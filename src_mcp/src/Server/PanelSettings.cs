@@ -30,6 +30,9 @@ public sealed record PanelSettings
 
     public TimeSpan ReviewerTimeout { get; init; } = TimeSpan.FromMinutes(10);
 
+    /// <summary>How long a rate-limited reviewer waits before its one retry.</summary>
+    public TimeSpan RateLimitBackoff { get; init; } = TimeSpan.FromSeconds(15);
+
     /// <summary>Where sessions, prompts overrides and round artifacts live.</summary>
     public string DataDir { get; init; } = DefaultDataDir;
 
@@ -51,6 +54,7 @@ public sealed record PanelSettings
         GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),
         PerProviderConcurrency = IntVar(env, "COAI_MAX_PER_PROVIDER", 2),
         ReviewerTimeout = TimeSpan.FromMinutes(IntVar(env, "COAI_REVIEWER_TIMEOUT_MINUTES", 10)),
+        RateLimitBackoff = TimeSpan.FromSeconds(IntVar(env, "COAI_RATE_LIMIT_BACKOFF_SECONDS", 15)),
         DataDir = env("COAI_DATA_DIR") is { Length: > 0 } dir ? dir : DefaultDataDir,
     }.WithProvidersFrom(env);
 

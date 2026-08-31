@@ -8,8 +8,18 @@ using Serilog.Core;
 
 namespace CoaiMcp.Tests;
 
-/// <summary>Tests that steer the fake CLI through PROCESS-WIDE environment variables share one
-/// collection so they never interleave — env is global state.</summary>
+/// <summary>
+/// **Every** class that launches the fake CLI belongs here, not only the ones that set
+/// `FAKECLI_*`.
+/// </summary>
+/// <remarks>
+/// Environment variables are process-wide, and xUnit runs collections in parallel: a class that
+/// merely launches the fake with argv verbs would find `FAKECLI_MODE=vendor` set underneath it by
+/// a class running beside it, take the vendor branch, and answer something the caller never asked
+/// for. It failed exactly that way on a CI runner —
+/// `FullLoop_FlawedPlan_RevisesToTheGate_ThenCodeRounds_ThenDone` got an error answer where a
+/// verdict belonged — and passed locally every time, because the interleaving needs the timing.
+/// </remarks>
 [CollectionDefinition("fakecli-env", DisableParallelization = true)]
 public sealed class FakeCliEnvCollection;
 
@@ -93,6 +103,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
                 Rounds = new PanelConfig(maxRounds, threshold, onExhausted),
                 DataDir = _data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
+                RateLimitBackoff = TimeSpan.FromMilliseconds(5),
             },
             VaultKeys.None("no vault in tests"),
             default,

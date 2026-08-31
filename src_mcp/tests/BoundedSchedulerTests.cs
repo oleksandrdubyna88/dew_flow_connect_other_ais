@@ -5,6 +5,7 @@ using FluentAssertions;
 
 namespace CoaiMcp.Tests;
 
+[Collection("fakecli-env")]
 public sealed class BoundedSchedulerTests
 {
     private readonly ReviewerExecutor _executor = new(new ProcessLauncher());

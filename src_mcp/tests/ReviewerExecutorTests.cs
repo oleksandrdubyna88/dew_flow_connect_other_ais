@@ -9,7 +9,16 @@ namespace CoaiMcp.Tests;
 /// <summary>Shared plumbing for driving the fake CLI as if it were a vendor.</summary>
 internal static class FakeCliInvocations
 {
-    internal static readonly string Dll = Path.Combine(AppContext.BaseDirectory, "FakeCli.dll");
+    /// <summary>
+    /// The apphost, not <c>dotnet FakeCli.dll</c>: one process instead of two.
+    /// </summary>
+    /// <remarks>
+    /// The extra <c>dotnet</c> host is what a killed timeout leaves behind — a CI job ended with
+    /// three "Terminate orphan process: dotnet" lines, and every launch paid a second host start
+    /// on a two-core runner.
+    /// </remarks>
+    internal static readonly string Exe = Path.Combine(
+        AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
 
     internal const string CleanReview = """{"findings": []}""";
 
@@ -21,13 +30,14 @@ internal static class FakeCliInvocations
         => new(
             provider,
             ReviewRole.Architecture,
-            new ProcessRequest("dotnet", [Dll, .. verbArgs], AppContext.BaseDirectory)
+            new ProcessRequest(Exe, verbArgs, AppContext.BaseDirectory)
             {
                 Timeout = timeout ?? TimeSpan.FromMinutes(1),
             },
             outputFile);
 }
 
+[Collection("fakecli-env")]
 public sealed class ReviewerExecutorTests
 {
     private readonly ReviewerExecutor _executor = new(new ProcessLauncher());

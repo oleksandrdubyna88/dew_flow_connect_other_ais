@@ -40,7 +40,8 @@ public sealed class PanelService
         _store = new SessionStore(settings.DataDir);
         _worktrees = new WorktreeManager(launcher, Path.Combine(settings.DataDir, "worktrees"));
         _context = new ContextAssembler(launcher);
-        _scheduler = new BoundedScheduler(settings.GlobalConcurrency, settings.PerProviderConcurrency);
+        _scheduler = new BoundedScheduler(
+            settings.GlobalConcurrency, settings.PerProviderConcurrency, settings.RateLimitBackoff);
         _executor = new ReviewerExecutor(launcher);
         _prompts = new RolePrompts(settings.DataDir);
     }
