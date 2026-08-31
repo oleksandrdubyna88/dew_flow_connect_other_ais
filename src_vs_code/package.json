@@ -57,6 +57,20 @@
     "configuration": {
       "title": "ConnectOtherAIs",
       "properties": {
+        "coai.rotatePrompts": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Spend the rounds on DIFFERENT review lenses instead of asking the same broad question again: round 1 universal, then each narrow lens in turn. Anything chosen in **Prompts per round** wins over the rotation."
+        },
+        "coai.promptsPerRound": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "Which prompt each role uses on each round, by catalog id — `{ \"Architecture\": [\"architecture\", \"arch-boundaries\"] }`. Index 0 is round 1; an unknown id falls back to that role's universal prompt.",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
         "coai.maxRounds": {
           "type": "integer",
           "default": 3,

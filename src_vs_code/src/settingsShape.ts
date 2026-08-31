@@ -49,6 +49,10 @@ export interface CoaiSettings {
   readonly language: LanguageCode;
   readonly translator: TranslatorChoice;
   readonly escalationMinutes: number;
+  /** Per role, the prompt id each round uses — index 0 is round 1. Empty = the universal one. */
+  readonly promptsPerRound: Readonly<Record<string, readonly string[]>>;
+  /** Spend the rounds on different lenses instead of asking the same broad question again. */
+  readonly rotatePrompts: boolean;
 }
 
 /** The defaults, matching the master plan's configuration table — pinned by tests. */
@@ -63,6 +67,8 @@ export const DEFAULTS: CoaiSettings = {
   language: 'en',
   translator: { provider: 'gemini', model: 'gemini-flash-latest' },
   escalationMinutes: 30,
+  promptsPerRound: {},
+  rotatePrompts: false,
 };
 
 /** A raw configuration reader: `get(section)` returns whatever the host stored, if anything. */
@@ -84,6 +90,8 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
       model: asString(read('translator.model')) || DEFAULTS.translator.model,
     },
     escalationMinutes: asPositive(read('escalationMinutes'), DEFAULTS.escalationMinutes),
+    promptsPerRound: asPromptRounds(read('promptsPerRound')),
+    rotatePrompts: read('rotatePrompts') === true,
   };
 }
 
@@ -95,6 +103,12 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
   const env: Record<string, string> = {};
   if (!sameVendors(vendors, DEFAULT_VENDORS)) {
     env['COAI_VENDORS'] = vendorsEnv(vendors);
+  }
+  if (settings.rotatePrompts) {
+    env['COAI_ROTATE_PROMPTS'] = 'true';
+  }
+  if (Object.keys(settings.promptsPerRound).length > 0) {
+    env['COAI_PROMPTS_PER_ROUND'] = JSON.stringify(settings.promptsPerRound);
   }
   if (settings.maxRounds !== DEFAULTS.maxRounds) {
     env['COAI_MAX_ROUNDS'] = String(settings.maxRounds);
@@ -172,4 +186,24 @@ function sameVendors(a: readonly Vendor[], b: readonly Vendor[]): boolean {
       );
     })
   );
+}
+
+/**
+ * The stored per-round prompt map, kept only where it is actually a map of string arrays.
+ *
+ * <p>A stale id is NOT filtered here: the server falls back to the universal prompt for anything
+ * it does not recognise, and silently dropping a name the person chose would make a typo look
+ * like it had been accepted.</p>
+ */
+function asPromptRounds(value: unknown): Record<string, string[]> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return {};
+  }
+  const out: Record<string, string[]> = {};
+  for (const [role, rounds] of Object.entries(value as Record<string, unknown>)) {
+    if (Array.isArray(rounds)) {
+      out[role] = rounds.filter((r): r is string => typeof r === 'string');
+    }
+  }
+  return out;
 }

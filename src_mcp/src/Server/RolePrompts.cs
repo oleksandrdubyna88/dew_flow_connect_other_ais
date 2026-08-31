@@ -1,4 +1,5 @@
 using System.Reflection;
+using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Reviewers;
 
 namespace CoaiMcp.Server;
@@ -20,16 +21,25 @@ public sealed class RolePrompts(string dataDir)
 {
     private string OverrideDir => Path.Combine(dataDir, "prompts");
 
-    public string For(ReviewRole role)
+    public string For(ReviewRole role) => ForChoice(PromptCatalog.UniversalFor(role.ToString()));
+
+    /// <summary>
+    /// One prompt from the catalog, override-first — the same layering as the role default,
+    /// because a narrow lens somebody edited must survive the next release too.
+    /// </summary>
+    public string ForChoice(PromptChoice choice)
     {
-        var overridePath = Path.Combine(OverrideDir, FileFor(role));
-        return File.Exists(overridePath) ? File.ReadAllText(overridePath) : ShippedDefaultFor(role);
+        var file = $"{choice.Id}.md";
+        var overridePath = Path.Combine(OverrideDir, file);
+        return File.Exists(overridePath) ? File.ReadAllText(overridePath) : Embedded(file);
     }
 
     /// <summary>The text compiled into this binary. Static: it depends on nothing on disk.</summary>
-    public static string ShippedDefaultFor(ReviewRole role)
+    public static string ShippedDefaultFor(ReviewRole role) => Embedded(FileFor(role));
+
+    private static string Embedded(string file)
     {
-        var name = $"CoaiMcp.prompts.{FileFor(role)}";
+        var name = $"CoaiMcp.prompts.{file}";
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name)
             ?? throw new InvalidOperationException(
                 $"the prompt '{name}' is not embedded in this build — check the EmbeddedResource item in CoaiMcp.csproj");

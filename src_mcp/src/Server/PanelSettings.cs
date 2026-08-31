@@ -65,6 +65,22 @@ public sealed record PanelSettings
     /// </remarks>
     public TranslatorSettings Translator { get; init; } = new("gemini") { Model = "gemini-flash-latest" };
 
+    /// <summary>
+    /// Which prompt each role uses on each round — <c>role -> [round1, round2, ...]</c>, by
+    /// catalog id. An empty or unknown entry falls back to the rotation or the universal prompt.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> PromptsPerRound { get; init; } =
+        new Dictionary<string, IReadOnlyList<string>>();
+
+    /// <summary>
+    /// Spend the rounds on DIFFERENT lenses instead of asking the same broad question again.
+    /// </summary>
+    /// <remarks>
+    /// Off by default: rotation changes what a second round means, and a person who has not asked
+    /// for it should get the prompt they last read in the panel.
+    /// </remarks>
+    public bool RotatePrompts { get; init; }
+
     /// <summary>Where sessions, prompts overrides and round artifacts live.</summary>
     public string DataDir { get; init; } = DefaultDataDir;
 
@@ -100,7 +116,33 @@ public sealed record PanelSettings
             ExecutablePath = env("COAI_TRANSLATOR_EXE") ?? string.Empty,
         },
         DataDir = env("COAI_DATA_DIR") is { Length: > 0 } dir ? dir : DefaultDataDir,
+        RotatePrompts = env("COAI_ROTATE_PROMPTS") is "1" or "true" or "TRUE",
+        PromptsPerRound = ParsePromptRounds(env("COAI_PROMPTS_PER_ROUND")),
     }.WithProvidersFrom(env);
+
+    /// <summary>
+    /// <c>{"Architecture":["architecture","arch-boundaries"],...}</c> — the panel's per-round
+    /// choice. Malformed JSON is no choice at all rather than a half-applied one.
+    /// </summary>
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> ParsePromptRounds(string? json)
+    {
+        if (json is not { Length: > 0 })
+        {
+            return new Dictionary<string, IReadOnlyList<string>>();
+        }
+
+        try
+        {
+            var parsed = System.Text.Json.JsonSerializer.Deserialize(
+                json, SettingsJsonContext.Default.DictionaryStringListString);
+            return parsed?.ToDictionary(e => e.Key, e => (IReadOnlyList<string>)e.Value)
+                   ?? new Dictionary<string, IReadOnlyList<string>>();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return new Dictionary<string, IReadOnlyList<string>>();
+        }
+    }
 
     /// <summary>
     /// The reviewers, from `COAI_VENDORS` — a JSON array, because a comma-separated list cannot

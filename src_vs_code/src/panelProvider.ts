@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { EscalationWatcher } from './escalationWatcher';
 import { ModelChoice, parseCodexModels } from './models';
 import { liveRegions, OPEN_BY_DEFAULT, panelHtml } from './panelView';
+import { selectedFor } from './prompts';
 import { parseSession, SessionFile } from './rounds';
 import { serverSettingsJson } from './serverSettingsFile';
 import { settingsFrom } from './settingsShape';
@@ -44,11 +45,13 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     this.view = view;
     view.webview.options = { enableScripts: true };
     view.webview.onDidReceiveMessage(
-      (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string; open?: boolean }) => {
+      (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string; open?: boolean; role?: string; round?: number }) => {
         if (m.type === 'section' && m.id !== undefined) {
           this.openSections = m.open === true
             ? [...new Set([...this.openSections, m.id])]
             : this.openSections.filter((s) => s !== m.id);
+        } else if (m.type === 'prompt' && m.role !== undefined && m.round !== undefined) {
+          void this.choosePrompt(m.role, m.round, String(m.value));
         } else if (m.type === 'setting' && m.key !== undefined) {
           void this.write(m.key, m.value, m.vendor);
         } else if (m.type === 'command') {
@@ -133,6 +136,30 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     if (usageCommand.length > 0) {
       terminal.sendText(usageCommand, false);
     }
+  }
+
+  /**
+   * One role's prompt for one round.
+   *
+   * <p>Stored as <code>role -&gt; [round1, round2, ...]</code> — the shape the server reads and
+   * the shape a person reasons in. Earlier rounds are filled with whatever they already resolve
+   * to rather than left as holes: a sparse array would make "round 3 is the attack lens" depend
+   * on what rounds 1 and 2 happened to be when it was read.</p>
+   */
+  private async choosePrompt(role: string, round: number, id: string): Promise<void> {
+    const config = vscode.workspace.getConfiguration('coai');
+    const settings = settingsFrom((section) => config.get(section));
+    const rounds = [...(settings.promptsPerRound[role] ?? [])];
+    while (rounds.length < round) {
+      rounds.push(selectedFor(role, rounds.length + 1, settings.promptsPerRound, settings.rotatePrompts));
+    }
+    rounds[round - 1] = id;
+    await config.update(
+      'promptsPerRound',
+      { ...settings.promptsPerRound, [role]: rounds },
+      vscode.ConfigurationTarget.Global,
+    );
+    await this.render();
   }
 
   /**

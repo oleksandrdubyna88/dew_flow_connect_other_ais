@@ -220,7 +220,8 @@ public sealed class PanelService
     public Task<string> ReviewPlanAsync(string repoPath, string branch, string planText, CancellationToken ct = default) =>
         RunStageAsync(repoPath, branch, planText, RoundMachine.BeginPlanRound, needsWorktree: false,
             (session, workingDir, _) => Task.FromResult<IReadOnlyList<ReviewerWork>>(
-                BuildWork([ReviewRole.PlanCritique], workingDir, $"## The plan under review\n\n{planText}")),
+                BuildWork([ReviewRole.PlanCritique], workingDir, $"## The plan under review\n\n{planText}",
+                    session.State.RoundsRunThisStage + 1)),
             ct);
 
     /// <summary>The code gate — three reviewers per provider, over the branch in a read-only tree.</summary>
@@ -234,7 +235,7 @@ public sealed class PanelService
                 var context =
                     $"## The plan this change implements\n\n{bundle.PlanText}\n\n" +
                     $"## The change ({bundle.Branch} over {bundle.BaseRef}, at {bundle.Sha})\n\n{bundle.Diff.Text}";
-                return BuildWork(CodeRoles, workingDir, context);
+                return BuildWork(CodeRoles, workingDir, context, session.State.RoundsRunThisStage + 1);
             },
             ct);
 
@@ -328,7 +329,19 @@ public sealed class PanelService
         }
     }
 
-    private IReadOnlyList<ReviewerWork> BuildWork(IReadOnlyList<ReviewRole> roles, string worktreePath, string context)
+    /// <summary>
+    /// Which prompt each role gets THIS round — the panel's choice, the rotation, or the
+    /// universal one. Resolved per round rather than per session, which is the whole point:
+    /// round two can ask a different question instead of the same one louder.
+    /// </summary>
+    private PromptChoice ChoiceFor(ReviewRole role, int round) =>
+        PromptCatalog.ForRound(
+            role.ToString(),
+            round,
+            _settings.PromptsPerRound.GetValueOrDefault(role.ToString(), []),
+            _settings.RotatePrompts);
+
+    private IReadOnlyList<ReviewerWork> BuildWork(IReadOnlyList<ReviewRole> roles, string worktreePath, string context, int round)
     {
         var schemaFile = Path.Combine(_settings.DataDir, "finding-schema.json");
         Directory.CreateDirectory(_settings.DataDir);
@@ -353,7 +366,7 @@ public sealed class PanelService
             };
             foreach (var role in roles)
             {
-                var prompt = ComposePrompt(role, context);
+                var prompt = ComposePrompt(ChoiceFor(role, round), context);
                 var repairPrompt = prompt +
                     "\n\nYOUR PREVIOUS ANSWER WAS NOT VALID JSON. Return ONLY the JSON object for the schema — no fences, no prose.";
                 work.Add(new ReviewerWork(
@@ -365,8 +378,8 @@ public sealed class PanelService
         return work;
     }
 
-    private string ComposePrompt(ReviewRole role, string context) =>
-        $"{_prompts.For(role)}\n\n## The finding contract\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{FindingSchema.Json}\n\n{context}";
+    private string ComposePrompt(PromptChoice choice, string context) =>
+        $"{_prompts.ForChoice(choice)}\n\n## The finding contract\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{FindingSchema.Json}\n\n{context}";
 
     private ReviewAnswer AnswerFor(
         RoundVerdict verdict,

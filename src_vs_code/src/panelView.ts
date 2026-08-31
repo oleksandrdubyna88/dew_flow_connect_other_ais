@@ -2,6 +2,7 @@ import { CoaiSettings, LANGUAGES, TRANSLATORS } from './settingsShape';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { ModelChoice, modelsFor, modelsProvenance } from './models';
+import { ROLES, promptsFor, selectedFor } from './prompts';
 import { costPhrase, elapsed, isRunning, reviewerLines, RoundRecord, SessionFile } from './rounds';
 import { Vendor } from './vendors';
 
@@ -49,6 +50,7 @@ export function panelHtml(state: PanelState, nonce: string): string {
     `<div id="live-questions">${questionsSection(state.questions)}</div>`,
     section('reviewers', 'Reviewers', open, reviewersBody(state)),
     section('language', 'Language', open, languageBody(state)),
+    section('prompts', 'Prompts per round', open, promptsBody(state)),
     section('gate', 'The gate', open, gateBody(state.settings)),
     section('limits', 'Limits', open, limitsBody(state.settings)),
     section('keys', 'Vendor keys', open, keysBody(state)),
@@ -78,6 +80,10 @@ ${body}
       }
       vscode.postMessage({ type: 'setting', key: el.dataset.setting, value, vendor: el.dataset.vendor });
     });
+  }
+  for (const el of document.querySelectorAll('[data-prompt]')) {
+    el.addEventListener('change', () =>
+      vscode.postMessage({ type: 'prompt', role: el.dataset.prompt, round: Number(el.dataset.round), value: el.value }));
   }
   for (const el of document.querySelectorAll('.section')) {
     el.addEventListener('toggle', () =>
@@ -305,7 +311,46 @@ function questionsSection(questions: readonly Escalation[]): string {
  * answered, two running" is the difference between waiting and being stuck. Until the server
  * began writing the round at its START, this panel could not tell those apart at all.</p>
  */
-export function roundsBody(sessions: readonly SessionFile[], nowMs: number = Date.now()): string {
+export 
+/**
+ * Which prompt each role uses on each round, and whether the rounds rotate through the lenses.
+ *
+ * <p>One row per round because that is the unit a person actually reasons about — "the second
+ * round should look for something else" — and a single prompt per role could not express it.
+ * The universal prompt is the default everywhere; a narrow lens is always a deliberate pick.</p>
+ */
+function promptsBody(state: PanelState): string {
+  const rounds = Math.max(1, Math.min(state.settings.maxRounds, 6));
+  const rows = ROLES.map((role) => {
+    const pickers = Array.from({ length: rounds }, (_, i) => {
+      const round = i + 1;
+      const current = selectedFor(role.id, round, state.settings.promptsPerRound, state.settings.rotatePrompts);
+      const options = promptsFor(role.id)
+        .map(
+          (p) =>
+            `<option value="${escapeHtml(p.id)}"${p.id === current ? ' selected' : ''} title="${escapeHtml(p.purpose)}">${escapeHtml(p.label)}</option>`,
+        )
+        .join('');
+      return `  <div class="field">
+    <label for="pr-${escapeHtml(role.id)}-${round}">Round ${round}</label>
+    <select id="pr-${escapeHtml(role.id)}-${round}" data-prompt="${escapeHtml(role.id)}" data-round="${round}">${options}</select>
+  </div>`;
+    }).join('\n');
+
+    return `<div class="vendor">
+  <div class="head"><span class="name">${escapeHtml(role.label)}</span><span class="hint">${escapeHtml(role.stage)} stage</span></div>
+${pickers}
+</div>`;
+  }).join('\n');
+
+  return `<div class="field">
+  <label class="check"><input type="checkbox" data-setting="rotatePrompts"${state.settings.rotatePrompts ? ' checked' : ''}> Rotate the lenses automatically</label>
+  <div class="hint">Round 1 asks the universal question; each later round takes a different narrow lens instead of repeating it. Anything you pick above wins over the rotation.</div>
+</div>
+${rows}`;
+}
+
+function roundsBody(sessions: readonly SessionFile[], nowMs: number = Date.now()): string {
   const rounds = sessions
     .flatMap((s) => s.rounds.map((r) => ({ branch: s.state.branch, ...r })))
     .sort((a, b) => Number(isRunning(b)) - Number(isRunning(a)) || b.completedUtc.localeCompare(a.completedUtc))

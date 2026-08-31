@@ -7,4 +7,5 @@ internal sealed record VendorDto(string? Id, string? Runtime, string? Model, str
 
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(List<VendorDto>))]
+[JsonSerializable(typeof(Dictionary<string, List<string>>), TypeInfoPropertyName = "DictionaryStringListString")]
 internal sealed partial class SettingsJsonContext : JsonSerializerContext;
