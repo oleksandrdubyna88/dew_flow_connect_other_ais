@@ -224,11 +224,8 @@ public sealed class PanelServiceTests : IAsyncLifetime
                 .Select(f => File.ReadAllText(f).Split('\0'))
                 .ToList();
             argvs.Should().HaveCount(6, "two providers x three roles");
-            // codex carries the prompt last; gemini carries it after -p.
-            var prompts = argvs
-                .Select(a => Array.IndexOf(a, "-p") is var i and >= 0 && i + 1 < a.Length ? a[i + 1] : a[^1])
-                .Distinct()
-                .ToList();
+            // Both vendors take the prompt on STDIN, which the fake records as the last field.
+            var prompts = argvs.Select(a => a[^1]).Distinct().ToList();
             prompts.Should().HaveCount(3, "three roles, three distinct prompts — each vendor gets the same three");
             prompts.Should().Contain(p => p.Contains("ARCHITECTURE reviewer"));
             prompts.Should().Contain(p => p.Contains("SECURITY AND RELIABILITY"));

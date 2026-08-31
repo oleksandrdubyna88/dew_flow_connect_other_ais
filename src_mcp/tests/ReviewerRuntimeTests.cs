@@ -21,6 +21,29 @@ public sealed class ReviewerRuntimeTests
     private static ReviewerInvocation Deepseek(ReviewerSettings? s = null) =>
         new DeepseekRuntime().Build(ReviewRole.UxDxPerformance, "review this", Worktree, Schema, OutDir, s ?? new("deepseek") { ApiKey = "sk-ds" });
 
+    /// <summary>
+    /// The rule that would have caught the real run's silent failure: a multi-line argument is
+    /// truncated at its first newline by cmd.exe, which parses every npm `.cmd` shim on Windows.
+    /// The model then answers as if it had been handed nothing, and says so politely.
+    /// </summary>
+    [Fact]
+    public void NoArgument_EverContainsANewline_TheyDoNotSurviveAWindowsShim()
+    {
+        var multiline = "line one\nline two\n\n## a heading\nand more";
+
+        foreach (var invocation in (ReviewerInvocation[])
+                 [
+                     new CodexRuntime().Build(ReviewRole.Architecture, multiline, Worktree, Schema, OutDir, new("codex")),
+                     new GeminiRuntime().Build(ReviewRole.Architecture, multiline, Worktree, Schema, OutDir, new("gemini")),
+                     new DeepseekRuntime().Build(ReviewRole.Architecture, multiline, Worktree, Schema, OutDir, new("deepseek") { ApiKey = "k" }),
+                 ])
+        {
+            invocation.Request.Arguments.Should().OnlyContain(a => !a.Contains('\n'),
+                $"{invocation.Provider} would lose everything after the first line");
+            invocation.Request.StdIn.Should().Be(multiline, $"{invocation.Provider} must carry the prompt on stdin");
+        }
+    }
+
     [Fact]
     public void CodexArgv_IsReadOnlyEphemeralAndSchemaBound()
     {
@@ -31,7 +54,8 @@ public sealed class ReviewerRuntimeTests
         args.Should().ContainInOrder("-C", Worktree);
         args.Should().ContainInOrder("--output-schema", Schema);
         args.Should().Contain("-o");
-        args[^1].Should().Be("review this", "the prompt rides last, after every flag");
+        args[^1].Should().Be("-", "codex's documented 'instructions come from stdin'");
+        Codex().Request.StdIn.Should().Be("review this");
         Codex().OutputFile.Should().StartWith(OutDir, "the answer is read from -o, not stdout");
     }
 
@@ -40,7 +64,8 @@ public sealed class ReviewerRuntimeTests
     {
         var invocation = Gemini();
 
-        invocation.Request.Arguments.Should().ContainInOrder("-p", "review this");
+        invocation.Request.StdIn.Should().Be("review this", "the review rides stdin; -p only points at it");
+        invocation.Request.Arguments.Should().Contain("-p");
         invocation.Request.Arguments.Should().ContainInOrder("-o", "json");
         invocation.Request.Arguments.Should().ContainInOrder("--approval-mode", "plan");
         // A round's worktree is always a fresh directory and so never a trusted folder; without

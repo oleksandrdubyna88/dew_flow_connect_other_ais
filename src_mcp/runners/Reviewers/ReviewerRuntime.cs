@@ -70,11 +70,16 @@ public class CodexRuntime : IReviewerRuntime
                 "-o", outputFile,
                 .. ModelArgs(settings),
                 .. ProviderOverrides,
-                prompt,
+                // `-` is codex's documented "read the instructions from stdin". The prompt does
+                // NOT travel in argv: on Windows this is an npm .cmd shim, and cmd.exe truncates
+                // an argument at its first newline — silently, so the model simply answers as if
+                // it had been given nothing.
+                "-",
             ],
             worktreePath)
         {
             Environment = KeyEnv(KeyVariable, settings),
+            StdIn = prompt,
             Timeout = settings.Timeout,
         };
         return new ReviewerInvocation(Provider, role, request, outputFile);
@@ -123,7 +128,10 @@ public sealed class GeminiRuntime : IReviewerRuntime
         var request = new ProcessRequest(
             settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : "gemini",
             [
-                "-p", prompt,
+                // The review itself arrives on stdin, which gemini appends its `-p` text to — so
+                // `-p` carries only this one short line. Same reason as codex: the Windows shim
+                // is a .cmd, and cmd.exe would truncate a multi-line prompt at its first newline.
+                "-p", "Follow the review instructions provided above and answer with the JSON only.",
                 "-o", "json",
                 // A round's worktree is a fresh directory, so it is NEVER a trusted folder — and
                 // without trust Gemini refuses headless entirely (exit 55) AND overrides
@@ -139,6 +147,7 @@ public sealed class GeminiRuntime : IReviewerRuntime
             Environment = settings.ApiKey.Length > 0
                 ? new Dictionary<string, string?> { ["GEMINI_API_KEY"] = settings.ApiKey }
                 : new Dictionary<string, string?>(),
+            StdIn = prompt,
             Timeout = settings.Timeout,
         };
         return new ReviewerInvocation(Provider, role, request);

@@ -45,11 +45,15 @@ public static class ExecutableResolver
             ? [command]
             : WindowsExtensions.Select(e => command + e).Append(command);
 
-        foreach (var directory in (pathVariable ?? string.Empty).Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        // The separators come from the TARGET platform, not the host: this function is told which
+        // platform it is resolving for, and a test that says `isWindows: true` on a Linux runner
+        // must get Windows behaviour. Using Path.PathSeparator here made the suite pass locally
+        // and fail in CI, which is the least useful place to learn it.
+        foreach (var directory in (pathVariable ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             foreach (var candidate in candidates)
             {
-                var full = Path.Combine(directory, candidate);
+                var full = $"{directory.TrimEnd('\\')}\\{candidate}";
                 if (fileExists(full))
                 {
                     return full;

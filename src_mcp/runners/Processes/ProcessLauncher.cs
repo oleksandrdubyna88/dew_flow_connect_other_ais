@@ -11,6 +11,18 @@ public sealed record ProcessRequest(
     public IReadOnlyDictionary<string, string?> Environment { get; init; } =
         new Dictionary<string, string?>();
 
+    /// <summary>
+    /// Written to the child's stdin, then closed. Empty means "close immediately".
+    /// </summary>
+    /// <remarks>
+    /// This is how every long or multi-line input travels. On Windows the vendor CLIs are npm
+    /// <c>.cmd</c> shims, which cmd.exe parses — and cmd.exe truncates an argument at its first
+    /// newline. The first real run (2026-08-31) passed a full review prompt in argv and the model
+    /// answered "No implementation plan was provided": it had received the first line and nothing
+    /// else, silently. stdin has no such parser between us and the process.
+    /// </remarks>
+    public string StdIn { get; init; } = string.Empty;
+
     public TimeSpan Timeout { get; init; } = TimeSpan.FromMinutes(10);
 }
 
@@ -61,6 +73,11 @@ public sealed class ProcessLauncher : IProcessLauncher
         process.Start();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
+        if (request.StdIn.Length > 0)
+        {
+            await process.StandardInput.WriteAsync(request.StdIn);
+        }
+
         process.StandardInput.Close();
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);

@@ -24,9 +24,13 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor")
 {
     if (Environment.GetEnvironmentVariable("FAKECLI_RECORD_DIR") is { Length: > 0 } record)
     {
-        // NUL-joined, because the args themselves are multiline (the prompt) — lines cannot
-        // reconstruct an argv, a character no argv contains can.
-        File.WriteAllText(Path.Combine(record, $"{Guid.NewGuid():N}.argv"), string.Join('\0', args));
+        // NUL-joined, because a recorded field may be multiline (the prompt on stdin) — lines
+        // cannot reconstruct an argv, a character no argv contains can. The stdin text is
+        // recorded as the LAST field, since that is where the prompt lives now.
+        var stdin = Console.IsInputRedirected ? Console.In.ReadToEnd() : string.Empty;
+        File.WriteAllText(
+            Path.Combine(record, $"{Guid.NewGuid():N}.argv"),
+            string.Join('\0', args.Append(stdin)));
     }
 
     var stderrText = Environment.GetEnvironmentVariable("FAKECLI_STDERR");
