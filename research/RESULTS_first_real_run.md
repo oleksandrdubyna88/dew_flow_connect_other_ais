@@ -138,3 +138,38 @@ way that only real reviewers could expose, because a fake vendor returns the tex
 The moment two models described one defect in their own words, the gate double-counted it. Scripted
 tests cannot produce disagreement about wording — which is exactly what a panel of different
 vendors is for.
+
+## The second sitting — 2026-08-31, evening, with the operator at the keyboard
+
+Driven through a real Claude Code session against the marketplace-published build, on a branch
+carrying a deliberately flawed `TokenGate`. Three more defects, each of a different kind.
+
+**Eleventh — the plan stage was handing agentic CLIs a checkout.** A plan round sat at ten minutes;
+the evidence was two live node processes and the round's worktree on disk. Given a tree and a plan
+that mentions files, codex goes and READS them — the role is to judge the document. The plan stage
+now runs each reviewer in an empty scratch directory, and a test holds that it creates no worktree
+and points nobody at one. Cost, stated: a plan reviewer can no longer verify a `file.cs:line`
+reference is real.
+
+**Twelfth — gemini never answered, and the timeout was hiding WHY.** Every gemini reviewer in every
+round failed as "timeout" at exactly the reviewer budget. Isolated by running the CLI by hand: with
+`--skip-trust` it hangs on ANY headless call on this machine, because `~/.gemini/settings.json`
+selects `gemini-api-key` auth and `GEMINI_API_KEY` is not in the environment — it waits on
+authentication before the model is ever reached. The operator's evidence ("flash chews 2000-line
+files in under a minute in the web") was correct and decisive: the model was never the slow part.
+Fix on the machine: sign the CLI in interactively, or put the key in the vault entry. Fix owed in
+the product: `providers` should probe with a tiny generation, not `--version`, which needs no
+auth and so reports a hung vendor as healthy.
+
+**Thirteenth — the protocol had no way to hear the human say "proceed".** Rounds exhausted, verdict
+`call_human`, the person decides to go — and `review_code` kept refusing forever, because
+nothing could ever set `PlanProceeded`. Found by actually sitting at the gate, not by any of the
+195 tests. `resolve` now takes `humanDecision: "proceed"`, honoured ONLY after exhaustion with a
+refusal before it (a model must not skip the loop by claiming permission it was never given), and
+the tool description says: never pass it on your own judgement.
+
+**And what the round itself was worth:** codex, three times over the same fictional plan, produced
+findings a human reviewer would be proud of — "a response merely containing the word valid is not
+an answer", "the 15-minute lease contradicts the revocation promise", "the fake-client tests cannot
+verify the HTTP behaviours they claim to". Each revision's findings were sharper than the last,
+which is the loop doing exactly what it was built to do.
