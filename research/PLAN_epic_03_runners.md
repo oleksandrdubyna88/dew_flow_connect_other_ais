@@ -1,9 +1,21 @@
 # PLAN — epic 03: reviewer runners — spawn, isolate, survive
 
-> Status: **plan only, nothing implemented yet.** Epic 3 of 6 under
-> [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) (its Phase 2). Depends on epic 02 (the
-> `Finding` contract and parse outcomes it feeds). This is where processes appear; the process-level
-> tests run against a **fake CLI executable**, never against the real vendors.
+> Status: **IMPLEMENTED, 2026-08-31.** Epic 3 of 6 under
+> [PLAN_connect_other_ais.md](../todo/PLAN_connect_other_ais.md) (its Phase 2). All four stories
+> shipped (commits c4df3fe, cc04026, be56259, 8711934); 100 tests green; module doc:
+> [module_runners.md](module_runners.md).
+>
+> **Deviations from the plan:**
+> - Story 3.4's timeout test asserts the outcome and the early return, not the process-tree kill
+>   itself — the fake CLI spawns no children, so "tree killed" is carried by `ProcessLauncher`'s
+>   `Kill(entireProcessTree: true)` and the sub-10s wall clock rather than by an orphan probe.
+> - The concurrency high-water is measured from ticks the fake CLI writes at body start/end, not
+>   from filesystem timestamps — deterministic under semaphores, immune to fs resolution.
+> - `ReviewerExecutor` routes BOTH vendors through the balanced extraction (`GeminiPayload`) — for
+>   codex it costs nothing and forgives a stray banner; the plan had codex parsed raw.
+> - The repair prompt is a second full invocation supplied by the caller (`ReviewerWork.Repair`),
+>   not a magic string inside the executor — the server owns prompt text, the runner owns launches.
+> - Exit-0-with-no-`-o`-file is pinned as `Unparseable`, a case the plan never named.
 
 ## Goal
 
