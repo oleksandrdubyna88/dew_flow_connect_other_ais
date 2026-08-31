@@ -317,7 +317,7 @@ test cases — build them strictly in this order, each depends only on its prede
 | Epic | Covers | Phases |
 |---|---|---|
 | [PLAN_epic_01_foundation.md](../research/PLAN_epic_01_foundation.md) — **shipped 2026-08-31** | conventions mount, solution + logging skeleton, CI | 0 |
-| [PLAN_epic_02_core.md](PLAN_epic_02_core.md) | finding contract, sanitizer, dedup + counting, round state machine | 1 |
+| [PLAN_epic_02_core.md](../research/PLAN_epic_02_core.md) — **shipped 2026-08-31** | finding contract, sanitizer, dedup + counting, round state machine | 1 |
 | [PLAN_epic_03_runners.md](PLAN_epic_03_runners.md) | worktree manager, context assembly, vendor runtimes, bounded scheduler | 2 |
 | [PLAN_epic_04_server.md](PLAN_epic_04_server.md) | the stdio server, review tools, creds keys, release + contract tests | 3 |
 | [PLAN_epic_05_extension.md](PLAN_epic_05_extension.md) | settings UI, install button, rounds view + escalation, CLAUDE.md snippet | 4–5 |

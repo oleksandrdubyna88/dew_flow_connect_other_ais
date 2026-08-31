@@ -1,9 +1,25 @@
 # PLAN — epic 02: the pure core — findings, sanitizer, counting, rounds
 
-> Status: **plan only, nothing implemented yet.** Epic 2 of 6 under
-> [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) (its Phase 1). Depends on epic 01 (the test
-> scaffolding). No process, no network, no filesystem beyond fixtures — everything here is a pure
-> function under a unit test, which is the whole point of doing it before any CLI exists.
+> Status: **IMPLEMENTED, 2026-08-31.** Epic 2 of 6 under
+> [PLAN_connect_other_ais.md](../todo/PLAN_connect_other_ais.md) (its Phase 1). All four stories
+> shipped; 61 tests green (this epic's 45 plus epic 01's 16); module doc:
+> [module_core.md](module_core.md).
+>
+> **Deviations from the plan:**
+> - Severity disagreement across vendors resolves **toward caution** on merge (blocking beats
+>   major) — the plan never said which wins; a test now pins it.
+> - The stage advances at **resolve**, not at round completion (`AdvanceOnResolve`): even a passing
+>   round's minors must be accepted/rejected before the next stage opens. The plan implied advance
+>   on the verdict.
+> - Escalate-with-exhausted-ladder falls through to `CallHuman` — the plan left the end of the
+>   ladder unspecified.
+> - The architecture test holds the **process/network** line by assembly references; filesystem use
+>   is not visible that way and stays out by review — the DoD's "no filesystem" is enforced more
+>   weakly than written, stated here rather than papered over.
+> - Story 2.1 test 1 compares field-for-field via equivalence, not record equality —
+>   `ImmutableArray` compares by reference inside a record.
+> - Teeth runs (all observed red, then restored): naive first-to-last extraction → exactly tests
+>   5 and 7 of story 2.2; discount disabled → both rule-3 tests; ladder reversed → the order test.
 
 ## Goal
 
