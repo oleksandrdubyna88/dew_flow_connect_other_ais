@@ -69,7 +69,12 @@ internal static class Program
         using var log = ServiceDefaults.CoaiLogging.CreateDewFlowLogger(AppName, consoleToStdErr: true);
         try
         {
-            var settings = PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
+            // The file the extension writes is the base; the client config env overrides it — a
+            // variable in the client is more specific than a file any window may rewrite.
+            var configuration = SettingsFile.Layer(
+                SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable),
+                Environment.GetEnvironmentVariable);
+            var settings = PanelSettings.FromEnvironment(configuration);
             var launcher = new ProcessLauncher();
             var keys = await new KeyVault(launcher).ReadAsync(Environment.GetEnvironmentVariable(KeyVault.KeyVariable));
             var vaultReadUtc = keys.Available ? DateTime.UtcNow : default;

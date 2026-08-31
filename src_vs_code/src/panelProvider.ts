@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import { EscalationWatcher } from './escalationWatcher';
 import { ModelChoice, parseCodexModels } from './models';
-import { panelHtml } from './panelView';
+import { OPEN_BY_DEFAULT, panelHtml } from './panelView';
 import { parseSession, SessionFile } from './rounds';
+import { serverSettingsJson } from './serverSettingsFile';
 import { settingsFrom } from './settingsShape';
 import { normaliseId, Vendor, VENDOR_PRESETS, vendorsFrom } from './vendors';
 
@@ -23,6 +24,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
   private view?: vscode.WebviewView;
   private codexModels: ModelChoice[] = [];
+  /** Which sections the person has open — kept HERE because the panel repaints on every
+      change, and a section that snapped shut mid-edit would be worse than none. */
+  private openSections: string[] = [...OPEN_BY_DEFAULT];
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -35,8 +39,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     this.view = view;
     view.webview.options = { enableScripts: true };
     view.webview.onDidReceiveMessage(
-      (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string }) => {
-        if (m.type === 'setting' && m.key !== undefined) {
+      (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string; open?: boolean }) => {
+        if (m.type === 'section' && m.id !== undefined) {
+          this.openSections = m.open === true
+            ? [...new Set([...this.openSections, m.id])]
+            : this.openSections.filter((s) => s !== m.id);
+        } else if (m.type === 'setting' && m.key !== undefined) {
           void this.write(m.key, m.value, m.vendor);
         } else if (m.type === 'command') {
           void this.run(m.command, m.id);
@@ -60,15 +68,19 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
     const config = vscode.workspace.getConfiguration('coai');
+    const settings = settingsFrom((section) => config.get(section));
+    const vendors = vendorsFrom(config.get('vendors'));
     this.codexModels = await this.readCodexModels();
+    await this.writeServerSettings(settings, vendors);
     this.view.webview.html = panelHtml(
       {
-        settings: settingsFrom((section) => config.get(section)),
-        vendors: vendorsFrom(config.get('vendors')),
+        settings,
+        vendors,
         codexModels: this.codexModels,
         serverInstalled: this.context.globalState.get<string>('coai.installedVersion') !== undefined,
         serverVersion: this.context.globalState.get<string>('coai.installedVersion') ?? '',
         questions: this.watcher.openQuestions,
+        openSections: this.openSections,
         sessions: await this.readSessions(),
       },
       nonce(),
@@ -170,6 +182,31 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       vendors.filter((v) => v.id !== id),
       vscode.ConfigurationTarget.Global,
     );
+  }
+
+  /**
+   * Saves the settings where the server reads them.
+   *
+   * <p>This is what ended the chore: settings used to reach the server only inside the pasted
+   * `mcpServers` env block, so every change to a threshold meant copying the block again and
+   * re-pasting it into a client's config. Both halves already share this directory.</p>
+   *
+   * <p>A failure here is not worth interrupting anyone over — the env block still works, and a
+   * settings panel is the wrong place to report a disk problem.</p>
+   */
+  private async writeServerSettings(
+    settings: ReturnType<typeof settingsFrom>,
+    vendors: readonly Vendor[],
+  ): Promise<void> {
+    try {
+      await vscode.workspace.fs.createDirectory(this.dataDir);
+      await vscode.workspace.fs.writeFile(
+        vscode.Uri.joinPath(this.dataDir, 'settings.json'),
+        new TextEncoder().encode(serverSettingsJson(settings, vendors)),
+      );
+    } catch {
+      // Not writable; the pasted env block remains the way in.
+    }
   }
 
   /**

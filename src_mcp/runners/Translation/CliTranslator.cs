@@ -78,15 +78,34 @@ public sealed class CliTranslator(IProcessLauncher launcher, TranslatorSettings 
     private ProcessRequest Build(string text, Language target, string kind)
     {
         var instruction = TranslationPrompt.For(target, kind);
+        var provider = settings.Provider.ToLowerInvariant();
         var executable = settings.ExecutablePath.Length > 0
             ? settings.ExecutablePath
-            : settings.Provider.Equals("codex", StringComparison.OrdinalIgnoreCase) ? "codex" : "gemini";
+            : provider switch { "codex" => "codex", "claude" => "claude", _ => "gemini" };
 
         // The instruction and the text travel together on stdin; the flag arguments never carry
         // either, so nothing can be truncated at a newline.
         var payload = $"{instruction}\n\n---\n{text}";
 
-        return settings.Provider.Equals("codex", StringComparison.OrdinalIgnoreCase)
+        if (provider == "claude")
+        {
+            return new ProcessRequest(
+                executable,
+                [
+                    "-p",
+                    "--output-format", "text",
+                    "--permission-mode", "plan",
+                    "--disallowedTools", "Edit", "Write", "NotebookEdit",
+                    .. settings.Model.Length > 0 ? (string[])["--model", settings.Model] : [],
+                ],
+                Environment.CurrentDirectory)
+            {
+                StdIn = payload,
+                Timeout = settings.Timeout,
+            };
+        }
+
+        return provider == "codex"
             ? new ProcessRequest(
                 executable,
                 [

@@ -28,6 +28,7 @@ export const LANGUAGES: readonly { code: LanguageCode; label: string }[] = [
 /** Who does the translating when the AI did not write in that language. */
 export const TRANSLATORS: readonly { id: string; label: string }[] = [
   { id: 'gemini', label: 'Gemini Flash (CLI)' },
+  { id: 'claude', label: 'Claude, a small model (CLI)' },
   { id: 'codex', label: 'Codex, a mini model (CLI)' },
   { id: 'none', label: 'Nobody — always show the original' },
 ];

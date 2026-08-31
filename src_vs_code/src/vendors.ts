@@ -25,6 +25,15 @@ export const DEFAULT_VENDORS: readonly Vendor[] = [
 /** Offered by "Add a reviewer…" — presets, not a closed set; the last is a blank to fill in. */
 export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })[] = [
   {
+    label: 'Claude (a second one)',
+    hint: 'A separate claude -p process: it sees the plan and the diff, never the conversation that produced them.',
+    id: 'claude',
+    runtime: 'claude',
+    model: 'haiku',
+    enabled: true,
+    baseUrl: '',
+  },
+  {
     label: 'DeepSeek',
     hint: 'Rides the Codex CLI against api.deepseek.com — needs a key in the vault entry.',
     id: 'deepseek',
@@ -62,7 +71,12 @@ export function vendorsFrom(value: unknown): Vendor[] {
     .filter((v): v is Record<string, unknown> => typeof v === 'object' && v !== null)
     .map((v) => ({
       id: typeof v['id'] === 'string' ? v['id'].trim().toLowerCase() : '',
-      runtime: v['runtime'] === 'gemini' ? ('gemini' as const) : ('codex' as const),
+      runtime:
+        v['runtime'] === 'gemini'
+          ? ('gemini' as const)
+          : v['runtime'] === 'claude'
+            ? ('claude' as const)
+            : ('codex' as const),
       model: typeof v['model'] === 'string' ? v['model'].trim() : '',
       enabled: v['enabled'] !== false,
       baseUrl: typeof v['baseUrl'] === 'string' ? v['baseUrl'].trim() : '',

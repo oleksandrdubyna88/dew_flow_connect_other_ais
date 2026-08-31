@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "A multi-model review gate: secondary vendor models (Codex, Gemini, DeepSeek) review your main AI's plan and code in rounds, until the findings drop under a threshold or a human is called.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -21,25 +21,30 @@
     "commands": [
       {
         "command": "coai.installServer",
-        "title": "ConnectOtherAIs: Install the MCP Server…"
+        "title": "Install the MCP server…",
+        "category": "ConnectOtherAIs"
       },
       {
         "command": "coai.copyConfigBlock",
-        "title": "ConnectOtherAIs: Copy the MCP config block"
+        "title": "Copy the MCP config block",
+        "category": "ConnectOtherAIs"
       },
       {
         "command": "coai.copyClaudeSnippet",
-        "title": "ConnectOtherAIs: Copy the CLAUDE.md snippet"
+        "title": "Copy the CLAUDE.md snippet",
+        "category": "ConnectOtherAIs"
       },
       {
         "command": "coai.showRounds",
-        "title": "ConnectOtherAIs: Show review rounds",
-        "icon": "$(list-unordered)"
+        "title": "Show review rounds",
+        "icon": "$(list-unordered)",
+        "category": "ConnectOtherAIs"
       },
       {
         "command": "coai.answerQuestion",
-        "title": "ConnectOtherAIs: Answer the open question…",
-        "icon": "$(comment-discussion)"
+        "title": "Answer the open question…",
+        "icon": "$(comment-discussion)",
+        "category": "ConnectOtherAIs"
       }
     ],
     "configuration": {

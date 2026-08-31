@@ -111,7 +111,12 @@ public sealed class PanelService
                 ? ("unavailable", $"needs a key under '{provider.Provider}' and the vault holds none — see the creds config entry")
                 : ("own auth", "the CLI's own sign-in is used");
 
-    private static string DefaultExe(string provider) => provider is "gemini" ? "gemini" : "codex";
+    private static string DefaultExe(string provider) => provider switch
+    {
+        "gemini" => "gemini",
+        "claude" => "claude",
+        _ => "codex",
+    };
 
     /// <summary>
     /// The runtime for one configured reviewer: a built-in by name, or — when the operator gave it
@@ -124,6 +129,7 @@ public sealed class PanelService
               ?? (provider.Runtime switch
               {
                   "gemini" => new GeminiRuntime(),
+                  "claude" => new ClaudeRuntime(),
                   "codex" => new CodexRuntime(),
                   _ => null,
               });

@@ -31,6 +31,6 @@ export function installedMessage(binaryPath: string): string {
   return (
     `coai-mcp is installed at ${binaryPath}. ` +
     'Its configuration is on your clipboard — paste it into your MCP client and restart it. ' +
-    'Settings changes travel in that block: copy it again after changing them.'
+    'That is a one-time paste: settings you change later are saved for the server itself.'
   );
 }

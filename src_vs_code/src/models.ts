@@ -16,7 +16,7 @@ export interface ModelChoice {
 }
 
 /** The shape of a vendor's CLI — what argv to build, not who the vendor is. */
-export type Runtime = 'codex' | 'gemini';
+export type Runtime = 'codex' | 'gemini' | 'claude';
 
 /** `~/.codex/models_cache.json` → the slugs it lists. A missing or broken cache is simply none. */
 export function parseCodexModels(text: string): ModelChoice[] {
@@ -53,12 +53,27 @@ export const CURATED_GEMINI_MODELS: readonly ModelChoice[] = [
  * and always with whatever the person already typed, so a saved value never vanishes from its
  * own dropdown.
  */
+/**
+ * Claude's models, curated: the CLI resolves an alias to the latest of that family, which is what
+ * anyone picking from a list actually wants.
+ */
+export const CURATED_CLAUDE_MODELS: readonly ModelChoice[] = [
+  { id: 'haiku', label: 'Haiku — fastest, cheapest' },
+  { id: 'sonnet', label: 'Sonnet — the balanced one' },
+  { id: 'opus', label: 'Opus — the strongest' },
+];
+
 export function modelsFor(
   runtime: Runtime,
   discoveredCodex: readonly ModelChoice[],
   current: string,
 ): ModelChoice[] {
-  const base = runtime === 'codex' ? [...discoveredCodex] : [...CURATED_GEMINI_MODELS];
+  const base =
+    runtime === 'codex'
+      ? [...discoveredCodex]
+      : runtime === 'claude'
+        ? [...CURATED_CLAUDE_MODELS]
+        : [...CURATED_GEMINI_MODELS];
   if (current.length > 0 && !base.some((m) => m.id === current)) {
     base.unshift({ id: current, label: `${current} (yours)` });
   }
@@ -69,6 +84,9 @@ export function modelsFor(
 export function modelsProvenance(runtime: Runtime, discoveredCodex: readonly ModelChoice[]): string {
   if (runtime === 'gemini') {
     return 'a curated list — the Gemini CLI publishes none. Any other model can be typed in.';
+  }
+  if (runtime === 'claude') {
+    return 'aliases the Claude CLI resolves to the latest of each family. Any exact id can be typed in.';
   }
   return discoveredCodex.length > 0
     ? `${discoveredCodex.length} models the Codex CLI has cached for this machine.`

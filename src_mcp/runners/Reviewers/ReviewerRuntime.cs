@@ -162,7 +162,7 @@ public sealed class ReviewerRuntimeSelector(IEnumerable<IReviewerRuntime> runtim
         runtimes.ToDictionary(r => r.Provider, StringComparer.OrdinalIgnoreCase);
 
     public static ReviewerRuntimeSelector Default { get; } =
-        new([new CodexRuntime(), new GeminiRuntime(), new DeepseekRuntime()]);
+        new([new CodexRuntime(), new GeminiRuntime(), new ClaudeRuntime(), new DeepseekRuntime()]);
 
     public IReadOnlyCollection<string> Providers => _byProvider.Keys;
 

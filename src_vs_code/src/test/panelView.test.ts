@@ -15,6 +15,7 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   serverVersion: '',
   questions: [],
   sessions: [],
+  openSections: ['reviewers', 'language', 'gate', 'limits', 'keys', 'server', 'rounds'],
   ...over,
 });
 
@@ -196,4 +197,92 @@ test('rounds are newest first, and an empty history says so', () => {
 
 test('escapeHtml handles the four characters that matter', () => {
   assert.equal(escapeHtml('<a href="x">&</a>'), '&lt;a href=&quot;x&quot;&gt;&amp;&lt;/a&gt;');
+});
+
+test('every setting carries a "?" that explains it', () => {
+  const html = panelHtml(state(), 'n');
+  const markers = html.match(/class="help"/g) ?? [];
+  assert.ok(markers.length >= 10, `every labelled setting explains itself, found ${markers.length}`);
+  // "Per vendor" is the one that provoked this: the label alone says nothing.
+  assert.ok(html.includes('Rate limits are per vendor'), 'and the explanation says WHY, not just what');
+});
+
+test('the keys section answers "do I need this?" before showing the field', () => {
+  const noKeys = panelHtml(state(), 'n');
+  assert.ok(noKeys.includes('Nothing to fill in yet'), 'codex and gemini sign in through their own CLIs');
+  assert.ok(noKeys.includes('not needed yet'));
+
+  const needsKeys = panelHtml(
+    state({
+      vendors: [
+        { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '' },
+        { id: 'deepseek', runtime: 'codex', model: '', enabled: true, baseUrl: 'https://api.deepseek.com/v1' },
+      ],
+    }),
+    'n',
+  );
+  assert.ok(!needsKeys.includes('Nothing to fill in yet'));
+  assert.ok(needsKeys.includes('deepseek'), 'and it names who needs one');
+  assert.ok(needsKeys.includes('Enable Code Access'), 'and how to mint it');
+});
+
+test('a disabled vendor with an endpoint does not demand a key', () => {
+  const html = panelHtml(
+    state({ vendors: [{ id: 'deepseek', runtime: 'codex', model: '', enabled: false, baseUrl: 'https://x/v1' }] }),
+    'n',
+  );
+  assert.ok(html.includes('Nothing to fill in yet'), 'a reviewer that does not run needs nothing');
+});
+
+test('the server line is body text, not a footnote', () => {
+  const css = panelHtml(state(), 'n').split('</style>')[0] ?? '';
+  assert.ok(!/\.status \{[^}]*font-size/.test(css), 'it states a fact and reads at the same size as one');
+});
+
+test('claude is offered as a translator and as a reviewer preset', () => {
+  assert.ok(panelHtml(state(), 'n').includes('Claude, a small model'));
+  const claude = panelHtml(
+    state({ vendors: [{ id: 'claude', runtime: 'claude', model: 'haiku', enabled: true, baseUrl: '' }] }),
+    'n',
+  );
+  assert.ok(claude.includes('value="haiku"'));
+  assert.ok(claude.includes('aliases the Claude CLI resolves'));
+});
+
+test('what changes is open; what is set once is folded away', () => {
+  // The fixture opens everything, so this asks the renderer for the real defaults.
+  const html = panelHtml(state({ openSections: [] }), 'n');
+  const openSections = [...html.matchAll(/data-section="([a-z]+)" open/g)].map((m) => m[1]);
+  assert.deepEqual(openSections, ['reviewers', 'rounds']);
+  for (const folded of ['language', 'gate', 'limits', 'keys', 'server']) {
+    assert.ok(html.includes(`data-section="${folded}"`), `${folded} is present`);
+    assert.ok(!html.includes(`data-section="${folded}" open`), `${folded} starts folded`);
+  }
+});
+
+test('a section the person opened stays open through a repaint', () => {
+  const html = panelHtml(state({ openSections: ['limits'] }), 'n');
+  assert.ok(html.includes('data-section="limits" open'));
+  assert.ok(!html.includes('data-section="reviewers" open'), 'their choice replaces the defaults entirely');
+});
+
+test('a waiting question is never collapsible', () => {
+  const html = panelHtml(
+    state({
+      questions: [
+        { id: 'q1', sessionId: 's', repoPath: 'r', branch: 'b', question: 'Ship?', openFindings: [], askedUtc: 'now' },
+      ],
+    }),
+    'n',
+  );
+  const heading = html.indexOf('waiting on you');
+  assert.ok(heading >= 0);
+  assert.ok(
+    heading < html.indexOf('<details'),
+    'it stands before every collapsible section — a blocked round is not tidied away behind an arrow',
+  );
+});
+
+test('the accordion reports its own toggles, so the open set survives', () => {
+  assert.ok(panelHtml(state(), 'n').includes("type: 'section'"));
 });
