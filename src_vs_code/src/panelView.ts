@@ -71,6 +71,11 @@ ${body}
   for (const el of document.querySelectorAll('[data-setting]')) {
     el.addEventListener('change', () => {
       const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
+      if (value === '__other__') {
+        // Not a model — a request to type one; the input box comes from the provider side.
+        vscode.postMessage({ type: 'command', command: 'customModel', id: el.dataset.vendor ?? '__translator__' });
+        return;
+      }
       vscode.postMessage({ type: 'setting', key: el.dataset.setting, value, vendor: el.dataset.vendor });
     });
   }
@@ -109,7 +114,6 @@ function reviewersBody(state: PanelState): string {
 
 function vendorCard(vendor: Vendor, codexModels: readonly ModelChoice[]): string {
   const id = escapeHtml(vendor.id);
-  const listId = `models-${id}`;
   const models = modelsFor(vendor.runtime, codexModels, vendor.model);
   const endpoint =
     vendor.baseUrl.length === 0
@@ -129,12 +133,9 @@ function vendorCard(vendor: Vendor, codexModels: readonly ModelChoice[]): string
     <button class="link" data-command="removeVendor" data-id="${id}">remove</button>
   </div>
   <div class="field">
-    <input type="text" list="${listId}" data-setting="model" data-vendor="${id}"
-           title="${escapeHtml(HELP.vendorModel)}"
-           value="${escapeHtml(vendor.model)}" placeholder="model — empty for the CLI's default">
-    <datalist id="${listId}">
-      ${models.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.label)}</option>`).join('\n      ')}
-    </datalist>
+    <select data-setting="model" data-vendor="${id}" title="${escapeHtml(HELP.vendorModel)}">
+      ${modelOptions(models, vendor.model)}
+    </select>
     <div class="hint">${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(vendor.runtime, codexModels))}</div>
   </div>${endpoint}
 </div>`;
@@ -150,9 +151,7 @@ function languageBody(state: PanelState): string {
   ).join('\n    ');
   const runtime =
     s.translator.provider === 'codex' ? 'codex' : s.translator.provider === 'claude' ? 'claude' : 'gemini';
-  const models = modelsFor(runtime, state.codexModels, s.translator.model)
-    .map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.label)}</option>`)
-    .join('\n    ');
+  const models = modelOptions(modelsFor(runtime, state.codexModels, s.translator.model), s.translator.model);
 
   return `<div class="field">
   ${labelled('language', 'Ask and answer in', 'language')}
@@ -168,11 +167,9 @@ function languageBody(state: PanelState): string {
 </div>
 <div class="field">
   ${labelled('translatorModel', 'Translator model', 'translatorModel')}
-  <input type="text" id="translatorModel" data-setting="translator.model" list="translator-models"
-         value="${escapeHtml(s.translator.model)}" placeholder="the CLI's default">
-  <datalist id="translator-models">
+  <select id="translatorModel" data-setting="translator.model">
     ${models}
-  </datalist>
+  </select>
   <div class="hint">A question already in this language is left alone. If the translator cannot run you get the original with the reason — never an error in its place.</div>
 </div>`;
 }
@@ -288,6 +285,23 @@ function roundsBody(sessions: readonly SessionFile[]): string {
         `<div class="verdict">${escapeHtml(r.branch)} · ${escapeHtml(r.stage)} ${r.number} · <b>${escapeHtml(r.verdict)}</b> · ${r.gatingCount} gating</div>`,
     )
     .join('\n');
+}
+
+/**
+ * A model list as SELECT options: the CLI's default first, every known model, the saved value
+ * kept even when unknown, and "another model…" as the way out of the list.
+ *
+ * <p>A select rather than a datalist, learned the hard way: a datalist FILTERS its options by the
+ * field's current value, so the moment a model was chosen every other option vanished and the
+ * picker read as broken.</p>
+ */
+function modelOptions(models: readonly ModelChoice[], current: string): string {
+  const known = models
+    .map((m) => `<option value="${escapeHtml(m.id)}"${m.id === current ? ' selected' : ''}>${escapeHtml(m.label)}</option>`)
+    .join('\n      ');
+  return `<option value=""${current === '' ? ' selected' : ''}>the CLI's default</option>
+      ${known}
+      <option value="__other__">another model…</option>`;
 }
 
 /**

@@ -54,6 +54,13 @@ test("codex offers the CLI's own cached models; gemini offers a curated list", (
   assert.ok(html.includes('a curated list'), 'curation is admitted, never passed off as discovery');
 });
 
+test('the picker is a SELECT with every model visible, never a filtering datalist', () => {
+  const html = panelHtml(state(), 'n0nce');
+  assert.ok(!html.includes('<datalist'), 'a datalist filters by the current value and reads as empty');
+  assert.ok(html.includes('another model…'), 'the list is a convenience, never a limit');
+  assert.ok(html.includes("the CLI's default"), 'and empty is a first-class choice');
+});
+
 test('a model the person typed stays in its own list', () => {
   const html = panelHtml(
     state({ vendors: [{ id: 'codex', runtime: 'codex', model: 'something-new', enabled: true, baseUrl: '' }] }),

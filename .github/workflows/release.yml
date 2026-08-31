@@ -1,20 +1,24 @@
 name: release
 
-# One product so far, one tag shape: mcp-v0.1.0 → four Native AOT `coai-mcp` binaries attached
-# to the release. The extension gains its own `extension-v*` line in epic 05; separate lines so
-# releasing one never ships the other. (The guard-without-a-trigger trap is documented in creds'
-# release.yml — a job's `if` is not a workflow trigger, so every tag shape is listed here.)
+# Two products, two tag shapes, so releasing one never ships the other:
+#   mcp-v0.2.3       → four Native AOT `coai-mcp` binaries attached to the release
+#   extension-v0.8.0 → the .vsix, attached to the release AND published to the Marketplace
+#                      when the VSCE_PAT secret exists (without it, the publish step skips
+#                      OUT LOUD and the .vsix still lands on the release for a manual upload).
+# (The guard-without-a-trigger trap is documented in creds' release.yml — a job's `if` is not a
+# workflow trigger, so every tag shape is listed here.)
 on:
   push:
     tags:
       - 'mcp-v*'
+      - 'extension-v*'
   workflow_dispatch:
     inputs:
       target:
         description: 'What to release'
         required: true
         type: choice
-        options: [mcp]
+        options: [mcp, extension]
 
 permissions:
   contents: read
@@ -101,3 +105,67 @@ jobs:
           gh release create "$GITHUB_REF_NAME" --title "coai-mcp ${GITHUB_REF_NAME#mcp-v}" --notes "Native AOT builds of the ConnectOtherAIs MCP server." 2>/dev/null || true
           gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber
           gh release upload "$GITHUB_REF_NAME" "$ASSET.sha256" --clobber
+
+  extension:
+    name: extension
+    if: startsWith(github.ref, 'refs/tags/extension-v') || inputs.target == 'extension'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: src_vs_code
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src_vs_code/package-lock.json
+
+      - run: npm ci
+
+      # The manifest version IS the release version; a tag that disagrees with it would publish
+      # a lie. Refuse rather than reconcile.
+      - name: Version must match the tag
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#extension-v}"
+          MANIFEST=$(node -p "require('./package.json').version")
+          if [[ "$GITHUB_REF" == refs/tags/extension-v* && "$TAG" != "$MANIFEST" ]]; then
+            echo "tag says $TAG, package.json says $MANIFEST — fix one of them" >&2
+            exit 1
+          fi
+
+      # Never ship an extension that has not passed its own tests.
+      - run: npm test
+
+      - run: npm run bundle
+
+      - name: Package
+        run: npx @vscode/vsce package --no-dependencies
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/extension-v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "ConnectOtherAIs ${GITHUB_REF_NAME#extension-v}" --notes "The VS Code extension." 2>/dev/null || true
+          gh release upload "$GITHUB_REF_NAME" *.vsix --clobber
+
+      # Publishing needs a Marketplace PAT (https://dev.azure.com → Personal Access Tokens,
+      # scope "Marketplace: Manage") stored as the VSCE_PAT repository secret. Absent, this step
+      # says so and the .vsix on the release is uploaded by hand — never a silent success.
+      - name: Publish to the Marketplace
+        if: startsWith(github.ref, 'refs/tags/extension-v')
+        shell: bash
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [[ -z "$VSCE_PAT" ]]; then
+            echo "::warning::VSCE_PAT is not set — the .vsix is on the GitHub release; upload it to the Marketplace by hand or add the secret."
+            exit 0
+          fi
+          npx @vscode/vsce publish --no-dependencies --packagePath *.vsix -p "$VSCE_PAT"

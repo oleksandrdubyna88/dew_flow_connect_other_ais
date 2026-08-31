@@ -121,10 +121,38 @@ export class PanelProvider implements vscode.WebviewViewProvider {
           await this.removeVendor(id);
         }
         break;
+      case 'customModel':
+        if (id !== undefined) {
+          await this.customModel(id);
+        }
+        break;
       default:
         return;
     }
     await this.render();
+  }
+
+  /**
+   * "another model…" from a picker: the list is a convenience, never a limit. `__translator__`
+   * routes to the translator's model; anything else names a vendor.
+   */
+  private async customModel(id: string): Promise<void> {
+    const model = await vscode.window.showInputBox({
+      title: id === '__translator__' ? 'Translator model' : `Model for ${id}`,
+      prompt: "The exact model id the CLI should be given. Empty keeps the CLI's default.",
+      placeHolder: 'e.g. gemini-2.5-flash, gpt-5.4-mini, haiku',
+    });
+    if (model === undefined) {
+      return; // dismissed — the picker snaps back to the saved value on re-render
+    }
+
+    if (id === '__translator__') {
+      await vscode.workspace
+        .getConfiguration('coai')
+        .update('translator.model', model.trim(), vscode.ConfigurationTarget.Global);
+      return;
+    }
+    await this.write('model', model.trim(), id);
   }
 
   /** A preset, or a name and an endpoint typed in — the list is not meant to stay at two. */
