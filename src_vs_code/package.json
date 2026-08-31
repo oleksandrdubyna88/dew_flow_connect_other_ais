@@ -265,6 +265,7 @@
     "typecheck": "tsc -p ./ --noEmit",
     "test": "npm run compile && node scripts/run-tests.mjs",
     "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
+    "vscode:prepublish": "npm run bundle",
     "package": "npm run test && npm run bundle && vsce package --no-dependencies",
     "icon": "node scripts/generate-icon.mjs"
   },
