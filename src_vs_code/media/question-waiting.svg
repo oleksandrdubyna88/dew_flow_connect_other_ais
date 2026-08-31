@@ -1,0 +1,10 @@
+<!-- The title-bar icon while a question is waiting. Green because a blocked round is not an
+     error and not a warning — it is something only you can move, and it should read as "you are
+     needed", not as "something broke". The colour is explicit rather than themed: a menu icon
+     tinted with the foreground would be the same grey as the idle one, which is the whole point
+     of showing a different icon at all. #3fb950 keeps its contrast on light and dark alike. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none">
+  <path d="M2.4 3.6A1.6 1.6 0 0 1 4 2h8a1.6 1.6 0 0 1 1.6 1.6v5.3A1.6 1.6 0 0 1 12 10.5H6.9L4.1 13v-2.5H4a1.6 1.6 0 0 1-1.6-1.6V3.6Z"
+        stroke="#3fb950" stroke-width="1.4" stroke-linejoin="round"/>
+  <circle cx="8" cy="6.2" r="1.5" fill="#3fb950"/>
+</svg>

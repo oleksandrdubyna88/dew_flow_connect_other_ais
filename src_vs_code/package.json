@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "A multi-model review gate: secondary vendor models (Codex, Gemini, DeepSeek) review your main AI's plan and code in rounds, until the findings drop under a threshold or a human is called.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -45,6 +45,12 @@
         "title": "Answer the open question…",
         "icon": "$(comment-discussion)",
         "category": "ConnectOtherAIs"
+      },
+      {
+        "command": "coai.answerQuestionWaiting",
+        "category": "ConnectOtherAIs",
+        "title": "Answer the open question…",
+        "icon": "media/question-waiting.svg"
       }
     ],
     "configuration": {
@@ -208,7 +214,7 @@
         {
           "type": "webview",
           "id": "coai.panel",
-          "name": "Review panel"
+          "name": "ConnectOtherAIs"
         }
       ]
     },
@@ -216,7 +222,12 @@
       "view/title": [
         {
           "command": "coai.answerQuestion",
-          "when": "view == coai.panel",
+          "when": "view == coai.panel && !coai.hasQuestions",
+          "group": "navigation@0"
+        },
+        {
+          "command": "coai.answerQuestionWaiting",
+          "when": "view == coai.panel && coai.hasQuestions",
           "group": "navigation@0"
         },
         {
@@ -238,6 +249,12 @@
           "command": "coai.copyClaudeSnippet",
           "when": "view == coai.panel",
           "group": "server@3"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "coai.answerQuestionWaiting",
+          "when": "false"
         }
       ]
     }

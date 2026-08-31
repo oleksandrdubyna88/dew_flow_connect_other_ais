@@ -29,7 +29,11 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   // The panel repaints whenever the watcher's state moves, so a question answered in the modal
   // disappears from the sidebar without anyone asking it to.
-  watcher.onChanged = () => void panel.render();
+  watcher.onChanged = () => {
+    // What the title bar switches on: green while somebody is waiting on an answer.
+    void vscode.commands.executeCommand('setContext', 'coai.hasQuestions', watcher.openQuestions.length > 0);
+    void panel.render();
+  };
   watcher.start();
 
   context.subscriptions.push(
@@ -40,6 +44,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('coai.copyClaudeSnippet', copyClaudeSnippet),
     vscode.commands.registerCommand('coai.showRounds', () => showRounds(watcher)),
     vscode.commands.registerCommand('coai.answerQuestion', () => answerQuestion(watcher)),
+    // The same action under a second id, so the title bar can show a green icon while a question
+    // is waiting — a menu icon cannot be recoloured by state, but which command is shown can.
+    vscode.commands.registerCommand('coai.answerQuestionWaiting', () => answerQuestion(watcher)),
   );
 
   void offerUpdate(context);
