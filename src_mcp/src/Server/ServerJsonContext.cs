@@ -46,6 +46,9 @@ public sealed record ResolveAnswer(string Stage, bool AwaitingResolve, int Recor
 /// <summary>A refusal or error, as data — the sentence is the interface.</summary>
 public sealed record ErrorAnswer(string Error);
 
+/// <summary>What `ask_human` returns: the person's words, or why there are none yet.</summary>
+public sealed record HumanAnswer(string Status, string Answer, string Instruction);
+
 /// <summary>The wire shape of one decision passed to `resolve`.</summary>
 public sealed record DecisionDto(int Finding, string Action, string Reason = "");
 
@@ -61,5 +64,6 @@ public sealed record DecisionDto(int Finding, string Action, string Reason = "")
 [JsonSerializable(typeof(ReviewAnswer))]
 [JsonSerializable(typeof(ResolveAnswer))]
 [JsonSerializable(typeof(ErrorAnswer))]
+[JsonSerializable(typeof(HumanAnswer))]
 [JsonSerializable(typeof(List<DecisionDto>))]
 internal sealed partial class ServerJsonContext : JsonSerializerContext;

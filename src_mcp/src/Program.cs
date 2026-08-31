@@ -128,7 +128,8 @@ internal static class Program
         Optional environment: COAI_PROVIDERS, COAI_MODEL_<PROVIDER>, COAI_EXE_<PROVIDER>,
         COAI_MAX_ROUNDS, COAI_GATE_THRESHOLD, COAI_ON_EXHAUSTED (continue|human|escalate),
         COAI_MAX_CONCURRENCY, COAI_MAX_PER_PROVIDER, COAI_REVIEWER_TIMEOUT_MINUTES,
-        COAI_DATA_DIR, COAI_RATE_LIMIT_BACKOFF_SECONDS,
+        COAI_DATA_DIR, COAI_RATE_LIMIT_BACKOFF_SECONDS, COAI_ESCALATION_MINUTES
+        (or COAI_ESCALATION_SECONDS, which wins),
         COAI_CREDS_KEY (the CredsForDevs config-entry key holding vendor keys),
         COAI_LOG_LEVEL.
         """;

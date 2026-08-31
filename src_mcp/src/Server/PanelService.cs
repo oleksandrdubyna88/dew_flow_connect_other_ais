@@ -29,6 +29,7 @@ public sealed class PanelService
     private readonly BoundedScheduler _scheduler;
     private readonly ReviewerExecutor _executor;
     private readonly RolePrompts _prompts;
+    private readonly Escalations _escalations;
 
     public PanelService(PanelSettings settings, VaultKeys keys, DateTime vaultReadUtc, IProcessLauncher launcher, Serilog.ILogger log)
     {
@@ -44,6 +45,7 @@ public sealed class PanelService
             settings.GlobalConcurrency, settings.PerProviderConcurrency, settings.RateLimitBackoff);
         _executor = new ReviewerExecutor(launcher);
         _prompts = new RolePrompts(settings.DataDir);
+        _escalations = new Escalations(settings.DataDir);
     }
 
     private static readonly ImmutableArray<ReviewRole> CodeRoles =
@@ -377,6 +379,55 @@ public sealed class PanelService
             default:
                 return Error("unexpected transition — this is a bug, report it");
         }
+    }
+
+    // ---------- ask_human ----------
+
+    /// <summary>
+    /// Puts the question in front of a person and waits — through the data directory the extension
+    /// watches, so no port is opened by either half.
+    /// </summary>
+    /// <remarks>
+    /// The open findings ride with it: a person deciding "ship anyway?" needs to see what is still
+    /// gating, and going to look for it elsewhere is how a decision gets made on a summary.
+    /// </remarks>
+    public async Task<string> AskHumanAsync(string repoPath, string branch, string question, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(question))
+        {
+            return Error("a question is required — an empty escalation tells a person nothing");
+        }
+
+        var session = _store.Load(repoPath, branch);
+        var id = Guid.NewGuid().ToString("N")[..12];
+        var asked = new EscalationQuestion(
+            id,
+            session?.State.SessionId ?? "no-session",
+            repoPath,
+            branch,
+            question.Trim(),
+            session?.Pending.Where(f => f.IsGating).ToList() ?? [],
+            DateTime.UtcNow.ToString("O"));
+
+        _log.Information("escalating {Id} to a person: {Question}", id, asked.Question);
+        var outcome = await _escalations.AskAsync(asked, _settings.EscalationBudget, ct);
+
+        return outcome switch
+        {
+            EscalationOutcome.Answered answered => Json(
+                new HumanAnswer("answered", answered.Text, string.Empty), ServerJsonContext.Default.HumanAnswer),
+
+            // The family's `remote-ask` fallback, verbatim in shape: nobody answered in the budget,
+            // so ASK IN THE CHAT rather than stalling or deciding alone. The question file stays.
+            _ => Json(
+                new HumanAnswer(
+                    "no_answer_yet",
+                    string.Empty,
+                    $"nobody answered in {_settings.EscalationBudget.TotalMinutes:0} minutes — ask the person " +
+                    $"directly in this conversation and wait for their reply. The question is still open in " +
+                    $"VS Code as escalation {id}."),
+                ServerJsonContext.Default.HumanAnswer),
+        };
     }
 
     // ---------- plumbing ----------

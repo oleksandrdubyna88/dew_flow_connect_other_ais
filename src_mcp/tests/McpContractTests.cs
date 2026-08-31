@@ -42,7 +42,7 @@ public sealed class McpContractTests : IDisposable
         catch (IOException) { }
     }
 
-    private Process Start(string logLevel = "debug")
+    private Process Start(string logLevel = "debug", int escalationSeconds = 1800)
     {
         var info = new ProcessStartInfo(ServerExe)
         {
@@ -53,15 +53,16 @@ public sealed class McpContractTests : IDisposable
         };
         info.Environment["COAI_DATA_DIR"] = _data;
         info.Environment["COAI_LOG_LEVEL"] = logLevel; // chatty on purpose: purity is the claim
+        info.Environment["COAI_ESCALATION_SECONDS"] = escalationSeconds.ToString();
         var process = Process.Start(info)!;
         return process;
     }
 
-    private static async Task<JsonDocument> RoundTrip(Process server, string request)
+    private static async Task<JsonDocument> RoundTrip(Process server, string request, int timeoutSeconds = 30)
     {
         await server.StandardInput.WriteLineAsync(request);
         await server.StandardInput.FlushAsync();
-        var line = await server.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(30));
+        var line = await server.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(timeoutSeconds));
         line.Should().NotBeNull("the server must answer before the client gives up");
         return JsonDocument.Parse(line!);
     }
@@ -134,10 +135,14 @@ public sealed class McpContractTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// With nobody at the keyboard, the escalation waits its budget and then tells the model to
+    /// ask in the chat — the family's `remote-ask` fallback, observed over the real wire.
+    /// </summary>
     [Fact]
-    public async Task AskHuman_ReturnsTheRefusal_TheMainAiMustSurface()
+    public async Task AskHuman_WithNobodyListening_WaitsThenSaysToAskInTheChat()
     {
-        using var server = Start();
+        using var server = Start(escalationSeconds: 3);
         try
         {
             await RoundTrip(server, """
@@ -146,13 +151,66 @@ public sealed class McpContractTests : IDisposable
             await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
             await server.StandardInput.FlushAsync();
 
+            // The budget is short here; the read must still outlast it.
             var answer = await RoundTrip(server, """
-                {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"ask_human","arguments":{"question":"ship it?"}}}
-                """);
+                {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"ask_human","arguments":{"repoPath":"D:/nowhere","branch":"main","question":"ship it?"}}}
+                """, timeoutSeconds: 60);
             var text = answer.RootElement.GetProperty("result").GetProperty("content")[0]
                 .GetProperty("text").GetString();
 
-            text.Should().Contain("SURFACE THIS QUESTION").And.Contain("ship it?");
+            text.Should().Contain("no_answer_yet").And.Contain("ask the person directly");
+            Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json")
+                .Should().ContainSingle("the question stays open — a person may still answer it");
+        }
+        finally
+        {
+            server.Kill(entireProcessTree: true);
+            await server.WaitForExitAsync();
+        }
+    }
+
+    [Fact]
+    public async Task AskHuman_AnsweredInVsCode_ReturnsThePersonsWords()
+    {
+        using var server = Start(escalationSeconds: 60);
+        try
+        {
+            await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}
+                """);
+            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
+            await server.StandardInput.FlushAsync();
+
+            await server.StandardInput.WriteLineAsync("""
+                {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"ask_human","arguments":{"repoPath":"D:/nowhere","branch":"main","question":"ship it?"}}}
+                """);
+            await server.StandardInput.FlushAsync();
+
+            // Stand in for the extension: wait for the question file, then write the answer.
+            var dir = Path.Combine(_data, "escalations");
+            string? question = null;
+            for (var i = 0; i < 200 && question is null; i++)
+            {
+                question = Directory.Exists(dir)
+                    ? Directory.GetFiles(dir, "*.json").FirstOrDefault(f => !f.EndsWith(".answer.json"))
+                    : null;
+                if (question is null)
+                {
+                    await Task.Delay(50);
+                }
+            }
+
+            question.Should().NotBeNull("the question must appear immediately, not when the wait ends");
+            var id = Path.GetFileNameWithoutExtension(question!);
+            await File.WriteAllTextAsync(
+                Path.Combine(dir, $"{id}.answer.json"),
+                $$"""{"id":"{{id}}","answer":"no, fix it first","answeredUtc":"{{DateTime.UtcNow:O}}"}""");
+
+            var line = await server.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(60));
+            var text = JsonDocument.Parse(line!).RootElement
+                .GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+
+            text.Should().Contain("answered").And.Contain("no, fix it first");
         }
         finally
         {

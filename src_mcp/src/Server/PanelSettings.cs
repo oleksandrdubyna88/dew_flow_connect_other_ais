@@ -33,6 +33,16 @@ public sealed record PanelSettings
     /// <summary>How long a rate-limited reviewer waits before its one retry.</summary>
     public TimeSpan RateLimitBackoff { get; init; } = TimeSpan.FromSeconds(15);
 
+    /// <summary>
+    /// How long an escalation waits for a person before answering "nobody answered yet".
+    /// </summary>
+    /// <remarks>
+    /// Thirty minutes, and the fallback is the family's: the main AI then asks in the chat, the
+    /// same shape `remote-ask.md` prescribes on `no_answer_yet`. Waiting forever would hand the
+    /// decision to whichever MCP client's own timeout fires first, with nothing said about why.
+    /// </remarks>
+    public TimeSpan EscalationBudget { get; init; } = TimeSpan.FromMinutes(30);
+
     /// <summary>Where sessions, prompts overrides and round artifacts live.</summary>
     public string DataDir { get; init; } = DefaultDataDir;
 
@@ -55,6 +65,12 @@ public sealed record PanelSettings
         PerProviderConcurrency = IntVar(env, "COAI_MAX_PER_PROVIDER", 2),
         ReviewerTimeout = TimeSpan.FromMinutes(IntVar(env, "COAI_REVIEWER_TIMEOUT_MINUTES", 10)),
         RateLimitBackoff = TimeSpan.FromSeconds(IntVar(env, "COAI_RATE_LIMIT_BACKOFF_SECONDS", 15)),
+        // Seconds win when set: minutes are the setting a person configures, seconds are for a
+        // short budget a test or a scripted run needs. One knob would have had to lie about one
+        // of the two.
+        EscalationBudget = env("COAI_ESCALATION_SECONDS") is { Length: > 0 }
+            ? TimeSpan.FromSeconds(IntVar(env, "COAI_ESCALATION_SECONDS", 30))
+            : TimeSpan.FromMinutes(IntVar(env, "COAI_ESCALATION_MINUTES", 30)),
         DataDir = env("COAI_DATA_DIR") is { Length: > 0 } dir ? dir : DefaultDataDir,
     }.WithProvidersFrom(env);
 

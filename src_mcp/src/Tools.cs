@@ -111,24 +111,25 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            (string question) => AskHuman(question),
+            async (string repoPath, string branch, string question) =>
+                await service.AskHumanAsync(repoPath, branch, question),
             new McpServerToolCreateOptions
             {
                 Name = "ask_human",
-                Title = "Escalate a decision to the person",
+                Title = "Escalate a decision to the person, and wait for their answer",
                 Description = """
-                    For a decision the gate says is a human's. Today no VS Code window listens (the
-                    ConnectOtherAIs extension is not installed/running), so this returns a refusal
-                    you must surface to the human yourself — verbatim, with the question.
+                    For a decision the gate says is a human's — a `call_human` verdict, or anything
+                    else only they can settle. The question appears in VS Code (a dialog, the status
+                    bar, and the open-questions list) together with the round's still-gating
+                    findings, and THIS CALL BLOCKS until they answer or the budget runs out
+                    (30 minutes by default).
+
+                    Two possible replies. `status: "answered"` carries their words in `answer` — act
+                    on them. `status: "no_answer_yet"` means nobody was at the keyboard: ask the
+                    person directly in this conversation and wait for their reply. Never decide
+                    alone because nobody answered; the question stays open in VS Code either way.
                     """,
-                ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false,
+                ReadOnly = true, Idempotent = false, Destructive = false, OpenWorld = false,
             });
     }
-
-    private static string AskHuman(string question) =>
-        System.Text.Json.JsonSerializer.Serialize(
-            new ErrorAnswer(
-                "no VS Code window is listening for escalations on this machine — SURFACE THIS " +
-                $"QUESTION TO THE HUMAN YOURSELF and wait for their answer: {question}"),
-            ServerJsonContext.Default.ErrorAnswer);
 }
