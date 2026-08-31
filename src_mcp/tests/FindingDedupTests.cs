@@ -29,6 +29,67 @@ public sealed class FindingDedupTests
     }
 
     [Fact]
+    public void TheSameDefectInDifferentWords_Merges_WhenFileAndLineAnchorIt()
+    {
+        // Verbatim from the real run of 2026-08-31: two reviewers, one path-traversal defect at
+        // Store.cs:10, 0.43 similar by title — counted twice under a single strict threshold.
+        var merged = FindingDedup.Merge([
+            F("codex", file: "src/Store.cs", line: 10,
+              title: "Unvalidated paste IDs can escape the configured storage root"),
+            F("gemini", file: "src/Store.cs", line: 10,
+              title: "Unvalidated paste IDs allow writes and reads outside the configured root"),
+        ]);
+
+        merged.Should().ContainSingle("a gate whose count grows with the number of reviewers is the bug dedup exists to prevent")
+            .Which.Providers.Should().BeEquivalentTo("codex", "gemini");
+    }
+
+    /// <summary>
+    /// The limit of a lexical rule, recorded rather than tuned away.
+    /// </summary>
+    /// <remarks>
+    /// Also verbatim from the real run: two roles found ONE quadratic scan and shared almost no
+    /// vocabulary describing it — "Search rescans and rereads the entire store once for every
+    /// paste" against "Search performs quadratic directory scans and file reads", 0.12 similar.
+    /// Lowering the threshold far enough to merge these would also merge the genuinely different
+    /// remarks in <see cref="UnrelatedRemarksOnTheSameLine_StillDoNotMerge"/> (0.20). So this pair
+    /// counts twice, and the honest cure is a semantic comparison rather than a smaller number —
+    /// which is a change worth making deliberately, not by moving a constant until a test passes.
+    /// </remarks>
+    [Fact]
+    public void TwoWordingsWithNoSharedVocabulary_StillCountTwice_AndThatIsTheKnownLimit()
+    {
+        FindingDedup.Merge([
+            F("codex", file: "src/Store.cs", line: 37, category: Category.Performance,
+              title: "Search rescans and rereads the entire store once for every paste"),
+            F("codex", file: "src/Store.cs", line: 39, category: Category.Performance,
+              title: "Search performs quadratic directory scans and file reads"),
+        ]).Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void UnrelatedRemarksOnTheSameLine_StillDoNotMerge()
+    {
+        // The looser threshold must not become "anything on one line is one finding".
+        FindingDedup.Merge([
+            F("codex", file: "src/A.cs", line: 20, category: Category.Reliability,
+              title: "the cancellation token is never observed"),
+            F("gemini", file: "src/A.cs", line: 22, category: Category.Reliability,
+              title: "the returned stream is left undisposed"),
+        ]).Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void RepoLevelFindings_StillNeedRealSimilarity()
+    {
+        // No file, no line: the title is all there is, so the strict threshold stands.
+        FindingDedup.Merge([
+            F("codex", file: "", line: 0, category: Category.Architecture, title: "the plan has no rollback step"),
+            F("gemini", file: "", line: 0, category: Category.Architecture, title: "the build order contradicts the stated scope"),
+        ]).Should().HaveCount(2);
+    }
+
+    [Fact]
     public void SameFileDifferentCategory_StaysTwoFindings() =>
         FindingDedup.Merge([
             F("codex", category: Category.Security),

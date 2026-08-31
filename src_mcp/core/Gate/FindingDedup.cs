@@ -42,11 +42,25 @@ public static class FindingDedup
         return [.. merged];
     }
 
-    internal static bool SameDefect(Finding a, Finding b) =>
-        a.Category == b.Category &&
-        NormalisePath(a.File).Equals(NormalisePath(b.File), StringComparison.OrdinalIgnoreCase) &&
-        Math.Abs(a.Line - b.Line) <= LineSlack &&
-        TextSimilarity.SameRemark(a.Title, b.Title);
+    /// <summary>
+    /// Same category, same file, lines within ±5 — and then as much wording overlap as those
+    /// coordinates leave necessary: little when a real file and line anchor both findings, the
+    /// full amount when neither has a file and the title is all there is to go on.
+    /// </summary>
+    internal static bool SameDefect(Finding a, Finding b)
+    {
+        if (a.Category != b.Category ||
+            !NormalisePath(a.File).Equals(NormalisePath(b.File), StringComparison.OrdinalIgnoreCase) ||
+            Math.Abs(a.Line - b.Line) > LineSlack)
+        {
+            return false;
+        }
+
+        var anchored = a.File.Length > 0 && a.Line > 0;
+        return anchored
+            ? TextSimilarity.SameAnchoredRemark(a.Title, b.Title)
+            : TextSimilarity.SameRemark(a.Title, b.Title);
+    }
 
     private static string NormalisePath(string path) => path.Replace('\\', '/');
 }
