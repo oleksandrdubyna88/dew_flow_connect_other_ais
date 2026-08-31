@@ -39,7 +39,7 @@ sequenceDiagram
 | `DiffExclusions`, `ContextAssembler` | `Context/ContextAssembler.cs` | numstat → per-file diffs with `:(exclude,glob)` pathspecs; binary sizes via `cat-file -s` |
 | `IReviewerRuntime`: `CodexRuntime`, `DeepseekRuntime`, `GeminiRuntime` | `Reviewers/ReviewerRuntime.cs` | pure argv builders, flags verified against codex 0.147.0 / gemini 0.55.1; keys ride env, never argv; DeepSeek = Codex config-shifted |
 | `ReviewerRuntimeSelector` | same | unknown provider refuses naming the catalog |
-| `ReviewerOutcome` (closed), `ReviewerExecutor`, `RateLimit` | `Reviewers/ReviewerExecutor.cs` | one launch + one repair; five named outcomes |
+| `ReviewerOutcome` (closed), `ReviewerExecutor`, `RateLimit` | `Reviewers/ReviewerExecutor.cs` | one launch + one repair; SIX named outcomes incl. NotStarted |
 | `BoundedScheduler`, `ReviewerWork`, `ReviewerSummaryFactory` | `Reviewers/BoundedScheduler.cs` | global + per-provider semaphores; one rate-limit retry after backoff |
 
 ## The decisions a reader needs
@@ -58,13 +58,13 @@ sequenceDiagram
 
 Both cost a whole run each; see [RESULTS_first_real_run.md](RESULTS_first_real_run.md).
 
-- **No argument may ever contain a newline.** On Windows the vendor CLIs are npm  shims, so
+- **No argument may ever contain a newline.** On Windows the vendor CLIs are npm `.cmd` shims, so
   cmd.exe parses our argv and truncates an argument at its first newline — silently, so the model
-  answers as if handed nothing. The prompt therefore travels on **stdin**: , and a
-  one-line  pointer for gemini, which appends  to stdin. A test asserts the rule for all
-  three runtimes.
-- **A bare command name is not startable.**  does not read , so it finds
-  npm's extensionless shell script and fails.  tries the executable extensions
+  answers as if it had been handed nothing. The prompt therefore travels on **stdin**: `codex … -`
+  (its documented "instructions from stdin"), and a one-line `-p` pointer for gemini, which appends
+  `-p` to stdin. A test asserts the rule for all three runtimes.
+- **A bare command name is not startable.** `Process.Start` does not read `PATHEXT`, so it finds
+  npm's extensionless shell script and fails. `ExecutableResolver` tries the executable extensions
   first and the bare name last, and never rewrites an explicit path.
 
 ## External dependencies
