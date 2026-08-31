@@ -83,6 +83,20 @@ public sealed class GateReportingTests
         RateLimit.Reason(result).Should().Contain("exceeded your current quota");
     }
 
+    [Fact]
+    public void ADailyQuota_IsNotRetried_BecauseWaitingCannotClearIt()
+    {
+        RateLimit.Hopeless("TerminalQuotaError: You have exhausted your daily quota on this model.")
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void ATransientOverload_IsStillWorthOneRetry()
+    {
+        RateLimit.Hopeless("503 UNAVAILABLE: This model is currently experiencing high demand")
+            .Should().BeFalse("that one clears while you wait, which is what the retry is for");
+    }
+
     // ---------- D1: the audit line survives a non-string property ----------
 
     /// <summary>

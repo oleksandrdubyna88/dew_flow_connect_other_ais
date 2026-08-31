@@ -65,9 +65,21 @@ public static class RateLimit
         Phrases.Any(p => Contains(result.StdErr, p) || Contains(result.StdOut, p));
 
     /// <summary>
+    /// Whether waiting is pointless: a DAILY allowance, not a per-minute throttle.
+    /// </summary>
+    /// <remarks>
+    /// Measured cost of not asking: gemini answered "You have exhausted your daily quota on this
+    /// model", the scheduler waited its backoff and launched a second doomed reviewer, and that
+    /// round took 157 seconds instead of 19. The retry exists for "this model is currently
+    /// experiencing high demand", which clears in seconds; a daily quota clears at midnight in
+    /// someone else's timezone.
+    /// </remarks>
+    public static bool Hopeless(string reason) =>
+        Contains(reason, "daily") || Contains(reason, "exhausted");
+
+    /// <summary>
     /// The line that says WHICH limit was hit, so a person can tell a per-minute throttle from a
-    /// daily quota. Gemini's real answer was "You have exhausted your daily quota on this model",
-    /// and a fifteen-second retry against that is 138 seconds of a round spent learning nothing.
+    /// daily quota — and so <see cref="Hopeless"/> has something to read.
     /// </summary>
     public static string Reason(ProcessResult result)
     {

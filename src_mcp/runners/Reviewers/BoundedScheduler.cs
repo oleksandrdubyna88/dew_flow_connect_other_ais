@@ -165,9 +165,16 @@ public sealed class BoundedScheduler(int globalCap = 3, int perProviderCap = 2, 
     private async Task<ReviewerOutcome> RunWithOneRetryAsync(ReviewerWork w, ReviewerExecutor executor, CancellationToken ct)
     {
         var outcome = await executor.RunAsync(w.Invocation, w.Repair, ct);
-        if (outcome is not ReviewerOutcome.RateLimited)
+        if (outcome is not ReviewerOutcome.RateLimited limited)
         {
             return outcome;
+        }
+
+        // A retry is for a limit that clears while you wait. A daily allowance does not, and
+        // spending the backoff plus a second doomed launch on one only makes the round slower.
+        if (RateLimit.Hopeless(limited.Reason))
+        {
+            return limited;
         }
 
         await Task.Delay(_backoff, ct);
