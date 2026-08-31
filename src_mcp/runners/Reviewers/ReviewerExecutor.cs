@@ -31,16 +31,23 @@ public abstract record ReviewerOutcome
     private ReviewerOutcome() { }
 }
 
-/// <summary>Recognising a vendor quota answer in a CLI's output. Pure, so it is a table test.</summary>
+/// <summary>
+/// Recognising "the vendor could not serve this right now, try again" in a CLI's output — the one
+/// failure worth a second attempt. Pure, so it is a table test.
+/// </summary>
 public static class RateLimit
 {
     /// <summary>
-    /// The phrases vendors actually use. <c>usage limit</c> is here because Codex says
-    /// "You've hit your usage limit" and never the words "rate limit" or "429" — observed in the
-    /// first real run, where a quota exhaustion was misreported as a plain non-zero exit and so
-    /// was never retried.
+    /// The phrases vendors actually use, all of them observed rather than imagined:
+    /// <list type="bullet">
+    /// <item>Codex says "You've hit your usage limit" — never "rate limit", never "429", which is
+    /// why a quota exhaustion was first misreported as a plain non-zero exit and never retried.</item>
+    /// <item>Gemini answers <c>503 UNAVAILABLE</c> "This model is currently experiencing high
+    /// demand" — transient by its own description, and so exactly what one retry is for.</item>
+    /// </list>
     /// </summary>
-    private static readonly string[] Phrases = ["429", "rate limit", "usage limit", "quota"];
+    private static readonly string[] Phrases =
+        ["429", "rate limit", "usage limit", "quota", "503", "unavailable", "high demand"];
 
     public static bool Hit(ProcessResult result) =>
         result.ExitCode != 0 &&
