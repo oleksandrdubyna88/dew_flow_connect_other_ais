@@ -55,3 +55,17 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Node / TypeScript (the VS Code extension half)
+node_modules/
+out/
+dist/
+*.tsbuildinfo
+*.vsix
+jspm_packages/
+
+# IDE
+.vs/
+
+# Native AOT publish output
+publish/
