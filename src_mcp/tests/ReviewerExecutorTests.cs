@@ -135,3 +135,111 @@ public sealed class ReviewerExecutorTests
     public void RateLimit_Detection_IsATable(int exitCode, string stdout, string stderr, bool hit) =>
         RateLimit.Hit(new ProcessResult(exitCode, stdout, stderr, TimedOut: false)).Should().Be(hit);
 }
+
+/// <summary>
+/// The launcher against a child that does not want our input.
+/// </summary>
+/// <remarks>
+/// Found by the suite itself, on both platforms, as a one-in-many flake: a git command exited
+/// before the prompt finished writing and <c>StandardInput.WriteAsync</c> threw a broken pipe
+/// straight out of the launcher. Every process in this product goes through here, so the failure
+/// was not "a flaky test" — it was a reviewer that could die as an exception instead of as one of
+/// the five named outcomes, and a round that failed as a whole because one CLI exited early.
+/// </remarks>
+[Collection("fakecli-env")]
+public sealed class ProcessLauncherStdInTests
+{
+    private readonly ProcessLauncher _launcher = new();
+
+    [Fact]
+    public async Task AChildThatExitsWithoutReadingStdIn_IsNotAnException()
+    {
+        // A megabyte is past any pipe buffer, so the write cannot complete before `emit` exits —
+        // the race the flake lost is the deterministic case here.
+        var request = new ProcessRequest(FakeCliInvocations.Exe, ["emit", "done"], AppContext.BaseDirectory)
+        {
+            StdIn = new string('x', 1024 * 1024),
+            Timeout = TimeSpan.FromSeconds(30),
+        };
+
+        var result = await _launcher.RunAsync(request, TestContext.Current.CancellationToken);
+
+        result.ExitCode.Should().Be(0);
+        result.StdOut.Should().Contain("done", "the child's own answer still arrives");
+        result.TimedOut.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TheChildStillReceivesStdIn_WhenItActuallyReadsIt()
+    {
+        // The guard must not turn into "stdin is optional": the prompt travels this way.
+        var record = Directory.CreateTempSubdirectory("coai-stdin-").FullName;
+        Environment.SetEnvironmentVariable("FAKECLI_MODE", "vendor");
+        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
+        try
+        {
+            var request = new ProcessRequest(FakeCliInvocations.Exe, ["exec", "-"], AppContext.BaseDirectory)
+            {
+                StdIn = "the whole review prompt",
+                Timeout = TimeSpan.FromSeconds(30),
+            };
+
+            await _launcher.RunAsync(request, TestContext.Current.CancellationToken);
+
+            var recorded = await File.ReadAllTextAsync(
+                Directory.EnumerateFiles(record, "*.argv").Single(), TestContext.Current.CancellationToken);
+            recorded.Should().Contain("the whole review prompt");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKECLI_MODE", null);
+            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
+        }
+    }
+}
+
+/// <summary>
+/// What the child receives on stdin, byte for byte.
+/// </summary>
+/// <remarks>
+/// The prompt travels on stdin for every vendor, so what precedes it matters. `Encoding.UTF8` has
+/// a byte-order mark, and .NET flushes it into the child from inside `Process.Start()` — three
+/// stray bytes in front of every prompt, and a broken pipe out of Start itself when the child had
+/// already exited. WSL loses that race reliably: five tests, one cause.
+/// <para>The bytes are recorded UNDECODED on purpose. The first version of this test read the
+/// prompt back through the fake CLI's own `Console.In`, which strips a BOM while decoding — so it
+/// passed against the unfixed launcher and proved nothing. A decoder cannot be the witness to a
+/// question about bytes.</para>
+/// </remarks>
+[Collection("fakecli-env")]
+public sealed class StdInBytesTests
+{
+    [Fact]
+    public async Task ThePromptArrivesWithNoByteOrderMarkInFrontOfIt()
+    {
+        var file = Path.Combine(Directory.CreateTempSubdirectory("coai-bom-").FullName, "stdin.bin");
+        Environment.SetEnvironmentVariable("FAKECLI_MODE", "vendor");
+        Environment.SetEnvironmentVariable("FAKECLI_RECORD_STDIN_BYTES", file);
+        try
+        {
+            await new ProcessLauncher().RunAsync(
+                new ProcessRequest(FakeCliInvocations.Exe, ["exec", "-"], AppContext.BaseDirectory)
+                {
+                    StdIn = "## The plan under review",
+                    Timeout = TimeSpan.FromSeconds(30),
+                },
+                TestContext.Current.CancellationToken);
+
+            var bytes = await File.ReadAllBytesAsync(file, TestContext.Current.CancellationToken);
+
+            bytes.Should().StartWith([(byte)'#', (byte)'#'], "the prompt is the first thing the child reads");
+            bytes.Take(3).Should().NotEqual([(byte)0xEF, (byte)0xBB, (byte)0xBF], "no byte-order mark");
+            System.Text.Encoding.UTF8.GetString(bytes).Should().Be("## The plan under review");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKECLI_MODE", null);
+            Environment.SetEnvironmentVariable("FAKECLI_RECORD_STDIN_BYTES", null);
+        }
+    }
+}

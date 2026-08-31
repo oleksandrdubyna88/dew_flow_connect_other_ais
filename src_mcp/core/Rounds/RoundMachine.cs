@@ -87,7 +87,7 @@ public static class RoundMachine
         if (reviewers.Answered == 0)
         {
             return new Transition.Ok(
-                s with { RoundsRunThisStage = roundsRun, AwaitingResolve = false },
+                s with { RoundsRunThisStage = roundsRun, AwaitingResolve = false, HumanGate = true },
                 new RoundVerdict.CallHuman(
                     gate,
                     reviewers,
@@ -124,7 +124,7 @@ public static class RoundMachine
 
             // Escalate with the ladder exhausted falls through to a human — there is nothing left to raise.
             _ => new Transition.Ok(
-                s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true },
+                s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, HumanGate = true },
                 new RoundVerdict.CallHuman(
                     gate,
                     reviewers,
@@ -145,13 +145,17 @@ public static class RoundMachine
             return new Transition.Refused("there is no completed round awaiting decisions — run a review first");
         }
 
-        if (humanSaysProceed && s.RoundsRunThisStage < s.Config.MaxRounds)
+        // The override is judged by what it would CHANGE, not by how many rounds are left.
+        // Two corrections, both from the code gate's own review of this file: the old check asked
+        // whether rounds remained, and an exhausted Escalate stage has none either — so the flag
+        // could skip a configured ladder (the reachable bypass). And when the gate has already
+        // decided to advance, the flag adds nothing, so refusing the whole resolve over a
+        // redundant argument would throw away a legitimate round's decisions.
+        if (humanSaysProceed && !s.HumanGate && !s.AdvanceOnResolve)
         {
-            // Before exhaustion the gate is the decider, not the human flag: allowing an early
-            // override would let a model skip the loop by claiming permission it was never given.
             return new Transition.Refused(
-                "a human override applies only after the rounds are exhausted and the verdict was call_human — " +
-                "this stage still has rounds left, so revise and review again");
+                "a human override applies only after the verdict was call_human — until then the gate decides, " +
+                "so revise and review again");
         }
 
         var unreasoned = decisions.OfType<Decision.Rejected>().Where(d => string.IsNullOrWhiteSpace(d.Reason)).ToList();
@@ -164,7 +168,7 @@ public static class RoundMachine
         var rejections = s.Rejections.AddRange(
             decisions.OfType<Decision.Rejected>().Select(d => new PriorRejection(d.Finding, d.Reason)));
 
-        var next = s with { AwaitingResolve = false, Rejections = rejections };
+        var next = s with { AwaitingResolve = false, Rejections = rejections, HumanGate = false };
         if (s.AdvanceOnResolve || humanSaysProceed)
         {
             next = next with

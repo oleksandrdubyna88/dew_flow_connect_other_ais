@@ -22,8 +22,32 @@ export const DEFAULT_VENDORS: readonly Vendor[] = [
   { id: 'gemini', runtime: 'gemini', model: '', enabled: true, baseUrl: '' },
 ];
 
-/** Offered by "Add a reviewer…" — presets, not a closed set; the last is a blank to fill in. */
+/**
+ * Offered by "Add a reviewer…" — presets, not a closed set; the last is a blank to fill in.
+ *
+ * <p><b>Every default vendor is listed here too</b>, which is not redundancy: remove gemini and
+ * the list it came from was the only place it existed, so it could never be added back. A default
+ * that cannot be restored is a one-way door, and the operator walked through it.</p>
+ */
 export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })[] = [
+  {
+    label: 'Codex (OpenAI)',
+    hint: 'The Codex CLI, signed in as itself — the panel’s default first reviewer.',
+    id: 'codex',
+    runtime: 'codex',
+    model: '',
+    enabled: true,
+    baseUrl: '',
+  },
+  {
+    label: 'Gemini (Google)',
+    hint: 'The Gemini CLI, signed in as itself. Needs an interactive login or a key in the vault.',
+    id: 'gemini',
+    runtime: 'gemini',
+    model: '',
+    enabled: true,
+    baseUrl: '',
+  },
   {
     label: 'Claude (a second one)',
     hint: 'A separate claude -p process: it sees the plan and the diff, never the conversation that produced them.',

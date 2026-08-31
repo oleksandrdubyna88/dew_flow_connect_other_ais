@@ -9,7 +9,11 @@ namespace CoaiMcp.Runners.Reviewers;
 /// </summary>
 public abstract record ReviewerOutcome
 {
-    public sealed record Ok(NormalisedReview Review, bool Repaired) : ReviewerOutcome;
+    /// <param name="Usage">What the vendor said the run consumed. Zeroes mean it said nothing.</param>
+    public sealed record Ok(NormalisedReview Review, bool Repaired, Usage Usage) : ReviewerOutcome
+    {
+        public Ok(NormalisedReview Review, bool Repaired) : this(Review, Repaired, Usage.None) { }
+    }
 
     public sealed record NonZeroExit(int ExitCode, string StdErrTail) : ReviewerOutcome;
 
@@ -72,7 +76,7 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher)
         ReviewerInvocation? repair = null,
         CancellationToken ct = default)
     {
-        var (outcome, review) = await RunOnceAsync(invocation, ct);
+        var (outcome, review, usage) = await RunOnceAsync(invocation, ct);
         if (outcome is not null)
         {
             return outcome;
@@ -80,7 +84,7 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher)
 
         if (review is { } parsed)
         {
-            return new ReviewerOutcome.Ok(parsed, Repaired: false);
+            return new ReviewerOutcome.Ok(parsed, Repaired: false, usage);
         }
 
         if (repair is null)
@@ -88,15 +92,17 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher)
             return new ReviewerOutcome.Unparseable("the answer was not the schema's JSON, and no repair was configured");
         }
 
-        var (repairOutcome, repaired) = await RunOnceAsync(repair, ct);
+        var (repairOutcome, repaired, repairUsage) = await RunOnceAsync(repair, ct);
         return repairOutcome
                ?? (repaired is { } fixedReview
-                   ? new ReviewerOutcome.Ok(fixedReview, Repaired: true)
+                   // Both launches are billed, so both are counted — a repaired reviewer that
+                   // reported only its second attempt would under-report every time.
+                   ? new ReviewerOutcome.Ok(fixedReview, Repaired: true, usage.Add(repairUsage))
                    : new ReviewerOutcome.Unparseable("still not the schema's JSON after one repair attempt"));
     }
 
     /// <summary>One launch. A non-null outcome is terminal; a null review means "unparseable".</summary>
-    private async Task<(ReviewerOutcome?, NormalisedReview?)> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
+    private async Task<(ReviewerOutcome?, NormalisedReview?, Usage)> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
     {
         ProcessResult result;
         try
@@ -106,33 +112,37 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher)
         catch (System.ComponentModel.Win32Exception e)
         {
             // One reviewer that cannot start is one reviewer's failure, never the round's.
-            return (new ReviewerOutcome.NotStarted($"'{invocation.Request.Executable}' could not be started: {e.Message}"), null);
+            return (new ReviewerOutcome.NotStarted($"'{invocation.Request.Executable}' could not be started: {e.Message}"), null, Usage.None);
         }
 
         if (result.TimedOut)
         {
-            return (new ReviewerOutcome.TimedOut(), null);
+            return (new ReviewerOutcome.TimedOut(), null, Usage.None);
         }
 
         if (RateLimit.Hit(result))
         {
-            return (new ReviewerOutcome.RateLimited(), null);
+            return (new ReviewerOutcome.RateLimited(), null, Usage.None);
         }
 
         if (result.ExitCode != 0)
         {
             var tail = result.StdErr.Length <= StdErrTail ? result.StdErr : result.StdErr[^StdErrTail..];
-            return (new ReviewerOutcome.NonZeroExit(result.ExitCode, tail.Trim()), null);
+            return (new ReviewerOutcome.NonZeroExit(result.ExitCode, tail.Trim()), null, Usage.None);
         }
 
-        return (null, Parse(invocation, result));
+        // Both reads go through the vendor's own adapter: where the answer lands and how the run
+        // is billed are vendor knowledge, and keeping them here would have made every new vendor
+        // an edit to this class.
+        var usage = invocation.Adapter?.ReadUsage(invocation, result) ?? UsageParser.Parse(result.StdOut);
+        return (null, Parse(invocation, result), usage);
     }
 
     private static NormalisedReview? Parse(ReviewerInvocation invocation, ProcessResult result)
     {
-        var raw = invocation.OutputFile.Length > 0
-            ? ReadOutputFile(invocation.OutputFile)
-            : result.StdOut;
+        var raw = invocation.Adapter is { } adapter
+            ? adapter.ReadAnswer(invocation, result)
+            : ReviewerOutput.FileOrStdout(invocation, result);
         if (raw is null)
         {
             return null;
@@ -148,21 +158,5 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher)
         return ReviewParser.Parse(payload.Json, invocation.Provider) is ParseOutcome.Success success
             ? success.Review
             : null;
-    }
-
-    private static string? ReadOutputFile(string path)
-    {
-        try
-        {
-            return File.ReadAllText(path);
-        }
-        catch (IOException)
-        {
-            return null; // the CLI exited 0 but wrote nothing — unparseable, by name
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return null;
-        }
     }
 }

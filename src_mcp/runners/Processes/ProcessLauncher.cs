@@ -60,7 +60,13 @@ public sealed class ProcessLauncher : IProcessLauncher
             // but English was being corrupted on its way in.
             StandardOutputEncoding = System.Text.Encoding.UTF8,
             StandardErrorEncoding = System.Text.Encoding.UTF8,
-            StandardInputEncoding = System.Text.Encoding.UTF8,
+            // UTF-8 WITHOUT the byte-order mark, and the difference is not cosmetic.
+            // `Encoding.UTF8` carries a preamble, and .NET flushes it into the child's stdin
+            // inside Process.Start() — which means every prompt this product has ever sent began
+            // with three stray bytes, and a child that exited quickly (git, mostly) took the whole
+            // launch down with a broken pipe from INSIDE Start. Found in WSL, where the race is
+            // lost reliably rather than once in a hundred runs: five tests, all in Process.Start.
+            StandardInputEncoding = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
         };
         foreach (var argument in request.Arguments)
         {
@@ -81,12 +87,7 @@ public sealed class ProcessLauncher : IProcessLauncher
         process.Start();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
-        if (request.StdIn.Length > 0)
-        {
-            await process.StandardInput.WriteAsync(request.StdIn);
-        }
-
-        process.StandardInput.Close();
+        await WriteStdInAsync(process, request.StdIn);
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(request.Timeout);
@@ -110,5 +111,40 @@ public sealed class ProcessLauncher : IProcessLauncher
         }
 
         return new ProcessResult(process.ExitCode, stdout.ToString(), stderr.ToString(), TimedOut: false);
+    }
+
+    /// <summary>
+    /// Feeds the child its input, and treats a closed pipe as the child's decision rather than
+    /// our failure.
+    /// </summary>
+    /// <remarks>
+    /// A process that exits before reading — a git command that needed no input, a CLI that
+    /// refused at once, one that read the first line and stopped — closes its end of the pipe, and
+    /// the write then throws. Left unguarded that exception came out of the launcher instead of a
+    /// <see cref="ProcessResult"/>, so an early exit failed the whole ROUND rather than one
+    /// reviewer with a named outcome. It surfaced as a rare cross-platform test flake for exactly
+    /// as long as it took the race to be lost twice.
+    /// <para>Nothing is hidden: the child's exit code, stdout and stderr are still returned, so a
+    /// CLI that exited early because it was broken is still reported as broken.</para>
+    /// </remarks>
+    private static async Task WriteStdInAsync(Process process, string text)
+    {
+        try
+        {
+            if (text.Length > 0)
+            {
+                await process.StandardInput.WriteAsync(text);
+            }
+
+            process.StandardInput.Close();
+        }
+        catch (IOException)
+        {
+            // The child is not listening any more. Its output is what matters now.
+        }
+        catch (ObjectDisposedException)
+        {
+            // Same race, one step later: the stream went away while we were writing to it.
+        }
     }
 }

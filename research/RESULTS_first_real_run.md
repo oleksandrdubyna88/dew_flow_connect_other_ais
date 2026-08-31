@@ -173,3 +173,50 @@ findings a human reviewer would be proud of — "a response merely containing th
 an answer", "the 15-minute lease contradicts the revocation promise", "the fake-client tests cannot
 verify the HTTP behaviours they claim to". Each revision's findings were sharper than the last,
 which is the loop doing exactly what it was built to do.
+
+## The third sitting — 2026-08-31, night: the WSL run, and four defects it alone could find
+
+The operator asked for two things — tokens and money per round, and a rounds view that does not ask
+to be saved — and then for the whole cycle to be proved **inside WSL**, tests and a real review
+both. Running it on a second platform was not ceremony: three of the four defects below are
+invisible on Windows.
+
+**Fourteenth — every prompt this product has ever sent began with a byte-order mark.**
+`StandardInputEncoding = Encoding.UTF8` carries a preamble, and .NET flushes it into the child from
+*inside* `Process.Start()`. Two consequences: three stray bytes in front of every review prompt, and
+— when the child had already exited, which git does constantly — a `Broken pipe` thrown from Start
+itself, taking the whole launch down instead of returning a result. On Windows it was a one-in-many
+flake with no name; in WSL it failed **five tests at once, all in `Process.Start`**, which is what
+made it findable. Measured before the fix, from the child's raw stdin:
+`EF BB BF 23 23 20 54 68 65 …`. The fix is a BOM-less `UTF8Encoding`, and the test now records
+undecoded bytes — its first version read the prompt back through the fake CLI's `Console.In`, which
+strips a BOM while decoding, so it passed against the broken launcher and proved nothing. A decoder
+cannot be the witness to a question about bytes.
+
+**Fifteenth — a child that exits before reading its input crashed the launcher.** Related but
+separate: even with no preamble, writing a megabyte-long prompt to a process that has already
+exited throws. That exception left `ProcessLauncher` instead of a `ProcessResult`, so one CLI
+exiting early failed the whole ROUND rather than one reviewer with a named outcome. Guarded now,
+and nothing is hidden — exit code, stdout and stderr still come back.
+
+**Sixteenth — `resolve` did not work without the human override.** The ordinary call of every single
+round — record decisions, no override — came back as `An error occurred invoking 'resolve'`, because
+`humanDecision` had no default value and the SDK therefore published it as REQUIRED. The second
+sitting's live run had missed it by always passing `humanDecision: "proceed"`, which is the one call
+that does not need to work. A contract test over real stdio now holds it.
+
+**Seventeenth — the human override was checked against the wrong thing.** Reported by codex in the
+code gate it was itself the subject of: the guard asked whether rounds remained, and an exhausted
+*Escalate* stage has none either — so the flag could skip a configured ladder. It is now a
+`HumanGate` flag set only by a `call_human` verdict and cleared by the resolve that used it. The
+refusal also became narrower on purpose: a redundant override, where the gate had already decided to
+advance, is ignored rather than refused, because refusing would have discarded a legitimate round's
+decisions.
+
+**What the WSL run proved, positively.** 215 tests green on Windows, 214 green in WSL across three
+consecutive runs; and a real plan round driven over stdio against a linux `coai-mcp` with a live
+`claude` reviewer: `call_human`, 4 gating findings of 7, **34 146 in / 7 425 out tokens, $0.3033** —
+the money read out of the vendor's own envelope, not a price table of ours — with the round visible
+on disk as `running` and `0 of 1 answered, 1 running` for the ninety seconds it took. The reviewer's
+own best line, about a plan for caching a probe: *"Plan never confirms the cache's host process is
+long-lived, and the specified test can't detect the case where it isn't."*

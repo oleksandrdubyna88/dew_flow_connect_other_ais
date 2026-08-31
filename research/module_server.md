@@ -53,6 +53,23 @@ startup; missing binary / no key / 401 / malformed body are named per-vendor una
 locked repo. Round trail (`RoundRecord`) and pending findings ride in the same file — `status`
 survives a server restart, per the durable-status rule.
 
+### The round is written before it runs, not after (`LiveRound`)
+
+A `RoundRecord` is persisted the moment the fan-out is built — `status: running`, `startedUtc`, the
+owning `RunnerPid`, and one `ReviewerState` per reviewer at `queued` — and rewritten as the
+scheduler reports each reviewer moving to `running`, `done` (with its finding count) or `failed`
+(with the reason). The finished record replaces it with the verdict and the round's `tokensIn`,
+`tokensOut` and `costUsd`.
+
+Why it matters: a code round takes minutes, and while it was only written at the END the panel
+could not tell "six reviewers are working" from "nothing has ever run here". That is the
+durable-status rule pointed at our own slowest operation.
+
+`SweepOrphanedRounds` runs once in the `PanelService` constructor and flips a `running` round whose
+`RunnerPid` is no longer alive to `interrupted` — a crashed round must never read as running
+forever. The pid check is what keeps a SECOND server sharing this data directory from declaring the
+first one's live round dead.
+
 ## Verification that matters
 
 - `McpContractTests` speak real JSON-RPC over real stdio to the built binary — and via

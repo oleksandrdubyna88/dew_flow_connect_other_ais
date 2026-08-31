@@ -49,6 +49,32 @@ public sealed class PanelService
         _prompts = new RolePrompts(settings.DataDir);
         _escalations = new Escalations(settings.DataDir);
         _translator = new CliTranslator(launcher, settings.Translator);
+
+        // Rounds this server never finished cannot be running any more, whatever their file says.
+        // A round left at "running" would sit in the panel forever; sweeping only rounds whose
+        // recorded process is gone keeps a SECOND server sharing this directory out of the way.
+        var swept = _store.SweepOrphanedRounds(ProcessIsAlive);
+        if (swept > 0)
+        {
+            _log.Warning("swept {Count} round(s) abandoned by a dead process", swept);
+        }
+    }
+
+    private static bool ProcessIsAlive(int pid)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(pid);
+            return !process.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
     }
 
     private static readonly ImmutableArray<ReviewRole> CodeRoles =
@@ -248,7 +274,10 @@ public sealed class PanelService
             var workingDir = lease?.Path ?? scratch!.Path;
             var work = await makeWork(session, workingDir, sha);
 
-            var results = await _scheduler.RunAllAsync(work, _executor, ct);
+            // The round exists on disk BEFORE the first CLI starts: the panel shows "running" for
+            // its whole duration instead of nothing at all, and a crash leaves something to sweep.
+            var live = new LiveRound(_store, session, work);
+            var results = await _scheduler.RunAllAsync(work, _executor, ct, live.Report);
             var summary = ReviewerSummaryFactory.From(results);
             var reviews = results.Select(r => r.Outcome).OfType<ReviewerOutcome.Ok>().Select(o => o.Review).ToList();
             var merged = FindingDedup.Merge(reviews.SelectMany(r => r.Findings));
@@ -260,21 +289,19 @@ public sealed class PanelService
             }
 
             var answer = AnswerFor(completed.Verdict, gate, summary, merged, reviews);
-            var record = new RoundRecord(
-                session.State.Stage.ToString(),
-                session.State.RoundsRunThisStage + 1,
-                answer.Verdict,
-                gate.GatingCount,
-                summary.Sentence,
-                DateTime.UtcNow);
+            var record = live.Finish(answer.Verdict, gate.GatingCount, summary.Sentence, results);
+            answer = answer with { Cost = new RoundCost(record.TokensIn, record.TokensOut, record.CostUsd) };
             _store.Save(session with
             {
                 State = completed.State,
                 Rounds = [.. session.Rounds, record],
                 Pending = [.. merged],
             });
-            _log.Information("round {Round} {Stage}: {Verdict} with {Gating} gating finding(s); {Reviewers}",
-                record.Number, record.Stage, record.Verdict, gate.GatingCount, summary.Sentence);
+            _log.Information(
+                "round {Round} {Stage}: {Verdict} with {Gating} gating finding(s); {Reviewers}; {TokensIn}+{TokensOut} tokens{Cost}",
+                record.Number, record.Stage, record.Verdict, gate.GatingCount, summary.Sentence,
+                record.TokensIn, record.TokensOut,
+                record.CostUsd is { } usd ? $", ${usd:0.0000}" : string.Empty);
             return Json(answer, ServerJsonContext.Default.ReviewAnswer);
         }
         catch (Exception e) when (e is WorktreeException or ContextException)

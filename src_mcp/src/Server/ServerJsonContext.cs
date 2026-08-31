@@ -30,6 +30,7 @@ public sealed record SessionAnswer(
     IReadOnlyList<RoundRecord> Rounds);
 
 /// <summary>What a review tool returns: the verdict, the honest reviewer count, the findings.</summary>
+/// <param name="Cost">What the round consumed, as the vendors themselves reported it.</param>
 public sealed record ReviewAnswer(
     string Verdict,
     string? EscalationStep,
@@ -39,7 +40,15 @@ public sealed record ReviewAnswer(
     IReadOnlyList<Finding> Findings,
     IReadOnlyList<Finding> Discounted,
     IReadOnlyList<string> RejectedEntries,
-    string Instruction);
+    string Instruction,
+    RoundCost? Cost = null);
+
+/// <summary>
+/// One round's consumption. Tokens come from every vendor that reports them; <paramref name="Usd"/>
+/// only from vendors that price their own runs (claude does), because a price table we maintained
+/// ourselves would be wrong within a month and a wrong number is worse than an absent one.
+/// </summary>
+public sealed record RoundCost(long TokensIn, long TokensOut, double? Usd);
 
 public sealed record ResolveAnswer(string Stage, bool AwaitingResolve, int RecordedDecisions, string Instruction);
 

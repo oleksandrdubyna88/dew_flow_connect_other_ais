@@ -1,3 +1,5 @@
+using System.Text.Json;
+using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Processes;
 
 namespace CoaiMcp.Runners.Reviewers;
@@ -12,9 +14,12 @@ namespace CoaiMcp.Runners.Reviewers;
 /// produced them. A cheaper model reviewing a stronger one's work is also the ordinary case, not
 /// an odd one — and the CLI is already installed and signed in on the machines this ships to.</para>
 /// <para>Flags verified against the installed CLI before being written here: `-p` prints and
-/// exits, `--output-format text` keeps the answer plain, and `--permission-mode plan` is the
-/// read-only mode. `--disallowedTools` names the write tools anyway: a reviewer that can edit the
-/// tree it is reviewing is a different program.</para>
+/// exits, `--output-format json` wraps the answer in an envelope, and `--permission-mode plan` is
+/// the read-only mode. `--disallowedTools` names the write tools anyway: a reviewer that can edit
+/// the tree it is reviewing is a different program.</para>
+/// <para>`json` rather than `text` because this is the ONE vendor that prices its own run: the
+/// envelope carries `usage` and `total_cost_usd`, measured against the installed CLI. The answer
+/// then lives in `result`, which is what <see cref="ReadAnswer"/> is for.</para>
 /// </remarks>
 public sealed class ClaudeRuntime : IReviewerRuntime
 {
@@ -32,7 +37,7 @@ public sealed class ClaudeRuntime : IReviewerRuntime
             settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : "claude",
             [
                 "-p",
-                "--output-format", "text",
+                "--output-format", "json",
                 "--permission-mode", "plan",
                 "--disallowedTools", "Edit", "Write", "NotebookEdit",
                 "--add-dir", worktreePath,
@@ -48,6 +53,24 @@ public sealed class ClaudeRuntime : IReviewerRuntime
                 : new Dictionary<string, string?>(),
             Timeout = settings.Timeout,
         };
-        return new ReviewerInvocation(Provider, role, request);
+        return new ReviewerInvocation(Provider, role, request, OutputFile: string.Empty, this);
+    }
+
+    /// <summary>The review is the envelope's <c>result</c> string; the rest is metadata.</summary>
+    public string? ReadAnswer(ReviewerInvocation invocation, ProcessResult result)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(result.StdOut);
+            return document.RootElement.TryGetProperty("result", out var answer) && answer.ValueKind == JsonValueKind.String
+                ? answer.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            // Not the envelope at all — hand the raw text on, so a CLI that ignored the flag still
+            // produces a review rather than a silent failure.
+            return result.StdOut;
+        }
     }
 }

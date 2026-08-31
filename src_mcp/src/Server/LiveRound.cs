@@ -1,0 +1,124 @@
+using CoaiMcp.Runners.Reviewers;
+
+namespace CoaiMcp.Server;
+
+/// <summary>
+/// The round as it happens: written to the session file before the first CLI starts, advanced as
+/// each reviewer moves, and closed with the verdict and what it all consumed.
+/// </summary>
+/// <remarks>
+/// <para>This is the durable-status rule pointed at our own slowest operation. A code round takes
+/// minutes; until it was persisted at the START, the panel could not tell "six reviewers are
+/// working" from "nothing has ever run here" — and the person watching had to read a log to find
+/// out which.</para>
+/// <para>The live record is not the source of the VERDICT — the state machine is. It is the
+/// answer to "what is happening right now", which is a different question and has to survive an
+/// F5, a restarted extension and a killed server.</para>
+/// </remarks>
+public sealed class LiveRound
+{
+    private readonly SessionStore _store;
+    private readonly PersistedSession _session;
+    private readonly Lock _gate = new();
+    private readonly Dictionary<string, ReviewerState> _states;
+    private readonly DateTime _startedUtc = DateTime.UtcNow;
+
+    public LiveRound(SessionStore store, PersistedSession session, IReadOnlyList<ReviewerWork> work)
+    {
+        _store = store;
+        _session = session;
+        _states = work.ToDictionary(
+            w => Key(w.Invocation.Provider, w.Invocation.Role.ToString()),
+            w => new ReviewerState(w.Invocation.Provider, w.Invocation.Role.ToString(), ReviewerState.Queued));
+        Persist();
+    }
+
+    /// <summary>One reviewer moved. Called from the fan-out's threads, hence the lock.</summary>
+    public void Report(ReviewerProgress progress)
+    {
+        lock (_gate)
+        {
+            var key = Key(progress.Provider, progress.Role.ToString());
+            var previous = _states.GetValueOrDefault(key)
+                           ?? new ReviewerState(progress.Provider, progress.Role.ToString(), progress.Status);
+            _states[key] = previous with
+            {
+                Status = progress.Status,
+                Findings = progress.Outcome is ReviewerOutcome.Ok ok ? ok.Review.Findings.Count() : previous.Findings,
+                Note = progress.Outcome is { } outcome and not ReviewerOutcome.Ok
+                    ? ReviewerSummaryFactory.Describe(outcome)
+                    : previous.Note,
+            };
+            Persist();
+        }
+    }
+
+    /// <summary>
+    /// The finished record: the verdict, and the round's total usage folded from every reviewer
+    /// that reported any — including a repaired reviewer's two launches.
+    /// </summary>
+    public RoundRecord Finish(
+        string verdict,
+        int gatingCount,
+        string reviewers,
+        IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results)
+    {
+        var usage = results
+            .Select(r => r.Outcome)
+            .OfType<ReviewerOutcome.Ok>()
+            .Aggregate(Core.Findings.Usage.None, (total, ok) => total.Add(ok.Usage));
+
+        lock (_gate)
+        {
+            return Record(verdict, gatingCount, reviewers, RoundRecord.Done) with
+            {
+                CompletedUtc = DateTime.UtcNow,
+                TokensIn = usage.TokensIn,
+                TokensOut = usage.TokensOut,
+                CostUsd = usage.CostUsd,
+            };
+        }
+    }
+
+    /// <summary>
+    /// The running round is the LAST element of the trail while it runs, and is replaced by the
+    /// finished record when the stage completes — never appended twice.
+    /// </summary>
+    private void Persist()
+    {
+        try
+        {
+            var running = Record("running", 0, RunningSentence(), RoundRecord.Running);
+            _store.Save(_session with { Rounds = [.. _session.Rounds, running] });
+        }
+        catch (IOException)
+        {
+            // A missed repaint is not a failed review; the next progress event writes again.
+        }
+    }
+
+    private RoundRecord Record(string verdict, int gatingCount, string reviewers, string status) =>
+        new(
+            _session.State.Stage.ToString(),
+            _session.State.RoundsRunThisStage + 1,
+            verdict,
+            gatingCount,
+            reviewers,
+            DateTime.UtcNow)
+        {
+            Status = status,
+            StartedUtc = _startedUtc,
+            RunnerPid = Environment.ProcessId,
+            ReviewerStates = [.. _states.Values.OrderBy(s => s.Provider).ThenBy(s => s.Role)],
+        };
+
+    private string RunningSentence()
+    {
+        var done = _states.Values.Count(s => s.Status is ReviewerState.Done);
+        var failed = _states.Values.Count(s => s.Status is ReviewerState.Failed);
+        var running = _states.Values.Count(s => s.Status is ReviewerState.Running);
+        return $"{done} of {_states.Count} answered, {running} running" + (failed > 0 ? $", {failed} failed" : string.Empty);
+    }
+
+    private static string Key(string provider, string role) => $"{provider}/{role}";
+}

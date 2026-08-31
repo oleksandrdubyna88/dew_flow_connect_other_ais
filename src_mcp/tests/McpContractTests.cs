@@ -221,4 +221,40 @@ public sealed class McpContractTests : IDisposable
             await server.WaitForExitAsync();
         }
     }
+
+    [Fact]
+    public async Task Resolve_WithoutTheHumanOverride_IsAnAnswer_NotAnSdkError()
+    {
+        // The ordinary path of EVERY round: record decisions, no override. Found live in WSL —
+        // `humanDecision` had no default, so the SDK made it REQUIRED and a normal resolve came
+        // back as "An error occurred invoking 'resolve'". The Windows live run had missed it by
+        // always passing the override, which is the one call that does not need to work.
+        using var server = Start();
+        try
+        {
+            await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"contract-test","version":"0"}}}
+                """);
+            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
+            await server.StandardInput.FlushAsync();
+
+            var answer = await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"resolve","arguments":{"repoPath":"D:/nowhere","branch":"main","decisions":"[]"}}}
+                """);
+
+            var text = answer.RootElement.GetProperty("result").GetProperty("content")[0]
+                .GetProperty("text").GetString();
+            text.Should().NotBeNull();
+            // No session for that repo, so the honest answer is our own sentence — the point is
+            // that it IS our sentence, in JSON, and not an invocation failure.
+            var parsed = JsonDocument.Parse(text!);
+            parsed.RootElement.TryGetProperty("error", out var sentence).Should().BeTrue();
+            sentence.GetString().Should().Contain("call open first");
+        }
+        finally
+        {
+            server.Kill(entireProcessTree: true);
+            await server.WaitForExitAsync();
+        }
+    }
 }

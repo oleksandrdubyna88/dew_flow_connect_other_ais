@@ -306,3 +306,68 @@ test('the disclosure arrow is a drawn chevron, not a punctuation mark', () => {
   assert.ok(!css.includes('203A'), 'a glyph rendered a third of the size nobody can hit');
   assert.ok(css.includes('rotate(45deg)'), 'and it turns when the section opens');
 });
+
+test('every vendor has a green run button next to remove', () => {
+  // The operator asked for a play triangle between the name and remove: it opens that vendor's
+  // own CLI, which is where an account is checked and a signed-out CLI is signed in.
+  const html = panelHtml(state(), 'n');
+  assert.ok(html.includes('data-command="runVendor" data-id="codex"'));
+  assert.ok(html.includes('▶'));
+  assert.ok(html.includes('var(--vscode-charts-green)'), 'green from the theme, not a hex of ours');
+  assert.ok(
+    html.indexOf('data-command="runVendor" data-id="codex"') <
+      html.indexOf('data-command="removeVendor" data-id="codex"'),
+    'it sits between the name and remove',
+  );
+});
+
+test('the live regions are addressable, so an update need not reload the panel', () => {
+  // The dropdowns closing after two seconds was a full webview reload on every watcher tick.
+  // Patching these two containers is what replaced it.
+  const html = panelHtml(state(), 'n');
+  assert.ok(html.includes('id="live-questions"'));
+  assert.ok(html.includes('id="live-rounds"'));
+});
+
+test('a running round shows its status, its reviewers and what it has cost', () => {
+  const html = panelHtml(
+    state({
+      sessions: [
+        {
+          state: {
+            sessionId: 's1',
+            repoPath: 'D:/repo',
+            branch: 'feature/x',
+            stage: 'CodeReview',
+            awaitingResolve: false,
+          },
+          rounds: [
+            {
+              stage: 'CodeReview',
+              number: 1,
+              verdict: 'running',
+              gatingCount: 0,
+              reviewers: '1 of 2 answered, 1 running',
+              completedUtc: '2026-08-31T12:00:00Z',
+              status: 'running',
+              startedUtc: '2026-08-31T12:00:00Z',
+              reviewerStates: [
+                { provider: 'codex', role: 'Architecture', status: 'done', findings: 2, note: '' },
+                { provider: 'claude', role: 'Architecture', status: 'running', findings: 0, note: '' },
+              ],
+              tokensIn: 5300,
+              tokensOut: 260,
+              costUsd: null,
+            },
+          ],
+        },
+      ],
+    }),
+    'n',
+  );
+
+  assert.ok(html.includes('badge running'));
+  assert.ok(html.includes('codex/Architecture — done (2 findings)'));
+  assert.ok(html.includes('5.3k in / 260 out'));
+  assert.ok(html.includes('no cost reported'));
+});

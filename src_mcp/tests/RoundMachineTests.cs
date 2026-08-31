@@ -154,7 +154,48 @@ public sealed class RoundMachineTests
 
         RoundMachine.Resolve(awaiting, [], humanSaysProceed: true)
             .Should().BeOfType<Transition.Refused>()
-            .Which.Sentence.Should().Contain("rounds are exhausted");
+            .Which.Sentence.Should().Contain("call_human");
+    }
+
+    [Fact]
+    public void TheHumanOverride_IsRefused_WhenTheExhaustedStageEscalatesInstead()
+    {
+        // The code gate's own review of this file found it, and it is the sharper half of the
+        // override rule: "no rounds left" is NOT "a human was asked". An escalated stage whose
+        // rounds are also spent would have passed the old round-count check, and honouring the
+        // flag there skips the ladder the operator configured.
+        var s = Fresh(new PanelConfig(MaxRounds: 1, OnExhausted: StagePolicy.Escalate));
+        var ok = (Transition.Ok)RoundMachine.CompleteRound(s, Failing(), AllSix);
+        ok.Verdict.Should().BeOfType<RoundVerdict.Escalated>();
+        var spent = ok.State with { RoundsRunThisStage = ok.State.Config.MaxRounds };
+
+        RoundMachine.Resolve(spent, [], humanSaysProceed: true)
+            .Should().BeOfType<Transition.Refused>()
+            .Which.Sentence.Should().Contain("call_human");
+    }
+
+    [Fact]
+    public void ARedundantOverride_IsIgnored_NotRefused()
+    {
+        // The gate already said proceed. The flag adds nothing — and refusing the resolve over a
+        // redundant argument would discard a whole round's recorded decisions.
+        var ok = (Transition.Ok)RoundMachine.CompleteRound(Fresh(), Passing(), AllSix);
+
+        RoundMachine.Resolve(ok.State, [], humanSaysProceed: true)
+            .Should().BeOfType<Transition.Moved>()
+            .Which.State.Stage.Should().Be(Stage.CodeReview);
+    }
+
+    [Fact]
+    public void TheOverrideDoorCloses_BehindTheHumanWhoWalkedThrough()
+    {
+        // One call_human verdict authorises ONE override. Left open, a later resolve in a fresh
+        // stage would still be carrying permission granted for a decision already made.
+        var s = Fresh(new PanelConfig(MaxRounds: 1, OnExhausted: StagePolicy.Human));
+        var ok = (Transition.Ok)RoundMachine.CompleteRound(s, Failing(), AllSix);
+        var moved = (Transition.Moved)RoundMachine.Resolve(ok.State, [], humanSaysProceed: true);
+
+        moved.State.HumanGate.Should().BeFalse();
     }
 
     [Fact]

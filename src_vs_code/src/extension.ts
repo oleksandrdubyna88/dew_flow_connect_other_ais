@@ -33,6 +33,9 @@ export function activate(context: vscode.ExtensionContext): void {
     // What the title bar switches on: green while somebody is waiting on an answer.
     void vscode.commands.executeCommand('setContext', 'coai.hasQuestions', watcher.openQuestions.length > 0);
     void panel.render();
+    // And the rounds view, if it is open: a round advances on its own, so the page it is shown on
+    // has to as well. Nothing is written when nobody is looking.
+    void refreshRoundsFile(watcher);
   };
   watcher.start();
 
@@ -131,15 +134,62 @@ async function copyClaudeSnippet(): Promise<void> {
   );
 }
 
+/** Where the rounds view lives on disk. One file, rewritten — never a new tab per look. */
+function roundsFile(): vscode.Uri {
+  return vscode.Uri.joinPath(dataDir(), 'rounds.md');
+}
+
+/**
+ * The rounds view, as a REAL file that is written and then opened.
+ *
+ * <p>It used to be an untitled document built from a string, which VS Code treats as unsaved
+ * work: every close asked whether to save it, and there was nothing to save — the content is
+ * derived from the server's session files and regenerated on demand. A real path under the data
+ * directory closes without a word, reopens at the same tab, and can be kept open while a round
+ * runs because {@link refreshRoundsFile} rewrites it in place.</p>
+ */
 async function showRounds(watcher: EscalationWatcher): Promise<void> {
   await watcher.refresh();
+  const file = await writeRoundsFile(watcher);
+  if (file === undefined) {
+    void vscode.window.showErrorMessage(
+      `The rounds view could not be written to ${roundsFile().fsPath}. Check that the folder is writable.`,
+    );
+    return;
+  }
+
+  const document = await vscode.workspace.openTextDocument(file);
+  await vscode.window.showTextDocument(document, { preview: false });
+}
+
+/** Renders the view to its file. Returns the path, or undefined when the disk refused. */
+async function writeRoundsFile(watcher: EscalationWatcher): Promise<vscode.Uri | undefined> {
   const sessions = await readSessions();
   // Open questions first: a blocked round is more urgent than the history of finished ones.
-  const document = await vscode.workspace.openTextDocument({
-    content: renderEscalations(watcher.openQuestions) + renderRounds(sessions),
-    language: 'markdown',
-  });
-  await vscode.window.showTextDocument(document, { preview: true });
+  const markdown = renderEscalations(watcher.openQuestions) + renderRounds(sessions);
+  const file = roundsFile();
+  try {
+    await vscode.workspace.fs.createDirectory(dataDir());
+    await vscode.workspace.fs.writeFile(file, new TextEncoder().encode(markdown));
+    return file;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Keeps an OPEN rounds view current while a round runs.
+ *
+ * <p>Only when it is already open in a tab: writing a file nobody is looking at every few seconds
+ * is churn, and a document VS Code has open is reloaded from disk by the editor itself, so the
+ * numbers advance without anybody pressing anything.</p>
+ */
+async function refreshRoundsFile(watcher: EscalationWatcher): Promise<void> {
+  const path = roundsFile().fsPath;
+  const isOpen = vscode.workspace.textDocuments.some((d) => d.uri.fsPath === path && !d.isDirty);
+  if (isOpen) {
+    await writeRoundsFile(watcher);
+  }
 }
 
 /** The server's own session files: its data dir, or `COAI_DATA_DIR` when the person set one. */

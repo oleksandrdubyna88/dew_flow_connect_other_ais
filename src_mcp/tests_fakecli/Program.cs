@@ -27,6 +27,18 @@ Console.OutputEncoding = System.Text.Encoding.UTF8;
 //   FAKECLI_RECORD_DIR   — write each launch's full argv into <guid>.argv there
 if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor")
 {
+    // Raw stdin, byte for byte, before any decoder can tidy it up. This exists because a
+    // decoded string cannot answer "was there a byte-order mark in front of the prompt" — the
+    // Console decoder strips it, which is exactly how three stray bytes went unnoticed for a
+    // whole product.
+    if (Environment.GetEnvironmentVariable("FAKECLI_RECORD_STDIN_BYTES") is { Length: > 0 } bytesPath)
+    {
+        using var input = Console.OpenStandardInput();
+        using var file = File.Create(bytesPath);
+        input.CopyTo(file);
+        return 0;
+    }
+
     if (Environment.GetEnvironmentVariable("FAKECLI_RECORD_DIR") is { Length: > 0 } record)
     {
         // NUL-joined, because a recorded field may be multiline (the prompt on stdin) — lines

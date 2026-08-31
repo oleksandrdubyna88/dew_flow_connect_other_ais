@@ -80,7 +80,12 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            async (string repoPath, string branch, string decisions, string? humanDecision) =>
+            // `humanDecision` MUST carry a default: without one the SDK publishes it as a REQUIRED
+            // argument, and then the ordinary resolve — decisions, no override, every single round
+            // — fails as "An error occurred invoking 'resolve'". Found by a live run in WSL; the
+            // Windows run before it had always passed the override, which is the one call that
+            // does not need to work.
+            async (string repoPath, string branch, string decisions, string? humanDecision = null) =>
                 await service.ResolveAsync(repoPath, branch, decisions,
                     string.Equals(humanDecision, "proceed", StringComparison.OrdinalIgnoreCase)),
             new McpServerToolCreateOptions

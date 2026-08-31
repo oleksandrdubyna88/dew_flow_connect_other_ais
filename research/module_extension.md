@@ -10,7 +10,7 @@
 | `coai.installServer` | Downloads the latest `mcp-v*` asset for this RID into the extension's storage, verifies its `.sha256`, extracts with `tar`, remembers the version, and puts the `mcpServers` block on the clipboard |
 | `coai.copyConfigBlock` | Regenerates that block from current settings — the way changed settings reach the server |
 | `coai.copyClaudeSnippet` | The CLAUDE.md text teaching a target repo's main AI the tool order |
-| `coai.showRounds` | Renders every session's rounds from the server's own session files as markdown |
+| `coai.showRounds` | Writes `<dataDir>/rounds.md` from the server's own session files and opens it — a REAL file, so closing it never asks to save, and it is rewritten in place while a round runs |
 
 ## How settings reach the server
 
@@ -52,13 +52,30 @@ flowchart LR
 | `installer.ts` | the impure half: fetch, sha256, `tar`, chmod, remembered version |
 | `mcpBlock.ts` | the `mcpServers` block (server id `coai`), client targets, install message |
 | `claudeSnippet.ts` | the paste for a target repo's CLAUDE.md |
-| `rounds.ts` | parse the server's session files; render the view; a torn file is skipped |
+| `rounds.ts` | parse the server's session files; render the view (status, elapsed, tokens, cost, the reviewers in flight); a torn file is skipped; a file from an older server with no status still renders |
+| `panelView.ts` | the sidebar's HTML, pure: sections, vendor cards with the green run button, the two live regions (`live-questions`, `live-rounds`) |
+| `panelProvider.ts` | the wiring: repaint ONLY when a control changed, live regions posted instead; vendor add/remove (confirmed)/run-in-terminal |
+| `vendorTerminal.ts` | pure: which CLI a vendor is, its own usage command (`/usage`, `/status`, `/stats`), and the provider overrides a custom endpoint needs |
 | `escalations.ts` | pure: parse a question, the answer file's shape, status-bar text, prompt-once, modal body, the open-questions section |
 | `escalationWatcher.ts` | the impure half: file watcher + a 5s poll (a watcher on a path outside the workspace is not guaranteed), the modal, the status-bar item, the atomic answer write |
 | `extension.ts` | activation, the four commands, the update offer |
 
+## Three UI decisions with a cause
+
+- **A repaint is conditional, and live data is posted.** Assigning `webview.html` RELOADS the
+  webview, which closes any open `<select>`. With the escalation watcher ticking every five seconds
+  and a running round rewriting its session file constantly, an unconditional repaint shut every
+  dropdown in the panel two or three seconds after it was opened. Now a change to the CONTROLS
+  repaints; `live-questions` and `live-rounds` are patched through `postMessage`.
+- **The rounds view is a file on disk.** It used to be an untitled document built from a string,
+  which VS Code treats as unsaved work — so every close asked whether to save content that is
+  derived and regenerated on demand. `<dataDir>/rounds.md` closes silently, reopens in the same tab,
+  and is rewritten while it is open so a running round advances on screen.
+- **Every default vendor is also a preset.** Gemini shipped as a default and was missing from
+  "Add a reviewer", so removing it was a one-way door. `vendors.test.ts` now holds that shut.
+
 ## Verified
 
-25 `node:test` cases over the pure modules; `.vsix` packaged in CI and installed by hand on
+90 `node:test` cases over the pure modules; `.vsix` packaged in CI and installed by hand on
 2026-08-31; the released win-x64 asset downloaded, checksum-matched, extracted with Windows
 bsdtar and registered — `claude mcp list` reported `coai ✔ Connected`.

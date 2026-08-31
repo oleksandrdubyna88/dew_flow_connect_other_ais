@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
 import { EscalationWatcher } from './escalationWatcher';
 import { ModelChoice, parseCodexModels } from './models';
-import { OPEN_BY_DEFAULT, panelHtml } from './panelView';
+import { liveRegions, OPEN_BY_DEFAULT, panelHtml } from './panelView';
 import { parseSession, SessionFile } from './rounds';
 import { serverSettingsJson } from './serverSettingsFile';
 import { settingsFrom } from './settingsShape';
 import { normaliseId, Vendor, VENDOR_PRESETS, vendorsFrom } from './vendors';
+import { vendorTerminal } from './vendorTerminal';
 
 /**
  * The sidebar panel: reviewers, language, the gate, the limits, and what is waiting on you.
@@ -24,6 +25,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
   private view?: vscode.WebviewView;
   private codexModels: ModelChoice[] = [];
+  /** What the last repaint was drawn from, so only a real change to the controls repaints. */
+  private paintedKey = '';
+  /** One nonce per panel instance: the CSP admits our one script, and a repaint reuses it. */
+  private readonly nonce = nonce();
   /** Which sections the person has open — kept HERE because the panel repaints on every
       change, and a section that snapped shut mid-edit would be worse than none. */
   private openSections: string[] = [...OPEN_BY_DEFAULT];
@@ -72,19 +77,62 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const vendors = vendorsFrom(config.get('vendors'));
     this.codexModels = await this.readCodexModels();
     await this.writeServerSettings(settings, vendors);
-    this.view.webview.html = panelHtml(
-      {
-        settings,
-        vendors,
-        codexModels: this.codexModels,
-        serverInstalled: this.context.globalState.get<string>('coai.installedVersion') !== undefined,
-        serverVersion: this.context.globalState.get<string>('coai.installedVersion') ?? '',
-        questions: this.watcher.openQuestions,
-        openSections: this.openSections,
-        sessions: await this.readSessions(),
-      },
-      nonce(),
-    );
+    const state = {
+      settings,
+      vendors,
+      codexModels: this.codexModels,
+      serverInstalled: this.context.globalState.get<string>('coai.installedVersion') !== undefined,
+      serverVersion: this.context.globalState.get<string>('coai.installedVersion') ?? '',
+      questions: this.watcher.openQuestions,
+      openSections: this.openSections,
+      sessions: await this.readSessions(),
+    };
+
+    // Two update paths, and which one runs is the whole fix for the pickers.
+    //
+    // Assigning `webview.html` RELOADS the webview, and a reload closes any open dropdown. The
+    // escalation watcher ticks every five seconds, and a round in flight rewrites its session
+    // file constantly — so the old unconditional assignment shut every `<select>` in this panel
+    // two or three seconds after it was opened.
+    //
+    // So a change to the CONTROLS repaints (rare, and always the person's own doing), while the
+    // live regions — the round in flight, a question waiting on an answer — are posted as HTML
+    // and patched into place, touching nothing else.
+    const key = staticKey(state);
+    if (key !== this.paintedKey) {
+      this.paintedKey = key;
+      this.view.webview.html = panelHtml(state, this.nonce);
+      return;
+    }
+
+    void this.view.webview.postMessage({ type: 'live', ...liveRegions(state) });
+  }
+
+  /**
+   * A vendor's own CLI, in a terminal, with its usage command typed and waiting.
+   *
+   * <p>Typed rather than sent: pressing Enter is the person's decision, and a slash command
+   * pushed into a TUI that has not finished starting is a line of stray text. This is also where
+   * a CLI gets signed in — the gemini reviewer that failed every round on this machine failed
+   * because its CLI had never authenticated headlessly, and the panel offered nowhere to fix
+   * that.</p>
+   */
+  private async runVendor(id: string): Promise<void> {
+    const vendor = vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors')).find((v) => v.id === id);
+    if (vendor === undefined) {
+      return;
+    }
+
+    const { command, usageCommand, note } = vendorTerminal(vendor);
+    const terminal = vscode.window.createTerminal({ name: `coai · ${vendor.id}` });
+    terminal.show();
+    if (note.length > 0) {
+      void vscode.window.showInformationMessage(note);
+    }
+    terminal.sendText(command, true);
+    if (usageCommand.length > 0) {
+      terminal.sendText(usageCommand, false);
+    }
   }
 
   /**
@@ -119,6 +167,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       case 'removeVendor':
         if (id !== undefined) {
           await this.removeVendor(id);
+        }
+        break;
+      case 'runVendor':
+        if (id !== undefined) {
+          await this.runVendor(id);
         }
         break;
       case 'customModel':
@@ -157,8 +210,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
   /** A preset, or a name and an endpoint typed in — the list is not meant to stay at two. */
   private async addVendor(): Promise<void> {
+    const existing = new Set(vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors')).map((v) => v.id));
+    // A preset already in the panel is not offered twice; the blank one (empty id) always is.
+    const offered = VENDOR_PRESETS.filter((p) => p.id.length === 0 || !existing.has(p.id));
     const picked = await vscode.window.showQuickPick(
-      VENDOR_PRESETS.map((p) => ({ label: p.label, detail: p.hint, preset: p })),
+      offered.map((p) => ({ label: p.label, detail: p.hint, preset: p })),
       { title: 'Add a reviewer', placeHolder: 'Which vendor should review as well?' },
     );
     if (picked === undefined) {
@@ -197,7 +253,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     await config.update('vendors', [...vendors, vendor], vscode.ConfigurationTarget.Global);
   }
 
-  /** Removing the last reviewer would leave a panel with nobody in it, so it is refused. */
+  /**
+   * Removing the last reviewer would leave a panel with nobody in it, so it is refused — and
+   * removing ANY reviewer is confirmed first: the link sits one line above the model picker, it
+   * takes that vendor's model and endpoint with it, and there is no undo.
+   */
   private async removeVendor(id: string): Promise<void> {
     const config = vscode.workspace.getConfiguration('coai');
     const vendors = vendorsFrom(config.get('vendors'));
@@ -205,6 +265,19 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       void vscode.window.showWarningMessage('A review panel needs at least one reviewer.');
       return;
     }
+
+    const confirmed = await vscode.window.showWarningMessage(
+      `Remove ${id} from the review panel?`,
+      {
+        modal: true,
+        detail: "Its model and endpoint settings go with it. Every vendor can be added back from the presets.",
+      },
+      'Remove',
+    );
+    if (confirmed !== 'Remove') {
+      return;
+    }
+
     await config.update(
       'vendors',
       vendors.filter((v) => v.id !== id),
@@ -276,8 +349,23 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   }
 }
 
-/** A fresh nonce per render: the content security policy admits exactly our one script. */
+/** A nonce per panel instance: the content security policy admits exactly our one script. */
 function nonce(): string {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   return Array.from({ length: 32 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
+}
+
+/**
+ * Everything a repaint is needed for - the CONTROLS. Deliberately excludes the live regions
+ * (rounds, questions), which are patched in place instead so an open dropdown survives.
+ */
+function staticKey(state: Parameters<typeof panelHtml>[0]): string {
+  return JSON.stringify([
+    state.settings,
+    state.vendors,
+    state.codexModels,
+    state.serverInstalled,
+    state.serverVersion,
+    state.openSections,
+  ]);
 }

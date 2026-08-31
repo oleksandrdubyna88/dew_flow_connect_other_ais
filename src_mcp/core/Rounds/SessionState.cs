@@ -69,6 +69,14 @@ public sealed record SessionState(
     /// <summary>Pending stage advance, decided at round completion, applied by resolve.</summary>
     public bool AdvanceOnResolve { get; init; }
 
+    /// <summary>
+    /// The last verdict was <c>call_human</c> — the ONLY state in which a human "proceed" override
+    /// is honoured. Its own flag rather than an inference from round counts, because the first
+    /// code-gate run proved the inference wrong: an exhausted Escalate stage also has no rounds
+    /// left, and the override could skip the configured ladder.
+    /// </summary>
+    public bool HumanGate { get; init; }
+
     public ImmutableArray<PriorRejection> Rejections { get; init; } = [];
 }
 

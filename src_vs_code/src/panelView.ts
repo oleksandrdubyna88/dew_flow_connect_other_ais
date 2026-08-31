@@ -2,7 +2,7 @@ import { CoaiSettings, LANGUAGES, TRANSLATORS } from './settingsShape';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { ModelChoice, modelsFor, modelsProvenance } from './models';
-import { SessionFile } from './rounds';
+import { costPhrase, elapsed, isRunning, reviewerLines, RoundRecord, SessionFile } from './rounds';
 import { Vendor } from './vendors';
 
 /**
@@ -46,14 +46,14 @@ export const OPEN_BY_DEFAULT: readonly string[] = [];
 export function panelHtml(state: PanelState, nonce: string): string {
   const open = state.openSections.length === 0 ? OPEN_BY_DEFAULT : state.openSections;
   const body = [
-    questionsSection(state.questions),
+    `<div id="live-questions">${questionsSection(state.questions)}</div>`,
     section('reviewers', 'Reviewers', open, reviewersBody(state)),
     section('language', 'Language', open, languageBody(state)),
     section('gate', 'The gate', open, gateBody(state.settings)),
     section('limits', 'Limits', open, limitsBody(state.settings)),
     section('keys', 'Vendor keys', open, keysBody(state)),
     section('server', 'Server', open, serverBody(state)),
-    section('rounds', 'Recent rounds', open, roundsBody(state.sessions)),
+    section('rounds', 'Recent rounds', open, `<div id="live-rounds">${roundsBody(state.sessions)}</div>`),
   ].join('\n');
 
   return `<!DOCTYPE html>
@@ -87,6 +87,30 @@ ${body}
     el.addEventListener('click', () =>
       vscode.postMessage({ type: 'command', command: el.dataset.command, id: el.dataset.id }));
   }
+
+  // Live updates arrive as HTML for the two regions that change on their own — the round in
+  // flight, and any open escalation. Patching them leaves every other control ALONE,
+  // which is the whole point: assigning the panel's html reloads the webview, and a reload
+  // closes any open dropdown. This is what stopped the pickers snapping shut mid-choice.
+  window.addEventListener('message', (event) => {
+    const message = event.data;
+    if (message?.type !== 'live') {
+      return;
+    }
+    const questions = document.getElementById('live-questions');
+    const rounds = document.getElementById('live-rounds');
+    if (questions !== null) {
+      questions.innerHTML = message.questions;
+    }
+    if (rounds !== null) {
+      rounds.innerHTML = message.rounds;
+    }
+    // The answer buttons live inside the patched HTML, so they are re-bound here.
+    for (const el of document.querySelectorAll('#live-questions [data-command]')) {
+      el.addEventListener('click', () =>
+        vscode.postMessage({ type: 'command', command: el.dataset.command, id: el.dataset.id }));
+    }
+  });
 </script>
 </body>
 </html>`;
@@ -130,6 +154,8 @@ function vendorCard(vendor: Vendor, codexModels: readonly ModelChoice[]): string
     <input type="checkbox" id="v-${id}" data-setting="enabled" data-vendor="${id}"${vendor.enabled ? ' checked' : ''}
            title="${escapeHtml(HELP.vendorEnabled)}">
     <label class="name" for="v-${id}">${id}</label>
+    <button class="run" data-command="runVendor" data-id="${id}" title="${escapeHtml(HELP.runVendor)}"
+            aria-label="Open ${id} in a terminal">▶</button>
     <button class="link" data-command="removeVendor" data-id="${id}">remove</button>
   </div>
   <div class="field">
@@ -271,20 +297,49 @@ function questionsSection(questions: readonly Escalation[]): string {
   return `<h2>A review is waiting on you</h2>\n${cards}`;
 }
 
-function roundsBody(sessions: readonly SessionFile[]): string {
+/**
+ * What has run — and what is running RIGHT NOW, which is the question people actually have
+ * during a ten-minute code gate.
+ *
+ * <p>A round in flight sorts first and lists its reviewers one by one, because "four of six
+ * answered, two running" is the difference between waiting and being stuck. Until the server
+ * began writing the round at its START, this panel could not tell those apart at all.</p>
+ */
+export function roundsBody(sessions: readonly SessionFile[], nowMs: number = Date.now()): string {
   const rounds = sessions
     .flatMap((s) => s.rounds.map((r) => ({ branch: s.state.branch, ...r })))
-    .sort((a, b) => b.completedUtc.localeCompare(a.completedUtc))
+    .sort((a, b) => Number(isRunning(b)) - Number(isRunning(a)) || b.completedUtc.localeCompare(a.completedUtc))
     .slice(0, 6);
   if (rounds.length === 0) {
     return '<div class="empty">No rounds yet.</div>';
   }
-  return rounds
-    .map(
-      (r) =>
-        `<div class="verdict">${escapeHtml(r.branch)} · ${escapeHtml(r.stage)} ${r.number} · <b>${escapeHtml(r.verdict)}</b> · ${r.gatingCount} gating</div>`,
-    )
-    .join('\n');
+  return rounds.map((r) => roundCard(r, nowMs)).join('\n');
+}
+
+function roundCard(round: RoundRecord & { branch: string }, nowMs: number): string {
+  const verdict = isRunning(round)
+    ? '<span class="badge running">running</span>'
+    : round.status === 'interrupted'
+      ? '<span class="badge stopped">interrupted</span>'
+      : `<b>${escapeHtml(round.verdict)}</b>`;
+  const reviewers = isRunning(round)
+    ? reviewerLines(round)
+        .map((line) => `<div class="reviewer">${escapeHtml(line)}</div>`)
+        .join('\n')
+    : '';
+  const took = elapsed(round, nowMs);
+  return `<div class="verdict">${escapeHtml(round.branch)} · ${escapeHtml(round.stage)} ${round.number} · ${verdict} · ${round.gatingCount} gating</div>
+<div class="usage">${took.length > 0 ? `${escapeHtml(took)} · ` : ''}${escapeHtml(costPhrase(round))}</div>
+${reviewers}`;
+}
+
+/**
+ * The two regions the provider may patch without reloading the webview — the round in flight and
+ * a waiting question. Everything else on the panel is a control, and a control only changes when
+ * the person changes it.
+ */
+export function liveRegions(state: PanelState, nowMs: number = Date.now()): { questions: string; rounds: string } {
+  return { questions: questionsSection(state.questions), rounds: roundsBody(state.sessions, nowMs) };
 }
 
 /**
@@ -397,8 +452,17 @@ const CSS = `
     border-radius: 3px; padding: 8px; margin: 8px 0;
   }
   .vendor .head { display: flex; align-items: center; gap: 6px; }
-  .vendor .name { font-weight: 600; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .vendor .name { font-weight: 600; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .vendor input[type="checkbox"] { flex: 0 0 auto; margin: 0; }
+  /* The play button sits between the name and remove, centred in the gap they leave. */
+  .vendor .head .run {
+    flex: 0 0 auto; width: auto; margin: 0 auto; padding: 1px 8px; line-height: 1.2;
+    background: none; color: var(--vscode-charts-green); font-size: 13px;
+    border: 1px solid transparent; border-radius: 3px;
+  }
+  .vendor .head .run:hover {
+    background: var(--vscode-toolbar-hoverBackground); border-color: var(--vscode-charts-green);
+  }
   .question {
     border-left: 3px solid var(--vscode-inputValidation-warningBorder);
     background: var(--vscode-inputValidation-warningBackground);
@@ -409,6 +473,14 @@ const CSS = `
   .verdict {
     font-family: var(--vscode-editor-font-family); font-size: 11px; margin: 2px 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .usage { font-size: 11px; opacity: .7; margin: 0 0 4px; }
+  .reviewer { font-size: 11px; opacity: .85; margin: 1px 0 1px 8px; }
+  .badge { padding: 0 5px; border-radius: 8px; font-size: 10px; font-weight: 600; }
+  .badge.running { background: var(--vscode-charts-green); color: var(--vscode-editor-background); }
+  .badge.stopped {
+    background: var(--vscode-inputValidation-warningBorder);
+    color: var(--vscode-editor-background);
   }
   .empty { opacity: .6; font-style: italic; margin: 6px 0; }
   .status { margin: 2px 0 0; }

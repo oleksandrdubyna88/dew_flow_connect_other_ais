@@ -1,3 +1,5 @@
+using System.Text.Json;
+using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Processes;
 
 namespace CoaiMcp.Runners.Reviewers;
@@ -29,17 +31,77 @@ public sealed record ReviewerSettings(string Provider)
 
 /// <summary>One reviewer launch, fully described: the process, and where its answer lands.</summary>
 /// <param name="OutputFile">Codex writes its final message here (<c>-o</c>); empty = read stdout.</param>
-public sealed record ReviewerInvocation(string Provider, ReviewRole Role, ProcessRequest Request, string OutputFile = "");
+/// <param name="Adapter">
+/// The vendor adapter that built this launch, so reading the answer and the usage stays with the
+/// vendor that knows their shape instead of becoming a switch in the executor.
+/// </param>
+public sealed record ReviewerInvocation(
+    string Provider,
+    ReviewRole Role,
+    ProcessRequest Request,
+    string OutputFile = "",
+    IReviewerRuntime? Adapter = null);
 
 /// <summary>
-/// Turns a role + prompt + worktree into an argv — one class per vendor, refusal over default,
-/// modelled on rag_qln's AgentRuntimes. Pure: no IO here, so every flag is a unit test.
+/// THE vendor adapter: everything one AI vendor needs to plug into the panel, in one interface —
+/// how to launch it, where its answer lands, and what the run consumed. A new vendor is one class
+/// implementing this (usually only <see cref="Build"/>; the read side has working defaults),
+/// registered in <see cref="ReviewerRuntimeSelector.Default"/> — nothing else changes.
 /// </summary>
+/// <remarks>
+/// Modelled on rag_qln's AgentRuntimes: one class per vendor, refusal over default. `Build` is
+/// pure — no IO — so every flag is a unit test; the read-side methods only look at what the
+/// finished process left behind.
+/// </remarks>
 public interface IReviewerRuntime
 {
     string Provider { get; }
 
     ReviewerInvocation Build(ReviewRole role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings);
+
+    /// <summary>
+    /// The answer text out of a finished run. Default: the file the invocation named (codex's
+    /// <c>-o</c>), stdout otherwise (gemini) — override when the CLI wraps its answer (claude's
+    /// JSON envelope). Null means "no answer where this vendor puts one" — unparseable, by name.
+    /// </summary>
+    string? ReadAnswer(ReviewerInvocation invocation, ProcessResult result) =>
+        ReviewerOutput.FileOrStdout(invocation, result);
+
+    /// <summary>
+    /// What the run consumed, from the CLI's OWN reporting — tokens always when the vendor says,
+    /// money only when the vendor itself prices the run (claude does; estimating for the rest
+    /// would mean shipping a price table that is wrong within a month). Default: the schema-less
+    /// scan over stdout, which reads codex's event stream and gemini's stats envelope alike.
+    /// </summary>
+    Usage ReadUsage(ReviewerInvocation invocation, ProcessResult result) =>
+        UsageParser.Parse(result.StdOut);
+}
+
+/// <summary>The default read conventions the adapters share.</summary>
+public static class ReviewerOutput
+{
+    /// <summary>The `-o` file when one was named, stdout otherwise. A named file that is missing
+    /// or unreadable is null — the CLI exited 0 but wrote no answer.</summary>
+    public static string? FileOrStdout(ReviewerInvocation invocation, ProcessResult result)
+    {
+        if (invocation.OutputFile.Length == 0)
+        {
+            return result.StdOut;
+        }
+
+        try
+        {
+            return File.ReadAllText(invocation.OutputFile);
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 }
 
 /// <summary>
@@ -68,6 +130,10 @@ public class CodexRuntime : IReviewerRuntime
                 "-C", worktreePath,
                 "--output-schema", schemaFilePath,
                 "-o", outputFile,
+                // The event stream on stdout — the final answer still arrives via `-o`. This is
+                // where codex reports what the run consumed (token_count events); without it the
+                // only usage trace is a human-formatted stderr line.
+                "--json",
                 .. ModelArgs(settings),
                 .. ProviderOverrides,
                 // `-` is codex's documented "read the instructions from stdin". The prompt does
@@ -82,7 +148,7 @@ public class CodexRuntime : IReviewerRuntime
             StdIn = prompt,
             Timeout = settings.Timeout,
         };
-        return new ReviewerInvocation(Provider, role, request, outputFile);
+        return new ReviewerInvocation(Provider, role, request, outputFile, this);
     }
 
     private protected static string Executable(ReviewerSettings settings, string fallback) =>
@@ -150,7 +216,7 @@ public sealed class GeminiRuntime : IReviewerRuntime
             StdIn = prompt,
             Timeout = settings.Timeout,
         };
-        return new ReviewerInvocation(Provider, role, request);
+        return new ReviewerInvocation(Provider, role, request, OutputFile: string.Empty, this);
     }
 }
 

@@ -6,6 +6,16 @@ namespace CoaiMcp.Runners.Reviewers;
 public sealed record ReviewerWork(ReviewerInvocation Invocation, ReviewerInvocation? Repair = null);
 
 /// <summary>
+/// One reviewer crossing a line, reported the moment it happens.
+/// </summary>
+/// <remarks>
+/// The fan-out is the slow part of the product — ten minutes is normal — and a round that showed
+/// nothing until it finished left the person with no way to tell "working" from "hung". A callback
+/// rather than a poll: the scheduler already knows, and nothing else has to guess.
+/// </remarks>
+public sealed record ReviewerProgress(string Provider, ReviewRole Role, string Status, ReviewerOutcome? Outcome = null);
+
+/// <summary>
 /// The fan-out stays logically parallel; the queue is what keeps it survivable. Two providers ×
 /// three roles is six CLIs wanting to start at the same instant — unbounded, that is where local
 /// process limits, the CLIs' own lock files and the vendors' 429s all arrive at once, each
@@ -39,10 +49,15 @@ public sealed class BoundedScheduler(int globalCap = 3, int perProviderCap = 2, 
 
     private readonly Dictionary<string, int> _peakPerProvider = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <param name="onProgress">
+    /// Called as each reviewer is queued, starts and ends. Invoked from the fan-out's threads, so
+    /// the handler must be thread-safe and quick — a slow one delays the reviewer it reports on.
+    /// </param>
     public async Task<IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)>> RunAllAsync(
         IReadOnlyList<ReviewerWork> work,
         ReviewerExecutor executor,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Action<ReviewerProgress>? onProgress = null)
     {
         PeakConcurrency = 0;
         _peakPerProvider.Clear();
@@ -56,6 +71,11 @@ public sealed class BoundedScheduler(int globalCap = 3, int perProviderCap = 2, 
             .ToDictionary(p => p, _ => new SemaphoreSlim(perProviderCap), StringComparer.OrdinalIgnoreCase);
         try
         {
+            foreach (var w in work)
+            {
+                Report(onProgress, w.Invocation, "queued");
+            }
+
             var tasks = work.Select(async w =>
             {
                 var name = w.Invocation.Provider;
@@ -65,9 +85,12 @@ public sealed class BoundedScheduler(int globalCap = 3, int perProviderCap = 2, 
                 {
                     await global.WaitAsync(ct);
                     Entered(name, runningPerProvider);
+                    Report(onProgress, w.Invocation, "running");
                     try
                     {
-                        return (w.Invocation, await RunWithOneRetryAsync(w, executor, ct));
+                        var outcome = await RunWithOneRetryAsync(w, executor, ct);
+                        Report(onProgress, w.Invocation, outcome is ReviewerOutcome.Ok ? "done" : "failed", outcome);
+                        return (w.Invocation, outcome);
                     }
                     finally
                     {
@@ -88,6 +111,20 @@ public sealed class BoundedScheduler(int globalCap = 3, int perProviderCap = 2, 
             {
                 semaphore.Dispose();
             }
+        }
+    }
+
+    /// <summary>A progress handler is a courtesy, never a dependency: its failure cannot fail a
+    /// reviewer, because a panel that cannot repaint is not a review that did not happen.</summary>
+    private static void Report(Action<ReviewerProgress>? onProgress, ReviewerInvocation invocation, string status, ReviewerOutcome? outcome = null)
+    {
+        try
+        {
+            onProgress?.Invoke(new ReviewerProgress(invocation.Provider, invocation.Role, status, outcome));
+        }
+        catch (Exception)
+        {
+            // Reporting is not the work.
         }
     }
 
@@ -137,7 +174,7 @@ public static class ReviewerSummaryFactory
                 .Where(r => r.Outcome is not ReviewerOutcome.Ok)
                 .Select(r => $"{r.Invocation.Provider}/{r.Invocation.Role}: {Describe(r.Outcome)}")]);
 
-    private static string Describe(ReviewerOutcome outcome) => outcome switch
+    public static string Describe(ReviewerOutcome outcome) => outcome switch
     {
         ReviewerOutcome.TimedOut => "timeout",
         ReviewerOutcome.RateLimited => "rate limited (after one retry)",
