@@ -107,6 +107,15 @@ comparison — a change to make deliberately, not by moving a constant until a t
   exhaustion was therefore misreported as a plain non-zero exit and never retried. Its real words
   are in the table now.
 
+
+## A ninth, found by CI rather than by a vendor
+
+The win-x64 release job reported a concurrency overlap of **five** against a cap of three — a
+number a semaphore of three cannot produce. So the measurement was wrong, not the scheduler: it
+counted overlapping start/end ticks that child processes wrote into files, which on a loaded
+two-core runner reports on clocks and process lifetimes rather than on slots held. The cap is now
+recorded inside the scheduler where the slot is taken, and the test asserts that. Worth keeping
+beside the rest: a test that measures the environment will eventually accuse the code.
 ## The verdict on the exercise
 
 The run did its job in the only way it could: by being real. Seven of the eight defects lived in the
