@@ -130,6 +130,34 @@ public sealed class RoundMachineTests
     }
 
     [Fact]
+    public void AfterCallHuman_TheHumansProceed_AdvancesTheStage()
+    {
+        // The gap the first live run exposed: rounds exhausted, verdict call_human, the person
+        // says "go" — and the machine had no way to hear it.
+        var s = Fresh(new PanelConfig(MaxRounds: 1, OnExhausted: StagePolicy.Human));
+        var ok = (Transition.Ok)RoundMachine.CompleteRound(s, Failing(), AllSix);
+        ok.Verdict.Should().BeOfType<RoundVerdict.CallHuman>();
+
+        var moved = RoundMachine.Resolve(ok.State, [], humanSaysProceed: true)
+            .Should().BeOfType<Transition.Moved>().Subject;
+
+        moved.State.Stage.Should().Be(Stage.CodeReview);
+        moved.State.PlanProceeded.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TheHumanOverride_IsRefused_WhileRoundsRemain()
+    {
+        // Before exhaustion the gate decides, not the flag: a model must not skip the loop by
+        // claiming permission it was never given.
+        var awaiting = ((Transition.Ok)RoundMachine.CompleteRound(Fresh(), Failing(), AllSix)).State;
+
+        RoundMachine.Resolve(awaiting, [], humanSaysProceed: true)
+            .Should().BeOfType<Transition.Refused>()
+            .Which.Sentence.Should().Contain("rounds are exhausted");
+    }
+
+    [Fact]
     public void PartialReviewerFailures_StillAdvance_AndSaySo()
     {
         var partial = new ReviewerSummary(6, 4, ["gemini/perf: timeout", "codex/security: rate limited"]);
