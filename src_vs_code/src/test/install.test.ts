@@ -80,15 +80,20 @@ test('the known client targets are the three files a person would edit', () => {
 });
 
 test('the CLAUDE.md snippet names all seven tools under the coai namespace', () => {
-  const snippet = claudeSnippet('my-repo');
+  const snippet = claudeSnippet();
   for (const tool of ['providers', 'open', 'review_plan', 'review_code', 'resolve', 'status', 'ask_human']) {
     assert.ok(snippet.includes(`mcp__coai__${tool}`), `names ${tool}`);
   }
-  assert.ok(snippet.includes('my-repo'), 'the repository is named for the reader');
+});
+
+test('the snippet names no repository — it tells the AI to read its own checkout', () => {
+  const snippet = claudeSnippet();
+  assert.ok(snippet.includes('git rev-parse --show-toplevel'), 'repoPath comes from where it runs');
+  assert.ok(snippet.includes('Never a path from this file'));
 });
 
 test('the snippet states the ordering contract and the human stop', () => {
-  const snippet = claudeSnippet('r');
+  const snippet = claudeSnippet();
   assert.ok(snippet.includes('REFUSES until a plan round'));
   assert.ok(snippet.includes('Do not proceed on your own judgement'));
   assert.ok(snippet.includes('a rejection'), 'the reason duty is stated');

@@ -123,11 +123,11 @@ async function copyConfigBlock(context: vscode.ExtensionContext): Promise<void> 
 }
 
 async function copyClaudeSnippet(): Promise<void> {
-  const folder = vscode.workspace.workspaceFolders?.[0];
-  const name = folder === undefined ? 'this repository' : folder.name;
-  await vscode.env.clipboard.writeText(claudeSnippet(name));
+  // The snippet names no repository: it is pasted into whichever one you are adopting it for, and
+  // the AI reading it is already in a checkout it can name for itself.
+  await vscode.env.clipboard.writeText(claudeSnippet());
   void vscode.window.showInformationMessage(
-    `The CLAUDE.md snippet for ${name} is on your clipboard — paste it into that repository's CLAUDE.md.`,
+    "The CLAUDE.md snippet is on your clipboard — paste it into the CLAUDE.md of the repository you want reviewed.",
   );
 }
 

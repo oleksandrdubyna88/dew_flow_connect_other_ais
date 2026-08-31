@@ -1,8 +1,8 @@
 {
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
-  "description": "A multi-model review gate: secondary vendor models (Codex, Gemini, DeepSeek) review your main AI's plan and code in rounds, until the findings drop under a threshold or a human is called.",
-  "version": "0.6.1",
+  "description": "Your AI writes the code; other vendors' models review it — the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
+  "version": "0.7.0",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -14,6 +14,7 @@
   },
   "categories": [
     "AI",
+    "Programming Languages",
     "Other"
   ],
   "main": "./dist/extension.js",
@@ -277,5 +278,26 @@
   "activationEvents": [
     "onStartupFinished"
   ],
-  "icon": "media/icon.png"
+  "icon": "media/icon.png",
+  "keywords": [
+    "ai",
+    "code review",
+    "mcp",
+    "claude",
+    "codex",
+    "gemini",
+    "deepseek",
+    "agent",
+    "multi-model",
+    "llm"
+  ],
+  "homepage": "https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais#readme",
+  "bugs": {
+    "url": "https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues"
+  },
+  "qna": "marketplace",
+  "galleryBanner": {
+    "color": "#2D508A",
+    "theme": "dark"
+  }
 }
