@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>CoaiMcp.Runners</RootNamespace>
+    <!-- The impure ring around the core: processes, worktrees, the scheduler. Everything here
+         carries data to and from CoaiMcp.Core and adds no rules of its own. -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\core\CoaiMcp.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CoaiMcp.Tests" />
+  </ItemGroup>
+
+</Project>
