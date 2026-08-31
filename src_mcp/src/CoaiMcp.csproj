@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>coai-mcp</AssemblyName>
+    <RootNamespace>CoaiMcp</RootNamespace>
+    <!-- Native AOT, the same choice as creds-mcp and for the same reason: an MCP client starts
+         this process and waits for the handshake before it can list a single tool, so start-up
+         is the user-visible cost. The trim/AOT analyzers then run on every ordinary build. -->
+    <PublishAot>true</PublishAot>
+    <StripSymbols>true</StripSymbols>
+    <!-- An accidental reflective serialization call is a compile error, not a runtime surprise.
+         The MCP SDK carries its own source-generated context (measured in creds, 2026-08-27). -->
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\service_defaults\CoaiMcp.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CoaiMcp.Tests" />
+  </ItemGroup>
+
+</Project>

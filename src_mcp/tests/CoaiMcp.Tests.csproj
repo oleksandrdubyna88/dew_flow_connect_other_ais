@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>CoaiMcp.Tests</RootNamespace>
+    <!-- xUnit v3 on Microsoft Testing Platform: this builds into a self-contained runner.
+         Run the executable; `dotnet test` has no VSTest host here and aborts. -->
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="FluentAssertions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\src\CoaiMcp.csproj" />
+    <ProjectReference Include="..\service_defaults\CoaiMcp.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>

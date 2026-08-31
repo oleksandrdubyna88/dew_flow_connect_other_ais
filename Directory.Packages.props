@@ -1,0 +1,35 @@
+<Project>
+
+  <!--
+    Package policy: bump to the latest STABLE release monthly, all at once, across the
+    dew_flow_* repositories (.claude/rules/shared/csharp/nuget-packages.md). Exceptions
+    are pinned below with the reason, because an exception without a reason gets bumped
+    by the next person who runs the sweep.
+  -->
+  <ItemGroup>
+    <!-- coai-mcp: the official MCP SDK. Affordable under Native AOT — measured in
+         dew_flow_creds_for_devs (2026-08-27): with PublishAot and
+         JsonSerializerIsReflectionEnabledByDefault=false it publishes with zero trim
+         warnings and answers a real initialize/tools-list exchange. MIT. -->
+    <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
+
+    <!-- The one logging stack, per .claude/rules/shared/common/logging-serilog.md.
+         The console sink is our own AnsiConsoleSink (the packaged themes emit nothing
+         once stdout is redirected - measured, see the rule); only the core pipeline
+         and the file sink come from packages. Apache-2.0. -->
+    <PackageVersion Include="Serilog" Version="4.4.0" />
+    <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- xUnit v3 on the native Microsoft Testing Platform: the test project builds into a
+         self-contained runner executable. There is no VSTest testhost here, so `dotnet test`
+         aborts — run the executable (.claude/rules/shared/common/testing.md). -->
+    <PackageVersion Include="xunit.v3" Version="4.0.0" />
+
+    <!-- 7.2.2 = the last Apache-2.0 release; 8.x moved to the Xceed Community License
+         (non-commercial only). Do NOT bump. -->
+    <PackageVersion Include="FluentAssertions" Version="7.2.2" />
+  </ItemGroup>
+
+</Project>
