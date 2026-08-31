@@ -1,9 +1,25 @@
 # PLAN — epic 04: coai-mcp — the server that holds the protocol
 
-> Status: **plan only, nothing implemented yet.** Epic 4 of 6 under
-> [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) (its Phase 3). Depends on epics 02 (state
-> machine, contract) and 03 (runners). After this epic the whole loop works from any MCP client —
-> before the extension exists.
+> Status: **IMPLEMENTED, 2026-08-31.** Epic 4 of 6 under
+> [PLAN_connect_other_ais.md](../todo/PLAN_connect_other_ais.md) (its Phase 3). All four stories
+> shipped (commit faa4c61, tag `mcp-v0.1.0`); module doc: [module_server.md](module_server.md).
+>
+> **Deviations from the plan:**
+> - Story 4.4's smoke is the CONTRACT TESTS pointed at the published binary via
+>   `COAI_CONTRACT_EXE`, not a `--help` grep — a `--help` that works proves nothing about the tool
+>   surface. The env hook was added to `McpContractTests` for exactly this.
+> - Settings come from the ENVIRONMENT, not a config file: the MCP client owns the server's
+>   process, so its `mcpServers` env block is where configuration crosses over. The extension
+>   regenerates that block; there is no settings loopback (the plan implied one at this stage).
+> - `ask_human` ships as a deliberate static refusal that instructs the model to surface the
+>   question itself — the loopback listener is epic 05's, and a tool that pretends to reach a human
+>   is worse than one that says it cannot.
+> - `resolve` addresses findings by INDEX into the round's merged list (persisted as `Pending`),
+>   which the plan never specified.
+> - JSON is camelCase (`PropertyNamingPolicy`) — found by nine failing tests reading PascalCase
+>   properties; pinned now by every wire assertion.
+> - Verified beyond the DoD: the released win-x64 asset was downloaded, checksum-matched,
+>   extracted and registered — `claude mcp list` reports `coai ✔ Connected`.
 
 ## Goal
 

@@ -1,9 +1,22 @@
 # PLAN — epic 05: the ConnectOtherAIs VS Code extension
 
-> Status: **plan only, nothing implemented yet.** Epic 5 of 6 under
-> [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) (its Phases 4–5). Depends on epic 04 (a
-> released binary to install; a loopback to listen to). TypeScript per the family doctrine; pure
-> modules tested with `node:test`, following the `creds_for_devs/src_vs_code` layout.
+> Status: **IMPLEMENTED, 2026-08-31**, with one story deferred. Epic 5 of 6 under
+> [PLAN_connect_other_ais.md](../todo/PLAN_connect_other_ais.md) (its Phases 4–5). Commit df25020;
+> 25 `node:test` cases; the `.vsix` was packaged AND installed into VS Code on this machine.
+>
+> **Deviations from the plan:**
+> - **Story 5.3's loopback is NOT built.** Settings travel one way, in the `mcpServers` env block
+>   the extension writes to the clipboard, and the rounds view reads the server's own session
+>   files directly — so no port, no listener, no protocol between the halves. What that costs is
+>   real: `ask_human` cannot reach a modal, and the server's static refusal (epic 04) stands in.
+>   The remaining work is extracted into [../todo/PLAN_escalation_loopback.md](../todo/PLAN_escalation_loopback.md).
+> - Settings are VS Code `configuration` contributions rather than a webview: the same knobs, in
+>   the editor's own settings UI, with no HTML to maintain. A webview buys presentation only.
+> - The rounds view is a generated markdown document rather than a tree/webview — reads well,
+>   copies into an issue, costs nothing to maintain.
+> - `esbuild` 0.25 (0.28 does not exist); otherwise the creds toolchain unchanged.
+> - Two snippet assertions were written across line wraps and failed on their first run; the text
+>   was reworded and the assertions tightened rather than loosened.
 
 ## Goal
 

@@ -12,3 +12,7 @@ Documentation of shipped behaviour: [architecture.md](architecture.md) is the en
 | [module_core.md](module_core.md) | The core module: entities, flow, the decisions a reader needs |
 | [PLAN_epic_03_runners.md](PLAN_epic_03_runners.md) | IMPLEMENTED 2026-08-31 — reviewer runners: worktrees, context assembly, vendor argvs, bounded scheduler |
 | [module_runners.md](module_runners.md) | The runners module: process seam, worktree lifecycle, the five failure modes |
+| [PLAN_epic_04_server.md](PLAN_epic_04_server.md) | IMPLEMENTED 2026-08-31 — coai-mcp: the stdio server, review tools, vault keys, release line |
+| [module_server.md](module_server.md) | The server module: the seven tools, the stage flow, persistence, what is verified |
+| [PLAN_epic_05_extension.md](PLAN_epic_05_extension.md) | IMPLEMENTED 2026-08-31 — the VS Code extension: settings, install button, rounds view, snippet (loopback deferred) |
+| [module_extension.md](module_extension.md) | The extension module: commands, the install path, what it deliberately does not do |

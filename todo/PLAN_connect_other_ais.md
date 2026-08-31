@@ -319,8 +319,8 @@ test cases — build them strictly in this order, each depends only on its prede
 | [PLAN_epic_01_foundation.md](../research/PLAN_epic_01_foundation.md) — **shipped 2026-08-31** | conventions mount, solution + logging skeleton, CI | 0 |
 | [PLAN_epic_02_core.md](../research/PLAN_epic_02_core.md) — **shipped 2026-08-31** | finding contract, sanitizer, dedup + counting, round state machine | 1 |
 | [PLAN_epic_03_runners.md](../research/PLAN_epic_03_runners.md) — **shipped 2026-08-31** | worktree manager, context assembly, vendor runtimes, bounded scheduler | 2 |
-| [PLAN_epic_04_server.md](PLAN_epic_04_server.md) | the stdio server, review tools, creds keys, release + contract tests | 3 |
-| [PLAN_epic_05_extension.md](PLAN_epic_05_extension.md) | settings UI, install button, rounds view + escalation, CLAUDE.md snippet | 4–5 |
+| [PLAN_epic_04_server.md](../research/PLAN_epic_04_server.md) — **shipped 2026-08-31** | the stdio server, review tools, creds keys, release + contract tests | 3 |
+| [PLAN_epic_05_extension.md](../research/PLAN_epic_05_extension.md) — **shipped 2026-08-31** | settings UI, install button, rounds view + escalation, CLAUDE.md snippet | 4–5 |
 | [PLAN_epic_06_proof.md](PLAN_epic_06_proof.md) | scripted end-to-end in CI, one recorded real run | 6 |
 
 **Phase 0 — the repository.** Already initialised: `.git`, `.gitignore` and `LICENSE` are in place as

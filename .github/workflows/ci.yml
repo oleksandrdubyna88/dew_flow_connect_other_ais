@@ -46,3 +46,29 @@ jobs:
 
       - name: Pin check
         run: node .claude/rules/shared/tools/pin-check.mjs
+
+  extension:
+    name: extension · typecheck · test · package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # `npm ci` needs the lockfile to match; the extension has zero runtime dependencies,
+      # so this installs only the build/test toolchain.
+      - name: Install
+        working-directory: src_vs_code
+        run: npm ci
+
+      - name: Test
+        working-directory: src_vs_code
+        run: npm test
+
+      # Packaging is part of CI because a .vsix that only builds on one machine is a release
+      # that fails at the last step.
+      - name: Package
+        working-directory: src_vs_code
+        run: npm run package

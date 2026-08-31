@@ -40,8 +40,8 @@ C4Container
 | Repository foundation (build, logging, CI) | [PLAN_epic_01_foundation.md](PLAN_epic_01_foundation.md) | **shipped 2026-08-31** |
 | Pure core (findings, sanitizer, counting, rounds) | [module_core.md](module_core.md) | **shipped 2026-08-31** |
 | Reviewer runners (worktrees, scheduler, vendors) | [module_runners.md](module_runners.md) | **shipped 2026-08-31** |
-| `coai-mcp` server | `module_server.md` | epic 04 — not started |
-| VS Code extension | `module_extension.md` | epic 05 — not started |
+| `coai-mcp` server | [module_server.md](module_server.md) | **shipped 2026-08-31** |
+| VS Code extension | [module_extension.md](module_extension.md) | **shipped 2026-08-31** (escalation loopback deferred) |
 
 ## Cross-cutting decisions already in force
 
