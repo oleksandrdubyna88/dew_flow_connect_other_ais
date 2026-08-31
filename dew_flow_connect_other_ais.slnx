@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src_mcp/src/CoaiMcp.csproj" />
+    <Project Path="src_mcp/core/CoaiMcp.Core.csproj" />
     <Project Path="src_mcp/service_defaults/CoaiMcp.ServiceDefaults.csproj" />
   </Folder>
   <Folder Name="/tests/">

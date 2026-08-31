@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>CoaiMcp.Core</RootNamespace>
+    <!-- The pure core: findings, the sanitizer, the counting rule, the round state machine.
+         No Process, no HttpClient, no filesystem — an architecture test in CoaiMcp.Tests holds
+         the line. Everything here is a pure function under a unit test. -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CoaiMcp.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\src\CoaiMcp.csproj" />
+    <ProjectReference Include="..\core\CoaiMcp.Core.csproj" />
     <ProjectReference Include="..\service_defaults\CoaiMcp.ServiceDefaults.csproj" />
   </ItemGroup>
 
