@@ -1,0 +1,135 @@
+{
+  "name": "connect-other-ais",
+  "displayName": "ConnectOtherAIs",
+  "description": "A multi-model review gate: secondary vendor models (Codex, Gemini, DeepSeek) review your main AI's plan and code in rounds, until the findings drop under a threshold or a human is called.",
+  "version": "0.1.0",
+  "publisher": "remsoftdev",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "coai.installServer",
+        "title": "ConnectOtherAIs: Install the MCP Server…"
+      },
+      {
+        "command": "coai.copyConfigBlock",
+        "title": "ConnectOtherAIs: Copy the MCP config block"
+      },
+      {
+        "command": "coai.copyClaudeSnippet",
+        "title": "ConnectOtherAIs: Copy the CLAUDE.md snippet"
+      },
+      {
+        "command": "coai.showRounds",
+        "title": "ConnectOtherAIs: Show review rounds"
+      }
+    ],
+    "configuration": {
+      "title": "ConnectOtherAIs",
+      "properties": {
+        "coai.providers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "codex",
+              "gemini",
+              "deepseek"
+            ]
+          },
+          "default": [
+            "codex",
+            "gemini"
+          ],
+          "markdownDescription": "Which secondary vendors review. `deepseek` needs a key in the CredsForDevs config entry (`#coai.credsKey#`)."
+        },
+        "coai.model.codex": {
+          "type": "string",
+          "default": "",
+          "description": "Model for the Codex CLI (-m). Empty = the CLI's own default."
+        },
+        "coai.model.gemini": {
+          "type": "string",
+          "default": "",
+          "description": "Model for the Gemini CLI (-m). Empty = the CLI's own default."
+        },
+        "coai.model.deepseek": {
+          "type": "string",
+          "default": "",
+          "description": "DeepSeek model (rides the Codex CLI's custom provider). Empty = the CLI's own default."
+        },
+        "coai.maxRounds": {
+          "type": "integer",
+          "default": 3,
+          "minimum": 1,
+          "description": "Review rounds per stage before the on-exhausted policy fires."
+        },
+        "coai.gateThreshold": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 0,
+          "description": "The gate passes when blocking+major findings (after de-duplication) are at or under this."
+        },
+        "coai.onExhausted": {
+          "type": "string",
+          "enum": [
+            "continue",
+            "human",
+            "escalate"
+          ],
+          "default": "human",
+          "markdownDescription": "When rounds run out with findings still gating: `continue` as-is (said out loud), call a `human`, or `escalate` the ladder (reviewer effort → reviewer model → arbiter model)."
+        },
+        "coai.maxConcurrency": {
+          "type": "integer",
+          "default": 3,
+          "minimum": 1,
+          "description": "Reviewer CLI processes running at once, machine-wide."
+        },
+        "coai.maxPerProvider": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 1,
+          "description": "Reviewer CLI processes per vendor at once — a rate limit is per vendor."
+        },
+        "coai.reviewerTimeoutMinutes": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 1,
+          "description": "Per-reviewer process timeout."
+        },
+        "coai.credsKey": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "The CredsForDevs **config-entry key** (minted by *Enable Code Access…* on the entry holding vendor API keys). A pass to one vault entry — revocable, useless while VS Code is closed — not a secret itself. Empty = keyless vendors only."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "typecheck": "tsc -p ./ --noEmit",
+    "test": "npm run compile && node --test \"out/test/*.test.js\"",
+    "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
+    "package": "npm run test && npm run bundle && vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.4.0"
+  }
+}

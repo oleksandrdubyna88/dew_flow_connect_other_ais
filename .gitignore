@@ -69,3 +69,6 @@ jspm_packages/
 
 # Native AOT publish output
 publish/
+
+# The extension's packaged artefact — built by CI, attached to a release
+src_vs_code/*.vsix
