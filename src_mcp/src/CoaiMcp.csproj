@@ -25,8 +25,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The shipped role-prompt defaults; the override layer lives in the data dir. -->
-    <Content Include="prompts\*.md" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The shipped role-prompt defaults, INSIDE the binary. They were content files copied beside
+         the executable until 2026-08-31, when the first real run died on every review_plan: the
+         release asset carries one file, and tests never noticed because a project reference copies
+         content into the test output. A default that can go missing is not a default. -->
+    <EmbeddedResource Include="prompts\*.md" LogicalName="CoaiMcp.prompts.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

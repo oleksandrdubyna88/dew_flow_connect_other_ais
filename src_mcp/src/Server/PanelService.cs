@@ -227,6 +227,16 @@ public sealed class PanelService
         {
             return Error(e.Message);
         }
+        catch (Exception e)
+        {
+            // Anything unforeseen becomes a SENTENCE, never an SDK-level "An error occurred
+            // invoking 'review_plan'". That message is what the first real run got (2026-08-31)
+            // when the prompts were missing from the release asset — it named the tool and
+            // nothing else, so the cause had to be guessed. The log carries the stack; the caller
+            // gets something it can act on.
+            _log.Error(e, "unhandled failure in the {Stage} stage", session.State.Stage);
+            return Error($"the round failed: {e.Message} (see the coai-mcp log for the stack)");
+        }
     }
 
     private IReadOnlyList<ReviewerWork> BuildWork(IReadOnlyList<ReviewRole> roles, string worktreePath, string context)

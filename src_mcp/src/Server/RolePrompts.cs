@@ -1,15 +1,20 @@
+using System.Reflection;
 using CoaiMcp.Runners.Reviewers;
 
 namespace CoaiMcp.Server;
 
 /// <summary>
-/// Role prompts: a shipped file default, an override layer, a restore — the prompt-catalog
-/// pattern, so editing a prompt is not a rebuild and restoring one is not an archaeology dig.
+/// Role prompts: a shipped default EMBEDDED in the binary, an override layer on disk, a restore —
+/// the prompt-catalog pattern, so editing a prompt is not a rebuild and restoring one is not an
+/// archaeology dig.
 /// </summary>
 /// <remarks>
-/// Shipped defaults live beside the binary (<c>prompts/*.md</c>, copied at build); overrides live
-/// under the data dir and win while they exist; restore is deleting the override. The server only
-/// READS here — editing arrives with the extension (epic 05).
+/// <para><b>Embedded, not copied beside the executable.</b> The release asset carries exactly one
+/// file, and the first real run (2026-08-31) died on every `review_plan` because the prompts were
+/// content files that the release never packaged — invisible in tests, where a project reference
+/// copies them into the output. A default that can go missing is not a default.</para>
+/// <para>Overrides live under the data dir and win while they exist; restore is deleting the
+/// override. The server only READS here — editing arrives with the extension.</para>
 /// </remarks>
 public sealed class RolePrompts(string dataDir)
 {
@@ -18,11 +23,19 @@ public sealed class RolePrompts(string dataDir)
     public string For(ReviewRole role)
     {
         var overridePath = Path.Combine(OverrideDir, FileFor(role));
-        return File.Exists(overridePath) ? File.ReadAllText(overridePath) : ShippedDefault(role);
+        return File.Exists(overridePath) ? File.ReadAllText(overridePath) : ShippedDefaultFor(role);
     }
 
-    public string ShippedDefault(ReviewRole role) =>
-        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "prompts", FileFor(role)));
+    /// <summary>The text compiled into this binary. Static: it depends on nothing on disk.</summary>
+    public static string ShippedDefaultFor(ReviewRole role)
+    {
+        var name = $"CoaiMcp.prompts.{FileFor(role)}";
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name)
+            ?? throw new InvalidOperationException(
+                $"the prompt '{name}' is not embedded in this build — check the EmbeddedResource item in CoaiMcp.csproj");
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
 
     public void Override(ReviewRole role, string text)
     {
