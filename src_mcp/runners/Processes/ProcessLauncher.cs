@@ -32,7 +32,9 @@ public sealed class ProcessLauncher : IProcessLauncher
 {
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
     {
-        var info = new ProcessStartInfo(request.Executable)
+        // Resolved here, at the one place a process is started, so every caller — reviewers, git,
+        // the creds probe — gets the npm-shim fix without knowing it exists.
+        var info = new ProcessStartInfo(ExecutableResolver.Resolve(request.Executable))
         {
             WorkingDirectory = request.WorkingDirectory,
             RedirectStandardOutput = true,
