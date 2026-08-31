@@ -189,7 +189,7 @@ public static class ReviewerSummaryFactory
     public static string Describe(ReviewerOutcome outcome) => outcome switch
     {
         ReviewerOutcome.TimedOut => "timeout",
-        ReviewerOutcome.RateLimited => "rate limited (after one retry)",
+        ReviewerOutcome.RateLimited r => $"rate limited (after one retry){Because(r.Reason)}",
         // The stderr tail travels WITH the exit code. "exit 1" alone was what made the same codex
         // failure undiagnosable twice at a real gate: the executor had captured the reason and
         // this sentence — the only place a person reads — threw it away.
@@ -200,24 +200,49 @@ public static class ReviewerSummaryFactory
     };
 
     /// <summary>
-    /// The CLI's last words, on one line and short enough to live inside a summary sentence.
+    /// The CLI's last words: the most informative line of its stderr, short enough to live inside
+    /// a summary sentence.
     /// </summary>
     /// <remarks>
-    /// The LAST non-empty line, not the first: vendors print a banner before they print what went
-    /// wrong, so the top of the tail is reliably the least informative part of it.
+    /// <para>The first version of this took the LAST non-empty line, reasoning that vendors print
+    /// a banner before they print what went wrong. Measured against the exact failure class the
+    /// feature exists for — a node CLI exiting 1 — that is the worst possible pick: node's last
+    /// line is its own version. The gate reported <c>exit 1: Node.js v20.20.2</c> while
+    /// <c>Error: Missing optional dependency @openai/codex-linux-x64</c> sat eight lines earlier,
+    /// INSIDE the captured tail.</para>
+    /// <para>So the rule is by CONTENT, not position: the first line that announces an error,
+    /// skipping the stack frames and source echoes that surround it. Everything falls back to the
+    /// first line that is not scaffolding, and only then to the last.</para>
     /// </remarks>
     private const int ReasonLength = 160;
 
+    private static readonly string[] Announcements =
+        ["error:", "error ", "exception", "fatal", "refused", "denied", "unauthorized", "quota", "not found", "missing"];
+
     private static string Because(string stdErrTail)
     {
-        var line = stdErrTail
+        var lines = stdErrTail
             .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-            .LastOrDefault(l => l.Length > 0);
-        if (line is null)
+            .Where(l => l.Length > 0)
+            .ToList();
+        if (lines.Count == 0)
         {
             return " (the CLI said nothing on stderr)";
         }
 
+        var meaningful = lines.Where(l => !IsScaffolding(l)).ToList();
+        var line = meaningful.FirstOrDefault(Announces) ?? meaningful.FirstOrDefault() ?? lines[^1];
         return $": {(line.Length <= ReasonLength ? line : $"{line[..ReasonLength]}…")}";
     }
+
+    private static bool Announces(string line) =>
+        Announcements.Any(a => line.Contains(a, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Stack frames, source echoes and version banners — the noise around the message.</summary>
+    private static bool IsScaffolding(string line) =>
+        line.StartsWith("at ", StringComparison.Ordinal) ||
+        line.StartsWith('^') ||
+        line.StartsWith("throw ", StringComparison.Ordinal) ||
+        line.StartsWith("Node.js v", StringComparison.Ordinal) ||
+        line.StartsWith("file:///", StringComparison.Ordinal);
 }

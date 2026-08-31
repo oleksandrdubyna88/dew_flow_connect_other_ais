@@ -71,7 +71,15 @@ public sealed class CoaiTextFormatter(string appName, int pid) : ITextFormatter
             output.Write(' ');
             output.Write(key);
             output.Write('=');
-            value.Render(output, "l");
+
+            // `l` means "no quotes" and it is a STRING specifier: Serilog passes it straight to
+            // IFormattable, so a numeric or date property throws FormatException from inside the
+            // formatter. The damage was silent and split in two — the file sink had already
+            // committed " Round=" and never wrote the newline, so eighteen entries landed on six
+            // physical lines; the console sink formats into a buffer first, so it dropped those
+            // events ENTIRELY. Found when an audit trail attached a round NUMBER, which is the
+            // most ordinary thing a caller could do.
+            value.Render(output, value is ScalarValue { Value: string } ? "l" : null);
         }
     }
 

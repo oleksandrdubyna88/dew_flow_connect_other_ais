@@ -54,6 +54,18 @@ internal sealed class ListSink : ILogEventSink
         return writer.ToString();
     }
 
+    /// <summary>The raw events, for a test that needs to format one itself.</summary>
+    public IReadOnlyList<LogEvent> Events
+    {
+        get
+        {
+            lock (_events)
+            {
+                return [.. _events];
+            }
+        }
+    }
+
     public IReadOnlyList<LogEventLevel> Levels
     {
         get

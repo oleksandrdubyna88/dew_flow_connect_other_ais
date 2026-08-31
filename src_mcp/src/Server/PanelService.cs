@@ -158,14 +158,18 @@ public sealed class PanelService
     private static IReviewerRuntime? RuntimeFor(ProviderSettings provider) =>
         provider.BaseUrl.Length > 0
             ? new CustomCodexRuntime(provider.Provider, provider.BaseUrl)
-            : ReviewerRuntimeSelector.Default.Find(provider.Provider)
-              ?? (provider.Runtime switch
-              {
-                  "gemini" => new GeminiRuntime(),
-                  "claude" => new ClaudeRuntime(),
-                  "codex" => new CodexRuntime(),
-                  _ => null,
-              });
+            // An EXPLICIT runtime outranks the id, and that order is the fix for a real defect:
+            // the id was consulted first, so a vendor called `claude` worked by accident while
+            // `my-claude` — same runtime, different name — silently ran the Codex CLI.
+            : Named(provider.Runtime) ?? ReviewerRuntimeSelector.Default.Find(provider.Provider);
+
+    private static IReviewerRuntime? Named(string runtime) => runtime switch
+    {
+        "gemini" => new GeminiRuntime(),
+        "claude" => new ClaudeRuntime(),
+        "codex" => new CodexRuntime(),
+        _ => null,
+    };
 
     // ---------- open / status ----------
 

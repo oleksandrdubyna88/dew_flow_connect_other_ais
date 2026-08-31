@@ -87,7 +87,11 @@ public static class RoundMachine
         if (reviewers.Answered == 0)
         {
             return new Transition.Ok(
-                s with { RoundsRunThisStage = roundsRun, AwaitingResolve = false, HumanGate = true },
+                // AwaitingResolve stays TRUE even though there are no findings to decide on: the
+                // round completed, and `resolve` is the only door a human's "proceed" can come
+                // through. With it false the verdict was unresolvable — the gate answered
+                // call_human and then refused the human, which is a dead end rather than a gate.
+                s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, HumanGate = true },
                 new RoundVerdict.CallHuman(
                     gate,
                     reviewers,

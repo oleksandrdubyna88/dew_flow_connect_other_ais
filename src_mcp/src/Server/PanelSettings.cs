@@ -140,7 +140,7 @@ public sealed record PanelSettings
                     .Where(v => !string.IsNullOrWhiteSpace(v.Id))
                     .Select(v => new ProviderSettings(v.Id!.Trim().ToLowerInvariant())
                     {
-                        Runtime = string.Equals(v.Runtime, "gemini", StringComparison.OrdinalIgnoreCase) ? "gemini" : "codex",
+                        Runtime = RuntimeOf(v.Runtime),
                         Model = v.Model?.Trim() ?? string.Empty,
                         BaseUrl = v.BaseUrl?.Trim() ?? string.Empty,
                     })];
@@ -150,6 +150,28 @@ public sealed record PanelSettings
             return [];
         }
     }
+
+    /// <summary>
+    /// Which runtime a configured vendor drives — every one this build knows, not two of them.
+    /// </summary>
+    /// <remarks>
+    /// This used to read "gemini, else codex", which silently ran every <c>claude</c> vendor
+    /// through the Codex CLI. It hid behind the id lookup — a vendor CALLED claude was matched by
+    /// name before its runtime was consulted — so it only surfaced when someone named one
+    /// <c>my-claude</c> and watched codex start. A reviewer that runs the wrong vendor's model is
+    /// worse than one that refuses: the panel reports an answer from a model nobody chose.
+    /// </remarks>
+    private static string RuntimeOf(string? runtime) => runtime?.Trim().ToLowerInvariant() switch
+    {
+        // Unset stays unset, and that is the whole distinction: the id then decides, so a vendor
+        // called `gemini` with no runtime field is still a gemini.
+        null or "" => string.Empty,
+        "gemini" => "gemini",
+        "claude" => "claude",
+        // An unknown runtime is a custom vendor riding the Codex CLI against its own base URL —
+        // a deliberate decision kept from the vendor-settings tests, not a fallthrough.
+        _ => "codex",
+    };
 
     private static int IntVar(Func<string, string?> env, string name, int fallback) =>
         int.TryParse(env(name), out var value) && value > 0 ? value : fallback;

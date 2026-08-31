@@ -21,8 +21,15 @@ public abstract record ReviewerOutcome
 
     public sealed record Unparseable(string Reason) : ReviewerOutcome;
 
-    /// <summary>Distinct from a timeout in the log AND the result — they demand different cures.</summary>
-    public sealed record RateLimited : ReviewerOutcome;
+    /// <summary>
+    /// Distinct from a timeout in the log AND the result — they demand different cures.
+    /// </summary>
+    /// <param name="Reason">
+    /// The vendor's own words. Carried because a bare "rate limited" repeats the mistake that a
+    /// bare "exit 1" made: a per-minute throttle a retry clears and a DAILY quota that no retry
+    /// can clear read identically, and only one of them is worth waiting for.
+    /// </param>
+    public sealed record RateLimited(string Reason = "") : ReviewerOutcome;
 
     /// <summary>
     /// The process never ran: the CLI is not installed, or the configured path is wrong. Its own
@@ -56,6 +63,18 @@ public static class RateLimit
     public static bool Hit(ProcessResult result) =>
         result.ExitCode != 0 &&
         Phrases.Any(p => Contains(result.StdErr, p) || Contains(result.StdOut, p));
+
+    /// <summary>
+    /// The line that says WHICH limit was hit, so a person can tell a per-minute throttle from a
+    /// daily quota. Gemini's real answer was "You have exhausted your daily quota on this model",
+    /// and a fifteen-second retry against that is 138 seconds of a round spent learning nothing.
+    /// </summary>
+    public static string Reason(ProcessResult result)
+    {
+        var lines = (result.StdErr + '\n' + result.StdOut)
+            .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return lines.FirstOrDefault(l => Phrases.Any(p => Contains(l, p))) ?? string.Empty;
+    }
 
     private static bool Contains(string text, string needle) =>
         text.Contains(needle, StringComparison.OrdinalIgnoreCase);
@@ -122,7 +141,7 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher)
 
         if (RateLimit.Hit(result))
         {
-            return (new ReviewerOutcome.RateLimited(), null, Usage.None);
+            return (new ReviewerOutcome.RateLimited(RateLimit.Reason(result)), null, Usage.None);
         }
 
         if (result.ExitCode != 0)
