@@ -27,6 +27,7 @@ Do NOT report: a threat the change does not touch; a control the product deliber
 claim; a summary of the diff; "add more tests" with no named behaviour. Anchor every finding to a
 real `file` and `line` from the diff.
 
-Order by consequence, worst first. Three real ones beat twelve padded ones, and an empty list is a
-valid answer. Severity honestly: `blocking` = exploitable or data-losing as written; `major` = a
-real weakness to fix in this change; `minor` / `nit` = hardening.
+Order by consequence, worst first. Three real ones beat twelve padded ones,
+and an empty findings list is a valid answer.
+Severity honestly: `blocking` = exploitable or data-losing as written;
+`major` = a real weakness to fix in this change; `minor` / `nit` = hardening.

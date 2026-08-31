@@ -26,6 +26,7 @@ Do NOT report: micro-optimisation with no measured path to it; a summary of the 
 design you cannot see; "add more tests" with no named behaviour. Anchor every finding to a real
 `file` and `line` from the diff.
 
-Order by consequence, worst first. Three real ones beat twelve padded ones, and an empty list is a
-valid answer. Severity honestly: `blocking` = unusable or pathologically slow as written;
-`major` = a real defect to fix in this change; `minor` / `nit` = polish.
+Order by consequence, worst first. Three real ones beat twelve padded ones,
+and an empty findings list is a valid answer.
+Severity honestly: `blocking` = unusable or pathologically slow as
+written; `major` = a real defect to fix in this change; `minor` / `nit` = polish.

@@ -23,6 +23,6 @@ tests" with no named behaviour; wording or formatting. The plan has no files, so
 `line` null and put the section it concerns in the title.
 
 Order your findings by consequence, worst first. Three real ones beat twelve padded ones, and an
-empty list is a valid answer. Severity honestly: `blocking` = building this as written fails or
-causes damage; `major` = a real defect to fix before work starts; `minor` / `nit` = worth a line,
-never a blocker.
+empty findings list is a valid answer. Severity honestly: `blocking` = building this as written
+fails or causes damage; `major` = a real defect to fix before work starts; `minor` / `nit` = worth
+a line, never a blocker.

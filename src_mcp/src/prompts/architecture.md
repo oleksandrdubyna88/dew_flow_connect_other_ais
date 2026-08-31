@@ -25,6 +25,7 @@ Do NOT report: a summary of the diff; a rewrite of working code in your preferre
 pattern the repo has deliberately chosen against; "add more tests" with no named behaviour.
 Anchor every finding to a real `file` and `line` from the diff.
 
-Order by consequence, worst first. Three real ones beat twelve padded ones, and an empty list is a
-valid answer. Severity honestly: `blocking` = this structure will have to be undone; `major` = a
-real defect to fix in this change; `minor` / `nit` = style.
+Order by consequence, worst first. Three real ones beat twelve padded ones,
+and an empty findings list is a valid answer.
+Severity honestly: `blocking` = this structure will have to be undone;
+`major` = a real defect to fix in this change; `minor` / `nit` = style.
