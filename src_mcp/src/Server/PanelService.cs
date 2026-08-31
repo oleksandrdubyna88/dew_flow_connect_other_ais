@@ -172,32 +172,52 @@ public sealed class PanelService
 
     // ---------- the two review stages ----------
 
+    /// <summary>
+    /// The plan gate — one reviewer per provider, over the document and NOTHING ELSE.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>No worktree here, and that is the fix for a ten-minute plan round.</b> This stage
+    /// used to hand each reviewer a full checkout, exactly as the code stage does. Given a
+    /// repository and a plan that mentions files, an agentic CLI goes and reads them — measured at
+    /// eight minutes and still running, for a 15 KB document. The role is to judge the DOCUMENT;
+    /// the repository is what the code stage is for.</para>
+    /// <para>What that costs, said plainly: a reviewer can no longer check that a `file.cs:line`
+    /// reference in the plan is real. That verification was never in the plan-critique prompt, and
+    /// buying it back at an order of magnitude in wall-clock is the wrong trade for a gate anybody
+    /// is expected to sit through.</para>
+    /// </remarks>
     public Task<string> ReviewPlanAsync(string repoPath, string branch, string planText, CancellationToken ct = default) =>
-        RunStageAsync(repoPath, branch, planText, RoundMachine.BeginPlanRound,
-            (session, lease) => Task.FromResult<IReadOnlyList<ReviewerWork>>(
-                BuildWork([ReviewRole.PlanCritique], lease.Path, $"## The plan under review\n\n{planText}")),
+        RunStageAsync(repoPath, branch, planText, RoundMachine.BeginPlanRound, needsWorktree: false,
+            (session, workingDir, _) => Task.FromResult<IReadOnlyList<ReviewerWork>>(
+                BuildWork([ReviewRole.PlanCritique], workingDir, $"## The plan under review\n\n{planText}")),
             ct);
 
+    /// <summary>The code gate — three reviewers per provider, over the branch in a read-only tree.</summary>
     public Task<string> ReviewCodeAsync(string repoPath, string branch, string baseRef, string planText, CancellationToken ct = default) =>
-        RunStageAsync(repoPath, branch, planText, RoundMachine.BeginCodeRound,
-            async (session, lease) =>
+        RunStageAsync(repoPath, branch, planText, RoundMachine.BeginCodeRound, needsWorktree: true,
+            async (session, workingDir, sha) =>
             {
-                var files = await _context.CollectAsync(repoPath, baseRef, lease.Sha, ct: ct);
+                var files = await _context.CollectAsync(repoPath, baseRef, sha, ct: ct);
                 var shaped = DiffShaper.Shape(files);
-                var bundle = new ReviewBundle(planText, branch, baseRef, lease.Sha, shaped);
+                var bundle = new ReviewBundle(planText, branch, baseRef, sha, shaped);
                 var context =
                     $"## The plan this change implements\n\n{bundle.PlanText}\n\n" +
                     $"## The change ({bundle.Branch} over {bundle.BaseRef}, at {bundle.Sha})\n\n{bundle.Diff.Text}";
-                return BuildWork(CodeRoles, lease.Path, context);
+                return BuildWork(CodeRoles, workingDir, context);
             },
             ct);
 
+    /// <param name="needsWorktree">
+    /// Whether the reviewers get a checkout at all. Only the code stage does: a plan reviewer with a
+    /// repository in front of it explores it, and a plan is text.
+    /// </param>
     private async Task<string> RunStageAsync(
         string repoPath,
         string branch,
         string planText,
         Func<SessionState, Transition> begin,
-        Func<PersistedSession, WorktreeLease, Task<IReadOnlyList<ReviewerWork>>> makeWork,
+        bool needsWorktree,
+        Func<PersistedSession, string, string, Task<IReadOnlyList<ReviewerWork>>> makeWork,
         CancellationToken ct)
     {
         if (planText.Length == 0)
@@ -219,9 +239,14 @@ public sealed class PanelService
         try
         {
             var sha = await _worktrees.ResolveShaAsync(repoPath, branch);
-            await using var lease = await _worktrees.AddAsync(
-                repoPath, sha, session.State.SessionId, session.State.RoundsRunThisStage + 1);
-            var work = await makeWork(session, lease);
+            // The plan stage gets an empty scratch directory instead of a checkout — there is
+            // nothing there to wander into, which is the point.
+            await using var lease = needsWorktree
+                ? await _worktrees.AddAsync(repoPath, sha, session.State.SessionId, session.State.RoundsRunThisStage + 1)
+                : null;
+            using var scratch = needsWorktree ? null : new ScratchDirectory();
+            var workingDir = lease?.Path ?? scratch!.Path;
+            var work = await makeWork(session, workingDir, sha);
 
             var results = await _scheduler.RunAllAsync(work, _executor, ct);
             var summary = ReviewerSummaryFactory.From(results);

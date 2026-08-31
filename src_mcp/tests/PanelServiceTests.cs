@@ -249,6 +249,36 @@ public sealed class PanelServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ThePlanStage_GivesReviewersNoCheckout_ToExplore()
+    {
+        // A ten-minute plan round was an agentic CLI reading the repository it had been handed.
+        // The role is to judge the DOCUMENT; only the code stage needs a tree.
+        var record = Directory.CreateTempSubdirectory("coai-cwd-").FullName;
+        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
+        try
+        {
+            var service = Service();
+            await service.OpenAsync(_repo, "feature");
+            await service.ReviewPlanAsync(_repo, "feature", "the plan");
+
+            var worktrees = Path.Combine(_data, "worktrees");
+            var created = Directory.Exists(worktrees) ? Directory.GetDirectories(worktrees) : [];
+            created.Should().BeEmpty("the plan stage checks out nothing at all");
+
+            var pointedAt = Directory.GetFiles(record, "*.argv")
+                .Select(f => File.ReadAllText(f).Split('\0'))
+                .Select(a => Array.IndexOf(a, "-C") is var i and >= 0 ? a[i + 1] : string.Empty)
+                .Where(d => d.Length > 0)
+                .ToList();
+            pointedAt.Should().OnlyContain(d => !d.Contains("coai-wt-"), "and points nobody at one");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
+        }
+    }
+
+    [Fact]
     public async Task MaxRoundsExhausted_YieldsCallHuman_WithTheOpenCount()
     {
         SetAnswer(OneMajor);

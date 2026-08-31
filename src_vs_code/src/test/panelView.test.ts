@@ -253,8 +253,8 @@ test('what changes is open; what is set once is folded away', () => {
   // The fixture opens everything, so this asks the renderer for the real defaults.
   const html = panelHtml(state({ openSections: [] }), 'n');
   const openSections = [...html.matchAll(/data-section="([a-z]+)" open/g)].map((m) => m[1]);
-  assert.deepEqual(openSections, ['reviewers', 'rounds']);
-  for (const folded of ['language', 'gate', 'limits', 'keys', 'server']) {
+  assert.deepEqual(openSections, [], "the panel opens as a list of headings, not a wall");
+  for (const folded of ['reviewers', 'language', 'gate', 'limits', 'keys', 'server', 'rounds']) {
     assert.ok(html.includes(`data-section="${folded}"`), `${folded} is present`);
     assert.ok(!html.includes(`data-section="${folded}" open`), `${folded} starts folded`);
   }
@@ -263,7 +263,7 @@ test('what changes is open; what is set once is folded away', () => {
 test('a section the person opened stays open through a repaint', () => {
   const html = panelHtml(state({ openSections: ['limits'] }), 'n');
   assert.ok(html.includes('data-section="limits" open'));
-  assert.ok(!html.includes('data-section="reviewers" open'), 'their choice replaces the defaults entirely');
+  assert.ok(!html.includes('data-section="rounds" open'), 'their choice is the whole set');
 });
 
 test('a waiting question is never collapsible', () => {

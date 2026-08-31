@@ -34,8 +34,14 @@ export interface PanelState {
   readonly openSections: readonly string[];
 }
 
-/** What is open before anyone touches anything: what changes, not what was set once. */
-export const OPEN_BY_DEFAULT: readonly string[] = ['reviewers', 'rounds'];
+/**
+ * Nothing is open before anyone touches anything.
+ *
+ * <p>The panel opens as a list of headings that fits in one glance, and you expand what you came
+ * for. Two sections open was still a wall on a narrow sidebar — and this is a panel you configure
+ * once and afterwards only visit when something is waiting on you.</p>
+ */
+export const OPEN_BY_DEFAULT: readonly string[] = [];
 
 export function panelHtml(state: PanelState, nonce: string): string {
   const open = state.openSections.length === 0 ? OPEN_BY_DEFAULT : state.openSections;
