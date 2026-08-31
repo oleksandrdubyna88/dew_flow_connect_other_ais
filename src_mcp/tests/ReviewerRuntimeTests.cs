@@ -43,6 +43,10 @@ public sealed class ReviewerRuntimeTests
         invocation.Request.Arguments.Should().ContainInOrder("-p", "review this");
         invocation.Request.Arguments.Should().ContainInOrder("-o", "json");
         invocation.Request.Arguments.Should().ContainInOrder("--approval-mode", "plan");
+        // A round's worktree is always a fresh directory and so never a trusted folder; without
+        // this Gemini exits 55 headless AND overrides plan mode away — every reviewer of the
+        // first real run died on it.
+        invocation.Request.Arguments.Should().Contain("--skip-trust");
         invocation.OutputFile.Should().BeEmpty("gemini answers on stdout, inside its envelope");
     }
 

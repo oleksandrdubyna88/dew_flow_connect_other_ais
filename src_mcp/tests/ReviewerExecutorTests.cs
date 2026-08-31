@@ -116,6 +116,10 @@ public sealed class ReviewerExecutorTests
     [Theory]
     [InlineData(1, "", "429 Too Many Requests", true)]
     [InlineData(1, "openai rate limit reached", "", true)]
+    // Codex's real words, from the first real run: it says neither "429" nor "rate limit", so a
+    // quota exhaustion was misreported as a plain non-zero exit and never retried.
+    [InlineData(1, "", "ERROR: You've hit your usage limit. Upgrade to Plus to continue using Codex", true)]
+    [InlineData(1, "", "quota exceeded for this project", true)]
     [InlineData(1, "", "some other failure", false)]
     [InlineData(0, "", "429 in ordinary output of a fine run", false)]
     public void RateLimit_Detection_IsATable(int exitCode, string stdout, string stderr, bool hit) =>

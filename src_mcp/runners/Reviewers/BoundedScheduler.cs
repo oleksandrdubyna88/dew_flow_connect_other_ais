@@ -93,6 +93,7 @@ public static class ReviewerSummaryFactory
         ReviewerOutcome.TimedOut => "timeout",
         ReviewerOutcome.RateLimited => "rate limited (after one retry)",
         ReviewerOutcome.NonZeroExit e => $"exit {e.ExitCode}",
+        ReviewerOutcome.NotStarted n => $"not started: {n.Reason}",
         ReviewerOutcome.Unparseable u => $"unparseable: {u.Reason}",
         _ => "unknown",
     };

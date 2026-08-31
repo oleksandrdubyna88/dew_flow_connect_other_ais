@@ -163,20 +163,49 @@ public sealed class EndToEndTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task CodeRound_WithEveryReviewerFailing_StillVerdicts_AndNamesThem()
+    public async Task CodeRound_WithEveryReviewerFailing_CallsAHuman_NeverProceeds()
     {
+        // This test asserted `proceed` until the first real run showed what that means: both
+        // vendors failed (one out of quota, one refusing an untrusted folder), no findings
+        // arrived, and the gate opened. The test had encoded the bug. It now asserts the rule.
         var service = Service();
         await service.OpenAsync(_repo, "feature");
         Script(Clean);
         await service.ReviewPlanAsync(_repo, "feature", "plan");
         await service.ResolveAsync(_repo, "feature", "[]");
 
-        // Every reviewer rate-limited: retried once each, then named — and the round still ends.
         Script(Clean, exit: 1, stderr: "429 Too Many Requests");
         var code = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", "plan"));
 
-        code.GetProperty("verdict").GetString().Should().Be("proceed", "no findings arrived, so nothing gates");
+        code.GetProperty("verdict").GetString().Should().Be("call_human");
         code.GetProperty("reviewers").GetString().Should().Contain("0 of 6").And.Contain("rate limited");
+        code.GetProperty("instruction").GetString().Should().Contain("do not proceed on your own");
+    }
+
+    [Fact]
+    public async Task OneVendorDown_TheOtherStillGates()
+    {
+        // The realistic case the quota outage produced: a panel of one is still a panel.
+        var service = new PanelService(
+            new PanelSettings
+            {
+                Providers = [new("codex") { ExecutablePath = "codex-that-is-not-installed" }, new("gemini") { ExecutablePath = FakeCliExe }],
+                Rounds = new PanelConfig(3, 2, StagePolicy.Human),
+                DataDir = _data,
+                ReviewerTimeout = TimeSpan.FromSeconds(30),
+            },
+            VaultKeys.None("no vault in tests"),
+            default,
+            _launcher,
+            Logger.None);
+        await service.OpenAsync(_repo, "feature");
+
+        Script(FourMajors);
+        var round = Parse(await service.ReviewPlanAsync(_repo, "feature", "the flawed plan"));
+
+        round.GetProperty("verdict").GetString().Should().Be("revise", "one vendor's findings still gate");
+        round.GetProperty("gatingCount").GetInt32().Should().Be(3);
+        round.GetProperty("reviewers").GetString().Should().Contain("1 of 2");
     }
 
     [Fact]

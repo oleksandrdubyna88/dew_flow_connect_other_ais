@@ -78,6 +78,22 @@ public static class RoundMachine
     public static Transition CompleteRound(SessionState s, GateResult gate, ReviewerSummary reviewers)
     {
         var roundsRun = s.RoundsRunThisStage + 1;
+
+        // The gate must not fail open. Found by the first real run (2026-08-31): every reviewer
+        // failed — one vendor out of quota, the other refusing an untrusted folder — so no
+        // findings arrived and the round answered 'proceed'. A panel that did not review is not a
+        // panel that approved; an empty result set is the ABSENCE of evidence, not evidence of
+        // absence. One answer is enough to judge on; none is a person's call.
+        if (reviewers.Answered == 0)
+        {
+            return new Transition.Ok(
+                s with { RoundsRunThisStage = roundsRun, AwaitingResolve = false },
+                new RoundVerdict.CallHuman(
+                    gate,
+                    reviewers,
+                    $"no reviewer answered — nothing was reviewed. {reviewers.Sentence}"));
+        }
+
         if (gate.Passed)
         {
             return new Transition.Ok(

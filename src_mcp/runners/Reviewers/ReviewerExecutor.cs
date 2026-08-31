@@ -20,16 +20,31 @@ public abstract record ReviewerOutcome
     /// <summary>Distinct from a timeout in the log AND the result — they demand different cures.</summary>
     public sealed record RateLimited : ReviewerOutcome;
 
+    /// <summary>
+    /// The process never ran: the CLI is not installed, or the configured path is wrong. Its own
+    /// outcome because it is neither a failure of the model nor of the network — found when a
+    /// test pointed one provider at a missing binary and the exception took the whole ROUND down
+    /// instead of one reviewer.
+    /// </summary>
+    public sealed record NotStarted(string Reason) : ReviewerOutcome;
+
     private ReviewerOutcome() { }
 }
 
 /// <summary>Recognising a vendor quota answer in a CLI's output. Pure, so it is a table test.</summary>
 public static class RateLimit
 {
+    /// <summary>
+    /// The phrases vendors actually use. <c>usage limit</c> is here because Codex says
+    /// "You've hit your usage limit" and never the words "rate limit" or "429" — observed in the
+    /// first real run, where a quota exhaustion was misreported as a plain non-zero exit and so
+    /// was never retried.
+    /// </summary>
+    private static readonly string[] Phrases = ["429", "rate limit", "usage limit", "quota"];
+
     public static bool Hit(ProcessResult result) =>
         result.ExitCode != 0 &&
-        (Contains(result.StdErr, "429") || Contains(result.StdErr, "rate limit") ||
-         Contains(result.StdOut, "429") || Contains(result.StdOut, "rate limit"));
+        Phrases.Any(p => Contains(result.StdErr, p) || Contains(result.StdOut, p));
 
     private static bool Contains(string text, string needle) =>
         text.Contains(needle, StringComparison.OrdinalIgnoreCase);
@@ -76,7 +91,17 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher)
     /// <summary>One launch. A non-null outcome is terminal; a null review means "unparseable".</summary>
     private async Task<(ReviewerOutcome?, NormalisedReview?)> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
     {
-        var result = await launcher.RunAsync(invocation.Request, ct);
+        ProcessResult result;
+        try
+        {
+            result = await launcher.RunAsync(invocation.Request, ct);
+        }
+        catch (System.ComponentModel.Win32Exception e)
+        {
+            // One reviewer that cannot start is one reviewer's failure, never the round's.
+            return (new ReviewerOutcome.NotStarted($"'{invocation.Request.Executable}' could not be started: {e.Message}"), null);
+        }
+
         if (result.TimedOut)
         {
             return (new ReviewerOutcome.TimedOut(), null);

@@ -107,6 +107,29 @@ public sealed class RoundMachineTests
     }
 
     [Fact]
+    public void NobodyAnswered_NeverPasses_TheGateMustNotFailOpen()
+    {
+        // The real run's most serious finding (2026-08-31): every reviewer failed, no findings
+        // arrived, and the round answered 'proceed'. A panel that did not review is not a panel
+        // that approved — an empty result set is the ABSENCE of evidence, not evidence of absence.
+        var nobody = new ReviewerSummary(6, 0, ["codex: quota", "gemini: untrusted folder"]);
+
+        var ok = (Transition.Ok)RoundMachine.CompleteRound(Fresh(), Passing(), nobody);
+
+        ok.Verdict.Should().BeOfType<RoundVerdict.CallHuman>()
+            .Which.Reason.Should().Contain("no reviewer");
+    }
+
+    [Fact]
+    public void OneAnswerIsEnoughToJudgeOn_ThoughTheSummaryNamesWhoDidNot()
+    {
+        var one = new ReviewerSummary(6, 1, ["five failures"]);
+
+        RoundMachine.CompleteRound(Fresh(), Passing(), one).Should().BeOfType<Transition.Ok>()
+            .Which.Verdict.Should().BeOfType<RoundVerdict.Proceed>();
+    }
+
+    [Fact]
     public void PartialReviewerFailures_StillAdvance_AndSaySo()
     {
         var partial = new ReviewerSummary(6, 4, ["gemini/perf: timeout", "codex/security: rate limited"]);

@@ -125,6 +125,12 @@ public sealed class GeminiRuntime : IReviewerRuntime
             [
                 "-p", prompt,
                 "-o", "json",
+                // A round's worktree is a fresh directory, so it is NEVER a trusted folder — and
+                // without trust Gemini refuses headless entirely (exit 55) AND overrides
+                // --approval-mode back to "default", which is what the first real run hit on all
+                // three of its reviewers. Trusting is safe precisely because plan mode is
+                // read-only: the flag restores the restriction rather than removing one.
+                "--skip-trust",
                 "--approval-mode", "plan",
                 ..settings.Model.Length > 0 ? (string[])["-m", settings.Model] : [],
             ],
