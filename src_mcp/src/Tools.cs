@@ -11,10 +11,15 @@ namespace CoaiMcp;
 /// </summary>
 internal static class Tools
 {
-    internal static IEnumerable<McpServerTool> All(PanelService service)
+    /// <param name="host">
+    /// Resolved per CALL, never captured once: the panel rewrites its settings file while this
+    /// server runs, and a tool bound to one service instance would keep serving the vendors,
+    /// models and thresholds that were on disk at startup.
+    /// </param>
+    internal static IEnumerable<McpServerTool> All(PanelServiceHost host)
     {
         yield return McpServerTool.Create(
-            async () => await service.ProvidersAsync(),
+            async () => await host.Current.ProvidersAsync(),
             new McpServerToolCreateOptions
             {
                 Name = "providers",
@@ -29,7 +34,7 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            async (string repoPath, string branch) => await service.OpenAsync(repoPath, branch),
+            async (string repoPath, string branch) => await host.Current.OpenAsync(repoPath, branch),
             new McpServerToolCreateOptions
             {
                 Name = "open",
@@ -45,7 +50,7 @@ internal static class Tools
 
         yield return McpServerTool.Create(
             async (string repoPath, string branch, string planText) =>
-                await service.ReviewPlanAsync(repoPath, branch, planText),
+                await host.Current.ReviewPlanAsync(repoPath, branch, planText),
             new McpServerToolCreateOptions
             {
                 Name = "review_plan",
@@ -63,7 +68,7 @@ internal static class Tools
 
         yield return McpServerTool.Create(
             async (string repoPath, string branch, string baseRef, string planText) =>
-                await service.ReviewCodeAsync(repoPath, branch, baseRef, planText),
+                await host.Current.ReviewCodeAsync(repoPath, branch, baseRef, planText),
             new McpServerToolCreateOptions
             {
                 Name = "review_code",
@@ -86,7 +91,7 @@ internal static class Tools
             // Windows run before it had always passed the override, which is the one call that
             // does not need to work.
             async (string repoPath, string branch, string decisions, string? humanDecision = null) =>
-                await service.ResolveAsync(repoPath, branch, decisions,
+                await host.Current.ResolveAsync(repoPath, branch, decisions,
                     string.Equals(humanDecision, "proceed", StringComparison.OrdinalIgnoreCase)),
             new McpServerToolCreateOptions
             {
@@ -108,7 +113,7 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            async (string repoPath, string branch) => await service.StatusAsync(repoPath, branch),
+            async (string repoPath, string branch) => await host.Current.StatusAsync(repoPath, branch),
             new McpServerToolCreateOptions
             {
                 Name = "status",
@@ -123,7 +128,7 @@ internal static class Tools
 
         yield return McpServerTool.Create(
             async (string repoPath, string branch, string question) =>
-                await service.AskHumanAsync(repoPath, branch, question),
+                await host.Current.AskHumanAsync(repoPath, branch, question),
             new McpServerToolCreateOptions
             {
                 Name = "ask_human",

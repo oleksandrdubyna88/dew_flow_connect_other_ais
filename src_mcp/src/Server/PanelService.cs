@@ -77,6 +77,13 @@ public sealed class PanelService
         }
     }
 
+    /// <summary>
+    /// The settings this instance was built from — how a caller checks WHICH configuration is
+    /// actually serving a call, now that <see cref="PanelServiceHost"/> can swap the instance
+    /// underneath the tools when the panel rewrites its file.
+    /// </summary>
+    public PanelSettings Settings => _settings;
+
     private static readonly ImmutableArray<ReviewRole> CodeRoles =
         [ReviewRole.Architecture, ReviewRole.SecurityReliability, ReviewRole.UxDxPerformance];
 
@@ -277,7 +284,13 @@ public sealed class PanelService
             // The round exists on disk BEFORE the first CLI starts: the panel shows "running" for
             // its whole duration instead of nothing at all, and a crash leaves something to sweep.
             var live = new LiveRound(_store, session, work);
-            var results = await _scheduler.RunAllAsync(work, _executor, ct, live.Report);
+            var audit = new RoundAudit(_log, session.State.Stage.ToString(), session.State.RoundsRunThisStage + 1);
+            audit.Opening(work, workingDir, _settings.ReviewerTimeout);
+            var results = await _scheduler.RunAllAsync(work, _executor, ct, progress =>
+            {
+                live.Report(progress);
+                audit.Moved(progress);
+            });
             var summary = ReviewerSummaryFactory.From(results);
             var reviews = results.Select(r => r.Outcome).OfType<ReviewerOutcome.Ok>().Select(o => o.Review).ToList();
             var merged = FindingDedup.Merge(reviews.SelectMany(r => r.Findings));
@@ -297,11 +310,8 @@ public sealed class PanelService
                 Rounds = [.. session.Rounds, record],
                 Pending = [.. merged],
             });
-            _log.Information(
-                "round {Round} {Stage}: {Verdict} with {Gating} gating finding(s); {Reviewers}; {TokensIn}+{TokensOut} tokens{Cost}",
-                record.Number, record.Stage, record.Verdict, gate.GatingCount, summary.Sentence,
-                record.TokensIn, record.TokensOut,
-                record.CostUsd is { } usd ? $", ${usd:0.0000}" : string.Empty);
+            audit.Closing(answer.Verdict, gate.GatingCount, summary.Sentence, record);
+            audit.Findings(merged);
             return Json(answer, ServerJsonContext.Default.ReviewAnswer);
         }
         catch (Exception e) when (e is WorktreeException or ContextException)

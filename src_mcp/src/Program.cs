@@ -82,7 +82,9 @@ internal static class Program
                 string.Join(",", settings.Providers.Where(p => p.Enabled).Select(p => p.Provider)),
                 keys.Available ? "keys loaded" : keys.Unavailability);
 
-            var service = new PanelService(settings, keys, vaultReadUtc, launcher, log);
+            // The file the panel writes is re-read per call, so a vendor or a threshold changed
+            // in the sidebar reaches the NEXT round without restarting the MCP client.
+            var host = new PanelServiceHost(Environment.GetEnvironmentVariable, keys, vaultReadUtc, launcher, log);
             var options = new McpServerOptions
             {
                 ServerInfo = new Implementation
@@ -93,7 +95,7 @@ internal static class Program
                 ServerInstructions = Instructions,
             };
             options.ToolCollection ??= [];
-            foreach (var tool in Tools.All(service))
+            foreach (var tool in Tools.All(host))
             {
                 options.ToolCollection.Add(tool);
             }

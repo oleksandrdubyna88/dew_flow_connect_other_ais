@@ -13,7 +13,13 @@ public sealed record ReviewerWork(ReviewerInvocation Invocation, ReviewerInvocat
 /// nothing until it finished left the person with no way to tell "working" from "hung". A callback
 /// rather than a poll: the scheduler already knows, and nothing else has to guess.
 /// </remarks>
-public sealed record ReviewerProgress(string Provider, ReviewRole Role, string Status, ReviewerOutcome? Outcome = null);
+/// <param name="Elapsed">How long the reviewer actually ran — zero until it finishes.</param>
+public sealed record ReviewerProgress(
+    string Provider,
+    ReviewRole Role,
+    string Status,
+    ReviewerOutcome? Outcome = null,
+    TimeSpan Elapsed = default);
 
 /// <summary>
 /// The fan-out stays logically parallel; the queue is what keeps it survivable. Two providers ×
@@ -86,10 +92,11 @@ public sealed class BoundedScheduler(int globalCap = 3, int perProviderCap = 2, 
                     await global.WaitAsync(ct);
                     Entered(name, runningPerProvider);
                     Report(onProgress, w.Invocation, "running");
+                    var watch = System.Diagnostics.Stopwatch.StartNew();
                     try
                     {
                         var outcome = await RunWithOneRetryAsync(w, executor, ct);
-                        Report(onProgress, w.Invocation, outcome is ReviewerOutcome.Ok ? "done" : "failed", outcome);
+                        Report(onProgress, w.Invocation, outcome is ReviewerOutcome.Ok ? "done" : "failed", outcome, watch.Elapsed);
                         return (w.Invocation, outcome);
                     }
                     finally
@@ -116,11 +123,16 @@ public sealed class BoundedScheduler(int globalCap = 3, int perProviderCap = 2, 
 
     /// <summary>A progress handler is a courtesy, never a dependency: its failure cannot fail a
     /// reviewer, because a panel that cannot repaint is not a review that did not happen.</summary>
-    private static void Report(Action<ReviewerProgress>? onProgress, ReviewerInvocation invocation, string status, ReviewerOutcome? outcome = null)
+    private static void Report(
+        Action<ReviewerProgress>? onProgress,
+        ReviewerInvocation invocation,
+        string status,
+        ReviewerOutcome? outcome = null,
+        TimeSpan elapsed = default)
     {
         try
         {
-            onProgress?.Invoke(new ReviewerProgress(invocation.Provider, invocation.Role, status, outcome));
+            onProgress?.Invoke(new ReviewerProgress(invocation.Provider, invocation.Role, status, outcome, elapsed));
         }
         catch (Exception)
         {
@@ -178,9 +190,34 @@ public static class ReviewerSummaryFactory
     {
         ReviewerOutcome.TimedOut => "timeout",
         ReviewerOutcome.RateLimited => "rate limited (after one retry)",
-        ReviewerOutcome.NonZeroExit e => $"exit {e.ExitCode}",
+        // The stderr tail travels WITH the exit code. "exit 1" alone was what made the same codex
+        // failure undiagnosable twice at a real gate: the executor had captured the reason and
+        // this sentence — the only place a person reads — threw it away.
+        ReviewerOutcome.NonZeroExit e => $"exit {e.ExitCode}{Because(e.StdErrTail)}",
         ReviewerOutcome.NotStarted n => $"not started: {n.Reason}",
         ReviewerOutcome.Unparseable u => $"unparseable: {u.Reason}",
         _ => "unknown",
     };
+
+    /// <summary>
+    /// The CLI's last words, on one line and short enough to live inside a summary sentence.
+    /// </summary>
+    /// <remarks>
+    /// The LAST non-empty line, not the first: vendors print a banner before they print what went
+    /// wrong, so the top of the tail is reliably the least informative part of it.
+    /// </remarks>
+    private const int ReasonLength = 160;
+
+    private static string Because(string stdErrTail)
+    {
+        var line = stdErrTail
+            .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .LastOrDefault(l => l.Length > 0);
+        if (line is null)
+        {
+            return " (the CLI said nothing on stderr)";
+        }
+
+        return $": {(line.Length <= ReasonLength ? line : $"{line[..ReasonLength]}…")}";
+    }
 }

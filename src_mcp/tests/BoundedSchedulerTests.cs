@@ -108,4 +108,46 @@ public sealed class BoundedSchedulerTests
         summary.Sentence.Should().Contain("codex/Architecture: exit 3");
         summary.Sentence.Should().Contain("gemini/Architecture: timeout");
     }
+
+    [Fact]
+    public async Task AFailedReviewer_CarriesTheClisOwnLastWords_NotJustItsExitCode()
+    {
+        // Twice at a real gate a reviewer failed as "codex/PlanCritique: exit 1" and the reason
+        // was unrecoverable: the executor captured stderr and the summary — the only place a
+        // person reads — dropped it. An exit code alone names no cure.
+        var work = new List<ReviewerWork>
+        {
+            new(FakeCliInvocations.Invoke("codex", ["stderr-exit", "stream error: unexpected status 401 Unauthorized", "1"])),
+        };
+
+        var results = await new BoundedScheduler().RunAllAsync(work, _executor, TestContext.Current.CancellationToken);
+
+        ReviewerSummaryFactory.From(results).Sentence
+            .Should().Contain("exit 1").And.Contain("401 Unauthorized");
+    }
+
+    [Fact]
+    public async Task AFailedReviewerThatSaidNothing_SaysSoRatherThanLookingTruncated()
+    {
+        var work = new List<ReviewerWork> { new(FakeCliInvocations.Invoke("codex", ["stderr-exit", "", "9"])) };
+
+        var results = await new BoundedScheduler().RunAllAsync(work, _executor, TestContext.Current.CancellationToken);
+
+        ReviewerSummaryFactory.From(results).Sentence.Should().Contain("said nothing on stderr");
+    }
+
+    [Fact]
+    public async Task AFinishedReviewer_ReportsHowLongItRan()
+    {
+        // The audit trail's timings come from here; a zero would make every line say "0.0s".
+        var seen = new List<ReviewerProgress>();
+        var work = new List<ReviewerWork> { new(FakeCliInvocations.Invoke("gemini", ["sleep", "300"])) };
+
+        await new BoundedScheduler().RunAllAsync(
+            work, _executor, TestContext.Current.CancellationToken, p => { lock (seen) { seen.Add(p); } });
+
+        seen.Should().Contain(p => p.Status == "running" && p.Elapsed == TimeSpan.Zero);
+        seen.Single(p => p.Status is "done" or "failed").Elapsed
+            .Should().BeGreaterThan(TimeSpan.FromMilliseconds(200));
+    }
 }

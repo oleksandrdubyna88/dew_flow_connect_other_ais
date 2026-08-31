@@ -73,4 +73,7 @@ public static class SettingsFile
     /// </summary>
     public static string DataDirFrom(Func<string, string?> environment) =>
         environment("COAI_DATA_DIR") is { Length: > 0 } dir ? dir : PanelSettings.DefaultDataDir;
+
+    /// <summary>The settings file itself — what a change watcher has to stat.</summary>
+    public static string PathFor(string dataDir) => Path.Combine(dataDir, Name);
 }
