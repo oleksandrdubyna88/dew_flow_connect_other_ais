@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "Your AI writes the code; other vendors' models review it — the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.1 — 2026-08-31
+
+**The packaged extension is the extension you built.** `vsce package` was bundling after it had
+already collected the files, so a release could ship a stale `dist/`. Ordered properly now — this
+is the first build where the version on the Marketplace is guaranteed to be the code in the tag.
+
+Pair it with **coai-mcp 0.4.0**, which is where this release's real news is: a per-reviewer audit
+trail, settings that apply to the next round instead of the next restart, and six defects a real
+end-to-end run found — including a vendor configured as `claude` that was silently running codex.
+
 ## 0.9.0 — 2026-08-31
 
 **A round tells you what it is doing while it does it.** The server now writes a round to disk the
