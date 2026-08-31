@@ -4,7 +4,8 @@ using CoaiMcp.Runners.Translation;
 
 namespace CoaiMcp.Server;
 
-/// <summary>One provider's configuration as the server sees it.</summary>
+/// <summary>One reviewer's configuration as the server sees it.</summary>
+/// <param name="Provider">Its id: what names it in the panel, in the logs, and in the vault entry.</param>
 public sealed record ProviderSettings(string Provider)
 {
     public bool Enabled { get; init; } = true;
@@ -12,6 +13,12 @@ public sealed record ProviderSettings(string Provider)
     public string Model { get; init; } = string.Empty;
 
     public string ExecutablePath { get; init; } = string.Empty;
+
+    /// <summary>Which CLI shape drives it — `codex` or `gemini`.</summary>
+    public string Runtime { get; init; } = string.Empty;
+
+    /// <summary>An OpenAI-compatible endpoint, for a vendor riding the Codex CLI. Empty = built in.</summary>
+    public string BaseUrl { get; init; } = string.Empty;
 }
 
 /// <summary>
@@ -95,9 +102,18 @@ public sealed record PanelSettings
         DataDir = env("COAI_DATA_DIR") is { Length: > 0 } dir ? dir : DefaultDataDir,
     }.WithProvidersFrom(env);
 
+    /// <summary>
+    /// The reviewers, from `COAI_VENDORS` — a JSON array, because a comma-separated list cannot
+    /// carry a runtime and a base URL, and a second encoding for those would be a format nobody
+    /// could read in a config file. `COAI_PROVIDERS` still works for the simple case.
+    /// </summary>
     private PanelSettings WithProvidersFrom(Func<string, string?> env)
     {
-        // COAI_PROVIDERS=codex,gemini,deepseek — order kept; absent = the default pair.
+        if (env("COAI_VENDORS") is { Length: > 0 } json && ParseVendors(json) is { Count: > 0 } vendors)
+        {
+            return this with { Providers = vendors };
+        }
+
         var listed = env("COAI_PROVIDERS");
         var providers = (listed is { Length: > 0 }
                 ? listed.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
@@ -109,6 +125,30 @@ public sealed record PanelSettings
             })
             .ToList();
         return this with { Providers = providers };
+    }
+
+    /// <summary>Malformed JSON is no configuration at all — the caller falls back rather than
+    /// running a review with a vendor list somebody half-wrote.</summary>
+    internal static List<ProviderSettings> ParseVendors(string json)
+    {
+        try
+        {
+            var vendors = System.Text.Json.JsonSerializer.Deserialize(json, SettingsJsonContext.Default.ListVendorDto);
+            return vendors is null
+                ? []
+                : [.. vendors
+                    .Where(v => !string.IsNullOrWhiteSpace(v.Id))
+                    .Select(v => new ProviderSettings(v.Id!.Trim().ToLowerInvariant())
+                    {
+                        Runtime = string.Equals(v.Runtime, "gemini", StringComparison.OrdinalIgnoreCase) ? "gemini" : "codex",
+                        Model = v.Model?.Trim() ?? string.Empty,
+                        BaseUrl = v.BaseUrl?.Trim() ?? string.Empty,
+                    })];
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return [];
+        }
     }
 
     private static int IntVar(Func<string, string?> env, string name, int fallback) =>

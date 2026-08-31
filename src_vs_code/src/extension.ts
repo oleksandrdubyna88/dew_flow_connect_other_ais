@@ -21,16 +21,11 @@ import { envBlock, settingsFrom } from './settingsShape';
  */
 export function activate(context: vscode.ExtensionContext): void {
   const watcher = new EscalationWatcher(dataDir());
-  const panel = new PanelProvider(context, watcher, dataDir(), {
-    install: () => installServer(context),
-    copyConfig: () => copyConfigBlock(context),
-    copySnippet: () => copyClaudeSnippet(),
-    answer: async (id) => {
-      const question = watcher.openQuestions.find((q) => q.id === id);
-      if (question !== undefined) {
-        await watcher.answerCommand(question);
-      }
-    },
+  const panel = new PanelProvider(context, watcher, dataDir(), async (id) => {
+    const question = watcher.openQuestions.find((q) => q.id === id);
+    if (question !== undefined) {
+      await watcher.answerCommand(question);
+    }
   });
   // The panel repaints whenever the watcher's state moves, so a question answered in the modal
   // disappears from the sidebar without anyone asking it to.

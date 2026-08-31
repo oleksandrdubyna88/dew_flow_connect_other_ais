@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "A multi-model review gate: secondary vendor models (Codex, Gemini, DeepSeek) review your main AI's plan and code in rounds, until the findings drop under a threshold or a human is called.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -33,47 +33,18 @@
       },
       {
         "command": "coai.showRounds",
-        "title": "ConnectOtherAIs: Show review rounds"
+        "title": "ConnectOtherAIs: Show review rounds",
+        "icon": "$(list-unordered)"
       },
       {
         "command": "coai.answerQuestion",
-        "title": "ConnectOtherAIs: Answer the open question…"
+        "title": "ConnectOtherAIs: Answer the open question…",
+        "icon": "$(comment-discussion)"
       }
     ],
     "configuration": {
       "title": "ConnectOtherAIs",
       "properties": {
-        "coai.providers": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "codex",
-              "gemini",
-              "deepseek"
-            ]
-          },
-          "default": [
-            "codex",
-            "gemini"
-          ],
-          "markdownDescription": "Which secondary vendors review. `deepseek` needs a key in the CredsForDevs config entry (`#coai.credsKey#`)."
-        },
-        "coai.model.codex": {
-          "type": "string",
-          "default": "",
-          "description": "Model for the Codex CLI (-m). Empty = the CLI's own default."
-        },
-        "coai.model.gemini": {
-          "type": "string",
-          "default": "",
-          "description": "Model for the Gemini CLI (-m). Empty = the CLI's own default."
-        },
-        "coai.model.deepseek": {
-          "type": "string",
-          "default": "",
-          "description": "DeepSeek model (rides the Codex CLI's custom provider). Empty = the CLI's own default."
-        },
         "coai.maxRounds": {
           "type": "integer",
           "default": 3,
@@ -163,6 +134,58 @@
           "default": 30,
           "minimum": 1,
           "description": "How long a question waits for you before the AI is told to ask in the chat instead."
+        },
+        "coai.vendors": {
+          "type": "array",
+          "default": [
+            {
+              "id": "codex",
+              "runtime": "codex",
+              "model": "",
+              "enabled": true,
+              "baseUrl": ""
+            },
+            {
+              "id": "gemini",
+              "runtime": "gemini",
+              "model": "",
+              "enabled": true,
+              "baseUrl": ""
+            }
+          ],
+          "markdownDescription": "The reviewers. Edit them in the **ConnectOtherAIs** panel — add a vendor, remove one, or point it at another model. `runtime` is which CLI shape it uses (`codex` or `gemini`); `baseUrl` makes it an OpenAI-compatible endpoint driven through the Codex CLI.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "runtime"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Short name; also names its key in the vault entry."
+              },
+              "runtime": {
+                "type": "string",
+                "enum": [
+                  "codex",
+                  "gemini"
+                ]
+              },
+              "model": {
+                "type": "string",
+                "description": "Empty uses the CLI's own default."
+              },
+              "enabled": {
+                "type": "boolean",
+                "default": true
+              },
+              "baseUrl": {
+                "type": "string",
+                "description": "OpenAI-compatible endpoint, for a vendor riding the Codex CLI."
+              }
+            }
+          }
         }
       }
     },
@@ -181,6 +204,35 @@
           "type": "webview",
           "id": "coai.panel",
           "name": "Review panel"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "coai.answerQuestion",
+          "when": "view == coai.panel",
+          "group": "navigation@0"
+        },
+        {
+          "command": "coai.showRounds",
+          "when": "view == coai.panel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "coai.installServer",
+          "when": "view == coai.panel",
+          "group": "server@1"
+        },
+        {
+          "command": "coai.copyConfigBlock",
+          "when": "view == coai.panel",
+          "group": "server@2"
+        },
+        {
+          "command": "coai.copyClaudeSnippet",
+          "when": "view == coai.panel",
+          "group": "server@3"
         }
       ]
     }

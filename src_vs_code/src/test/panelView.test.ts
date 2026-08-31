@@ -2,9 +2,15 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { escapeHtml, panelHtml, PanelState } from '../panelView';
 import { DEFAULTS } from '../settingsShape';
+import { DEFAULT_VENDORS } from '../vendors';
 
 const state = (over: Partial<PanelState> = {}): PanelState => ({
   settings: DEFAULTS,
+  vendors: DEFAULT_VENDORS,
+  codexModels: [
+    { id: 'gpt-5.6-sol', label: 'GPT-5.6-Sol' },
+    { id: 'gpt-5.4-mini', label: 'GPT-5.4-Mini' },
+  ],
   serverInstalled: false,
   serverVersion: '',
   questions: [],
@@ -21,20 +27,61 @@ test('every language and translator is offered', () => {
   assert.ok(html.includes('always show the original'));
 });
 
-test('every vendor gets a checkbox and a model field', () => {
+test('each reviewer gets a switch, a model field and a way out', () => {
   const html = panelHtml(state(), 'n0nce');
-  for (const provider of ['codex', 'gemini', 'deepseek']) {
-    assert.ok(html.includes(`data-setting="provider.${provider}"`), `${provider} can be switched`);
-    assert.ok(html.includes(`data-setting="model.${provider}"`), `${provider} takes a model`);
+  for (const id of ['codex', 'gemini']) {
+    assert.ok(html.includes(`data-setting="enabled" data-vendor="${id}"`), `${id} can be switched off`);
+    assert.ok(html.includes(`data-setting="model" data-vendor="${id}"`), `${id} takes a model`);
+    assert.ok(html.includes(`data-command="removeVendor" data-id="${id}"`), `${id} can be removed`);
   }
+  assert.ok(html.includes('data-command="addVendor"'), 'and the list is not meant to stay at two');
 });
 
-test('the enabled vendors are the checked ones', () => {
-  const html = panelHtml(state({ settings: { ...DEFAULTS, providers: ['gemini'] } }), 'n0nce');
-  const gemini = html.slice(html.indexOf('data-setting="provider.gemini"'));
-  assert.ok(gemini.startsWith('data-setting="provider.gemini" checked'));
-  const codex = html.slice(html.indexOf('data-setting="provider.codex"'));
-  assert.ok(!codex.startsWith('data-setting="provider.codex" checked'));
+test('a disabled reviewer is shown unchecked', () => {
+  const html = panelHtml(
+    state({ vendors: [{ id: 'codex', runtime: 'codex', model: '', enabled: false, baseUrl: '' }] }),
+    'n0nce',
+  );
+  assert.ok(!html.includes('data-vendor="codex" checked'));
+});
+
+test("codex offers the CLI's own cached models; gemini offers a curated list", () => {
+  const html = panelHtml(state(), 'n0nce');
+  assert.ok(html.includes('value="gpt-5.6-sol"'), 'discovered from ~/.codex/models_cache.json');
+  assert.ok(html.includes('models the Codex CLI has cached'));
+  assert.ok(html.includes('value="gemini-flash-latest"'));
+  assert.ok(html.includes('a curated list'), 'curation is admitted, never passed off as discovery');
+});
+
+test('a model the person typed stays in its own list', () => {
+  const html = panelHtml(
+    state({ vendors: [{ id: 'codex', runtime: 'codex', model: 'something-new', enabled: true, baseUrl: '' }] }),
+    'n0nce',
+  );
+  assert.ok(html.includes('value="something-new"'));
+  assert.ok(html.includes('something-new (yours)'), 'a saved value never vanishes from its own dropdown');
+});
+
+test('a custom endpoint is editable; a first-party vendor shows no URL field', () => {
+  const custom = panelHtml(
+    state({ vendors: [{ id: 'mistral', runtime: 'codex', model: '', enabled: true, baseUrl: 'https://api.mistral.ai/v1' }] }),
+    'n0nce',
+  );
+  assert.ok(custom.includes('data-setting="baseUrl" data-vendor="mistral"'));
+  assert.ok(!panelHtml(state(), 'n0nce').includes('data-setting="baseUrl"'));
+});
+
+test('nothing can force the view to scroll sideways', () => {
+  const css = panelHtml(state(), 'n0nce').split('</style>')[0] ?? '';
+  assert.ok(css.includes('box-sizing: border-box'), 'a 100% field plus padding is wider than its parent');
+  assert.ok(css.includes('overflow-x: hidden'));
+  assert.ok(!css.includes('white-space: nowrap;\n    width'), 'no fixed widths that a narrow sidebar cannot honour');
+});
+
+test('the server actions moved to the title menu, and the panel says so', () => {
+  const html = panelHtml(state(), 'n0nce');
+  assert.ok(!html.includes('data-command="install"'), 'commands belong in the view menu, not as buttons');
+  assert.ok(html.includes('⋯ menu'), 'and the panel points at where they went');
 });
 
 test('the script runs only under the given nonce', () => {
@@ -51,12 +98,10 @@ test('colours come from the theme, never from us', () => {
   assert.ok(!/#[0-9a-f]{6}/i.test(html.split('<script')[0] ?? ''), 'no hard-coded hex colours');
 });
 
-test('the install button says what it will do', () => {
-  assert.ok(panelHtml(state(), 'n').includes('Install the MCP server…'));
-  assert.ok(
-    panelHtml(state({ serverInstalled: true, serverVersion: '0.3.0' }), 'n').includes('Update the MCP server…'),
-  );
-  assert.ok(panelHtml(state({ serverInstalled: true, serverVersion: '0.3.0' }), 'n').includes('0.3.0'));
+test('the panel says whether the server is installed, and which version', () => {
+  assert.ok(panelHtml(state(), 'n').includes('not installed yet'));
+  const installed = panelHtml(state({ serverInstalled: true, serverVersion: '0.4.0' }), 'n');
+  assert.ok(installed.includes('coai-mcp 0.4.0 is installed'));
 });
 
 test('with no question waiting there is no waiting section at all', () => {

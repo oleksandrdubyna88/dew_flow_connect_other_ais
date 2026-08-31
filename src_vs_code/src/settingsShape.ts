@@ -10,7 +10,7 @@
  * configuration crosses over, regenerated whenever the person copies it again.</p>
  */
 
-export type Provider = 'codex' | 'gemini' | 'deepseek';
+import { DEFAULT_VENDORS, Vendor, vendorsEnv } from './vendors';
 
 export type OnExhausted = 'continue' | 'human' | 'escalate';
 
@@ -32,17 +32,12 @@ export const TRANSLATORS: readonly { id: string; label: string }[] = [
   { id: 'none', label: 'Nobody — always show the original' },
 ];
 
-/** Every vendor the panel can offer, in the order it shows them. */
-export const PROVIDERS: readonly Provider[] = ['codex', 'gemini', 'deepseek'];
-
 export interface TranslatorChoice {
   readonly provider: string;
   readonly model: string;
 }
 
 export interface CoaiSettings {
-  readonly providers: readonly Provider[];
-  readonly models: Readonly<Partial<Record<Provider, string>>>;
   readonly maxRounds: number;
   readonly gateThreshold: number;
   readonly onExhausted: OnExhausted;
@@ -57,8 +52,6 @@ export interface CoaiSettings {
 
 /** The defaults, matching the master plan's configuration table — pinned by tests. */
 export const DEFAULTS: CoaiSettings = {
-  providers: ['codex', 'gemini'],
-  models: {},
   maxRounds: 3,
   gateThreshold: 2,
   onExhausted: 'human',
@@ -76,14 +69,7 @@ export type ConfigReader = (section: string) => unknown;
 
 /** VS Code config → a validated `CoaiSettings`; anything malformed falls back to the default. */
 export function settingsFrom(read: ConfigReader): CoaiSettings {
-  const providers = asProviders(read('providers'));
   return {
-    providers,
-    models: {
-      codex: asString(read('model.codex')),
-      gemini: asString(read('model.gemini')),
-      deepseek: asString(read('model.deepseek')),
-    },
     maxRounds: asPositive(read('maxRounds'), DEFAULTS.maxRounds),
     gateThreshold: asCount(read('gateThreshold'), DEFAULTS.gateThreshold),
     onExhausted: asOnExhausted(read('onExhausted')),
@@ -104,16 +90,10 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
  * The `env` block for `mcpServers` — only what differs from the server's own defaults, so a
  * pristine configuration produces NO env at all and the block stays readable.
  */
-export function envBlock(settings: CoaiSettings): Record<string, string> {
+export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DEFAULT_VENDORS): Record<string, string> {
   const env: Record<string, string> = {};
-  if (!sameProviders(settings.providers, DEFAULTS.providers)) {
-    env['COAI_PROVIDERS'] = settings.providers.join(',');
-  }
-  for (const provider of settings.providers) {
-    const model = settings.models[provider];
-    if (model) {
-      env[`COAI_MODEL_${provider.toUpperCase()}`] = model;
-    }
+  if (!sameVendors(vendors, DEFAULT_VENDORS)) {
+    env['COAI_VENDORS'] = vendorsEnv(vendors);
   }
   if (settings.maxRounds !== DEFAULTS.maxRounds) {
     env['COAI_MAX_ROUNDS'] = String(settings.maxRounds);
@@ -151,14 +131,6 @@ export function envBlock(settings: CoaiSettings): Record<string, string> {
   return env;
 }
 
-function asProviders(value: unknown): readonly Provider[] {
-  if (!Array.isArray(value)) {
-    return DEFAULTS.providers;
-  }
-  const valid = value.filter((p): p is Provider => p === 'codex' || p === 'gemini' || p === 'deepseek');
-  return valid.length > 0 ? valid : DEFAULTS.providers;
-}
-
 function asString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -183,6 +155,20 @@ function asOnExhausted(value: unknown): OnExhausted {
   return value === 'continue' || value === 'escalate' || value === 'human' ? value : DEFAULTS.onExhausted;
 }
 
-function sameProviders(a: readonly Provider[], b: readonly Provider[]): boolean {
-  return a.length === b.length && a.every((p, i) => p === b[i]);
+/** Whether the reviewers are still exactly the shipped pair, unchanged. */
+function sameVendors(a: readonly Vendor[], b: readonly Vendor[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((v, i) => {
+      const other = b[i];
+      return (
+        other !== undefined &&
+        v.id === other.id &&
+        v.runtime === other.runtime &&
+        v.model === other.model &&
+        v.enabled === other.enabled &&
+        v.baseUrl === other.baseUrl
+      );
+    })
+  );
 }

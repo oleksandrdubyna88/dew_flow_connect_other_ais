@@ -1,49 +1,49 @@
 import * as vscode from 'vscode';
 import { EscalationWatcher } from './escalationWatcher';
+import { ModelChoice, parseCodexModels } from './models';
 import { panelHtml } from './panelView';
 import { parseSession, SessionFile } from './rounds';
 import { settingsFrom } from './settingsShape';
+import { normaliseId, Vendor, VENDOR_PRESETS, vendorsFrom } from './vendors';
 
 /**
- * The sidebar panel: settings, the server, open questions and recent rounds in one place.
+ * The sidebar panel: reviewers, language, the gate, the limits, and what is waiting on you.
  *
  * <p>The markup is next door in `panelView.ts`, pure and tested. This half is the wiring — reading
- * VS Code configuration, writing it back, and re-rendering when anything changes.</p>
+ * VS Code configuration, writing it back, and re-rendering when anything changes. The server's own
+ * actions (install, copy the config block, copy the snippet) live in the view's ⋯ menu, where
+ * VS Code puts commands, rather than as buttons competing with the settings.</p>
  *
- * <p><b>Settings are written to VS Code configuration</b>, not to a file of our own. A person who
- * prefers the Settings UI, or a repository that commits `.vscode/settings.json`, gets the same
- * values; this panel is a convenient face on them, never a second source of truth.</p>
+ * <p><b>Settings are written to VS Code configuration</b>, not to a file of our own: a person who
+ * prefers the Settings UI gets the same values, and this panel is a face on them rather than a
+ * second source of truth.</p>
  */
 export class PanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'coai.panel';
 
   private view?: vscode.WebviewView;
+  private codexModels: ModelChoice[] = [];
 
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly watcher: EscalationWatcher,
     private readonly dataDir: vscode.Uri,
-    private readonly commands: {
-      install: () => Promise<void>;
-      copyConfig: () => Promise<void>;
-      copySnippet: () => Promise<void>;
-      answer: (id: string) => Promise<void>;
-    },
+    private readonly answer: (id: string) => Promise<void>,
   ) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
     view.webview.options = { enableScripts: true };
-    view.webview.onDidReceiveMessage((message: { type: string; key?: string; value?: unknown; command?: string; id?: string }) => {
-      if (message.type === 'setting' && message.key !== undefined) {
-        void this.write(message.key, message.value);
-      } else if (message.type === 'command') {
-        void this.run(message.command, message.id);
-      }
-    });
+    view.webview.onDidReceiveMessage(
+      (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string }) => {
+        if (m.type === 'setting' && m.key !== undefined) {
+          void this.write(m.key, m.value, m.vendor);
+        } else if (m.type === 'command') {
+          void this.run(m.command, m.id);
+        }
+      },
+    );
 
-    // The panel is a view of state that four other things change: settings, the server's
-    // escalations, its sessions, and the installer. Re-render on each rather than on a timer.
     this.context.subscriptions.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration('coai')) {
@@ -60,9 +60,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
     const config = vscode.workspace.getConfiguration('coai');
+    this.codexModels = await this.readCodexModels();
     this.view.webview.html = panelHtml(
       {
         settings: settingsFrom((section) => config.get(section)),
+        vendors: vendorsFrom(config.get('vendors')),
+        codexModels: this.codexModels,
         serverInstalled: this.context.globalState.get<string>('coai.installedVersion') !== undefined,
         serverVersion: this.context.globalState.get<string>('coai.installedVersion') ?? '',
         questions: this.watcher.openQuestions,
@@ -73,24 +76,18 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * One setting, written where the person is most likely to want it.
-   * <p>Global, not workspace: the vendors you review with and the language you read in are
+   * One setting, written globally.
+   * <p>Global rather than workspace: the vendors you review with and the language you read in are
    * properties of YOU, not of one checkout — and a workspace write would surprise anyone whose
    * `.vscode/settings.json` is in git.</p>
    */
-  private async write(key: string, value: unknown): Promise<void> {
+  private async write(key: string, value: unknown, vendorId?: string): Promise<void> {
     const config = vscode.workspace.getConfiguration('coai');
-    if (key.startsWith('provider.')) {
-      const provider = key.slice('provider.'.length);
-      const current = new Set(config.get<string[]>('providers') ?? []);
-      if (value === true) {
-        current.add(provider);
-      } else {
-        current.delete(provider);
-      }
-      // Keep the panel's own order, so the list never shuffles under the person.
-      const ordered = ['codex', 'gemini', 'deepseek'].filter((p) => current.has(p));
-      await config.update('providers', ordered, vscode.ConfigurationTarget.Global);
+    if (vendorId !== undefined) {
+      const vendors = vendorsFrom(config.get('vendors')).map((v) =>
+        v.id === vendorId ? { ...v, [key]: value } : v,
+      );
+      await config.update('vendors', vendors, vscode.ConfigurationTarget.Global);
       return;
     }
 
@@ -99,24 +96,98 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
   private async run(command: string | undefined, id: string | undefined): Promise<void> {
     switch (command) {
-      case 'install':
-        await this.commands.install();
-        break;
-      case 'copyConfig':
-        await this.commands.copyConfig();
-        break;
-      case 'copySnippet':
-        await this.commands.copySnippet();
-        break;
       case 'answer':
         if (id !== undefined) {
-          await this.commands.answer(id);
+          await this.answer(id);
+        }
+        break;
+      case 'addVendor':
+        await this.addVendor();
+        break;
+      case 'removeVendor':
+        if (id !== undefined) {
+          await this.removeVendor(id);
         }
         break;
       default:
         return;
     }
     await this.render();
+  }
+
+  /** A preset, or a name and an endpoint typed in — the list is not meant to stay at two. */
+  private async addVendor(): Promise<void> {
+    const picked = await vscode.window.showQuickPick(
+      VENDOR_PRESETS.map((p) => ({ label: p.label, detail: p.hint, preset: p })),
+      { title: 'Add a reviewer', placeHolder: 'Which vendor should review as well?' },
+    );
+    if (picked === undefined) {
+      return;
+    }
+
+    let vendor: Vendor = { ...picked.preset };
+    if (vendor.id.length === 0) {
+      const name = await vscode.window.showInputBox({
+        title: 'Add a reviewer',
+        prompt: 'A short name — it identifies the vendor and names its key in the vault entry',
+        placeHolder: 'mistral',
+        validateInput: (v) => (normaliseId(v).length === 0 ? 'A name is needed' : undefined),
+      });
+      if (name === undefined) {
+        return;
+      }
+      const baseUrl = await vscode.window.showInputBox({
+        title: `Add ${normaliseId(name)}`,
+        prompt: 'Its OpenAI-compatible base URL',
+        placeHolder: 'https://api.example.com/v1',
+        validateInput: (v) => (v.trim().startsWith('http') ? undefined : 'A base URL is needed'),
+      });
+      if (baseUrl === undefined) {
+        return;
+      }
+      vendor = { ...vendor, id: normaliseId(name), baseUrl: baseUrl.trim() };
+    }
+
+    const config = vscode.workspace.getConfiguration('coai');
+    const vendors = vendorsFrom(config.get('vendors'));
+    if (vendors.some((v) => v.id === vendor.id)) {
+      void vscode.window.showWarningMessage(`${vendor.id} is already a reviewer.`);
+      return;
+    }
+    await config.update('vendors', [...vendors, vendor], vscode.ConfigurationTarget.Global);
+  }
+
+  /** Removing the last reviewer would leave a panel with nobody in it, so it is refused. */
+  private async removeVendor(id: string): Promise<void> {
+    const config = vscode.workspace.getConfiguration('coai');
+    const vendors = vendorsFrom(config.get('vendors'));
+    if (vendors.length <= 1) {
+      void vscode.window.showWarningMessage('A review panel needs at least one reviewer.');
+      return;
+    }
+    await config.update(
+      'vendors',
+      vendors.filter((v) => v.id !== id),
+      vscode.ConfigurationTarget.Global,
+    );
+  }
+
+  /**
+   * The Codex CLI's own model cache — what this machine can actually reach today, rather than a
+   * list we would have to keep up to date by hand.
+   */
+  private async readCodexModels(): Promise<ModelChoice[]> {
+    const home = process.env['USERPROFILE'] ?? process.env['HOME'];
+    const codexHome = process.env['CODEX_HOME'] ?? (home === undefined ? undefined : `${home}/.codex`);
+    if (codexHome === undefined) {
+      return [];
+    }
+    try {
+      const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(`${codexHome}/models_cache.json`));
+      return parseCodexModels(new TextDecoder().decode(bytes));
+    } catch {
+      return []; // codex has never run here, or keeps its cache elsewhere
+    }
   }
 
   private async readSessions(): Promise<SessionFile[]> {

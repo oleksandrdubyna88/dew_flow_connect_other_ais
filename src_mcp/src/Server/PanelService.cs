@@ -73,19 +73,21 @@ public sealed class PanelService
 
     private async Task<ProviderStatus> ProbeAsync(ProviderSettings provider, CancellationToken ct)
     {
-        if (ReviewerRuntimeSelector.Default.Find(provider.Provider) is null)
+        if (RuntimeFor(provider) is null)
         {
             return new ProviderStatus(provider.Provider, provider.Enabled, false, "",
                 "unavailable", ReviewerRuntimeSelector.Default.RefusalFor(provider.Provider));
         }
 
-        var (auth, authNote) = AuthFor(provider.Provider);
+        var (auth, authNote) = AuthFor(provider);
         if (!provider.Enabled)
         {
             return new ProviderStatus(provider.Provider, false, false, "", auth, "disabled in settings");
         }
 
-        var exe = provider.ExecutablePath.Length > 0 ? provider.ExecutablePath : DefaultExe(provider.Provider);
+        var exe = provider.ExecutablePath.Length > 0
+            ? provider.ExecutablePath
+            : DefaultExe(provider.Runtime.Length > 0 ? provider.Runtime : provider.Provider);
         try
         {
             var result = await _launcher.RunAsync(
@@ -102,14 +104,29 @@ public sealed class PanelService
         }
     }
 
-    private (string Auth, string Note) AuthFor(string provider) =>
-        _keys.Keys.ContainsKey(provider)
+    private (string Auth, string Note) AuthFor(ProviderSettings provider) =>
+        _keys.Keys.ContainsKey(provider.Provider)
             ? ("vault key", "")
-            : provider is "deepseek"
-                ? ("unavailable", "needs a key and the vault holds none — see the creds config entry")
+            : provider.BaseUrl.Length > 0 || provider.Provider is "deepseek"
+                ? ("unavailable", $"needs a key under '{provider.Provider}' and the vault holds none — see the creds config entry")
                 : ("own auth", "the CLI's own sign-in is used");
 
     private static string DefaultExe(string provider) => provider is "gemini" ? "gemini" : "codex";
+
+    /// <summary>
+    /// The runtime for one configured reviewer: a built-in by name, or — when the operator gave it
+    /// a base URL — the generic custom one. A vendor added in the panel is DATA, not a release.
+    /// </summary>
+    private static IReviewerRuntime? RuntimeFor(ProviderSettings provider) =>
+        provider.BaseUrl.Length > 0
+            ? new CustomCodexRuntime(provider.Provider, provider.BaseUrl)
+            : ReviewerRuntimeSelector.Default.Find(provider.Provider)
+              ?? (provider.Runtime switch
+              {
+                  "gemini" => new GeminiRuntime(),
+                  "codex" => new CodexRuntime(),
+                  _ => null,
+              });
 
     // ---------- open / status ----------
 
@@ -255,8 +272,8 @@ public sealed class PanelService
         var work = new List<ReviewerWork>();
         foreach (var provider in _settings.Providers.Where(p => p.Enabled))
         {
-            if (ReviewerRuntimeSelector.Default.Find(provider.Provider) is not { } runtime ||
-                AuthFor(provider.Provider).Auth == "unavailable")
+            if (RuntimeFor(provider) is not { } runtime ||
+                AuthFor(provider).Auth == "unavailable")
             {
                 continue; // reported by `providers`; a fan-out is built only from what can run
             }
