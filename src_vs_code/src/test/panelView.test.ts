@@ -286,3 +286,16 @@ test('a waiting question is never collapsible', () => {
 test('the accordion reports its own toggles, so the open set survives', () => {
   assert.ok(panelHtml(state(), 'n').includes("type: 'section'"));
 });
+
+test('nothing sits against the edge of the view', () => {
+  const css = panelHtml(state(), 'n').split('</style>')[0] ?? '';
+  const body = css.match(/body \{[^}]*\}/)?.[0] ?? '';
+  assert.ok(/padding: 4px 14px 20px 12px/.test(body), 'air down both sides, wider on the scrollbar side');
+});
+
+test('the disclosure arrow is a drawn chevron, not a punctuation mark', () => {
+  const css = panelHtml(state(), 'n').split('</style>')[0] ?? '';
+  assert.ok(css.includes('border-right: 1.5px solid currentColor'), 'drawn, so it scales with the text');
+  assert.ok(!css.includes('203A'), 'a glyph rendered a third of the size nobody can hit');
+  assert.ok(css.includes('rotate(45deg)'), 'and it turns when the section opens');
+});

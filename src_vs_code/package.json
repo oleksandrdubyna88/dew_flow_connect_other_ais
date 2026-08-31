@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "A multi-model review gate: secondary vendor models (Codex, Gemini, DeepSeek) review your main AI's plan and code in rounds, until the findings drop under a threshold or a human is called.",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {

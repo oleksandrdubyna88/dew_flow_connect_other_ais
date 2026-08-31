@@ -316,7 +316,9 @@ const CSS = `
   body {
     font-family: var(--vscode-font-family); font-size: var(--vscode-font-size);
     color: var(--vscode-foreground); background: transparent;
-    margin: 0; padding: 4px 0 20px; overflow-x: hidden;
+    /* Air down both sides: nothing should touch the edge of the view, and the right-hand gap is
+       a shade wider so a field never sits under the scrollbar's track. */
+    margin: 0; padding: 4px 14px 20px 12px; overflow-x: hidden;
   }
   h2 {
     font-size: 11px; text-transform: uppercase; letter-spacing: .06em; opacity: .75;
@@ -330,12 +332,15 @@ const CSS = `
   }
   .section > summary:hover { opacity: 1; }
   .section > summary::-webkit-details-marker { display: none; }
-  /* The arrow is ours, so it points the right way in both states without any script. */
+  /* A real chevron, drawn from two borders rather than borrowed from punctuation: it matches the
+     Explorer's weight, scales with the text, and points the right way in both states with no
+     script. (A '›' glyph rendered a third of this size — a disclosure arrow nobody can hit.) */
   .section > summary::before {
-    content: '\\203A'; display: inline-block; font-size: 13px; line-height: 1;
-    transition: transform .12s ease; transform: rotate(0deg);
+    content: ''; flex: 0 0 auto; width: 6px; height: 6px; margin: 0 4px 0 2px;
+    border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg); transition: transform .12s ease;
   }
-  .section[open] > summary::before { transform: rotate(90deg); }
+  .section[open] > summary::before { transform: rotate(45deg); margin-top: -3px; }
   .field { margin: 8px 0; }
   .field > label { display: block; margin-bottom: 3px; }
   .inline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
