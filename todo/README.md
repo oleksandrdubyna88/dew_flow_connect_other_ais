@@ -10,7 +10,6 @@ a plan moves there (`/promote-plan`) the moment its work ships. Convention:
 |---|---|
 | [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) | The master plan: the multi-model review gate — architecture, protocol, rules, decisions |
 | [PLAN_escalation_loopback.md](PLAN_escalation_loopback.md) | The tail of epic 5 — reaching a human from the server without opening a port |
-| [PLAN_epic_06_proof.md](PLAN_epic_06_proof.md) | Epic 6 — proof: scripted end-to-end in CI, one recorded real run |
 
 Epics are ordered: each depends only on the ones above it, and 02–03 are where all the pure logic
 lives — build them exactly in this order.

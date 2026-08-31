@@ -1,9 +1,23 @@
 # PLAN — epic 06: proof — the loop observed end to end
 
-> Status: **plan only, nothing implemented yet.** Epic 6 of 6 under
-> [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) (its Phase 6). Depends on everything
-> before it. This epic produces no feature; it produces **evidence**, and the family's rule applies —
-> never report work you have not seen working.
+> Status: **IMPLEMENTED, 2026-08-31.** Epic 6 of 6 under
+> [PLAN_connect_other_ais.md](../todo/PLAN_connect_other_ais.md) (its Phase 6). Both stories done;
+> the record is [RESULTS_first_real_run.md](RESULTS_first_real_run.md).
+>
+> **Deviations from the plan:**
+> - Story 6.1 shipped four scenarios, and one of them asserted the wrong thing: the
+>   all-reviewers-failed case expected `proceed`. The real run showed that is the gate failing
+>   open, so it now asserts `call_human` — a test can encode a bug, and this one did.
+> - Story 6.2 took SIX attempts, each stopped by a real defect. The plan budgeted one run; the
+>   value was in the six, and all of it is in the record.
+> - Its pass condition — at least two of the three seeded flaws — was exceeded: the plan stage
+>   named two, the code stage named all three plus an undisposed `JsonDocument` nobody planted,
+>   and the quadratic scan was found independently by two different roles.
+> - Codex ran out of quota mid-run (the operator topped it up) and Gemini answered 503 under load.
+>   Both are recorded as vendor conditions rather than papered over, and both taught the retry
+>   table its real phrases.
+> - The run also found a defect in the COUNTING RULE — same defect, different words, counted twice
+>   — which the plan never anticipated as an outcome of story 6.2.
 
 ## Goal
 

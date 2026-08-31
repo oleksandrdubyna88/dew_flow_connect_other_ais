@@ -1,6 +1,6 @@
 # The first real run — 2026-08-31
 
-> The record story 6.2 of [PLAN_epic_06_proof.md](../todo/PLAN_epic_06_proof.md) exists to produce:
+> The record story 6.2 of [PLAN_epic_06_proof.md](PLAN_epic_06_proof.md) exists to produce:
 > one session against the real vendors, on a throwaway repository, from a deliberately flawed plan.
 > It found **eight defects that 141 green tests did not** — seven in delivery and one in the
 > counting rule itself — and every one of them is now a test.
@@ -109,8 +109,13 @@ comparison — a change to make deliberately, not by moving a constant until a t
 
 ## The verdict on the exercise
 
-The run did its job in the only way it could: by being real. Every one of the seven defects lived
-in the seam between our code and someone else's — a release packaging step, a Windows shim, a
-vendor's schema validator, a CLI's trust model, a quota message's wording. None of them could have
-been found by testing our own logic harder, and all of them would have been found by the first
-user.
+The run did its job in the only way it could: by being real. Seven of the eight defects lived in the
+seam between our code and someone else's — a release packaging step, a Windows shim, a vendor's
+schema validator, a CLI's trust model, a quota message's wording. None of those could have been
+found by testing our own logic harder, and all of them would have been found by the first user.
+
+The eighth is the one worth remembering longest: the counting rule was wrong, and it was wrong in a
+way that only real reviewers could expose, because a fake vendor returns the text you told it to.
+The moment two models described one defect in their own words, the gate double-counted it. Scripted
+tests cannot produce disagreement about wording — which is exactly what a panel of different
+vendors is for.

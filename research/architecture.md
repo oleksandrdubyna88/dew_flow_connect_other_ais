@@ -1,8 +1,9 @@
 # ConnectOtherAIs — architecture
 
-> The system **as it is**. Right now that is mostly scaffolding: the repository skeleton exists, the
-> product does not yet. Each epic that lands updates this file and adds its `module_*.md`; a diagram
-> here that shows unbuilt parts is marked *(planned)* until the code exists.
+> The system **as it is**. All six epics shipped on 2026-08-31: the server runs the loop from any
+> MCP client and the extension installs it. The one deferred piece is the escalation loopback
+> ([../todo/PLAN_escalation_loopback.md](../todo/PLAN_escalation_loopback.md)) — `ask_human` answers
+> with a refusal the main AI must surface itself.
 
 ## What this is
 
@@ -11,7 +12,7 @@ both in rounds until the de-duplicated count of blocking+major findings drops un
 a human is escalated to. Design record: [../todo/PLAN_connect_other_ais.md](../todo/PLAN_connect_other_ais.md)
 until implemented, then promoted here.
 
-## Containers *(planned — epics 02–05)*
+## Containers
 
 ```mermaid
 C4Container
