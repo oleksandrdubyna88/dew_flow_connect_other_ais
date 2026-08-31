@@ -54,6 +54,9 @@ public sealed class McpContractTests : IDisposable
         info.Environment["COAI_DATA_DIR"] = _data;
         info.Environment["COAI_LOG_LEVEL"] = logLevel; // chatty on purpose: purity is the claim
         info.Environment["COAI_ESCALATION_SECONDS"] = escalationSeconds.ToString();
+        // These test the WIRE. Translation is a vendor call with its own tests; leaving it on
+        // would make every escalation here wait on a real model.
+        info.Environment["COAI_TRANSLATOR_PROVIDER"] = "none";
         var process = Process.Start(info)!;
         return process;
     }

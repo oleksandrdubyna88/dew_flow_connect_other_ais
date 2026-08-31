@@ -53,6 +53,14 @@ public sealed class ProcessLauncher : IProcessLauncher
             RedirectStandardError = true,
             RedirectStandardInput = true,
             UseShellExecute = false,
+            // UTF-8 on every stream, explicitly. Without this .NET decodes a child's output with
+            // the console's ANSI code page, and on Windows that turns every non-ASCII character
+            // into '?' — silently. Found by a translation test whose Ukrainian came back as
+            // "??? ?????", but it was never only translation: a finding written in any language
+            // but English was being corrupted on its way in.
+            StandardOutputEncoding = System.Text.Encoding.UTF8,
+            StandardErrorEncoding = System.Text.Encoding.UTF8,
+            StandardInputEncoding = System.Text.Encoding.UTF8,
         };
         foreach (var argument in request.Arguments)
         {

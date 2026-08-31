@@ -13,6 +13,11 @@
 //
 // Deliberately dumb: every behaviour a test needs, none it does not.
 
+// UTF-8 out, like the real vendors (node writes UTF-8). Without this Windows encodes stdout in
+// the console's code page and every Cyrillic character leaves as '?' — which is exactly how the
+// launcher's own missing StandardOutputEncoding was found.
+Console.OutputEncoding = System.Text.Encoding.UTF8;
+
 // Vendor mode: behave like a reviewer CLI whatever the argv shape, steered by environment —
 // the vendor runtimes build real codex/gemini argvs, and the fan-out tests drive THOSE.
 //   FAKECLI_MODE=vendor

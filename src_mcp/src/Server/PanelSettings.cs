@@ -1,4 +1,6 @@
+using CoaiMcp.Core.Context;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Translation;
 
 namespace CoaiMcp.Server;
 
@@ -43,6 +45,19 @@ public sealed record PanelSettings
     /// </remarks>
     public TimeSpan EscalationBudget { get; init; } = TimeSpan.FromMinutes(30);
 
+    /// <summary>The language a person is asked in, and answers in. Defaults to English.</summary>
+    public Language Language { get; init; } = Language.English;
+
+    /// <summary>
+    /// Which small, fast model translates when the AI did not already write in that language.
+    /// </summary>
+    /// <remarks>
+    /// Gemini Flash by default because the Gemini CLI is usually already signed in and a flash
+    /// model answers a one-sentence job while a person waits. `none` switches translation off and
+    /// shows the original — which is also what happens, with a note, when the CLI cannot run.
+    /// </remarks>
+    public TranslatorSettings Translator { get; init; } = new("gemini") { Model = "gemini-flash-latest" };
+
     /// <summary>Where sessions, prompts overrides and round artifacts live.</summary>
     public string DataDir { get; init; } = DefaultDataDir;
 
@@ -71,6 +86,12 @@ public sealed record PanelSettings
         EscalationBudget = env("COAI_ESCALATION_SECONDS") is { Length: > 0 }
             ? TimeSpan.FromSeconds(IntVar(env, "COAI_ESCALATION_SECONDS", 30))
             : TimeSpan.FromMinutes(IntVar(env, "COAI_ESCALATION_MINUTES", 30)),
+        Language = Language.For(env("COAI_LANGUAGE")),
+        Translator = new TranslatorSettings(env("COAI_TRANSLATOR_PROVIDER") is { Length: > 0 } tp ? tp : "gemini")
+        {
+            Model = env("COAI_TRANSLATOR_MODEL") ?? "gemini-flash-latest",
+            ExecutablePath = env("COAI_TRANSLATOR_EXE") ?? string.Empty,
+        },
         DataDir = env("COAI_DATA_DIR") is { Length: > 0 } dir ? dir : DefaultDataDir,
     }.WithProvidersFrom(env);
 

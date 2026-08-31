@@ -4,13 +4,23 @@ using CoaiMcp.Core.Findings;
 
 namespace CoaiMcp.Server;
 
-/// <summary>One question waiting for a person, as it sits on disk.</summary>
+/// <summary>
+/// One question waiting for a person, as it sits on disk.
+/// </summary>
+/// <param name="Question">What to SHOW: in the configured language when that was possible.</param>
+/// <param name="QuestionOriginal">As the AI wrote it — kept so nothing is ever lost in translation.</param>
+/// <param name="Language">The language code the question was rendered into (or attempted in).</param>
+/// <param name="TranslationNote">Empty when <paramref name="Question"/> is in that language;
+/// otherwise why it is not, in words a person can act on.</param>
 public sealed record EscalationQuestion(
     string Id,
     string SessionId,
     string RepoPath,
     string Branch,
     string Question,
+    string QuestionOriginal,
+    string Language,
+    string TranslationNote,
     IReadOnlyList<Finding> OpenFindings,
     string AskedUtc);
 

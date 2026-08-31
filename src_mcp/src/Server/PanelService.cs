@@ -7,6 +7,7 @@ using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Context;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Runners.Translation;
 using CoaiMcp.Runners.Worktrees;
 
 namespace CoaiMcp.Server;
@@ -30,6 +31,7 @@ public sealed class PanelService
     private readonly ReviewerExecutor _executor;
     private readonly RolePrompts _prompts;
     private readonly Escalations _escalations;
+    private readonly ITranslator _translator;
 
     public PanelService(PanelSettings settings, VaultKeys keys, DateTime vaultReadUtc, IProcessLauncher launcher, Serilog.ILogger log)
     {
@@ -46,6 +48,7 @@ public sealed class PanelService
         _executor = new ReviewerExecutor(launcher);
         _prompts = new RolePrompts(settings.DataDir);
         _escalations = new Escalations(settings.DataDir);
+        _translator = new CliTranslator(launcher, settings.Translator);
     }
 
     private static readonly ImmutableArray<ReviewRole> CodeRoles =
@@ -400,22 +403,33 @@ public sealed class PanelService
 
         var session = _store.Load(repoPath, branch);
         var id = Guid.NewGuid().ToString("N")[..12];
+
+        // Into the person's language. A model that already wrote in it returns the text unchanged;
+        // one that cannot be reached returns it with a note, and the note is shown rather than
+        // swallowed — a question in the wrong language is a nuisance, a missing one stops a review.
+        var shown = await _translator.TranslateAsync(question.Trim(), _settings.Language, "question", ct);
         var asked = new EscalationQuestion(
             id,
             session?.State.SessionId ?? "no-session",
             repoPath,
             branch,
-            question.Trim(),
+            shown.Text,
+            shown.Original,
+            _settings.Language.Code,
+            shown.Note,
             session?.Pending.Where(f => f.IsGating).ToList() ?? [],
             DateTime.UtcNow.ToString("O"));
 
-        _log.Information("escalating {Id} to a person: {Question}", id, asked.Question);
+        _log.Information("escalating {Id} to a person in {Language}: {Question}", id, _settings.Language.Code, asked.Question);
         var outcome = await _escalations.AskAsync(asked, _settings.EscalationBudget, ct);
 
         return outcome switch
         {
+            // And back: the caller asked in its own language, so it is answered in that language,
+            // with the person's own words kept beside it. Translating only one direction would
+            // hand an English-speaking model a Russian answer and call it done.
             EscalationOutcome.Answered answered => Json(
-                new HumanAnswer("answered", answered.Text, string.Empty), ServerJsonContext.Default.HumanAnswer),
+                await AnswerFor(answered.Text, question.Trim(), ct), ServerJsonContext.Default.HumanAnswer),
 
             // The family's `remote-ask` fallback, verbatim in shape: nobody answered in the budget,
             // so ASK IN THE CHAT rather than stalling or deciding alone. The question file stays.
@@ -423,12 +437,51 @@ public sealed class PanelService
                 new HumanAnswer(
                     "no_answer_yet",
                     string.Empty,
+                    string.Empty,
                     $"nobody answered in {_settings.EscalationBudget.TotalMinutes:0} minutes — ask the person " +
                     $"directly in this conversation and wait for their reply. The question is still open in " +
                     $"VS Code as escalation {id}."),
                 ServerJsonContext.Default.HumanAnswer),
         };
     }
+
+    /// <summary>
+    /// The person's answer, rendered for the caller: their words translated back into the language
+    /// the question arrived in, with the original kept beside it.
+    /// </summary>
+    /// <remarks>
+    /// The target is inferred from the ASKING text rather than configured — the model that asked
+    /// is the one that has to act on the reply, and it wrote the question itself. When the two
+    /// languages are the same the translator returns the text unchanged, which costs one fast call
+    /// and removes a guess.
+    /// </remarks>
+    private async Task<HumanAnswer> AnswerFor(string answer, string originalQuestion, CancellationToken ct)
+    {
+        var back = await _translator.TranslateAsync(
+            answer,
+            LanguageOfCaller(originalQuestion),
+            "answer",
+            ct);
+        return new HumanAnswer(
+            "answered",
+            back.Text,
+            answer,
+            back.Note.Length == 0
+                ? string.Empty
+                : $"the answer is shown in the person's own words: {back.Note}");
+    }
+
+    /// <summary>
+    /// Which language to answer the CALLER in. Latin script → English; otherwise the configured
+    /// language, because a caller writing Cyrillic is not asking to be answered in English.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately crude, and cheap: the translator itself decides whether anything needs doing —
+    /// asked to render Russian text in Russian, it returns it unchanged. A wrong guess here costs
+    /// a no-op call, never a wrong answer.
+    /// </remarks>
+    private Language LanguageOfCaller(string question) =>
+        question.Any(c => c >= 'Ѐ' && c <= 'ӿ') ? _settings.Language : Language.English;
 
     // ---------- plumbing ----------
 

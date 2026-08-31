@@ -32,6 +32,9 @@ public sealed class EscalationsTests : IDisposable
         "D:/repo",
         "feature/x",
         "Two findings still gate after three rounds. Ship anyway?",
+        "Two findings still gate after three rounds. Ship anyway?",
+        "en",
+        string.Empty,
         [new Finding(Severity.Blocking, Category.Security, "src/A.cs", 7, "token compared with ==", "timing", "fix it", ["codex"])],
         DateTime.UtcNow.ToString("O"));
 
