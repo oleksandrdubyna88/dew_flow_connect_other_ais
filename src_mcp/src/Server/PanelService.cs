@@ -362,7 +362,7 @@ public sealed class PanelService
 
     // ---------- resolve ----------
 
-    public Task<string> ResolveAsync(string repoPath, string branch, string decisionsJson)
+    public Task<string> ResolveAsync(string repoPath, string branch, string decisionsJson, bool humanSaysProceed = false)
     {
         var session = _store.Load(repoPath, branch);
         if (session is null)
@@ -383,7 +383,7 @@ public sealed class PanelService
         if (dtos is null or [])
         {
             return Task.FromResult(session.Pending.Count == 0
-                ? Finish(session, [])
+                ? Finish(session, [], humanSaysProceed)
                 : Error($"{session.Pending.Count} finding(s) await a decision — pass one per finding index"));
         }
 
@@ -407,12 +407,12 @@ public sealed class PanelService
                 : new Decision.Rejected(finding, dto.Reason));
         }
 
-        return Task.FromResult(Finish(session, decisions));
+        return Task.FromResult(Finish(session, decisions, humanSaysProceed));
     }
 
-    private string Finish(PersistedSession session, List<Decision> decisions)
+    private string Finish(PersistedSession session, List<Decision> decisions, bool humanSaysProceed = false)
     {
-        switch (RoundMachine.Resolve(session.State, decisions))
+        switch (RoundMachine.Resolve(session.State, decisions, humanSaysProceed))
         {
             case Transition.Refused refused:
                 return Error(refused.Sentence);

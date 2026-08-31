@@ -80,8 +80,9 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            async (string repoPath, string branch, string decisions) =>
-                await service.ResolveAsync(repoPath, branch, decisions),
+            async (string repoPath, string branch, string decisions, string? humanDecision) =>
+                await service.ResolveAsync(repoPath, branch, decisions,
+                    string.Equals(humanDecision, "proceed", StringComparison.OrdinalIgnoreCase)),
             new McpServerToolCreateOptions
             {
                 Name = "resolve",
@@ -92,6 +93,11 @@ internal static class Tools
                     {"finding": 1, "action": "reject", "reason": "…"}]. A rejection without a
                     reason refuses the whole call; a reasoned rejection is discounted in later
                     rounds unless a reviewer re-raises it with a genuinely new argument.
+
+                    After a call_human verdict ONLY: when the PERSON has explicitly decided to
+                    proceed despite the open findings, pass humanDecision: "proceed" — it advances
+                    the stage and is recorded as their override. Never pass it on your own
+                    judgement; it is refused while rounds remain.
                     """,
                 ReadOnly = false, Idempotent = false, Destructive = false, OpenWorld = false,
             });

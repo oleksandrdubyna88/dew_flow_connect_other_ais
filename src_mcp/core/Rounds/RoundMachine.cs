@@ -132,11 +132,26 @@ public static class RoundMachine
                     (s.Config.OnExhausted == StagePolicy.Escalate ? " and the escalation ladder is exhausted" : string.Empty))),
         };
 
-    public static Transition Resolve(SessionState s, IReadOnlyList<Decision> decisions)
+    /// <param name="humanSaysProceed">
+    /// The human's override after a <see cref="RoundVerdict.CallHuman"/>: the rounds are spent,
+    /// findings still gate, and a PERSON decided to go anyway. Honoured only in exactly that
+    /// state — the first live run exposed the gap where the human said "proceed" and the machine
+    /// had no way to hear it, leaving the code gate unreachable forever.
+    /// </param>
+    public static Transition Resolve(SessionState s, IReadOnlyList<Decision> decisions, bool humanSaysProceed = false)
     {
         if (!s.AwaitingResolve)
         {
             return new Transition.Refused("there is no completed round awaiting decisions — run a review first");
+        }
+
+        if (humanSaysProceed && s.RoundsRunThisStage < s.Config.MaxRounds)
+        {
+            // Before exhaustion the gate is the decider, not the human flag: allowing an early
+            // override would let a model skip the loop by claiming permission it was never given.
+            return new Transition.Refused(
+                "a human override applies only after the rounds are exhausted and the verdict was call_human — " +
+                "this stage still has rounds left, so revise and review again");
         }
 
         var unreasoned = decisions.OfType<Decision.Rejected>().Where(d => string.IsNullOrWhiteSpace(d.Reason)).ToList();
@@ -150,7 +165,7 @@ public static class RoundMachine
             decisions.OfType<Decision.Rejected>().Select(d => new PriorRejection(d.Finding, d.Reason)));
 
         var next = s with { AwaitingResolve = false, Rejections = rejections };
-        if (s.AdvanceOnResolve)
+        if (s.AdvanceOnResolve || humanSaysProceed)
         {
             next = next with
             {
