@@ -37,8 +37,8 @@ C4Container
 
 | Module | Doc | Status |
 |---|---|---|
-| Repository foundation (build, logging, CI) | *(this file, for now)* | epic 01 — in progress |
-| Pure core (findings, sanitizer, counting, rounds) | `module_core.md` | epic 02 — not started |
+| Repository foundation (build, logging, CI) | [PLAN_epic_01_foundation.md](PLAN_epic_01_foundation.md) | **shipped 2026-08-31** |
+| Pure core (findings, sanitizer, counting, rounds) | `module_core.md` | epic 02 — in progress |
 | Reviewer runners (worktrees, scheduler, vendors) | `module_runners.md` | epic 03 — not started |
 | `coai-mcp` server | `module_server.md` | epic 04 — not started |
 | VS Code extension | `module_extension.md` | epic 05 — not started |

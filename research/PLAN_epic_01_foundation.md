@@ -1,8 +1,21 @@
 # PLAN — epic 01: repository foundation
 
-> Status: **plan only, nothing implemented yet.** Epic 1 of 6 under
-> [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) (its Phase 0). Everything else builds on
-> this; nothing here depends on anything else.
+> Status: **IMPLEMENTED, 2026-08-31.** Epic 1 of 6 under
+> [PLAN_connect_other_ais.md](../todo/PLAN_connect_other_ais.md) (its Phase 0). All three stories
+> shipped in three commits (d7e8fd2, 1565dd5, e1ad95e); CI green on the first push.
+>
+> **Deviations from the plan:**
+> - The logging contract is a factory (`CoaiLogging.CreateDewFlowLogger`) rather than the rule's
+>   `IHostApplicationBuilder` extension — this repo's only host is a hand-built AOT stdio process
+>   that takes no host builder. Stated in the class doc; the contract itself (two sinks, the path
+>   shape, UTC, stderr for stdio) is honoured in full.
+> - AOT publish on the dev machine needs `C:\Program Files (x86)\Microsoft Visual Studio\Installer`
+>   prepended to PATH — the ILCompiler targets call a bare `vswhere.exe`. CI runners are unaffected;
+>   CI itself runs no publish (the release workflow of epic 04 will).
+> - Story 1.1's test case 3 was run live: deleting a `todo/README.md` row made `plan-lifecycle.mjs`
+>   fail naming exactly the omitted plan.
+> - 16 tests shipped: startup classification, log path shape, and the logging contract observed
+>   (UTC line, ANSI into a redirected writer, file-per-run, unquoted strings, extra properties).
 
 ## Goal
 

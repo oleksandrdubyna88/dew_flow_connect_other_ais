@@ -9,7 +9,6 @@ a plan moves there (`/promote-plan`) the moment its work ships. Convention:
 | Plan | What it delivers |
 |---|---|
 | [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) | The master plan: the multi-model review gate — architecture, protocol, rules, decisions |
-| [PLAN_epic_01_foundation.md](PLAN_epic_01_foundation.md) | Epic 1 — repository foundation: conventions mount, solution + logging skeleton, CI |
 | [PLAN_epic_02_core.md](PLAN_epic_02_core.md) | Epic 2 — the pure core: finding contract, Gemini sanitizer, dedup + counting, round state machine |
 | [PLAN_epic_03_runners.md](PLAN_epic_03_runners.md) | Epic 3 — reviewer runners: worktree manager, context assembly, vendor runtimes, bounded scheduler |
 | [PLAN_epic_04_server.md](PLAN_epic_04_server.md) | Epic 4 — `coai-mcp`: the stdio server, review tools, creds keys, release + contract tests |
