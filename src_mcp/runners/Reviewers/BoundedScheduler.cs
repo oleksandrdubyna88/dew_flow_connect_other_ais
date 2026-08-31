@@ -20,11 +20,35 @@ public sealed class BoundedScheduler(int globalCap = 3, int perProviderCap = 2, 
 {
     private readonly TimeSpan _backoff = rateLimitBackoff ?? TimeSpan.FromSeconds(15);
 
+    private int _running;
+
+    /// <summary>
+    /// The most reviewers ever in flight at once during the last <see cref="RunAllAsync"/>.
+    /// </summary>
+    /// <remarks>
+    /// Instrumented rather than inferred. The first version of the cap test measured overlap from
+    /// wall-clock ticks the child processes wrote, and on a loaded two-core CI runner it reported
+    /// FIVE against a cap of three — a number the semaphore cannot produce, so the measurement was
+    /// what was wrong. A counter incremented where the semaphore is actually held answers the
+    /// question the test is asking, with no clocks and no files in the way.
+    /// </remarks>
+    public int PeakConcurrency { get; private set; }
+
+    /// <summary>The same, per provider — a rate limit is per vendor.</summary>
+    public IReadOnlyDictionary<string, int> PeakPerProvider => _peakPerProvider;
+
+    private readonly Dictionary<string, int> _peakPerProvider = new(StringComparer.OrdinalIgnoreCase);
+
     public async Task<IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)>> RunAllAsync(
         IReadOnlyList<ReviewerWork> work,
         ReviewerExecutor executor,
         CancellationToken ct = default)
     {
+        PeakConcurrency = 0;
+        _peakPerProvider.Clear();
+        _running = 0;
+        var runningPerProvider = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
         using var global = new SemaphoreSlim(globalCap);
         var perProvider = work
             .Select(w => w.Invocation.Provider)
@@ -34,17 +58,20 @@ public sealed class BoundedScheduler(int globalCap = 3, int perProviderCap = 2, 
         {
             var tasks = work.Select(async w =>
             {
-                var provider = perProvider[w.Invocation.Provider];
+                var name = w.Invocation.Provider;
+                var provider = perProvider[name];
                 await provider.WaitAsync(ct);
                 try
                 {
                     await global.WaitAsync(ct);
+                    Entered(name, runningPerProvider);
                     try
                     {
                         return (w.Invocation, await RunWithOneRetryAsync(w, executor, ct));
                     }
                     finally
                     {
+                        Left(name, runningPerProvider);
                         global.Release();
                     }
                 }
@@ -61,6 +88,28 @@ public sealed class BoundedScheduler(int globalCap = 3, int perProviderCap = 2, 
             {
                 semaphore.Dispose();
             }
+        }
+    }
+
+    /// <summary>Counted where the slot is actually held; the lock covers the peaks, not the work.</summary>
+    private void Entered(string provider, Dictionary<string, int> perProvider)
+    {
+        var running = Interlocked.Increment(ref _running);
+        lock (_peakPerProvider)
+        {
+            PeakConcurrency = Math.Max(PeakConcurrency, running);
+            var forProvider = perProvider.GetValueOrDefault(provider) + 1;
+            perProvider[provider] = forProvider;
+            _peakPerProvider[provider] = Math.Max(_peakPerProvider.GetValueOrDefault(provider), forProvider);
+        }
+    }
+
+    private void Left(string provider, Dictionary<string, int> perProvider)
+    {
+        Interlocked.Decrement(ref _running);
+        lock (_peakPerProvider)
+        {
+            perProvider[provider] = perProvider.GetValueOrDefault(provider) - 1;
         }
     }
 

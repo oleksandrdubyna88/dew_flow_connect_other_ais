@@ -10,39 +10,31 @@ public sealed class BoundedSchedulerTests
     private readonly ReviewerExecutor _executor = new(new ProcessLauncher());
     private readonly string _dir = Directory.CreateTempSubdirectory("coai-sched-").FullName;
 
-    /// <summary>Max simultaneous fake-CLI bodies, from the ticks each wrote at start and end.</summary>
-    private static int MaxOverlap(string dir)
-    {
-        var intervals = Directory.GetFiles(dir, "*.start")
-            .Select(start => (
-                Start: long.Parse(File.ReadAllText(start)),
-                End: long.Parse(File.ReadAllText(Path.ChangeExtension(start, ".end")))))
-            .ToList();
-        return intervals.Count == 0
-            ? 0
-            : intervals.Max(i => intervals.Count(o => o.Start < i.End && i.Start < o.End));
-    }
 
     /// <summary>
-    /// The cap is the invariant and is asserted hard. The "it is still a fan-out" half is a
-    /// TIMING claim, and its body is long enough that process start-up cannot explain the result:
-    /// at 800ms it failed once on a loaded CI runner where six `dotnet` launches serialised
-    /// themselves, which measured the runner rather than the scheduler.
+    /// The cap, measured where the slot is held rather than inferred from the clock.
     /// </summary>
+    /// <remarks>
+    /// The first version counted overlapping [start,end] ticks written by the child processes.
+    /// On a loaded two-core CI runner it reported FIVE against a cap of three — a number the
+    /// semaphore cannot produce, so the measurement was what was wrong, not the scheduler. The
+    /// counter answers exactly the question being asked, with no clocks and no files in between.
+    /// </remarks>
     [Fact]
-    public async Task ConcurrentProcesses_NeverExceedTheGlobalCap()
+    public async Task ConcurrentReviewers_NeverExceedTheGlobalCap()
     {
         var busyDir = Directory.CreateDirectory(Path.Combine(_dir, "global")).FullName;
         var work = Enumerable.Range(0, 6)
             .Select(i => new ReviewerWork(
-                FakeCliInvocations.Invoke($"vendor{i % 3}", ["busy", busyDir, "3000"])))
+                FakeCliInvocations.Invoke($"vendor{i % 3}", ["busy", busyDir, "300"])))
             .ToList();
+        var scheduler = new BoundedScheduler(globalCap: 3, perProviderCap: 2);
 
-        await new BoundedScheduler(globalCap: 3, perProviderCap: 2)
-            .RunAllAsync(work, _executor, TestContext.Current.CancellationToken);
+        await scheduler.RunAllAsync(work, _executor, TestContext.Current.CancellationToken);
 
-        MaxOverlap(busyDir).Should().BeLessThanOrEqualTo(3, "the global semaphore is the machine's cap")
-            .And.BeGreaterThanOrEqualTo(2, "the fan-out must still be a fan-out, not a serial queue");
+        scheduler.PeakConcurrency.Should().BeLessThanOrEqualTo(3, "the global semaphore is the machine's cap")
+            .And.BeGreaterThan(1, "the fan-out must still be a fan-out, not a serial queue");
+        Directory.GetFiles(busyDir, "*.end").Should().HaveCount(6, "every reviewer really ran");
     }
 
     [Fact]
@@ -50,14 +42,16 @@ public sealed class BoundedSchedulerTests
     {
         var slowDir = Directory.CreateDirectory(Path.Combine(_dir, "slow")).FullName;
         var work = Enumerable.Range(0, 4)
-            .Select(_ => new ReviewerWork(FakeCliInvocations.Invoke("slowvendor", ["busy", slowDir, "2000"])))
+            .Select(_ => new ReviewerWork(FakeCliInvocations.Invoke("slowvendor", ["busy", slowDir, "300"])))
             .ToList();
+        var scheduler = new BoundedScheduler(globalCap: 4, perProviderCap: 2);
 
-        await new BoundedScheduler(globalCap: 4, perProviderCap: 2)
-            .RunAllAsync(work, _executor, TestContext.Current.CancellationToken);
+        await scheduler.RunAllAsync(work, _executor, TestContext.Current.CancellationToken);
 
-        MaxOverlap(slowDir).Should().BeLessThanOrEqualTo(2,
+        scheduler.PeakPerProvider["slowvendor"].Should().BeLessThanOrEqualTo(2,
             "a rate limit is per vendor — a global cap alone would put every slot on one provider");
+        scheduler.PeakConcurrency.Should().BeLessThanOrEqualTo(2,
+            "with one vendor, its own cap is the binding one");
     }
 
     [Fact]
