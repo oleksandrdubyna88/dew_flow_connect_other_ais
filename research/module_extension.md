@@ -36,9 +36,11 @@ flowchart LR
   what the block carries anyway.
 - **Never installs unverified bytes.** A missing `.sha256` is refused OUT LOUD — a quiet skip is
   indistinguishable from a check that passed.
-- **Opens no port.** The rounds view reads files; the one case that would need a channel —
-  `ask_human` — is deferred with its reasoning in
-  [../todo/PLAN_escalation_loopback.md](../todo/PLAN_escalation_loopback.md).
+- **Opens no port — still.** Escalation was the one case that needed a channel, and it arrives as a
+  FILE in the same data directory: `EscalationWatcher` watches `escalations/*.json`, raises a modal,
+  keeps a status-bar item so a dismissed modal loses nothing, lists open questions at the TOP of the
+  rounds view, and writes the answer atomically (temp + rename) because half a file must never
+  resolve a question.
 - **No account, no sign-in, no cloud service of its own.**
 
 ## Entities
@@ -51,6 +53,8 @@ flowchart LR
 | `mcpBlock.ts` | the `mcpServers` block (server id `coai`), client targets, install message |
 | `claudeSnippet.ts` | the paste for a target repo's CLAUDE.md |
 | `rounds.ts` | parse the server's session files; render the view; a torn file is skipped |
+| `escalations.ts` | pure: parse a question, the answer file's shape, status-bar text, prompt-once, modal body, the open-questions section |
+| `escalationWatcher.ts` | the impure half: file watcher + a 5s poll (a watcher on a path outside the workspace is not guaranteed), the modal, the status-bar item, the atomic answer write |
 | `extension.ts` | activation, the four commands, the update offer |
 
 ## Verified

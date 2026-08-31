@@ -5,9 +5,9 @@
 > extension installs it, and the loop was exercised against the real vendors —
 > [RESULTS_first_real_run.md](RESULTS_first_real_run.md).
 >
-> **The open tail**, extracted rather than left implied:
-> [../todo/PLAN_escalation_loopback.md](../todo/PLAN_escalation_loopback.md) — `ask_human` cannot
-> reach a person yet; it returns a refusal the main AI must surface itself.
+> **The tail that was open at promotion has since shipped**:
+> [PLAN_escalation_loopback.md](PLAN_escalation_loopback.md) — `ask_human` now reaches a person in
+> VS Code through a question FILE, with no port on either side.
 >
 > **Deviations from the plan, at the level this document decides:**
 > - **The extension has no loopback at all**, and the product is better for it: settings travel one

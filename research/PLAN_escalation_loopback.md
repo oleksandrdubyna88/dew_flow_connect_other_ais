@@ -1,11 +1,25 @@
 # PLAN — the escalation loopback: reaching a human from the server
 
-> Status: **plan only, nothing implemented yet.** The tail extracted from
-> [../research/PLAN_epic_05_extension.md](../research/PLAN_epic_05_extension.md) (story 5.3) when
-> the rest of that epic shipped on 2026-08-31.
+> Status: **IMPLEMENTED, 2026-08-31.** Both stories shipped. Verified live on this machine: the
+> installed `coai-mcp` asked a question, the installed extension showed it, the operator answered
+> "да" in the modal, and the server returned `{"status":"answered","answer":"да"}` to the caller.
 >
-> Related: [../research/module_server.md](../research/module_server.md) (the `ask_human` refusal
-> this replaces), [../research/module_runners.md](../research/module_runners.md).
+> **Deviations from the plan:**
+> - The file shape won, as the plan argued — and the UI grew beyond the modal on the operator's
+>   call: a **status-bar item** and an **open-questions section at the top of the rounds view**, so
+>   a dismissed modal never loses a question that is blocking a round.
+> - A **5-second poll backs the file watcher**. A `FileSystemWatcher` on a path outside the
+>   workspace is not guaranteed on every platform, and "you will see the question" has to be true
+>   rather than likely.
+> - The budget is **30 minutes** (`COAI_ESCALATION_MINUTES`), plus `COAI_ESCALATION_SECONDS`
+>   which wins when set: minutes are what a person configures, seconds are what a test needs. One
+>   knob would have had to lie about one of the two.
+> - The timeout answers `no_answer_yet` with the instruction to ask in the chat — the family's
+>   `remote-ask` fallback — rather than the plan's unspecified "named timeout".
+> - An **empty** answer is treated exactly like a malformed one: silence with a file around it is
+>   still silence. The plan named only the malformed case.
+> - Story 2's "already answered raises no modal" is enforced by prompt-once-per-id, which also
+>   covers the case the plan did not name: a poll must not re-raise a modal a person just closed.
 
 ## The symptom
 

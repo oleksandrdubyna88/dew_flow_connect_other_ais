@@ -14,7 +14,7 @@
 | `review_code` | `RunStageAsync` with the three code roles per provider | **no plan round reached `proceed`** |
 | `resolve` | `ResolveAsync` — reasoned decisions by finding index | bad index; reject without a reason |
 | `status` | persisted session + round trail | no session |
-| `ask_human` | static refusal until the extension's loopback exists (epic 05) | always, by design — the text tells the model to surface the question |
+| `ask_human` | `Escalations` — a question FILE the extension watches | only an empty question; otherwise it WAITS the budget, then answers `no_answer_yet` telling the model to ask in the chat |
 
 ## Flow of one stage
 
@@ -24,6 +24,18 @@ worktree lease → build work (schema file, role prompt + contract + context; re
 (`PersistedSession.Pending` = what `resolve` indices point into) → `ReviewAnswer` with an
 `instruction` sentence for the main AI. The lease disposes in `finally` — a thrown stage leaves no
 worktree.
+
+## Escalation — reaching a person without a port
+
+`ask_human` writes `escalations/<id>.json` into the data directory the extension already reads for
+the rounds view, then polls for `<id>.answer.json` beside it. The round's still-gating findings ride
+with the question, because a person deciding "ship anyway?" should not have to go looking for what
+gates.
+
+A malformed, half-written or empty answer file is **not** an answer — the wait continues; unblocking
+a round on nothing is the failure this guards against. The budget (`COAI_ESCALATION_MINUTES`, 30 by
+default; `COAI_ESCALATION_SECONDS` wins when set) ends in `no_answer_yet` with the instruction to ask
+in the chat — the family's `remote-ask` fallback — and the question file **stays open**.
 
 ## Configuration and keys
 

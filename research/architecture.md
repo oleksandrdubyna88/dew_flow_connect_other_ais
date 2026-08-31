@@ -1,9 +1,9 @@
 # ConnectOtherAIs — architecture
 
-> The system **as it is**. All six epics shipped on 2026-08-31: the server runs the loop from any
-> MCP client and the extension installs it. The one deferred piece is the escalation loopback
-> ([../todo/PLAN_escalation_loopback.md](../todo/PLAN_escalation_loopback.md)) — `ask_human` answers
-> with a refusal the main AI must surface itself.
+> The system **as it is**. All six epics and the escalation tail shipped on 2026-08-31: the server
+> runs the loop from any MCP client, the extension installs it, and `ask_human` reaches a person in
+> VS Code ([PLAN_escalation_loopback.md](PLAN_escalation_loopback.md)) — observed end to end, a
+> question asked by the installed binary and answered in the installed extension.
 
 ## What this is
 

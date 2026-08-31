@@ -3,30 +3,70 @@ import { ridFor } from './coaiInstall';
 import { claudeSnippet } from './claudeSnippet';
 import { CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
 import { binaryPath, installLatest, installedVersion, updateIsAvailable } from './installer';
+import { EscalationWatcher } from './escalationWatcher';
+import { renderEscalations } from './escalations';
 import { parseSession, renderRounds, SessionFile } from './rounds';
 import { envBlock, settingsFrom } from './settingsShape';
 
 /**
- * ConnectOtherAIs — the human surface. Four commands and no background work: the review itself
- * lives in `coai-mcp`, which an MCP client owns and starts.
+ * ConnectOtherAIs — the human surface. Five commands, one directory watcher, and no port: the
+ * review itself lives in `coai-mcp`, which an MCP client owns and starts.
  *
  * <p>The restraint is deliberate and inherited from CredsForDevs: the config block is OFFERED on
  * the clipboard, never written into another program's file; the binary goes into extension
- * storage, never onto the `PATH`.</p>
+ * storage, never onto the `PATH`. The one thing the server needs to reach us for — a question for
+ * a person — arrives as a FILE in the data directory this extension already reads, which is why
+ * there is still nothing listening on a socket.</p>
  */
 export function activate(context: vscode.ExtensionContext): void {
+  const watcher = new EscalationWatcher(dataDir());
+  watcher.start();
+
   context.subscriptions.push(
+    watcher,
     vscode.commands.registerCommand('coai.installServer', () => installServer(context)),
     vscode.commands.registerCommand('coai.copyConfigBlock', () => copyConfigBlock(context)),
     vscode.commands.registerCommand('coai.copyClaudeSnippet', copyClaudeSnippet),
-    vscode.commands.registerCommand('coai.showRounds', showRounds),
+    vscode.commands.registerCommand('coai.showRounds', () => showRounds(watcher)),
+    vscode.commands.registerCommand('coai.answerQuestion', () => answerQuestion(watcher)),
   );
 
   void offerUpdate(context);
 }
 
 export function deactivate(): void {
-  // Nothing to tear down: no server, no watcher, no port.
+  // The watcher is a subscription; VS Code disposes it. No server, no port, nothing else to stop.
+}
+
+/** Where `coai-mcp` keeps its sessions and escalations — its default, or `COAI_DATA_DIR`. */
+function dataDir(): vscode.Uri {
+  const configured = process.env['COAI_DATA_DIR'];
+  const localAppData = process.env['LOCALAPPDATA'] ?? `${process.env['HOME'] ?? '.'}/.local/share`;
+  return vscode.Uri.file(configured ?? `${localAppData}/coai-mcp`);
+}
+
+/** Answer an open question by hand — the same path the modal's button takes. */
+async function answerQuestion(watcher: EscalationWatcher): Promise<void> {
+  await watcher.refresh();
+  const open = watcher.openQuestions;
+  if (open.length === 0) {
+    void vscode.window.showInformationMessage('No ConnectOtherAIs review is waiting on an answer.');
+    return;
+  }
+
+  const picked =
+    open.length === 1
+      ? open[0]
+      : await vscode.window
+          .showQuickPick(
+            open.map((e) => ({ label: e.branch, detail: e.question, escalation: e })),
+            { title: 'Which question?' },
+          )
+          .then((choice) => choice?.escalation);
+
+  if (picked !== undefined) {
+    await watcher.answerCommand(picked);
+  }
 }
 
 function settings(): ReturnType<typeof settingsFrom> {
@@ -73,10 +113,12 @@ async function copyClaudeSnippet(): Promise<void> {
   );
 }
 
-async function showRounds(): Promise<void> {
+async function showRounds(watcher: EscalationWatcher): Promise<void> {
+  await watcher.refresh();
   const sessions = await readSessions();
+  // Open questions first: a blocked round is more urgent than the history of finished ones.
   const document = await vscode.workspace.openTextDocument({
-    content: renderRounds(sessions),
+    content: renderEscalations(watcher.openQuestions) + renderRounds(sessions),
     language: 'markdown',
   });
   await vscode.window.showTextDocument(document, { preview: true });

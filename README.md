@@ -29,6 +29,16 @@ it, but it can make a skipped stage impossible to fake.
 Seven tools, unprefixed (the client's `coai` id is the namespace): `providers`, `open`,
 `review_plan`, `review_code`, `resolve`, `status`, `ask_human`.
 
+## When it needs a person
+
+`ask_human` — and a `call_human` verdict — put the question in front of you **in VS Code**: a
+dialog, a status-bar item so a dismissed dialog loses nothing, and an open-questions section at the
+top of the rounds view. The call blocks until you answer; after 30 minutes it comes back
+`no_answer_yet` telling the AI to ask you in the chat instead, and the question stays open.
+
+Still no port on either side: the server writes the question as a file into the data directory the
+extension already reads, and your answer is a file beside it.
+
 ## What makes "fewer than 2 remarks" mean something
 
 Without a rule, three verbose reviewers guarantee escalation forever. So:
