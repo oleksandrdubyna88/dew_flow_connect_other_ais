@@ -1,7 +1,7 @@
 # PLAN — epic 05: the ConnectOtherAIs VS Code extension
 
 > Status: **IMPLEMENTED, 2026-08-31**, with one story deferred. Epic 5 of 6 under
-> [PLAN_connect_other_ais.md](../todo/PLAN_connect_other_ais.md) (its Phases 4–5). Commit df25020;
+> [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) (its Phases 4–5). Commit df25020;
 > 25 `node:test` cases; the `.vsix` was packaged AND installed into VS Code on this machine.
 >
 > **Deviations from the plan:**

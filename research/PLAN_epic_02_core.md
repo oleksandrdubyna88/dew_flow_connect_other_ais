@@ -1,7 +1,7 @@
 # PLAN — epic 02: the pure core — findings, sanitizer, counting, rounds
 
 > Status: **IMPLEMENTED, 2026-08-31.** Epic 2 of 6 under
-> [PLAN_connect_other_ais.md](../todo/PLAN_connect_other_ais.md) (its Phase 1). All four stories
+> [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) (its Phase 1). All four stories
 > shipped; 61 tests green (this epic's 45 plus epic 01's 16); module doc:
 > [module_core.md](module_core.md).
 >

@@ -1,15 +1,14 @@
 # todo/ — open work
 
-Plans for work that is **not finished**. Documentation of the system as it is lives in `research/`;
-a plan moves there (`/promote-plan`) the moment its work ships. Convention:
-`.claude/rules/shared/common/planning-docs.md` (mounted by epic 01).
+Plans for work that is **not finished**. Documentation of the system as it is lives in
+[../research/](../research/); a plan moves there (`/promote-plan`) the moment its work ships.
+Convention: `.claude/rules/shared/common/planning-docs.md`.
 
 ## Currently open
 
 | Plan | What it delivers |
 |---|---|
-| [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) | The master plan: the multi-model review gate — architecture, protocol, rules, decisions |
-| [PLAN_escalation_loopback.md](PLAN_escalation_loopback.md) | The tail of epic 5 — reaching a human from the server without opening a port |
+| [PLAN_escalation_loopback.md](PLAN_escalation_loopback.md) | The tail of epic 5 — reaching a human from the server, without opening a port |
 
-Epics are ordered: each depends only on the ones above it, and 02–03 are where all the pure logic
-lives — build them exactly in this order.
+Everything else shipped on 2026-08-31: the master plan and all six epics are in
+[../research/](../research/) with `IMPLEMENTED` status, beside the record of the first real run.

@@ -1,7 +1,7 @@
 # PLAN — epic 04: coai-mcp — the server that holds the protocol
 
 > Status: **IMPLEMENTED, 2026-08-31.** Epic 4 of 6 under
-> [PLAN_connect_other_ais.md](../todo/PLAN_connect_other_ais.md) (its Phase 3). All four stories
+> [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) (its Phase 3). All four stories
 > shipped (commit faa4c61, tag `mcp-v0.1.0`); module doc: [module_server.md](module_server.md).
 >
 > **Deviations from the plan:**

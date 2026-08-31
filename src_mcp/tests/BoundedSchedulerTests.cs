@@ -23,13 +23,19 @@ public sealed class BoundedSchedulerTests
             : intervals.Max(i => intervals.Count(o => o.Start < i.End && i.Start < o.End));
     }
 
+    /// <summary>
+    /// The cap is the invariant and is asserted hard. The "it is still a fan-out" half is a
+    /// TIMING claim, and its body is long enough that process start-up cannot explain the result:
+    /// at 800ms it failed once on a loaded CI runner where six `dotnet` launches serialised
+    /// themselves, which measured the runner rather than the scheduler.
+    /// </summary>
     [Fact]
     public async Task ConcurrentProcesses_NeverExceedTheGlobalCap()
     {
         var busyDir = Directory.CreateDirectory(Path.Combine(_dir, "global")).FullName;
         var work = Enumerable.Range(0, 6)
             .Select(i => new ReviewerWork(
-                FakeCliInvocations.Invoke($"vendor{i % 3}", ["busy", busyDir, "800"])))
+                FakeCliInvocations.Invoke($"vendor{i % 3}", ["busy", busyDir, "3000"])))
             .ToList();
 
         await new BoundedScheduler(globalCap: 3, perProviderCap: 2)
@@ -44,7 +50,7 @@ public sealed class BoundedSchedulerTests
     {
         var slowDir = Directory.CreateDirectory(Path.Combine(_dir, "slow")).FullName;
         var work = Enumerable.Range(0, 4)
-            .Select(_ => new ReviewerWork(FakeCliInvocations.Invoke("slowvendor", ["busy", slowDir, "600"])))
+            .Select(_ => new ReviewerWork(FakeCliInvocations.Invoke("slowvendor", ["busy", slowDir, "2000"])))
             .ToList();
 
         await new BoundedScheduler(globalCap: 4, perProviderCap: 2)

@@ -1,7 +1,7 @@
 # PLAN — epic 01: repository foundation
 
 > Status: **IMPLEMENTED, 2026-08-31.** Epic 1 of 6 under
-> [PLAN_connect_other_ais.md](../todo/PLAN_connect_other_ais.md) (its Phase 0). All three stories
+> [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) (its Phase 0). All three stories
 > shipped in three commits (d7e8fd2, 1565dd5, e1ad95e); CI green on the first push.
 >
 > **Deviations from the plan:**

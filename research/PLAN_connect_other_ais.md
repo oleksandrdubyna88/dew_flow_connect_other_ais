@@ -1,12 +1,29 @@
 # PLAN — ConnectOtherAIs: a multi-model gate on the plan and on the code
 
-> Status: **plan only, nothing implemented yet.** Scope: this repository — a VS Code extension
-> (settings UI + install button), a Native-AOT MCP server, and the round protocol between them.
+> Status: **IMPLEMENTED, 2026-08-31.** All six epics shipped in one day and are promoted here
+> beside this record. The product runs: `coai-mcp` drives the rounds from any MCP client, the
+> extension installs it, and the loop was exercised against the real vendors —
+> [RESULTS_first_real_run.md](RESULTS_first_real_run.md).
 >
-> Sibling references (relative to `D:\rsd\`, sibling checkouts of this one):
-> `dew_flow_creds_for_devs/src_mcp`, `dew_flow_creds_for_devs/src_vs_code`,
-> `dew_flow_rag_qln/src/Rag.Application/Agents/AgentRuntimes.cs`,
-> `dew_flow_conventions/ROLLOUT.md`.
+> **The open tail**, extracted rather than left implied:
+> [../todo/PLAN_escalation_loopback.md](../todo/PLAN_escalation_loopback.md) — `ask_human` cannot
+> reach a person yet; it returns a refusal the main AI must surface itself.
+>
+> **Deviations from the plan, at the level this document decides:**
+> - **The extension has no loopback at all**, and the product is better for it: settings travel one
+>   way in the copied `mcpServers` env block, and the rounds view reads the server's own session
+>   files. No port, no token, no "is the window up" question. Escalation is the single case that
+>   would need a channel, which is why it is the single thing deferred.
+> - **The counting rule gained a graduated threshold.** The plan's single "same remark" test counted
+>   one defect twice when two vendors worded it differently — invisible until real models disagreed
+>   about wording. Anchored by file+line+category, far less overlap is now required.
+> - **A round where NOBODY answered is `call_human`, never `proceed`.** The plan did not say, the
+>   first implementation let the gate fail open, and the real run caught it.
+> - **The prompt travels on stdin**, not argv — cmd.exe truncates a multi-line argument at its first
+>   newline, and every reviewer silently received one line of its role prompt.
+> - **Role prompts are embedded in the binary**, not shipped beside it: the release asset carries one
+>   file.
+> - Sibling references below are as-verified on 2026-08-31 and are kept for the record.
 
 ## The goal
 
@@ -316,12 +333,12 @@ test cases — build them strictly in this order, each depends only on its prede
 
 | Epic | Covers | Phases |
 |---|---|---|
-| [PLAN_epic_01_foundation.md](../research/PLAN_epic_01_foundation.md) — **shipped 2026-08-31** | conventions mount, solution + logging skeleton, CI | 0 |
-| [PLAN_epic_02_core.md](../research/PLAN_epic_02_core.md) — **shipped 2026-08-31** | finding contract, sanitizer, dedup + counting, round state machine | 1 |
-| [PLAN_epic_03_runners.md](../research/PLAN_epic_03_runners.md) — **shipped 2026-08-31** | worktree manager, context assembly, vendor runtimes, bounded scheduler | 2 |
-| [PLAN_epic_04_server.md](../research/PLAN_epic_04_server.md) — **shipped 2026-08-31** | the stdio server, review tools, creds keys, release + contract tests | 3 |
-| [PLAN_epic_05_extension.md](../research/PLAN_epic_05_extension.md) — **shipped 2026-08-31** | settings UI, install button, rounds view + escalation, CLAUDE.md snippet | 4–5 |
-| [PLAN_epic_06_proof.md](../research/PLAN_epic_06_proof.md) — **shipped 2026-08-31** | scripted end-to-end in CI, one recorded real run | 6 |
+| [PLAN_epic_01_foundation.md](PLAN_epic_01_foundation.md) — **shipped 2026-08-31** | conventions mount, solution + logging skeleton, CI | 0 |
+| [PLAN_epic_02_core.md](PLAN_epic_02_core.md) — **shipped 2026-08-31** | finding contract, sanitizer, dedup + counting, round state machine | 1 |
+| [PLAN_epic_03_runners.md](PLAN_epic_03_runners.md) — **shipped 2026-08-31** | worktree manager, context assembly, vendor runtimes, bounded scheduler | 2 |
+| [PLAN_epic_04_server.md](PLAN_epic_04_server.md) — **shipped 2026-08-31** | the stdio server, review tools, creds keys, release + contract tests | 3 |
+| [PLAN_epic_05_extension.md](PLAN_epic_05_extension.md) — **shipped 2026-08-31** | settings UI, install button, rounds view + escalation, CLAUDE.md snippet | 4–5 |
+| [PLAN_epic_06_proof.md](PLAN_epic_06_proof.md) — **shipped 2026-08-31** | scripted end-to-end in CI, one recorded real run | 6 |
 
 **Phase 0 — the repository.** Already initialised: `.git`, `.gitignore` and `LICENSE` are in place as
 of 2026-08-31. What remains: the `dew_flow_conventions` submodule at `.claude/rules/shared`,

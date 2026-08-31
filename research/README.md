@@ -6,6 +6,7 @@ Documentation of shipped behaviour: [architecture.md](architecture.md) is the en
 
 | Document | What it covers |
 |---|---|
+| [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) | IMPLEMENTED 2026-08-31 — the master plan: architecture, protocol, the counting rule, every decision and its reason |
 | [architecture.md](architecture.md) | System overview, container diagram, module map, cross-cutting decisions |
 | [PLAN_epic_01_foundation.md](PLAN_epic_01_foundation.md) | IMPLEMENTED 2026-08-31 — repository foundation: conventions mount, solution + logging skeleton, CI |
 | [PLAN_epic_02_core.md](PLAN_epic_02_core.md) | IMPLEMENTED 2026-08-31 — the pure core: findings, sanitizer, dedup + counting, round state machine |

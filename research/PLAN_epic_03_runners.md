@@ -1,7 +1,7 @@
 # PLAN — epic 03: reviewer runners — spawn, isolate, survive
 
 > Status: **IMPLEMENTED, 2026-08-31.** Epic 3 of 6 under
-> [PLAN_connect_other_ais.md](../todo/PLAN_connect_other_ais.md) (its Phase 2). All four stories
+> [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) (its Phase 2). All four stories
 > shipped (commits c4df3fe, cc04026, be56259, 8711934); 100 tests green; module doc:
 > [module_runners.md](module_runners.md).
 >

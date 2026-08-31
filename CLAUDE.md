@@ -15,8 +15,8 @@ a human is called. Two halves:
 | `src_mcp` | `coai-mcp` (client id `coai`) | Native-AOT stdio MCP server: round state machine, CLI fan-out, finding normalisation, verdicts |
 | `src_vs_code` | ConnectOtherAIs extension | settings UI, rounds view, human-escalation modal, "Install the MCP server…" button |
 
-The full design is `todo/PLAN_connect_other_ais.md` (master plan) and `todo/PLAN_epic_0*.md` (the
-build order). **Session start:** read `research/architecture.md` first, then the epic you are working.
+The full design is `research/PLAN_connect_other_ais.md` (master plan) and `research/PLAN_epic_0*.md` (the
+build order, each with its deviations recorded). **Session start:** read `research/architecture.md` first, then the epic you are working.
 
 ## Commands
 

@@ -9,7 +9,7 @@
 
 A multi-model review gate. The main AI writes the plan and the code; secondary vendor CLIs review
 both in rounds until the de-duplicated count of blocking+major findings drops under a threshold, or
-a human is escalated to. Design record: [../todo/PLAN_connect_other_ais.md](../todo/PLAN_connect_other_ais.md)
+a human is escalated to. Design record: [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md)
 until implemented, then promoted here.
 
 ## Containers

@@ -1,7 +1,7 @@
 # PLAN — epic 06: proof — the loop observed end to end
 
 > Status: **IMPLEMENTED, 2026-08-31.** Epic 6 of 6 under
-> [PLAN_connect_other_ais.md](../todo/PLAN_connect_other_ais.md) (its Phase 6). Both stories done;
+> [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) (its Phase 6). Both stories done;
 > the record is [RESULTS_first_real_run.md](RESULTS_first_real_run.md).
 >
 > **Deviations from the plan:**
