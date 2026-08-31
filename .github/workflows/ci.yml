@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: build · test · family checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Only the rules submodule — never `submodules: recursive`, which would drag whatever
+      # code submodules appear later into a markdown walk (conventions ROLLOUT.md).
+      - name: Conventions submodule
+        run: git submodule update --init --depth 1 .claude/rules/shared
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Build
+        run: dotnet build dew_flow_connect_other_ais.slnx -c Release
+
+      # xUnit v3 on Microsoft Testing Platform: the test project builds into a self-contained
+      # runner executable. `dotnet test` has no VSTest host here and would abort — never use it
+      # (.claude/rules/shared/common/testing.md). No `.exe` suffix on Linux.
+      - name: Test
+        run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests
+
+      # The rules that check themselves: a misfiled plan and a stale pin are red builds,
+      # not discoveries.
+      - name: Plan lifecycle
+        run: node .claude/rules/shared/tools/plan-lifecycle.mjs
+
+      - name: Pin check
+        run: node .claude/rules/shared/tools/pin-check.mjs
