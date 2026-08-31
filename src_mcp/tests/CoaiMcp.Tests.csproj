@@ -17,6 +17,9 @@
     <ProjectReference Include="..\src\CoaiMcp.csproj" />
     <ProjectReference Include="..\core\CoaiMcp.Core.csproj" />
     <ProjectReference Include="..\runners\CoaiMcp.Runners.csproj" />
+    <!-- The scriptable vendor stand-in: referenced so its binaries (dll + runtimeconfig) land
+         beside the tests; run as `dotnet FakeCli.dll <verb>`, never loaded as a library. -->
+    <ProjectReference Include="..\tests_fakecli\FakeCli.csproj" />
     <ProjectReference Include="..\service_defaults\CoaiMcp.ServiceDefaults.csproj" />
   </ItemGroup>
 

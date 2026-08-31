@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>CoaiMcp.FakeCli</RootNamespace>
+    <!-- A test asset, not a product: the scriptable stand-in for codex/gemini, so the
+         process-level suite touches no vendor and needs no network. -->
+  </PropertyGroup>
+
+</Project>

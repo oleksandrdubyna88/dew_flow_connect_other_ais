@@ -1,0 +1,67 @@
+// The scriptable stand-in for a reviewer CLI. Verbs:
+//
+//   [count <file>] <verb> <args...>      — `count` first: append one line per launch, then run the verb
+//
+//   emit <text>                          — text to stdout, exit 0
+//   emit-to <dst> <text>                 — text into the file (codex -o), nothing on stdout, exit 0
+//   stderr-exit <text> <code>            — text to stderr, exit <code>
+//   sleep <ms>                           — exit 0 after the delay
+//   busy <dir> <ms>                      — write <guid>.start (ticks), sleep, write <guid>.end (ticks)
+//   flip <flag> <firstStderr> <firstExit> <thenStdout>
+//                                        — first launch: create <flag>, stderr, exit <firstExit>;
+//                                          later launches: <thenStdout> to stdout, exit 0
+//
+// Deliberately dumb: every behaviour a test needs, none it does not.
+
+var args0 = args;
+if (args0.Length >= 2 && args0[0] == "count")
+{
+    using (var counter = new FileStream(args0[1], FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
+    using (var writer = new StreamWriter(counter))
+    {
+        writer.WriteLine("L");
+    }
+
+    args0 = args0[2..];
+}
+
+switch (args0)
+{
+    case ["emit", var text]:
+        Console.Out.Write(text);
+        return 0;
+
+    case ["emit-to", var dst, var text]:
+        File.WriteAllText(dst, text);
+        return 0;
+
+    case ["stderr-exit", var text, var code]:
+        Console.Error.WriteLine(text);
+        return int.Parse(code);
+
+    case ["sleep", var ms]:
+        Thread.Sleep(int.Parse(ms));
+        return 0;
+
+    case ["busy", var dir, var ms]:
+        var id = Guid.NewGuid().ToString("N");
+        File.WriteAllText(Path.Combine(dir, $"{id}.start"), DateTime.UtcNow.Ticks.ToString());
+        Thread.Sleep(int.Parse(ms));
+        File.WriteAllText(Path.Combine(dir, $"{id}.end"), DateTime.UtcNow.Ticks.ToString());
+        return 0;
+
+    case ["flip", var flag, var firstStderr, var firstExit, var thenStdout]:
+        if (!File.Exists(flag))
+        {
+            File.WriteAllText(flag, "flipped");
+            Console.Error.WriteLine(firstStderr);
+            return int.Parse(firstExit);
+        }
+
+        Console.Out.Write(thenStdout);
+        return 0;
+
+    default:
+        Console.Error.WriteLine($"fake-cli: unknown verb [{string.Join(' ', args0)}]");
+        return 64;
+}

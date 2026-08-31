@@ -7,5 +7,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="src_mcp/tests/CoaiMcp.Tests.csproj" />
+    <Project Path="src_mcp/tests_fakecli/FakeCli.csproj" />
   </Folder>
 </Solution>
