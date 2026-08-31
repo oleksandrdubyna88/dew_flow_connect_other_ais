@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "A multi-model review gate: secondary vendor models (Codex, Gemini, DeepSeek) review your main AI's plan and code in rounds, until the findings drop under a threshold or a human is called.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -118,8 +118,71 @@
           "type": "string",
           "default": "",
           "markdownDescription": "The CredsForDevs **config-entry key** (minted by *Enable Code Access…* on the entry holding vendor API keys). A pass to one vault entry — revocable, useless while VS Code is closed — not a secret itself. Empty = keyless vendors only."
+        },
+        "coai.language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "es",
+            "de",
+            "ru",
+            "uk"
+          ],
+          "enumDescriptions": [
+            "English",
+            "Español",
+            "Deutsch",
+            "Русский",
+            "Українська"
+          ],
+          "default": "en",
+          "description": "The language you are asked in, and answer in. A question already written in it is left alone."
+        },
+        "coai.translator.provider": {
+          "type": "string",
+          "enum": [
+            "gemini",
+            "codex",
+            "none"
+          ],
+          "enumDescriptions": [
+            "Gemini Flash (CLI)",
+            "Codex with a mini model (CLI)",
+            "Never translate — always show the original"
+          ],
+          "default": "gemini",
+          "description": "Which small, fast model translates a question that is not already in your language."
+        },
+        "coai.translator.model": {
+          "type": "string",
+          "default": "gemini-flash-latest",
+          "description": "The translator's model. Empty uses the CLI's own default."
+        },
+        "coai.escalationMinutes": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 1,
+          "description": "How long a question waits for you before the AI is told to ask in the chat instead."
         }
       }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "coai",
+          "title": "ConnectOtherAIs",
+          "icon": "media/panel.svg"
+        }
+      ]
+    },
+    "views": {
+      "coai": [
+        {
+          "type": "webview",
+          "id": "coai.panel",
+          "name": "Review panel"
+        }
+      ]
     }
   },
   "scripts": {
@@ -127,7 +190,8 @@
     "typecheck": "tsc -p ./ --noEmit",
     "test": "npm run compile && node --test \"out/test/*.test.js\"",
     "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
-    "package": "npm run test && npm run bundle && vsce package --no-dependencies"
+    "package": "npm run test && npm run bundle && vsce package --no-dependencies",
+    "icon": "node scripts/generate-icon.mjs"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
@@ -138,5 +202,6 @@
   },
   "activationEvents": [
     "onStartupFinished"
-  ]
+  ],
+  "icon": "media/icon.png"
 }

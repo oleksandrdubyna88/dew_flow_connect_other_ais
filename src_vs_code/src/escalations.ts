@@ -22,6 +22,9 @@ export interface Escalation {
   readonly question: string;
   readonly openFindings: readonly EscalationFinding[];
   readonly askedUtc: string;
+  readonly questionOriginal?: string;
+  readonly language?: string;
+  readonly translationNote?: string;
 }
 
 /** Parse one question file; anything that is not a question is skipped, never guessed at. */

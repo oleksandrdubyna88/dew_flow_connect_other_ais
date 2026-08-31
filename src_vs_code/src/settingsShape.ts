@@ -14,6 +14,32 @@ export type Provider = 'codex' | 'gemini' | 'deepseek';
 
 export type OnExhausted = 'continue' | 'human' | 'escalate';
 
+/** The five languages a person may be asked in. */
+export type LanguageCode = 'en' | 'es' | 'de' | 'ru' | 'uk';
+
+export const LANGUAGES: readonly { code: LanguageCode; label: string }[] = [
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Español' },
+  { code: 'de', label: 'Deutsch' },
+  { code: 'ru', label: 'Русский' },
+  { code: 'uk', label: 'Українська' },
+];
+
+/** Who does the translating when the AI did not write in that language. */
+export const TRANSLATORS: readonly { id: string; label: string }[] = [
+  { id: 'gemini', label: 'Gemini Flash (CLI)' },
+  { id: 'codex', label: 'Codex, a mini model (CLI)' },
+  { id: 'none', label: 'Nobody — always show the original' },
+];
+
+/** Every vendor the panel can offer, in the order it shows them. */
+export const PROVIDERS: readonly Provider[] = ['codex', 'gemini', 'deepseek'];
+
+export interface TranslatorChoice {
+  readonly provider: string;
+  readonly model: string;
+}
+
 export interface CoaiSettings {
   readonly providers: readonly Provider[];
   readonly models: Readonly<Partial<Record<Provider, string>>>;
@@ -24,6 +50,9 @@ export interface CoaiSettings {
   readonly maxPerProvider: number;
   readonly reviewerTimeoutMinutes: number;
   readonly credsKey: string;
+  readonly language: LanguageCode;
+  readonly translator: TranslatorChoice;
+  readonly escalationMinutes: number;
 }
 
 /** The defaults, matching the master plan's configuration table — pinned by tests. */
@@ -37,6 +66,9 @@ export const DEFAULTS: CoaiSettings = {
   maxPerProvider: 2,
   reviewerTimeoutMinutes: 10,
   credsKey: '',
+  language: 'en',
+  translator: { provider: 'gemini', model: 'gemini-flash-latest' },
+  escalationMinutes: 30,
 };
 
 /** A raw configuration reader: `get(section)` returns whatever the host stored, if anything. */
@@ -59,6 +91,12 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     maxPerProvider: asPositive(read('maxPerProvider'), DEFAULTS.maxPerProvider),
     reviewerTimeoutMinutes: asPositive(read('reviewerTimeoutMinutes'), DEFAULTS.reviewerTimeoutMinutes),
     credsKey: asString(read('credsKey')),
+    language: asLanguage(read('language')),
+    translator: {
+      provider: asTranslator(read('translator.provider')),
+      model: asString(read('translator.model')) || DEFAULTS.translator.model,
+    },
+    escalationMinutes: asPositive(read('escalationMinutes'), DEFAULTS.escalationMinutes),
   };
 }
 
@@ -98,6 +136,18 @@ export function envBlock(settings: CoaiSettings): Record<string, string> {
   if (settings.credsKey) {
     env['COAI_CREDS_KEY'] = settings.credsKey;
   }
+  if (settings.language !== DEFAULTS.language) {
+    env['COAI_LANGUAGE'] = settings.language;
+  }
+  if (settings.translator.provider !== DEFAULTS.translator.provider) {
+    env['COAI_TRANSLATOR_PROVIDER'] = settings.translator.provider;
+  }
+  if (settings.translator.model !== DEFAULTS.translator.model) {
+    env['COAI_TRANSLATOR_MODEL'] = settings.translator.model;
+  }
+  if (settings.escalationMinutes !== DEFAULTS.escalationMinutes) {
+    env['COAI_ESCALATION_MINUTES'] = String(settings.escalationMinutes);
+  }
   return env;
 }
 
@@ -119,6 +169,14 @@ function asPositive(value: unknown, fallback: number): number {
 
 function asCount(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : fallback;
+}
+
+function asLanguage(value: unknown): LanguageCode {
+  return LANGUAGES.some((l) => l.code === value) ? (value as LanguageCode) : DEFAULTS.language;
+}
+
+function asTranslator(value: unknown): string {
+  return TRANSLATORS.some((t) => t.id === value) ? (value as string) : DEFAULTS.translator.provider;
 }
 
 function asOnExhausted(value: unknown): OnExhausted {

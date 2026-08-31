@@ -4,6 +4,7 @@ import { claudeSnippet } from './claudeSnippet';
 import { CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
 import { binaryPath, installLatest, installedVersion, updateIsAvailable } from './installer';
 import { EscalationWatcher } from './escalationWatcher';
+import { PanelProvider } from './panelProvider';
 import { renderEscalations } from './escalations';
 import { parseSession, renderRounds, SessionFile } from './rounds';
 import { envBlock, settingsFrom } from './settingsShape';
@@ -20,10 +21,25 @@ import { envBlock, settingsFrom } from './settingsShape';
  */
 export function activate(context: vscode.ExtensionContext): void {
   const watcher = new EscalationWatcher(dataDir());
+  const panel = new PanelProvider(context, watcher, dataDir(), {
+    install: () => installServer(context),
+    copyConfig: () => copyConfigBlock(context),
+    copySnippet: () => copyClaudeSnippet(),
+    answer: async (id) => {
+      const question = watcher.openQuestions.find((q) => q.id === id);
+      if (question !== undefined) {
+        await watcher.answerCommand(question);
+      }
+    },
+  });
+  // The panel repaints whenever the watcher's state moves, so a question answered in the modal
+  // disappears from the sidebar without anyone asking it to.
+  watcher.onChanged = () => void panel.render();
   watcher.start();
 
   context.subscriptions.push(
     watcher,
+    vscode.window.registerWebviewViewProvider(PanelProvider.viewType, panel),
     vscode.commands.registerCommand('coai.installServer', () => installServer(context)),
     vscode.commands.registerCommand('coai.copyConfigBlock', () => copyConfigBlock(context)),
     vscode.commands.registerCommand('coai.copyClaudeSnippet', copyClaudeSnippet),

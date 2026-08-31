@@ -25,6 +25,9 @@ export class EscalationWatcher {
   private readonly disposables: vscode.Disposable[] = [];
   private open: Escalation[] = [];
 
+  /** Called after every refresh, so a view can repaint without polling on its own. */
+  public onChanged: () => void = () => {};
+
   constructor(private readonly dataDir: vscode.Uri) {
     this.statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     this.statusItem.command = 'coai.showRounds';
@@ -69,6 +72,8 @@ export class EscalationWatcher {
       this.statusItem.text = text;
       this.statusItem.show();
     }
+
+    this.onChanged();
 
     for (const escalation of this.open) {
       if (shouldPrompt(escalation.id, this.prompted, false)) {
