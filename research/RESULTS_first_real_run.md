@@ -2,8 +2,8 @@
 
 > The record story 6.2 of [PLAN_epic_06_proof.md](PLAN_epic_06_proof.md) exists to produce:
 > one session against the real vendors, on a throwaway repository, from a deliberately flawed plan.
-> It found **eight defects that 141 green tests did not** — seven in delivery and one in the
-> counting rule itself — and every one of them is now a test.
+> It found **ten defects that 141 green tests did not** — seven in delivery, one in the
+> counting rule itself, and two in the tests — and every one of them is now a test.
 
 ## What was under review
 
@@ -108,7 +108,7 @@ comparison — a change to make deliberately, not by moving a constant until a t
   are in the table now.
 
 
-## A ninth, found by CI rather than by a vendor
+## Two more, found by CI rather than by a vendor
 
 The win-x64 release job reported a concurrency overlap of **five** against a cap of three — a
 number a semaphore of three cannot produce. So the measurement was wrong, not the scheduler: it
@@ -116,6 +116,16 @@ counted overlapping start/end ticks that child processes wrote into files, which
 two-core runner reports on clocks and process lifetimes rather than on slots held. The cap is now
 recorded inside the scheduler where the slot is taken, and the test asserts that. Worth keeping
 beside the rest: a test that measures the environment will eventually accuse the code.
+
+And a tenth, from the same job: the tests steer the fake vendor through **process-wide**
+environment variables, while xUnit runs collections in PARALLEL. Two classes that launched the fake
+with argv verbs found `FAKECLI_MODE=vendor` set underneath them by a class running beside them, so
+the fake answered something nobody asked for and a full-loop test got an error where a verdict
+belonged. It passed locally every single time — the interleaving needs the timing of a loaded
+two-core runner. Every class that launches the fake now shares one non-parallel collection, and the
+fake runs as its apphost rather than through a second `dotnet` host, which is what the job had been
+listing as orphaned processes.
+
 ## The verdict on the exercise
 
 The run did its job in the only way it could: by being real. Seven of the eight defects lived in the
