@@ -220,3 +220,23 @@ the money read out of the vendor's own envelope, not a price table of ours — w
 on disk as `running` and `0 of 1 answered, 1 running` for the ninety seconds it took. The reviewer's
 own best line, about a plan for caching a probe: *"Plan never confirms the cache's host process is
 long-lived, and the specified test can't detect the case where it isn't."*
+
+### The crash sweep, proved by an actual crash
+
+Not asserted only in a unit test: a live plan round in WSL was killed mid-flight (the server
+process ended while its reviewer was still thinking), and the next server said so at startup —
+`swept 1 round(s) abandoned by a dead process` — leaving the round as
+
+```json
+{ "status": "interrupted", "verdict": "interrupted", "reviewers": "0 of 1 answered, 1 running" }
+```
+
+The per-reviewer states are deliberately left as they were: "running" there is the last thing that
+was true, and rewriting it to something tidier would erase which reviewer the crash caught.
+
+### And the CI record, which had been red for the same reason
+
+The `ci` workflow on `main` was failing before this sitting — three tests, all
+`IOException: Broken pipe` from inside `Process.StartCore`, exactly the byte-order-mark preamble
+above. It went green on the first push carrying the fix. Two platforms and CI agreeing on one cause
+is what turned "a flaky test" into a defect with an address.
