@@ -1,3 +1,8 @@
+using CoaiMcp.Runners.Processes;
+using CoaiMcp.Server;
+using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
+
 namespace CoaiMcp;
 
 /// <summary>
@@ -8,14 +13,16 @@ namespace CoaiMcp;
 /// JSON-RPC to it over stdio. <b>stdout carries the protocol</b>: one stray line on it corrupts
 /// the stream, and the failure looks like a protocol bug rather than a logging one — so every
 /// diagnostic goes to stderr, and nothing here ever writes to stdout except the transport and
-/// <c>--help</c>.</para>
-/// <para>This is the epic-01 skeleton: it classifies its invocation, wires the logging contract,
-/// and refuses to serve until epic 04 gives it a server. The refusal is deliberate — a binary
-/// that pretends to serve is worse than one that says it cannot yet.</para>
+/// <c>--help</c>. That is also why the server is built by hand rather than on the SDK's generic
+/// host, whose default logging goes to stdout (measured in creds, 2026-08-27).</para>
 /// </remarks>
 internal static class Program
 {
     private const string AppName = "coai-mcp";
+
+    /// <summary>The server's own identity; the CLIENT config key is `coai`, and that shorter
+    /// name is what prefixes the tools (`mcp__coai__review_plan`).</summary>
+    private const string ServerName = "connect-other-ais";
 
     private static void Note(string message) => Console.Error.WriteLine($"[{AppName}] {message}");
 
@@ -38,7 +45,7 @@ internal static class Program
             ? Startup.Serve
             : args[0] is "--help" or "-h" or "help" ? Startup.Help : Startup.Usage;
 
-    private static int Main(string[] args)
+    private static async Task<int> Main(string[] args)
     {
         switch (Classify(args))
         {
@@ -52,18 +59,63 @@ internal static class Program
                 return 64; // EX_USAGE
 
             default:
-                return Serve();
+                return await ServeAsync();
         }
     }
 
-    private static int Serve()
+    private static async Task<int> ServeAsync()
     {
         // stdio host → the console sink goes to stderr (logging-serilog.md, stdio hosts).
         using var log = ServiceDefaults.CoaiLogging.CreateDewFlowLogger(AppName, consoleToStdErr: true);
-        log.Information("coai-mcp starting — skeleton build, no server yet");
-        Note("this build carries no MCP server yet (epic 04). It exists to prove the pipeline.");
-        return 2;
+        try
+        {
+            var settings = PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
+            var launcher = new ProcessLauncher();
+            var keys = await new KeyVault(launcher).ReadAsync(Environment.GetEnvironmentVariable(KeyVault.KeyVariable));
+            var vaultReadUtc = keys.Available ? DateTime.UtcNow : default;
+            log.Information("starting: {Providers} enabled, vault: {Vault}",
+                string.Join(",", settings.Providers.Where(p => p.Enabled).Select(p => p.Provider)),
+                keys.Available ? "keys loaded" : keys.Unavailability);
+
+            var service = new PanelService(settings, keys, vaultReadUtc, launcher, log);
+            var options = new McpServerOptions
+            {
+                ServerInfo = new Implementation
+                {
+                    Name = ServerName,
+                    Version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
+                },
+                ServerInstructions = Instructions,
+            };
+            options.ToolCollection ??= [];
+            foreach (var tool in Tools.All(service))
+            {
+                options.ToolCollection.Add(tool);
+            }
+
+            await using var transport = new StdioServerTransport(ServerName);
+            await using var server = McpServer.Create(transport, options);
+            await server.RunAsync();
+            return 0;
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException)
+        {
+            // The client went away mid-stream. Not a failure of ours.
+            Note("the MCP client closed the connection.");
+            return 0;
+        }
     }
+
+    internal const string Instructions = """
+        ConnectOtherAIs: a review gate run by OTHER vendors' models over your plan and your code.
+        The protocol, in order: `open` a session for the repo+branch. `review_plan` sends the plan
+        to every enabled provider; `resolve` records your accept/reject decision for EVERY finding
+        (a rejection needs a reason). Repeat until the verdict is `proceed`, implement, then
+        `review_code` (three independent reviewers per provider), `resolve`, and fix — the same
+        loop. `review_code` REFUSES until a plan round has reached `proceed`; skipped stages are
+        impossible, not discouraged. `providers` says what is configured and what it authenticates
+        as; `status` re-orients a resumed conversation; `ask_human` escalates to the person.
+        """;
 
     internal const string HelpText = """
         coai-mcp — the ConnectOtherAIs review-gate MCP server.
@@ -73,6 +125,10 @@ internal static class Program
 
           { "mcpServers": { "coai": { "command": "<full path to coai-mcp>" } } }
 
-        This is a skeleton build: the tool surface arrives with epic 04.
+        Optional environment: COAI_PROVIDERS, COAI_MODEL_<PROVIDER>, COAI_EXE_<PROVIDER>,
+        COAI_MAX_ROUNDS, COAI_GATE_THRESHOLD, COAI_ON_EXHAUSTED (continue|human|escalate),
+        COAI_MAX_CONCURRENCY, COAI_MAX_PER_PROVIDER, COAI_REVIEWER_TIMEOUT_MINUTES,
+        COAI_DATA_DIR, COAI_CREDS_KEY (the CredsForDevs config-entry key holding vendor keys),
+        COAI_LOG_LEVEL.
         """;
 }

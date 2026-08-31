@@ -15,7 +15,18 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="ModelContextProtocol" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\core\CoaiMcp.Core.csproj" />
+    <ProjectReference Include="..\runners\CoaiMcp.Runners.csproj" />
     <ProjectReference Include="..\service_defaults\CoaiMcp.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The shipped role-prompt defaults; the override layer lives in the data dir. -->
+    <Content Include="prompts\*.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

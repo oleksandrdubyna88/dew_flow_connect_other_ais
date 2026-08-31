@@ -13,6 +13,43 @@
 //
 // Deliberately dumb: every behaviour a test needs, none it does not.
 
+// Vendor mode: behave like a reviewer CLI whatever the argv shape, steered by environment —
+// the vendor runtimes build real codex/gemini argvs, and the fan-out tests drive THOSE.
+//   FAKECLI_MODE=vendor
+//   FAKECLI_STDOUT       — text for stdout (the gemini path)
+//   FAKECLI_OUTFILE_TEXT — text for the file after `-o` in argv (the codex path)
+//   FAKECLI_STDERR / FAKECLI_EXIT — failure steering
+//   FAKECLI_RECORD_DIR   — write each launch's full argv into <guid>.argv there
+if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor")
+{
+    if (Environment.GetEnvironmentVariable("FAKECLI_RECORD_DIR") is { Length: > 0 } record)
+    {
+        // NUL-joined, because the args themselves are multiline (the prompt) — lines cannot
+        // reconstruct an argv, a character no argv contains can.
+        File.WriteAllText(Path.Combine(record, $"{Guid.NewGuid():N}.argv"), string.Join('\0', args));
+    }
+
+    var stderrText = Environment.GetEnvironmentVariable("FAKECLI_STDERR");
+    if (stderrText is { Length: > 0 })
+    {
+        Console.Error.WriteLine(stderrText);
+    }
+
+    var outIndex = Array.IndexOf(args, "-o");
+    if (outIndex >= 0 && outIndex + 1 < args.Length &&
+        Environment.GetEnvironmentVariable("FAKECLI_OUTFILE_TEXT") is { Length: > 0 } fileText)
+    {
+        File.WriteAllText(args[outIndex + 1], fileText);
+    }
+
+    if (Environment.GetEnvironmentVariable("FAKECLI_STDOUT") is { Length: > 0 } stdoutText)
+    {
+        Console.Out.Write(stdoutText);
+    }
+
+    return int.TryParse(Environment.GetEnvironmentVariable("FAKECLI_EXIT"), out var exit) ? exit : 0;
+}
+
 var args0 = args;
 if (args0.Length >= 2 && args0[0] == "count")
 {

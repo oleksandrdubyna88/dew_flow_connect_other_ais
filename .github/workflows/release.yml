@@ -1,0 +1,103 @@
+name: release
+
+# One product so far, one tag shape: mcp-v0.1.0 → four Native AOT `coai-mcp` binaries attached
+# to the release. The extension gains its own `extension-v*` line in epic 05; separate lines so
+# releasing one never ships the other. (The guard-without-a-trigger trap is documented in creds'
+# release.yml — a job's `if` is not a workflow trigger, so every tag shape is listed here.)
+on:
+  push:
+    tags:
+      - 'mcp-v*'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'What to release'
+        required: true
+        type: choice
+        options: [mcp]
+
+permissions:
+  contents: read
+
+jobs:
+  mcp-binaries:
+    name: coai-mcp (${{ matrix.rid }})
+    if: startsWith(github.ref, 'refs/tags/mcp-v') || inputs.target == 'mcp'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            runner: ubuntu-latest
+          - rid: linux-arm64
+            runner: ubuntu-24.04-arm
+          - rid: win-x64
+            runner: windows-latest
+          - rid: win-arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Toolchain (linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang zlib1g-dev
+
+      # Never ship a binary that has not passed its own tests on this architecture.
+      - name: Build and test
+        shell: bash
+        run: |
+          dotnet build dew_flow_connect_other_ais.slnx -c Release
+          ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests${{ runner.os == 'Windows' && '.exe' || '' }}
+
+      - name: Publish
+        run: dotnet publish src_mcp/src/CoaiMcp.csproj -c Release -r ${{ matrix.rid }} -o out
+
+      # The release smoke the epic demands: the PUBLISHED binary answers a real initialize /
+      # tools/list exchange — the contract tests, pointed at it. AOT failures often surface only
+      # at first run, and --help alone would not catch a broken tool surface.
+      - name: Smoke the published binary
+        shell: bash
+        env:
+          COAI_CONTRACT_EXE: ${{ github.workspace }}/out/coai-mcp${{ runner.os == 'Windows' && '.exe' || '' }}
+        run: |
+          ./out/coai-mcp${{ runner.os == 'Windows' && '.exe' || '' }} --help | grep -q 'coai-mcp'
+          ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests${{ runner.os == 'Windows' && '.exe' || '' }} --filter-class "*McpContractTests"
+
+      - name: Package
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/mcp-v* ]]; then VERSION="${GITHUB_REF_NAME#mcp-v}"; else VERSION="0.0.0-manual"; fi
+          NAME="coai-mcp-$VERSION-${{ matrix.rid }}"
+          mkdir "$NAME"
+          if [[ "${{ matrix.rid }}" == win-* ]]; then
+            cp out/coai-mcp.exe "$NAME/"
+            7z a "$NAME.zip" "$NAME" > /dev/null
+            echo "ASSET=$NAME.zip" >> "$GITHUB_ENV"
+          else
+            cp out/coai-mcp "$NAME/"
+            tar czf "$NAME.tar.gz" "$NAME"
+            echo "ASSET=$NAME.tar.gz" >> "$GITHUB_ENV"
+          fi
+
+      # A checksum beside each archive, written by the job that BUILT it — four small files have
+      # no collector job to fail (the reasoning is spelled out in creds' release.yml).
+      - name: Checksum
+        shell: bash
+        run: sha256sum "$ASSET" > "$ASSET.sha256"
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/mcp-v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "coai-mcp ${GITHUB_REF_NAME#mcp-v}" --notes "Native AOT builds of the ConnectOtherAIs MCP server." 2>/dev/null || true
+          gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber
+          gh release upload "$GITHUB_REF_NAME" "$ASSET.sha256" --clobber

@@ -6,6 +6,11 @@
     <!-- xUnit v3 on Microsoft Testing Platform: this builds into a self-contained runner.
          Run the executable; `dotnet test` has no VSTest host here and aborts. -->
     <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <!-- xUnit1051 (thread TestContext cancellation into every call) is suppressed deliberately:
+         the integration suites here drive PanelService/git through APIs with optional tokens, and
+         threading the context token through every call buys responsiveness on manual cancellation
+         only, at the cost of noise on every line. Timeouts guard the processes themselves. -->
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

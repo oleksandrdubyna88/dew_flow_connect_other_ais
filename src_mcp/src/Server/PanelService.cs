@@ -1,0 +1,388 @@
+using System.Collections.Immutable;
+using System.Text.Json;
+using CoaiMcp.Core.Context;
+using CoaiMcp.Core.Findings;
+using CoaiMcp.Core.Gate;
+using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Context;
+using CoaiMcp.Runners.Processes;
+using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Runners.Worktrees;
+
+namespace CoaiMcp.Server;
+
+/// <summary>
+/// The orchestrator behind every tool: sessions, fan-outs, verdicts. All RULES live in the core;
+/// this class carries data between the wire, the runners and the state machine — and answers
+/// every failure as a sentence in JSON, never as an exception up the stdio stack.
+/// </summary>
+public sealed class PanelService
+{
+    private readonly PanelSettings _settings;
+    private readonly VaultKeys _keys;
+    private readonly DateTime _vaultReadUtc;
+    private readonly IProcessLauncher _launcher;
+    private readonly Serilog.ILogger _log;
+    private readonly SessionStore _store;
+    private readonly WorktreeManager _worktrees;
+    private readonly ContextAssembler _context;
+    private readonly BoundedScheduler _scheduler;
+    private readonly ReviewerExecutor _executor;
+    private readonly RolePrompts _prompts;
+
+    public PanelService(PanelSettings settings, VaultKeys keys, DateTime vaultReadUtc, IProcessLauncher launcher, Serilog.ILogger log)
+    {
+        _settings = settings;
+        _keys = keys;
+        _vaultReadUtc = vaultReadUtc;
+        _launcher = launcher;
+        _log = log;
+        _store = new SessionStore(settings.DataDir);
+        _worktrees = new WorktreeManager(launcher, Path.Combine(settings.DataDir, "worktrees"));
+        _context = new ContextAssembler(launcher);
+        _scheduler = new BoundedScheduler(settings.GlobalConcurrency, settings.PerProviderConcurrency);
+        _executor = new ReviewerExecutor(launcher);
+        _prompts = new RolePrompts(settings.DataDir);
+    }
+
+    private static readonly ImmutableArray<ReviewRole> CodeRoles =
+        [ReviewRole.Architecture, ReviewRole.SecurityReliability, ReviewRole.UxDxPerformance];
+
+    // ---------- providers ----------
+
+    public async Task<string> ProvidersAsync(CancellationToken ct = default)
+    {
+        var statuses = new List<ProviderStatus>();
+        foreach (var provider in _settings.Providers)
+        {
+            statuses.Add(await ProbeAsync(provider, ct));
+        }
+
+        return Json(new ProvidersAnswer(
+            statuses,
+            _vaultReadUtc == default ? "never" : _vaultReadUtc.ToString("O"),
+            _keys.Available ? $"{_keys.Keys.Count} vendor key(s) loaded" : _keys.Unavailability),
+            ServerJsonContext.Default.ProvidersAnswer);
+    }
+
+    private async Task<ProviderStatus> ProbeAsync(ProviderSettings provider, CancellationToken ct)
+    {
+        if (ReviewerRuntimeSelector.Default.Find(provider.Provider) is null)
+        {
+            return new ProviderStatus(provider.Provider, provider.Enabled, false, "",
+                "unavailable", ReviewerRuntimeSelector.Default.RefusalFor(provider.Provider));
+        }
+
+        var (auth, authNote) = AuthFor(provider.Provider);
+        if (!provider.Enabled)
+        {
+            return new ProviderStatus(provider.Provider, false, false, "", auth, "disabled in settings");
+        }
+
+        var exe = provider.ExecutablePath.Length > 0 ? provider.ExecutablePath : DefaultExe(provider.Provider);
+        try
+        {
+            var result = await _launcher.RunAsync(
+                new ProcessRequest(exe, ["--version"], Environment.CurrentDirectory) { Timeout = TimeSpan.FromSeconds(30) },
+                ct);
+            return result.ExitCode == 0
+                ? new ProviderStatus(provider.Provider, true, true, result.StdOut.Trim(), auth, authNote)
+                : new ProviderStatus(provider.Provider, true, true, "", auth,
+                    $"--version exited {result.ExitCode}: {result.StdErr.Trim()}");
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return new ProviderStatus(provider.Provider, true, false, "", auth, $"'{exe}' was not found on this machine");
+        }
+    }
+
+    private (string Auth, string Note) AuthFor(string provider) =>
+        _keys.Keys.ContainsKey(provider)
+            ? ("vault key", "")
+            : provider is "deepseek"
+                ? ("unavailable", "needs a key and the vault holds none — see the creds config entry")
+                : ("own auth", "the CLI's own sign-in is used");
+
+    private static string DefaultExe(string provider) => provider is "gemini" ? "gemini" : "codex";
+
+    // ---------- open / status ----------
+
+    public async Task<string> OpenAsync(string repoPath, string branch, CancellationToken ct = default)
+    {
+        if (!Directory.Exists(repoPath))
+        {
+            return Error($"'{repoPath}' is not a directory on this machine");
+        }
+
+        try
+        {
+            await _worktrees.ResolveShaAsync(repoPath, branch);
+            await _worktrees.PruneOursAsync(repoPath);
+        }
+        catch (WorktreeException e)
+        {
+            return Error(e.Message);
+        }
+
+        var session = _store.Load(repoPath, branch)
+            ?? new PersistedSession(
+                new SessionState(Guid.NewGuid().ToString("N")[..8], repoPath, branch, _settings.Rounds),
+                []);
+        _store.Save(session);
+        _log.Information("session {SessionId} open for {Branch}", session.State.SessionId, branch);
+        return Json(SessionAnswerFor(session), ServerJsonContext.Default.SessionAnswer);
+    }
+
+    public Task<string> StatusAsync(string repoPath, string branch)
+    {
+        var session = _store.Load(repoPath, branch);
+        return Task.FromResult(session is null
+            ? Error("no session for this repo+branch — call open first")
+            : Json(SessionAnswerFor(session), ServerJsonContext.Default.SessionAnswer));
+    }
+
+    // ---------- the two review stages ----------
+
+    public Task<string> ReviewPlanAsync(string repoPath, string branch, string planText, CancellationToken ct = default) =>
+        RunStageAsync(repoPath, branch, planText, RoundMachine.BeginPlanRound,
+            (session, lease) => Task.FromResult<IReadOnlyList<ReviewerWork>>(
+                BuildWork([ReviewRole.PlanCritique], lease.Path, $"## The plan under review\n\n{planText}")),
+            ct);
+
+    public Task<string> ReviewCodeAsync(string repoPath, string branch, string baseRef, string planText, CancellationToken ct = default) =>
+        RunStageAsync(repoPath, branch, planText, RoundMachine.BeginCodeRound,
+            async (session, lease) =>
+            {
+                var files = await _context.CollectAsync(repoPath, baseRef, lease.Sha, ct: ct);
+                var shaped = DiffShaper.Shape(files);
+                var bundle = new ReviewBundle(planText, branch, baseRef, lease.Sha, shaped);
+                var context =
+                    $"## The plan this change implements\n\n{bundle.PlanText}\n\n" +
+                    $"## The change ({bundle.Branch} over {bundle.BaseRef}, at {bundle.Sha})\n\n{bundle.Diff.Text}";
+                return BuildWork(CodeRoles, lease.Path, context);
+            },
+            ct);
+
+    private async Task<string> RunStageAsync(
+        string repoPath,
+        string branch,
+        string planText,
+        Func<SessionState, Transition> begin,
+        Func<PersistedSession, WorktreeLease, Task<IReadOnlyList<ReviewerWork>>> makeWork,
+        CancellationToken ct)
+    {
+        if (planText.Length == 0)
+        {
+            return Error("planText is required — a reviewer that cannot see the intent reviews its own guess");
+        }
+
+        var session = _store.Load(repoPath, branch);
+        if (session is null)
+        {
+            return Error("no session for this repo+branch — call open first");
+        }
+
+        if (begin(session.State) is Transition.Refused refused)
+        {
+            return Error(refused.Sentence);
+        }
+
+        try
+        {
+            var sha = await _worktrees.ResolveShaAsync(repoPath, branch);
+            await using var lease = await _worktrees.AddAsync(
+                repoPath, sha, session.State.SessionId, session.State.RoundsRunThisStage + 1);
+            var work = await makeWork(session, lease);
+
+            var results = await _scheduler.RunAllAsync(work, _executor, ct);
+            var summary = ReviewerSummaryFactory.From(results);
+            var reviews = results.Select(r => r.Outcome).OfType<ReviewerOutcome.Ok>().Select(o => o.Review).ToList();
+            var merged = FindingDedup.Merge(reviews.SelectMany(r => r.Findings));
+            var gate = GateRule.Evaluate(merged, session.State.Rejections, _settings.Rounds.Threshold);
+
+            if (RoundMachine.CompleteRound(session.State, gate, summary) is not Transition.Ok completed)
+            {
+                return Error("the round could not complete — this is a bug, report it");
+            }
+
+            var answer = AnswerFor(completed.Verdict, gate, summary, merged, reviews);
+            var record = new RoundRecord(
+                session.State.Stage.ToString(),
+                session.State.RoundsRunThisStage + 1,
+                answer.Verdict,
+                gate.GatingCount,
+                summary.Sentence,
+                DateTime.UtcNow);
+            _store.Save(session with
+            {
+                State = completed.State,
+                Rounds = [.. session.Rounds, record],
+                Pending = [.. merged],
+            });
+            _log.Information("round {Round} {Stage}: {Verdict} with {Gating} gating finding(s); {Reviewers}",
+                record.Number, record.Stage, record.Verdict, gate.GatingCount, summary.Sentence);
+            return Json(answer, ServerJsonContext.Default.ReviewAnswer);
+        }
+        catch (Exception e) when (e is WorktreeException or ContextException)
+        {
+            return Error(e.Message);
+        }
+    }
+
+    private IReadOnlyList<ReviewerWork> BuildWork(IReadOnlyList<ReviewRole> roles, string worktreePath, string context)
+    {
+        var schemaFile = Path.Combine(_settings.DataDir, "finding-schema.json");
+        Directory.CreateDirectory(_settings.DataDir);
+        File.WriteAllText(schemaFile, FindingSchema.Json);
+        var outputDir = Directory.CreateTempSubdirectory("coai-answers-").FullName;
+
+        var work = new List<ReviewerWork>();
+        foreach (var provider in _settings.Providers.Where(p => p.Enabled))
+        {
+            if (ReviewerRuntimeSelector.Default.Find(provider.Provider) is not { } runtime ||
+                AuthFor(provider.Provider).Auth == "unavailable")
+            {
+                continue; // reported by `providers`; a fan-out is built only from what can run
+            }
+
+            var settings = new ReviewerSettings(provider.Provider)
+            {
+                ExecutablePath = provider.ExecutablePath,
+                Model = provider.Model,
+                ApiKey = _keys.Keys.GetValueOrDefault(provider.Provider, string.Empty),
+                Timeout = _settings.ReviewerTimeout,
+            };
+            foreach (var role in roles)
+            {
+                var prompt = ComposePrompt(role, context);
+                var repairPrompt = prompt +
+                    "\n\nYOUR PREVIOUS ANSWER WAS NOT VALID JSON. Return ONLY the JSON object for the schema — no fences, no prose.";
+                work.Add(new ReviewerWork(
+                    runtime.Build(role, prompt, worktreePath, schemaFile, outputDir, settings),
+                    runtime.Build(role, repairPrompt, worktreePath, schemaFile, outputDir, settings)));
+            }
+        }
+
+        return work;
+    }
+
+    private string ComposePrompt(ReviewRole role, string context) =>
+        $"{_prompts.For(role)}\n\n## The finding contract\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{FindingSchema.Json}\n\n{context}";
+
+    private ReviewAnswer AnswerFor(
+        RoundVerdict verdict,
+        GateResult gate,
+        ReviewerSummary summary,
+        ImmutableArray<Finding> merged,
+        List<NormalisedReview> reviews)
+    {
+        var rejectedEntries = reviews.SelectMany(r => r.Rejected).Select(r => $"entry {r.Index}: {r.Reason}").ToList();
+        var (name, step, instruction) = verdict switch
+        {
+            RoundVerdict.Proceed => ("proceed", (string?)null,
+                "The gate passed. Record a decision for EVERY finding via resolve (rejections need reasons); the next stage opens after that."),
+            RoundVerdict.Revise r => ("revise", null,
+                $"Findings gate. Resolve every finding with accept/reject + reason, fix the accepted ones, then run this review again ({r.RoundsLeft} round(s) left)."),
+            RoundVerdict.ContinueAnyway => ("continue_anyway", null,
+                "Rounds exhausted; policy says proceed as-is. Record decisions via resolve and say in your summary that findings remain."),
+            RoundVerdict.CallHuman h => ("call_human", null,
+                $"Rounds exhausted: {h.Reason}. A human decides — surface the open findings to them; do not proceed on your own."),
+            RoundVerdict.Escalated e => ("escalated", e.Step.ToString(),
+                $"Rounds exhausted; the ladder fires {e.Step}. Resolve the findings, apply the step, and run a fresh round."),
+            _ => ("unknown", null, ""),
+        };
+        return new ReviewAnswer(
+            name, step, gate.GatingCount, _settings.Rounds.Threshold, summary.Sentence,
+            [.. merged], [.. gate.Discounted], rejectedEntries, instruction);
+    }
+
+    // ---------- resolve ----------
+
+    public Task<string> ResolveAsync(string repoPath, string branch, string decisionsJson)
+    {
+        var session = _store.Load(repoPath, branch);
+        if (session is null)
+        {
+            return Task.FromResult(Error("no session for this repo+branch — call open first"));
+        }
+
+        List<DecisionDto>? dtos;
+        try
+        {
+            dtos = JsonSerializer.Deserialize(decisionsJson, ServerJsonContext.Default.ListDecisionDto);
+        }
+        catch (JsonException e)
+        {
+            return Task.FromResult(Error($"decisions is not valid JSON: {e.Message}"));
+        }
+
+        if (dtos is null or [])
+        {
+            return Task.FromResult(session.Pending.Count == 0
+                ? Finish(session, [])
+                : Error($"{session.Pending.Count} finding(s) await a decision — pass one per finding index"));
+        }
+
+        var decisions = new List<Decision>();
+        foreach (var dto in dtos)
+        {
+            if (dto.Finding < 0 || dto.Finding >= session.Pending.Count)
+            {
+                return Task.FromResult(Error($"finding index {dto.Finding} does not exist — this round reported {session.Pending.Count}"));
+            }
+
+            var finding = session.Pending[dto.Finding];
+            var action = dto.Action.ToLowerInvariant();
+            if (action is not ("accept" or "reject"))
+            {
+                return Task.FromResult(Error($"action '{dto.Action}' is neither accept nor reject"));
+            }
+
+            decisions.Add(action == "accept"
+                ? new Decision.Accepted(finding)
+                : new Decision.Rejected(finding, dto.Reason));
+        }
+
+        return Task.FromResult(Finish(session, decisions));
+    }
+
+    private string Finish(PersistedSession session, List<Decision> decisions)
+    {
+        switch (RoundMachine.Resolve(session.State, decisions))
+        {
+            case Transition.Refused refused:
+                return Error(refused.Sentence);
+            case Transition.Moved moved:
+                _store.Save(session with { State = moved.State, Pending = [] });
+                var instruction = moved.State switch
+                {
+                    { Stage: Stage.CodeReview, RoundsRunThisStage: 0 } when session.State.Stage == Stage.PlanReview =>
+                        "The plan stage is complete. Implement the plan on the branch, then call review_code.",
+                    { Stage: Stage.Done } => "The code stage is complete. This session is done.",
+                    _ => "Decisions recorded. Apply the accepted findings, then run the review again.",
+                };
+                return Json(new ResolveAnswer(moved.State.Stage.ToString(), moved.State.AwaitingResolve, decisions.Count, instruction),
+                    ServerJsonContext.Default.ResolveAnswer);
+            default:
+                return Error("unexpected transition — this is a bug, report it");
+        }
+    }
+
+    // ---------- plumbing ----------
+
+    private SessionAnswer SessionAnswerFor(PersistedSession session) => new(
+        session.State.SessionId,
+        session.State.Stage.ToString(),
+        session.State.RoundsRunThisStage,
+        session.State.AwaitingResolve,
+        session.State.PlanProceeded,
+        _settings.Rounds.Threshold,
+        _settings.Rounds.MaxRounds,
+        session.Rounds);
+
+    private static string Json<T>(T value, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type) =>
+        JsonSerializer.Serialize(value, type);
+
+    private static string Error(string sentence) =>
+        JsonSerializer.Serialize(new ErrorAnswer(sentence), ServerJsonContext.Default.ErrorAnswer);
+}
