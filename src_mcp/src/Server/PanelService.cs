@@ -120,7 +120,7 @@ public sealed class PanelService
 
         var exe = provider.ExecutablePath.Length > 0
             ? provider.ExecutablePath
-            : DefaultExe(provider.Runtime.Length > 0 ? provider.Runtime : provider.Provider);
+            : RuntimeFor(provider)?.DefaultExecutable ?? provider.Provider;
         try
         {
             var result = await _launcher.RunAsync(
@@ -144,13 +144,6 @@ public sealed class PanelService
                 ? ("unavailable", $"needs a key under '{provider.Provider}' and the vault holds none — see the creds config entry")
                 : ("own auth", "the CLI's own sign-in is used");
 
-    private static string DefaultExe(string provider) => provider switch
-    {
-        "gemini" => "gemini",
-        "claude" => "claude",
-        _ => "codex",
-    };
-
     /// <summary>
     /// The runtime for one configured reviewer: a built-in by name, or — when the operator gave it
     /// a base URL — the generic custom one. A vendor added in the panel is DATA, not a release.
@@ -167,6 +160,7 @@ public sealed class PanelService
     {
         "gemini" => new GeminiRuntime(),
         "claude" => new ClaudeRuntime(),
+        "antigravity" => new AntigravityRuntime(),
         "codex" => new CodexRuntime(),
         _ => null,
     };

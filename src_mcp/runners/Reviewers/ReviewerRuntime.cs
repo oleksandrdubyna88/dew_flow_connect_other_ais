@@ -60,6 +60,17 @@ public interface IReviewerRuntime
     ReviewerInvocation Build(ReviewRole role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings);
 
     /// <summary>
+    /// The command to start when the operator configured no path — and what `providers` probes.
+    /// </summary>
+    /// <remarks>
+    /// It lives on the adapter because it is vendor knowledge, and duplicating it in the probe is
+    /// how `providers` came to report a healthy reviewer as missing: the Antigravity installer
+    /// puts `agy` on the PATH only for shells started afterwards, the adapter knew to fall back to
+    /// the install location, and the probe did not.
+    /// </remarks>
+    string DefaultExecutable => Provider;
+
+    /// <summary>
     /// The answer text out of a finished run. Default: the file the invocation named (codex's
     /// <c>-o</c>), stdout otherwise (gemini) — override when the CLI wraps its answer (claude's
     /// JSON envelope). Null means "no answer where this vendor puts one" — unparseable, by name.
@@ -228,7 +239,7 @@ public sealed class ReviewerRuntimeSelector(IEnumerable<IReviewerRuntime> runtim
         runtimes.ToDictionary(r => r.Provider, StringComparer.OrdinalIgnoreCase);
 
     public static ReviewerRuntimeSelector Default { get; } =
-        new([new CodexRuntime(), new GeminiRuntime(), new ClaudeRuntime(), new DeepseekRuntime()]);
+        new([new CodexRuntime(), new GeminiRuntime(), new ClaudeRuntime(), new AntigravityRuntime(), new DeepseekRuntime()]);
 
     public IReadOnlyCollection<string> Providers => _byProvider.Keys;
 

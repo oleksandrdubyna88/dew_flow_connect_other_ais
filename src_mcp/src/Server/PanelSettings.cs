@@ -168,6 +168,7 @@ public sealed record PanelSettings
         null or "" => string.Empty,
         "gemini" => "gemini",
         "claude" => "claude",
+        "antigravity" => "antigravity",
         // An unknown runtime is a custom vendor riding the Codex CLI against its own base URL —
         // a deliberate decision kept from the vendor-settings tests, not a fallthrough.
         _ => "codex",

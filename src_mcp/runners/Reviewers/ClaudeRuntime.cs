@@ -73,4 +73,60 @@ public sealed class ClaudeRuntime : IReviewerRuntime
             return result.StdOut;
         }
     }
+
+    /// <summary>
+    /// Claude reports the same run TWICE and the two disagree — this reads the right one.
+    /// </summary>
+    /// <remarks>
+    /// <para>Measured on a real call: <c>usage</c> said 10 input / 44 output while
+    /// <c>modelUsage</c> said 532 / 57 for the same run. <c>usage</c> is the LAST message's
+    /// usage; <c>modelUsage</c> is the aggregate across every turn, which is what a multi-turn
+    /// review actually consumed — the generic scan read the wrong one and under-reported every
+    /// reviewer.</para>
+    /// <para>Cache tokens are ADDED here, unlike codex: claude reports
+    /// <c>cacheCreationInputTokens</c> and <c>cacheReadInputTokens</c> BESIDE the input count
+    /// rather than inside it, and both are billed. Codex's <c>cached_input_tokens</c> is a subset
+    /// of its <c>input_tokens</c> and must NOT be added. Getting that backwards is a silent factor
+    /// of two in either direction, which is exactly why each vendor reads its own numbers.</para>
+    /// </remarks>
+    public Usage ReadUsage(ReviewerInvocation invocation, ProcessResult result)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(result.StdOut.Trim());
+            if (document.RootElement.TryGetProperty("modelUsage", out var models) &&
+                models.ValueKind == JsonValueKind.Object)
+            {
+                return Aggregate(models);
+            }
+        }
+        catch (JsonException)
+        {
+            // Not the envelope we know; the generic scan is a better answer than none.
+        }
+
+        return UsageParser.Parse(result.StdOut);
+    }
+
+    private static Usage Aggregate(JsonElement models)
+    {
+        var usage = Usage.None;
+        foreach (var model in models.EnumerateObject())
+        {
+            usage = usage.Add(new Usage(
+                Number(model.Value, "inputTokens")
+                + Number(model.Value, "cacheCreationInputTokens")
+                + Number(model.Value, "cacheReadInputTokens"),
+                Number(model.Value, "outputTokens"),
+                Cost(model.Value)));
+        }
+
+        return usage;
+    }
+
+    private static long Number(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.TryGetInt64(out var number) ? number : 0;
+
+    private static double? Cost(JsonElement element) =>
+        element.TryGetProperty("costUSD", out var value) && value.TryGetDouble(out var usd) ? usd : null;
 }
