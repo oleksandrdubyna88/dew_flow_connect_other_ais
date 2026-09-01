@@ -1,7 +1,7 @@
 # RESULTS — which MODEL to review CODE with: one real commit, three roles per model
 
-> Status: **partial, 2026-09-01.** Eleven of fourteen cells completed; three were lost to a vendor
-> rate limit and are named below rather than omitted.
+> Status: **partial, 2026-09-01.** Eleven of fourteen cells completed; three were lost to an
+> exhausted vendor quota and are named below rather than omitted.
 >
 > The plan half, which carries the method and the variance discussion, is
 > [RESULTS_model_comparison.md](RESULTS_model_comparison.md).
@@ -51,10 +51,18 @@ the harness is now a file rather than a heredoc.
 rate limited. Three findings from one reviewer is not comparable with eleven from three, and it is
 left in only so the row is not silently missing.
 
-**Lost to the same rate limit, with no row at all:** Claude Opus 4.6, GPT-OSS 120B, and Sonnet's
-second run. Their plan round could not reach `proceed`, so `review_code` correctly refused. The
-vendor throttled after roughly forty runs in an hour — a fact about the campaign, not about the
-models, and the reason those three will be re-run rather than reported.
+**Lost with no row at all:** Claude Opus 4.6, GPT-OSS 120B, and Sonnet's second run.
+
+They were retried after a cooldown and failed identically, in 33 seconds each. The log says why, and
+it is not the transient throttle this first read as: `Individual quota reached` — the antigravity
+ACCOUNT's quota, exhausted after roughly fifty runs in an hour across both halves of the campaign.
+Minutes do not fix that, so these three stay missing until the quota window resets. Saying they
+"will be re-run" would have been the easier sentence and the wrong one.
+
+**The gate behaved correctly while this happened, which is worth its own line.** With zero of one
+reviewer answering, the plan round returned `call_human` with *"no reviewer answered — nothing was
+reviewed"*, and `review_code` then refused because no plan round had reached `proceed`. A quota
+outage produced a stop and an explanation rather than a green review of nothing.
 
 ## What the completed cells show
 
