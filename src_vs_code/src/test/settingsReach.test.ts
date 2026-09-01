@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { CoaiSettings, DEFAULTS, envBlock } from '../settingsShape';
 import { DEFAULT_VENDORS, vendorsFrom } from '../vendors';
 import { serverSettingsJson } from '../serverSettingsFile';
+import { selectedFor } from '../prompts';
 
 /**
  * No setting may be silently dropped on its way to the server.
@@ -83,4 +84,21 @@ test('a stored vendor keeps its runtime through the parser, not only through the
 
 test('a runtime nobody knows still falls back to codex, which is the one that takes a base URL', () => {
   assert.equal(vendorsFrom([{ id: 'x', runtime: 'llama.cpp', baseUrl: 'https://x/v1' }])[0]!.runtime, 'codex');
+});
+
+test('a round nobody chose stays empty, so rotation still applies to it', () => {
+  // The panel pads the array up to the round being set. Padding with a RESOLVED id silently
+  // converts automatic rotation into fixed picks for every earlier round — a fix that was made,
+  // lost to a careless whole-file write, and only noticed because the panel was re-read.
+  const stored: Record<string, string[]> = {};
+  const rounds = [...(stored['Architecture'] ?? [])];
+  while (rounds.length < 3) {
+    rounds.push('');
+  }
+  rounds[2] = 'arch-evolution';
+
+  assert.deepEqual(rounds, ['', '', 'arch-evolution']);
+  assert.equal(selectedFor('Architecture', 1, { Architecture: rounds }, true), 'architecture',
+    'round 1 must still rotate to the universal prompt');
+  assert.equal(selectedFor('Architecture', 3, { Architecture: rounds }, true), 'arch-evolution');
 });

@@ -2,9 +2,9 @@ import * as vscode from 'vscode';
 import { EscalationWatcher } from './escalationWatcher';
 import { ModelChoice, parseCodexModels } from './models';
 import { liveRegions, OPEN_BY_DEFAULT, panelHtml } from './panelView';
-import { selectedFor } from './prompts';
 import { parseSession, SessionFile } from './rounds';
 import { parseUsage, UsageEntry, Window } from './usage';
+import { latestServerVersion } from './installer';
 import { serverSettingsJson } from './serverSettingsFile';
 import { settingsFrom } from './settingsShape';
 import { normaliseId, Vendor, VENDOR_PRESETS, vendorsFrom } from './vendors';
@@ -36,6 +36,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private openSections: string[] = [...OPEN_BY_DEFAULT];
   /** Which window the spending chart shows. A view preference, so it lives here, not in config. */
   private usageWindow: Window = 'week';
+  /** The newest published server version, and when GitHub last answered. */
+  private latestServer = '';
+  private latestCheckedAt = 0;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -94,6 +97,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       sessions: await this.readSessions(),
       usage: await this.readUsage(),
       usageWindow: this.usageWindow,
+      latestServerVersion: await this.publishedVersion(),
     };
 
     // Two update paths, and which one runs is the whole fix for the pickers.
@@ -147,16 +151,17 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * One role's prompt for one round.
    *
    * <p>Stored as <code>role -&gt; [round1, round2, ...]</code> — the shape the server reads and
-   * the shape a person reasons in. Earlier rounds are filled with whatever they already resolve
-   * to rather than left as holes: a sparse array would make "round 3 is the attack lens" depend
-   * on what rounds 1 and 2 happened to be when it was read.</p>
+   * the shape a person reasons in. Rounds nobody has chosen stay EMPTY rather than being filled
+   * with what they resolve to today: both reviewers of this change caught that padding them
+   * silently turned automatic rotation into fixed picks the moment anyone touched a later
+   * round. Both halves read an empty entry as "not chosen".</p>
    */
   private async choosePrompt(role: string, round: number, id: string): Promise<void> {
     const config = vscode.workspace.getConfiguration('coai');
     const settings = settingsFrom((section) => config.get(section));
     const rounds = [...(settings.promptsPerRound[role] ?? [])];
     while (rounds.length < round) {
-      rounds.push(selectedFor(role, rounds.length + 1, settings.promptsPerRound, settings.rotatePrompts));
+      rounds.push('');
     }
     rounds[round - 1] = id;
     await config.update(
@@ -205,6 +210,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         if (id !== undefined) {
           await this.runVendor(id);
         }
+        break;
+      case 'checkForUpdate':
+        this.latestCheckedAt = 0;
         break;
       case 'usageWindow':
         if (id !== undefined) {
@@ -371,6 +379,23 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * <p>Read whole: a year of rounds is a few hundred kilobytes, and streaming it would buy
    * nothing a person could notice while adding a second way for the chart to be wrong.</p>
    */
+  /**
+   * The newest published server version, asked of GitHub at most every half hour.
+   *
+   * <p>The panel repaints on every keystroke in a settings field; asking GitHub each time would
+   * spend the anonymous rate limit in a minute and then answer nothing at all. "Check again" in
+   * the Server section clears the clock for a person who wants an answer now.</p>
+   */
+  private async publishedVersion(): Promise<string> {
+    const halfAnHour = 30 * 60 * 1000;
+    if (Date.now() - this.latestCheckedAt < halfAnHour) {
+      return this.latestServer;
+    }
+    this.latestCheckedAt = Date.now();
+    this.latestServer = (await latestServerVersion()) ?? '';
+    return this.latestServer;
+  }
+
   private async readUsage(): Promise<UsageEntry[]> {
     try {
       const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.dataDir, 'usage.jsonl'));

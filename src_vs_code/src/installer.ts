@@ -8,6 +8,7 @@ import {
   binaryNameFor,
   entryPathIn,
   ridFor,
+  newestServerTag,
   updateAvailable,
   versionFromTag,
 } from './coaiInstall';
@@ -84,18 +85,38 @@ export async function updateIsAvailable(state: vscode.Memento): Promise<boolean>
   }
 }
 
+/**
+ * The newest published SERVER version, or undefined when GitHub cannot be reached.
+ *
+ * <p>The list endpoint, not <c>/releases/latest</c>: that one answers with the newest release of
+ * ANY tag shape, and this repository publishes extension releases too. An extension release was
+ * therefore answering "is there a newer server" with a tag that is not a server version, so the
+ * update check concluded no — every time, silently, since the day the extension line started.</p>
+ */
+export async function latestServerVersion(): Promise<string | undefined> {
+  try {
+    return versionFromTag(await latestTag());
+  } catch {
+    return undefined; // an offline machine is not an error worth showing
+  }
+}
+
 async function latestTag(): Promise<string> {
-  const response = await fetch(`https://api.github.com/repos/${RELEASES_REPO}/releases/latest`, {
+  const response = await fetch(`https://api.github.com/repos/${RELEASES_REPO}/releases?per_page=30`, {
     headers: { accept: 'application/vnd.github+json' },
   });
   if (!response.ok) {
-    throw new Error(`GitHub answered ${response.status} for the latest release`);
+    throw new Error(`GitHub answered ${response.status} for the release list`);
   }
-  const body = (await response.json()) as { tag_name?: string };
-  if (typeof body.tag_name !== 'string') {
-    throw new Error('the latest release has no tag');
+  const body = (await response.json()) as { tag_name?: string }[];
+  const tags = Array.isArray(body)
+    ? body.map((r) => r.tag_name).filter((t): t is string => typeof t === 'string')
+    : [];
+  const newest = newestServerTag(tags);
+  if (newest === undefined) {
+    throw new Error('no server release is published yet');
   }
-  return body.tag_name;
+  return newest;
 }
 
 async function download(url: string): Promise<Uint8Array> {

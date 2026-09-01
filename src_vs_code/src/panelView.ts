@@ -38,6 +38,8 @@ export interface PanelState {
   readonly usage: readonly UsageEntry[];
   /** Which window the spending chart is showing. */
   readonly usageWindow: Window;
+  /** The newest published server version, or empty while it is unknown or unreachable. */
+  readonly latestServerVersion: string;
 }
 
 /**
@@ -276,13 +278,30 @@ ${field}`;
 ${field}`;
 }
 
+/**
+ * What is installed, what is published, and a button when those differ.
+ *
+ * <p>The published version is shown even when it MATCHES, because "you are up to date" and "the
+ * check never ran" look identical when only a mismatch is displayed — and this check silently
+ * never ran at all for weeks, asking GitHub for the newest release of any kind and being handed
+ * an extension tag.</p>
+ */
 function serverBody(state: PanelState): string {
-  return `<div class="status">${
-    state.serverInstalled
-      ? `coai-mcp ${escapeHtml(state.serverVersion)} is installed.`
-      : 'coai-mcp is not installed yet — use the ⋯ menu above.'
-  }</div>
-<div class="hint">Changes here are saved for the server straight away; it reads them when your MCP client next starts it. The config block in the ⋯ menu is pasted once, when you first set it up.</div>`;
+  const installed = state.serverInstalled
+    ? `coai-mcp ${escapeHtml(state.serverVersion)} is installed.`
+    : 'coai-mcp is not installed yet.';
+
+  const published = state.latestServerVersion.length === 0
+    ? '<div class="hint">The published version could not be read from GitHub just now.</div>'
+    : state.serverInstalled && state.latestServerVersion === state.serverVersion
+      ? `<div class="hint">${escapeHtml(state.latestServerVersion)} is the newest published — you are up to date.</div>`
+      : `<div class="hint">${escapeHtml(state.latestServerVersion)} is published.</div>
+<button class="add" data-command="installServer">⬇&nbsp; ${state.serverInstalled ? 'Update' : 'Install'} coai-mcp ${escapeHtml(state.latestServerVersion)}</button>`;
+
+  return `<div class="status">${installed}</div>
+${published}
+<div class="hint">Changes here are saved for the server straight away; it reads them when your MCP client next starts it. The config block in the ⋯ menu is pasted once, when you first set it up.</div>
+<button class="link" data-command="checkForUpdate">Check again</button>`;
 }
 
 function questionsSection(questions: readonly Escalation[]): string {

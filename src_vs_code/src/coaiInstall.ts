@@ -72,3 +72,17 @@ export function updateAvailable(installed: string | undefined, publishedTag: str
   }
   return installed === undefined || compareVersions(published, installed) > 0;
 }
+
+/**
+ * The newest SERVER tag out of a release list.
+ *
+ * <p>This repository publishes two tag shapes — <c>mcp-v*</c> and <c>extension-v*</c> — and the
+ * update check used to ask GitHub for "the latest release", which is the newest of EITHER. An
+ * extension release therefore answered the question "is there a newer server", produced a tag
+ * that is not a server version, and the check quietly concluded no. It never fired once.</p>
+ */
+export function newestServerTag(tags: readonly string[]): string | undefined {
+  return tags
+    .filter((t) => versionFromTag(t) !== undefined)
+    .sort((a, b) => compareVersions(versionFromTag(b)!, versionFromTag(a)!))[0];
+}
