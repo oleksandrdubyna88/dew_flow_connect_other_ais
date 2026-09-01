@@ -66,30 +66,25 @@ test('each npm-published CLI offers the exact command that installs it', () => {
     ['gemini', '@google/gemini-cli'],
     ['claude', '@anthropic-ai/claude-code'],
   ] as const) {
-    const install = vendorInstall({ id: runtime, runtime, model: '', enabled: true, baseUrl: '', executablePath: '' });
+    const install = vendorInstall({ id: runtime, runtime, model: '', enabled: true, baseUrl: '', executablePath: '' }, 'linux');
     assert.equal(install.command, `npm install -g ${pkg}`);
   }
 });
 
-test('the same command in both shells, because npm does not care which one you are in', () => {
-  const install = vendorInstall({ id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '' });
-  assert.equal(install.powershell, install.command);
-  assert.equal(install.bash, install.command);
-  // What DOES differ is getting node in the first place, which is the actual reason somebody is
-  // reading this on a fresh WSL box.
-  assert.match(install.prerequisite.powershell, /winget/);
-  assert.match(install.prerequisite.bash, /apt|nvm/);
+test('the npm command is the same on every platform, because npm does not care', () => {
+  const linux = vendorInstall({ id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '' }, 'linux');
+  const windows = vendorInstall({ id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '' }, 'win32');
+  assert.equal(linux.command, windows.command);
 });
 
 test('antigravity is pointed at, because Google publishes no install command for it', () => {
   // `agy` ships as a Go binary with the Antigravity app and npm has no package for it, so there is
   // nothing to run. The honest answer is the documentation.
-  const install = vendorInstall({ id: 'gemini', runtime: 'antigravity', model: '', enabled: true, baseUrl: '', executablePath: '' });
-
-  assert.equal(install.bash, '');
-  assert.equal(install.powershell, '');
-  assert.match(install.docs, /antigravity\.google/);
-  assert.match(install.note, /no install command|ships with/i);
+  for (const p of ['win32', 'linux', 'darwin'] as const) {
+    const install = vendorInstall({ id: 'gemini', runtime: 'antigravity', model: '', enabled: true, baseUrl: '', executablePath: '' }, p);
+    assert.equal(install.command, '');
+    assert.match(install.docs, /antigravity\.google/);
+  }
 });
 
 test('an install command may only come from a source the vendor itself publishes', () => {
@@ -99,20 +94,80 @@ test('an install command may only come from a source the vendor itself publishes
   // offer what the vendor publishes.
   const runtimes = ['codex', 'gemini', 'claude', 'antigravity'] as const;
   for (const runtime of runtimes) {
-    const install = vendorInstall({ id: runtime, runtime, model: '', enabled: true, baseUrl: '', executablePath: '' });
-    for (const command of [install.command, install.bash, install.powershell]) {
+    for (const p of ['win32', 'linux', 'darwin'] as const) {
+      const command = vendorInstall({ id: runtime, runtime, model: '', enabled: true, baseUrl: '', executablePath: '' }, p).command;
       if (command.length === 0) {
         continue;
       }
       assert.ok(
         OFFICIAL_SOURCES.some((prefix) => command.startsWith(prefix)),
-        `${runtime} would install with "${command}", which is not from a source the vendor publishes`,
+        `${runtime} on ${p} would install with "${command}", which is not from a source the vendor publishes`,
       );
     }
   }
 });
 
 test('a vendor on somebody else’s endpoint installs the CLI it actually rides', () => {
-  const install = vendorInstall({ id: 'deepseek', runtime: 'codex', model: '', enabled: true, baseUrl: 'https://api.deepseek.com/v1', executablePath: '' });
+  const install = vendorInstall({ id: 'deepseek', runtime: 'codex', model: '', enabled: true, baseUrl: 'https://api.deepseek.com/v1', executablePath: '' }, 'linux');
   assert.equal(install.command, 'npm install -g @openai/codex');
+});
+
+// ---------- the buttons must answer for the OS they are actually running on ----------
+
+test('the run button uses the CLI path when one is set', () => {
+  // The whole point of the field: PATH could not answer, so somebody said where the binary is.
+  // A button that then runs the bare name ignores the one thing they told it.
+  const term = vendorTerminal({
+    id: 'gemini', runtime: 'antigravity', model: 'gemini-3.7-flash-high', enabled: true, baseUrl: '',
+    executablePath: '/mnt/c/Users/strug/AppData/Local/agy/bin/agy.exe',
+  });
+
+  assert.match(term.command, /^\/mnt\/c\/Users\/strug\/AppData\/Local\/agy\/bin\/agy\.exe\b/);
+  assert.ok(term.usageCommand.endsWith('agy.exe usage'), 'the usage line must run the same binary: ' + term.usageCommand);
+});
+
+test('a path with a space survives being put on a command line', () => {
+  const term = vendorTerminal({
+    id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '',
+    executablePath: '/home/jinx/my tools/codex',
+  });
+
+  assert.ok(term.command.startsWith('"/home/jinx/my tools/codex"'), term.command);
+});
+
+test('the install prerequisite is the one for THIS operating system', () => {
+  for (const [platform, marker] of [
+    ['win32', /winget/],
+    ['linux', /apt|nvm/],
+    ['darwin', /brew/],
+  ] as const) {
+    const install = vendorInstall(
+      { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '' },
+      platform,
+    );
+    assert.match(install.prerequisite, marker, `${platform} needs its own way to get node`);
+  }
+});
+
+test('an antigravity reviewer on linux says it cannot work there, rather than offering nothing', () => {
+  // In a VS Code window connected to WSL the extension host IS linux, so this is the case a person
+  // actually hits — and "no command" with no explanation reads as a broken button.
+  const linux = vendorInstall(
+    { id: 'gemini', runtime: 'antigravity', model: '', enabled: true, baseUrl: '', executablePath: '' },
+    'linux',
+  );
+
+  assert.equal(linux.command, '');
+  assert.match(linux.note, /no Linux CLI|not published|codex or claude/i);
+});
+
+test('the same reviewer on windows is installable by installing the app', () => {
+  const windows = vendorInstall(
+    { id: 'gemini', runtime: 'antigravity', model: '', enabled: true, baseUrl: '', executablePath: '' },
+    'win32',
+  );
+
+  assert.equal(windows.command, '');
+  assert.match(windows.note, /app/i);
+  assert.doesNotMatch(windows.note, /no Linux CLI/i, 'that sentence is about the other platform');
 });

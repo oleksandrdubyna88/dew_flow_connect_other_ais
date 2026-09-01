@@ -41,7 +41,14 @@ export function vendorTerminal(vendor: Vendor): VendorTerminal {
   // fallback everywhere else too. A runtime this build KNOWS must be listed above: the chain this
   // replaced quietly opened codex for `antigravity`, so the button meant for signing a vendor in
   // started a different vendor's CLI under that vendor's name.
-  const executable = EXECUTABLE[vendor.runtime] ?? 'codex';
+  //
+  // A CLI path somebody set wins over both. The whole point of the field is that PATH could not
+  // answer; a button that then runs the bare name ignores the one thing they told it. Quoted,
+  // because a path with a space is otherwise two arguments.
+  const executable =
+    vendor.executablePath.length > 0
+      ? quoteIfNeeded(vendor.executablePath)
+      : (EXECUTABLE[vendor.runtime] ?? 'codex');
   const model =
     vendor.model.length === 0
       ? []
@@ -52,7 +59,13 @@ export function vendorTerminal(vendor: Vendor): VendorTerminal {
 
   return {
     command: [executable, ...provider, ...model].join(' '),
-    usageCommand: USAGE_COMMAND[vendor.runtime] ?? '',
+    // agy's usage command is a SHELL command rather than a slash command inside a session, so it
+    // must run the same binary the button just launched — which, with a CLI path set, is not the
+    // bare name.
+    usageCommand:
+      vendor.runtime === 'antigravity'
+        ? `${executable} usage`
+        : (USAGE_COMMAND[vendor.runtime] ?? ''),
     note:
       vendor.baseUrl.length === 0
         ? ''
@@ -75,6 +88,11 @@ function providerOverrides(vendor: Vendor): readonly string[] {
   ];
 }
 
+/** A path with a space is two arguments unless it is one string. */
+function quoteIfNeeded(path: string): string {
+  return path.includes(' ') ? `"${path}"` : path;
+}
+
 /** `mistral` → `MISTRAL_API_KEY`, matching the server's own derivation exactly. */
 export function keyVariable(id: string): string {
   return `${id.toUpperCase().replace(/[-.]/g, '_')}_API_KEY`;
@@ -87,23 +105,24 @@ export function keyVariable(id: string): string {
  * and the panel is where somebody is standing when they find that out. Hunting a vendor's docs to
  * paste one npm line is the kind of small friction that stops a reviewer being added at all.</p>
  */
+/** The operating systems the buttons can answer for — what `process.platform` reports. */
+export type Platform = 'win32' | 'linux' | 'darwin';
+
+/**
+ * How to install the CLI a reviewer needs, for the operating system the panel is actually on.
+ *
+ * <p>The platform is an argument rather than a lookup so this stays pure — and because it is the
+ * fact that changes everything: in a VS Code window connected to WSL the extension host IS linux,
+ * whatever the machine's badge says, and the answers must be the linux ones.</p>
+ */
 export interface VendorInstall {
-  /**
-   * The install command for a shell-agnostic vendor, or empty when the shells differ.
-   *
-   * <p>They differ for exactly one vendor, and that is why the two fields below exist: `agy` has a
-   * snap package on Linux and nothing on Windows, where it ships with the Antigravity app.</p>
-   */
+  /** The install command for this platform, or empty when the vendor publishes none for it. */
   readonly command: string;
-  /** What PowerShell would run, or empty when there is nothing to run there. */
-  readonly powershell: string;
-  /** What bash would run, or empty when there is nothing to run there. */
-  readonly bash: string;
-  /** Getting to the point where that command works — this is where the shells actually differ. */
-  readonly prerequisite: { readonly powershell: string; readonly bash: string };
-  /** Where to read more, and the whole answer for a CLI with no install command. */
+  /** Getting to the point where the command works — how THIS platform gets node. */
+  readonly prerequisite: string;
+  /** Where to read more, and the whole answer when there is no command. */
   readonly docs: string;
-  /** Anything a person must know before running it. */
+  /** Anything a person must know before running it, in this platform's terms. */
   readonly note: string;
 }
 
@@ -121,29 +140,30 @@ const DOCS: Record<string, string> = {
   antigravity: 'https://antigravity.google',
 };
 
+/** How each platform gets node, which is the actual reason somebody reads this on a fresh box. */
+const NODE_PREREQUISITE: Record<Platform, string> = {
+  win32: 'winget install OpenJS.NodeJS.LTS',
+  linux: 'sudo apt install -y nodejs npm   # or: nvm install --lts',
+  darwin: 'brew install node',
+};
+
 /**
- * <p><b>A CLI npm does not publish is pointed at, never invented.</b> `agy` ships as a Go binary
- * with the Antigravity app; a plausible-looking npm line for it would be a command that fails, in
- * the one place somebody came to precisely because they did not know the answer.</p>
+ * <p><b>Official sources only — an operator decision, and this is where it bites.</b> There IS an
+ * `antigravity-cli` snap for Linux at the version Google ships; its publisher is a third party, and
+ * it was briefly offered here. A button that installs software gets pressed without reading, so it
+ * may only ever offer what the vendor itself publishes — `OFFICIAL_SOURCES` and its test are that
+ * rule in a form a future change cannot quietly break.</p>
  */
-export function vendorInstall(vendor: Vendor): VendorInstall {
+export function vendorInstall(vendor: Vendor, platform: Platform): VendorInstall {
   if (vendor.runtime === 'antigravity') {
-    return ANTIGRAVITY_INSTALL;
+    return antigravityInstall(platform);
   }
 
   const runtime = PACKAGE[vendor.runtime] !== undefined ? vendor.runtime : 'codex';
-  const command = `npm install -g ${PACKAGE[runtime]}`;
 
   return {
-    command,
-    powershell: command,
-    bash: command,
-    // The command itself is identical in both shells — npm does not care. What differs is getting
-    // node in the first place, which is the actual reason somebody is reading this on a fresh box.
-    prerequisite: {
-      powershell: 'winget install OpenJS.NodeJS.LTS',
-      bash: 'sudo apt install -y nodejs npm   # or: nvm install --lts',
-    },
+    command: `npm install -g ${PACKAGE[runtime]}`,
+    prerequisite: NODE_PREREQUISITE[platform],
     docs: DOCS[vendor.runtime] ?? DOCS['codex']!,
     note:
       vendor.baseUrl.length === 0
@@ -153,33 +173,20 @@ export function vendorInstall(vendor: Vendor): VendorInstall {
 }
 
 /**
- * Antigravity: pointed at, never installed by a command from here.
- *
- * <p><b>Official sources only — an operator decision, and this is where it bites.</b> There IS a
- * `antigravity-cli` snap for Linux, at the version Google ships, and it was briefly offered here.
- * Its publisher is not Google: it is a third party repackaging the real CLI. A button that installs
- * software is a button people press without reading, so it may only ever offer what the vendor
- * itself publishes. `OFFICIAL_SOURCES` and the test over it are that rule in a form a future change
- * cannot quietly break.</p>
- *
- * <p>So on Linux there is no command to give, because the vendor publishes none: `agy` ships as a
- * Go binary with the Antigravity app, and `npm install -g antigravity` is a 404. The honest answer
- * is the documentation, and — measured — the Windows `agy.exe` DOES launch from WSL through
- * interop, so a Windows-side install plus the new CLI-path field is a real route for anyone whose
- * repository lives on a Windows drive.</p>
+ * Antigravity: installable by installing the app where the app exists, and said plainly where it
+ * does not. `agy` ships as a Go binary with the Antigravity app; npm has no package for it.
  */
-const ANTIGRAVITY_INSTALL: VendorInstall = {
-  command: '',
-  powershell: '',
-  bash: '',
-  prerequisite: {
-    powershell: 'install the Antigravity app; the CLI comes with it',
-    bash: 'install the Antigravity app on the Windows side — its agy.exe runs from WSL through interop',
-  },
-  docs: 'https://antigravity.google',
-  note:
-    'The Antigravity CLI has no install command from a source Google publishes: `agy` ships with the Antigravity app, and npm has no package for it. Install the app, then sign in once. On WSL its Windows agy.exe does run through interop — put its path in this reviewer\u2019s CLI path field.',
-};
+function antigravityInstall(platform: Platform): VendorInstall {
+  const note =
+    platform === 'linux'
+      ? 'Antigravity has no Linux CLI that Google publishes — on Linux use codex or claude as this ' +
+        'reviewer. On WSL there is one more route: the Windows agy.exe runs through interop, so put ' +
+        'its path (/mnt/c/…/agy/bin/agy.exe) in this reviewer’s CLI path field.'
+      : 'The Antigravity CLI comes with the Antigravity app — install the app, sign in once, and ' +
+        'agy is on PATH.';
+
+  return { command: '', prerequisite: '', docs: DOCS['antigravity']!, note };
+}
 
 /**
  * The only publishers an install command may come from.

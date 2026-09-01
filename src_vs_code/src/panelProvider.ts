@@ -15,7 +15,7 @@ import { latestServerVersion } from './installer';
 import { serverSettingsJson } from './serverSettingsFile';
 import { settingsFrom } from './settingsShape';
 import { normaliseId, Vendor, VENDOR_PRESETS, vendorsFrom } from './vendors';
-import { vendorInstall, vendorTerminal } from './vendorTerminal';
+import { Platform, vendorInstall, vendorTerminal } from './vendorTerminal';
 
 /**
  * The sidebar panel: reviewers, language, the gate, the limits, and what is waiting on you.
@@ -171,12 +171,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    const install = vendorInstall(vendor);
-    // The shell decides, because for one vendor the two differ: agy has a snap on Linux and no
-    // command at all on Windows, where it ships with the Antigravity app.
-    const shell = isPowerShell() ? 'powershell' : 'bash';
-    const command = install[shell];
-    if (command.length === 0) {
+    // `process.platform` is the extension HOST's platform, which is the one that matters: in a
+    // VS Code window connected to WSL it is 'linux', whatever the machine's badge says, and the
+    // terminal this opens runs there too.
+    const install = vendorInstall(vendor, platform());
+    if (install.command.length === 0) {
       const open = 'Open the instructions';
       const choice = await vscode.window.showInformationMessage(install.note, open);
       if (choice === open) {
@@ -193,9 +192,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
     // Both lines are typed, newest last, so the prompt holds the install command itself: a machine
     // that already has node needs only that one, and a machine that does not can scroll up one.
-    terminal.sendText(`# first time on this machine? ${install.prerequisite[shell]}`, false);
-    terminal.sendText('', true);
-    terminal.sendText(command, false);
+    if (install.prerequisite.length > 0) {
+      terminal.sendText(`# first time on this machine? ${install.prerequisite}`, false);
+      terminal.sendText('', true);
+    }
+
+    terminal.sendText(install.command, false);
   }
 
   /**
@@ -507,16 +509,7 @@ function nonce(): string {
   return Array.from({ length: 32 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
 }
 
-/**
- * Which shell VS Code will actually open, so the right prerequisite is the one shown.
- *
- * <p>Read from the terminal profile rather than from the platform: a Windows machine whose
- * default profile is a WSL shell wants the apt line, and that is precisely the machine somebody
- * is on when they press this.</p>
- */
-function isPowerShell(): boolean {
-  const profile = vscode.workspace
-    .getConfiguration('terminal.integrated.defaultProfile')
-    .get<string>(process.platform === 'win32' ? 'windows' : 'linux');
-  return process.platform === 'win32' && !/wsl|bash|ubuntu|git bash/i.test(profile ?? 'PowerShell');
+/** The extension host's platform, narrowed to the three the buttons can answer for. */
+function platform(): Platform {
+  return process.platform === 'win32' ? 'win32' : process.platform === 'darwin' ? 'darwin' : 'linux';
 }
