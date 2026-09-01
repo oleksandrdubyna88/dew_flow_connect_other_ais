@@ -100,8 +100,14 @@ public sealed record PanelSettings
     public static PanelSettings FromEnvironment(Func<string, string?> env) => new PanelSettings
     {
         Rounds = new PanelConfig(
-            MaxRounds: IntVar(env, "COAI_MAX_ROUNDS", 3),
-            Threshold: IntVar(env, "COAI_GATE_THRESHOLD", 2),
+            // The legacy keys become the DEFAULT for both stages rather than being dropped:
+            // somebody who set a threshold once must not have their gate silently change under them.
+            Plan: new StageGate(
+                IntVar(env, "COAI_MAX_ROUNDS_PLAN", IntVar(env, "COAI_MAX_ROUNDS", PanelConfig.PlanDefault.MaxRounds)),
+                IntVar(env, "COAI_THRESHOLD_PLAN", IntVar(env, "COAI_GATE_THRESHOLD", PanelConfig.PlanDefault.Threshold))),
+            Code: new StageGate(
+                IntVar(env, "COAI_MAX_ROUNDS_CODE", IntVar(env, "COAI_MAX_ROUNDS", PanelConfig.CodeDefault.MaxRounds)),
+                IntVar(env, "COAI_THRESHOLD_CODE", IntVar(env, "COAI_GATE_THRESHOLD", PanelConfig.CodeDefault.Threshold))),
             OnExhausted: env("COAI_ON_EXHAUSTED")?.ToLowerInvariant() switch
             {
                 "continue" => StagePolicy.Continue,

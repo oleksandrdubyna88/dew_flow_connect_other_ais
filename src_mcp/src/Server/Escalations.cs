@@ -24,8 +24,38 @@ public sealed record EscalationQuestion(
     IReadOnlyList<Finding> OpenFindings,
     string AskedUtc);
 
-/// <summary>What a person wrote back.</summary>
-public sealed record EscalationAnswer(string Id, string Answer, string AnsweredUtc);
+/// <summary>
+/// What a person chose when the gate ran out of rounds and asked them.
+/// </summary>
+/// <remarks>
+/// <para>Three answers, because those are the three things that can actually happen next — and
+/// notably none of them is "ship it with the findings open". A gate whose human override is
+/// "ignore all this" is a gate with an off switch; these three all keep the findings alive.</para>
+/// <para>It was asked with a free-text input box, which is the control for a question an AI wrote
+/// in words, and this is not that. <see cref="None"/> is what prose means: still their answer,
+/// carried to the AI, but never a decision on its own.</para>
+/// </remarks>
+public enum HumanDecision
+{
+    None,
+
+    /// <summary>Keep going: another set of rounds, nothing changed first.</summary>
+    /// <remarks>For when the person thinks the reviewers are wrong, or wants another opinion.</remarks>
+    Continue,
+
+    /// <summary>Stop reviewing and act on what was found, then review again.</summary>
+    Fix,
+
+    /// <summary>Stop and talk to the person before doing anything else.</summary>
+    Discuss,
+}
+
+/// <summary>What a person wrote back, and — when they pressed a button — what they chose.</summary>
+public sealed record EscalationAnswer(string Id, string Answer, string AnsweredUtc)
+{
+    /// <summary><c>proceed</c> or <c>fix</c>. Absent for a typed answer, and absent is not a choice.</summary>
+    public string? Decision { get; init; }
+}
 
 /// <summary>What waiting for a person produced. A closed union: silence is never an answer.</summary>
 public abstract record EscalationOutcome
@@ -118,6 +148,78 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
         return ReadAnswer(question.Id) is { } late
             ? new EscalationOutcome.Answered(late.Answer)
             : new EscalationOutcome.NoAnswerYet(budget);
+    }
+
+    /// <summary>
+    /// This session's answered notice, if a person has answered one.
+    /// </summary>
+    /// <remarks>
+    /// The reason this exists: a <c>call_human</c> notice is written by a round that then RETURNS,
+    /// so nothing is polling for its answer the way <see cref="AskAsync"/> does. The panel wrote the
+    /// answer file and no code on either side ever read it — a person could type a decision, watch
+    /// the card disappear, and have changed nothing. That is a worse dead end than never being
+    /// asked, because it looks like it worked.
+    /// </remarks>
+    private EscalationAnswer? AnsweredFor(string sessionId)
+    {
+        if (!System.IO.Directory.Exists(Directory))
+        {
+            return null;
+        }
+
+        // Newest first: a session asked twice is answered about the round it is in now.
+        var questions = System.IO.Directory
+            .EnumerateFiles(Directory, "*.json")
+            .Where(p => !p.EndsWith(".answer.json", StringComparison.Ordinal))
+            .OrderByDescending(File.GetLastWriteTimeUtc);
+
+        foreach (var path in questions)
+        {
+            if (ReadQuestion(path) is not { } question || question.SessionId != sessionId)
+            {
+                continue;
+            }
+
+            if (ReadAnswer(question.Id) is { } answer)
+            {
+                return answer;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>What the person chose for this session, or <see cref="HumanDecision.None"/>.</summary>
+    public HumanDecision DecisionFor(string sessionId) =>
+        // `?.Decision?` and not `?.Decision.`: a field absent from the JSON comes back NULL through
+        // the source-generated deserializer whatever the property initializer says, so the
+        // non-nullable declaration is a promise the wire does not keep. Found by the test for a
+        // typed answer, which is the ordinary case.
+        AnsweredFor(sessionId)?.Decision?.Trim().ToLowerInvariant() switch
+        {
+            "continue" => HumanDecision.Continue,
+            "fix" => HumanDecision.Fix,
+            "discuss" => HumanDecision.Discuss,
+            _ => HumanDecision.None,
+        };
+
+    /// <summary>Their own words, whether or not they pressed a button. Never discarded.</summary>
+    public string AnswerTextFor(string sessionId) => AnsweredFor(sessionId)?.Answer ?? string.Empty;
+
+    private EscalationQuestion? ReadQuestion(string path)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize(File.ReadAllText(path), EscalationJsonContext.Default.EscalationQuestion);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 
     /// <summary>The answer, or nothing — a malformed or half-written file is nothing, never an answer.</summary>

@@ -76,7 +76,7 @@ public sealed class RoundMachineTests
     [InlineData(StagePolicy.Escalate, typeof(RoundVerdict.Escalated))]
     public void MaxRounds_ReachedWithFindings_YieldsTheConfiguredOutcome(StagePolicy policy, Type verdict)
     {
-        var s = Fresh(new PanelConfig(MaxRounds: 1, OnExhausted: policy));
+        var s = Fresh(PanelConfig.Uniform(1, 2, policy));
 
         RoundMachine.CompleteRound(s, Failing(), AllSix).Should().BeOfType<Transition.Ok>()
             .Which.Verdict.Should().BeOfType(verdict);
@@ -85,7 +85,7 @@ public sealed class RoundMachineTests
     [Fact]
     public void EscalationSteps_FireInLadderOrder_ThenAHuman()
     {
-        var s = Fresh(new PanelConfig(MaxRounds: 1, OnExhausted: StagePolicy.Escalate));
+        var s = Fresh(PanelConfig.Uniform(1, 2, StagePolicy.Escalate));
 
         var steps = new List<EscalationStep>();
         for (var i = 0; i < 3; i++)
@@ -134,7 +134,7 @@ public sealed class RoundMachineTests
     {
         // The gap the first live run exposed: rounds exhausted, verdict call_human, the person
         // says "go" — and the machine had no way to hear it.
-        var s = Fresh(new PanelConfig(MaxRounds: 1, OnExhausted: StagePolicy.Human));
+        var s = Fresh(PanelConfig.Uniform(1, 2, StagePolicy.Human));
         var ok = (Transition.Ok)RoundMachine.CompleteRound(s, Failing(), AllSix);
         ok.Verdict.Should().BeOfType<RoundVerdict.CallHuman>();
 
@@ -164,10 +164,10 @@ public sealed class RoundMachineTests
         // override rule: "no rounds left" is NOT "a human was asked". An escalated stage whose
         // rounds are also spent would have passed the old round-count check, and honouring the
         // flag there skips the ladder the operator configured.
-        var s = Fresh(new PanelConfig(MaxRounds: 1, OnExhausted: StagePolicy.Escalate));
+        var s = Fresh(PanelConfig.Uniform(1, 2, StagePolicy.Escalate));
         var ok = (Transition.Ok)RoundMachine.CompleteRound(s, Failing(), AllSix);
         ok.Verdict.Should().BeOfType<RoundVerdict.Escalated>();
-        var spent = ok.State with { RoundsRunThisStage = ok.State.Config.MaxRounds };
+        var spent = ok.State with { RoundsRunThisStage = ok.State.Config.Plan.MaxRounds };
 
         RoundMachine.Resolve(spent, [], humanSaysProceed: true)
             .Should().BeOfType<Transition.Refused>()
@@ -191,7 +191,7 @@ public sealed class RoundMachineTests
     {
         // One call_human verdict authorises ONE override. Left open, a later resolve in a fresh
         // stage would still be carrying permission granted for a decision already made.
-        var s = Fresh(new PanelConfig(MaxRounds: 1, OnExhausted: StagePolicy.Human));
+        var s = Fresh(PanelConfig.Uniform(1, 2, StagePolicy.Human));
         var ok = (Transition.Ok)RoundMachine.CompleteRound(s, Failing(), AllSix);
         var moved = (Transition.Moved)RoundMachine.Resolve(ok.State, [], humanSaysProceed: true);
 

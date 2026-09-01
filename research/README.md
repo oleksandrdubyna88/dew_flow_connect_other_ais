@@ -20,3 +20,5 @@ Documentation of shipped behaviour: [architecture.md](architecture.md) is the en
 | [PLAN_epic_06_proof.md](PLAN_epic_06_proof.md) | IMPLEMENTED 2026-08-31 — proof: the scripted end-to-end in CI, and the recorded real run |
 | [RESULTS_first_real_run.md](RESULTS_first_real_run.md) | The first real run: six attempts, eight defects, and what the reviewers found |
 | [PLAN_escalation_loopback.md](PLAN_escalation_loopback.md) | IMPLEMENTED 2026-08-31 — reaching a person from the server through files, with the modal, status bar and open-questions list |
+| [PLAN_conventions_pass.md](PLAN_conventions_pass.md) | IMPLEMENTED 2026-09-01 — the gate reads the project's own written rules and spends code round 1 on nothing else; rounds and threshold split per stage |
+| [RESULTS_conventions_prompt.md](RESULTS_conventions_prompt.md) | Three conventions prompts × two vendors plus a variance control: indistinguishable, nothing invented, and all eight missed the rule written as a table |

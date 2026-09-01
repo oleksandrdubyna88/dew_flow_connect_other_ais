@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.16.0 — 2026-09-01
+
+**The gate reads your project's own rules, and spends the first code round on nothing else.** Every
+repository carries written conventions — `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.claude/rules` — and
+the reviewers had never been shown a line of them, so the gate could call a change well written by
+its own standards while it broke four rules the project enforces on its humans. Round 1 of all three
+code reviewers now judges the diff against those rules and nothing else, quoting the sentence it
+breaks. Pick something else for round 1 and that still wins.
+
+The prompt for it was chosen by measurement — three variants, two vendors, plus a variance control —
+and the measurement decided nothing: they were indistinguishable, and across 56 findings not one
+cited a rule that did not exist. What mattered was putting the rules in the prompt at all. The record,
+including the violation all eight cells missed, is in `research/RESULTS_conventions_prompt.md`.
+
+**Rounds and threshold are set per stage.** Plan review defaults to 3 rounds and 2 findings; code
+review to 3 and 3. One number for both was strict on a page of text and impossible on a diff of a
+dozen files — measured here, where the plan stage passed at two and the code stage never passed.
+
+**A `call_human` verdict is answered with three buttons**, not a text box: keep going with another
+set of rounds, stop and act on the findings, or stop and talk to me. Each says what it will cause.
+And they now DO something — a typed answer to that card used to be written to a file nothing read, so
+you could decide, watch the card disappear, and have changed nothing. None of the three ships a
+change over open findings; an override meaning "ignore all this" is an off switch on the gate.
+
+**The Prompts and Gate sections are reframed**: the plan role in its own frame, the three code roles
+in one, each with a coloured edge from the sibling product's palette — and each showing only the
+rounds its own stage will actually run.
+
 ## 0.15.0 — 2026-09-01
 
 **Install a reviewer's CLI from its own row.** The new `⤓` button beside `▶` opens a terminal with

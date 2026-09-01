@@ -283,10 +283,20 @@ public sealed class PanelService
                 var files = await _context.CollectAsync(repoPath, baseRef, sha, ct: ct);
                 var shaped = DiffShaper.Shape(files);
                 var bundle = new ReviewBundle(scope, branch, baseRef, sha, shaped);
+
+                // The project's OWN written conventions, read from the worktree so they are the
+                // rules as of the commit under review rather than as of this afternoon. Without
+                // them a reviewer can call a change well written by its own standards while it
+                // breaks four rules the project enforces on its humans — and its silence reads as
+                // approval, because a reviewer cannot flag what it was never told.
+                var rules = RuleFiles.Collect(workingDir);
                 var context =
                     $"## The plan this change implements\n\n{bundle.PlanText}\n\n" +
+                    RulesSection(rules) +
                     $"## The change ({bundle.Branch} over {bundle.BaseRef}, at {bundle.Sha})\n\n{bundle.Diff.Text}";
-                return BuildWork(CodeRoles, workingDir, context, session.State.RoundsRunThisStage + 1);
+                _log.Information("rules for review: {Count} file(s), {Bytes} bytes, {Omitted} omitted",
+                    rules.Files.Count, rules.Bytes, rules.Omitted.Count);
+                return BuildWork(CodeRoles, workingDir, context, session.State.RoundsRunThisStage + 1, rules.HasRules);
             },
             ct);
     }
@@ -364,14 +374,14 @@ public sealed class PanelService
             var summary = ReviewerSummaryFactory.From(results);
             var reviews = results.Select(r => r.Outcome).OfType<ReviewerOutcome.Ok>().Select(o => o.Review).ToList();
             var merged = FindingDedup.Merge(reviews.SelectMany(r => r.Findings));
-            var gate = GateRule.Evaluate(merged, session.State.Rejections, _settings.Rounds.Threshold);
+            var gate = GateRule.Evaluate(merged, session.State.Rejections, StageGate(session).Threshold);
 
             if (RoundMachine.CompleteRound(session.State, gate, summary) is not Transition.Ok completed)
             {
                 return Error("the round could not complete — this is a bug, report it");
             }
 
-            var answer = AnswerFor(completed.Verdict, gate, summary, merged, reviews);
+            var answer = AnswerFor(completed.Verdict, gate, summary, merged, reviews, StageGate(session).Threshold);
             var record = live.Finish(answer.Verdict, gate.GatingCount, summary.Sentence, results);
             answer = answer with { Cost = new RoundCost(record.TokensIn, record.TokensOut, record.CostUsd) };
             _store.Save(session with
@@ -449,15 +459,19 @@ public sealed class PanelService
         }
     }
 
+    /// <summary>The gate for the stage this session is in — the only way this class reads it.</summary>
+    private StageGate StageGate(PersistedSession session) => _settings.Rounds.For(session.State.Stage);
+
     private string ModelOf(string provider) =>
         _settings.Providers.FirstOrDefault(p => p.Provider == provider)?.Model ?? string.Empty;
 
-    private PromptChoice ChoiceFor(ReviewRole role, int round) =>
+    private PromptChoice ChoiceFor(ReviewRole role, int round, bool hasRules) =>
         PromptCatalog.ForRound(
             role.ToString(),
             round,
             _settings.PromptsPerRound.GetValueOrDefault(role.ToString(), []),
-            _settings.RotatePrompts);
+            _settings.RotatePrompts,
+            hasRules);
 
     /// <summary>
     /// A <c>call_human</c> verdict reaches the PERSON, not only the AI that asked.
@@ -491,7 +505,26 @@ public sealed class PanelService
         _log.Information("a person was asked to decide: {Reason}", human.Reason);
     }
 
-    private IReadOnlyList<ReviewerWork> BuildWork(IReadOnlyList<ReviewRole> roles, string worktreePath, string context, int round)
+    /// <summary>
+    /// The rules block, or a sentence saying there is none.
+    /// </summary>
+    /// <remarks>
+    /// Said out loud either way. A conventions reviewer handed nothing would judge against its own
+    /// taste and report the result as compliance, which is the one answer this pass must not give.
+    /// </remarks>
+    private static string RulesSection(RuleBundle rules) =>
+        rules.HasRules
+            ? $"## The rules this project has written down\n\n{rules.Render()}\n"
+            : "## The rules this project has written down\n\nThis repository has none " +
+              "(no CLAUDE.md, AGENTS.md, GEMINI.md or .claude/rules). Do not invent a standard: " +
+              "a conventions finding needs a rule to quote.\n\n";
+
+    private IReadOnlyList<ReviewerWork> BuildWork(
+        IReadOnlyList<ReviewRole> roles,
+        string worktreePath,
+        string context,
+        int round,
+        bool hasRules = false)
     {
         var schemaFile = Path.Combine(_settings.DataDir, "finding-schema.json");
         Directory.CreateDirectory(_settings.DataDir);
@@ -523,7 +556,7 @@ public sealed class PanelService
             };
             foreach (var role in roles)
             {
-                var choice = ChoiceFor(role, round);
+                var choice = ChoiceFor(role, round, hasRules);
                 var prompt = ComposePrompt(choice, context);
                 var repairPrompt = prompt +
                     "\n\nYOUR PREVIOUS ANSWER WAS NOT VALID JSON. Return ONLY the JSON object for the schema — no fences, no prose.";
@@ -545,7 +578,8 @@ public sealed class PanelService
         GateResult gate,
         ReviewerSummary summary,
         ImmutableArray<Finding> merged,
-        List<NormalisedReview> reviews)
+        List<NormalisedReview> reviews,
+        int threshold)
     {
         var rejectedEntries = reviews.SelectMany(r => r.Rejected).Select(r => $"entry {r.Index}: {r.Reason}").ToList();
         var (name, step, instruction) = verdict switch
@@ -563,7 +597,7 @@ public sealed class PanelService
             _ => ("unknown", null, ""),
         };
         return new ReviewAnswer(
-            name, step, gate.GatingCount, _settings.Rounds.Threshold, summary.Sentence,
+            name, step, gate.GatingCount, threshold, summary.Sentence,
             [.. merged], [.. gate.Discounted], rejectedEntries, instruction);
     }
 
@@ -590,7 +624,7 @@ public sealed class PanelService
         if (dtos is null or [])
         {
             return Task.FromResult(session.Pending.Count == 0
-                ? Finish(session, [], humanSaysProceed)
+                ? Finish(WithHumanDecision(session), [], humanSaysProceed)
                 : Error($"{session.Pending.Count} finding(s) await a decision — pass one per finding index"));
         }
 
@@ -614,7 +648,31 @@ public sealed class PanelService
                 : new Decision.Rejected(finding, dto.Reason));
         }
 
-        return Task.FromResult(Finish(session, decisions, humanSaysProceed));
+        return Task.FromResult(Finish(WithHumanDecision(session), decisions, humanSaysProceed));
+    }
+
+    /// <summary>
+    /// Applies what the PERSON pressed on a <c>call_human</c> notice, if they pressed anything.
+    /// </summary>
+    /// <remarks>
+    /// <para>Two of the three buttons mean "the stage is not finished, carry on": another set of
+    /// rounds either way, differing only in whether the AI changes something first. So both reset
+    /// the stage's round count — which is the whole unblocking, and it is the person's doing, not
+    /// the AI's.</para>
+    /// <para>None of the three advances a stage over open findings. A human override that means
+    /// "ignore all this" would be an off switch on the gate, and it is deliberately not offered.
+    /// <c>Discuss</c> leaves the session exactly where it is: the AI is meant to stop and talk.</para>
+    /// </remarks>
+    private PersistedSession WithHumanDecision(PersistedSession session)
+    {
+        var decision = _escalations.DecisionFor(session.State.SessionId);
+        if (decision is not (HumanDecision.Continue or HumanDecision.Fix))
+        {
+            return session;
+        }
+
+        _log.Information("the person chose {Decision}; the stage gets a fresh set of rounds", decision);
+        return session with { State = session.State with { RoundsRunThisStage = 0 } };
     }
 
     private string Finish(PersistedSession session, List<Decision> decisions, bool humanSaysProceed = false)
@@ -746,9 +804,19 @@ public sealed class PanelService
         session.State.RoundsRunThisStage,
         session.State.AwaitingResolve,
         session.State.PlanProceeded,
-        _settings.Rounds.Threshold,
-        _settings.Rounds.MaxRounds,
-        session.Rounds);
+        _settings.Rounds.For(session.State.Stage).Threshold,
+        _settings.Rounds.For(session.State.Stage).MaxRounds,
+        session.Rounds)
+    {
+        HumanDecision = _escalations.DecisionFor(session.State.SessionId) switch
+        {
+            Server.HumanDecision.Continue => "continue",
+            Server.HumanDecision.Fix => "fix",
+            Server.HumanDecision.Discuss => "discuss",
+            _ => string.Empty,
+        },
+        HumanAnswer = _escalations.AnswerTextFor(session.State.SessionId),
+    };
 
     private static string Json<T>(T value, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type) =>
         JsonSerializer.Serialize(value, type);

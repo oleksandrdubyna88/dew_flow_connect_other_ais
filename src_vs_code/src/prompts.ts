@@ -26,14 +26,17 @@ export const PROMPTS: readonly PromptChoice[] = [
   { id: 'plan-assumptions', role: 'PlanCritique', label: 'Assumptions & verification', purpose: 'What the plan takes for granted, and what it promises but never checks.', universal: false },
   { id: 'plan-human-path', role: 'PlanCritique', label: 'The human path', purpose: 'What a person does with it, and what happens when they do it wrong.', universal: false },
 
+  { id: 'conventions', role: 'Architecture', label: 'Conventions', purpose: 'Only the rules this project wrote down — CLAUDE.md, AGENTS.md, GEMINI.md, .claude/rules. A convention the reviewer believes in but the project never wrote is not a finding.', universal: false },
   { id: 'architecture', role: 'Architecture', label: 'Universal', purpose: 'Boundaries, abstractions, consistency, and the plan-to-code gap.', universal: true },
   { id: 'arch-boundaries', role: 'Architecture', label: 'Boundaries & duplication', purpose: 'Dependency direction, layers reaching around each other, capabilities implemented twice.', universal: false },
   { id: 'arch-evolution', role: 'Architecture', label: 'Cost of the next change', purpose: 'What this change makes harder, and what is hard-coded that will have to vary.', universal: false },
 
+  { id: 'conventions', role: 'SecurityReliability', label: 'Conventions', purpose: 'Only the rules this project wrote down — CLAUDE.md, AGENTS.md, GEMINI.md, .claude/rules. A convention the reviewer believes in but the project never wrote is not a finding.', universal: false },
   { id: 'security-reliability', role: 'SecurityReliability', label: 'Universal', purpose: 'Secrets, input, failure behaviour, state, trust boundaries.', universal: true },
   { id: 'sec-memory-leaks', role: 'SecurityReliability', label: 'What it holds and leaves', purpose: 'Secrets that outlive their use, resources leaked on the error path, what a kill -9 leaves behind.', universal: false },
   { id: 'sec-attack', role: 'SecurityReliability', label: 'Attack surface', purpose: 'What is trusted that was never checked, injection, privilege, and checks that fail open.', universal: false },
 
+  { id: 'conventions', role: 'UxDxPerformance', label: 'Conventions', purpose: 'Only the rules this project wrote down — CLAUDE.md, AGENTS.md, GEMINI.md, .claude/rules. A convention the reviewer believes in but the project never wrote is not a finding.', universal: false },
   { id: 'uxdx-performance', role: 'UxDxPerformance', label: 'Universal', purpose: 'Performance, UI state as code, and the ergonomics of a new API.', universal: true },
   { id: 'perf-scale', role: 'UxDxPerformance', label: 'Cost at scale', purpose: 'Which input grows, and what this code does when it does.', universal: false },
   { id: 'dx-ergonomics', role: 'UxDxPerformance', label: 'Ergonomics & waiting', purpose: 'Names that mislead, errors that name no cure, and work a person waits on.', universal: false },

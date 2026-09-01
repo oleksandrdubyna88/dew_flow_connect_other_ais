@@ -154,3 +154,28 @@ Fixed alongside it: `vendorTerminal` resolved its executable with a two-step cha
 to `codex`, so `▶` on an Antigravity row opened a different vendor's CLI under that vendor's name —
 the wrong-model defect again, on the button whose whole purpose is signing that vendor in. Every
 runtime this build knows is now a row in one table.
+
+### Two frames, four colours, and a stage each (2026-09-01)
+
+The Prompts section is two frames: the plan role alone, and the three code roles together. Each role
+is a box with a coloured LEFT EDGE rather than a filled panel — it marks the role at a glance without
+turning a settings panel into four coloured slabs, and it survives a light theme unchanged. The
+palette is the sibling product's own token set (`creds/src_vs_code/src/entityFormStyles.ts`): a
+`--vscode-charts-*` token with the hex it falls back to, so a theme that defines them wins and one
+that does not still gets the intended colour. **The colour is never the only signal** — every role's
+name is written out.
+
+That fallback is why `colours come from the theme, never from us` had to be narrowed: a hex inside
+`var(--x, #hex)` is sanctioned, a bare one is still us choosing a colour for somebody's editor.
+
+The Gate section is now two boxes, plan and code, each with its own rounds and threshold. Each
+prompt row shows only the rounds ITS stage will run: a picker for a round nobody reaches is a control
+that cannot do anything, which is the lesson the spending tabs already taught.
+
+### The escalation is answered with buttons
+
+"Proceed anyway, or fix the findings and review again?" was asked with a free-text input box — the
+control for a question an AI wrote in words, and this is not that. Worse, a typed answer had no
+effect at all (see [module_server.md](module_server.md)). It is a QuickPick of three now, each saying
+what it will cause: another set of rounds, stop and act on the findings, or stop and talk. `''` is
+not among them: there is no "ship it anyway".

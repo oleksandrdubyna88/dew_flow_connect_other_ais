@@ -39,8 +39,16 @@ export interface TranslatorChoice {
 }
 
 export interface CoaiSettings {
-  readonly maxRounds: number;
-  readonly gateThreshold: number;
+  /**
+   * The plan stage's budget. Separate from the code stage's because a plan is a document and a
+   * diff is not: two findings still open is a lot of doubt about a page of text, while three open
+   * on a diff of a dozen files is an ordinary Tuesday. One number for both made the plan gate
+   * strict and the code gate a permanent `call_human`.
+   */
+  readonly maxRoundsPlan: number;
+  readonly gateThresholdPlan: number;
+  readonly maxRoundsCode: number;
+  readonly gateThresholdCode: number;
   readonly onExhausted: OnExhausted;
   readonly maxConcurrency: number;
   readonly maxPerProvider: number;
@@ -57,8 +65,10 @@ export interface CoaiSettings {
 
 /** The defaults, matching the master plan's configuration table — pinned by tests. */
 export const DEFAULTS: CoaiSettings = {
-  maxRounds: 3,
-  gateThreshold: 2,
+  maxRoundsPlan: 3,
+  gateThresholdPlan: 2,
+  maxRoundsCode: 3,
+  gateThresholdCode: 3,
   onExhausted: 'human',
   maxConcurrency: 3,
   maxPerProvider: 2,
@@ -77,8 +87,10 @@ export type ConfigReader = (section: string) => unknown;
 /** VS Code config → a validated `CoaiSettings`; anything malformed falls back to the default. */
 export function settingsFrom(read: ConfigReader): CoaiSettings {
   return {
-    maxRounds: asPositive(read('maxRounds'), DEFAULTS.maxRounds),
-    gateThreshold: asCount(read('gateThreshold'), DEFAULTS.gateThreshold),
+    maxRoundsPlan: asPositive(read('maxRoundsPlan'), DEFAULTS.maxRoundsPlan),
+    gateThresholdPlan: asCount(read('gateThresholdPlan'), DEFAULTS.gateThresholdPlan),
+    maxRoundsCode: asPositive(read('maxRoundsCode'), DEFAULTS.maxRoundsCode),
+    gateThresholdCode: asCount(read('gateThresholdCode'), DEFAULTS.gateThresholdCode),
     onExhausted: asOnExhausted(read('onExhausted')),
     maxConcurrency: asPositive(read('maxConcurrency'), DEFAULTS.maxConcurrency),
     maxPerProvider: asPositive(read('maxPerProvider'), DEFAULTS.maxPerProvider),
@@ -110,11 +122,17 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
   if (Object.keys(settings.promptsPerRound).length > 0) {
     env['COAI_PROMPTS_PER_ROUND'] = JSON.stringify(settings.promptsPerRound);
   }
-  if (settings.maxRounds !== DEFAULTS.maxRounds) {
-    env['COAI_MAX_ROUNDS'] = String(settings.maxRounds);
+  if (settings.maxRoundsPlan !== DEFAULTS.maxRoundsPlan) {
+    env['COAI_MAX_ROUNDS_PLAN'] = String(settings.maxRoundsPlan);
   }
-  if (settings.gateThreshold !== DEFAULTS.gateThreshold) {
-    env['COAI_GATE_THRESHOLD'] = String(settings.gateThreshold);
+  if (settings.maxRoundsCode !== DEFAULTS.maxRoundsCode) {
+    env['COAI_MAX_ROUNDS_CODE'] = String(settings.maxRoundsCode);
+  }
+  if (settings.gateThresholdPlan !== DEFAULTS.gateThresholdPlan) {
+    env['COAI_THRESHOLD_PLAN'] = String(settings.gateThresholdPlan);
+  }
+  if (settings.gateThresholdCode !== DEFAULTS.gateThresholdCode) {
+    env['COAI_THRESHOLD_CODE'] = String(settings.gateThresholdCode);
   }
   if (settings.onExhausted !== DEFAULTS.onExhausted) {
     env['COAI_ON_EXHAUSTED'] = settings.onExhausted;

@@ -61,8 +61,10 @@ const SELF_EVIDENT: Record<string, string> = {
 
 const SETTING_ALIAS: Record<string, string> = {
   'coai.vendors': 'each row is one vendor',
-  'coai.maxRounds': 'rounds per stage',
-  'coai.gateThreshold': 'passes at or under',
+  'coai.maxRoundsPlan': 'rounds',
+  'coai.maxRoundsCode': 'rounds',
+  'coai.gateThresholdPlan': 'passes at or under',
+  'coai.gateThresholdCode': 'passes at or under',
   'coai.onExhausted': 'when the rounds run out',
   'coai.maxConcurrency': 'reviewers at once',
   'coai.maxPerProvider': 'per vendor',

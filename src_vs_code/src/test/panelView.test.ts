@@ -106,7 +106,13 @@ test('colours come from the theme, never from us', () => {
   const html = panelHtml(state(), 'n0nce');
   assert.ok(html.includes('var(--vscode-foreground)'));
   assert.ok(html.includes('var(--vscode-button-background)'));
-  assert.ok(!/#[0-9a-f]{6}/i.test(html.split('<script')[0] ?? ''), 'no hard-coded hex colours');
+  // A hex is allowed in exactly one place: the fallback of a theme token, `var(--x, #hex)`. The
+  // sibling product does the same, and the reason is that a theme which does not define the token
+  // should still get the intended colour rather than the browser's idea of one. A BARE hex is still
+  // us choosing a colour for somebody's editor, and stays forbidden.
+  const styles = html.split('<script')[0] ?? '';
+  const bare = styles.replace(/var\([^)]*\)/g, '');
+  assert.ok(!/#[0-9a-f]{6}/i.test(bare), 'no hard-coded hex colours outside a var() fallback');
 });
 
 test('the panel says whether the server is installed, and which version', () => {
@@ -411,4 +417,72 @@ test('a spending row shows the vendor and its cost apart, not run together', () 
   assert.match(html, /<span class="cost">/, 'the money needs an element the row can push to its far end');
   assert.match(html, /\.spend \.head \{[^}]*space-between/, 'the row puts the name and the cost at opposite ends');
   assert.match(html, /\.spend \.figures \{/, 'the tokens are the answer, so they are not styled as a hint');
+});
+
+// ---------- the prompts section: one frame for the plan, one for the three code roles ----------
+
+test('the plan role stands in its own frame, apart from the code roles', () => {
+  const html = panelHtml(state(), 'n0nce');
+  const groups = html.split('class="role-group"');
+
+  assert.equal(groups.length, 3, 'two frames: the plan stage, then the code stage');
+  const [, planFrame, codeFrame] = groups;
+  assert.ok(planFrame!.includes('data-prompt="PlanCritique"'), 'the plan role is in the first frame');
+  assert.ok(!planFrame!.includes('data-prompt="Architecture"'), 'and the code roles are not');
+  for (const role of ['Architecture', 'SecurityReliability', 'UxDxPerformance']) {
+    assert.ok(codeFrame!.includes(`data-prompt="${role}"`), `${role} shares the code frame`);
+  }
+});
+
+test('each code role is wrapped in its own colour, and still says its name', () => {
+  const html = panelHtml(state(), 'n0nce');
+  for (const [role, tone] of [
+    ['Architecture', 'arch'],
+    ['SecurityReliability', 'sec'],
+    ['UxDxPerformance', 'uxdx'],
+  ] as const) {
+    assert.match(html, new RegExp(`class="role role-${tone}"[\\s\\S]*?data-prompt="${role}"`),
+      `${role} is not wrapped in its own tone`);
+  }
+  // The colour is never the only signal: a person who cannot tell them apart still reads the name.
+  for (const label of ['Architecture', 'Security &amp; reliability', 'Performance &amp; UX-DX']) {
+    assert.ok(html.includes(label), `${label} is written out, not left to a colour`);
+  }
+});
+
+test('the role colours come from the theme with a fallback, never a bare hex', () => {
+  const css = panelHtml(state(), 'n0nce').split('</style>')[0] ?? '';
+  for (const [tone, fallback] of [
+    ['arch', '#569cd6'],
+    ['sec', '#ce9178'],
+    ['uxdx', '#b5cea8'],
+    ['plan', '#c586c0'],
+  ] as const) {
+    assert.match(css, new RegExp(`--tone-${tone}:\\s*var\\(--vscode-charts-\\w+,\\s*${fallback}\\)`),
+      `${tone} must be a charts token with a fallback`);
+  }
+});
+
+test('the plan and code stages each show their own rounds and threshold', () => {
+  const html = panelHtml(state(), 'n0nce');
+  for (const key of ['maxRoundsPlan', 'gateThresholdPlan', 'maxRoundsCode', 'gateThresholdCode']) {
+    assert.ok(html.includes(`data-setting="${key}"`), `${key} has no control`);
+  }
+  assert.ok(!html.includes('data-setting="maxRounds"'), 'the single-value control is gone, not hidden');
+});
+
+test('the number of rounds each stage shows follows that stage’s own budget', () => {
+  const html = panelHtml(
+    state({ settings: { ...DEFAULTS, maxRoundsPlan: 2, maxRoundsCode: 4 } }),
+    'n0nce',
+  );
+  assert.ok(html.includes('data-prompt="PlanCritique" data-round="2"'));
+  assert.ok(!html.includes('data-prompt="PlanCritique" data-round="3"'), 'a plan round nobody will run needs no picker');
+  assert.ok(html.includes('data-prompt="Architecture" data-round="4"'));
+});
+
+test('code round 1 is the conventions pass, and says so', () => {
+  const html = panelHtml(state(), 'n0nce');
+  assert.match(html, /Round 1[\s\S]{0,400}?Conventions/, 'the first code round defaults to the rules check');
+  assert.ok(html.includes('written down'), 'and the section says what that pass judges against');
 });

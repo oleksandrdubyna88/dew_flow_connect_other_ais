@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "Your AI writes the code; other vendors' models review it — the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -81,18 +81,6 @@
               "type": "string"
             }
           }
-        },
-        "coai.maxRounds": {
-          "type": "integer",
-          "default": 3,
-          "minimum": 1,
-          "description": "Review rounds per stage before the on-exhausted policy fires."
-        },
-        "coai.gateThreshold": {
-          "type": "integer",
-          "default": 2,
-          "minimum": 0,
-          "description": "The gate passes when blocking+major findings (after de-duplication) are at or under this."
         },
         "coai.onExhausted": {
           "type": "string",
@@ -223,6 +211,30 @@
               }
             }
           }
+        },
+        "coai.maxRoundsPlan": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "description": "Plan review: how many rounds the stage gets before a person decides."
+        },
+        "coai.gateThresholdPlan": {
+          "type": "number",
+          "default": 2,
+          "minimum": 0,
+          "description": "Plan review passes at or under this many blocking/major findings."
+        },
+        "coai.maxRoundsCode": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "description": "Code review: how many rounds the stage gets before a person decides."
+        },
+        "coai.gateThresholdCode": {
+          "type": "number",
+          "default": 3,
+          "minimum": 0,
+          "description": "Code review passes at or under this many blocking/major findings. A diff carries more than a plan does."
         },
         "coai.uiScale": {
           "type": "number",

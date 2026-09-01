@@ -27,7 +27,22 @@ public sealed record SessionAnswer(
     bool PlanProceeded,
     int Threshold,
     int MaxRounds,
-    IReadOnlyList<RoundRecord> Rounds);
+    IReadOnlyList<RoundRecord> Rounds)
+{
+    /// <summary>
+    /// What the PERSON answered a <c>call_human</c> with, if they have: <c>proceed</c>, <c>fix</c>,
+    /// or empty. Their own words come with it whether or not they pressed a button.
+    /// </summary>
+    /// <remarks>
+    /// Here because a resumed conversation must be able to LEARN of the decision rather than be
+    /// told about it. The notice used to be written by a round that then returned, so a person's
+    /// answer landed in a file nothing read — they could decide, watch the card disappear, and have
+    /// changed nothing.
+    /// </remarks>
+    public string HumanDecision { get; init; } = string.Empty;
+
+    public string HumanAnswer { get; init; } = string.Empty;
+}
 
 /// <summary>What a review tool returns: the verdict, the honest reviewer count, the findings.</summary>
 /// <param name="Cost">What the round consumed, as the vendors themselves reported it.</param>

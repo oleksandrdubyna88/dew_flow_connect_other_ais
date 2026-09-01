@@ -21,8 +21,14 @@ public sealed class PromptCatalogTests
         foreach (var role in Roles)
         {
             var choices = PromptCatalog.For(role).ToList();
-            choices.Should().HaveCount(3, $"{role} should offer a universal prompt and two lenses");
+            // A universal prompt and two lenses, plus — for the three CODE roles — the conventions
+            // pass, which is not a lens: it asks a different question (does this obey the written
+            // rules) and it owns round 1 rather than taking a turn in the rotation.
+            var expected = role == PromptCatalog.PlanRole ? 3 : 4;
+            choices.Should().HaveCount(expected, $"{role} should offer a universal prompt and two lenses");
             choices.Count(c => c.Universal).Should().Be(1, $"{role} needs exactly one default");
+            choices.Count(c => c.Id == PromptCatalog.ConventionsId)
+                .Should().Be(role == PromptCatalog.PlanRole ? 0 : 1, "a plan is not judged against code conventions");
         }
     }
 

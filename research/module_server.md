@@ -163,3 +163,49 @@ would have explained why.
 
 The rule this implements, including how to review an EXISTING commit (scope from the intent, commit
 as `branch`, its parent as `baseRef`): [.claude/rules/common/review-gate.md](../.claude/rules/common/review-gate.md).
+
+### The gate is split per stage, and code round 1 judges the written rules (2026-09-01)
+
+**`PanelConfig` is two `StageGate`s.** One threshold for both stages was wrong in a way only use
+revealed: a plan is a document, so two findings still open is a lot of doubt about a page of text; a
+diff is hundreds of lines across a dozen files, and three open there is an ordinary Tuesday. The
+number that made the plan gate strict made the code gate a permanent `call_human` — measured on this
+product's own rounds, where the plan stage passed at two and the code stage never passed at all.
+Defaults: plan 3 rounds / 2 findings, code 3 / 3. `PanelConfig.For(Stage)` is the only way to read
+them, so no call site picks a stage by hand, and the legacy `COAI_MAX_ROUNDS` /
+`COAI_GATE_THRESHOLD` become the value for BOTH stages rather than being dropped.
+
+**The reviewers are shown the project's own rules.** `RuleFiles.Collect` (in `runners/Context`) reads
+`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.claude/rules/**` and
+`.cursor/rules/**` from the WORKTREE — the rules as of the commit under review, not as of this
+afternoon. Instruction files first (they are the entry points and they survive a tight budget), 40 KB
+total, whole files only, and **what the budget cut is NAMED in the prompt**: a reviewer told nothing
+about what it was not shown would report compliance with rules it never saw, which turns an absence
+of evidence into a clean bill of health. A repo with no rules gets a sentence saying so, because a
+conventions pass with nothing to judge against would invent a standard.
+
+**Round 1 of every code role is the conventions pass** (`prompts/conventions.md`), when rules exist
+and the person has not chosen otherwise. Three reviewers already cover architecture, security and
+performance, each with its own taste; the one thing none of them did is hold the change to the
+standard the project WROTE DOWN — which is the standard its human authors are held to, so the two
+halves were being judged differently by construction. Before this, three rounds on this product's own
+commits referenced a project rule zero times.
+
+The prompt was chosen by measurement and the measurement decided nothing:
+[RESULTS_conventions_prompt.md](RESULTS_conventions_prompt.md).
+
+### A `call_human` answer reaches the machine
+
+The notice is written by a round that then RETURNS, so nothing polls for its answer the way
+`AskAsync` does — the panel wrote `<id>.answer.json` and no code on either side ever read it. A
+person could decide, watch the card disappear, and have changed nothing, which is a worse dead end
+than never being asked because it looks like it worked.
+
+`Escalations.DecisionFor(sessionId)` now reads it, and the answer carries one of THREE decisions
+rather than prose: `continue` (another set of rounds, nothing changed), `fix` (stop, act on the
+findings, then review again) and `discuss` (stop and talk to the person). `resolve` resets the
+stage's round count for the first two — the person's doing, not the AI's — and `status` reports the
+decision so a resumed conversation LEARNS of it rather than being told.
+
+**None of the three advances a stage over open findings.** A human override meaning "ignore all
+this" would be an off switch on the gate, and it is deliberately not offered.

@@ -25,7 +25,44 @@ public enum EscalationStep
     ArbiterModelUp,
 }
 
-public sealed record PanelConfig(int MaxRounds = 3, int Threshold = 2, StagePolicy OnExhausted = StagePolicy.Human);
+/// <summary>One stage's budget: how many attempts it gets, and how much may still be open.</summary>
+public sealed record StageGate(int MaxRounds, int Threshold);
+
+/// <summary>
+/// The gate, per stage — because a plan and a diff are not the same object.
+/// </summary>
+/// <remarks>
+/// <para>One threshold for both was wrong in a way only use revealed. A plan is a document: two
+/// findings still open is a lot of doubt about a page of text. A diff is hundreds of lines across a
+/// dozen files, and three open findings there is an ordinary Tuesday — so the number that makes the
+/// plan gate strict makes the code gate a permanent <c>call_human</c>. Measured on this product's
+/// own rounds: the plan stage passed at two and the code stage never passed at all.</para>
+/// <para><see cref="For"/> is the only way to read them, so no call site picks a stage by hand.</para>
+/// </remarks>
+public sealed record PanelConfig(
+    StageGate? Plan = null,
+    StageGate? Code = null,
+    StagePolicy OnExhausted = StagePolicy.Human)
+{
+    /// <summary>Three attempts, at most two findings still open. A page of text can be got right.</summary>
+    public static readonly StageGate PlanDefault = new(3, 2);
+
+    /// <summary>Three attempts, at most three. A diff of any size carries more than a plan does.</summary>
+    public static readonly StageGate CodeDefault = new(3, 3);
+
+    public StageGate Plan { get; init; } = Plan ?? PlanDefault;
+
+    public StageGate Code { get; init; } = Code ?? CodeDefault;
+
+    public StageGate For(Stage stage) => stage == Stage.CodeReview ? Code : Plan;
+
+    /// <summary>
+    /// The same gate for both stages — what the legacy single-value settings mean, and what a test
+    /// that does not care about the split is asking for.
+    /// </summary>
+    public static PanelConfig Uniform(int maxRounds, int threshold, StagePolicy onExhausted = StagePolicy.Human) =>
+        new(new StageGate(maxRounds, threshold), new StageGate(maxRounds, threshold), onExhausted);
+}
 
 public enum Stage
 {

@@ -116,7 +116,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
                     new("codex") { ExecutablePath = FakeCliExe },
                     new("gemini") { ExecutablePath = FakeCliExe },
                 ],
-                Rounds = new PanelConfig(maxRounds, threshold, onExhausted),
+                Rounds = PanelConfig.Uniform(maxRounds, threshold, onExhausted),
                 DataDir = _data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),

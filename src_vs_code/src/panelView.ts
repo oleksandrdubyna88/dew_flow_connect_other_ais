@@ -221,13 +221,30 @@ function languageBody(state: PanelState): string {
 }
 
 function gateBody(s: CoaiSettings): string {
-  return `<div class="field inline">
-  ${labelled('maxRounds', 'Rounds per stage', 'maxRounds')}
-  <input type="number" id="maxRounds" min="1" data-setting="maxRounds" value="${s.maxRounds}">
+  // A stage each, because a plan is a document and a diff is not: two findings still open is a lot
+  // of doubt about a page of text, while three open across a dozen changed files is ordinary. One
+  // number for both made the plan gate strict and the code gate a permanent call_human.
+  return `<div class="role role-plan">
+  <div class="head"><span class="name">Plan review</span></div>
+  <div class="field inline">
+    ${labelled('maxRoundsPlan', 'Rounds', 'maxRounds')}
+    <input type="number" id="maxRoundsPlan" min="1" data-setting="maxRoundsPlan" value="${s.maxRoundsPlan}">
+  </div>
+  <div class="field inline">
+    ${labelled('gateThresholdPlan', 'Passes at or under', 'gateThreshold')}
+    <input type="number" id="gateThresholdPlan" min="0" data-setting="gateThresholdPlan" value="${s.gateThresholdPlan}">
+  </div>
 </div>
-<div class="field inline">
-  ${labelled('gateThreshold', 'Passes at or under', 'gateThreshold')}
-  <input type="number" id="gateThreshold" min="0" data-setting="gateThreshold" value="${s.gateThreshold}">
+<div class="role role-code">
+  <div class="head"><span class="name">Code review</span></div>
+  <div class="field inline">
+    ${labelled('maxRoundsCode', 'Rounds', 'maxRounds')}
+    <input type="number" id="maxRoundsCode" min="1" data-setting="maxRoundsCode" value="${s.maxRoundsCode}">
+  </div>
+  <div class="field inline">
+    ${labelled('gateThresholdCode', 'Passes at or under', 'gateThreshold')}
+    <input type="number" id="gateThresholdCode" min="0" data-setting="gateThresholdCode" value="${s.gateThresholdCode}">
+  </div>
 </div>
 <div class="field">
   ${labelled('onExhausted', 'When the rounds run out', 'onExhausted')}
@@ -350,9 +367,20 @@ export
  * round should look for something else" — and a single prompt per role could not express it.
  * The universal prompt is the default everywhere; a narrow lens is always a deliberate pick.</p>
  */
+/** Which tone wraps each role. The colour is never the only signal — the name is always written. */
+const ROLE_TONE: Record<string, string> = {
+  PlanCritique: 'plan',
+  Architecture: 'arch',
+  SecurityReliability: 'sec',
+  UxDxPerformance: 'uxdx',
+};
+
 function promptsBody(state: PanelState): string {
-  const rounds = Math.max(1, Math.min(state.settings.maxRounds, 6));
-  const rows = ROLES.map((role) => {
+  const roleRow = (role: (typeof ROLES)[number]): string => {
+    // Each stage shows the rounds IT will run: a picker for a round nobody reaches is a control
+    // that cannot do anything, which is the defect the spending tabs already taught.
+    const budget = role.stage === 'plan' ? state.settings.maxRoundsPlan : state.settings.maxRoundsCode;
+    const rounds = Math.max(1, Math.min(budget, 6));
     const pickers = Array.from({ length: rounds }, (_, i) => {
       const round = i + 1;
       const current = selectedFor(role.id, round, state.settings.promptsPerRound, state.settings.rotatePrompts);
@@ -368,17 +396,28 @@ function promptsBody(state: PanelState): string {
   </div>`;
     }).join('\n');
 
-    return `<div class="vendor">
-  <div class="head"><span class="name">${escapeHtml(role.label)}</span><span class="hint">${escapeHtml(role.stage)} stage</span></div>
+    return `<div class="role role-${ROLE_TONE[role.id] ?? 'plan'}">
+  <div class="head"><span class="name">${escapeHtml(role.label)}</span></div>
 ${pickers}
 </div>`;
-  }).join('\n');
+  };
+
+  const plan = ROLES.filter((r) => r.stage === 'plan').map(roleRow).join('\n');
+  const code = ROLES.filter((r) => r.stage !== 'plan').map(roleRow).join('\n');
 
   return `<div class="field">
   <label class="check"><input type="checkbox" data-setting="rotatePrompts"${state.settings.rotatePrompts ? ' checked' : ''}> Rotate the lenses automatically</label>
-  <div class="hint">Round 1 asks the universal question; each later round takes a different narrow lens instead of repeating it. Anything you pick above wins over the rotation.</div>
+  <div class="hint">Round 1 asks the universal question; each later round takes a different narrow lens instead of repeating it. Anything you pick below wins over the rotation.</div>
 </div>
-${rows}`;
+<div class="role-group">
+  <div class="group-head">Plan stage</div>
+${plan}
+</div>
+<div class="role-group">
+  <div class="group-head">Code stage — three reviewers per vendor, every round</div>
+  <div class="hint">Round 1 defaults to <b>Conventions</b>: it judges the diff against the rules this project has written down — <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>GEMINI.md</code>, <code>.claude/rules</code> — and nothing else. Pick something else for round 1 and that wins.</div>
+${code}
+</div>`;
 }
 
 /**
@@ -627,6 +666,29 @@ const CSS = `
     background: var(--vscode-inputValidation-warningBorder);
     color: var(--vscode-editor-background);
   }
+  /* The role palette, taken from the sibling product's own token set
+     (creds/src_vs_code/src/entityFormStyles.ts): a charts token with the hex it falls back to, so a
+     theme that defines them wins and one that does not still gets the intended colour. */
+  :root {
+    --tone-plan: var(--vscode-charts-purple, #c586c0);
+    --tone-arch: var(--vscode-charts-blue, #569cd6);
+    --tone-sec: var(--vscode-charts-orange, #ce9178);
+    --tone-uxdx: var(--vscode-charts-green, #b5cea8);
+    --tone-code: var(--vscode-widget-border, #454545);
+  }
+  .role-group { border: 1px solid var(--vscode-widget-border); border-radius: 4px; padding: 6px 8px 2px; margin: 0 0 10px; }
+  .group-head { font-size: 11px; font-weight: 600; opacity: .8; margin: 0 0 6px; }
+  /* A left edge rather than a filled box: it marks the role at a glance without turning the
+     settings panel into four coloured slabs, and it survives a light theme unchanged. */
+  .role { border: 1px solid var(--vscode-widget-border); border-left: 3px solid var(--tone-plan);
+          border-radius: 3px; padding: 6px 8px 2px; margin: 0 0 8px; }
+  .role .head { margin: 0 0 4px; }
+  .role .name { font-weight: 600; }
+  .role-plan { border-left-color: var(--tone-plan); }
+  .role-arch { border-left-color: var(--tone-arch); }
+  .role-sec { border-left-color: var(--tone-sec); }
+  .role-uxdx { border-left-color: var(--tone-uxdx); }
+  .role-code { border-left-color: var(--tone-code); }
   .tabs { display: flex; gap: 4px; margin: 0 0 8px; }
   .tab { flex: 1; padding: 3px 6px; font: inherit; color: var(--vscode-foreground);
          background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-widget-border);

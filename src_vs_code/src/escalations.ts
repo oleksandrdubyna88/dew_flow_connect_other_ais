@@ -39,10 +39,6 @@ export function parseEscalation(text: string): Escalation | undefined {
   }
 }
 
-/** The answer file's content, exactly as the server parses it. */
-export function answerJson(id: string, answer: string, nowUtc: string): string {
-  return JSON.stringify({ id, answer, answeredUtc: nowUtc }, null, 2);
-}
 
 /**
  * What the status bar says. Empty means hide it: a status-bar item that says "0" is furniture.

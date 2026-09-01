@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  answerJson,
   Escalation,
   modalText,
   parseEscalation,
@@ -9,6 +8,7 @@ import {
   shouldPrompt,
   statusBarText,
 } from '../escalations';
+import { answerJson } from '../escalationAnswer';
 
 const escalation = (over: Partial<Escalation> = {}): Escalation => ({
   id: 'abc123',

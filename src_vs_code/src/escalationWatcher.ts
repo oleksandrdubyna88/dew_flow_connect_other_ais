@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
+import { answerJson, decisionChoices } from './escalationAnswer';
 import {
-  answerJson,
   Escalation,
   modalText,
   parseEscalation,
@@ -96,23 +96,52 @@ export class EscalationWatcher {
     await this.answerCommand(escalation);
   }
 
-  /** Asks for the text and writes the answer file the server is waiting for. */
+  /**
+   * Puts the decision in front of the person and writes what they chose.
+   *
+   * <p>Choices rather than a blank box: "the rounds ran out, now what" has three answers, and a
+   * free-text field for it invites a sentence no code can act on — which is exactly what happened,
+   * silently, because nothing read the file either. The escape hatch is still there as the third
+   * item, for a person who wants to say something the buttons do not cover.</p>
+   */
   async answerCommand(escalation: Escalation): Promise<void> {
-    const text = await vscode.window.showInputBox({
-      title: `ConnectOtherAIs — ${escalation.branch}`,
-      prompt: escalation.question,
-      placeHolder: 'Your answer goes back to the AI that asked',
-      ignoreFocusOut: true,
-    });
-    if (text === undefined || text.trim().length === 0) {
+    const choices = decisionChoices();
+    const picked = await vscode.window.showQuickPick(
+      choices.map((c) => ({ label: c.label, detail: c.detail, choice: c })),
+      {
+        title: `ConnectOtherAIs — ${escalation.branch}`,
+        placeHolder: escalation.question,
+        ignoreFocusOut: true,
+        matchOnDetail: true,
+      },
+    );
+    if (picked === undefined) {
       return; // dismissing is not answering; the question stays open
+    }
+
+    let decision = picked.choice.decision;
+    let text = picked.choice.label;
+    if (decision === '') {
+      const typed = await vscode.window.showInputBox({
+        title: `ConnectOtherAIs — ${escalation.branch}`,
+        prompt: escalation.question,
+        placeHolder: 'Your answer goes back to the AI that asked',
+        ignoreFocusOut: true,
+      });
+      if (typed === undefined || typed.trim().length === 0) {
+        return;
+      }
+
+      text = typed.trim();
     }
 
     // Atomic: the server polls this directory, and half a file must never resolve a question.
     const dir = vscode.Uri.joinPath(this.dataDir, 'escalations');
     const target = vscode.Uri.joinPath(dir, `${escalation.id}.answer.json`);
     const temp = vscode.Uri.joinPath(dir, `${escalation.id}.answer.json.tmp`);
-    const bytes = new TextEncoder().encode(answerJson(escalation.id, text.trim(), new Date().toISOString()));
+    const bytes = new TextEncoder().encode(
+      answerJson(escalation.id, text.trim(), new Date().toISOString(), decision),
+    );
     await vscode.workspace.fs.writeFile(temp, bytes);
     await vscode.workspace.fs.rename(temp, target, { overwrite: true });
     await this.refresh();

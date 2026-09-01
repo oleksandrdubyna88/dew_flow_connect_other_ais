@@ -125,7 +125,7 @@ public sealed class EndToEndTests : IAsyncLifetime
             new PanelSettings
             {
                 Providers = [new("codex") { ExecutablePath = FakeCliExe }, new("gemini") { ExecutablePath = FakeCliExe }],
-                Rounds = new PanelConfig(maxRounds, Threshold: 2, onExhausted),
+                Rounds = PanelConfig.Uniform(maxRounds, 2, onExhausted),
                 DataDir = _data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),
@@ -207,7 +207,7 @@ public sealed class EndToEndTests : IAsyncLifetime
             new PanelSettings
             {
                 Providers = [new("codex") { ExecutablePath = "codex-that-is-not-installed" }, new("gemini") { ExecutablePath = FakeCliExe }],
-                Rounds = new PanelConfig(3, 2, StagePolicy.Human),
+                Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
                 DataDir = _data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),

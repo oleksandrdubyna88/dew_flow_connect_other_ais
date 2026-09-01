@@ -7,8 +7,10 @@ import { DEFAULT_VENDORS, normaliseId, Vendor, vendorsEnv, vendorsFrom } from '.
 const reader = (values: Record<string, unknown>) => (section: string) => values[section];
 
 test('defaults match the master plan configuration table', () => {
-  assert.equal(DEFAULTS.maxRounds, 3);
-  assert.equal(DEFAULTS.gateThreshold, 2);
+  assert.equal(DEFAULTS.maxRoundsPlan, 3);
+  assert.equal(DEFAULTS.maxRoundsCode, 3);
+  assert.equal(DEFAULTS.gateThresholdPlan, 2);
+  assert.equal(DEFAULTS.gateThresholdCode, 3, 'a diff carries more than a plan does');
   assert.equal(DEFAULTS.onExhausted, 'human');
   assert.equal(DEFAULTS.maxConcurrency, 3);
   assert.equal(DEFAULTS.maxPerProvider, 2);
@@ -28,24 +30,24 @@ test('the shipped reviewers are the two whose CLIs authenticate themselves', () 
 
 test('an empty configuration reads as the defaults', () => {
   const settings = settingsFrom(reader({}));
-  assert.equal(settings.maxRounds, DEFAULTS.maxRounds);
+  assert.equal(settings.maxRoundsPlan, DEFAULTS.maxRoundsPlan);
   assert.equal(settings.onExhausted, DEFAULTS.onExhausted);
   assert.deepEqual(vendorsFrom(undefined), [...DEFAULT_VENDORS]);
 });
 
 test('invalid values fall back rather than reaching the server', () => {
   const settings = settingsFrom(
-    reader({ maxRounds: 0, gateThreshold: -1, onExhausted: 'panic', maxConcurrency: 'three', language: 'fr' }),
+    reader({ maxRoundsPlan: 0, gateThresholdPlan: -1, onExhausted: 'panic', maxConcurrency: 'three', language: 'fr' }),
   );
-  assert.equal(settings.maxRounds, DEFAULTS.maxRounds, '0 rounds would gate nothing');
-  assert.equal(settings.gateThreshold, DEFAULTS.gateThreshold);
+  assert.equal(settings.maxRoundsPlan, DEFAULTS.maxRoundsPlan, '0 rounds would gate nothing');
+  assert.equal(settings.gateThresholdPlan, DEFAULTS.gateThresholdPlan);
   assert.equal(settings.onExhausted, DEFAULTS.onExhausted);
   assert.equal(settings.maxConcurrency, DEFAULTS.maxConcurrency);
   assert.equal(settings.language, 'en', 'an unknown language is English, never a failure');
 });
 
 test('a threshold of zero is legitimate and survives', () => {
-  assert.equal(settingsFrom(reader({ gateThreshold: 0 })).gateThreshold, 0);
+  assert.equal(settingsFrom(reader({ gateThresholdPlan: 0 })).gateThresholdPlan, 0);
 });
 
 test('a stored vendor list that names nothing runnable is an accident, not a configuration', () => {
@@ -88,10 +90,10 @@ test('a pristine configuration produces NO env at all', () => {
 
 test('only what differs from the defaults reaches the env block', () => {
   const settings = settingsFrom(
-    reader({ maxRounds: 5, onExhausted: 'escalate', credsKey: 'cfg-key', language: 'uk' }),
+    reader({ maxRoundsPlan: 5, onExhausted: 'escalate', credsKey: 'cfg-key', language: 'uk' }),
   );
   assert.deepEqual(envBlock(settings, DEFAULT_VENDORS), {
-    COAI_MAX_ROUNDS: '5',
+    COAI_MAX_ROUNDS_PLAN: '5',
     COAI_ON_EXHAUSTED: 'escalate',
     COAI_CREDS_KEY: 'cfg-key',
     COAI_LANGUAGE: 'uk',

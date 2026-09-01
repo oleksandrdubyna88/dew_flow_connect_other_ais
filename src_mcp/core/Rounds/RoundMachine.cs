@@ -105,11 +105,12 @@ public static class RoundMachine
                 new RoundVerdict.Proceed(gate, reviewers));
         }
 
-        if (roundsRun < s.Config.MaxRounds)
+        var budget = s.Config.For(s.Stage).MaxRounds;
+        if (roundsRun < budget)
         {
             return new Transition.Ok(
                 s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true },
-                new RoundVerdict.Revise(gate, reviewers, s.Config.MaxRounds - roundsRun));
+                new RoundVerdict.Revise(gate, reviewers, budget - roundsRun));
         }
 
         return Exhausted(s, gate, reviewers, roundsRun);

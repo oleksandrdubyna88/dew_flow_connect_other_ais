@@ -13,8 +13,10 @@ import { selectedFor } from '../prompts';
  * key, the server uses its own default, and nothing anywhere says so. This walks every field.</p>
  */
 const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
-  maxRounds: 5,
-  gateThreshold: 1,
+  maxRoundsPlan: 5,
+  gateThresholdPlan: 1,
+  maxRoundsCode: 4,
+  gateThresholdCode: 5,
   onExhausted: 'escalate',
   maxConcurrency: 7,
   maxPerProvider: 4,

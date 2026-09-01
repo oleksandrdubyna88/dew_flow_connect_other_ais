@@ -68,8 +68,8 @@ public sealed class SettingsReachTheServerTests : IDisposable
         s.Providers.Should().ContainSingle().Which.Provider.Should().Be("antigravity");
         s.Providers[0].Runtime.Should().Be("antigravity");
         s.Providers[0].Model.Should().Be("gemini-3.7-flash-high");
-        s.Rounds.MaxRounds.Should().Be(5);
-        s.Rounds.Threshold.Should().Be(1);
+        s.Rounds.Plan.MaxRounds.Should().Be(5);
+        s.Rounds.Plan.Threshold.Should().Be(1);
         s.Rounds.OnExhausted.Should().Be(StagePolicy.Escalate);
         s.GlobalConcurrency.Should().Be(7);
         s.PerProviderConcurrency.Should().Be(4);
@@ -108,11 +108,11 @@ public sealed class SettingsReachTheServerTests : IDisposable
         // could be turned on but never off.
         var host = Host();
         PanelWrites(("COAI_MAX_ROUNDS", "9"));
-        host.Current.Settings.Rounds.MaxRounds.Should().Be(9);
+        host.Current.Settings.Rounds.Plan.MaxRounds.Should().Be(9);
 
         PanelWrites(("COAI_LANGUAGE", "ru"));
 
-        host.Current.Settings.Rounds.MaxRounds.Should().Be(3, "a key that is gone is a value back at its default");
+        host.Current.Settings.Rounds.Plan.MaxRounds.Should().Be(3, "a key that is gone is a value back at its default");
     }
 
     [Fact]
@@ -131,7 +131,7 @@ public sealed class SettingsReachTheServerTests : IDisposable
 
         PanelWrites(("COAI_MAX_ROUNDS", "9"));
 
-        host.Current.Settings.Rounds.MaxRounds.Should().Be(2);
+        host.Current.Settings.Rounds.Plan.MaxRounds.Should().Be(2);
     }
 
     [Fact]
