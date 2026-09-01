@@ -45,7 +45,9 @@ public sealed class PanelService
         _context = new ContextAssembler(launcher);
         _scheduler = new BoundedScheduler(
             settings.GlobalConcurrency, settings.PerProviderConcurrency, settings.RateLimitBackoff);
-        _executor = new ReviewerExecutor(launcher);
+        // Unparseable answers are kept beside the sessions, so "it would not parse" can be read
+        // rather than guessed at.
+        _executor = new ReviewerExecutor(launcher, Path.Combine(settings.DataDir, "unparseable"));
         _prompts = new RolePrompts(settings.DataDir);
         _escalations = new Escalations(settings.DataDir);
         _translator = new CliTranslator(launcher, settings.Translator);

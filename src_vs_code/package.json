@@ -65,7 +65,7 @@
         "coai.promptsPerRound": {
           "type": "object",
           "default": {},
-          "markdownDescription": "Which prompt each role uses on each round, by catalog id — `{ \"Architecture\": [\"architecture\", \"arch-boundaries\"] }`. Index 0 is round 1; an unknown id falls back to that role's universal prompt.",
+          "markdownDescription": "Which prompt each role uses on each round, by catalog id — `{ \"Architecture\": [\"architecture\", \"arch-boundaries\"] }`. Index 0 is round 1. An empty or unknown entry is treated as *not chosen*: it falls back to the rotation when **Rotate the lenses automatically** is on, and to that role's universal prompt otherwise.",
           "additionalProperties": {
             "type": "array",
             "items": { "type": "string" }

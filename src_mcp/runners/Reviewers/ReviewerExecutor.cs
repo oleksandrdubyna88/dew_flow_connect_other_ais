@@ -98,9 +98,45 @@ public static class RateLimit
 /// parse. An unparseable answer gets exactly one repair launch; a second failure is a named
 /// outcome, never a retry loop.
 /// </summary>
-public sealed class ReviewerExecutor(IProcessLauncher launcher)
+public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnparseableIn = null)
 {
     private const int StdErrTail = 400;
+
+    /// <summary>
+    /// Where an answer that would not parse is KEPT, so the next person can read what the vendor
+    /// actually said.
+    /// </summary>
+    /// <remarks>
+    /// The first real code round lost a reviewer to "unparseable: still not the schema's JSON
+    /// after one repair attempt" and the evidence was gone — the same answer replayed by hand
+    /// afterwards succeeded, so the sentence named a symptom nobody could chase. An unparseable
+    /// answer is the one case where the raw text is the whole story.
+    /// </remarks>
+    private string? Keep(ReviewerInvocation invocation, string? raw)
+    {
+        if (keepUnparseableIn is null || raw is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(keepUnparseableIn);
+            var file = Path.Combine(
+                keepUnparseableIn,
+                $"{invocation.Provider}-{invocation.Role}-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.txt");
+            File.WriteAllText(file, raw);
+            return file;
+        }
+        catch (IOException)
+        {
+            return null; // keeping evidence must never be what fails a round
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 
     public async Task<ReviewerOutcome> RunAsync(
         ReviewerInvocation invocation,
@@ -120,7 +156,8 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher)
 
         if (repair is null)
         {
-            return new ReviewerOutcome.Unparseable("the answer was not the schema's JSON, and no repair was configured");
+            return new ReviewerOutcome.Unparseable(
+                Because("the answer was not the schema's JSON, and no repair was configured", Keep(invocation, lastRaw)));
         }
 
         var (repairOutcome, repaired, repairUsage) = await RunOnceAsync(repair, ct);
@@ -129,8 +166,15 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher)
                    // Both launches are billed, so both are counted — a repaired reviewer that
                    // reported only its second attempt would under-report every time.
                    ? new ReviewerOutcome.Ok(fixedReview, Repaired: true, usage.Add(repairUsage))
-                   : new ReviewerOutcome.Unparseable("still not the schema's JSON after one repair attempt"));
+                   : new ReviewerOutcome.Unparseable(
+                       Because("still not the schema's JSON after one repair attempt", Keep(repair, lastRaw))));
     }
+
+    /// <summary>The most recent raw answer, so an unparseable one can be kept rather than lost.</summary>
+    private string? lastRaw;
+
+    private static string Because(string sentence, string? keptAt) =>
+        keptAt is null ? sentence : $"{sentence} (the answer was kept at {keptAt})";
 
     /// <summary>One launch. A non-null outcome is terminal; a null review means "unparseable".</summary>
     private async Task<(ReviewerOutcome?, NormalisedReview?, Usage)> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
@@ -169,11 +213,13 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher)
         return (null, Parse(invocation, result), usage);
     }
 
-    private static NormalisedReview? Parse(ReviewerInvocation invocation, ProcessResult result)
+    private NormalisedReview? Parse(ReviewerInvocation invocation, ProcessResult result)
     {
+        lastRaw = null;
         var raw = invocation.Adapter is { } adapter
             ? adapter.ReadAnswer(invocation, result)
             : ReviewerOutput.FileOrStdout(invocation, result);
+        lastRaw = raw;
         if (raw is null)
         {
             return null;

@@ -135,7 +135,12 @@ public sealed record PanelSettings
         {
             var parsed = System.Text.Json.JsonSerializer.Deserialize(
                 json, SettingsJsonContext.Default.DictionaryStringListString);
-            return parsed?.ToDictionary(e => e.Key, e => (IReadOnlyList<string>)e.Value)
+            // `{"Architecture": null}` is valid JSON and would put a NULL list in the map, which
+            // the round then dereferences. Found by the gate reviewing this very commit: a
+            // hand-edited settings file could crash every round with no useful message.
+            return parsed?
+                       .Where(e => e.Value is not null)
+                       .ToDictionary(e => e.Key, e => (IReadOnlyList<string>)e.Value)
                    ?? new Dictionary<string, IReadOnlyList<string>>();
         }
         catch (System.Text.Json.JsonException)
