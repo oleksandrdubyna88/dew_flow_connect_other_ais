@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.11.0 — 2026-09-01
+
+**The Server section tells you what is published.** It shows the installed version, the newest
+published one, and an Update button when they differ — plus *Check again* for an answer right now.
+The published version is shown even when it matches, because "up to date" and "the check never
+ran" look identical when only a mismatch is displayed.
+
+And the check really never ran: it asked GitHub for the newest release of ANY kind, and this
+repository publishes extension releases too, so an extension tag was answering the question "is
+there a newer server" and the comparison concluded no. Every time, since the extension line
+started.
+
 ## 0.10.1 — 2026-09-01
 
 **Antigravity is a runtime the panel actually knows.** It was in the server and missing from the
