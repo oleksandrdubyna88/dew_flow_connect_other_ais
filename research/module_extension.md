@@ -179,3 +179,41 @@ control for a question an AI wrote in words, and this is not that. Worse, a type
 effect at all (see [module_server.md](module_server.md)). It is a QuickPick of three now, each saying
 what it will cause: another set of rounds, stop and act on the findings, or stop and talk. `''` is
 not among them: there is no "ship it anyway".
+
+### One section per role, and no language (2026-09-01)
+
+The Prompts and Gate sections described one thing between them: how many times a role asks, how much
+it may still find, and what it asks each time. They are one box per role now — rounds, threshold and
+the per-round prompt pickers together, with the role's colour on its left edge. What is left in The
+Gate is the single decision that belongs to neither role nor stage: what to do when the rounds run
+out, now with a fourth answer (*good enough — take what's true and move on*).
+
+`coai.rounds` and `coai.thresholds` are role-keyed objects; a stored map is whatever a person or a
+sync left there, so each entry is validated on its own and a junk one takes its default rather than
+poisoning the map. `maxRoundsCode` was briefly a field and is now DERIVED where it is needed — a
+stored copy would be a second source of truth for a number that already exists, and the
+every-setting-reaches-the-server test caught it by refusing to see a change in the env block.
+
+`selectedFor` mirrors the server's conventions rule, because it did not and the panel showed
+`Universal` for a round the server would run `Conventions` in.
+
+The Language section is gone with the translator. The help's own language switch is unaffected: that
+is `coai.helpLanguage`, the reading side.
+
+### The picker is a claim about another program (2026-09-01)
+
+`selectedFor` decides what the prompt picker SHOWS for a round nobody has set. Every branch in it is
+a claim about what `PromptCatalog.ForRound` will do — so a branch only one of the two has is not a
+feature, it is a lie with a dropdown around it. That is what the rotation branch had become: fed by
+the panel's dealing switch, unread by the server, naming `arch-boundaries` for a round the server
+would spend on `architecture`.
+
+`panelServerPromptAgreement.test.ts` is the guard, and it is deliberately shaped as a mirror of the
+server's resolution rather than a list of expected ids: role x round x `hasRules`, compared against
+one local function that spells out what the C# does. Its twin is `ConventionsPassTests`. Two suites
+for one rule, because the rule is that two programs agree and neither can check that alone.
+
+The same pass removed three orphan tooltips — `language`, `translator`, `translatorModel` — left in
+`help.ts` when the translator went. `helpTooltips.test.ts` now fails when a tooltip describes a
+control the panel does not render: the coverage test next door fails when a control has no help, and
+a catalog needs both directions because only one of them is caught by using the product.

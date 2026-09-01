@@ -82,7 +82,6 @@ public static class PromptCatalog
         string role,
         int round,
         IReadOnlyList<string> chosen,
-        bool rotating,
         bool hasRules = false)
     {
         var index = Math.Max(round, 1) - 1;
@@ -108,16 +107,6 @@ public static class PromptCatalog
             return For(role).First(p => p.Id == ConventionsId);
         }
 
-        if (!rotating)
-        {
-            return UniversalFor(role);
-        }
-
-        // Universal first, then each narrow lens in turn, then round-robin. The broad question
-        // earns the first round because it is the one most likely to find the obvious thing.
-        // The conventions pass is not one of the lenses: rotation exists to vary the QUESTION, and
-        // this one is a different job that round 1 already owns.
-        var order = For(role).Where(p => p.Id != ConventionsId).OrderByDescending(p => p.Universal).ToList();
-        return order[index % order.Count];
+        return For(role).First(p => p.Universal);
     }
 }

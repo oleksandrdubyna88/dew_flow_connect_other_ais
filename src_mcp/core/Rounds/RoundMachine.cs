@@ -115,7 +115,10 @@ public static class RoundMachine
                 new RoundVerdict.Proceed(gate, reviewers));
         }
 
-        var budget = s.Config.For(s.Stage).MaxRounds;
+        // The budget of the roles that are actually OVER their threshold — not the stage's widest.
+        // A role with one round that is still over cannot run again, so revising for its sake would
+        // loop until the stage's widest role ran out, asking nothing new of anybody.
+        var budget = BudgetOfRolesWithWorkLeft(s, gate);
         if (roundsRun < budget)
         {
             return new Transition.Ok(
@@ -124,6 +127,22 @@ public static class RoundMachine
         }
 
         return Exhausted(s, gate, reviewers, roundsRun);
+    }
+
+    /// <summary>
+    /// How many rounds the over-threshold roles have between them, at most.
+    /// </summary>
+    /// <remarks>
+    /// Falls back to the stage's own budget when nothing is attributed — a plan round, or findings
+    /// from a session file written before roles were recorded. Without that fallback an
+    /// unattributed finding could never be revised for.
+    /// </remarks>
+    private static int BudgetOfRolesWithWorkLeft(SessionState s, GateResult gate)
+    {
+        var named = gate.OverThreshold.Where(r => r.Length > 0).ToList();
+        return named.Count == 0
+            ? s.Config.For(s.Stage).MaxRounds
+            : named.Max(r => s.Config.For(r).MaxRounds);
     }
 
     private static Transition Exhausted(SessionState s, GateResult gate, ReviewerSummary reviewers, int roundsRun) =>

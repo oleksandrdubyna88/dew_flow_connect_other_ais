@@ -22,13 +22,38 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   ...over,
 });
 
-test('every language and translator is offered', () => {
+
+test('each role shows its own rounds, its own threshold and its own prompts', () => {
+  // The Gate and the Prompts sections described one thing between them: how many times this role
+  // asks, how much it may still find, and what it asks each time. One box per role now.
   const html = panelHtml(state(), 'n0nce');
-  for (const label of ['English', 'Español', 'Deutsch', 'Русский', 'Українська']) {
-    assert.ok(html.includes(label), `offers ${label}`);
+
+  for (const role of ['PlanCritique', 'Architecture', 'SecurityReliability', 'UxDxPerformance']) {
+    assert.ok(html.includes(`data-setting="rounds" data-vendor="${role}"`), `${role} has no rounds control`);
+    assert.ok(html.includes(`data-setting="thresholds" data-vendor="${role}"`), `${role} has no threshold control`);
+    assert.ok(html.includes(`data-prompt="${role}" data-round="1"`), `${role} has no round-1 prompt`);
   }
-  assert.ok(html.includes('Gemini Flash'));
-  assert.ok(html.includes('always show the original'));
+
+  // What is left in The Gate is the one decision that belongs to neither role nor stage.
+  assert.ok(html.includes('data-setting="onExhausted"'));
+  assert.ok(!html.includes('data-setting="maxRoundsPlan"'), 'the per-stage controls are gone, not hidden');
+});
+
+test('both deal switches are offered, and off is the default', () => {
+  const html = panelHtml(state(), 'n0nce');
+
+  assert.ok(html.includes('data-setting="dealPlanLenses"'));
+  assert.ok(html.includes('data-setting="dealCodeLenses"'));
+  assert.ok(!html.includes('data-setting="dealPlanLenses" checked'), 'dealing gives up cross-vendor agreement');
+});
+
+test('the questions are English, so there is no language to choose', () => {
+  // The escalation is three buttons; there is no prose left to translate, and a subprocess per
+  // escalation that can time out or answer in the wrong language earned nothing.
+  const html = panelHtml(state(), 'n0nce');
+
+  assert.ok(!html.includes('data-setting="reviewers"'));
+  assert.ok(!html.includes('data-setting="translator.provider"'));
 });
 
 test('each reviewer gets a switch, a model field and a way out', () => {
@@ -255,8 +280,7 @@ test('the server line is body text, not a footnote', () => {
   assert.ok(!/\.status \{[^}]*font-size/.test(css), 'it states a fact and reads at the same size as one');
 });
 
-test('claude is offered as a translator and as a reviewer preset', () => {
-  assert.ok(panelHtml(state(), 'n').includes('Claude, a small model'));
+test('claude is offered as a reviewer preset', () => {
   const claude = panelHtml(
     state({ vendors: [{ id: 'claude', runtime: 'claude', model: 'haiku', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }] }),
     'n',
@@ -270,7 +294,7 @@ test('what changes is open; what is set once is folded away', () => {
   const html = panelHtml(state({ openSections: [] }), 'n');
   const openSections = [...html.matchAll(/data-section="([a-z]+)" open/g)].map((m) => m[1]);
   assert.deepEqual(openSections, [], "the panel opens as a list of headings, not a wall");
-  for (const folded of ['reviewers', 'language', 'gate', 'limits', 'keys', 'server', 'rounds']) {
+  for (const folded of ['reviewers', 'prompts', 'gate', 'limits', 'keys', 'server', 'rounds']) {
     assert.ok(html.includes(`data-section="${folded}"`), `${folded} is present`);
     assert.ok(!html.includes(`data-section="${folded}" open`), `${folded} starts folded`);
   }
@@ -463,17 +487,10 @@ test('the role colours come from the theme with a fallback, never a bare hex', (
   }
 });
 
-test('the plan and code stages each show their own rounds and threshold', () => {
-  const html = panelHtml(state(), 'n0nce');
-  for (const key of ['maxRoundsPlan', 'gateThresholdPlan', 'maxRoundsCode', 'gateThresholdCode']) {
-    assert.ok(html.includes(`data-setting="${key}"`), `${key} has no control`);
-  }
-  assert.ok(!html.includes('data-setting="maxRounds"'), 'the single-value control is gone, not hidden');
-});
 
 test('the number of rounds each stage shows follows that stage’s own budget', () => {
   const html = panelHtml(
-    state({ settings: { ...DEFAULTS, maxRoundsPlan: 2, maxRoundsCode: 4 } }),
+    state({ settings: { ...DEFAULTS, rounds: { ...DEFAULTS.rounds, PlanCritique: 2, Architecture: 4, SecurityReliability: 4, UxDxPerformance: 4 } } }),
     'n0nce',
   );
   assert.ok(html.includes('data-prompt="PlanCritique" data-round="2"'));
@@ -498,7 +515,7 @@ test('the code stage states its own arithmetic, in the numbers actually configur
         { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
         { id: 'antigravity', runtime: 'antigravity', model: '', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
       ],
-      settings: { ...DEFAULTS, maxRoundsCode: 2 },
+      settings: { ...DEFAULTS },
     }),
     'n0nce',
   );

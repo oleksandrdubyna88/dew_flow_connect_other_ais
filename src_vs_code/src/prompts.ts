@@ -51,19 +51,23 @@ export function universalFor(role: string): PromptChoice {
 }
 
 
+/** The one prompt that judges nothing but the project's own written rules. */
+export const CONVENTIONS_ID = 'conventions';
 
 /**
  * What the panel shows as selected for one round — the stored choice, or what the server would
  * actually use, so the box never reads as "nothing" when a prompt is in fact chosen.
+ *
+ * <p><b>This function is a claim about another program.</b> Every branch here has to be the same
+ * branch `PromptCatalog.ForRound` takes, and `panelServerPromptAgreement.test.ts` is what holds the
+ * two together. There used to be a third branch — rotate through the lenses when a round is unset
+ * — fed by the panel's DEAL switch, which the server's rotation never read; the picker named
+ * prompts nobody ran. A branch that only one of the two programs has is not a feature.</p>
  */
-/** The one prompt that judges nothing but the project's own written rules. */
-const CONVENTIONS_ID = 'conventions';
-
 export function selectedFor(
   role: string,
   round: number,
   stored: Readonly<Record<string, readonly string[]>>,
-  rotating: boolean,
   hasRules = true,
 ): string {
   const chosen = stored[role]?.[round - 1];
@@ -82,13 +86,5 @@ export function selectedFor(
     return CONVENTIONS_ID;
   }
 
-  if (!rotating) {
-    return universalFor(role).id;
-  }
-  const order = [...promptsFor(role)]
-    .filter((p) => p.id !== CONVENTIONS_ID)
-    .sort((a, b) => Number(b.universal) - Number(a.universal));
-  // A role nobody knows has no prompts, and `% 0` is NaN — which indexes to undefined and throws
-  // on the next property access. A picker for an unknown role should be empty, not fatal.
-  return order.length === 0 ? '' : order[(round - 1) % order.length]!.id;
+  return universalFor(role).id;
 }

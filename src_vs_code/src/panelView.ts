@@ -1,4 +1,4 @@
-import { CoaiSettings, LANGUAGES, TRANSLATORS } from './settingsShape';
+import { CoaiSettings } from './settingsShape';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { ModelChoice, modelsFor, modelsProvenance } from './models';
@@ -56,7 +56,6 @@ export function panelHtml(state: PanelState, nonce: string): string {
   const body = [
     `<div id="live-questions">${questionsSection(state.questions)}</div>`,
     section('reviewers', 'Reviewers', open, reviewersBody(state)),
-    section('language', 'Language', open, languageBody(state)),
     section('prompts', 'Prompts per round', open, promptsBody(state)),
     section('gate', 'The gate', open, gateBody(state.settings)),
     section('limits', 'Limits', open, limitsBody(state.settings)),
@@ -206,71 +205,17 @@ function vendorCard(vendor: Vendor, codexModels: readonly ModelChoice[]): string
 </div>`;
 }
 
-function languageBody(state: PanelState): string {
-  const s = state.settings;
-  const languages = LANGUAGES.map(
-    (l) => `<option value="${l.code}"${s.language === l.code ? ' selected' : ''}>${escapeHtml(l.label)}</option>`,
-  ).join('\n    ');
-  const translators = TRANSLATORS.map(
-    (t) => `<option value="${t.id}"${s.translator.provider === t.id ? ' selected' : ''}>${escapeHtml(t.label)}</option>`,
-  ).join('\n    ');
-  const runtime =
-    s.translator.provider === 'codex' ? 'codex' : s.translator.provider === 'claude' ? 'claude' : 'gemini';
-  const models = modelOptions(modelsFor(runtime, state.codexModels, s.translator.model), s.translator.model);
-
-  return `<div class="field">
-  ${labelled('language', 'Ask and answer in', 'language')}
-  <select id="language" data-setting="language">
-    ${languages}
-  </select>
-</div>
-<div class="field">
-  ${labelled('translator', 'Translated by', 'translator')}
-  <select id="translator" data-setting="translator.provider">
-    ${translators}
-  </select>
-</div>
-<div class="field">
-  ${labelled('translatorModel', 'Translator model', 'translatorModel')}
-  <select id="translatorModel" data-setting="translator.model">
-    ${models}
-  </select>
-  <div class="hint">A question already in this language is left alone. If the translator cannot run you get the original with the reason — never an error in its place.</div>
-</div>`;
-}
 
 function gateBody(s: CoaiSettings): string {
-  // A stage each, because a plan is a document and a diff is not: two findings still open is a lot
-  // of doubt about a page of text, while three open across a dozen changed files is ordinary. One
-  // number for both made the plan gate strict and the code gate a permanent call_human.
-  return `<div class="role role-plan">
-  <div class="head"><span class="name">Plan review</span></div>
-  <div class="field inline">
-    ${labelled('maxRoundsPlan', 'Rounds', 'maxRounds')}
-    <input type="number" id="maxRoundsPlan" min="1" data-setting="maxRoundsPlan" value="${s.maxRoundsPlan}">
-  </div>
-  <div class="field inline">
-    ${labelled('gateThresholdPlan', 'Passes at or under', 'gateThreshold')}
-    <input type="number" id="gateThresholdPlan" min="0" data-setting="gateThresholdPlan" value="${s.gateThresholdPlan}">
-  </div>
-</div>
-<div class="role role-code">
-  <div class="head"><span class="name">Code review</span></div>
-  <div class="field inline">
-    ${labelled('maxRoundsCode', 'Rounds', 'maxRounds')}
-    <input type="number" id="maxRoundsCode" min="1" data-setting="maxRoundsCode" value="${s.maxRoundsCode}">
-  </div>
-  <div class="field inline">
-    ${labelled('gateThresholdCode', 'Passes at or under', 'gateThreshold')}
-    <input type="number" id="gateThresholdCode" min="0" data-setting="gateThresholdCode" value="${s.gateThresholdCode}">
-  </div>
-</div>
-<div class="field">
+  // Rounds and threshold moved INTO each role's box, beside that role's prompts: they were two
+  // sections describing one thing. What is left here is the one decision that belongs to neither
+  // role nor stage \u2014 what to do when the rounds run out.
+  return `<div class="field">
   ${labelled('onExhausted', 'When the rounds run out', 'onExhausted')}
   <select id="onExhausted" data-setting="onExhausted">
     <option value="human"${s.onExhausted === 'human' ? ' selected' : ''}>Ask a human</option>
     <option value="continue"${s.onExhausted === 'continue' ? ' selected' : ''}>Continue, and say so</option>
-    <option value="good_enough"${s.onExhausted === 'good_enough' ? ' selected' : ''}>Good enough — take what’s true and move on</option>
+    <option value="good_enough"${s.onExhausted === 'good_enough' ? ' selected' : ''}>Good enough \u2014 take what\u2019s true and move on</option>
     <option value="escalate"${s.onExhausted === 'escalate' ? ' selected' : ''}>Climb the ladder</option>
   </select>
 </div>`;
@@ -381,7 +326,7 @@ function questionsSection(questions: readonly Escalation[]): string {
  */
 export 
 /**
- * Which prompt each role uses on each round, and whether the rounds rotate through the lenses.
+ * Which prompt each role uses on each round, beside that role’s rounds and threshold.
  *
  * <p>One row per round because that is the unit a person actually reasons about — "the second
  * round should look for something else" — and a single prompt per role could not express it.
@@ -407,7 +352,12 @@ const ROLE_TONE: Record<string, string> = {
 function fanOut(state: PanelState): string {
   const vendors = state.vendors.filter((v) => v.enabled).length;
   const reviewers = vendors * 3;
-  const rounds = Math.max(1, state.settings.maxRoundsCode);
+  // Derived, not stored: it is the widest CODE role's budget, and a stored copy would be a
+  // second source of truth for a number that already exists.
+  const rounds = Math.max(
+    1,
+    ...['Architecture', 'SecurityReliability', 'UxDxPerformance'].map((r) => state.settings.rounds[r] ?? 2),
+  );
   return (
     `${vendors} vendor${vendors === 1 ? '' : 's'} × 3 roles = ${reviewers} reviewer${reviewers === 1 ? '' : 's'} ` +
     `per round, each runs once per round, up to ${rounds} round${rounds === 1 ? '' : 's'}`
@@ -415,14 +365,14 @@ function fanOut(state: PanelState): string {
 }
 
 function promptsBody(state: PanelState): string {
+  const s = state.settings;
   const roleRow = (role: (typeof ROLES)[number]): string => {
-    // Each stage shows the rounds IT will run: a picker for a round nobody reaches is a control
-    // that cannot do anything, which is the defect the spending tabs already taught.
-    const budget = role.stage === 'plan' ? state.settings.maxRoundsPlan : state.settings.maxRoundsCode;
-    const rounds = Math.max(1, Math.min(budget, 6));
-    const pickers = Array.from({ length: rounds }, (_, i) => {
+    // A role's own budget decides how many rounds it shows: a picker for a round that role will
+    // never reach is a control that cannot do anything, which the spending tabs already taught.
+    const budget = Math.max(1, Math.min(s.rounds[role.id] ?? 2, 6));
+    const pickers = Array.from({ length: budget }, (_, i) => {
       const round = i + 1;
-      const current = selectedFor(role.id, round, state.settings.promptsPerRound, state.settings.rotatePrompts);
+      const current = selectedFor(role.id, round, s.promptsPerRound);
       const options = promptsFor(role.id)
         .map(
           (p) =>
@@ -435,8 +385,20 @@ function promptsBody(state: PanelState): string {
   </div>`;
     }).join('\n');
 
+    // The gate and the prompts were two sections describing one thing: how many times this role
+    // asks, how much it may still find, and what it asks each time. One box now.
     return `<div class="role role-${ROLE_TONE[role.id] ?? 'plan'}">
   <div class="head"><span class="name">${escapeHtml(role.label)}</span></div>
+  <div class="field inline">
+    ${labelled(`rounds-${role.id}`, 'Rounds', 'maxRounds')}
+    <input type="number" id="rounds-${role.id}" min="1" max="6" data-setting="rounds" data-vendor="${role.id}"
+           value="${s.rounds[role.id] ?? 2}">
+  </div>
+  <div class="field inline">
+    ${labelled(`threshold-${role.id}`, 'Passes at or under', 'gateThreshold')}
+    <input type="number" id="threshold-${role.id}" min="0" data-setting="thresholds" data-vendor="${role.id}"
+           value="${s.thresholds[role.id] ?? 3}">
+  </div>
 ${pickers}
 </div>`;
   };
@@ -444,17 +406,21 @@ ${pickers}
   const plan = ROLES.filter((r) => r.stage === 'plan').map(roleRow).join('\n');
   const code = ROLES.filter((r) => r.stage !== 'plan').map(roleRow).join('\n');
 
-  return `<div class="field">
-  <label class="check"><input type="checkbox" data-setting="rotatePrompts"${state.settings.rotatePrompts ? ' checked' : ''}> Rotate the lenses automatically</label>
-  <div class="hint">Round 1 asks the universal question; each later round takes a different narrow lens instead of repeating it. Anything you pick below wins over the rotation.</div>
-</div>
-<div class="role-group">
+  return `<div class="role-group">
   <div class="group-head">Plan stage</div>
+  <div class="field">
+    <label class="check"><input type="checkbox" data-setting="dealPlanLenses"${s.dealPlanLenses ? ' checked' : ''}> Deal the lenses across vendors</label>
+    <div class="hint">Off: every vendor answers the same question, and two vendors agreeing on a finding is a fact the gate can use. On: every lens gets asked once instead, at half the launches \u2014 and that agreement is gone. Anything you pick below wins either way.</div>
+  </div>
 ${plan}
 </div>
 <div class="role-group">
-  <div class="group-head">Code stage — ${fanOut(state)}</div>
-  <div class="hint">Round 1 defaults to <b>Conventions</b>: it judges the diff against the rules this project has written down — <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>GEMINI.md</code>, <code>.claude/rules</code> — and nothing else. Pick something else for round 1 and that wins.</div>
+  <div class="group-head">Code stage \u2014 ${fanOut(state)}</div>
+  <div class="field">
+    <label class="check"><input type="checkbox" data-setting="dealCodeLenses"${s.dealCodeLenses ? ' checked' : ''}> Deal the roles across vendors</label>
+    <div class="hint">Off: each of the three roles is asked of every vendor. On: the three roles are dealt out, one vendor each.</div>
+  </div>
+  <div class="hint">Round 1 defaults to <b>Conventions</b>: it judges the diff against the rules this project has written down \u2014 <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>GEMINI.md</code>, <code>.claude/rules</code> \u2014 and nothing else. Pick something else for round 1 and that wins.</div>
 ${code}
 </div>`;
 }

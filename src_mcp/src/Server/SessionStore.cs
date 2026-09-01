@@ -78,6 +78,16 @@ public sealed record PersistedSession(SessionState State, List<RoundRecord> Roun
     /// whether the code is defensible, never whether it is what was asked for.
     /// </remarks>
     public string PlanText { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Prompt ids this session has already asked, so the plan stage spends every lens once.
+    /// </summary>
+    /// <remarks>
+    /// The plan role has three prompts and a round deals one to each vendor, so two vendors cover
+    /// the pool in two rounds rather than asking the universal question twice. Without this the deal
+    /// would be random with replacement, which asks the same lens again while another goes unasked.
+    /// </remarks>
+    public List<string> UsedPrompts { get; init; } = [];
 }
 
 /// <summary>

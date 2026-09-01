@@ -40,6 +40,11 @@ top of the rounds view. The call blocks until you answer; after 30 minutes it co
 Still no port on either side: the server writes the question as a file into the data directory the
 extension already reads, and your answer is a file beside it.
 
+You answer with one of three buttons — **keep going** (another set of rounds), **stop and act on the
+findings**, or **stop and talk to me** — and each says what it will cause. None of them ships a change
+over open findings: an override meaning "ignore all this" is an off switch on a gate. The questions
+are English; there used to be a translator, and three buttons removed the prose it existed for.
+
 ## What makes "fewer than 2 remarks" mean something
 
 Without a rule, three verbose reviewers guarantee escalation forever. So:
@@ -50,6 +55,15 @@ Without a rule, three verbose reviewers guarantee escalation forever. So:
    twice the work.
 3. A finding you rejected **with a reason**, re-raised with the same argument, does not count again.
    Re-raised with a genuinely new argument, it counts in full.
+4. **Each ROLE has its own rounds and its own threshold**, and a finding is counted against the
+   threshold of the role that raised it. Architecture may be worth two passes with different lenses
+   while performance is worth one; a shared budget forces the cheapest role to pay for the most
+   expensive. A stage passes when every role is at or under its own number — not when one total is
+   small enough — and it revises only for roles that still have rounds to spend.
+
+Defaults: the plan role gets 3 rounds at a threshold of 2; each code role 2 rounds at 3. When the
+rounds run out there are four answers: ask a human, continue and say so, **good enough** (read the
+findings, apply the ones that are true, move on), or climb the escalation ladder.
 
 ## Install
 
@@ -96,7 +110,18 @@ with an `IMPLEMENTED` status when they ship — a rule this repository's CI enfo
 ## Prompts: a universal question, and eight narrow lenses
 
 Each reviewer role ships a **universal** prompt and two narrow ones, and the panel can pick which
-prompt each ROUND uses — or rotate through them automatically (universal first, then each lens).
+prompt each ROUND uses.
+
+**Round 1 of every code role is the conventions pass**: it judges the diff against the rules this
+project has written down — `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.claude/rules`, read from the
+worktree of the commit under review — and nothing else. A finding there must quote the sentence it
+breaks; a convention the reviewer believes in but the project never wrote is not a finding. Pick
+something else for round 1 and that wins.
+
+**Dealing the lenses** is a switch per stage, off by default. Off, every vendor answers every
+question and two vendors agreeing on a finding is a fact the gate can use. On, the round's prompts
+are dealt out one per vendor: every lens gets asked once at half the launches, and that agreement is
+gone. It is a real trade and the default is the conservative half of it.
 
 | Role | Universal | Lens 1 | Lens 2 |
 |---|---|---|---|

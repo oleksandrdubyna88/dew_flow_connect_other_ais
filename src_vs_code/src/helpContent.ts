@@ -96,11 +96,11 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'Then: choose who reviews',
       whatItIs:
-        'The **Reviewers** section is the panel of other vendors\' models that will read your plan and your code. Each row is one vendor: a checkbox to include it, a model picker, a ▶ to open its CLI in a terminal, and **remove**.',
+        'The **Reviewers** section is the panel of other vendors\' models that will read your plan and your code. Each row is one vendor: a checkbox to include it, a model picker, a ▶ to open its CLI in a terminal, a ⤤ to install that CLI, its price per million tokens, and **remove**.',
       why:
         'The whole point is that the reviewer is not the author. A second opinion from the same model that wrote the code is worth less than a first opinion from a different one — and two vendors agreeing on a finding is the strongest signal this product produces.',
       setup:
-        '**＋ Add a reviewer** offers the vendors this build knows: Codex, Antigravity (Gemini, Claude and GPT-OSS through one subscription), a second Claude, DeepSeek, OpenRouter, and a blank for any OpenAI-compatible endpoint.\n\nMost of them authenticate as themselves — if the CLI is signed in on this machine, no key is needed. Press ▶ on a row to open that vendor\'s CLI in a terminal: that is where you sign it in, and where its own usage command is typed and waiting for you to press Enter.',
+        '**＋ Add a reviewer** offers the vendors this build knows: Codex, Antigravity (Gemini, Claude and GPT-OSS through one subscription), a second Claude, DeepSeek, OpenRouter, and a blank for any OpenAI-compatible endpoint.\n\nMost of them authenticate as themselves — if the CLI is signed in on this machine, no key is needed. Press ▶ on a row to open that vendor\'s CLI in a terminal: that is where you sign it in, and where its own usage command is typed and waiting for you to press Enter. Press ⤤ and the same terminal opens with the INSTALL command typed instead — the vendor\'s own published one, for the operating system that terminal actually runs in. VS Code attached to WSL gets the Linux command, not the PowerShell one.',
       usage:
         'Two reviewers is the useful minimum, because agreement is the signal. Three costs three times as much and rarely says three times as much.\n\nThe model picker lists what that CLI can actually reach on this machine — for Codex, its own cached model list; for the others, a curated list. **another model…** takes any exact id you type.',
       whatCanGoWrong:
@@ -132,7 +132,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       why:
         'Without a limit a review loop never ends: there is always one more finding. The threshold says what "good enough" is, in a number, before the argument starts.',
       setup:
-        'The defaults are three rounds, a threshold of two, and *Ask a human*. Only **blocking** and **major** findings count towards the threshold — minor and nit never gate.\n\nA finding raised by two vendors counts ONCE. A finding you rejected with a reason is discounted unless a reviewer raises it again with something new.',
+        'Each ROLE has its own rounds and its own threshold, set beside that role’s prompts — architecture may be worth two passes with different lenses while performance is worth one, and a shared budget forces the cheapest role to pay for the most expensive. **Deal the lenses across vendors** is the other switch there: off, every vendor answers the same question and two vendors agreeing on a finding is a fact the gate can use; on, every lens gets asked once at half the launches and that agreement is gone. The defaults are three plan rounds at a threshold of two, two code rounds at three, dealing off, and *Ask a human*. Only **blocking** and **major** findings count towards the threshold — minor and nit never gate.\n\nA finding raised by two vendors counts ONCE. A finding you rejected with a reason is discounted unless a reviewer raises it again with something new.',
       usage:
         '*Ask a human* is the honest default: the gate stops and puts the decision in front of you. *Continue anyway* proceeds and says out loud that findings remain — it touches none of them, which is how a gate becomes decoration. *Good enough — take what’s true and move on* is the one between: the AI reads the open findings, applies the ones that are true and useful, rejects the rest with reasons, and proceeds. *Escalate* climbs a ladder — more reviewer effort, then a stronger reviewer model, then a stronger arbiter — and gives the stage a fresh set of rounds each time.',
       whatCanGoWrong:
@@ -144,15 +144,15 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
   {
     id: 'prompts-per-round',
     en: {
-      title: 'Prompts per round, and the automatic rotation',
+      title: 'Prompts per round: which question each round asks',
       whatItIs:
-        'Each reviewer role has a universal prompt and two narrow lenses. This section picks which prompt each ROUND uses, per role, or lets the rounds rotate through them.',
+        'Each reviewer role has a universal prompt and two narrow lenses. This section picks which prompt each ROUND of that role uses, and it sits with that role\'s rounds and threshold, because those three settings answer one question together.',
       why:
         'One prompt per role forever is the right default and the wrong ceiling. Asked to look at everything, a model spreads itself thin, and a second round of the same broad question tends to return the same broad answers.',
       setup:
-        'One picker per round per role; each option carries its purpose as a tooltip. **Rotate the lenses automatically** spends round one on the universal question and each later round on a different lens. Anything you pick explicitly wins over the rotation.\n\nA round you have not touched stays unset, so the rotation still applies to it.',
+        'One picker per round per role; each option carries its purpose as a tooltip. A round you have not touched shows what the server will actually run for it — the picker is never a guess, and never a prompt nobody would run.\n\n**Round one of every CODE role is the conventions pass unless you pick otherwise.** It judges the diff against the rules this project has written down — nothing else — and a finding there has to quote the sentence it breaks. A repository with no rule files falls back to that role\'s universal prompt, because a conventions pass with no conventions has nothing to say.\n\nEvery other unset round is that role\'s universal question. A lens is asked when you ask for it: there is no automatic rotation any more. There was one, it had no switch the panel could reach, and its only remaining effect was to make this picker name a prompt the server would not run.',
       usage:
-        'Rotation is OFF by default, and that is a considered choice rather than caution. It was measured against the universal prompt over two code rounds: rotation found FEWER distinct findings (17 against 25) for less money.\n\nRead the full text of every prompt in **The prompts, in full**.',
+        '**Deal the lenses across vendors** is the switch beside these pickers, and it is the one that changes how a round is spent: off, every vendor answers every question of that round; on, the round\'s prompts are dealt out one per vendor, so a round costs one launch per vendor instead of one per prompt per vendor. What it spends is agreement — two vendors filing the same finding is the strongest signal this product produces, and a dealt round cannot produce it. It is off by default for exactly that reason.\n\nWhen you do want two different lenses on one change, set them on two rounds and let both run. It was measured: over two code rounds, spending them on different lenses found FEWER distinct findings than asking the universal question twice (17 against 25) for less money — which is why nothing does it for you.\n\nRead the full text of every prompt in **The prompts, in full**.',
       whatCanGoWrong:
         '**What the measurement does not establish.** Across three plans the union of three lenses found roughly twice what any single one did — and that result does not survive its own control: the SAME prompt on the SAME text three times produced 6, 4 and 5 findings whose overlaps were 3, 1 and zero. Run-to-run variance alone explains the spread. The lenses are offered because they are useful to aim, not because they were shown to find more.',
     },
@@ -176,17 +176,18 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
   {
     id: 'language-and-translator',
     en: {
-      title: 'Language: the one you are asked in',
+      title:
+        "Language: the questions are English",
       whatItIs:
-        '**Ask and answer in** is the language a question reaches you in, and the language your answer is translated back FROM. **Translated by** is which small, fast model does it.',
+        "There is nothing to set here any more. A `call_human` question reaches you as one fixed English sentence and three buttons, and your answer goes back exactly as you gave it.",
       why:
-        'The AI asking is usually writing English. You should not have to read it, and it should not have to read your reply in another language to act on it.',
+        "There used to be a translator: the question was prose an AI had written, you had to read it, and you answered in your own words. Three buttons removed all of that. A subprocess per escalation that can time out, refuse, or answer in the wrong language is a moving part earning nothing.",
       setup:
-        'Pick your language. The translator defaults to a flash model because it answers a one-sentence job while you wait. **Nobody — always show the original** switches translation off.',
+        "Nothing. The **Ask and answer in** and **Translated by** controls are gone, along with the `COAI_LANGUAGE` and `COAI_TRANSLATOR_*` settings behind them.",
       usage:
-        'Translation runs both ways: the question into your language, your answer back into the language it was asked in. Your own words are always kept beside the translation, so nothing is lost in it.',
+        "The language of THIS help is separate and still yours: the selector at the top of these pages switches it, and it is stored as `coai.helpLanguage`. What changed is the reviewers’ side, not the reading side.",
       whatCanGoWrong:
-        'A translator that cannot run shows the original with a note rather than nothing. A question in the wrong language is a nuisance; a missing question stops a review.',
+        "Nothing here can fail any more, which was the point. If you type free text on a button that offers it, it reaches the AI unmediated — worth more than the same words rendered into another language by a third model.",
     },
   },
   {
@@ -226,13 +227,13 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'What each AI has used: tokens, money and time',
       whatItIs:
-        'A bar per vendor over a day, a week, a month or a year: tokens in and out, money, how many runs, how many failed, total and average time, and a total across all of them.',
+        'A bar per vendor over a day, a week, a month or a year: tokens in and out, **money**, how many runs, how many failed, total and average time — and one line at the bottom totalling every vendor.',
       why:
         'A review panel spends real money on every round, and the question "what has this cost me this month" cannot be answered from a session file — sessions are rewritten as rounds advance and hold one branch each.',
       setup:
-        'Nothing to set up. The server appends one line per reviewer to `usage.jsonl` in its data directory, and this section reads it.',
+        'Nothing to set up for the tokens: the server appends one line per reviewer to `usage.jsonl` in its data directory, and this section reads it.\n\nFor MONEY there is one thing, and only you can supply it: **what this vendor charges per million tokens, in and out**, in the vendor\'s own row. This product ships no price table on purpose — a shipped one is wrong for anybody on a flat subscription, wrong the first time a vendor changes a price, and wrong silently in both cases. Fill in a rate and that vendor\'s money appears; leave it empty and it stays a dash.',
       usage:
-        '**A failed reviewer is counted too.** A run that burned ninety seconds and answered nothing is exactly what a spending record must not hide, so every row carries its outcome and the failed count sits beside the tokens.\n\nMoney shows a dash where a vendor does not price its own runs — free and unreported are different facts, and only one of them is good news. Claude reports money; Codex and Antigravity report tokens only.',
+        '**A failed reviewer is counted too.** A run that burned ninety seconds and answered nothing is exactly what a spending record must not hide, so every row carries its outcome and the failed count sits beside the tokens.\n\n**The tilde is load-bearing.** `$0.42` is what a vendor billed; `~$0.42` is what your own rate works out to. Claude reports its cost, Codex and Antigravity report tokens only — so those two are a tilde or a dash, never a bare figure. The total keeps the halves apart for the same reason: it reads `$0.18 + ~$0.31` rather than adding a fact to a calculation and presenting the sum as either.\n\nBelow a dollar, money is shown to four decimals. A round that cost eight hundredths of a cent is a real number, and rounding it to `$0.00` says the panel is not counting.',
       whatCanGoWrong:
         'Token counting is per vendor because one rule would be wrong for at least one of them: Codex folds cached tokens INTO its input count, Claude reports them BESIDE it, and Antigravity\'s thinking tokens sit inside its output count. Claude also reports the same run twice with different numbers; the aggregate one is used.',
     },
@@ -260,11 +261,11 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'The prompts, in full',
       whatItIs:
-        'The complete text of every prompt this product sends to a reviewer — the four universal ones and the eight narrow lenses. Nothing is paraphrased here; this is what the model reads.',
+        'The complete text of every prompt this product sends to a reviewer — the four universal ones, the eight narrow lenses, and the conventions pass. Nothing is paraphrased here; this is what the model reads.',
       why:
         'A review you cannot audit is a review you have to take on faith. Knowing exactly what was asked is what lets you judge whether an answer was fair — and whether a finding you disagree with came from a bad model or a bad question.',
       setup:
-        'Nothing to set up. What is printed below is compared against the server\'s own prompt files by a test, so it cannot drift from what actually runs.',
+        'Nothing to set up. What is printed below is compared against the server\'s own prompt files by a test, so it cannot drift from what actually runs.\n\nThe **conventions** prompt is grouped on its own rather than under a role, because it is not a lens on one role\'s question: it is a different question that all three code roles ask in round one. Its rules arrive with it — the project\'s own `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` and `.claude/rules`, read from the worktree of the commit under review and quoted verbatim, up to 40 KB, with anything left out named rather than silently dropped.',
       usage:
         'Every prompt ends with the same discipline: a finding must name a concrete situation and the wrong outcome it produces, four kinds of non-finding are named and forbidden, and an empty findings list is stated to be a valid answer — a reviewer told to always find something will always find something.\n\nYou can override any of them: drop a file named after the prompt into `prompts/` inside the server\'s data directory, and it wins while it exists. Delete it to go back to the shipped text.',
       whatCanGoWrong:

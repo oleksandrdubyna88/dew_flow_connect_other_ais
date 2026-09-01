@@ -24,7 +24,7 @@ public sealed class ConventionsPassTests
     {
         foreach (var role in (string[])[PromptCatalog.ArchitectureRole, PromptCatalog.SecurityRole, PromptCatalog.UxDxRole])
         {
-            PromptCatalog.ForRound(role, 1, NoChoice, rotating: false, hasRules: true)
+            PromptCatalog.ForRound(role, 1, NoChoice, hasRules: true)
                 .Id.Should().Be("conventions", $"{role} round 1 must judge the written rules");
         }
     }
@@ -34,14 +34,14 @@ public sealed class ConventionsPassTests
     {
         // A pass with nothing to judge against would invent a standard, which is worse than the
         // review it displaced.
-        PromptCatalog.ForRound(PromptCatalog.ArchitectureRole, 1, NoChoice, rotating: false, hasRules: false)
+        PromptCatalog.ForRound(PromptCatalog.ArchitectureRole, 1, NoChoice, hasRules: false)
             .Id.Should().Be("architecture");
     }
 
     [Fact]
     public void ThePlanStage_IsUntouched_BecauseAPlanIsNotADiff()
     {
-        PromptCatalog.ForRound(PromptCatalog.PlanRole, 1, NoChoice, rotating: false, hasRules: true)
+        PromptCatalog.ForRound(PromptCatalog.PlanRole, 1, NoChoice, hasRules: true)
             .Id.Should().Be("plan-critique");
     }
 
@@ -49,17 +49,21 @@ public sealed class ConventionsPassTests
     public void AnExplicitChoiceForRoundOne_StillWins()
     {
         // A default, not a lock: somebody who picked a lens for round 1 asked for that lens.
-        PromptCatalog.ForRound(PromptCatalog.SecurityRole, 1, ["sec-attack"], rotating: false, hasRules: true)
+        PromptCatalog.ForRound(PromptCatalog.SecurityRole, 1, ["sec-attack"], hasRules: true)
             .Id.Should().Be("sec-attack");
     }
 
     [Fact]
-    public void LaterRounds_AreTheLensesTheyAlwaysWere()
+    public void OnlyRoundOne_IsClaimed_AndOnlyForACodeRole()
     {
-        PromptCatalog.ForRound(PromptCatalog.ArchitectureRole, 2, NoChoice, rotating: false, hasRules: true)
-            .Id.Should().Be("architecture", "only round 1 is claimed");
-        PromptCatalog.ForRound(PromptCatalog.ArchitectureRole, 2, NoChoice, rotating: true, hasRules: true)
-            .Id.Should().Be("arch-boundaries", "and rotation still owns the rest");
+        // The conventions pass takes round 1 and nothing else. A later round with no explicit pick
+        // is that role's universal prompt — the same answer the PANEL shows for it, which is the
+        // agreement `panelServerPromptAgreement.test.ts` holds from the other side.
+        foreach (var round in (int[])[2, 3, 4])
+        {
+            PromptCatalog.ForRound(PromptCatalog.ArchitectureRole, round, NoChoice, hasRules: true)
+                .Id.Should().Be("architecture", $"round {round} is not claimed");
+        }
     }
 
     [Fact]

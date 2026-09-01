@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.19.0 — 2026-09-01
+
+**Rounds and a threshold PER ROLE.** They were per stage, and one number for both before that — the
+same discovery each time: a budget shared by things that are not alike makes the cheapest of them pay
+for the most expensive. Architecture may be worth two passes with different lenses while performance
+is worth one. Each role now carries its own two numbers, beside its own prompts, in one box; a finding
+counts against the threshold of the role that RAISED it, so a noisy role cannot spend another role's
+tolerance; and a stage passes when every role is at or under its own number rather than when one total
+is small enough. A role whose rounds are spent simply stops being asked.
+
+A threshold of **zero** survives the trip to the server now. The panel had always accepted it and had a
+test saying so, while the server required a positive number and silently substituted its own default —
+the two halves disagreeing about a number somebody had deliberately set to nothing.
+
+**Deal the prompts across vendors** — one switch per stage, off by default. Off, every vendor answers
+every question, and two vendors filing the same finding is a fact the gate can use. On, the round's
+prompts are dealt out one per vendor: a code round costs three launches instead of six, and that
+agreement is gone. Measured on a real commit: 3 reviewers against 6, 39 % of the tokens, 59 % of the
+wall clock. It is a real trade and the default is the conservative half of it.
+
+**A fourth answer when the rounds run out: *Good enough — take what's true and move on*.** Between
+"ask a human" and "continue anyway", which touches nothing: the AI reads what is still open, applies
+the findings that are true and useful, rejects the rest with reasons, and proceeds. Observed end to
+end in the pre-delivery campaign.
+
+**The prompt picker no longer names a prompt the server will not run.** It passed the DEAL switch into
+the mirror function's ROTATING slot, so ticking *Deal the lenses across vendors* displayed
+`arch-boundaries` for round 2 of Architecture while the server ran `architecture`. The server's
+rotation read only `COAI_ROTATE_PROMPTS`, which this extension stopped writing when the Prompts and
+Gate sections were merged — so rotation had no way in from the product at all, and its only surviving
+effect was that lie in a dropdown. Rotation is removed from both halves; two different lenses on one
+change are still available by picking them on two rounds. `COAI_ROTATE_PROMPTS` keeps working as the
+alias for the two dealing switches. Nothing was lost: rotation was measured worse than asking the
+universal question twice — 17 distinct findings against 25, for less money.
+
+**The translator is gone.** A `call_human` question is one fixed English sentence and three buttons,
+so there was nothing left to translate. `Ask and answer in`, `Translated by` and the settings behind
+them are removed, along with three tooltips describing controls that no longer existed — now caught by
+a test that fails when help describes a control the panel does not render. **The help's own five
+languages are untouched**: that is the reading side, and every article that changed in this release was
+rewritten in all five.
+
+**Help brought level with the product**, in English, Русский, Українська, Deutsch and Español: the
+per-role gate, the dealing switch, the conventions pass that owns round 1 of every code role, money and
+the tilde that separates a billed figure from a computed one, and the ⤤ button that installs a
+vendor's CLI with the command for the OS the terminal will actually run in.
+
 ## 0.18.0 — 2026-09-01
 
 **Money, for the vendors that do not report any.** Only Claude prices its own runs, so every other

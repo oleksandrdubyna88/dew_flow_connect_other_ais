@@ -209,3 +209,70 @@ decision so a resumed conversation LEARNS of it rather than being told.
 
 **None of the three advances a stage over open findings.** A human override meaning "ignore all
 this" would be an off switch on the gate, and it is deliberately not offered.
+
+### The gate is per ROLE, and the prompts can be dealt (2026-09-01)
+
+**`PanelConfig` holds a `RoleGate` per role.** Per stage before this, and one number for both before
+that; each step was the same discovery, that a budget shared by things which are not alike forces the
+cheapest of them to pay for the most expensive. Architecture may be worth two passes with different
+lenses while performance is worth one. `For(string role)` is the only way to read a role's numbers;
+`For(Stage)` answers the widest of the stage's roles, because the stage counts rounds once and a role
+simply stops taking part when its own budget is spent (`RolesForRound`).
+
+Two consequences worth naming:
+
+- **A finding is counted against the threshold of the role that raised it.** `Finding.Role` is stamped
+  in `PanelService` — the only place holding both the invocation and its answer — and `GateRule`
+  groups by it. Passing is EVERY role at or under its own threshold, not one total being small
+  enough. `GateResult.OverThreshold` names the roles with work left.
+- **A round revises for the budget of the roles that are actually over.** Not the stage's widest: a
+  role with one round that is still over cannot run again, so revising for its sake would loop until
+  the widest role ran out, asking nothing new of anybody.
+- A threshold of **zero** now survives the server. `IntVar` required a positive number, which is
+  right for rounds and wrong for a threshold: the panel had always accepted zero and had a test
+  saying so, and the server silently substituted its own default — the two halves disagreeing about a
+  number a person had deliberately set to nothing.
+
+**Dealing the prompts (`PromptDeal`) is opt-in, off by default, and that default is the point.** With
+it off — the shipped behaviour — every vendor answers every question and `FindingDedup` merges what
+they agree on, which is the strongest signal this product produces. With it on the round's items are
+dealt one per vendor: every lens gets asked once at half the launches, and that agreement is gone.
+Two switches, because a plan has three lenses for one role and a code round has three roles.
+
+The deal is seeded from `StableSeed(sessionId, round)` — FNV, not `string.GetHashCode`, which is
+randomised per process and would deal a different hand on a restart while the log named a seed nobody
+could reuse. The plan stage additionally spends each lens once: `PersistedSession.UsedPrompts` records
+what a round asked, so two vendors cover the pool in two rounds instead of both being asked the
+universal question.
+
+### The translator is gone
+
+It existed because a `call_human` question was prose an AI had written and the person answered in
+their own words. The escalation is three buttons: the question is one fixed English sentence and the
+answer is a choice. `runners/Translation`, `ITranslator`, `TranslationPrompt`, the `Translator` and
+`Language` settings and `COAI_TRANSLATOR_*` / `COAI_LANGUAGE` are all removed. A subprocess per
+escalation that can time out, refuse, or answer in the wrong language was a moving part earning
+nothing. The help's own five languages are untouched — that is the reading side, not the reviewers'.
+
+### Rotation is gone, because only one half of the product had it (2026-09-01)
+
+`PromptCatalog.ForRound` took a `rotating` flag: with no explicit pick, spend round 1 on the
+universal question and each later round on a different lens. It came from `COAI_ROTATE_PROMPTS`, and
+when the Prompts and Gate sections were merged the extension stopped writing that variable — so
+nothing a person could touch turned it on.
+
+The panel, meanwhile, passed its DEAL switch into the mirror function's `rotating` slot. Two
+different ideas sharing one argument: ticking *Deal the lenses across vendors* made the picker show
+`arch-boundaries` for round 2 of Architecture, while the server ran `architecture`. Found by cell 9
+of the pre-delivery campaign, not by reading.
+
+Both halves lost the branch. `ForRound(role, round, chosen, hasRules)` now resolves exactly three
+ways — an explicit pick, the conventions pass in round 1 of a code role with rules present, or that
+role's universal prompt — and `panelServerPromptAgreement.test.ts` asserts the panel agrees for
+every role and round. `COAI_ROTATE_PROMPTS` survives as the legacy alias for the two dealing
+switches, which is where anybody who set it wanted to end up.
+
+Removing it cost nothing measurable: rotation was measured WORSE than asking the universal question
+twice — 17 distinct findings against 25 over two code rounds, for less money
+([RESULTS_prompt_measurement.md](RESULTS_prompt_measurement.md) §3). Two different lenses on one
+change are still available by picking them on two rounds.

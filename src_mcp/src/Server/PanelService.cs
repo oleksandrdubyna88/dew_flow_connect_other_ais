@@ -7,7 +7,6 @@ using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Context;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
-using CoaiMcp.Runners.Translation;
 using CoaiMcp.Runners.Worktrees;
 
 namespace CoaiMcp.Server;
@@ -31,7 +30,6 @@ public sealed class PanelService
     private readonly ReviewerExecutor _executor;
     private readonly RolePrompts _prompts;
     private readonly Escalations _escalations;
-    private readonly ITranslator _translator;
     private readonly UsageLedger _ledger;
 
     public PanelService(PanelSettings settings, VaultKeys keys, DateTime vaultReadUtc, IProcessLauncher launcher, Serilog.ILogger log)
@@ -51,7 +49,6 @@ public sealed class PanelService
         _executor = new ReviewerExecutor(launcher, Path.Combine(settings.DataDir, "unparseable"));
         _prompts = new RolePrompts(settings.DataDir);
         _escalations = new Escalations(settings.DataDir);
-        _translator = new CliTranslator(launcher, settings.Translator);
         _ledger = new UsageLedger(settings.DataDir);
 
         // Rounds this server never finished cannot be running any more, whatever their file says.
@@ -249,7 +246,10 @@ public sealed class PanelService
         RunStageAsync(repoPath, branch, planText, RoundMachine.BeginPlanRound, needsWorktree: false,
             (session, workingDir, _) => Task.FromResult<IReadOnlyList<ReviewerWork>>(
                 BuildWork([ReviewRole.PlanCritique], workingDir, $"## The plan under review\n\n{planText}",
-                    session.State.RoundsRunThisStage + 1)),
+                    session.State.RoundsRunThisStage + 1,
+                    seed: StableSeed(session.State.SessionId, session.State.RoundsRunThisStage + 1),
+                    planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session) : null,
+                    deal: _settings.DealPlanLenses)),
             ct);
 
     /// <summary>
@@ -296,9 +296,62 @@ public sealed class PanelService
                     $"## The change ({bundle.Branch} over {bundle.BaseRef}, at {bundle.Sha})\n\n{bundle.Diff.Text}";
                 _log.Information("rules for review: {Count} file(s), {Bytes} bytes, {Omitted} omitted",
                     rules.Files.Count, rules.Bytes, rules.Omitted.Count);
-                return BuildWork(CodeRoles, workingDir, context, session.State.RoundsRunThisStage + 1, rules.HasRules);
+                // Only the roles whose OWN budget reaches this round. The stage counts rounds once
+                // and a role stops taking part when its rounds are spent, so architecture can be
+                // worth two passes while performance is worth one.
+                var round = session.State.RoundsRunThisStage + 1;
+                var roles = _settings.Rounds
+                    .RolesForRound(Stage.CodeReview, round)
+                    .Select(Enum.Parse<ReviewRole>)
+                    .ToList();
+                _log.Information("round {Round} runs {Count} role(s): {Roles}", round, roles.Count, string.Join(", ", roles));
+                return BuildWork(roles, workingDir, context, round, rules.HasRules,
+                    seed: StableSeed(session.State.SessionId, round),
+                    deal: _settings.DealCodeLenses);
             },
             ct);
+    }
+
+    /// <summary>
+    /// The plan lenses this session has not spent yet, one for each vendor that can run.
+    /// </summary>
+    /// <remarks>
+    /// <para>The plan role has a universal prompt and two narrow lenses. A round deals one to each
+    /// vendor, so two vendors cover the pool in two rounds — instead of both being asked the
+    /// universal question while the two lenses go unasked, which is what handing every vendor the
+    /// same prompt did.</para>
+    /// <para>When the pool is empty the whole list comes back: a fourth round asks the universal
+    /// question again rather than nothing at all.</para>
+    /// </remarks>
+    private IReadOnlyList<string> UnspentPlanLenses(PersistedSession session)
+    {
+        var all = PromptCatalog.For(PromptCatalog.PlanRole)
+            .OrderByDescending(p => p.Universal)
+            .Select(p => p.Id)
+            .ToList();
+        var unspent = all.Where(id => !session.UsedPrompts.Contains(id)).ToList();
+        var pool = unspent.Count > 0 ? unspent : all;
+        var vendors = _settings.Providers.Count(p => p.Enabled);
+        return [.. pool.Take(Math.Max(vendors, 1))];
+    }
+
+    /// <summary>
+    /// A seed that is the same on every replay of one round, and different for the next.
+    /// </summary>
+    /// <remarks>
+    /// FNV over the session id and the round number, not <c>string.GetHashCode</c>: that one is
+    /// randomised per process, so the same round would deal a different hand on a restart and the
+    /// audit log would name a seed nobody could reuse.
+    /// </remarks>
+    internal static int StableSeed(string sessionId, int round)
+    {
+        var hash = 2166136261u;
+        foreach (var c in $"{sessionId}:{round}")
+        {
+            hash = (hash ^ c) * 16777619u;
+        }
+
+        return (int)(hash & 0x7FFFFFFF);
     }
 
     /// <summary>What the caller sent, or what the plan stage already agreed — in that order.</summary>
@@ -373,8 +426,16 @@ public sealed class PanelService
             });
             var summary = ReviewerSummaryFactory.From(results);
             var reviews = results.Select(r => r.Outcome).OfType<ReviewerOutcome.Ok>().Select(o => o.Review).ToList();
-            var merged = FindingDedup.Merge(reviews.SelectMany(r => r.Findings));
-            var gate = GateRule.Evaluate(merged, session.State.Rejections, StageGate(session).Threshold);
+            // The ROLE is stamped here because this is the only place that holds both the invocation
+            // and its answer. A threshold belongs to a role, so a finding has to remember whose it is.
+            var merged = FindingDedup.Merge(results
+                .Where(r => r.Outcome is ReviewerOutcome.Ok)
+                .SelectMany(r => ((ReviewerOutcome.Ok)r.Outcome).Review.Findings
+                    .Select(f => f with { Role = r.Invocation.Role.ToString() })));
+            var gate = GateRule.Evaluate(
+                merged,
+                session.State.Rejections,
+                role => _settings.Rounds.For(role).Threshold);
 
             if (RoundMachine.CompleteRound(session.State, gate, summary) is not Transition.Ok completed)
             {
@@ -389,6 +450,8 @@ public sealed class PanelService
                 State = completed.State,
                 Rounds = [.. session.Rounds, record],
                 Pending = [.. merged],
+                // The lenses this round spent, so the next one asks the ones nobody has yet.
+                UsedPrompts = [.. session.UsedPrompts.Union(work.Select(w => w.Prompt).Where(p => p.Length > 0))],
                 // The scope is kept with the session so the CODE stage has it without the caller
                 // sending it twice. Asking for it again is how a caller ends up sending nothing,
                 // and a reviewer handed a bare diff answers a different question than the one the
@@ -470,7 +533,6 @@ public sealed class PanelService
             role.ToString(),
             round,
             _settings.PromptsPerRound.GetValueOrDefault(role.ToString(), []),
-            _settings.RotatePrompts,
             hasRules);
 
     /// <summary>
@@ -498,7 +560,7 @@ public sealed class PanelService
             $"The {RoundSubject.StageName(session.State.Stage.ToString())} gate needs your decision: {human.Reason}. " +
             "Proceed anyway, or fix the findings and review again?",
             string.Empty,
-            _settings.Language.Code,
+            "en",
             string.Empty,
             [.. merged.Where(f => f.IsGating)],
             DateTime.UtcNow.ToString("O")));
@@ -519,12 +581,25 @@ public sealed class PanelService
               "(no CLAUDE.md, AGENTS.md, GEMINI.md or .claude/rules). Do not invent a standard: " +
               "a conventions finding needs a rule to quote.\n\n";
 
+    /// <summary>
+    /// The round's work: one item per (role, prompt), DEALT across the vendors.
+    /// </summary>
+    /// <remarks>
+    /// <para>Every vendor used to run every role's prompt — two vendors answering the same
+    /// question, with the dedup merging what they agreed on. Dealing them out asks every lens once
+    /// instead, at half the launches, and gives up cross-vendor agreement to do it. The trade is
+    /// written out in <see cref="PromptDeal"/>.</para>
+    /// <para>With ONE vendor the deal is the identity, and this is exactly what it always was.</para>
+    /// </remarks>
     private IReadOnlyList<ReviewerWork> BuildWork(
         IReadOnlyList<ReviewRole> roles,
         string worktreePath,
         string context,
         int round,
-        bool hasRules = false)
+        bool hasRules = false,
+        int seed = 0,
+        IReadOnlyList<string>? planPrompts = null,
+        bool deal = false)
     {
         var schemaFile = Path.Combine(_settings.DataDir, "finding-schema.json");
         Directory.CreateDirectory(_settings.DataDir);
@@ -538,13 +613,56 @@ public sealed class PanelService
         // stage learned the hard way, applied to the one launch whose whole job is to be brief.
         var repairDir = Directory.CreateTempSubdirectory("coai-repair-").FullName;
 
-        var work = new List<ReviewerWork>();
-        foreach (var provider in _settings.Providers.Where(p => p.Enabled))
+        // Only what can actually run: a vendor whose CLI is missing or whose key is absent is
+        // reported by `providers` and left out of the deal rather than dealt work it cannot do.
+        var runnable = _settings.Providers
+            .Where(p => p.Enabled)
+            .Where(p => RuntimeFor(p) is not null && AuthFor(p).Auth != "unavailable")
+            .ToList();
+        if (runnable.Count == 0)
         {
-            if (RuntimeFor(provider) is not { } runtime ||
-                AuthFor(provider).Auth == "unavailable")
+            return [];
+        }
+
+        // The items: one per role for a code round, or one per unspent lens for a plan round.
+        var items = planPrompts is { Count: > 0 }
+            ? planPrompts.Select(id => (Role: roles[0], PromptId: id)).ToList()
+            : roles.Select(role => (Role: role, PromptId: ChoiceFor(role, round, hasRules).Id)).ToList();
+
+        var work = new List<ReviewerWork>();
+        if (!deal)
+        {
+            // The shipped behaviour: every vendor answers every question, so two vendors agreeing on
+            // a finding is a fact the gate can use. Dealing is opt-in precisely because it gives
+            // that up.
+            foreach (var provider in runnable)
             {
-                continue; // reported by `providers`; a fan-out is built only from what can run
+                foreach (var item in items)
+                {
+                    Add(provider, item.Role, item.PromptId);
+                }
+            }
+
+            return work;
+        }
+
+        foreach (var hand in PromptDeal.Deal(
+            [.. items.Select(i => $"{i.Role}|{i.PromptId}")],
+            [.. runnable.Select(p => p.Provider)],
+            seed))
+        {
+            var parts = hand.Item.Split('|', 2);
+            Add(runnable.First(p => p.Provider == hand.Vendor), Enum.Parse<ReviewRole>(parts[0]), parts[1]);
+        }
+
+        return work;
+
+        void Add(ProviderSettings provider, ReviewRole role, string promptId)
+        {
+            var choice = PromptCatalog.ById(promptId) ?? PromptCatalog.UniversalFor(role.ToString());
+            if (RuntimeFor(provider) is not { } runtime)
+            {
+                return;
             }
 
             var settings = new ReviewerSettings(provider.Provider)
@@ -554,20 +672,14 @@ public sealed class PanelService
                 ApiKey = _keys.Keys.GetValueOrDefault(provider.Provider, string.Empty),
                 Timeout = _settings.ReviewerTimeout,
             };
-            foreach (var role in roles)
-            {
-                var choice = ChoiceFor(role, round, hasRules);
-                var prompt = ComposePrompt(choice, context);
-                var repairPrompt = prompt +
-                    "\n\nYOUR PREVIOUS ANSWER WAS NOT VALID JSON. Return ONLY the JSON object for the schema — no fences, no prose.";
-                work.Add(new ReviewerWork(
-                    runtime.Build(role, prompt, worktreePath, schemaFile, outputDir, settings),
-                    runtime.Build(role, repairPrompt, repairDir, schemaFile, outputDir, settings),
-                    choice.Id));
-            }
+            var prompt = ComposePrompt(choice, context);
+            var repairPrompt = prompt +
+                "\n\nYOUR PREVIOUS ANSWER WAS NOT VALID JSON. Return ONLY the JSON object for the schema — no fences, no prose.";
+            work.Add(new ReviewerWork(
+                runtime.Build(role, prompt, worktreePath, schemaFile, outputDir, settings),
+                runtime.Build(role, repairPrompt, repairDir, schemaFile, outputDir, settings),
+                choice.Id));
         }
-
-        return work;
     }
 
     private string ComposePrompt(PromptChoice choice, string context) =>
@@ -726,32 +838,31 @@ public sealed class PanelService
         var session = _store.Load(repoPath, branch);
         var id = Guid.NewGuid().ToString("N")[..12];
 
-        // Into the person's language. A model that already wrote in it returns the text unchanged;
-        // one that cannot be reached returns it with a note, and the note is shown rather than
-        // swallowed — a question in the wrong language is a nuisance, a missing one stops a review.
-        var shown = await _translator.TranslateAsync(question.Trim(), _settings.Language, "question", ct);
+        // English, as the caller wrote it. There used to be a translator here, and a set of
+        // buttons replaced the prose it existed for: the question is one fixed sentence and the
+        // answer is a choice, so a subprocess per escalation that can time out or answer in the
+        // wrong language was a moving part earning nothing.
+        var text = question.Trim();
         var asked = new EscalationQuestion(
             id,
             session?.State.SessionId ?? "no-session",
             repoPath,
             branch,
-            shown.Text,
-            shown.Original,
-            _settings.Language.Code,
-            shown.Note,
+            text,
+            text,
+            "en",
+            string.Empty,
             session?.Pending.Where(f => f.IsGating).ToList() ?? [],
             DateTime.UtcNow.ToString("O"));
 
-        _log.Information("escalating {Id} to a person in {Language}: {Question}", id, _settings.Language.Code, asked.Question);
+        _log.Information("escalating {Id} to a person: {Question}", id, asked.Question);
         var outcome = await _escalations.AskAsync(asked, _settings.EscalationBudget, ct);
 
         return outcome switch
         {
-            // And back: the caller asked in its own language, so it is answered in that language,
-            // with the person's own words kept beside it. Translating only one direction would
-            // hand an English-speaking model a Russian answer and call it done.
+            // Their own words, unchanged. Nothing stands between the person and the caller now.
             EscalationOutcome.Answered answered => Json(
-                await AnswerFor(answered.Text, question.Trim(), ct), ServerJsonContext.Default.HumanAnswer),
+                AnswerFor(answered.Text), ServerJsonContext.Default.HumanAnswer),
 
             // The family's `remote-ask` fallback, verbatim in shape: nobody answered in the budget,
             // so ASK IN THE CHAT rather than stalling or deciding alone. The question file stays.
@@ -767,43 +878,14 @@ public sealed class PanelService
         };
     }
 
-    /// <summary>
-    /// The person's answer, rendered for the caller: their words translated back into the language
-    /// the question arrived in, with the original kept beside it.
-    /// </summary>
+    /// <summary>The person's answer, exactly as they gave it.</summary>
     /// <remarks>
-    /// The target is inferred from the ASKING text rather than configured — the model that asked
-    /// is the one that has to act on the reply, and it wrote the question itself. When the two
-    /// languages are the same the translator returns the text unchanged, which costs one fast call
-    /// and removes a guess.
+    /// It used to be translated back into the language the caller had asked in. The buttons
+    /// removed the reason: a choice is not prose, and their free text — when they type any — is
+    /// worth more unmediated than rendered into another language by a third model.
     /// </remarks>
-    private async Task<HumanAnswer> AnswerFor(string answer, string originalQuestion, CancellationToken ct)
-    {
-        var back = await _translator.TranslateAsync(
-            answer,
-            LanguageOfCaller(originalQuestion),
-            "answer",
-            ct);
-        return new HumanAnswer(
-            "answered",
-            back.Text,
-            answer,
-            back.Note.Length == 0
-                ? string.Empty
-                : $"the answer is shown in the person's own words: {back.Note}");
-    }
+    private static HumanAnswer AnswerFor(string answer) => new("answered", answer, answer, string.Empty);
 
-    /// <summary>
-    /// Which language to answer the CALLER in. Latin script → English; otherwise the configured
-    /// language, because a caller writing Cyrillic is not asking to be answered in English.
-    /// </summary>
-    /// <remarks>
-    /// Deliberately crude, and cheap: the translator itself decides whether anything needs doing —
-    /// asked to render Russian text in Russian, it returns it unchanged. A wrong guess here costs
-    /// a no-op call, never a wrong answer.
-    /// </remarks>
-    private Language LanguageOfCaller(string question) =>
-        question.Any(c => c >= 'Ѐ' && c <= 'ӿ') ? _settings.Language : Language.English;
 
     // ---------- plumbing ----------
 

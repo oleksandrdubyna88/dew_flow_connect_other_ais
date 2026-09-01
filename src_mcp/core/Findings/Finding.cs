@@ -38,6 +38,18 @@ public sealed record Finding(
     string Fix,
     ImmutableArray<string> Providers)
 {
+    /// <summary>
+    /// Which reviewer ROLE raised it, so it can be counted against that role's threshold.
+    /// </summary>
+    /// <remarks>
+    /// <para>An init property rather than a constructor parameter, deliberately: every existing call
+    /// site keeps working and a finding from an older session file simply has none.</para>
+    /// <para>Empty means unattributed — a plan-stage remark, or a file written before this existed.
+    /// It is still counted, against the whole-stage threshold; dropping it would let a round pass on
+    /// findings nobody looked at.</para>
+    /// </remarks>
+    public string Role { get; init; } = string.Empty;
+
     public bool IsGating => Severity is Severity.Blocking or Severity.Major;
 }
 

@@ -13,20 +13,17 @@ import { selectedFor } from '../prompts';
  * key, the server uses its own default, and nothing anywhere says so. This walks every field.</p>
  */
 const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
-  maxRoundsPlan: 5,
-  gateThresholdPlan: 1,
-  maxRoundsCode: 4,
-  gateThresholdCode: 5,
+  rounds: { PlanCritique: 5, Architecture: 4, SecurityReliability: 4, UxDxPerformance: 4 },
+  thresholds: { PlanCritique: 1, Architecture: 5, SecurityReliability: 5, UxDxPerformance: 5 },
+  dealPlanLenses: true,
   onExhausted: 'escalate',
   maxConcurrency: 7,
   maxPerProvider: 4,
   reviewerTimeoutMinutes: 12,
   credsKey: 'coai-key',
-  language: 'ru',
-  translator: { provider: 'claude', model: 'haiku' },
   escalationMinutes: 45,
   promptsPerRound: { SecurityReliability: ['sec-attack'] },
-  rotatePrompts: true,
+  dealCodeLenses: true,
 };
 
 test('every setting, changed on its own, reaches the server file', () => {
@@ -56,9 +53,9 @@ test('the file the panel writes is the shape the server parses', () => {
     assert.match(key, /^COAI_[A-Z_]+$/, `${key} is not an env-shaped key`);
     assert.equal(typeof value, 'string', `${key} must be a string, the env carries no other type`);
   }
-  assert.equal(written['COAI_ROTATE_PROMPTS'], 'true');
+  assert.equal(written['COAI_DEAL_PLAN'], 'true');
+  assert.equal(written['COAI_DEAL_CODE'], 'true');
   assert.deepEqual(JSON.parse(written['COAI_PROMPTS_PER_ROUND']!), { SecurityReliability: ['sec-attack'] });
-  assert.equal(written['COAI_LANGUAGE'], 'ru');
 });
 
 test('a vendor added in the panel travels with its runtime and model', () => {
@@ -88,10 +85,11 @@ test('a runtime nobody knows still falls back to codex, which is the one that ta
   assert.equal(vendorsFrom([{ id: 'x', runtime: 'llama.cpp', baseUrl: 'https://x/v1' }])[0]!.runtime, 'codex');
 });
 
-test('a round nobody chose stays empty, so rotation still applies to it', () => {
-  // The panel pads the array up to the round being set. Padding with a RESOLVED id silently
-  // converts automatic rotation into fixed picks for every earlier round — a fix that was made,
-  // lost to a careless whole-file write, and only noticed because the panel was re-read.
+test('a round nobody chose is padded with nothing, not with what it resolves to today', () => {
+  // The panel pads the array up to the round being set. Padding with a RESOLVED id would freeze
+  // today's default into a stored choice, so a later change to the default would never reach a
+  // person who had once set round 3 — a fix that was made, lost to a careless whole-file write,
+  // and only noticed because the panel was re-read.
   const stored: Record<string, string[]> = {};
   const rounds = [...(stored['Architecture'] ?? [])];
   while (rounds.length < 3) {
@@ -100,9 +98,10 @@ test('a round nobody chose stays empty, so rotation still applies to it', () => 
   rounds[2] = 'arch-evolution';
 
   assert.deepEqual(rounds, ['', '', 'arch-evolution']);
-  // Round 1 of a code role is the conventions pass now, so the rotation question is asked of round
-  // 2 — and asked of round 1 with hasRules: false, which is the case that still rotates.
-  assert.equal(selectedFor('Architecture', 1, { Architecture: rounds }, true, false), 'architecture',
-    'round 1 must still rotate to the universal prompt');
-  assert.equal(selectedFor('Architecture', 3, { Architecture: rounds }, true), 'arch-evolution');
+  // An empty slot still resolves the way the server resolves it: conventions in round 1 when the
+  // repository has written rules, that role's universal prompt when it has none.
+  assert.equal(selectedFor('Architecture', 1, { Architecture: rounds }), 'conventions');
+  assert.equal(selectedFor('Architecture', 1, { Architecture: rounds }, false), 'architecture');
+  assert.equal(selectedFor('Architecture', 2, { Architecture: rounds }), 'architecture');
+  assert.equal(selectedFor('Architecture', 3, { Architecture: rounds }), 'arch-evolution');
 });

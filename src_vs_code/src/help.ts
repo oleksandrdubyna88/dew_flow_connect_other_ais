@@ -26,24 +26,17 @@ export const HELP = {
     'What this vendor bills per million tokens, in and out. From YOU, never from a table this product ships: a shipped price list is wrong for anyone on a flat subscription, wrong the first time a vendor changes a price, and wrong silently in both cases. Only Claude reports its own cost; codex and antigravity report tokens and nothing else, so their money read as a dash until you fill these in. What is computed from your rate is marked with a tilde — ~$0.42 is what the tokens work out to, $0.42 is what a vendor actually charged, and the totals keep the two apart.',
 
   installVendorCli:
-    'Install this vendor’s CLI. It opens a terminal with the exact command typed and waiting — one npm line, plus how to get node first if this machine has none. A fresh WSL box has none of these CLIs, and the answer being on somebody else’s docs page is why a reviewer never gets added.',
+    'Install this vendor’s CLI. It opens a terminal with the exact command typed and waiting, picked for the OS the terminal will actually run in — PowerShell on Windows, the shell in your distribution when VS Code is attached to WSL — plus how to get node first if this machine has none. Only the vendors’ own published sources: npm for Codex, Google’s own script for Antigravity. A fresh WSL box has none of these CLIs, and the answer being on somebody else’s docs page is why a reviewer never gets added.',
 
   addVendor:
     'Add another independent reviewer: a preset, or any OpenAI-compatible endpoint by name and URL. More vendors means more independent eyes — and more cost per round.',
 
-  language:
-    'The language you are asked and answer in. A question the AI already wrote in this language is left exactly as it was; anything else is translated first.',
-  translator:
-    'Which small, fast model translates a question that is not already in your language. It is a one-sentence job in front of someone who is waiting, so a flash or mini model is the right choice. "Nobody" shows every question in the language it arrived in.',
-  translatorModel:
-    "The translator's model. Empty uses the CLI's own default. If the translator cannot run at all, you get the original text with the reason — never an error in its place.",
-
   maxRounds:
-    'How many times one stage may be reviewed before the policy below takes over. There are two stages: the plan, then the code. Three is usually enough — a fourth round rarely changes a verdict.',
+    'How many times THIS ROLE may be asked before the policy below takes over. Each role has its own count, because they are not worth the same number of passes: architecture may deserve two with different lenses while performance deserves one, and a shared budget makes the cheapest role pay for the most expensive. A round runs the roles that still have a count left — all of them, not only the ones that gated, because the next round reads a REVISED diff and a role that was clean on the old one can find something in the fix. When a role’s count is spent it simply stops being asked, and the stage keeps going for the roles that have not.',
   gateThreshold:
-    'The gate opens when this many findings are left, or fewer. Only blocking and major findings count, and the same defect raised by two vendors counts once. Zero demands a clean review; two tolerates a couple of disagreements.',
+    'The gate opens for THIS ROLE when this many of its findings are left, or fewer — a finding is counted against the threshold of the role that raised it, so a noisy role cannot spend another role’s tolerance. Only blocking and major findings count, and the same defect raised by two vendors counts once. Zero demands a clean review from this role; two tolerates a couple of disagreements. The stage passes when every role is at or under its own number.',
   onExhausted:
-    'What happens when the rounds run out and findings still gate. Ask a human: the review stops and waits for you. Continue: it proceeds and says out loud what is still open. Climb the ladder: raise the reviewers’ effort, then their model, then the arbiter’s — and try again.',
+    'What happens when the rounds run out and findings still gate. Ask a human: the review stops and waits for you. Continue: it proceeds and says out loud what is still open, touching none of them. Good enough: the AI reads what is open, applies the findings that are true and useful, rejects the rest with reasons, and moves on. Climb the ladder: raise the reviewers’ effort, then their model, then the arbiter’s — and try again.',
 
   maxConcurrency:
     'How many reviewer processes may run at the same time, across every vendor. Higher finishes a round sooner and loads the machine harder; each one is a full CLI.',

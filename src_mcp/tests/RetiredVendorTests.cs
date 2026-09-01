@@ -1,7 +1,5 @@
-using CoaiMcp.Core.Context;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
-using CoaiMcp.Runners.Translation;
 using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
@@ -42,40 +40,10 @@ public sealed class RetiredVendorTests
         settings.Providers.Select(p => p.Provider).Should().BeEquivalentTo(["codex", "antigravity"]);
     }
 
-    [Fact]
-    public void TheTranslator_DoesNotDefaultToTheRetiredCli()
-    {
-        // The operator runs with COAI_LANGUAGE=ru, so EVERY question a person is shown goes
-        // through this CLI. It defaulted to the one that no longer answers.
-        new PanelSettings().Translator.Provider.Should().NotBe("gemini");
-    }
 
     // ---------- an antigravity translator must launch antigravity ----------
 
-    [Fact]
-    public async Task TheAntigravityTranslator_LaunchesAgy_NotTheGeminiCli()
-    {
-        var launcher = new RecordingLauncher("привет");
 
-        await new CliTranslator(launcher, new TranslatorSettings("antigravity"))
-            .TranslateAsync("hello", Language.Russian, "question");
-
-        Path.GetFileNameWithoutExtension(launcher.Last!.Executable).Should().Be("agy",
-            "a provider that falls through to another vendor's binary is the wrong-model defect again");
-    }
-
-    [Fact]
-    public async Task TheAntigravityTranslator_SendsTheTextOnStdIn()
-    {
-        var launcher = new RecordingLauncher("привет");
-
-        await new CliTranslator(launcher, new TranslatorSettings("antigravity"))
-            .TranslateAsync("hello", Language.Russian, "question");
-
-        launcher.Last!.StdIn.Should().Contain("hello");
-        launcher.Last.Arguments.Should().NotContain(a => a.Contains("hello"),
-            "a prompt on the command line is truncated at the first newline by cmd.exe");
-    }
 
     // ---------- providers must not call a closed door healthy ----------
 

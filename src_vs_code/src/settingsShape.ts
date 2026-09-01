@@ -45,40 +45,51 @@ export interface CoaiSettings {
    * on a diff of a dozen files is an ordinary Tuesday. One number for both made the plan gate
    * strict and the code gate a permanent `call_human`.
    */
-  readonly maxRoundsPlan: number;
-  readonly gateThresholdPlan: number;
-  readonly maxRoundsCode: number;
-  readonly gateThresholdCode: number;
+  /**
+   * Rounds and threshold per ROLE, keyed by role id.
+   *
+   * <p>Per stage before this, and one number for both before that. Each step was the same
+   * discovery: a budget shared by things that are not alike forces the cheapest of them to pay for
+   * the most expensive. Architecture may be worth two passes with different lenses while
+   * performance is worth one.</p>
+   */
+  readonly rounds: Readonly<Record<string, number>>;
+  readonly thresholds: Readonly<Record<string, number>>;
+
   readonly onExhausted: OnExhausted;
   readonly maxConcurrency: number;
   readonly maxPerProvider: number;
   readonly reviewerTimeoutMinutes: number;
   readonly credsKey: string;
-  readonly language: LanguageCode;
-  readonly translator: TranslatorChoice;
   readonly escalationMinutes: number;
   /** Per role, the prompt id each round uses — index 0 is round 1. Empty = the universal one. */
   readonly promptsPerRound: Readonly<Record<string, readonly string[]>>;
   /** Spend the rounds on different lenses instead of asking the same broad question again. */
-  readonly rotatePrompts: boolean;
+  /**
+   * Deal the lenses across the vendors instead of giving every vendor the same one.
+   *
+   * <p>Two switches because the stages are not alike: a plan has three lenses for one role, a code
+   * round has three roles. Off by default, and that default is the point \u2014 with it off every vendor
+   * answers the same question and two vendors agreeing on a finding is a fact the gate can use.
+   * On, every lens gets asked once at half the launches, and that agreement is gone.</p>
+   */
+  readonly dealPlanLenses: boolean;
+  readonly dealCodeLenses: boolean;
 }
 
 /** The defaults, matching the master plan's configuration table — pinned by tests. */
 export const DEFAULTS: CoaiSettings = {
-  maxRoundsPlan: 3,
-  gateThresholdPlan: 2,
-  maxRoundsCode: 3,
-  gateThresholdCode: 3,
+  rounds: { PlanCritique: 3, Architecture: 2, SecurityReliability: 2, UxDxPerformance: 2 },
+  thresholds: { PlanCritique: 2, Architecture: 3, SecurityReliability: 3, UxDxPerformance: 3 },
   onExhausted: 'human',
   maxConcurrency: 3,
   maxPerProvider: 2,
   reviewerTimeoutMinutes: 10,
   credsKey: '',
-  language: 'en',
-  translator: { provider: 'gemini', model: 'gemini-flash-latest' },
   escalationMinutes: 30,
   promptsPerRound: {},
-  rotatePrompts: false,
+  dealPlanLenses: false,
+  dealCodeLenses: false,
 };
 
 /** A raw configuration reader: `get(section)` returns whatever the host stored, if anything. */
@@ -87,23 +98,18 @@ export type ConfigReader = (section: string) => unknown;
 /** VS Code config → a validated `CoaiSettings`; anything malformed falls back to the default. */
 export function settingsFrom(read: ConfigReader): CoaiSettings {
   return {
-    maxRoundsPlan: asPositive(read('maxRoundsPlan'), DEFAULTS.maxRoundsPlan),
-    gateThresholdPlan: asCount(read('gateThresholdPlan'), DEFAULTS.gateThresholdPlan),
-    maxRoundsCode: asPositive(read('maxRoundsCode'), DEFAULTS.maxRoundsCode),
-    gateThresholdCode: asCount(read('gateThresholdCode'), DEFAULTS.gateThresholdCode),
+    rounds: asRoleNumbers(read('rounds'), DEFAULTS.rounds, asPositive),
+    thresholds: asRoleNumbers(read('thresholds'), DEFAULTS.thresholds, asCount),
     onExhausted: asOnExhausted(read('onExhausted')),
     maxConcurrency: asPositive(read('maxConcurrency'), DEFAULTS.maxConcurrency),
     maxPerProvider: asPositive(read('maxPerProvider'), DEFAULTS.maxPerProvider),
     reviewerTimeoutMinutes: asPositive(read('reviewerTimeoutMinutes'), DEFAULTS.reviewerTimeoutMinutes),
     credsKey: asString(read('credsKey')),
-    language: asLanguage(read('language')),
-    translator: {
-      provider: asTranslator(read('translator.provider')),
-      model: asString(read('translator.model')) || DEFAULTS.translator.model,
-    },
+
     escalationMinutes: asPositive(read('escalationMinutes'), DEFAULTS.escalationMinutes),
     promptsPerRound: asPromptRounds(read('promptsPerRound')),
-    rotatePrompts: read('rotatePrompts') === true,
+    dealPlanLenses: read('dealPlanLenses') === true,
+    dealCodeLenses: read('dealCodeLenses') === true,
   };
 }
 
@@ -116,23 +122,27 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
   if (!sameVendors(vendors, DEFAULT_VENDORS)) {
     env['COAI_VENDORS'] = vendorsEnv(vendors);
   }
-  if (settings.rotatePrompts) {
-    env['COAI_ROTATE_PROMPTS'] = 'true';
-  }
   if (Object.keys(settings.promptsPerRound).length > 0) {
     env['COAI_PROMPTS_PER_ROUND'] = JSON.stringify(settings.promptsPerRound);
   }
-  if (settings.maxRoundsPlan !== DEFAULTS.maxRoundsPlan) {
-    env['COAI_MAX_ROUNDS_PLAN'] = String(settings.maxRoundsPlan);
+  // A key per role, and only where it differs: the panel writes what is not the default so that
+  // returning a control to its default REMOVES the key rather than pinning the old value.
+  for (const [role, rounds] of Object.entries(settings.rounds)) {
+    if (rounds !== DEFAULTS.rounds[role]) {
+      env[`COAI_ROUNDS_${role.toUpperCase()}`] = String(rounds);
+    }
   }
-  if (settings.maxRoundsCode !== DEFAULTS.maxRoundsCode) {
-    env['COAI_MAX_ROUNDS_CODE'] = String(settings.maxRoundsCode);
+  if (settings.dealPlanLenses !== DEFAULTS.dealPlanLenses) {
+    env['COAI_DEAL_PLAN'] = 'true';
   }
-  if (settings.gateThresholdPlan !== DEFAULTS.gateThresholdPlan) {
-    env['COAI_THRESHOLD_PLAN'] = String(settings.gateThresholdPlan);
+  if (settings.dealCodeLenses !== DEFAULTS.dealCodeLenses) {
+    env['COAI_DEAL_CODE'] = 'true';
   }
-  if (settings.gateThresholdCode !== DEFAULTS.gateThresholdCode) {
-    env['COAI_THRESHOLD_CODE'] = String(settings.gateThresholdCode);
+
+  for (const [role, threshold] of Object.entries(settings.thresholds)) {
+    if (threshold !== DEFAULTS.thresholds[role]) {
+      env[`COAI_THRESHOLD_${role.toUpperCase()}`] = String(threshold);
+    }
   }
   if (settings.onExhausted !== DEFAULTS.onExhausted) {
     env['COAI_ON_EXHAUSTED'] = settings.onExhausted;
@@ -148,15 +158,6 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
   }
   if (settings.credsKey) {
     env['COAI_CREDS_KEY'] = settings.credsKey;
-  }
-  if (settings.language !== DEFAULTS.language) {
-    env['COAI_LANGUAGE'] = settings.language;
-  }
-  if (settings.translator.provider !== DEFAULTS.translator.provider) {
-    env['COAI_TRANSLATOR_PROVIDER'] = settings.translator.provider;
-  }
-  if (settings.translator.model !== DEFAULTS.translator.model) {
-    env['COAI_TRANSLATOR_MODEL'] = settings.translator.model;
   }
   if (settings.escalationMinutes !== DEFAULTS.escalationMinutes) {
     env['COAI_ESCALATION_MINUTES'] = String(settings.escalationMinutes);
@@ -176,13 +177,7 @@ function asCount(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : fallback;
 }
 
-function asLanguage(value: unknown): LanguageCode {
-  return LANGUAGES.some((l) => l.code === value) ? (value as LanguageCode) : DEFAULTS.language;
-}
 
-function asTranslator(value: unknown): string {
-  return TRANSLATORS.some((t) => t.id === value) ? (value as string) : DEFAULTS.translator.provider;
-}
 
 function asOnExhausted(value: unknown): OnExhausted {
   return value === 'continue' || value === 'escalate' || value === 'human' || value === 'good_enough'
@@ -225,5 +220,25 @@ function asPromptRounds(value: unknown): Record<string, string[]> {
       out[role] = rounds.filter((r): r is string => typeof r === 'string');
     }
   }
+  return out;
+}
+
+/**
+ * A role -> number map from settings, with every role falling back to its default.
+ *
+ * <p>A stored map is whatever a person or a sync left there, so each entry is validated on its
+ * own and a junk one takes the default rather than poisoning the map.</p>
+ */
+function asRoleNumbers(
+  value: unknown,
+  defaults: Readonly<Record<string, number>>,
+  check: (value: unknown, fallback: number) => number,
+): Readonly<Record<string, number>> {
+  const stored = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  const out: Record<string, number> = {};
+  for (const [role, fallback] of Object.entries(defaults)) {
+    out[role] = check(stored[role], fallback);
+  }
+
   return out;
 }

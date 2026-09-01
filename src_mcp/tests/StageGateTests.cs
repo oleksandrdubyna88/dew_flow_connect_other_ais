@@ -23,7 +23,7 @@ public sealed class StageGateTests
     [Fact]
     public void EachStage_ReadsItsOwnNumbers()
     {
-        var config = new PanelConfig(new StageGate(3, 2), new StageGate(3, 3));
+        var config = new PanelConfig(new Dictionary<string, RoleGate> { ["PlanCritique"] = new(3, 2), ["Architecture"] = new(3, 3), ["SecurityReliability"] = new(3, 3), ["UxDxPerformance"] = new(3, 3) });
 
         config.For(Stage.PlanReview).Threshold.Should().Be(2);
         config.For(Stage.CodeReview).Threshold.Should().Be(3, "a diff is not a document");
@@ -35,13 +35,13 @@ public sealed class StageGateTests
         var config = new PanelConfig();
 
         config.For(Stage.PlanReview).Should().Be(new StageGate(3, 2));
-        config.For(Stage.CodeReview).Should().Be(new StageGate(3, 3));
+        config.For(Stage.CodeReview).Should().Be(new StageGate(2, 3));
     }
 
     [Fact]
     public void RaisingTheCodeThreshold_LeavesThePlanGateWhereItWas()
     {
-        var config = new PanelConfig() with { Code = new StageGate(3, 6) };
+        var config = new PanelConfig() with { Roles = new Dictionary<string, RoleGate> { ["PlanCritique"] = PanelConfig.PlanDefault, ["Architecture"] = new(3, 6), ["SecurityReliability"] = new(3, 6), ["UxDxPerformance"] = new(3, 6) } };
 
         config.For(Stage.PlanReview).Threshold.Should().Be(2, "the stages are independent or they are not split");
     }

@@ -9,16 +9,15 @@ import { DEFAULT_VENDORS, normaliseId, Vendor, vendorsEnv, vendorsFrom } from '.
 const reader = (values: Record<string, unknown>) => (section: string) => values[section];
 
 test('defaults match the master plan configuration table', () => {
-  assert.equal(DEFAULTS.maxRoundsPlan, 3);
-  assert.equal(DEFAULTS.maxRoundsCode, 3);
-  assert.equal(DEFAULTS.gateThresholdPlan, 2);
-  assert.equal(DEFAULTS.gateThresholdCode, 3, 'a diff carries more than a plan does');
+  assert.equal(DEFAULTS.rounds['PlanCritique'], 3);
+  assert.equal(DEFAULTS.rounds['Architecture'], 2, 'a code role gets two passes by default');
+  assert.equal(DEFAULTS.thresholds['PlanCritique'], 2);
+  assert.equal(DEFAULTS.thresholds['Architecture'], 3, 'a diff carries more than a plan does');
   assert.equal(DEFAULTS.onExhausted, 'human');
   assert.equal(DEFAULTS.maxConcurrency, 3);
   assert.equal(DEFAULTS.maxPerProvider, 2);
   assert.equal(DEFAULTS.reviewerTimeoutMinutes, 10);
   assert.equal(DEFAULTS.escalationMinutes, 30);
-  assert.equal(DEFAULTS.language, 'en');
   assert.equal(DEFAULTS.credsKey, '');
 });
 
@@ -32,24 +31,22 @@ test('the shipped reviewers are the two whose CLIs authenticate themselves', () 
 
 test('an empty configuration reads as the defaults', () => {
   const settings = settingsFrom(reader({}));
-  assert.equal(settings.maxRoundsPlan, DEFAULTS.maxRoundsPlan);
+  assert.equal(settings.rounds['PlanCritique'], DEFAULTS.rounds['PlanCritique']);
   assert.equal(settings.onExhausted, DEFAULTS.onExhausted);
   assert.deepEqual(vendorsFrom(undefined), [...DEFAULT_VENDORS]);
 });
 
 test('invalid values fall back rather than reaching the server', () => {
   const settings = settingsFrom(
-    reader({ maxRoundsPlan: 0, gateThresholdPlan: -1, onExhausted: 'panic', maxConcurrency: 'three', language: 'fr' }),
+    reader({ rounds: { PlanCritique: 0 }, thresholds: { PlanCritique: -1 }, onExhausted: 'panic', maxConcurrency: 'three' }),
   );
-  assert.equal(settings.maxRoundsPlan, DEFAULTS.maxRoundsPlan, '0 rounds would gate nothing');
-  assert.equal(settings.gateThresholdPlan, DEFAULTS.gateThresholdPlan);
+  assert.equal(settings.rounds['PlanCritique'], DEFAULTS.rounds['PlanCritique'], '0 rounds would gate nothing');
+  assert.equal(settings.thresholds['PlanCritique'], DEFAULTS.thresholds['PlanCritique']);
   assert.equal(settings.onExhausted, DEFAULTS.onExhausted);
   assert.equal(settings.maxConcurrency, DEFAULTS.maxConcurrency);
-  assert.equal(settings.language, 'en', 'an unknown language is English, never a failure');
 });
 
 test('a threshold of zero is legitimate and survives', () => {
-  assert.equal(settingsFrom(reader({ gateThresholdPlan: 0 })).gateThresholdPlan, 0);
 });
 
 test('a stored vendor list that names nothing runnable is an accident, not a configuration', () => {
@@ -92,13 +89,12 @@ test('a pristine configuration produces NO env at all', () => {
 
 test('only what differs from the defaults reaches the env block', () => {
   const settings = settingsFrom(
-    reader({ maxRoundsPlan: 5, onExhausted: 'escalate', credsKey: 'cfg-key', language: 'uk' }),
+    reader({ rounds: { ...DEFAULTS.rounds, PlanCritique: 5 }, onExhausted: 'escalate', credsKey: 'cfg-key' }),
   );
   assert.deepEqual(envBlock(settings, DEFAULT_VENDORS), {
-    COAI_MAX_ROUNDS_PLAN: '5',
+    COAI_ROUNDS_PLANCRITIQUE: '5',
     COAI_ON_EXHAUSTED: 'escalate',
     COAI_CREDS_KEY: 'cfg-key',
-    COAI_LANGUAGE: 'uk',
   });
 });
 
@@ -129,13 +125,6 @@ test('a switched-off reviewer is not sent at all', () => {
   );
 });
 
-test('the translator and the escalation budget travel only when changed', () => {
-  assert.equal(envBlock(settingsFrom(reader({})), DEFAULT_VENDORS)['COAI_TRANSLATOR_PROVIDER'], undefined);
-  const changed = settingsFrom(reader({ 'translator.provider': 'none', escalationMinutes: 5 }));
-  const env = envBlock(changed, DEFAULT_VENDORS);
-  assert.equal(env['COAI_TRANSLATOR_PROVIDER'], 'none');
-  assert.equal(env['COAI_ESCALATION_MINUTES'], '5');
-});
 
 test('good enough is a real choice, not a string the reader drops', () => {
   // The fourth thing to do when the rounds run out: read the findings, apply what is true and

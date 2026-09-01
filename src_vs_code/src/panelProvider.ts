@@ -206,8 +206,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * <p>Stored as <code>role -&gt; [round1, round2, ...]</code> — the shape the server reads and
    * the shape a person reasons in. Rounds nobody has chosen stay EMPTY rather than being filled
    * with what they resolve to today: both reviewers of this change caught that padding them
-   * silently turned automatic rotation into fixed picks the moment anyone touched a later
-   * round. Both halves read an empty entry as "not chosen".</p>
+   * freezes today’s default into a stored choice the moment anyone touches a later round, so a
+   * later change to that default would never reach them again. Both halves read an empty entry
+   * as "not chosen".</p>
    */
   private async choosePrompt(role: string, round: number, id: string): Promise<void> {
     const config = vscode.workspace.getConfiguration('coai');

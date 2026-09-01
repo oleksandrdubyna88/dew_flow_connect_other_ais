@@ -31,6 +31,9 @@ public static class FindingDedup
                 continue;
             }
 
+            // `existing with` keeps the FIRST role that raised it, which is deliberate: a threshold
+            // is one role's budget, so the same defect seen by two roles is counted once, against
+            // whoever saw it first. With prompts dealt across vendors this is rare by design.
             var existing = merged[index];
             merged[index] = existing with
             {

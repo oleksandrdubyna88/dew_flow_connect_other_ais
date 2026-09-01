@@ -167,7 +167,7 @@ public sealed class RoundMachineTests
         var s = Fresh(PanelConfig.Uniform(1, 2, StagePolicy.Escalate));
         var ok = (Transition.Ok)RoundMachine.CompleteRound(s, Failing(), AllSix);
         ok.Verdict.Should().BeOfType<RoundVerdict.Escalated>();
-        var spent = ok.State with { RoundsRunThisStage = ok.State.Config.Plan.MaxRounds };
+        var spent = ok.State with { RoundsRunThisStage = ok.State.Config.For(Stage.PlanReview).MaxRounds };
 
         RoundMachine.Resolve(spent, [], humanSaysProceed: true)
             .Should().BeOfType<Transition.Refused>()

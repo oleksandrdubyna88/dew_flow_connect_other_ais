@@ -57,9 +57,6 @@ public sealed class SettingsReachTheServerTests : IDisposable
             ("COAI_MAX_PER_PROVIDER", "4"),
             ("COAI_REVIEWER_TIMEOUT_MINUTES", "12"),
             ("COAI_ESCALATION_MINUTES", "45"),
-            ("COAI_LANGUAGE", "ru"),
-            ("COAI_TRANSLATOR_PROVIDER", "claude"),
-            ("COAI_TRANSLATOR_MODEL", "haiku"),
             ("COAI_ROTATE_PROMPTS", "true"),
             ("COAI_PROMPTS_PER_ROUND", """{"SecurityReliability":["sec-attack","sec-memory-leaks"]}"""));
 
@@ -68,17 +65,14 @@ public sealed class SettingsReachTheServerTests : IDisposable
         s.Providers.Should().ContainSingle().Which.Provider.Should().Be("antigravity");
         s.Providers[0].Runtime.Should().Be("antigravity");
         s.Providers[0].Model.Should().Be("gemini-3.7-flash-high");
-        s.Rounds.Plan.MaxRounds.Should().Be(5);
-        s.Rounds.Plan.Threshold.Should().Be(1);
+        s.Rounds.For(Stage.PlanReview).MaxRounds.Should().Be(5);
+        s.Rounds.For(Stage.PlanReview).Threshold.Should().Be(1);
         s.Rounds.OnExhausted.Should().Be(StagePolicy.Escalate);
         s.GlobalConcurrency.Should().Be(7);
         s.PerProviderConcurrency.Should().Be(4);
         s.ReviewerTimeout.Should().Be(TimeSpan.FromMinutes(12));
         s.EscalationBudget.Should().Be(TimeSpan.FromMinutes(45));
-        s.Language.Code.Should().Be("ru");
-        s.Translator.Provider.Should().Be("claude");
-        s.Translator.Model.Should().Be("haiku");
-        s.RotatePrompts.Should().BeTrue();
+        s.DealPlanLenses.Should().BeTrue("the legacy rotate flag still turns dealing on");
         s.PromptsPerRound["SecurityReliability"].Should().Equal("sec-attack", "sec-memory-leaks");
     }
 
@@ -95,8 +89,7 @@ public sealed class SettingsReachTheServerTests : IDisposable
         var settings = host.Current.Settings;
         PromptCatalog.ForRound(
             PromptCatalog.ArchitectureRole, 1,
-            settings.PromptsPerRound.GetValueOrDefault(PromptCatalog.ArchitectureRole, []),
-            settings.RotatePrompts)
+            settings.PromptsPerRound.GetValueOrDefault(PromptCatalog.ArchitectureRole, []))
             .Id.Should().Be("arch-evolution");
     }
 
@@ -108,11 +101,12 @@ public sealed class SettingsReachTheServerTests : IDisposable
         // could be turned on but never off.
         var host = Host();
         PanelWrites(("COAI_MAX_ROUNDS", "9"));
-        host.Current.Settings.Rounds.Plan.MaxRounds.Should().Be(9);
+        host.Current.Settings.Rounds.For(Stage.PlanReview).MaxRounds.Should().Be(9);
 
-        PanelWrites(("COAI_LANGUAGE", "ru"));
-
-        host.Current.Settings.Rounds.Plan.MaxRounds.Should().Be(3, "a key that is gone is a value back at its default");
+        // The panel writes the file again without that key, which is what returning a control to its
+        // default looks like from here.
+        PanelWrites();
+        host.Current.Settings.Rounds.For(Stage.PlanReview).MaxRounds.Should().Be(3, "a key that is gone is a value back at its default");
     }
 
     [Fact]
@@ -131,7 +125,7 @@ public sealed class SettingsReachTheServerTests : IDisposable
 
         PanelWrites(("COAI_MAX_ROUNDS", "9"));
 
-        host.Current.Settings.Rounds.Plan.MaxRounds.Should().Be(2);
+        host.Current.Settings.Rounds.For(Stage.PlanReview).MaxRounds.Should().Be(2);
     }
 
     [Fact]

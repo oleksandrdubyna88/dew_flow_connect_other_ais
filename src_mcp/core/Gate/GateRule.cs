@@ -14,6 +14,16 @@ public sealed record GateResult(
     ImmutableArray<Finding> Discounted)
 {
     public static GateResult Empty { get; } = new(0, true, [], []);
+
+    /// <summary>
+    /// The roles whose own findings are over their own threshold — the ones with work left.
+    /// </summary>
+    /// <remarks>
+    /// This is what makes a per-role budget mean anything: a round revises only for the roles that
+    /// are actually over, and a stage is finished when this is empty. Unattributed findings answer to
+    /// the empty role, which is how a plan round still gates.
+    /// </remarks>
+    public ImmutableArray<string> OverThreshold { get; init; } = [];
 }
 
 /// <summary>
@@ -28,10 +38,21 @@ public sealed record GateResult(
 /// </remarks>
 public static class GateRule
 {
+    /// <summary>The same rule with one threshold for every role — what the plan stage wants.</summary>
     public static GateResult Evaluate(
         ImmutableArray<Finding> merged,
         ImmutableArray<PriorRejection> priorRejections,
-        int threshold)
+        int threshold) => Evaluate(merged, priorRejections, _ => threshold);
+
+    /// <param name="thresholdFor">
+    /// This role's threshold. A finding is counted against the role that RAISED it, because the three
+    /// code reviewers do different jobs and one number for all of them forces the cheapest role to
+    /// pay for the most expensive one.
+    /// </param>
+    public static GateResult Evaluate(
+        ImmutableArray<Finding> merged,
+        ImmutableArray<PriorRejection> priorRejections,
+        Func<string, int> thresholdFor)
     {
         var gating = ImmutableArray.CreateBuilder<Finding>();
         var discounted = ImmutableArray.CreateBuilder<Finding>();
@@ -47,8 +68,21 @@ public static class GateRule
             }
         }
 
-        var count = gating.Count;
-        return new GateResult(count, count <= threshold, gating.ToImmutable(), discounted.ToImmutable());
+        // Per ROLE, because that is whose budget it is. A role at exactly its threshold passes:
+        // "passes at or under" is what the panel says and what a person set.
+        var over = gating.ToImmutable()
+            .GroupBy(f => f.Role)
+            .Where(g => g.Count() > thresholdFor(g.Key))
+            .Select(g => g.Key)
+            .ToImmutableArray();
+
+        // Passing is EVERY role being at or under its own threshold, not a single total being small
+        // enough. A stage where architecture is fine and security has one unacceptable finding has
+        // not passed, whatever the sum says.
+        return new GateResult(gating.Count, over.IsEmpty, gating.ToImmutable(), discounted.ToImmutable())
+        {
+            OverThreshold = over,
+        };
     }
 
     /// <summary>Rejected before, and raised again with the SAME argument — the discount case.</summary>

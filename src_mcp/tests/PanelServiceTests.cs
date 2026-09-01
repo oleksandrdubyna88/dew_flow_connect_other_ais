@@ -107,7 +107,11 @@ public sealed class PanelServiceTests : IAsyncLifetime
         result.ExitCode.Should().Be(0, $"git {string.Join(' ', args)}: {result.StdErr}");
     }
 
-    private PanelService Service(int threshold = 2, StagePolicy onExhausted = StagePolicy.Human, int maxRounds = 3) =>
+    private PanelService Service(
+        int threshold = 2,
+        StagePolicy onExhausted = StagePolicy.Human,
+        int maxRounds = 3,
+        bool deal = false) =>
         new(
             new PanelSettings
             {
@@ -120,6 +124,8 @@ public sealed class PanelServiceTests : IAsyncLifetime
                 DataDir = _data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),
+                DealPlanLenses = deal,
+                DealCodeLenses = deal,
             },
             VaultKeys.None("no vault in tests"),
             default,
@@ -291,7 +297,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
             var argvs = Directory.GetFiles(record, "*.argv")
                 .Select(f => File.ReadAllText(f).Split('\0'))
                 .ToList();
-            argvs.Should().HaveCount(6, "two providers x three roles");
+            argvs.Should().HaveCount(6, "two providers x three roles — dealing is opt-in and off here");
             // Both vendors take the prompt on STDIN, which the fake records as the last field.
             var prompts = argvs.Select(a => a[^1]).Distinct().ToList();
             prompts.Should().HaveCount(3, "three roles, three distinct prompts — each vendor gets the same three");
@@ -346,5 +352,65 @@ public sealed class PanelServiceTests : IAsyncLifetime
 
         answer.GetProperty("verdict").GetString().Should().Be("call_human");
         answer.GetProperty("instruction").GetString().Should().Contain("do not proceed on your own");
+    }
+
+    /// <summary>
+    /// With dealing ON, a round asks every lens once instead of asking one lens twice.
+    /// </summary>
+    /// <remarks>
+    /// Opt-in, because of what it trades: with it off two vendors answer the same question and the
+    /// dedup merges what they agree on, which is the strongest signal this product produces. On, the
+    /// round costs half the launches and every lens gets used. The operator chose to have the choice.
+    /// </remarks>
+    [Fact]
+    public async Task WithDealingOn_ACodeRound_AsksEachRoleOnce_AcrossTheVendors()
+    {
+        var record = Directory.CreateTempSubdirectory("coai-deal-").FullName;
+        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
+        try
+        {
+            var service = Service(deal: true);
+            await service.OpenAsync(_repo, "feature");
+            await service.ReviewPlanAsync(_repo, "feature", "the plan");
+            await service.ResolveAsync(_repo, "feature", "[]");
+            foreach (var file in Directory.GetFiles(record))
+            {
+                File.Delete(file);
+            }
+
+            await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
+
+            var argvs = Directory.GetFiles(record, "*.argv").Select(f => File.ReadAllText(f).Split(' ')).ToList();
+            argvs.Should().HaveCount(3, "three roles dealt across two vendors, one each");
+            argvs.Select(a => a[^1]).Distinct().Should().HaveCount(3, "and no prompt asked twice");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
+        }
+    }
+
+    [Fact]
+    public async Task WithDealingOn_ThePlanRound_SpendsADifferentLensPerVendor()
+    {
+        var record = Directory.CreateTempSubdirectory("coai-deal-plan-").FullName;
+        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
+        try
+        {
+            var service = Service(deal: true);
+            await service.OpenAsync(_repo, "feature");
+            await service.ReviewPlanAsync(_repo, "feature", "the plan");
+
+            var prompts = Directory.GetFiles(record, "*.argv")
+                .Select(f => File.ReadAllText(f).Split(' ')[^1])
+                .ToList();
+            prompts.Should().HaveCount(2, "one per vendor");
+            prompts.Distinct().Should().HaveCount(2,
+                "each vendor got a DIFFERENT lens — asking both the same one is what this replaces");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
+        }
     }
 }

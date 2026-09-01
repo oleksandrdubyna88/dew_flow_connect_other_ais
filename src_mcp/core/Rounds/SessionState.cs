@@ -34,43 +34,74 @@ public enum EscalationStep
     ArbiterModelUp,
 }
 
-/// <summary>One stage's budget: how many attempts it gets, and how much may still be open.</summary>
+/// <summary>One role's budget: how many attempts it gets, and how much may still be open.</summary>
+public sealed record RoleGate(int MaxRounds, int Threshold);
+
+/// <summary>Kept as the name a stage-wide budget goes by; a stage's gate is its widest role.</summary>
 public sealed record StageGate(int MaxRounds, int Threshold);
 
 /// <summary>
-/// The gate, per stage — because a plan and a diff are not the same object.
+/// The gate, per ROLE — because the reviewers do different jobs.
 /// </summary>
 /// <remarks>
-/// <para>One threshold for both was wrong in a way only use revealed. A plan is a document: two
-/// findings still open is a lot of doubt about a page of text. A diff is hundreds of lines across a
-/// dozen files, and three open findings there is an ordinary Tuesday — so the number that makes the
-/// plan gate strict makes the code gate a permanent <c>call_human</c>. Measured on this product's
-/// own rounds: the plan stage passed at two and the code stage never passed at all.</para>
-/// <para><see cref="For"/> is the only way to read them, so no call site picks a stage by hand.</para>
+/// <para>It was per stage, and before that one number for both. Each step was the same discovery:
+/// a budget shared by things that are not alike forces the cheapest of them to pay for the most
+/// expensive. A plan is a document and a diff is not; architecture may be worth two passes with
+/// different lenses while performance is worth one.</para>
+/// <para><see cref="For(string)"/> is how a role's numbers are read, and the only way — so no call
+/// site picks a budget by hand. A stage's round budget is the WIDEST of its roles: the stage counts
+/// rounds once, and a role simply stops taking part when its own budget is spent.</para>
 /// </remarks>
 public sealed record PanelConfig(
-    StageGate? Plan = null,
-    StageGate? Code = null,
+    IReadOnlyDictionary<string, RoleGate>? Roles = null,
     StagePolicy OnExhausted = StagePolicy.Human)
 {
-    /// <summary>Three attempts, at most two findings still open. A page of text can be got right.</summary>
-    public static readonly StageGate PlanDefault = new(3, 2);
+    /// <summary>Three attempts, at most two findings open. A page of text can be got right.</summary>
+    public static readonly RoleGate PlanDefault = new(3, 2);
 
-    /// <summary>Three attempts, at most three. A diff of any size carries more than a plan does.</summary>
-    public static readonly StageGate CodeDefault = new(3, 3);
+    /// <summary>Two attempts, at most three. A diff carries more than a plan does.</summary>
+    public static readonly RoleGate CodeDefault = new(2, 3);
 
-    public StageGate Plan { get; init; } = Plan ?? PlanDefault;
+    /// <summary>The role names this config knows, in the order a round runs them.</summary>
+    public static readonly string[] AllRoles =
+        ["PlanCritique", "Architecture", "SecurityReliability", "UxDxPerformance"];
 
-    public StageGate Code { get; init; } = Code ?? CodeDefault;
+    public static readonly string[] CodeRoleNames =
+        ["Architecture", "SecurityReliability", "UxDxPerformance"];
 
-    public StageGate For(Stage stage) => stage == Stage.CodeReview ? Code : Plan;
+    public IReadOnlyDictionary<string, RoleGate> Roles { get; init; } = Roles ?? Defaults();
+
+    private static Dictionary<string, RoleGate> Defaults() =>
+        AllRoles.ToDictionary(r => r, r => r == "PlanCritique" ? PlanDefault : CodeDefault);
+
+    /// <summary>This role's numbers, falling back to its stage's default for an unknown name.</summary>
+    public RoleGate For(string role) =>
+        Roles.TryGetValue(role, out var gate)
+            ? gate
+            : role == "PlanCritique" ? PlanDefault : CodeDefault;
+
+    /// <summary>The stage's budget: its widest role, because the stage counts rounds once.</summary>
+    public StageGate For(Stage stage)
+    {
+        var roles = RolesOf(stage);
+        return new StageGate(roles.Max(r => For(r).MaxRounds), roles.Max(r => For(r).Threshold));
+    }
 
     /// <summary>
-    /// The same gate for both stages — what the legacy single-value settings mean, and what a test
+    /// Which roles take part in a given round of a stage — those whose own budget reaches it.
+    /// </summary>
+    public IReadOnlyList<string> RolesForRound(Stage stage, int round) =>
+        [.. RolesOf(stage).Where(r => For(r).MaxRounds >= Math.Max(round, 1))];
+
+    private static string[] RolesOf(Stage stage) =>
+        stage == Stage.CodeReview ? CodeRoleNames : ["PlanCritique"];
+
+    /// <summary>
+    /// The same gate for every role — what the legacy single-value settings mean, and what a test
     /// that does not care about the split is asking for.
     /// </summary>
     public static PanelConfig Uniform(int maxRounds, int threshold, StagePolicy onExhausted = StagePolicy.Human) =>
-        new(new StageGate(maxRounds, threshold), new StageGate(maxRounds, threshold), onExhausted);
+        new(AllRoles.ToDictionary(r => r, _ => new RoleGate(maxRounds, threshold)), onExhausted);
 }
 
 public enum Stage

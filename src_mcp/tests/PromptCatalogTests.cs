@@ -45,46 +45,33 @@ public sealed class PromptCatalogTests
     }
 
     [Fact]
-    public void WithoutAChoiceOrRotation_EveryRoundGetsTheUniversalPrompt()
+    public void WithoutAChoice_EveryRoundGetsTheUniversalPrompt()
     {
         foreach (var role in Roles)
         {
             foreach (var round in (int[])[1, 2, 3, 7])
             {
-                PromptCatalog.ForRound(role, round, [], rotating: false).Universal.Should().BeTrue();
+                PromptCatalog.ForRound(role, round, []).Universal.Should().BeTrue();
             }
         }
     }
 
     [Fact]
-    public void Rotating_SpendsTheRoundsOnDifferentLenses_StartingWithTheUniversalOne()
+    public void AnExplicitChoice_WinsOverTheDefault()
     {
-        var ids = new[] { 1, 2, 3 }
-            .Select(r => PromptCatalog.ForRound(PromptCatalog.SecurityRole, r, [], rotating: true).Id)
-            .ToList();
-
-        ids.Should().OnlyHaveUniqueItems("asking the same question three times is what rotation exists to avoid");
-        PromptCatalog.ById(ids[0])!.Universal.Should().BeTrue("the broad question earns the first round");
-    }
-
-    [Fact]
-    public void AnExplicitChoice_WinsOverTheRotation()
-    {
-        PromptCatalog.ForRound(PromptCatalog.SecurityRole, 2, ["", "sec-attack"], rotating: true)
+        PromptCatalog.ForRound(PromptCatalog.SecurityRole, 2, ["", "sec-attack"])
             .Id.Should().Be("sec-attack");
     }
 
     [Fact]
-    public void AnEmptyEntry_IsNotAChoice_SoTheRotationStillApplies()
+    public void AnEmptyEntry_IsNotAChoice_SoTheDefaultStillApplies()
     {
         // The panel pads rounds nobody touched with "". If that counted as a choice, touching
         // round three would freeze rounds one and two — which is exactly what both reviewers of
-        // the catalog commit caught.
-        var rotated = PromptCatalog.ForRound(PromptCatalog.SecurityRole, 2, ["", ""], rotating: true);
-        var fixedOne = PromptCatalog.ForRound(PromptCatalog.SecurityRole, 2, ["", ""], rotating: false);
-
-        rotated.Universal.Should().BeFalse("round two rotates to a lens");
-        fixedOne.Universal.Should().BeTrue("without rotation an unset round is the universal prompt");
+        // the catalog commit caught. It has to fall THROUGH to the default, not resolve to the
+        // empty id and leave the round with no prompt at all.
+        PromptCatalog.ForRound(PromptCatalog.SecurityRole, 2, ["", ""])
+            .Should().Be(PromptCatalog.UniversalFor(PromptCatalog.SecurityRole));
     }
 
     [Theory]
@@ -92,7 +79,7 @@ public sealed class PromptCatalogTests
     [InlineData("architecture")] // a real id, but belonging to another role
     public void AStaleOrForeignId_FallsThroughInsteadOfLeavingTheRoundWithNoPrompt(string id)
     {
-        PromptCatalog.ForRound(PromptCatalog.SecurityRole, 1, [id], rotating: false)
+        PromptCatalog.ForRound(PromptCatalog.SecurityRole, 1, [id])
             .Should().Be(PromptCatalog.UniversalFor(PromptCatalog.SecurityRole));
     }
 
@@ -107,8 +94,7 @@ public sealed class PromptCatalogTests
         settings.PromptsPerRound.Should().NotContainKey("Architecture");
         var act = () => PromptCatalog.ForRound(
             PromptCatalog.ArchitectureRole, 1,
-            settings.PromptsPerRound.GetValueOrDefault(PromptCatalog.ArchitectureRole, []),
-            settings.RotatePrompts);
+            settings.PromptsPerRound.GetValueOrDefault(PromptCatalog.ArchitectureRole, []));
         act.Should().NotThrow();
     }
 

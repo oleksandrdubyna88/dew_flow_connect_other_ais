@@ -22,7 +22,7 @@ namespace CoaiMcp.Tests;
 public sealed class GoodEnoughPolicyTests
 {
     private static SessionState Fresh(StagePolicy policy) =>
-        new("s", "D:/r", "main", new PanelConfig(new StageGate(1, 0), new StageGate(1, 0), policy));
+        new("s", "D:/r", "main", PanelConfig.Uniform(1, 0, policy));
 
     private static GateResult TwoOpen() =>
         GateRule.Evaluate([Finding("token compared with =="), Finding("no timeout on the fetch")], [], 0);

@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "Your AI writes the code; other vendors' models review it — the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.18.0",
+  "version": "0.19.0",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -66,15 +66,10 @@
     "configuration": {
       "title": "ConnectOtherAIs",
       "properties": {
-        "coai.rotatePrompts": {
-          "type": "boolean",
-          "default": false,
-          "markdownDescription": "Spend the rounds on DIFFERENT review lenses instead of asking the same broad question again: round 1 universal, then each narrow lens in turn. Anything chosen in **Prompts per round** wins over the rotation."
-        },
         "coai.promptsPerRound": {
           "type": "object",
           "default": {},
-          "markdownDescription": "Which prompt each role uses on each round, by catalog id — `{ \"Architecture\": [\"architecture\", \"arch-boundaries\"] }`. Index 0 is round 1. An empty or unknown entry is treated as *not chosen*: it falls back to the rotation when **Rotate the lenses automatically** is on, and to that role's universal prompt otherwise.",
+          "markdownDescription": "Which prompt each role uses on each round, by catalog id — `{ \"Architecture\": [\"architecture\", \"arch-boundaries\"] }`. Index 0 is round 1. An empty or unknown entry is treated as *not chosen*: round 1 of a code role falls back to the conventions pass when the repository has written rules, and every other round to that role's universal prompt.",
           "additionalProperties": {
             "type": "array",
             "items": {
@@ -115,45 +110,6 @@
           "type": "string",
           "default": "",
           "markdownDescription": "The CredsForDevs **config-entry key** (minted by *Enable Code Access…* on the entry holding vendor API keys). A pass to one vault entry — revocable, useless while VS Code is closed — not a secret itself. Empty = keyless vendors only."
-        },
-        "coai.language": {
-          "type": "string",
-          "enum": [
-            "en",
-            "es",
-            "de",
-            "ru",
-            "uk"
-          ],
-          "enumDescriptions": [
-            "English",
-            "Español",
-            "Deutsch",
-            "Русский",
-            "Українська"
-          ],
-          "default": "en",
-          "description": "The language you are asked in, and answer in. A question already written in it is left alone."
-        },
-        "coai.translator.provider": {
-          "type": "string",
-          "enum": [
-            "gemini",
-            "codex",
-            "none"
-          ],
-          "enumDescriptions": [
-            "Gemini Flash (CLI)",
-            "Codex with a mini model (CLI)",
-            "Never translate — always show the original"
-          ],
-          "default": "gemini",
-          "description": "Which small, fast model translates a question that is not already in your language."
-        },
-        "coai.translator.model": {
-          "type": "string",
-          "default": "gemini-flash-latest",
-          "description": "The translator's model. Empty uses the CLI's own default."
         },
         "coai.escalationMinutes": {
           "type": "integer",
@@ -219,29 +175,35 @@
             }
           }
         },
-        "coai.maxRoundsPlan": {
-          "type": "number",
-          "default": 3,
-          "minimum": 1,
-          "description": "Plan review: how many rounds the stage gets before a person decides."
+        "coai.rounds": {
+          "type": "object",
+          "default": {
+            "PlanCritique": 3,
+            "Architecture": 2,
+            "SecurityReliability": 2,
+            "UxDxPerformance": 2
+          },
+          "markdownDescription": "How many rounds each reviewer ROLE gets. Architecture may be worth two passes with different lenses while performance is worth one; a shared budget forces the cheapest role to pay for the most expensive. Edit it in the **ConnectOtherAIs** panel."
         },
-        "coai.gateThresholdPlan": {
-          "type": "number",
-          "default": 2,
-          "minimum": 0,
-          "description": "Plan review passes at or under this many blocking/major findings."
+        "coai.thresholds": {
+          "type": "object",
+          "default": {
+            "PlanCritique": 2,
+            "Architecture": 3,
+            "SecurityReliability": 3,
+            "UxDxPerformance": 3
+          },
+          "markdownDescription": "How many blocking/major findings each ROLE may still have and pass. A finding is counted against the threshold of the role that raised it."
         },
-        "coai.maxRoundsCode": {
-          "type": "number",
-          "default": 3,
-          "minimum": 1,
-          "description": "Code review: how many rounds the stage gets before a person decides."
+        "coai.dealPlanLenses": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Deal the plan stage’s lenses across the vendors instead of giving every vendor the same one. **Off** (the default): every vendor answers the same question, so two vendors agreeing on a finding is a fact the gate can use. **On**: every lens gets asked once at half the launches, and that agreement is gone."
         },
-        "coai.gateThresholdCode": {
-          "type": "number",
-          "default": 3,
-          "minimum": 0,
-          "description": "Code review passes at or under this many blocking/major findings. A diff carries more than a plan does."
+        "coai.dealCodeLenses": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Deal the three code roles across the vendors, one vendor each, instead of asking every role of every vendor."
         },
         "coai.uiScale": {
           "type": "number",

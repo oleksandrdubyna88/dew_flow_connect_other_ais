@@ -1,6 +1,5 @@
 using CoaiMcp.Core.Context;
 using CoaiMcp.Core.Rounds;
-using CoaiMcp.Runners.Translation;
 
 namespace CoaiMcp.Server;
 
@@ -58,26 +57,27 @@ public sealed record PanelSettings
     /// </remarks>
     public TimeSpan EscalationBudget { get; init; } = TimeSpan.FromMinutes(30);
 
-    /// <summary>The language a person is asked in, and answers in. Defaults to English.</summary>
-    public Language Language { get; init; } = Language.English;
 
-    /// <summary>
-    /// Which small, fast model translates when the AI did not already write in that language.
-    /// </summary>
-    /// <remarks>
-    /// Antigravity by default: its CLI is usually already signed in, and a flash model answers a
-    /// one-sentence job while a person waits. The model is left unset so the CLI picks its own.
-    /// This ran through the Gemini CLI until the retirement, which meant the one path a person
-    /// actually SEES — the question in their own language — went through a CLI that had stopped
-    /// answering. `none` switches translation off and shows the original, which is also what
-    /// happens, with a note, when the CLI cannot run.
-    /// </remarks>
-    public TranslatorSettings Translator { get; init; } = new("antigravity");
 
     /// <summary>
     /// Which prompt each role uses on each round — <c>role -> [round1, round2, ...]</c>, by
     /// catalog id. An empty or unknown entry falls back to the rotation or the universal prompt.
     /// </summary>
+    /// <summary>
+    /// Deal the PLAN stage's lenses across the vendors instead of giving every vendor the same one.
+    /// </summary>
+    /// <remarks>
+    /// <para>Opt-in, and off by default, because of what it trades. With it off — the shipped
+    /// behaviour — every vendor answers the same question and <c>FindingDedup</c> merges what they
+    /// agree on, which is the strongest signal this product produces. With it on every lens gets
+    /// asked once instead, at half the launches, and that agreement is gone.</para>
+    /// <para>Two flags rather than one because the stages are not alike: a plan has three lenses for
+    /// one role, a code round has three roles.</para>
+    /// </remarks>
+    public bool DealPlanLenses { get; init; }
+
+    public bool DealCodeLenses { get; init; }
+
     public IReadOnlyDictionary<string, IReadOnlyList<string>> PromptsPerRound { get; init; } =
         new Dictionary<string, IReadOnlyList<string>>();
 
@@ -88,7 +88,6 @@ public sealed record PanelSettings
     /// Off by default: rotation changes what a second round means, and a person who has not asked
     /// for it should get the prompt they last read in the panel.
     /// </remarks>
-    public bool RotatePrompts { get; init; }
 
     /// <summary>Where sessions, prompts overrides and round artifacts live.</summary>
     public string DataDir { get; init; } = DefaultDataDir;
@@ -100,14 +99,10 @@ public sealed record PanelSettings
     public static PanelSettings FromEnvironment(Func<string, string?> env) => new PanelSettings
     {
         Rounds = new PanelConfig(
-            // The legacy keys become the DEFAULT for both stages rather than being dropped:
-            // somebody who set a threshold once must not have their gate silently change under them.
-            Plan: new StageGate(
-                IntVar(env, "COAI_MAX_ROUNDS_PLAN", IntVar(env, "COAI_MAX_ROUNDS", PanelConfig.PlanDefault.MaxRounds)),
-                IntVar(env, "COAI_THRESHOLD_PLAN", IntVar(env, "COAI_GATE_THRESHOLD", PanelConfig.PlanDefault.Threshold))),
-            Code: new StageGate(
-                IntVar(env, "COAI_MAX_ROUNDS_CODE", IntVar(env, "COAI_MAX_ROUNDS", PanelConfig.CodeDefault.MaxRounds)),
-                IntVar(env, "COAI_THRESHOLD_CODE", IntVar(env, "COAI_GATE_THRESHOLD", PanelConfig.CodeDefault.Threshold))),
+            // Three layers, widest first: a ROLE's own keys, then its stage's, then the legacy
+            // single pair. Somebody who set a threshold once must not have their gate change under
+            // them, and somebody who set a stage must not have to repeat it for three roles.
+            Roles: RoleGates(env),
             OnExhausted: env("COAI_ON_EXHAUSTED")?.ToLowerInvariant() switch
             {
                 "continue" => StagePolicy.Continue,
@@ -125,14 +120,9 @@ public sealed record PanelSettings
         EscalationBudget = env("COAI_ESCALATION_SECONDS") is { Length: > 0 }
             ? TimeSpan.FromSeconds(IntVar(env, "COAI_ESCALATION_SECONDS", 30))
             : TimeSpan.FromMinutes(IntVar(env, "COAI_ESCALATION_MINUTES", 30)),
-        Language = Language.For(env("COAI_LANGUAGE")),
-        Translator = new TranslatorSettings(env("COAI_TRANSLATOR_PROVIDER") is { Length: > 0 } tp ? tp : "antigravity")
-        {
-            Model = env("COAI_TRANSLATOR_MODEL") ?? string.Empty,
-            ExecutablePath = env("COAI_TRANSLATOR_EXE") ?? string.Empty,
-        },
         DataDir = env("COAI_DATA_DIR") is { Length: > 0 } dir ? dir : DefaultDataDir,
-        RotatePrompts = env("COAI_ROTATE_PROMPTS") is "1" or "true" or "TRUE",
+        DealPlanLenses = Flag(env, "COAI_DEAL_PLAN") || Flag(env, "COAI_ROTATE_PROMPTS"),
+        DealCodeLenses = Flag(env, "COAI_DEAL_CODE") || Flag(env, "COAI_ROTATE_PROMPTS"),
         PromptsPerRound = ParsePromptRounds(env("COAI_PROMPTS_PER_ROUND")),
     }.WithProvidersFrom(env);
 
@@ -251,6 +241,51 @@ public sealed record PanelSettings
         _ => "codex",
     };
 
+    /// <summary>
+    /// Every role's gate, read widest-first: the role's own keys, its stage's, then the legacy pair.
+    /// </summary>
+    /// <remarks>
+    /// <c>COAI_ROUNDS_ARCHITECTURE</c> / <c>COAI_THRESHOLD_SECURITYRELIABILITY</c> name a role;
+    /// <c>COAI_MAX_ROUNDS_CODE</c> / <c>COAI_THRESHOLD_PLAN</c> name a stage; <c>COAI_MAX_ROUNDS</c>
+    /// and <c>COAI_GATE_THRESHOLD</c> are the originals and still fill in for everything.
+    /// </remarks>
+    private static Dictionary<string, RoleGate> RoleGates(Func<string, string?> env)
+    {
+        var gates = new Dictionary<string, RoleGate>();
+        foreach (var role in PanelConfig.AllRoles)
+        {
+            var isPlan = role == "PlanCritique";
+            var stage = isPlan ? "PLAN" : "CODE";
+            var shipped = isPlan ? PanelConfig.PlanDefault : PanelConfig.CodeDefault;
+            var key = role.ToUpperInvariant();
+
+            var rounds = IntVar(env, $"COAI_ROUNDS_{key}",
+                IntVar(env, $"COAI_MAX_ROUNDS_{stage}",
+                    IntVar(env, "COAI_MAX_ROUNDS", shipped.MaxRounds)));
+            var threshold = CountVar(env, $"COAI_THRESHOLD_{key}",
+                CountVar(env, $"COAI_THRESHOLD_{stage}",
+                    CountVar(env, "COAI_GATE_THRESHOLD", shipped.Threshold)));
+            gates[role] = new RoleGate(rounds, threshold);
+        }
+
+        return gates;
+    }
+
+    private static bool Flag(Func<string, string?> env, string name) =>
+        env(name) is "1" or "true" or "TRUE" or "True";
+
     private static int IntVar(Func<string, string?> env, string name, int fallback) =>
         int.TryParse(env(name), out var value) && value > 0 ? value : fallback;
+
+    /// <summary>
+    /// A count where ZERO is a legitimate value — a threshold, unlike a round budget.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="IntVar"/> requires a positive number, which is right for rounds and concurrency and
+    /// wrong for a threshold: zero means "any gating finding blocks", the panel has always accepted
+    /// it and has a test saying so, and the server silently substituted its own default. The two
+    /// halves disagreed about a number a person had deliberately set to nothing.
+    /// </remarks>
+    private static int CountVar(Func<string, string?> env, string name, int fallback) =>
+        int.TryParse(env(name), out var value) && value >= 0 ? value : fallback;
 }
