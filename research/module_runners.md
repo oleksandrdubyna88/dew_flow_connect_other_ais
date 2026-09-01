@@ -171,18 +171,37 @@ earlier "WSL works" reports had actually tested:
 `codex` installs from its official npm package and needs one `codex login`. That is two independent
 reviewers, which is the minimum the product is built around.
 
-**Antigravity has no Linux CLI that Google publishes.** `agy` ships as a Go binary with the
-Antigravity app; `npm install -g antigravity` is a 404. A third party publishes an `antigravity-cli`
-snap at Google's own version, strictly confined; it was briefly offered by the install button and is
-now deliberately excluded — **official sources only**, an operator decision, pinned by a test over
-`OFFICIAL_SOURCES` because a button that installs software gets pressed without reading. So on a
-pure Linux box that vendor cannot review, and `VendorDiagnosis.ForRuntime` says exactly that rather
-than reporting a missing file.
+**Antigravity DOES have a Linux CLI, published by Google — and this document said the opposite for
+a day.** The claim was built from two true observations: `npm install -g antigravity` is a 404, and
+`agy` ships as a Go binary with the Antigravity app. What was never checked is whether Google
+publishes an installer of its own, and it does:
+
+```
+curl -fsSL https://antigravity.google/cli/install.sh | bash     # Linux and macOS
+irm https://antigravity.google/cli/install.ps1 | iex            # Windows
+```
+
+Verified 2026-09-01: both URLs serve, `install.sh` branches on Darwin AND Linux, and the resulting
+`~/.local/bin/agy` answered nine review rounds of the pre-delivery campaign in WSL. The third-party
+`antigravity-cli` snap stays excluded — **official sources only**, an operator decision pinned by a
+test over `OFFICIAL_SOURCES`, because a button that installs software gets pressed without reading.
+
+**Two defects came out of believing it.** `VendorDiagnosis.ForRuntime` had a blanket Linux door for
+this runtime, and a door there fires BEFORE the probe — so `providers` answered `cliFound: false`,
+`auth: unavailable` for a machine whose `agy` was sitting at the path the vendor row named, an hour
+after it had reviewed nine rounds. And a test pinned the sentence, which is why it survived: written
+from the same wrong belief as the code, it could only ever confirm it. A test is evidence about
+behaviour and never about the world.
+
+`ForRuntime` now answers one question — is this runtime CLOSED whatever its binary says, which Gemini
+is and Antigravity is not — and a CLI that is merely absent is reported by the probe, with
+`VendorDiagnosis.InstallCure` naming the vendor's own install command.
 
 **On WSL, two routes were measured. One works and one does not, and the one that does not is the
 one I recommended first.**
 
-*The Windows `agy.exe` as a reviewer's CLI path: NO.* It launches — `--help` exits 0 through interop,
+*The Windows `agy.exe` as a reviewer's CLI path: NO — and unnecessary now that the Linux CLI installs
+from Google's own script.* It launches — `--help` exits 0 through interop,
 and a real plan round confirmed the launcher reaches it, which is the `executablePath` fix verified
 in anger. Then it runs for 60 seconds and exits 1 with `Error: authentication timed out`. Its
 sign-in lives in the Windows user profile and it cannot complete the flow started from a Linux

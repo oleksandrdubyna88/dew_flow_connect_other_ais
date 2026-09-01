@@ -148,7 +148,15 @@ public sealed class PanelService
         }
         catch (System.ComponentModel.Win32Exception)
         {
-            return new ProviderStatus(provider.Provider, true, false, "", auth, $"'{exe}' was not found on this machine");
+            // A missing CLI is the one failure with a one-line answer, so the answer goes here
+            // rather than on a vendor's docs page. This used to be a blanket "antigravity has no
+            // Linux CLI" door in VendorDiagnosis.ForRuntime, which fired BEFORE this probe and so
+            // told a machine with a working `agy` that it had none.
+            var install = VendorDiagnosis.InstallCure(RuntimeNameOf(provider));
+            var note = install is null
+                ? $"'{exe}' was not found on this machine"
+                : $"'{exe}' was not found on this machine — {install}";
+            return new ProviderStatus(provider.Provider, true, false, "", auth, note);
         }
     }
 

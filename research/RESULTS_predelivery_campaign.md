@@ -15,7 +15,8 @@ five settings combinations. The point was not to grade the reviewers — it was 
 per-role gate, the dealt prompts and the fourth exhausted-rounds answer behave the way the panel says
 they do, with real CLIs on a real branch.
 
-It found one defect nothing else had (§4). It also failed to exercise two paths it was designed for,
+It found two defects nothing else had (§4, §4b) — the second by installing the artifact it had just
+helped release and asking it one question. It also failed to exercise two paths it was designed for,
 and §3 says so plainly rather than counting them as passes.
 
 ## 1. The plan stage
@@ -106,6 +107,43 @@ rounds earlier in the same hour. The round did not fail: it reported `3 of 6 rev
 named each failure with its role, kept every raw answer on disk, and reached a verdict on what did
 come back. That is the designed behaviour for a partial round, observed under a real vendor fault
 rather than a stub.
+
+## 4b. A second defect, found by installing what had just been published
+
+The 0.9.0 binary went into the WSL extension storage and was asked one question — `providers`, with
+the same vendor list the campaign had used an hour earlier. It answered:
+
+```
+antigravity | cliFound: false | auth: unavailable
+"Antigravity has no Linux CLI that Google publishes ..."
+```
+
+`~/.local/bin/agy` was sitting at exactly the path the vendor row named, and had answered nine review
+rounds in this campaign. Two faults behind one sentence:
+
+1. **The door fired before the probe.** `VendorDiagnosis.ForRuntime` is for a runtime that is CLOSED
+   whatever its binary says — Gemini, whose `--version` exits 0 without reaching Google. Antigravity
+   is not that: its CLI is sometimes absent, which is the probe's business. The two cases had been
+   collapsed, so a present binary was never asked.
+2. **The sentence was false, and a test held it in place.** Google publishes
+   `https://antigravity.google/cli/install.sh`; it was verified to branch on Darwin and Linux, and it
+   is how the `agy` in this campaign got there. `TheMissingLinuxCli_IsNamedAsAVendorFact_NotAsAMissingFile`
+   asserted the false claim word for word. Written from the same wrong belief as the code, it could
+   only ever confirm it — a test is evidence about behaviour, never about the world.
+
+The sentence also still recommended pointing a Linux vendor's path at a Windows `agy.exe` under WSL,
+which an earlier measurement in this repo had refuted: it exits 1 after 60 s with `authentication
+timed out`. That advice is now pinned OUT by a test over every string the tables hold.
+
+`ForRuntime` answers one question again, and a missing CLI is reported by the probe with
+`VendorDiagnosis.InstallCure` naming the vendor's own command. Four tests, the platform stated at the
+call site rather than inherited — the mistake this repo has already made once, where a host-dependent
+assertion passed locally and failed on CI.
+
+**What this says about the campaign's value.** Nothing in eleven review rounds exposed it: the
+launcher honours `executablePath` and ran antigravity fine every time. It took installing the
+published artifact and asking it the one question a person asks first. A release is not verified until
+the thing that shipped is the thing that was run.
 
 ## 5. Cost
 

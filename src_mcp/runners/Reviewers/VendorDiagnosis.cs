@@ -67,22 +67,46 @@ public static class VendorDiagnosis
     /// health at all: it is the reason a round was still being spent on it a day later.
     /// </remarks>
     /// <param name="linux">
-    /// Whether this machine is Linux. It changes the answer for exactly one runtime: Antigravity
-    /// works on Windows and has no CLI to install on Linux at all.
+    /// Kept for the callers that state their platform. NOTHING depends on it any more, and that is
+    /// the fix: Antigravity had a blanket Linux door here, and a door in this method fires BEFORE
+    /// the probe — so a machine with a working `agy` was told it had no CLI. This method answers one
+    /// question only: is the runtime itself closed, whatever its binary says. Gemini is. A runtime
+    /// whose CLI is merely absent is the probe's business, and <see cref="InstallCure"/> is what it
+    /// says about it.
     /// </param>
     public static string? ForRuntime(string runtime, bool? linux = null) =>
         runtime?.Trim().ToLowerInvariant() switch
         {
             "gemini" => "RETIRED by Google for individual accounts: this CLI refuses before it reaches " +
                         "a model. Switch this vendor's runtime to 'antigravity'.",
-            // Measured 2026-09-01: `agy` ships as a Go binary with the Antigravity app, npm has no
-            // package for it, and the only Linux package is a third-party repackaging. So on Linux
-            // this vendor cannot work, and "'agy' was not found on this machine" sends somebody
-            // hunting for an install that does not exist. Naming the fact costs one sentence.
-            "antigravity" when linux ?? OperatingSystem.IsLinux() =>
-                "Antigravity has no Linux CLI that Google publishes — `agy` ships with the Antigravity " +
-                "app, and npm has no package for it. On Linux use codex or claude as this reviewer, " +
-                "or point this vendor's CLI path at a Windows agy.exe if you are on WSL.",
+            _ => null,
+        };
+
+    /// <summary>
+    /// How to install a runtime whose CLI is not on this machine — the vendor's own published
+    /// command, for this platform.
+    /// </summary>
+    /// <remarks>
+    /// <para>"'agy' was not found on this machine" is a true sentence that leaves somebody searching
+    /// a vendor's docs, which is the reason a reviewer never gets added. The command is one line and
+    /// it is knowable here.</para>
+    /// <para>Only official sources. Antigravity on Linux and macOS is Google's own script — verified
+    /// 2026-09-01 to handle both, after this product had spent a day claiming no such thing existed.
+    /// The snap package is a third-party repackaging and is deliberately not offered.</para>
+    /// <para>What is NOT offered either: pointing a Linux server at a Windows <c>agy.exe</c> through
+    /// WSL interop. It was measured — the process exits 1 after 60 seconds with "authentication
+    /// timed out", because the Windows binary cannot reach a credential store from the Linux side.
+    /// Advice that has been refuted is worse than none.</para>
+    /// </remarks>
+    public static string? InstallCure(string runtime, bool? linux = null) =>
+        (runtime?.Trim().ToLowerInvariant(), linux ?? OperatingSystem.IsLinux()) switch
+        {
+            ("antigravity", true) =>
+                "install Google's own CLI: curl -fsSL https://antigravity.google/cli/install.sh | bash",
+            ("antigravity", false) =>
+                "install Google's own CLI: irm https://antigravity.google/cli/install.ps1 | iex",
+            ("codex", _) => "install it with: npm install -g @openai/codex",
+            ("claude", _) => "install it with: npm install -g @anthropic-ai/claude-code",
             _ => null,
         };
 }

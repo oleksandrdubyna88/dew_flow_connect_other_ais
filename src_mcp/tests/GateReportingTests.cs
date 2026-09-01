@@ -256,28 +256,36 @@ public sealed class GateReportingTests
     }
 
     [Fact]
-    public void OnLinux_AnAntigravityVendor_SaysThereIsNoLinuxCli_AndWhatToUseInstead()
+    public void AVendorThatCouldNotStart_NamesTheExecutable()
     {
-        // Measured 2026-09-01: `agy` ships as a Go binary with the Antigravity app, npm has no
-        // package for it, and the only Linux package is a third-party repackaging the operator has
-        // ruled out. So on a Linux box this vendor cannot work, and "'agy' was not found on this
-        // machine" sends somebody hunting for an install that does not exist.
+        // The reviewer line has to say WHICH binary was missing: a round reporting "not started" for
+        // a panel of six is a message about nothing. How to install it is `providers`' job, where
+        // there is room for a command — see AntigravityOnLinuxTests.
         var sentence = Sentence(new ReviewerOutcome.NotStarted("'agy' was not found on this machine"));
 
         sentence.Should().Contain("agy");
     }
 
     [Fact]
-    public void TheMissingLinuxCli_IsNamedAsAVendorFact_NotAsAMissingFile()
+    public void AnAbsentCli_IsNotDiagnosedBeforeTheProbe_OnEitherPlatform()
     {
-        VendorDiagnosis.ForRuntime("antigravity", linux: true)
-            .Should().NotBeNull()
-            .And.Subject.As<string>().Should().Contain("no Linux CLI").And.Contain("codex");
+        // This assertion replaces one that pinned "Antigravity has no Linux CLI that Google
+        // publishes" — a claim about the WORLD, and a false one: Google publishes
+        // antigravity.google/cli/install.sh, which handles Linux and macOS. Written from the same
+        // wrong belief as the code, the test could only confirm it, and it did for a day.
+        //
+        // `ForRuntime` answers one question: is this runtime CLOSED whatever its binary says. Gemini
+        // is. A runtime whose CLI is merely absent is the probe's business, and a door in front of
+        // the probe told a machine with a working `agy` that it had none.
+        VendorDiagnosis.ForRuntime("antigravity", linux: true).Should().BeNull();
+        VendorDiagnosis.ForRuntime("antigravity", linux: false).Should().BeNull();
     }
 
     [Fact]
-    public void OnWindows_AntigravityIsNotDiagnosedAsMissing_BecauseItWorksThere()
+    public void AnAbsentCli_IsAnsweredWithTheVendorsOwnInstallCommand()
     {
-        VendorDiagnosis.ForRuntime("antigravity", linux: false).Should().BeNull();
+        VendorDiagnosis.InstallCure("antigravity", linux: true)
+            .Should().Contain("antigravity.google/cli/install.sh",
+                "the official source, and the one the product spent a day denying existed");
     }
 }
