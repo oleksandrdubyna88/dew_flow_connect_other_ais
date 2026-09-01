@@ -63,10 +63,17 @@ public sealed class LiveRound
         string reviewers,
         IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results)
     {
+        // Failures that still burned tokens count towards the round's total: an unparseable
+        // answer is a completed run whose usage the vendor reported. Counting only `Ok` made a
+        // round with two fallen reviewers report roughly half of what it actually cost.
         var usage = results
-            .Select(r => r.Outcome)
-            .OfType<ReviewerOutcome.Ok>()
-            .Aggregate(Core.Findings.Usage.None, (total, ok) => total.Add(ok.Usage));
+            .Select(r => r.Outcome switch
+            {
+                ReviewerOutcome.Ok ok => ok.Usage,
+                ReviewerOutcome.Unparseable bad => bad.Usage,
+                _ => Core.Findings.Usage.None,
+            })
+            .Aggregate(Core.Findings.Usage.None, (total, one) => total.Add(one));
 
         lock (_gate)
         {

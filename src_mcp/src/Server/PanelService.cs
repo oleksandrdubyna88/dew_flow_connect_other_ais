@@ -350,6 +350,44 @@ public sealed class PanelService
     /// universal one. Resolved per round rather than per session, which is the whole point:
     /// round two can ask a different question instead of the same one louder.
     /// </summary>
+    /// <summary>
+    /// Removes yesterday's answer directories.
+    /// </summary>
+    /// <remarks>
+    /// Each round takes a temp directory for the vendors' `-o` files and nothing ever removed it:
+    /// an audit of this machine found 1384 of them, each holding review answers on disk with no
+    /// expiry. Worktrees and the plan scratch were already leased properly; this was the one that
+    /// leaked. Pruned on the way IN rather than in a finally, so a killed round is cleaned up by
+    /// the next one instead of never.
+    /// </remarks>
+    private static void PruneOldAnswerDirs()
+    {
+        var cutoff = DateTime.UtcNow.AddHours(-6);
+        try
+        {
+            foreach (var dir in Directory.EnumerateDirectories(Path.GetTempPath(), "coai-answers-*"))
+            {
+                try
+                {
+                    if (Directory.GetCreationTimeUtc(dir) < cutoff)
+                    {
+                        Directory.Delete(dir, recursive: true);
+                    }
+                }
+                catch (IOException)
+                {
+                    // In use by another server, or gone already. Either is fine.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+            }
+        }
+        catch (DirectoryNotFoundException)
+        {
+        }
+    }
+
     private string ModelOf(string provider) =>
         _settings.Providers.FirstOrDefault(p => p.Provider == provider)?.Model ?? string.Empty;
 
@@ -366,6 +404,7 @@ public sealed class PanelService
         Directory.CreateDirectory(_settings.DataDir);
         File.WriteAllText(schemaFile, FindingSchema.Json);
         var outputDir = Directory.CreateTempSubdirectory("coai-answers-").FullName;
+        PruneOldAnswerDirs();
 
         var work = new List<ReviewerWork>();
         foreach (var provider in _settings.Providers.Where(p => p.Enabled))
@@ -385,12 +424,14 @@ public sealed class PanelService
             };
             foreach (var role in roles)
             {
-                var prompt = ComposePrompt(ChoiceFor(role, round), context);
+                var choice = ChoiceFor(role, round);
+                var prompt = ComposePrompt(choice, context);
                 var repairPrompt = prompt +
                     "\n\nYOUR PREVIOUS ANSWER WAS NOT VALID JSON. Return ONLY the JSON object for the schema — no fences, no prose.";
                 work.Add(new ReviewerWork(
                     runtime.Build(role, prompt, worktreePath, schemaFile, outputDir, settings),
-                    runtime.Build(role, repairPrompt, worktreePath, schemaFile, outputDir, settings)));
+                    runtime.Build(role, repairPrompt, worktreePath, schemaFile, outputDir, settings),
+                    choice.Id));
             }
         }
 

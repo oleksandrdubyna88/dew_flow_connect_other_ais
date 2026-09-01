@@ -27,7 +27,7 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
         _log.Information(
             "round {Round} {Stage} opening: {Count} reviewer(s) — {Reviewers}; working dir {WorkingDir}, timeout {Timeout}",
             number, stage, work.Count,
-            string.Join(", ", work.Select(w => $"{w.Invocation.Provider}/{w.Invocation.Role}")),
+            string.Join(", ", work.Select(w => $"{w.Invocation.Provider}/{w.Invocation.Role}[{w.Prompt}]")),
             workingDir, Humanised(timeout));
 
         foreach (var w in work)

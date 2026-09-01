@@ -19,7 +19,16 @@ public abstract record ReviewerOutcome
 
     public sealed record TimedOut : ReviewerOutcome;
 
-    public sealed record Unparseable(string Reason) : ReviewerOutcome;
+    /// <param name="Usage">
+    /// What the run consumed anyway. An unparseable answer is the one FAILURE whose process
+    /// completed and reported its usage, and dropping it under-reported a round by roughly half
+    /// whenever a reviewer fell over — measured: two failed reviewers ran 107 and 128 seconds
+    /// beside a sibling that cost 210k input tokens, and the round recorded them as free.
+    /// </param>
+    public sealed record Unparseable(string Reason, Usage Usage) : ReviewerOutcome
+    {
+        public Unparseable(string Reason) : this(Reason, Usage.None) { }
+    }
 
     /// <summary>
     /// Distinct from a timeout in the log AND the result — they demand different cures.
@@ -163,7 +172,7 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
         if (repair is null)
         {
             return new ReviewerOutcome.Unparseable(
-                Because("the answer was not the schema's JSON, and no repair was configured", Keep(invocation, raw)));
+                Because(Said(raw), "and no repair was configured", Keep(invocation, raw)), usage);
         }
 
         var (repairOutcome, repaired, repairUsage, repairRaw) = await RunOnceAsync(repair, ct);
@@ -172,12 +181,33 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
                    // Both launches are billed, so both are counted — a repaired reviewer that
                    // reported only its second attempt would under-report every time.
                    ? new ReviewerOutcome.Ok(fixedReview, Repaired: true, usage.Add(repairUsage))
+                   // BOTH launches are kept, and the first one wins when the repair came back
+                   // empty: a vendor whose envelope broke leaves nothing to read, and the
+                   // evidence file was landing at zero bytes exactly when it was most needed.
                    : new ReviewerOutcome.Unparseable(
-                       Because("still not the schema's JSON after one repair attempt", Keep(repair, repairRaw))));
+                       Because(Said(repairRaw ?? raw), "after one repair attempt", Keep(repair, Longer(raw, repairRaw))),
+                       usage.Add(repairUsage)));
     }
 
-    private static string Because(string sentence, string? keptAt) =>
-        keptAt is null ? sentence : $"{sentence} (the answer was kept at {keptAt})";
+    private static string Because(string what, string when, string? keptAt) =>
+        keptAt is null ? $"{what} {when}" : $"{what} {when} (the answer was kept at {keptAt})";
+
+    /// <summary>
+    /// What actually went wrong, which is not always what the old sentence claimed.
+    /// </summary>
+    /// <remarks>
+    /// "Still not the schema's JSON" describes a syntax problem. Measured on a real round, the
+    /// vendor had returned NOTHING — an empty envelope — and the sentence sent the reader looking
+    /// for malformed JSON that did not exist.
+    /// </remarks>
+    private static string Said(string? raw) =>
+        string.IsNullOrWhiteSpace(raw)
+            ? "the vendor returned an empty answer"
+            : "the answer was not the schema's JSON";
+
+    /// <summary>The launch that actually said something — the repair is often the empty one.</summary>
+    private static string? Longer(string? first, string? second) =>
+        (second?.Trim().Length ?? 0) >= (first?.Trim().Length ?? 0) ? second : first;
 
     /// <summary>One launch. A non-null outcome is terminal; a null review means "unparseable".</summary>
     private async Task<(ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Raw)> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)

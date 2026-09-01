@@ -96,7 +96,11 @@ public sealed class EscalationsTests : IDisposable
     [Fact]
     public async Task MalformedAnswerFile_IsIgnored_AndTheWaitContinues()
     {
-        var task = _escalations.AskAsync(Question(), TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        // A GENEROUS budget on purpose. This test asserts that the wait is still running after a
+        // malformed file appears, and with a five-second budget it was really asserting that the
+        // machine got back to it in five seconds — which a loaded one does not. It failed twice
+        // during rounds that had six reviewer processes in flight, and passed alone every time.
+        var task = _escalations.AskAsync(Question(), TimeSpan.FromMinutes(2), TestContext.Current.CancellationToken);
         await Task.Delay(50, TestContext.Current.CancellationToken);
         File.WriteAllText(_escalations.AnswerPath("q1"), "{ half-written");
         await Task.Delay(100, TestContext.Current.CancellationToken);

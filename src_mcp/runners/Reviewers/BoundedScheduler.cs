@@ -3,7 +3,15 @@ using CoaiMcp.Core.Rounds;
 namespace CoaiMcp.Runners.Reviewers;
 
 /// <summary>One reviewer's work order: the launch, and the one repair launch it is allowed.</summary>
-public sealed record ReviewerWork(ReviewerInvocation Invocation, ReviewerInvocation? Repair = null);
+/// <param name="Prompt">
+/// Which catalog prompt this reviewer was given. Carried so the audit log can NAME it: a verifier
+/// checking that rotation works had to infer the prompt from the byte count of the argv line and
+/// the known lengths of the catalog files, which is not a thing anyone should have to do.
+/// </param>
+public sealed record ReviewerWork(
+    ReviewerInvocation Invocation,
+    ReviewerInvocation? Repair = null,
+    string Prompt = "");
 
 /// <summary>
 /// One reviewer crossing a line, reported the moment it happens.

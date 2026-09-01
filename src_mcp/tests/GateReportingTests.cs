@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
@@ -95,6 +96,28 @@ public sealed class GateReportingTests
     {
         RateLimit.Hopeless("503 UNAVAILABLE: This model is currently experiencing high demand")
             .Should().BeFalse("that one clears while you wait, which is what the retry is for");
+    }
+
+    // ---------- what a failed reviewer still costs ----------
+
+    [Fact]
+    public void AnUnparseableReviewer_StillReportsWhatItConsumed()
+    {
+        // Measured on a real code round: two reviewers fell over after 107 and 128 seconds beside
+        // a sibling that cost 210k input tokens, and the round recorded them as free. An
+        // unparseable answer is a COMPLETED run whose usage the vendor reported.
+        var outcome = new ReviewerOutcome.Unparseable("the vendor returned an empty answer", new Usage(210_555, 3_000, null));
+
+        outcome.Usage.TokensIn.Should().Be(210_555);
+    }
+
+    [Fact]
+    public void AnEmptyAnswer_IsNotDescribedAsMalformedJson()
+    {
+        // "Still not the schema's JSON" sent a reader looking for malformed JSON that did not
+        // exist — the vendor's envelope had come back empty.
+        Sentence(new ReviewerOutcome.Unparseable("the vendor returned an empty answer after one repair attempt"))
+            .Should().Contain("empty answer").And.NotContain("not the schema");
     }
 
     // ---------- D1: the audit line survives a non-string property ----------

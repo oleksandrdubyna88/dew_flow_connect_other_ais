@@ -49,7 +49,15 @@ public sealed class UsageLedger(string dataDir)
     /// </summary>
     public void Record(ReviewerInvocation invocation, ReviewerOutcome outcome, string model, string stage, TimeSpan elapsed)
     {
-        var usage = outcome is ReviewerOutcome.Ok ok ? ok.Usage : Usage.None;
+        // An unparseable run COMPLETED and reported what it consumed; only a process that never
+        // finished has nothing to declare. Reading usage from `Ok` alone made every failed
+        // reviewer look free, which is the opposite of what a spending record is for.
+        var usage = outcome switch
+        {
+            ReviewerOutcome.Ok ok => ok.Usage,
+            ReviewerOutcome.Unparseable bad => bad.Usage,
+            _ => Usage.None,
+        };
         var entry = new UsageEntry(
             DateTime.UtcNow.ToString("O"),
             invocation.Provider,
@@ -65,9 +73,12 @@ public sealed class UsageLedger(string dataDir)
         try
         {
             Directory.CreateDirectory(dataDir);
+            var line = System.Text.Encoding.UTF8.GetBytes(
+                JsonSerializer.Serialize(entry, LedgerJsonContext.Default.UsageEntry) + "\n");
             lock (Gate)
             {
-                File.AppendAllText(Path, JsonSerializer.Serialize(entry, LedgerJsonContext.Default.UsageEntry) + "\n");
+                using var file = new FileStream(Path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+                file.Write(line);
             }
         }
         catch (IOException)
