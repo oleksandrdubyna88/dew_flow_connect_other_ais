@@ -179,9 +179,11 @@ export function vendorInstall(vendor: Vendor, platform: Platform): VendorInstall
 function antigravityInstall(platform: Platform): VendorInstall {
   const note =
     platform === 'linux'
-      ? 'Antigravity has no Linux CLI that Google publishes — on Linux use codex or claude as this ' +
-        'reviewer. On WSL there is one more route: the Windows agy.exe runs through interop, so put ' +
-        'its path (/mnt/c/…/agy/bin/agy.exe) in this reviewer’s CLI path field.'
+      ? 'Antigravity has no Linux CLI that Google publishes — use codex or claude as this reviewer ' +
+        'here. Pointing the CLI path at a Windows agy.exe does NOT work, measured: it launches ' +
+        'through WSL interop and then exits after 60s with "authentication timed out", because its ' +
+        'sign-in lives in the Windows profile. To use the Windows CLIs, run the Windows coai-mcp.exe ' +
+        'as your MCP server instead.'
       : 'The Antigravity CLI comes with the Antigravity app — install the app, sign in once, and ' +
         'agy is on PATH.';
 

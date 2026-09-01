@@ -179,12 +179,21 @@ now deliberately excluded — **official sources only**, an operator decision, p
 pure Linux box that vendor cannot review, and `VendorDiagnosis.ForRuntime` says exactly that rather
 than reporting a missing file.
 
-**On WSL there are two further routes, both measured.** The Windows `agy.exe` launches from WSL
-through interop (exit 0) — usable by putting its path in the vendor's CLI-path field, for a
-repository on a Windows drive. And the Windows `coai-mcp.exe` itself runs as the MCP server launched
-from a WSL client: `initialize` and `providers` both answered. That second route makes the
-already-signed-in Windows CLIs available to a WSL session with no Linux install at all; its limit is
-paths, since a Windows server needs Windows paths for the repository.
+**On WSL, two routes were measured. One works and one does not, and the one that does not is the
+one I recommended first.**
+
+*The Windows `agy.exe` as a reviewer's CLI path: NO.* It launches — `--help` exits 0 through interop,
+and a real plan round confirmed the launcher reaches it, which is the `executablePath` fix verified
+in anger. Then it runs for 60 seconds and exits 1 with `Error: authentication timed out`. Its
+sign-in lives in the Windows user profile and it cannot complete the flow started from a Linux
+parent. Reading had predicted a different failure (every path the server hands a reviewer is a Linux
+path, and `--json-schema /home/…` means nothing to a Windows process) — the real failure arrives
+earlier, at authentication, which is why this was run rather than concluded.
+
+*The Windows `coai-mcp.exe` as the MCP server for a WSL client: YES.* `initialize` and `providers`
+both answered over stdio through interop. That makes the already-signed-in Windows CLIs available to
+a WSL session with no Linux install at all. Its limit is paths: a Windows server needs Windows paths
+for the repository, so the calling AI must pass `D:\rsd\...` rather than `/mnt/d/rsd/...`.
 
 **One unexplained observation, recorded rather than concluded:** in that interop run, the vendor whose
 runtime is `antigravity` reported `codex-cli` as its version, while `agy --version` on the same

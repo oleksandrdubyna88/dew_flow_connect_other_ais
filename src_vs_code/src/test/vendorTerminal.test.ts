@@ -159,6 +159,10 @@ test('an antigravity reviewer on linux says it cannot work there, rather than of
 
   assert.equal(linux.command, '');
   assert.match(linux.note, /no Linux CLI|not published|codex or claude/i);
+  // And it must not advise the route that was MEASURED not to work: the Windows agy.exe does launch
+  // from a Linux server through interop and then exits after 60s with "authentication timed out",
+  // because its sign-in lives in the Windows profile.
+  assert.match(linux.note, /does NOT work|authentication timed out/i);
 });
 
 test('the same reviewer on windows is installable by installing the app', () => {
