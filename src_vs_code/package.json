@@ -85,8 +85,9 @@
         "coai.onExhausted": {
           "type": "string",
           "enum": [
-            "continue",
             "human",
+            "continue",
+            "good_enough",
             "escalate"
           ],
           "default": "human",

@@ -134,7 +134,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       setup:
         'The defaults are three rounds, a threshold of two, and *Ask a human*. Only **blocking** and **major** findings count towards the threshold — minor and nit never gate.\n\nA finding raised by two vendors counts ONCE. A finding you rejected with a reason is discounted unless a reviewer raises it again with something new.',
       usage:
-        '*Ask a human* is the honest default: the gate stops and puts the decision in front of you. *Continue anyway* proceeds and says out loud that findings remain. *Escalate* climbs a ladder — more reviewer effort, then a stronger reviewer model, then a stronger arbiter — and gives the stage a fresh set of rounds each time.',
+        '*Ask a human* is the honest default: the gate stops and puts the decision in front of you. *Continue anyway* proceeds and says out loud that findings remain — it touches none of them, which is how a gate becomes decoration. *Good enough — take what’s true and move on* is the one between: the AI reads the open findings, applies the ones that are true and useful, rejects the rest with reasons, and proceeds. *Escalate* climbs a ladder — more reviewer effort, then a stronger reviewer model, then a stronger arbiter — and gives the stage a fresh set of rounds each time.',
       whatCanGoWrong:
         'A threshold of zero means every finding of any severity gates, which in practice means a review never passes.\n\nRounds are per STAGE: the plan gate and the code gate each get the full count.',
     },

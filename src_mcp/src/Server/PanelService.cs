@@ -590,11 +590,20 @@ public sealed class PanelService
                 $"Findings gate. Resolve every finding with accept/reject + reason, fix the accepted ones, then run this review again ({r.RoundsLeft} round(s) left)."),
             RoundVerdict.ContinueAnyway => ("continue_anyway", null,
                 "Rounds exhausted; policy says proceed as-is. Record decisions via resolve and say in your summary that findings remain."),
+            RoundVerdict.GoodEnough => ("good_enough", null,
+                "Rounds exhausted; policy says good enough. READ the open findings and apply the ones " +
+                "that are true and useful — that is the point of this setting, and it is what makes it " +
+                "different from continue_anyway. Reject the rest with reasons via resolve, say in your " +
+                "summary what you took and what you declined, then proceed."),
             RoundVerdict.CallHuman h => ("call_human", null,
                 $"Rounds exhausted: {h.Reason}. A human decides — surface the open findings to them; do not proceed on your own."),
             RoundVerdict.Escalated e => ("escalated", e.Step.ToString(),
                 $"Rounds exhausted; the ladder fires {e.Step}. Resolve the findings, apply the step, and run a fresh round."),
-            _ => ("unknown", null, ""),
+            // A verdict with no case here used to return ("unknown", null, "") — a name with no
+            // instruction behind it, which is the same silence a button wired to nothing produces.
+            // The union is closed, so reaching this is a programming error; the outer catch turns it
+            // into a reported sentence rather than a crash, and the test below makes it not happen.
+            _ => throw new InvalidOperationException($"no instruction for verdict {verdict.GetType().Name}"),
         };
         return new ReviewAnswer(
             name, step, gate.GatingCount, threshold, summary.Sentence,

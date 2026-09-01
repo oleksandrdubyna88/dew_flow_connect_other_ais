@@ -260,6 +260,7 @@ function gateBody(s: CoaiSettings): string {
   <select id="onExhausted" data-setting="onExhausted">
     <option value="human"${s.onExhausted === 'human' ? ' selected' : ''}>Ask a human</option>
     <option value="continue"${s.onExhausted === 'continue' ? ' selected' : ''}>Continue, and say so</option>
+    <option value="good_enough"${s.onExhausted === 'good_enough' ? ' selected' : ''}>Good enough — take what’s true and move on</option>
     <option value="escalate"${s.onExhausted === 'escalate' ? ' selected' : ''}>Climb the ladder</option>
   </select>
 </div>`;

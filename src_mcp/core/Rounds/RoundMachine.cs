@@ -26,6 +26,16 @@ public abstract record RoundVerdict
     /// <summary>Rounds exhausted, policy says proceed as-is — said out loud, never silently.</summary>
     public sealed record ContinueAnyway(GateResult Gate, ReviewerSummary Reviewers) : RoundVerdict;
 
+    /// <summary>
+    /// Rounds exhausted, policy says: good enough — take what is true and move on.
+    /// </summary>
+    /// <remarks>
+    /// The findings travel with it because they are the WORK: the caller reads them, applies the
+    /// ones that hold, records why it rejected the rest, and proceeds. That last part is what keeps
+    /// this different from <see cref="ContinueAnyway"/>, which proceeds and touches nothing.
+    /// </remarks>
+    public sealed record GoodEnough(GateResult Gate, ReviewerSummary Reviewers) : RoundVerdict;
+
     /// <summary>Rounds exhausted, policy says a person decides.</summary>
     public sealed record CallHuman(GateResult Gate, ReviewerSummary Reviewers, string Reason) : RoundVerdict;
 
@@ -122,6 +132,12 @@ public static class RoundMachine
             StagePolicy.Continue => new Transition.Ok(
                 s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, AdvanceOnResolve = true },
                 new RoundVerdict.ContinueAnyway(gate, reviewers)),
+
+            // Advances like Continue and differs entirely in the INSTRUCTION: this one tells the
+            // caller to read the findings and apply the ones that hold before moving on.
+            StagePolicy.GoodEnough => new Transition.Ok(
+                s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, AdvanceOnResolve = true },
+                new RoundVerdict.GoodEnough(gate, reviewers)),
 
             StagePolicy.Escalate when s.EscalationsUsed < Ladder.Length => new Transition.Ok(
                 s with { RoundsRunThisStage = 0, AwaitingResolve = true, EscalationsUsed = s.EscalationsUsed + 1 },

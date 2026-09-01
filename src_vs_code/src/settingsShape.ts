@@ -12,7 +12,7 @@
 
 import { DEFAULT_VENDORS, Vendor, vendorsEnv } from './vendors';
 
-export type OnExhausted = 'continue' | 'human' | 'escalate';
+export type OnExhausted = 'continue' | 'escalate' | 'human' | 'good_enough';
 
 /** The five languages a person may be asked in. */
 export type LanguageCode = 'en' | 'es' | 'de' | 'ru' | 'uk';
@@ -185,7 +185,9 @@ function asTranslator(value: unknown): string {
 }
 
 function asOnExhausted(value: unknown): OnExhausted {
-  return value === 'continue' || value === 'escalate' || value === 'human' ? value : DEFAULTS.onExhausted;
+  return value === 'continue' || value === 'escalate' || value === 'human' || value === 'good_enough'
+    ? value
+    : DEFAULTS.onExhausted;
 }
 
 /** Whether the reviewers are still exactly the shipped pair, unchanged. */

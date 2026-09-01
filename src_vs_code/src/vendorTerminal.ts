@@ -173,21 +173,37 @@ export function vendorInstall(vendor: Vendor, platform: Platform): VendorInstall
 }
 
 /**
- * Antigravity: installable by installing the app where the app exists, and said plainly where it
- * does not. `agy` ships as a Go binary with the Antigravity app; npm has no package for it.
+ * Antigravity: Google's own installer, on every platform.
+ *
+ * <p><b>This entry was wrong twice before it was right, and both errors are worth keeping.</b>
+ * First it offered a third-party snap, which the operator rejected — rightly: a button that
+ * installs software may only offer what the vendor itself publishes. Then it claimed Google
+ * publishes no Linux CLI at all and told people to use codex or claude instead. That was simply
+ * false. There are official installer scripts at `antigravity.google/cli/`, one shell and one
+ * PowerShell, and the operator found them by reading the vendor's site rather than trusting me.</p>
+ *
+ * <p>Verified before this was written: both URLs return the real scripts; `install.sh` branches on
+ * `uname` itself and handles Darwin AND Linux, amd64 and arm64, musl included — so it is ONE
+ * command for both, not one per platform; and the binary it installed on Linux answered a
+ * review-shaped call with exit 0.</p>
+ *
+ * <p>A `curl | bash` is a supply-chain shape worth naming, so the note names it. It is the vendor's
+ * own documented installer on the vendor's own domain, which is what official means here.</p>
  */
 function antigravityInstall(platform: Platform): VendorInstall {
-  const note =
-    platform === 'linux'
-      ? 'Antigravity has no Linux CLI that Google publishes — use codex or claude as this reviewer ' +
-        'here. Pointing the CLI path at a Windows agy.exe does NOT work, measured: it launches ' +
-        'through WSL interop and then exits after 60s with "authentication timed out", because its ' +
-        'sign-in lives in the Windows profile. To use the Windows CLIs, run the Windows coai-mcp.exe ' +
-        'as your MCP server instead.'
-      : 'The Antigravity CLI comes with the Antigravity app — install the app, sign in once, and ' +
-        'agy is on PATH.';
-
-  return { command: '', prerequisite: '', docs: DOCS['antigravity']!, note };
+  return {
+    command:
+      platform === 'win32'
+        ? 'irm https://antigravity.google/cli/install.ps1 | iex'
+        : 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+    // Nothing to get first: the CLI is a single Go binary, so there is no node in the way.
+    prerequisite: '',
+    docs: DOCS['antigravity']!,
+    note:
+      "Google's own installer, from antigravity.google. It is a piped script — read it first if that "
+      + 'matters to you. It drops a single binary (`~/.local/bin/agy` on Linux and macOS) and needs '
+      + 'one interactive sign-in afterwards: run `agy` once.',
+  };
 }
 
 /**
@@ -196,4 +212,12 @@ function antigravityInstall(platform: Platform): VendorInstall {
  * <p>One line per vendor, and nothing else is allowed — see the test. A third-party repackaging can
  * be the most convenient thing on the machine and it still does not go behind a button.</p>
  */
-export const OFFICIAL_SOURCES: readonly string[] = ['npm install -g @openai/', 'npm install -g @google/', 'npm install -g @anthropic-ai/'];
+export const OFFICIAL_SOURCES: readonly string[] = [
+  'npm install -g @openai/',
+  'npm install -g @google/',
+  'npm install -g @anthropic-ai/',
+  // The vendor's own installer on the vendor's own domain. The DOMAIN is the guard: anything else
+  // piped into a shell is exactly what this list exists to keep out.
+  'curl -fsSL https://antigravity.google/',
+  'irm https://antigravity.google/',
+];

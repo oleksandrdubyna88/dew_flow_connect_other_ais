@@ -112,6 +112,7 @@ public sealed record PanelSettings
             {
                 "continue" => StagePolicy.Continue,
                 "escalate" => StagePolicy.Escalate,
+                "good_enough" or "goodenough" => StagePolicy.GoodEnough,
                 _ => StagePolicy.Human,
             }),
         GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),

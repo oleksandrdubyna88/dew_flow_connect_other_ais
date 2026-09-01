@@ -134,3 +134,17 @@ test('the translator and the escalation budget travel only when changed', () => 
   assert.equal(env['COAI_TRANSLATOR_PROVIDER'], 'none');
   assert.equal(env['COAI_ESCALATION_MINUTES'], '5');
 });
+
+test('good enough is a real choice, not a string the reader drops', () => {
+  // The fourth thing to do when the rounds run out: read the findings, apply what is true and
+  // useful, and move on. `continue` proceeds and touches nothing, which is how a gate becomes
+  // decoration — so an unknown-value reader silently turning this back into 'human' would be the
+  // whole feature quietly missing.
+  assert.equal(settingsFrom(reader({ onExhausted: 'good_enough' })).onExhausted, 'good_enough');
+  assert.equal(settingsFrom(reader({ onExhausted: 'panic' })).onExhausted, DEFAULTS.onExhausted);
+});
+
+test('the choice travels to the server under the name the server parses', () => {
+  const env = envBlock({ ...DEFAULTS, onExhausted: 'good_enough' });
+  assert.equal(env['COAI_ON_EXHAUSTED'], 'good_enough');
+});

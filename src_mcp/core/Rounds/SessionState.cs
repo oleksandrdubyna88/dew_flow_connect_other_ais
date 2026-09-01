@@ -14,6 +14,15 @@ public enum StagePolicy
 
     /// <summary>Climb the escalation ladder, then a fresh set of rounds.</summary>
     Escalate,
+
+    /// <summary>Good enough: read the findings, apply what is true and useful, and move on.</summary>
+    /// <remarks>
+    /// The gap between the other three, and the ordinary case. The reviewers found real things, they
+    /// are not worth another round each, and the right move is to WORK them rather than to stop or
+    /// to ignore them. <see cref="Continue"/> is not this: it proceeds and leaves every finding
+    /// untouched, which is how a gate becomes decoration.
+    /// </remarks>
+    GoodEnough,
 }
 
 /// <summary>The ladder, in the only order it fires. The arbiter moves last — changing the author

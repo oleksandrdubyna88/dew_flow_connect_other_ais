@@ -77,14 +77,29 @@ test('the npm command is the same on every platform, because npm does not care',
   assert.equal(linux.command, windows.command);
 });
 
-test('antigravity is pointed at, because Google publishes no install command for it', () => {
-  // `agy` ships as a Go binary with the Antigravity app and npm has no package for it, so there is
-  // nothing to run. The honest answer is the documentation.
-  for (const p of ['win32', 'linux', 'darwin'] as const) {
-    const install = vendorInstall({ id: 'gemini', runtime: 'antigravity', model: '', enabled: true, baseUrl: '', executablePath: '' }, p);
-    assert.equal(install.command, '');
-    assert.match(install.docs, /antigravity\.google/);
-  }
+
+test('antigravity installs from Google’s own script, one per shell family', () => {
+  // Verified 2026-09-01 before this was written: both URLs return the real scripts; install.sh
+  // branches on `uname` itself and handles Darwin AND Linux (amd64/arm64, musl included), so it is
+  // ONE command for both; and the binary it installed on Linux answered a review-shaped call with
+  // exit 0. The operator found these by reading the vendor's site — this file had claimed twice that
+  // no official Linux install existed.
+  const on = (platform: 'win32' | 'linux' | 'darwin'): string =>
+    vendorInstall({ id: 'gemini', runtime: 'antigravity', model: '', enabled: true, baseUrl: '', executablePath: '' }, platform).command;
+
+  assert.equal(on('linux'), 'curl -fsSL https://antigravity.google/cli/install.sh | bash');
+  assert.equal(on('darwin'), on('linux'), 'one script serves both — it branches on uname itself');
+  assert.equal(on('win32'), 'irm https://antigravity.google/cli/install.ps1 | iex');
+});
+
+test('a piped installer says that it is one', () => {
+  // curl | bash is a supply-chain shape. It is the vendor's own documented installer on the
+  // vendor's own domain, which is what official means here — and a person may still want to read it
+  // first, so the note says so rather than hiding it.
+  const note = vendorInstall({ id: 'gemini', runtime: 'antigravity', model: '', enabled: true, baseUrl: '', executablePath: '' }, 'linux').note;
+
+  assert.match(note, /piped script|read it first/i);
+  assert.match(note, /sign.?in|agy` once/i, 'and that one interactive sign-in follows');
 });
 
 test('an install command may only come from a source the vendor itself publishes', () => {
@@ -149,29 +164,4 @@ test('the install prerequisite is the one for THIS operating system', () => {
   }
 });
 
-test('an antigravity reviewer on linux says it cannot work there, rather than offering nothing', () => {
-  // In a VS Code window connected to WSL the extension host IS linux, so this is the case a person
-  // actually hits — and "no command" with no explanation reads as a broken button.
-  const linux = vendorInstall(
-    { id: 'gemini', runtime: 'antigravity', model: '', enabled: true, baseUrl: '', executablePath: '' },
-    'linux',
-  );
 
-  assert.equal(linux.command, '');
-  assert.match(linux.note, /no Linux CLI|not published|codex or claude/i);
-  // And it must not advise the route that was MEASURED not to work: the Windows agy.exe does launch
-  // from a Linux server through interop and then exits after 60s with "authentication timed out",
-  // because its sign-in lives in the Windows profile.
-  assert.match(linux.note, /does NOT work|authentication timed out/i);
-});
-
-test('the same reviewer on windows is installable by installing the app', () => {
-  const windows = vendorInstall(
-    { id: 'gemini', runtime: 'antigravity', model: '', enabled: true, baseUrl: '', executablePath: '' },
-    'win32',
-  );
-
-  assert.equal(windows.command, '');
-  assert.match(windows.note, /app/i);
-  assert.doesNotMatch(windows.note, /no Linux CLI/i, 'that sentence is about the other platform');
-});
