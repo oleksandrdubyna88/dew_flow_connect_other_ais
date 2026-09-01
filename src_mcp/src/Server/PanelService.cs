@@ -406,6 +406,12 @@ public sealed class PanelService
         var outputDir = Directory.CreateTempSubdirectory("coai-answers-").FullName;
         PruneOldAnswerDirs();
 
+        // The REPAIR launch gets no workspace, whatever the stage. It is not asking for a better
+        // review — it already asked for that — it is asking for the answer in the schema, and an
+        // agentic CLI handed a checkout goes exploring instead. That is the same lesson the plan
+        // stage learned the hard way, applied to the one launch whose whole job is to be brief.
+        var repairDir = Directory.CreateTempSubdirectory("coai-repair-").FullName;
+
         var work = new List<ReviewerWork>();
         foreach (var provider in _settings.Providers.Where(p => p.Enabled))
         {
@@ -430,7 +436,7 @@ public sealed class PanelService
                     "\n\nYOUR PREVIOUS ANSWER WAS NOT VALID JSON. Return ONLY the JSON object for the schema — no fences, no prose.";
                 work.Add(new ReviewerWork(
                     runtime.Build(role, prompt, worktreePath, schemaFile, outputDir, settings),
-                    runtime.Build(role, repairPrompt, worktreePath, schemaFile, outputDir, settings),
+                    runtime.Build(role, repairPrompt, repairDir, schemaFile, outputDir, settings),
                     choice.Id));
             }
         }

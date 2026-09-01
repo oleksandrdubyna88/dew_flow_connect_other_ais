@@ -158,7 +158,7 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
         ReviewerInvocation? repair = null,
         CancellationToken ct = default)
     {
-        var (outcome, review, usage, raw) = await RunOnceAsync(invocation, ct);
+        var (outcome, review, usage, answer, evidence) = await RunOnceAsync(invocation, ct);
         if (outcome is not null)
         {
             return outcome;
@@ -172,10 +172,10 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
         if (repair is null)
         {
             return new ReviewerOutcome.Unparseable(
-                Because(Said(raw), "and no repair was configured", Keep(invocation, raw)), usage);
+                Because(Said(answer), "and no repair was configured", Keep(invocation, evidence)), usage);
         }
 
-        var (repairOutcome, repaired, repairUsage, repairRaw) = await RunOnceAsync(repair, ct);
+        var (repairOutcome, repaired, repairUsage, repairAnswer, repairEvidence) = await RunOnceAsync(repair, ct);
         return repairOutcome
                ?? (repaired is { } fixedReview
                    // Both launches are billed, so both are counted — a repaired reviewer that
@@ -185,9 +185,19 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
                    // empty: a vendor whose envelope broke leaves nothing to read, and the
                    // evidence file was landing at zero bytes exactly when it was most needed.
                    : new ReviewerOutcome.Unparseable(
-                       Because(Said(repairRaw ?? raw), "after one repair attempt", Keep(repair, Longer(raw, repairRaw))),
+                       Because(Said(repairAnswer ?? answer), "after one repair attempt", Keep(repair, Longer(evidence, repairEvidence))),
                        usage.Add(repairUsage)));
     }
+
+    /// <summary>
+    /// Everything the process said, for when what it MEANT to say is missing.
+    /// </summary>
+    /// <remarks>
+    /// Both streams, labelled. An empty answer with an empty evidence file tells nobody anything;
+    /// the vendor's own stream carries its status and its error, and that is the whole diagnosis.
+    /// </remarks>
+    private static string Transcript(ProcessResult result) =>
+        $"--- stdout ---\n{result.StdOut}\n--- stderr ---\n{result.StdErr}";
 
     private static string Because(string what, string when, string? keptAt) =>
         keptAt is null ? $"{what} {when}" : $"{what} {when} (the answer was kept at {keptAt})";
@@ -210,7 +220,7 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
         (second?.Trim().Length ?? 0) >= (first?.Trim().Length ?? 0) ? second : first;
 
     /// <summary>One launch. A non-null outcome is terminal; a null review means "unparseable".</summary>
-    private async Task<(ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Raw)> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
+    private async Task<(ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Answer, string Evidence)> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
     {
         ProcessResult result;
         try
@@ -220,52 +230,57 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
         catch (System.ComponentModel.Win32Exception e)
         {
             // One reviewer that cannot start is one reviewer's failure, never the round's.
-            return (new ReviewerOutcome.NotStarted($"'{invocation.Request.Executable}' could not be started: {e.Message}"), null, Usage.None, null);
+            return (new ReviewerOutcome.NotStarted($"'{invocation.Request.Executable}' could not be started: {e.Message}"), null, Usage.None, null, string.Empty);
         }
 
         if (result.TimedOut)
         {
-            return (new ReviewerOutcome.TimedOut(), null, Usage.None, null);
+            return (new ReviewerOutcome.TimedOut(), null, Usage.None, null, string.Empty);
         }
 
         if (RateLimit.Hit(result))
         {
-            return (new ReviewerOutcome.RateLimited(RateLimit.Reason(result)), null, Usage.None, null);
+            return (new ReviewerOutcome.RateLimited(RateLimit.Reason(result)), null, Usage.None, null, string.Empty);
         }
 
         if (result.ExitCode != 0)
         {
             var tail = result.StdErr.Length <= StdErrTail ? result.StdErr : result.StdErr[^StdErrTail..];
-            return (new ReviewerOutcome.NonZeroExit(result.ExitCode, tail.Trim()), null, Usage.None, null);
+            return (new ReviewerOutcome.NonZeroExit(result.ExitCode, tail.Trim()), null, Usage.None, null, string.Empty);
         }
 
         // Both reads go through the vendor's own adapter: where the answer lands and how the run
         // is billed are vendor knowledge, and keeping them here would have made every new vendor
         // an edit to this class.
         var usage = invocation.Adapter?.ReadUsage(invocation, result) ?? UsageParser.Parse(result.StdOut);
-        var (review, raw) = Parse(invocation, result);
-        return (null, review, usage, raw);
+        var (review, answer, evidence) = Parse(invocation, result);
+        return (null, review, usage, answer, evidence);
     }
 
-    private static (NormalisedReview? Review, string? Raw) Parse(ReviewerInvocation invocation, ProcessResult result)
+    private static (NormalisedReview? Review, string? Answer, string Evidence) Parse(ReviewerInvocation invocation, ProcessResult result)
     {
         var raw = invocation.Adapter is { } adapter
             ? adapter.ReadAnswer(invocation, result)
             : ReviewerOutput.FileOrStdout(invocation, result);
+        // The EVIDENCE is not always the answer. When a vendor's envelope comes back empty there
+        // is nothing in the field the adapter reads, and the diagnosis — its status, its error,
+        // its own event stream — is sitting in stdout, which was being thrown away. A kept file
+        // of zero bytes is what that looked like from outside.
+        var evidence = string.IsNullOrWhiteSpace(raw) ? Transcript(result) : raw;
         if (raw is null)
         {
-            return (null, null);
+            return (null, null, evidence);
         }
 
         // Gemini answers through its envelope and its habits; codex's -o file is schema-bound
         // already, but the same balanced extraction costs nothing and forgives a stray banner.
         if (GeminiPayload.Extract(raw) is not ExtractOutcome.Payload payload)
         {
-            return (null, raw);
+            return (null, raw, evidence);
         }
 
         return ReviewParser.Parse(payload.Json, invocation.Provider) is ParseOutcome.Success success
-            ? (success.Review, raw)
-            : (null, raw);
+            ? (success.Review, raw, evidence)
+            : (null, raw, evidence);
     }
 }

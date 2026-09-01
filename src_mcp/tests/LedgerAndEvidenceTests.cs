@@ -158,4 +158,23 @@ public sealed class LedgerAndEvidenceTests : IDisposable
         outcome.Should().BeOfType<ReviewerOutcome.Unparseable>()
             .Which.Reason.Should().Contain("empty answer").And.NotContain("not the schema");
     }
+
+    [Fact]
+    public async Task WhenTheVendorSaysNOTHING_TheProcessTranscriptIsWhatIsKept()
+    {
+        // The failure that would not explain itself: the envelope came back empty, so the field
+        // the adapter reads held nothing and the kept file was zero bytes — twice, in real runs.
+        // The diagnosis was in the process's own streams all along.
+        var kept = System.IO.Path.Combine(_dir, "unparseable");
+        var executor = new ReviewerExecutor(new ProcessLauncher(), kept);
+        var silent = FakeCliInvocations.Invoke("gemini", ["stderr-emit", "quota check failed upstream", ""]);
+
+        var outcome = await executor.RunAsync(silent, repair: silent, ct: TestContext.Current.CancellationToken);
+
+        outcome.Should().BeOfType<ReviewerOutcome.Unparseable>();
+        var file = Directory.GetFiles(kept).Should().ContainSingle().Subject;
+        var text = await File.ReadAllTextAsync(file, TestContext.Current.CancellationToken);
+        new FileInfo(file).Length.Should().BeGreaterThan(0, "an empty evidence file explains nothing");
+        text.Should().Contain("stderr").And.Contain("quota check failed upstream");
+    }
 }

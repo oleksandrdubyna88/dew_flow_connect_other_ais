@@ -213,6 +213,47 @@ public sealed class PanelServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task TheRepairLaunch_IsGivenNoWorkspace_BecauseItIsAskingForAnAnswer()
+    {
+        // A repair says "your last answer was not the schema's JSON, send the JSON". Handing it
+        // the checkout again invites the same exploration that produced the empty answer — the
+        // plan stage learned this at ten minutes a round, and antigravity failed intermittently on
+        // the code stage until the repair stopped carrying a workspace.
+        var record = Directory.CreateTempSubdirectory("coai-record-").FullName;
+        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
+        try
+        {
+            var service = Service();
+            await service.OpenAsync(_repo, "feature");
+            await service.ReviewPlanAsync(_repo, "feature", "the plan");
+            await service.ResolveAsync(_repo, "feature", "[]");
+            foreach (var file in Directory.GetFiles(record))
+            {
+                File.Delete(file);
+            }
+
+            await service.ReviewCodeAsync(_repo, "feature", "main", "the plan");
+
+            // Every recorded launch is the FIRST attempt here (the fake answers correctly), so the
+            // assertion is on how the repair was BUILT: its working directory is not the worktree.
+            var session = new SessionStore(_data).Load(_repo, "feature");
+            session.Should().NotBeNull();
+            Directory.EnumerateDirectories(Path.GetTempPath(), "coai-repair-*")
+                .Should().NotBeEmpty("the repair launch runs in a directory of its own");
+            foreach (var dir in Directory.EnumerateDirectories(Path.GetTempPath(), "coai-repair-*"))
+            {
+                Directory.EnumerateFileSystemEntries(dir).Should().BeEmpty(
+                    "an empty directory is what makes an agentic CLI answer instead of explore");
+            }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
+            Directory.Delete(record, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task CodeStage_FansOutThreeRolesPerProvider_WithThreeDistinctPrompts()
     {
         var record = Directory.CreateTempSubdirectory("coai-record-").FullName;

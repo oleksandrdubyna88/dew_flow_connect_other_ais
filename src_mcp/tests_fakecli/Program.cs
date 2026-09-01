@@ -93,6 +93,13 @@ switch (args0)
         File.WriteAllText(dst, text);
         return 0;
 
+    // Says something on stderr and NOTHING useful on stdout, exiting 0 — the shape of a vendor
+    // whose envelope came back empty while its streams carried the diagnosis.
+    case ["stderr-emit", var noise, var text]:
+        Console.Error.WriteLine(noise);
+        Console.Out.Write(text);
+        return 0;
+
     case ["stderr-exit", var text, var code]:
         Console.Error.WriteLine(text);
         return int.Parse(code);
