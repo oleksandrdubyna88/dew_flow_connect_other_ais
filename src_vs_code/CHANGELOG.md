@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.10.1 — 2026-09-01
+
+**Antigravity is a runtime the panel actually knows.** It was in the server and missing from the
+extension's own list, so a vendor configured as `antigravity` was stored as `codex` — the panel
+would have run the wrong vendor's model and reported the answer under the right vendor's name. Its
+model list is there too: `agy models` on a Pro subscription reaches Gemini, Claude and GPT-OSS.
+
+**The chart's time tabs work.** The repaint key left out which window was showing, so clicking
+Today or Month changed the state and repainted nothing. One missing number in a ledger line no
+longer turns every total into `NaN` either.
+
+Pair with **coai-mcp 0.5.1**: failed reviewers are now counted in the spending record with what
+they actually consumed (they used to read as free, under-reporting a round by about half), an
+answer that cannot be parsed leaves the vendor's real transcript on disk instead of an empty file,
+the ledger survives a second server writing beside it, and the repair launch no longer hands an
+agentic reviewer a checkout — which is what made one code round in three lose a reviewer.
+
 ## 0.10.0 — 2026-09-01
 
 **Prompts per round.** Each reviewer role now has a universal prompt and two narrow lenses, and the
