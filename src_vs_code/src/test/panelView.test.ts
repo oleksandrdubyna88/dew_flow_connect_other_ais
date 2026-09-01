@@ -1,3 +1,4 @@
+import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { escapeHtml, panelHtml, PanelState } from '../panelView';
@@ -20,6 +21,7 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   usageWindow: 'week',
   cliStatus: {},
   modelPrices: {},
+  snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   latestServerVersion: '',
   ...over,
 });

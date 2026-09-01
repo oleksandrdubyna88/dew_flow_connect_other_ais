@@ -6,6 +6,7 @@ import { ROLES, promptsFor, selectedFor } from './prompts';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, WINDOWS, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerLines, RoundRecord, SessionFile, stageName } from './rounds';
 import { CliStatus, cliStatusNote, updateAvailable, UNKNOWN_CLI } from './cliVersions';
+import { SnippetStatus, snippetNote } from './claudeSnippet';
 import { ModelPrice } from './modelPrices';
 import { Vendor } from './vendors';
 
@@ -42,6 +43,13 @@ export interface PanelState {
   readonly usageWindow: Window;
   /** The newest published server version, or empty while it is unknown or unreachable. */
   readonly latestServerVersion: string;
+  /**
+   * What the CLAUDE.md snippet pasted into this workspace is, next to what this build hands out.
+   *
+   * <p>Only `older`, `unversioned` and `ahead` produce a line. A workspace that never adopted the
+   * gate is not a problem to report, and one that is current has nothing to say.</p>
+   */
+  readonly snippetStatus: SnippetStatus;
   /**
    * The published list price per MODEL id, for the models the vendors are set to.
    *
@@ -349,7 +357,13 @@ function serverBody(state: PanelState): string {
       : `<div class="hint">${escapeHtml(state.latestServerVersion)} is published.</div>
 <button class="add" data-command="installServer">⬇&nbsp; ${state.serverInstalled ? 'Update' : 'Install'} coai-mcp ${escapeHtml(state.latestServerVersion)}</button>`;
 
-  return `<div class="status">${installed}</div>
+  // The pasted snippet is the other half of this section: the server is installed here, and
+  // the instruction that makes an AI USE it lives in somebody's CLAUDE.md, where it goes stale
+  // silently. One line, and only when there is something to do about it.
+  const snippet = snippetNote(state.snippetStatus);
+  const stale = snippet.length === 0 ? '' : `<div class="stale">${escapeHtml(snippet)}</div>`;
+
+  return `<div class="status">${installed}</div>${stale}
 ${published}
 <div class="hint">Changes here are saved for the server straight away; it reads them when your MCP client next starts it. The config block in the ⋯ menu is pasted once, when you first set it up.</div>
 <button class="link" data-command="checkForUpdate">Check again</button>`;
@@ -870,6 +884,12 @@ const CSS = `
   /* The money is the quiet half of the row: a dash where a vendor does not price its own runs. */
   .spend .cost { font-size: 11px; opacity: .75; flex: 0 0 auto; }
   .spend .forget { flex: 0 0 auto; padding: 0 2px; font-size: 11px; opacity: .55; }
+  /* A stale pasted snippet is worth noticing and not worth alarming about: the gate still
+     works, the AI reading it is just being told an older story. */
+  .stale {
+    border-left: 3px solid var(--tone-limits); padding: 6px 8px; margin: 6px 0;
+    font-size: 11px; background: var(--vscode-textBlockQuote-background);
+  }
   .spend .forget:hover { opacity: 1; color: var(--tone-keys); }
   /* The tokens are what the section is FOR, so they are read at full strength; the durations
      underneath stay a .hint, because they are context rather than the answer. */

@@ -1,3 +1,4 @@
+import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CliStatus } from '../cliVersions';
@@ -43,6 +44,7 @@ function html(vendors: readonly Vendor[], cliStatus: Record<string, CliStatus>):
     usageWindow: 'week',
     cliStatus,
     modelPrices: {},
+    snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   }, 'nonce');
 }
 

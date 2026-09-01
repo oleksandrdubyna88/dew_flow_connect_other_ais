@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.22.0 — 2026-09-01
+
+**The pasted CLAUDE.md snippet carries a version, and the panel says when a copy has fallen behind.**
+Handing somebody text to paste means the source moves and the copy does not — and the copy is the one
+being obeyed. That is not hypothetical: a block pasted into one repository here predated the SCOPE
+rule, so the AI following it would call `review_code` with a commit subject and meet a refusal that
+nothing in its instructions explained.
+
+The snippet now emits a marker, and the Server section reads it back out of this workspace's
+`CLAUDE.md`, `AGENTS.md`, `GEMINI.md` or `.github/copilot-instructions.md` — the same four files the
+server reads for its conventions pass. Older says both numbers and what to do; a copy from before
+versioning says so without inventing a number for it; a copy NEWER than this extension says to update
+the extension rather than paste over the repository. Current and absent say nothing, because a
+repository that has not adopted the gate is entitled not to.
+
+**The version cannot silently go stale**, which is the part that makes it worth having: a test pins
+it to the snippet's own hash, so editing the text fails the build until the number moves with it —
+and the failure message carries the next number and the new hash, ready to paste.
+
 ## 0.21.0 — 2026-09-01
 
 **The review gate says out loud that it is ADDITIONAL.** The `feature-dev` plugin's quality phase

@@ -1,3 +1,4 @@
+import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { panelHtml } from '../panelView';
@@ -36,6 +37,7 @@ function css(): string {
     usageWindow: 'week',
     cliStatus: {},
     modelPrices: {},
+    snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   }, 'nonce');
 }
 

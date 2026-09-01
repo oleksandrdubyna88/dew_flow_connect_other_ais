@@ -274,3 +274,27 @@ spawn a process and open a connection per vendor each time. Pressing the button 
 "I just updated it" is answered now rather than in twenty minutes. Every failure path lands on an
 empty string, which renders grey: a button that lights up because a fetch failed is a button that
 lies.
+
+### The pasted snippet carries a version (2026-09-01)
+
+Handing somebody text to paste means the source moves and the copy does not, and the copy is the one
+being obeyed. Found in the wild: the block in `dew_flow_creds_for_devs/CLAUDE.md` predated the SCOPE
+rule, so the AI following it would call `review_code` with a commit subject and meet a refusal that
+nothing in its instructions explained.
+
+`claudeSnippet.ts` now emits `<!-- coai-snippet vN -->`, and `PanelProvider.pastedSnippet` reads it
+back out of the workspace's `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` or `.github/copilot-instructions.md`
+— the same four the server reads for its conventions pass, because there is no reason the two halves
+of this product should disagree about which files an AI reads. The first file carrying the block
+wins; a repository with it in two places has a problem this panel cannot fix.
+
+**A number, not a hash — and both.** A hash cannot be forgotten but only answers "different", while
+the useful sentence is "OLDER than the current one": a stale paste and a locally edited one want
+opposite advice, and only an ordered number tells them apart. So the number is ordered and
+`snippetVersion.test.ts` pins it to the text's hash — editing the snippet fails the build until the
+number moves with it, and the failure message carries the next number and the new hash.
+
+Five outcomes rather than a boolean, because they want different sentences: `current` and `absent`
+say nothing (a repository that never adopted the gate is entitled not to), `unversioned` means the
+copy predates the marker, `older` names both numbers, and `ahead` — an extension older than the
+repository — says to update this build rather than paste over the repo.

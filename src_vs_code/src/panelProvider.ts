@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import * as vscode from 'vscode';
+import { snippetStatus, SnippetStatus } from './claudeSnippet';
 import { EscalationWatcher } from './escalationWatcher';
 import { ModelChoice, parseCodexModels } from './models';
 import {
@@ -139,6 +140,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       latestServerVersion: await this.publishedVersion(),
       cliStatus: await this.vendorCliStatus(vendors),
       modelPrices: await this.modelPrices(vendors),
+      snippetStatus: await this.pastedSnippet(),
     };
 
     // Two update paths, and which one runs is the whole fix for the pickers.
@@ -159,6 +161,42 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
 
     void this.view.webview.postMessage({ type: 'live', ...liveRegions(state) });
+  }
+
+  /**
+   * How old the snippet pasted into this workspace is.
+   *
+   * <p>The same four instruction files the SERVER reads for its conventions pass — a person pastes
+   * into whichever one their AI reads, and there is no reason for the two halves of this product to
+   * disagree about which those are.</p>
+   *
+   * <p>Only the workspace ROOT, and only files that exist. Walking a repository for a pasted block
+   * would be a filesystem crawl on every repaint to answer a question about one paragraph.</p>
+   */
+  private async pastedSnippet(): Promise<SnippetStatus> {
+    const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+    if (root === undefined) {
+      return snippetStatus(undefined);
+    }
+
+    for (const name of ['CLAUDE.md', 'AGENTS.md', 'GEMINI.md', '.github/copilot-instructions.md']) {
+      const text = await this.readIfPresent(vscode.Uri.joinPath(root, name));
+      // The FIRST file that carries it wins. A repository with the block in two files has a
+      // problem this panel cannot fix, and reporting the older of the two would be arbitrary.
+      if (text.includes('Multi-model review gate (ConnectOtherAIs)')) {
+        return snippetStatus(text);
+      }
+    }
+
+    return snippetStatus(undefined);
+  }
+
+  private async readIfPresent(uri: vscode.Uri): Promise<string> {
+    try {
+      return new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
+    } catch {
+      return ''; // an absent instruction file is the normal case, not a failure
+    }
   }
 
   /**

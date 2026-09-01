@@ -1,3 +1,4 @@
+import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { panelHtml } from '../panelView';
@@ -63,6 +64,7 @@ test('no control that writes a role-keyed setting is labelled as a vendor', () =
     usageWindow: 'week',
     cliStatus: {},
     modelPrices: {},
+    snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   }, 'nonce');
 
   const roleKeyed = [...html.matchAll(/data-setting="(rounds|thresholds)"[^>]*/g)].map((m) => m[0]);
@@ -94,6 +96,7 @@ test('every role id the panel writes to is a role, and no vendor shares the name
     usageWindow: 'week',
     cliStatus: {},
     modelPrices: {},
+    snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   }, 'nonce');
 
   const roles = new Set([...html.matchAll(/data-role="([^"]+)"/g)].map((m) => m[1]!));
@@ -135,6 +138,7 @@ test('the number of prompt pickers follows that role\u2019s rounds', () => {
       usageWindow: 'week',
     cliStatus: {},
     modelPrices: {},
+    snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
     }, 'nonce');
 
   const pickers = (page: string, role: string): number =>

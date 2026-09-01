@@ -1,3 +1,4 @@
+import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { panelHtml } from '../panelView';
@@ -30,6 +31,7 @@ function html(v: Vendor, prices: Record<string, ModelPrice>): string {
     settings: DEFAULTS, vendors: [v], codexModels: [], serverInstalled: false, serverVersion: '',
     latestServerVersion: '', questions: [], sessions: [], openSections: [], usage: [],
     usageWindow: 'week', cliStatus: {}, modelPrices: prices,
+    snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   }, 'nonce');
 }
 

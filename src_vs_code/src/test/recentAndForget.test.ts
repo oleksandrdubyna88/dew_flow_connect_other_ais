@@ -1,3 +1,4 @@
+import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CliStatus } from '../cliVersions';
@@ -76,6 +77,7 @@ function html(over: {
     usageWindow: 'week',
     cliStatus: over.cliStatus ?? {},
     modelPrices: {},
+    snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   }, 'nonce', NOW);
 }
 
