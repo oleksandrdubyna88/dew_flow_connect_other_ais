@@ -16,6 +16,9 @@ export const HELP = {
     "Which model this vendor reviews with. Empty means the CLI's own default, which is usually its newest. A stronger model finds more and costs more; the panel exists so you can mix.",
   vendorBaseUrl:
     'The OpenAI-compatible endpoint this vendor is reached at. Its API key lives in the CredsForDevs config entry under this vendor’s name, never here.',
+  vendorExecutablePath:
+    'Where this vendor’s CLI is, for when PATH cannot be trusted to answer. Empty means "look it up on PATH", which is right almost everywhere — and wrong in WSL, where codex and gemini resolve to the WINDOWS npm shims through the interop PATH and die on a missing Linux binary. Put the native path here and the round stops depending on which shell happened to start the server.',
+
   runVendor:
     'Open this vendor’s own CLI in a terminal, with its usage command ready at the prompt — press Enter to see what you have spent. This is also where you sign a CLI in: a vendor whose CLI is not authenticated fails every round with a timeout.',
 

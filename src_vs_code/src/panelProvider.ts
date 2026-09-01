@@ -172,7 +172,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
 
     const install = vendorInstall(vendor);
-    if (install.command.length === 0) {
+    // The shell decides, because for one vendor the two differ: agy has a snap on Linux and no
+    // command at all on Windows, where it ships with the Antigravity app.
+    const shell = isPowerShell() ? 'powershell' : 'bash';
+    const command = install[shell];
+    if (command.length === 0) {
       const open = 'Open the instructions';
       const choice = await vscode.window.showInformationMessage(install.note, open);
       if (choice === open) {
@@ -189,10 +193,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
     // Both lines are typed, newest last, so the prompt holds the install command itself: a machine
     // that already has node needs only that one, and a machine that does not can scroll up one.
-    const shell = isPowerShell() ? install.prerequisite.powershell : install.prerequisite.bash;
-    terminal.sendText(`# needs node first? ${shell}`, false);
+    terminal.sendText(`# first time on this machine? ${install.prerequisite[shell]}`, false);
     terminal.sendText('', true);
-    terminal.sendText(install.command, false);
+    terminal.sendText(command, false);
   }
 
   /**

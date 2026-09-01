@@ -43,7 +43,7 @@ test('each reviewer gets a switch, a model field and a way out', () => {
 
 test('a disabled reviewer is shown unchecked', () => {
   const html = panelHtml(
-    state({ vendors: [{ id: 'codex', runtime: 'codex', model: '', enabled: false, baseUrl: '' }] }),
+    state({ vendors: [{ id: 'codex', runtime: 'codex', model: '', enabled: false, baseUrl: '', executablePath: '' }] }),
     'n0nce',
   );
   assert.ok(!html.includes('data-vendor="codex" checked'));
@@ -66,7 +66,7 @@ test('the picker is a SELECT with every model visible, never a filtering datalis
 
 test('a model the person typed stays in its own list', () => {
   const html = panelHtml(
-    state({ vendors: [{ id: 'codex', runtime: 'codex', model: 'something-new', enabled: true, baseUrl: '' }] }),
+    state({ vendors: [{ id: 'codex', runtime: 'codex', model: 'something-new', enabled: true, baseUrl: '', executablePath: '' }] }),
     'n0nce',
   );
   assert.ok(html.includes('value="something-new"'));
@@ -75,7 +75,7 @@ test('a model the person typed stays in its own list', () => {
 
 test('a custom endpoint is editable; a first-party vendor shows no URL field', () => {
   const custom = panelHtml(
-    state({ vendors: [{ id: 'mistral', runtime: 'codex', model: '', enabled: true, baseUrl: 'https://api.mistral.ai/v1' }] }),
+    state({ vendors: [{ id: 'mistral', runtime: 'codex', model: '', enabled: true, baseUrl: 'https://api.mistral.ai/v1', executablePath: '' }] }),
     'n0nce',
   );
   assert.ok(custom.includes('data-setting="baseUrl" data-vendor="mistral"'));
@@ -231,8 +231,8 @@ test('the keys section answers "do I need this?" before showing the field', () =
   const needsKeys = panelHtml(
     state({
       vendors: [
-        { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '' },
-        { id: 'deepseek', runtime: 'codex', model: '', enabled: true, baseUrl: 'https://api.deepseek.com/v1' },
+        { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '' },
+        { id: 'deepseek', runtime: 'codex', model: '', enabled: true, baseUrl: 'https://api.deepseek.com/v1', executablePath: '' },
       ],
     }),
     'n',
@@ -244,7 +244,7 @@ test('the keys section answers "do I need this?" before showing the field', () =
 
 test('a disabled vendor with an endpoint does not demand a key', () => {
   const html = panelHtml(
-    state({ vendors: [{ id: 'deepseek', runtime: 'codex', model: '', enabled: false, baseUrl: 'https://x/v1' }] }),
+    state({ vendors: [{ id: 'deepseek', runtime: 'codex', model: '', enabled: false, baseUrl: 'https://x/v1', executablePath: '' }] }),
     'n',
   );
   assert.ok(html.includes('Nothing to fill in yet'), 'a reviewer that does not run needs nothing');
@@ -258,7 +258,7 @@ test('the server line is body text, not a footnote', () => {
 test('claude is offered as a translator and as a reviewer preset', () => {
   assert.ok(panelHtml(state(), 'n').includes('Claude, a small model'));
   const claude = panelHtml(
-    state({ vendors: [{ id: 'claude', runtime: 'claude', model: 'haiku', enabled: true, baseUrl: '' }] }),
+    state({ vendors: [{ id: 'claude', runtime: 'claude', model: 'haiku', enabled: true, baseUrl: '', executablePath: '' }] }),
     'n',
   );
   assert.ok(claude.includes('value="haiku"'));

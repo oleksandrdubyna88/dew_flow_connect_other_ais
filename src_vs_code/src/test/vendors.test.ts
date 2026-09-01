@@ -56,7 +56,7 @@ test('a reviewer saved before the retirement is migrated, keeping its name', () 
   // The id is what names the row, the usage history and the vault key — migrating the RUNTIME
   // moves the vendor to the CLI Google pointed at; renaming it would orphan all three.
   const migrated = vendorsFrom([
-    { id: 'gemini', runtime: 'gemini', model: 'gemini-flash-latest', enabled: true, baseUrl: '' },
+    { id: 'gemini', runtime: 'gemini', model: 'gemini-flash-latest', enabled: true, baseUrl: '', executablePath: '' },
   ]);
 
   assert.equal(migrated[0]!.id, 'gemini');
@@ -69,7 +69,33 @@ test('a reviewer saved before the retirement is migrated, keeping its name', () 
 
 test('a vendor riding its own endpoint is never migrated', () => {
   const kept = vendorsFrom([
-    { id: 'mine', runtime: 'gemini', model: 'x', enabled: true, baseUrl: 'https://example.test/v1' },
+    { id: 'mine', runtime: 'gemini', model: 'x', enabled: true, baseUrl: 'https://example.test/v1', executablePath: '' },
   ]);
   assert.equal(kept[0]!.runtime, 'gemini', 'a base URL means the vendor is not Google’s at all');
+});
+
+// ---------- where a vendor's CLI actually is ----------
+
+test('a vendor carries the path to its own CLI', () => {
+  const stored = [{ id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '/home/jinx/.npm-global/bin/codex' }];
+
+  assert.equal(vendorsFrom(stored)[0]!.executablePath, '/home/jinx/.npm-global/bin/codex');
+});
+
+test('the path travels to the server, because PATH cannot always answer', () => {
+  // WSL is why: `codex` resolves there to the Windows npm shim on the interop PATH, which runs
+  // Linux node against a Windows install and dies. The native one is in ~/.npm-global/bin and
+  // nothing could point at it, so a WSL round failed whatever anybody configured.
+  const env = vendorsEnv([
+    { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '/usr/local/bin/codex' },
+  ]);
+
+  assert.ok(env.includes('/usr/local/bin/codex'), 'the server reads this list and nothing else');
+  assert.ok(env.includes('executablePath'), 'under the name the server parses');
+});
+
+test('an absent path stays absent rather than becoming an empty string the server must interpret', () => {
+  const env = JSON.parse(vendorsEnv([{ id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '' }])) as Record<string, string>[];
+
+  assert.equal(env[0]!['executablePath'], '');
 });

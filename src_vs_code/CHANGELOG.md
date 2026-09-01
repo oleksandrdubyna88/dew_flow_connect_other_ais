@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.17.0 — 2026-09-01
+
+**WSL works, and this is the release that makes it possible.** Three separate blockers, measured
+rather than assumed:
+
+- **Every reviewer row now has a CLI path field.** It had none, and the environment variable that
+  used to serve the purpose was read only in a branch the panel never uses — so from the moment
+  anybody opened this panel, saying WHERE a CLI lives was impossible. In WSL that is fatal: `codex`
+  and `gemini` resolve there to the WINDOWS npm shims through the interop PATH, which run Linux node
+  against a Windows install and die. Empty still means "look it up on PATH", which is right almost
+  everywhere.
+- **The install button offers only what a vendor itself publishes.** Codex, Gemini and Claude have
+  official npm packages and the button gives you the exact line. Antigravity does not: `agy` ships
+  with the Antigravity app and npm has no package for it. There IS a convenient `antigravity-cli`
+  snap at Google's own version — published by a third party — and it is deliberately NOT offered. A
+  button that installs software gets pressed without reading, so it may only ever offer an official
+  source, and a test now holds every command against that rule.
+- **On Linux, an Antigravity reviewer says so plainly** instead of reporting a missing file: Google
+  publishes no Linux CLI, so use codex or claude there — or, on WSL, point the reviewer's new CLI
+  path field at a Windows `agy.exe`, which does run through interop (measured).
+- **A round now tells you when a CLI is installed but not signed in.** A fresh codex answers with
+  five reconnect attempts and two 401s; nothing in that wall says to run its login. Same for a
+  directory the CLI has never been trusted in, which every review worktree is.
+
 ## 0.16.0 — 2026-09-01
 
 **The gate reads your project's own rules, and spends the first code round on nothing else.** Every

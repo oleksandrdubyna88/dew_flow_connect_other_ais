@@ -145,3 +145,49 @@ the retirement. Green health on a dead vendor is worse than no health at all —
 was still being spent on it a day later.
 
 A vendor with its own `baseUrl` is never migrated: that is not Google's CLI at all.
+
+### WSL, measured (2026-09-01)
+
+Three separate blockers, each of which alone made a WSL round impossible, and none of which the
+earlier "WSL works" reports had actually tested:
+
+1. **A vendor's executable path could not be set.** `COAI_EXE_<VENDOR>` was read in ONE branch of the
+   settings — the `COAI_PROVIDERS` fallback — and the panel always writes `COAI_VENDORS`. So the
+   moment anybody opened the panel, the only way to say WHERE a CLI lives stopped working. In WSL
+   that is fatal: `codex` and `gemini` resolve there to the **Windows npm shims** through the interop
+   PATH, which run Linux node against a Windows install and die on a missing native dependency. The
+   native Linux codex sits in `~/.npm-global/bin` and nothing could point at it. `VendorDto` carries
+   `executablePath` now, the env variable answers when the list does not, and the panel shows the
+   field for every vendor.
+2. **`npm install -g` fails as the ordinary user.** `npm prefix -g` is `/usr`, owned by root. The fix
+   is a user prefix (`npm config set prefix ~/.npm-global`), not sudo.
+3. **An installed CLI is not a signed-in CLI.** A fresh codex answers a review with five reconnect
+   attempts and two 401s, and nothing in that wall says to run its login. Three doors added to
+   `VendorDiagnosis`: the missing bearer, the bare 401, and the untrusted-directory refusal — that
+   last one matters because a review runs in a FRESH worktree every round, which is a directory
+   nobody has ever accepted a dialog for.
+
+**What works on Linux — and on WSL — today:** `claude` is native and answers (exit 0, measured).
+`codex` installs from its official npm package and needs one `codex login`. That is two independent
+reviewers, which is the minimum the product is built around.
+
+**Antigravity has no Linux CLI that Google publishes.** `agy` ships as a Go binary with the
+Antigravity app; `npm install -g antigravity` is a 404. A third party publishes an `antigravity-cli`
+snap at Google's own version, strictly confined; it was briefly offered by the install button and is
+now deliberately excluded — **official sources only**, an operator decision, pinned by a test over
+`OFFICIAL_SOURCES` because a button that installs software gets pressed without reading. So on a
+pure Linux box that vendor cannot review, and `VendorDiagnosis.ForRuntime` says exactly that rather
+than reporting a missing file.
+
+**On WSL there are two further routes, both measured.** The Windows `agy.exe` launches from WSL
+through interop (exit 0) — usable by putting its path in the vendor's CLI-path field, for a
+repository on a Windows drive. And the Windows `coai-mcp.exe` itself runs as the MCP server launched
+from a WSL client: `initialize` and `providers` both answered. That second route makes the
+already-signed-in Windows CLIs available to a WSL session with no Linux install at all; its limit is
+paths, since a Windows server needs Windows paths for the repository.
+
+**One unexplained observation, recorded rather than concluded:** in that interop run, the vendor whose
+runtime is `antigravity` reported `codex-cli` as its version, while `agy --version` on the same
+machine returns 1.1.23 and the same probe on Windows had reported 1.1.23 for it. Either the probe
+resolved the wrong executable or the reading was wrong; it has not been reproduced and is not yet a
+bug report.

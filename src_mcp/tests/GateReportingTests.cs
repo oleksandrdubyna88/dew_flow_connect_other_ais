@@ -218,4 +218,66 @@ public sealed class GateReportingTests
         RoundMachine.Resolve(ok.State, [], humanSaysProceed: true)
             .Should().BeOfType<Transition.Moved>().Which.State.Stage.Should().Be(Stage.CodeReview);
     }
+
+    // ---------- a CLI that is installed but not signed in ----------
+
+    /// <summary>
+    /// Measured in WSL: a freshly installed codex answers a review with five reconnect attempts and
+    /// two 401s, and nothing in that wall of text says the one thing a person needs to do.
+    /// </summary>
+    [Fact]
+    public void ACliThatIsNotSignedIn_SaysToSignIn_NotFiveReconnects()
+    {
+        const string stderr = """
+            401 Unauthorized: Missing bearer or basic authentication in header, url: wss://api.openai.com/v1/responses
+            ERROR: Reconnecting... 1/5
+            ERROR: Reconnecting... 5/5
+            ERROR: unexpected status 401 Unauthorized: Missing bearer or basic authentication in header
+            """;
+
+        var sentence = Sentence(new ReviewerOutcome.NonZeroExit(1, stderr));
+
+        sentence.Should().Contain("signed in").And.Contain("login");
+        sentence.Should().NotContain("Reconnecting", "the retries are the symptom, not the cure");
+    }
+
+    /// <summary>
+    /// Also measured in WSL: a directory the CLI has never been trusted in. It warned and answered
+    /// here, but a review runs in a FRESH worktree every round, which is a directory nobody has ever
+    /// accepted a dialog for.
+    /// </summary>
+    [Fact]
+    public void AnUntrustedWorkingDirectory_ForClaude_SaysWhatToAccept()
+    {
+        var sentence = Sentence(new ReviewerOutcome.NonZeroExit(1,
+            "This directory has not been trusted. Run Claude Code interactively here once and accept the trust dialog"));
+
+        sentence.Should().Contain("trust");
+    }
+
+    [Fact]
+    public void OnLinux_AnAntigravityVendor_SaysThereIsNoLinuxCli_AndWhatToUseInstead()
+    {
+        // Measured 2026-09-01: `agy` ships as a Go binary with the Antigravity app, npm has no
+        // package for it, and the only Linux package is a third-party repackaging the operator has
+        // ruled out. So on a Linux box this vendor cannot work, and "'agy' was not found on this
+        // machine" sends somebody hunting for an install that does not exist.
+        var sentence = Sentence(new ReviewerOutcome.NotStarted("'agy' was not found on this machine"));
+
+        sentence.Should().Contain("agy");
+    }
+
+    [Fact]
+    public void TheMissingLinuxCli_IsNamedAsAVendorFact_NotAsAMissingFile()
+    {
+        VendorDiagnosis.ForRuntime("antigravity", linux: true)
+            .Should().NotBeNull()
+            .And.Subject.As<string>().Should().Contain("no Linux CLI").And.Contain("codex");
+    }
+
+    [Fact]
+    public void OnWindows_AntigravityIsNotDiagnosedAsMissing_BecauseItWorksThere()
+    {
+        VendorDiagnosis.ForRuntime("antigravity", linux: false).Should().BeNull();
+    }
 }

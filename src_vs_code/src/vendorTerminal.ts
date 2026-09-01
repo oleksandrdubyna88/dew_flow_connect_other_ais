@@ -88,11 +88,16 @@ export function keyVariable(id: string): string {
  * paste one npm line is the kind of small friction that stops a reviewer being added at all.</p>
  */
 export interface VendorInstall {
-  /** The install command, or empty when this CLI is not installed by a command we can state. */
+  /**
+   * The install command for a shell-agnostic vendor, or empty when the shells differ.
+   *
+   * <p>They differ for exactly one vendor, and that is why the two fields below exist: `agy` has a
+   * snap package on Linux and nothing on Windows, where it ships with the Antigravity app.</p>
+   */
   readonly command: string;
-  /** The same command as PowerShell would run it. */
+  /** What PowerShell would run, or empty when there is nothing to run there. */
   readonly powershell: string;
-  /** The same command as bash would run it. */
+  /** What bash would run, or empty when there is nothing to run there. */
   readonly bash: string;
   /** Getting to the point where that command works — this is where the shells actually differ. */
   readonly prerequisite: { readonly powershell: string; readonly bash: string };
@@ -122,8 +127,12 @@ const DOCS: Record<string, string> = {
  * the one place somebody came to precisely because they did not know the answer.</p>
  */
 export function vendorInstall(vendor: Vendor): VendorInstall {
+  if (vendor.runtime === 'antigravity') {
+    return ANTIGRAVITY_INSTALL;
+  }
+
   const runtime = PACKAGE[vendor.runtime] !== undefined ? vendor.runtime : 'codex';
-  const command = vendor.runtime === 'antigravity' ? '' : `npm install -g ${PACKAGE[runtime]}`;
+  const command = `npm install -g ${PACKAGE[runtime]}`;
 
   return {
     command,
@@ -137,10 +146,45 @@ export function vendorInstall(vendor: Vendor): VendorInstall {
     },
     docs: DOCS[vendor.runtime] ?? DOCS['codex']!,
     note:
-      vendor.runtime === 'antigravity'
-        ? 'The Antigravity CLI (agy) ships with the Antigravity app rather than through npm — install the app, then sign in once.'
-        : vendor.baseUrl.length === 0
-          ? ''
-          : `${vendor.id} rides the Codex CLI against ${vendor.baseUrl}, so this installs codex.`,
+      vendor.baseUrl.length === 0
+        ? ''
+        : `${vendor.id} rides the Codex CLI against ${vendor.baseUrl}, so this installs codex.`,
   };
 }
+
+/**
+ * Antigravity: pointed at, never installed by a command from here.
+ *
+ * <p><b>Official sources only — an operator decision, and this is where it bites.</b> There IS a
+ * `antigravity-cli` snap for Linux, at the version Google ships, and it was briefly offered here.
+ * Its publisher is not Google: it is a third party repackaging the real CLI. A button that installs
+ * software is a button people press without reading, so it may only ever offer what the vendor
+ * itself publishes. `OFFICIAL_SOURCES` and the test over it are that rule in a form a future change
+ * cannot quietly break.</p>
+ *
+ * <p>So on Linux there is no command to give, because the vendor publishes none: `agy` ships as a
+ * Go binary with the Antigravity app, and `npm install -g antigravity` is a 404. The honest answer
+ * is the documentation, and — measured — the Windows `agy.exe` DOES launch from WSL through
+ * interop, so a Windows-side install plus the new CLI-path field is a real route for anyone whose
+ * repository lives on a Windows drive.</p>
+ */
+const ANTIGRAVITY_INSTALL: VendorInstall = {
+  command: '',
+  powershell: '',
+  bash: '',
+  prerequisite: {
+    powershell: 'install the Antigravity app; the CLI comes with it',
+    bash: 'install the Antigravity app on the Windows side — its agy.exe runs from WSL through interop',
+  },
+  docs: 'https://antigravity.google',
+  note:
+    'The Antigravity CLI has no install command from a source Google publishes: `agy` ships with the Antigravity app, and npm has no package for it. Install the app, then sign in once. On WSL its Windows agy.exe does run through interop — put its path in this reviewer\u2019s CLI path field.',
+};
+
+/**
+ * The only publishers an install command may come from.
+ *
+ * <p>One line per vendor, and nothing else is allowed — see the test. A third-party repackaging can
+ * be the most convenient thing on the machine and it still does not go behind a button.</p>
+ */
+export const OFFICIAL_SOURCES: readonly string[] = ['npm install -g @openai/', 'npm install -g @google/', 'npm install -g @anthropic-ai/'];

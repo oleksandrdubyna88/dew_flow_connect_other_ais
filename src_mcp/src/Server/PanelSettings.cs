@@ -173,7 +173,10 @@ public sealed record PanelSettings
     {
         if (env("COAI_VENDORS") is { Length: > 0 } json && ParseVendors(json) is { Count: > 0 } vendors)
         {
-            return this with { Providers = vendors };
+            // The env variable still answers for a vendor the list did not place. It predates the
+            // panel, it is what a scripted or containerised run has, and dropping it the moment a
+            // vendor list appeared is what made an executable path unsettable from either side.
+            return this with { Providers = [.. vendors.Select(v => WithExecutable(v, env))] };
         }
 
         var listed = env("COAI_PROVIDERS");
@@ -188,6 +191,16 @@ public sealed record PanelSettings
             .ToList();
         return this with { Providers = providers };
     }
+
+    /// <summary>Where this vendor's CLI is: the list first, then its own env variable.</summary>
+    private static ProviderSettings WithExecutable(ProviderSettings vendor, Func<string, string?> env) =>
+        vendor.ExecutablePath.Length > 0
+            ? vendor
+            : vendor with { ExecutablePath = env(ExecutableVariable(vendor.Provider)) ?? string.Empty };
+
+    /// <summary><c>my-claude</c> → <c>COAI_EXE_MY_CLAUDE</c>, the same derivation the key uses.</summary>
+    internal static string ExecutableVariable(string provider) =>
+        $"COAI_EXE_{provider.ToUpperInvariant().Replace('-', '_').Replace('.', '_')}";
 
     /// <summary>Malformed JSON is no configuration at all — the caller falls back rather than
     /// running a review with a vendor list somebody half-wrote.</summary>
@@ -205,6 +218,7 @@ public sealed record PanelSettings
                         Runtime = RuntimeOf(v.Runtime),
                         Model = v.Model?.Trim() ?? string.Empty,
                         BaseUrl = v.BaseUrl?.Trim() ?? string.Empty,
+                        ExecutablePath = v.ExecutablePath?.Trim() ?? string.Empty,
                     })];
         }
         catch (System.Text.Json.JsonException)

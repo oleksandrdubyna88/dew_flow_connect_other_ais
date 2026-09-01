@@ -107,10 +107,10 @@ public sealed class RoundAuditTests
             "codex",
             ReviewRole.PlanCritique,
             ReviewerState.Failed,
-            new ReviewerOutcome.NonZeroExit(1, "stream error: unexpected status 401 Unauthorized"),
+            new ReviewerOutcome.NonZeroExit(1, "stream error: the frobnicator is out of widgets"),
             TimeSpan.FromSeconds(42)));
 
-        _sink.All.Should().Contain("codex").And.Contain("401 Unauthorized").And.Contain("42");
+        _sink.All.Should().Contain("codex").And.Contain("frobnicator is out of widgets").And.Contain("42");
         _sink.Levels.Should().ContainSingle().Which.Should().Be(
             LogEventLevel.Warning, "a reviewer that did not review is what someone will search this log for");
     }

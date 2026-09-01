@@ -167,6 +167,15 @@ function vendorCard(vendor: Vendor, codexModels: readonly ModelChoice[]): string
     <div class="hint">Its OpenAI-compatible endpoint. The key for it lives in the vault entry under <code>${id}</code>.</div>
   </div>`;
 
+  // Shown for EVERY vendor, not only a custom endpoint. PATH is not always able to answer: in WSL
+  // `codex` and `gemini` resolve to the WINDOWS npm shims through the interop PATH and die on a
+  // missing Linux binary, and until this field existed nothing could point at the native one.
+  const executable = `
+  <div class="field">
+    <input type="text" data-setting="executablePath" data-vendor="${id}" title="${escapeHtml(HELP.vendorExecutablePath)}"
+           placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(vendor.executablePath)}">
+  </div>`;
+
   return `<div class="vendor">
   <div class="head">
     <input type="checkbox" id="v-${id}" data-setting="enabled" data-vendor="${id}"${vendor.enabled ? ' checked' : ''}
@@ -183,7 +192,7 @@ function vendorCard(vendor: Vendor, codexModels: readonly ModelChoice[]): string
       ${modelOptions(models, vendor.model)}
     </select>
     <div class="hint">${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(vendor.runtime, codexModels))}</div>
-  </div>${endpoint}
+  </div>${endpoint}${executable}
 </div>`;
 }
 

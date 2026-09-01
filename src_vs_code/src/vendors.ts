@@ -17,6 +17,16 @@ export interface Vendor {
   readonly enabled: boolean;
   /** OpenAI-compatible endpoint, for a vendor riding the Codex runtime. Empty = the CLI's own. */
   readonly baseUrl: string;
+  /**
+   * Where this vendor's CLI is. Empty = look it up on PATH.
+   *
+   * <p>PATH is not always able to answer, and WSL is the case that proves it: `codex` resolves
+   * there to the Windows npm shim on the interop PATH, which runs Linux node against a Windows
+   * install and dies on a missing native dependency. The native Linux one sits in
+   * `~/.npm-global/bin` and until this field existed nothing could point at it — so a WSL round
+   * failed every time, whatever anybody configured.</p>
+   */
+  readonly executablePath: string;
 }
 
 /** The model an Antigravity row starts on: flash at high effort, the CLI's own active model. */
@@ -32,8 +42,8 @@ export const ANTIGRAVITY_DEFAULT_MODEL = 'gemini-3.7-flash-high';
  * DEFAULTING to it are different changes, and only the first one had been made.</p>
  */
 export const DEFAULT_VENDORS: readonly Vendor[] = [
-  { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '' },
-  { id: 'antigravity', runtime: 'antigravity', model: ANTIGRAVITY_DEFAULT_MODEL, enabled: true, baseUrl: '' },
+  { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '' },
+  { id: 'antigravity', runtime: 'antigravity', model: ANTIGRAVITY_DEFAULT_MODEL, enabled: true, baseUrl: '', executablePath: '' },
 ];
 
 /**
@@ -52,6 +62,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     model: '',
     enabled: true,
     baseUrl: '',
+    executablePath: '',
   },
   {
     label: 'Antigravity (Google)',
@@ -61,6 +72,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     model: ANTIGRAVITY_DEFAULT_MODEL,
     enabled: true,
     baseUrl: '',
+    executablePath: '',
   },
   {
     label: 'Gemini (Google) — retired',
@@ -70,6 +82,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     model: '',
     enabled: true,
     baseUrl: '',
+    executablePath: '',
   },
   {
     label: 'Claude (a second one)',
@@ -79,6 +92,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     model: 'haiku',
     enabled: true,
     baseUrl: '',
+    executablePath: '',
   },
   {
     label: 'DeepSeek',
@@ -88,6 +102,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     model: 'deepseek-chat',
     enabled: true,
     baseUrl: 'https://api.deepseek.com/v1',
+    executablePath: '',
   },
   {
     label: 'OpenRouter',
@@ -97,6 +112,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     model: '',
     enabled: true,
     baseUrl: 'https://openrouter.ai/api/v1',
+    executablePath: '',
   },
   {
     label: 'Another OpenAI-compatible endpoint',
@@ -106,6 +122,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     model: '',
     enabled: true,
     baseUrl: '',
+    executablePath: '',
   },
 ];
 
@@ -126,6 +143,7 @@ export function vendorsFrom(value: unknown): Vendor[] {
       model: typeof v['model'] === 'string' ? v['model'].trim() : '',
       enabled: v['enabled'] !== false,
       baseUrl: typeof v['baseUrl'] === 'string' ? v['baseUrl'].trim() : '',
+      executablePath: typeof v['executablePath'] === 'string' ? v['executablePath'].trim() : '',
     }))
     .filter((v) => v.id.length > 0)
     .map(migrateRetired);
@@ -174,6 +192,12 @@ export function vendorsEnv(vendors: readonly Vendor[]): string {
   return JSON.stringify(
     vendors
       .filter((v) => v.enabled)
-      .map((v) => ({ id: v.id, runtime: v.runtime, model: v.model, baseUrl: v.baseUrl })),
+      .map((v) => ({
+        id: v.id,
+        runtime: v.runtime,
+        model: v.model,
+        baseUrl: v.baseUrl,
+        executablePath: v.executablePath,
+      })),
   );
 }

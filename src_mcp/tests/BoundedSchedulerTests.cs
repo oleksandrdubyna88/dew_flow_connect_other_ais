@@ -117,13 +117,13 @@ public sealed class BoundedSchedulerTests
         // person reads — dropped it. An exit code alone names no cure.
         var work = new List<ReviewerWork>
         {
-            new(FakeCliInvocations.Invoke("codex", ["stderr-exit", "stream error: unexpected status 401 Unauthorized", "1"])),
+            new(FakeCliInvocations.Invoke("codex", ["stderr-exit", "stream error: the frobnicator is out of widgets", "1"])),
         };
 
         var results = await new BoundedScheduler().RunAllAsync(work, _executor, TestContext.Current.CancellationToken);
 
         ReviewerSummaryFactory.From(results).Sentence
-            .Should().Contain("exit 1").And.Contain("401 Unauthorized");
+            .Should().Contain("exit 1").And.Contain("frobnicator is out of widgets");
     }
 
     [Fact]
