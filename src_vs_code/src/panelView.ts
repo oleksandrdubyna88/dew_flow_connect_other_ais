@@ -6,6 +6,7 @@ import { ROLES, promptsFor, selectedFor } from './prompts';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, WINDOWS, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerLines, RoundRecord, SessionFile, stageName } from './rounds';
 import { CliStatus, cliStatusNote, updateAvailable, UNKNOWN_CLI } from './cliVersions';
+import { ModelPrice } from './modelPrices';
 import { Vendor } from './vendors';
 
 /**
@@ -42,6 +43,14 @@ export interface PanelState {
   /** The newest published server version, or empty while it is unknown or unreachable. */
   readonly latestServerVersion: string;
   /**
+   * The published list price per MODEL id, for the models the vendors are set to.
+   *
+   * <p>Shown as the rate fields' placeholder and used for the money when they are empty. It is a
+   * LIST price, not a bill: reviews here run on a subscription, so this is what the tokens would
+   * have cost through an API. Anything typed wins over it.</p>
+   */
+  readonly modelPrices: Readonly<Record<string, ModelPrice>>;
+  /**
    * Each vendor's installed and published CLI version, by vendor id.
    *
    * <p>Absent, or both fields empty, is a legitimate answer — an offline machine, a CLI that is not
@@ -60,7 +69,7 @@ export interface PanelState {
  */
 export const OPEN_BY_DEFAULT: readonly string[] = [];
 
-export function panelHtml(state: PanelState, nonce: string): string {
+export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date.now()): string {
   const open = state.openSections.length === 0 ? OPEN_BY_DEFAULT : state.openSections;
   const body = [
     `<div id="live-questions">${questionsSection(state.questions)}</div>`,
@@ -71,7 +80,7 @@ export function panelHtml(state: PanelState, nonce: string): string {
     section('keys', 'Vendor keys', open, keysBody(state)),
     section('server', 'Server', open, serverBody(state)),
     section('usage', 'What each AI has used', open, usageBody(state)),
-    section('rounds', 'Recent rounds', open, `<div id="live-rounds">${roundsBody(state.sessions)}</div>`),
+    section('rounds', 'Recent rounds', open, `<div id="live-rounds">${roundsBody(state.sessions, nowMs)}</div>`),
   ].join('\n');
 
   return `<!DOCTYPE html>
@@ -158,6 +167,28 @@ ${body}
 </details>`;
 }
 
+/** A published rate in the box, greyed as a placeholder — visibly not somebody's own number. */
+function ratePlaceholder(perMillion: number | undefined): string {
+  return perMillion === undefined || perMillion <= 0 ? '—' : String(perMillion);
+}
+
+/**
+ * Where the number in the box came from, said out loud.
+ *
+ * <p>The distinction matters more than the number: a rate somebody typed is a fact about their
+ * account, and a public list price is what these tokens would have cost through an API. The panel
+ * must never let the second be mistaken for the first — which is the same reason the money it
+ * produces keeps its tilde.</p>
+ */
+function rateNote(model: string, price: ModelPrice | undefined): string {
+  if (price === undefined) {
+    return `What this vendor bills per million tokens, in and out. No public list prices ${model.length === 0 ? 'this model' : model}, so this one has to come from you.`;
+  }
+  const list = price.source === 'openrouter' ? "OpenRouter's model list" : "LiteLLM's public price file";
+
+  return `Empty uses the published list price for ${model} — $${price.inPerMillion} in / $${price.outPerMillion} out per million, from ${list}. That is what these tokens would cost through an API, not what you were billed: reviews here run on your subscription. Type a rate to use your own, per field.`;
+}
+
 /**
  * What a screen reader says, which cannot be a colour.
  *
@@ -171,11 +202,16 @@ function updateLabel(id: string, cli: CliStatus): string {
 }
 
 function reviewersBody(state: PanelState): string {
-  return `${state.vendors.map((v) => vendorCard(v, state.codexModels, state.cliStatus[v.id] ?? UNKNOWN_CLI)).join('\n')}
+  return `${state.vendors.map((v) => vendorCard(v, state.codexModels, state.cliStatus[v.id] ?? UNKNOWN_CLI, state.modelPrices[v.model])).join('\n')}
 <button class="add" data-command="addVendor" title="${escapeHtml(HELP.addVendor)}">＋&nbsp; Add a reviewer</button>`;
 }
 
-function vendorCard(vendor: Vendor, codexModels: readonly ModelChoice[], cli: CliStatus): string {
+function vendorCard(
+  vendor: Vendor,
+  codexModels: readonly ModelChoice[],
+  cli: CliStatus,
+  price: ModelPrice | undefined,
+): string {
   const id = escapeHtml(vendor.id);
   const models = modelsFor(vendor.runtime, codexModels, vendor.model);
   const endpoint =
@@ -199,12 +235,14 @@ function vendorCard(vendor: Vendor, codexModels: readonly ModelChoice[], cli: Cl
   <div class="field inline">
     ${labelled(`price-in-${id}`, '$ / 1M in', 'vendorPrice')}
     <input type="number" id="price-in-${id}" min="0" step="0.01" data-setting="pricePerMillionIn" data-vendor="${id}"
-           value="${vendor.pricePerMillionIn === 0 ? '' : vendor.pricePerMillionIn}" placeholder="—">
+           value="${vendor.pricePerMillionIn === 0 ? '' : vendor.pricePerMillionIn}"
+           placeholder="${ratePlaceholder(price?.inPerMillion)}" title="${escapeHtml(rateNote(vendor.model, price))}">
   </div>
   <div class="field inline">
     ${labelled(`price-out-${id}`, '$ / 1M out', 'vendorPrice')}
     <input type="number" id="price-out-${id}" min="0" step="0.01" data-setting="pricePerMillionOut" data-vendor="${id}"
-           value="${vendor.pricePerMillionOut === 0 ? '' : vendor.pricePerMillionOut}" placeholder="—">
+           value="${vendor.pricePerMillionOut === 0 ? '' : vendor.pricePerMillionOut}"
+           placeholder="${ratePlaceholder(price?.outPerMillion)}" title="${escapeHtml(rateNote(vendor.model, price))}">
   </div>`;
 
   return `<div class="vendor">
@@ -504,7 +542,11 @@ function total(billed: number | null, guessed: number | null): string {
 }
 
 function usageRows(state: PanelState): string {
-  const rows = totalsByVendor(within(state.usage, state.usageWindow, new Date()), state.vendors);
+  const rows = totalsByVendor(
+    within(state.usage, state.usageWindow, new Date()),
+    state.vendors,
+    (modelId) => state.modelPrices[modelId],
+  );
   if (rows.length === 0) {
     return '<div class="empty">Nothing recorded in this window yet.</div>';
   }
@@ -515,7 +557,10 @@ function usageRows(state: PanelState): string {
       const total = r.tokensIn + r.tokensOut;
       const failed = r.failed === 0 ? '' : ` · <span class="warn">${r.failed} failed</span>`;
       return `<div class="spend">
-  <div class="head"><span class="name">${escapeHtml(r.provider)}</span><span class="cost">${spend(r)}</span></div>
+  <div class="head"><span class="name">${escapeHtml(r.provider)}</span><span class="cost">${spend(r)}</span>
+    <button class="link forget" data-command="forgetUsage" data-id="${escapeHtml(r.provider)}"
+            title="Clear ${escapeHtml(r.provider)}'s recorded runs from this chart. Nothing is deleted from the ledger — the row simply stops counting what is already there, and comes back the next time this vendor runs."
+            aria-label="Forget ${escapeHtml(r.provider)}'s recorded spending">✕</button></div>
   <div class="bar"><span style="width:${barWidth(total, busiest)}%"></span></div>
   <div class="figures">${shortNumber(r.tokensIn)} in · ${shortNumber(r.tokensOut)} out · ${r.runs} run(s)${failed}</div>
   <div class="hint">${shortDuration(r.seconds)} total · ${shortDuration(r.averageSeconds)} average</div>
@@ -539,14 +584,35 @@ function usageRows(state: PanelState): string {
 <div class="hint total">All vendors: ${shortNumber(all.tokens)} tokens · ${total(all.cost, all.guess)} · ${shortDuration(all.seconds)}</div>`;
 }
 
+/** How far back this section looks. A window a person can hold in their head: three days. */
+const RECENT_HOURS = 72;
+
+/**
+ * The rounds of the last {@link RECENT_HOURS}, newest first, however many that is.
+ *
+ * <p>It was the six newest whatever their age, and both halves of that were wrong: a quiet week left
+ * last month on screen looking current, and a busy afternoon hid the morning. A window answers
+ * "what has been happening" — which is the question the section is for — and the list scrolls
+ * instead of pushing everything below it off the panel.</p>
+ *
+ * <p>A round still RUNNING is always shown. It has no completion time to compare, and it is the one
+ * row somebody is actually waiting on.</p>
+ */
 function roundsBody(sessions: readonly SessionFile[], nowMs: number = Date.now()): string {
-  const rounds = sessions
-    .flatMap((s) => s.rounds.map((r) => ({ branch: s.state.branch, ...r })))
-    .sort((a, b) => Number(isRunning(b)) - Number(isRunning(a)) || b.completedUtc.localeCompare(a.completedUtc))
-    .slice(0, 6);
+  const all = sessions.flatMap((s) => s.rounds.map((r) => ({ branch: s.state.branch, ...r })));
+  const since = new Date(nowMs - RECENT_HOURS * 60 * 60 * 1000).toISOString();
+  const rounds = all
+    .filter((r) => isRunning(r) || r.completedUtc > since)
+    .sort((a, b) => Number(isRunning(b)) - Number(isRunning(a)) || b.completedUtc.localeCompare(a.completedUtc));
   if (rounds.length === 0) {
-    return '<div class="empty">No rounds yet.</div>';
+    // Two different empty states, because they mean different things: nothing has ever run, or
+    // nothing has run lately. A view that says "no rounds yet" to somebody with a month of history
+    // is telling them their work is gone.
+    return all.length === 0
+      ? '<div class="empty">No rounds yet.</div>'
+      : `<div class="empty">Nothing in the last ${RECENT_HOURS} hours. Older rounds are in <b>Show review rounds</b>.</div>`;
   }
+
   return rounds.map((r) => roundCard(r, nowMs)).join('\n');
 }
 
@@ -716,14 +782,6 @@ const CSS = `
   /* The install button sits beside ▶ and is deliberately quieter: it is the thing you press
      once, on a machine that does not have the CLI yet. */
   .vendor .head .get { font-size: 11px; }
-  /* The update button says, by its colour, whether there is anything to do — which is the question
-     somebody actually has, and the one they used to answer by leaving the panel. Grey is the
-     resting state AND the "could not tell" state: a button that lights up because a fetch failed
-     would be worse than one that never lights up. */
-  .vendor .head .upd { font-size: 12px; color: var(--vscode-descriptionForeground); }
-  .vendor .head .upd.has-update { color: var(--vscode-charts-green); font-weight: 600; }
-  .vendor .head .upd:hover { border-color: var(--vscode-descriptionForeground); }
-  .vendor .head .upd.has-update:hover { border-color: var(--vscode-charts-green); }
   .vendor .head .run {
     flex: 0 0 auto; width: auto; margin: 0 auto; padding: 1px 8px; line-height: 1.2;
     background: none; color: var(--vscode-charts-green); font-size: 13px;
@@ -731,6 +789,21 @@ const CSS = `
   }
   .vendor .head .run:hover {
     background: var(--vscode-toolbar-hoverBackground); border-color: var(--vscode-charts-green);
+  }
+  /* The update button says, by its colour, whether there is anything to do — which is the question
+     somebody actually has, and the one they used to answer by leaving the panel. Grey is the
+     resting state AND the "could not tell" state: a button that lights up because a fetch failed
+     would be worse than one that never lights up.
+
+     These sit AFTER the .run:hover rule on purpose. They have the same specificity as it, so
+     earlier they lost: .run:hover paints a green border, hovering is how a tooltip gets read, and every
+     up-to-date button therefore turned green the moment anybody looked at it. Reported against
+     0.20.0 within the hour. */
+  .vendor .head .upd { font-size: 12px; color: var(--vscode-descriptionForeground); }
+  .vendor .head .upd:hover { border-color: var(--vscode-descriptionForeground); background: none; }
+  .vendor .head .upd.has-update { color: var(--vscode-charts-green); font-weight: 600; }
+  .vendor .head .upd.has-update:hover {
+    border-color: var(--vscode-charts-green); background: var(--vscode-toolbar-hoverBackground);
   }
   .question {
     border-left: 3px solid var(--vscode-inputValidation-warningBorder);
@@ -744,6 +817,9 @@ const CSS = `
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .usage { font-size: 11px; opacity: .7; margin: 0 0 4px; }
+  /* Three days of rounds is a list of unknown length inside a sidebar section, so it scrolls in
+     place rather than pushing every section below it off the bottom of the panel. */
+  #live-rounds { max-height: 320px; overflow-y: auto; }
   .reviewer { font-size: 11px; opacity: .85; margin: 1px 0 1px 8px; }
   .badge { padding: 0 5px; border-radius: 8px; font-size: 10px; font-weight: 600; }
   .badge.running { background: var(--vscode-charts-green); color: var(--vscode-editor-background); }
@@ -793,6 +869,8 @@ const CSS = `
   .spend .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
   /* The money is the quiet half of the row: a dash where a vendor does not price its own runs. */
   .spend .cost { font-size: 11px; opacity: .75; flex: 0 0 auto; }
+  .spend .forget { flex: 0 0 auto; padding: 0 2px; font-size: 11px; opacity: .55; }
+  .spend .forget:hover { opacity: 1; color: var(--tone-keys); }
   /* The tokens are what the section is FOR, so they are read at full strength; the durations
      underneath stay a .hint, because they are context rather than the answer. */
   .spend .figures { font-size: 11px; margin: 3px 0 0; line-height: 1.45; }
@@ -841,6 +919,7 @@ export const PANEL_COMMANDS = [
   'usageWindow',
   'installVendorCli',
   'updateVendorCli',
+  'forgetUsage',
   // Posted by the model picker rather than by a button: "another model…" is a request to type one.
   'customModel',
 ] as const;

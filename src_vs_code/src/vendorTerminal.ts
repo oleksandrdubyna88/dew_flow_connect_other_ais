@@ -37,6 +37,54 @@ const EXECUTABLE: Record<string, string> = {
 };
 
 /**
+ * How to bring a vendor's CLI up to date — its OWN command, verified one by one.
+ *
+ * <p>Two of them can update themselves and two cannot, and the difference is not guessable:</p>
+ *
+ * <ul>
+ *   <li><b>claude</b>: `claude update`, which Anthropic's docs call "apply an update immediately".</li>
+ *   <li><b>antigravity</b>: `agy update`. <b>This one was got wrong first.</b> `agy --help` lists
+ *       four subcommands and update is not among them, so it was written down as "no update
+ *       subcommand at all" — in a comment, a changelog, a plan and a module doc. The command exists
+ *       and answers; the help output is incomplete. Running it costs a second, and inferring its
+ *       absence from a list cost a wrong claim in four places.</li>
+ *   <li><b>codex</b>: no update subcommand in the full `codex --help`, and OpenAI's own quickstart
+ *       prints the same line under <i>Install Codex</i> and <i>Update Codex</i> — so re-running the
+ *       installer IS the update here.</li>
+ *   <li><b>gemini</b>: `npm install -g @google/gemini-cli@latest`, from its README.</li>
+ * </ul>
+ *
+ * <p>A vendor whose CLI path is set gets that path, not the bare name: the update must touch the
+ * binary the reviews actually run.</p>
+ */
+export function vendorUpdate(vendor: Vendor, platform: Platform): VendorInstall {
+  const self = SELF_UPDATE[vendor.runtime];
+  if (self !== undefined) {
+    return {
+      command: `${quoteIfNeeded(executableFor(vendor))} ${self}`,
+      prerequisite: '',
+      docs: DOCS[vendor.runtime] ?? DOCS['codex']!,
+      note: '',
+    };
+  }
+  const install = vendorInstall(vendor, platform);
+  const npmPackage = PACKAGE[vendor.runtime];
+
+  // npm installs the newest by default, but `@latest` says so out loud in a command somebody is
+  // about to read before pressing Enter — and it is the line Google's and Anthropic's own docs
+  // print for updating.
+  return npmPackage === undefined
+    ? install
+    : { ...install, command: `npm install -g ${npmPackage}@latest` };
+}
+
+/** The vendors whose CLI updates ITSELF, and the subcommand that does it. */
+const SELF_UPDATE: Record<string, string> = {
+  claude: 'update',
+  antigravity: 'update',
+};
+
+/**
  * Which binary this vendor actually is, on this machine.
  *
  * <p>A CLI path somebody set wins over the runtime's default name. The whole point of that field is

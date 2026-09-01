@@ -106,7 +106,11 @@ export function within(entries: readonly UsageEntry[], window: Window, now: Date
 }
 
 /** Per vendor, biggest spender first — the row order a person actually scans for. */
-export function totalsByVendor(entries: readonly UsageEntry[], vendors: readonly Vendor[] = []): VendorTotals[] {
+export function totalsByVendor(
+  entries: readonly UsageEntry[],
+  vendors: readonly Vendor[] = [],
+  listed: PriceLookup = () => undefined,
+): VendorTotals[] {
   const byProvider = new Map<string, UsageEntry[]>();
   for (const e of entries) {
     byProvider.set(e.provider, [...(byProvider.get(e.provider) ?? []), e]);
@@ -119,7 +123,7 @@ export function totalsByVendor(entries: readonly UsageEntry[], vendors: readonly
       const tokensIn = sum(rows.map((r) => r.tokensIn));
       const tokensOut = sum(rows.map((r) => r.tokensOut));
       const reported = priced.length === 0 ? null : sum(priced.map((r) => r.costUsd as number));
-      const price = priceOf(provider, vendors);
+      const price = priceOf(provider, vendors, listed);
       return {
         provider,
         runs: rows.length,
@@ -195,14 +199,30 @@ export function barWidth(value: number, max: number): number {
 export function priceOf(
   provider: string,
   vendors: readonly Vendor[],
+  listed: PriceLookup = () => undefined,
 ): { readonly in: number; readonly out: number } | undefined {
   const vendor = vendors.find((v) => v.id === provider);
-  if (vendor === undefined || (vendor.pricePerMillionIn === 0 && vendor.pricePerMillionOut === 0)) {
+  if (vendor === undefined) {
     return undefined;
   }
+  // A TYPED rate is a fact about this account — a flat subscription, a negotiated rate, a free
+  // tier — and a published list price is a general estimate. The specific statement wins over the
+  // general one, per field: somebody who filled in only the input rate keeps it, and the output
+  // rate falls back rather than the whole vendor going dark.
+  const published = listed(vendor.model);
+  const inRate = vendor.pricePerMillionIn > 0 ? vendor.pricePerMillionIn : (published?.inPerMillion ?? 0);
+  const outRate = vendor.pricePerMillionOut > 0 ? vendor.pricePerMillionOut : (published?.outPerMillion ?? 0);
 
-  return { in: vendor.pricePerMillionIn, out: vendor.pricePerMillionOut };
+  return inRate === 0 && outRate === 0 ? undefined : { in: inRate, out: outRate };
 }
+
+/**
+ * What a model costs per million tokens according to a public list, or nothing.
+ *
+ * <p>A function rather than a table so this file stays free of the fetching: the panel holds the
+ * lists, `usage.ts` holds the arithmetic, and a test can answer for one model without a network.</p>
+ */
+export type PriceLookup = (modelId: string) => { inPerMillion: number; outPerMillion: number } | undefined;
 
 /** An estimate, marked as one. The tilde is the whole point: this is not what anybody billed. */
 export function estimated(usd: number): string {

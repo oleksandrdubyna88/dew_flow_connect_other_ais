@@ -42,6 +42,7 @@ function html(vendors: readonly Vendor[], cliStatus: Record<string, CliStatus>):
     usage: [],
     usageWindow: 'week',
     cliStatus,
+    modelPrices: {},
   }, 'nonce');
 }
 

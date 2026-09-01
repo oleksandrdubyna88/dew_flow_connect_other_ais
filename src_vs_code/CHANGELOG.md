@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.21.0 — 2026-09-01
+
+**The review gate says out loud that it is ADDITIONAL.** The `feature-dev` plugin's quality phase
+launches three Claude reviewers in parallel at exactly the moment the CLAUDE.md snippet says to call
+`review_code` — and nothing in that snippet forbade the phase or protected it. Between a numbered
+CONTRACT that "the server enforces" and one phase of a workflow, the emphatic text wins, so this one
+now says what it means: run your own reviewers exactly as you would have, start them and this gate at
+the same time, and neither replaces the other. Your reviewers read the whole change with the
+repository in context; this gate asks a different vendor's model the questions your own model is
+worst placed to answer. The same sentence is in the server's advertised instructions, which reach
+every client whether or not anybody pasted the snippet. A `call_human` verdict stops the SHIPPING,
+not the task.
+
+**The snippet also shipped one paragraph twice**, verbatim. Everybody who pasted it got it twice. A
+test now fails when any paragraph appears more than once.
+
+**A model's price is looked up instead of typed.** The two rate fields were empty on every machine
+this shipped to, so the money column was dashes — and both public price sources turn out to carry
+every model this build offers: OpenRouter's model list, and LiteLLM's price file for the models
+OpenRouter does not list. The published rate shows as the field's placeholder and feeds the money
+when the field is empty; anything typed wins over it, per field. It is a LIST price, not a bill —
+reviews run on your subscription — so it keeps the tilde that already means "worked out, not
+charged", and the tooltip names which list it came from.
+
+**`agy update` exists, and this product said it did not.** `agy --help` lists four subcommands and
+update is not among them; the command works. It went into a comment, a changelog, a plan and a module
+doc as "no update subcommand at all" — inferred from an incomplete list instead of run. The update
+button now uses each vendor's own command, verified one at a time: `claude update`, `agy update`,
+and re-installing for codex and gemini, which is what their own docs prescribe.
+
+**Two defects in the update button, reported within the hour of 0.20.0.** It looked green on an
+up-to-date CLI — not the state logic but the HOVER: `.upd` inherits `.run`, whose hover paints a
+green border, and the grey rule sat earlier at equal specificity. Hovering is how you read a tooltip,
+so the wrong colour was the only colour anybody saw. And codex reported "could not be read" on a
+machine where `codex --version` answers: on Windows an npm global is a `.cmd` shim and `spawn`
+without a shell does no PATHEXT resolution.
+
+**Recent rounds is a 72-hour window that scrolls**, rather than the six newest whatever their age —
+a quiet week left last month on screen looking current, and a busy afternoon hid the morning. A round
+still running is always shown. The rounds markdown file gained a **When** column and sorts newest
+first; an undated round sorts last rather than floating to the top.
+
+**A vendor's spending row can be forgotten**, after a confirmation. It clears the counters without
+touching the ledger on disk — a watermark on this side, not a rewrite of a file the server is
+appending to — so nothing is destroyed and the row returns the next time that vendor runs.
+
 ## 0.20.0 — 2026-09-01
 
 **Every reviewer row has an update button, and it says by its colour whether there is anything to

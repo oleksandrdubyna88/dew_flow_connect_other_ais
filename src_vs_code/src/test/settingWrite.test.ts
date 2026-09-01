@@ -62,6 +62,7 @@ test('no control that writes a role-keyed setting is labelled as a vendor', () =
     usage: [],
     usageWindow: 'week',
     cliStatus: {},
+    modelPrices: {},
   }, 'nonce');
 
   const roleKeyed = [...html.matchAll(/data-setting="(rounds|thresholds)"[^>]*/g)].map((m) => m[0]);
@@ -92,6 +93,7 @@ test('every role id the panel writes to is a role, and no vendor shares the name
     usage: [],
     usageWindow: 'week',
     cliStatus: {},
+    modelPrices: {},
   }, 'nonce');
 
   const roles = new Set([...html.matchAll(/data-role="([^"]+)"/g)].map((m) => m[1]!));
@@ -132,6 +134,7 @@ test('the number of prompt pickers follows that role\u2019s rounds', () => {
       usage: [],
       usageWindow: 'week',
     cliStatus: {},
+    modelPrices: {},
     }, 'nonce');
 
   const pickers = (page: string, role: string): number =>

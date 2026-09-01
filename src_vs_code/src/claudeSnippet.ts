@@ -15,7 +15,15 @@ export function claudeSnippet(): string {
   return `## Multi-model review gate (ConnectOtherAIs)
 
 This repository is reviewed by OTHER vendors' models before and after implementation, through the
-\`coai\` MCP server. The tools are \`mcp__coai__providers\`, \`mcp__coai__open\`,
+\`coai\` MCP server.
+
+**This is IN ADDITION to your own review, never instead of it.** If your workflow ends a task by
+launching your own reviewers — the way \`feature-dev\`'s quality phase launches three in parallel —
+run them exactly as you would have. Start them and this gate AT THE SAME TIME: a code round is
+minutes of somebody else's CLI, and there is nothing to wait for. They are not substitutes for each
+other and that is the entire point: your reviewers read the whole change with this repository in
+context, and this gate asks a different vendor's model the questions your own model is worst placed
+to answer. Dropping either half saves time by discarding the half you did not measure. The tools are \`mcp__coai__providers\`, \`mcp__coai__open\`,
 \`mcp__coai__review_plan\`, \`mcp__coai__review_code\`, \`mcp__coai__resolve\`,
 \`mcp__coai__status\` and \`mcp__coai__ask_human\`.
 
@@ -49,20 +57,13 @@ has reached \`proceed\`.**
    \`baseRef\`. The plan you passed at step 2 is kept with the session and reused automatically,
    so in the normal flow this costs you nothing.
 
-   **A code round is never given a bare diff.** \`planText\` is the SCOPE — what this change was
-   supposed to achieve — and the server refuses a code round without one. A reviewer holding only a
-   diff can judge whether the code is defensible; it cannot judge whether the code is what was
-   ASKED for, and those come apart constantly: a change can be well written, well tested, and solve
-   the wrong problem. Only the second question catches that.
-
-   So the scope must say the symptom or goal, what must be true when it is done, and the
-   constraints — not a commit subject. Reviewing an EXISTING commit works the same way: state what
-   that commit was supposed to do as the scope, pass the commit as \`branch\` and its parent as
-   \`baseRef\`. The plan you passed at step 2 is kept with the session and reused automatically,
-   so in the normal flow this costs you nothing.
 6. Verdict \`call_human\` → surface the open findings to the person and stop.
    **Do not proceed on your own judgement.** Verdict \`escalated\` → apply the named step and run
    a fresh round.
+
+   "Stop" here means stop SHIPPING over open findings — it does not end the task. Your own review,
+   your summary, and anything else your workflow does still run: this gate decides whether the
+   change may proceed, not what else you owe the person.
 
 Report the verdicts and the reviewer counts in your summary. A round that ran with four of six
 reviewers says so — pass that on rather than implying a full panel agreed.

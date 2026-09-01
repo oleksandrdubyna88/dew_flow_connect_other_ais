@@ -129,9 +129,11 @@ export function renderSession(session: SessionFile, nowMs: number = Date.now()):
   // into two different stories — `PlanReview` here and `plan review` there, a subject in one and
   // none in the other — and a person comparing them asked which was right, which is the only
   // sensible response to a product that says two things about one round.
-  const rows = session.rounds
+  const rows = [...session.rounds]
+    .sort((a, b) => whenOf(b).localeCompare(whenOf(a)))
     .map((r) =>
       row([
+        whenCell(r),
         stageName(r.stage),
         String(r.number),
         r.subject ?? '',
@@ -154,6 +156,7 @@ export function renderSession(session: SessionFile, nowMs: number = Date.now()):
 
 /** The columns, once. The header and the delimiter are both BUILT from this. */
 const COLUMNS: readonly string[] = [
+  'When',
   'Stage',
   'Round',
   'What',
@@ -164,6 +167,30 @@ const COLUMNS: readonly string[] = [
   'Tokens · cost',
   'Reviewers',
 ];
+
+/**
+ * When a round happened, for sorting: its completion, or its start while it is still running.
+ *
+ * <p>An unknown time sorts LAST rather than first, which is why it is an empty string and the sort
+ * is descending. Files written by an older server have no `startedUtc`, and a round with no time
+ * must not float to the top of a table whose whole promise is that the top row is the newest.</p>
+ */
+function whenOf(round: RoundRecord): string {
+  return round.completedUtc.length > 0 ? round.completedUtc : (round.startedUtc ?? '');
+}
+
+/**
+ * The date and time as a person reads them: `2026-09-01 14:05`, UTC, seconds dropped.
+ *
+ * <p>Seconds are noise in a table of rounds that take minutes. The `T` and the `Z` go with them:
+ * this is a column to scan, not a timestamp to parse. A round with no time at all gets a dash —
+ * an empty cell in the column everything is sorted by is the one row a reader cannot place.</p>
+ */
+function whenCell(round: RoundRecord): string {
+  const when = whenOf(round);
+
+  return when.length === 0 ? '—' : when.slice(0, 16).replace('T', ' ');
+}
 
 /**
  * One table row, and it is one LINE.

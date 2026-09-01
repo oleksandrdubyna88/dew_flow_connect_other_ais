@@ -144,6 +144,24 @@ export async function latestCliVersion(source: VersionSource): Promise<string> {
   }
 }
 
+/**
+ * The names to try when asking a CLI its version, in order.
+ *
+ * <p>On Windows an npm global is a `.cmd` shim — `codex` is `codex.cmd` — and `spawn` without a
+ * shell does no PATHEXT resolution, so a bare name finds nothing. The panel reported "could not be
+ * read" for a CLI that answers perfectly from a terminal, which is the same trap this project met
+ * driving vendor CLIs from code: on Windows, PATHEXT is yours to apply.</p>
+ *
+ * <p>A path that already names its extension is left alone: it is an answer, not a guess.</p>
+ */
+export function versionProbeCandidates(executable: string, platform: Platform): string[] {
+  if (platform !== 'win32' || /\.[a-z]{2,4}$/i.test(executable)) {
+    return [executable];
+  }
+
+  return [`${executable}.cmd`, `${executable}.exe`, executable];
+}
+
 /** What the panel shows for one vendor's CLI. Both empty means "could not tell", which is grey. */
 export interface CliStatus {
   readonly installed: string;

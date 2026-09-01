@@ -16,13 +16,31 @@ import {
   CliStatus,
   latestCliVersion,
   parseCliVersion,
+  versionProbeCandidates,
   versionSourceFor,
 } from './cliVersions';
 import { latestServerVersion } from './installer';
+import {
+  fetchTable,
+  LITELLM_PRICES,
+  liteLlmTable,
+  ModelPrice,
+  OPENROUTER_MODELS,
+  openRouterTable,
+  PriceTable,
+  priceFor,
+} from './modelPrices';
 import { serverSettingsJson } from './serverSettingsFile';
 import { roleRecordUpdate, SettingMessage, settingsFrom, settingWrite } from './settingsShape';
 import { normaliseId, Vendor, VENDOR_PRESETS, vendorsFrom } from './vendors';
-import { executableFor, Platform, vendorInstall, vendorTerminal } from './vendorTerminal';
+import {
+  executableFor,
+  Platform,
+  VendorInstall,
+  vendorInstall,
+  vendorTerminal,
+  vendorUpdate,
+} from './vendorTerminal';
 
 /**
  * The sidebar panel: reviewers, language, the gate, the limits, and what is waiting on you.
@@ -56,6 +74,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   /** Each vendor's installed and published CLI version, and when they were last read. */
   private cliStatus: Record<string, CliStatus> = {};
   private cliCheckedAt = 0;
+  /** The two public price lists, and when they were last fetched. */
+  private openRouterPrices: PriceTable = {};
+  private liteLlmPrices: PriceTable = {};
+  private pricesCheckedAt = 0;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -112,10 +134,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       questions: this.watcher.openQuestions,
       openSections: this.openSections,
       sessions: await this.readSessions(),
-      usage: await this.readUsage(),
+      usage: this.remembered(await this.readUsage()),
       usageWindow: this.usageWindow,
       latestServerVersion: await this.publishedVersion(),
       cliStatus: await this.vendorCliStatus(vendors),
+      modelPrices: await this.modelPrices(vendors),
     };
 
     // Two update paths, and which one runs is the whole fix for the pickers.
@@ -136,6 +159,98 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
 
     void this.view.webview.postMessage({ type: 'live', ...liveRegions(state) });
+  }
+
+  /**
+   * The published list price of every model the vendors are currently set to.
+   *
+   * <p>Once a day: a price list does not move faster than that, and the two files are large —
+   * OpenRouter answered with 419 models and LiteLLM with 3408 entries when this was written. Only
+   * the models actually in use are kept, so the panel carries a handful of numbers rather than a
+   * catalogue.</p>
+   *
+   * <p>Both fail silently to an empty table. A machine with no network shows the same panel it
+   * always showed, with dashes where the prices would be — which is exactly what it showed before
+   * this existed.</p>
+   */
+  private async modelPrices(vendors: readonly Vendor[]): Promise<Record<string, ModelPrice>> {
+    const A_DAY = 24 * 60 * 60 * 1000;
+    if (Date.now() - this.pricesCheckedAt > A_DAY) {
+      this.pricesCheckedAt = Date.now();
+      [this.openRouterPrices, this.liteLlmPrices] = await Promise.all([
+        fetchTable(OPENROUTER_MODELS, openRouterTable),
+        fetchTable(LITELLM_PRICES, liteLlmTable),
+      ]);
+    }
+
+    const prices: Record<string, ModelPrice> = {};
+    for (const vendor of vendors) {
+      if (vendor.model.length === 0) {
+        continue; // "the CLI's default" — we do not know which model that is, so we do not guess
+      }
+      const price = priceFor(vendor.model, this.openRouterPrices, this.liteLlmPrices);
+      if (price !== undefined) {
+        prices[vendor.model] = price;
+      }
+    }
+
+    return prices;
+  }
+
+  /**
+   * Clear one vendor's recorded runs from the spending chart, after asking.
+   *
+   * <p><b>A watermark, never a rewrite of the ledger.</b> The server appends to `usage.jsonl` while
+   * this panel is open, so filtering that file and writing it back would race a round finishing
+   * mid-write — and a spending record is exactly the kind of file that must not lose rows to a UI
+   * action. What is stored here is "ignore anything this vendor recorded at or before this instant".
+   * Nothing is destroyed, the ledger stays the server's, and the row returns the next time the
+   * vendor runs because that entry's timestamp is later.</p>
+   *
+   * <p>Modal, because it is not reversible from the panel and the number it clears is the only
+   * record of what a month cost.</p>
+   */
+  private async forgetUsage(provider: string): Promise<void> {
+    const forget = 'Forget';
+    const answer = await vscode.window.showWarningMessage(
+      `Clear ${provider}'s recorded runs from the spending chart?`,
+      {
+        modal: true,
+        detail:
+          'The chart stops counting what this vendor has recorded so far. Nothing is deleted from '
+          + 'the ledger on disk, and the row comes back the next time this vendor runs.',
+      },
+      forget,
+    );
+    if (answer !== forget) {
+      return;
+    }
+
+    const marks = { ...this.forgottenBefore(), [provider]: new Date().toISOString() };
+    await this.context.globalState.update('coai.usageForgottenBefore', marks);
+    await this.render();
+  }
+
+  /**
+   * The ledger minus what has been forgotten.
+   *
+   * <p>Applied on READ so the file is never touched: an entry recorded at or before a vendor's
+   * watermark is not counted, and everything after it is. That is what makes the row come back on
+   * its own — there is no state to reset, only a timestamp the next run is later than.</p>
+   */
+  private remembered(entries: readonly UsageEntry[]): UsageEntry[] {
+    const marks = this.forgottenBefore();
+
+    return entries.filter((e) => {
+      const mark = marks[e.provider];
+
+      return mark === undefined || e.utc > mark;
+    });
+  }
+
+  /** Per vendor, the instant before which its recorded runs are not counted. */
+  private forgottenBefore(): Record<string, string> {
+    return this.context.globalState.get<Record<string, string>>('coai.usageForgottenBefore') ?? {};
   }
 
   /**
@@ -188,27 +303,17 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return '';
     }
 
-    return new Promise((resolve) => {
-      // A CLI that hangs must not hold up a repaint, so the wait is short and its failure is the
-      // same "could not tell" every other failure here produces.
-      const child = spawn(executable, ['--version'], { shell: false });
-      const timer = setTimeout(() => {
-        child.kill();
-        resolve('');
-      }, 8000);
-      let output = '';
-      child.stdout?.on('data', (chunk: Buffer) => {
-        output += chunk.toString();
-      });
-      child.on('error', () => {
-        clearTimeout(timer);
-        resolve('');
-      });
-      child.on('close', () => {
-        clearTimeout(timer);
-        resolve(parseCliVersion(output));
-      });
-    });
+    // On Windows the answer is usually `codex.cmd`, so the candidates are tried in order and the
+    // first that ANSWERS wins. A name that does not exist fails immediately with ENOENT, so this
+    // costs nothing when the first one is right.
+    for (const candidate of versionProbeCandidates(executable, platform())) {
+      const version = await askVersion(candidate);
+      if (version.length > 0) {
+        return version;
+      }
+    }
+
+    return '';
   }
 
   /**
@@ -250,6 +355,26 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * publish gets its documentation opened instead of a command that would fail.</p>
    */
   private async installVendorCli(id: string): Promise<void> {
+    await this.openCliTerminal(id, 'install', vendorInstall);
+  }
+
+  /**
+   * The vendor's own update command, in a terminal, typed and waiting.
+   *
+   * <p>Not always the install command: `claude update` and `agy update` update themselves, while
+   * codex and gemini are updated by installing again. Which is which is in {@link vendorUpdate},
+   * verified per vendor — `agy update` was written down as not existing because `agy --help` does
+   * not list it, and it exists.</p>
+   */
+  private async updateVendorCli(id: string): Promise<void> {
+    await this.openCliTerminal(id, 'update', vendorUpdate);
+  }
+
+  private async openCliTerminal(
+    id: string,
+    verb: 'install' | 'update',
+    commandFor: (vendor: Vendor, platform: Platform) => VendorInstall,
+  ): Promise<void> {
     const vendor = vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors')).find((v) => v.id === id);
     if (vendor === undefined) {
       return;
@@ -258,7 +383,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // `process.platform` is the extension HOST's platform, which is the one that matters: in a
     // VS Code window connected to WSL it is 'linux', whatever the machine's badge says, and the
     // terminal this opens runs there too.
-    const install = vendorInstall(vendor, platform());
+    const install = commandFor(vendor, platform());
     if (install.command.length === 0) {
       const open = 'Open the instructions';
       const choice = await vscode.window.showInformationMessage(install.note, open);
@@ -268,7 +393,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    const terminal = vscode.window.createTerminal({ name: `coai · install ${vendor.id}` });
+    const terminal = vscode.window.createTerminal({ name: `coai · ${verb} ${vendor.id}` });
     terminal.show();
     if (install.note.length > 0) {
       void vscode.window.showInformationMessage(install.note);
@@ -410,12 +535,13 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         break;
       case 'updateVendorCli':
         if (id !== undefined) {
-          // The SAME command the install button runs, and that is the vendors' own answer rather
-          // than a shortcut: OpenAI prints one line under both "Install Codex" and "Update Codex",
-          // Anthropic's native install is the same script, and `agy` has no update subcommand at
-          // all. Re-running the installer IS the update for every CLI here.
-          this.cliCheckedAt = 0; // so the button stops being green as soon as the version moves
-          await this.installVendorCli(id);
+          this.cliCheckedAt = 0; // the button stops being green as soon as the version moves
+          await this.updateVendorCli(id);
+        }
+        break;
+      case 'forgetUsage':
+        if (id !== undefined) {
+          await this.forgetUsage(id);
         }
         break;
       case 'installServer':
@@ -629,6 +755,35 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 function nonce(): string {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   return Array.from({ length: 32 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
+}
+
+/**
+ * One `--version` call, answered with the version or with nothing.
+ *
+ * <p>A CLI that hangs must not hold up a repaint, so the wait is short and a timeout produces the
+ * same "could not tell" every other failure here does. Nothing throws: an absent binary is an
+ * ordinary state of a machine, not an error to show somebody.</p>
+ */
+function askVersion(executable: string): Promise<string> {
+  return new Promise((resolve) => {
+    const child = spawn(executable, ['--version'], { shell: false });
+    const timer = setTimeout(() => {
+      child.kill();
+      resolve('');
+    }, 8000);
+    let output = '';
+    child.stdout?.on('data', (chunk: Buffer) => {
+      output += chunk.toString();
+    });
+    child.on('error', () => {
+      clearTimeout(timer);
+      resolve('');
+    });
+    child.on('close', () => {
+      clearTimeout(timer);
+      resolve(parseCliVersion(output));
+    });
+  });
 }
 
 /** The extension host's platform, narrowed to the three the buttons can answer for. */

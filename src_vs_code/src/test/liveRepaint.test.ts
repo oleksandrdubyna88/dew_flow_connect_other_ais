@@ -33,6 +33,7 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   usage,
   usageWindow: 'week',
   cliStatus: {},
+  modelPrices: {},
   ...over,
 });
 
