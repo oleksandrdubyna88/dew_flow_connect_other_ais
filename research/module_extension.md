@@ -101,3 +101,24 @@ string comparison of two Windows paths. VS Code hands back `c:\Users\…` for a 
 `C:\Users\…` for one this extension opened, so a restored tab silently stopped being refreshed and
 the file went stale while rounds kept running. `roundsViewIsOpen` (in `rounds.ts`, pure) compares
 case-insensitively.
+
+### A panel button cannot be wired to nothing (2026-09-01)
+
+The Update button in the Server section did nothing for a day. The markup emitted
+`data-command="installServer"`, the provider's switch had no case for it, and the click fell into
+`default: return` — no error, no notification, no log line. A button wired to nothing looks exactly
+like a button whose work failed silently, which is why it took a person reporting it.
+
+`PANEL_COMMANDS` in `panelView.ts` now declares the panel's whole command vocabulary beside the
+markup that emits it, and `PanelProvider.run` switches over that union with a `never`
+exhaustiveness check. A declared command with no case is a **compile error**:
+
+```
+src/panelProvider.ts(239,15): error TS2322: Type '"installServer"' is not assignable to type 'never'.
+```
+
+A test covers the reverse — a button posting a name nobody declared.
+
+The install itself now answers a locked binary with the cure rather than an errno: overwriting a
+running `coai-mcp.exe` is refused by Windows, and an MCP client holding it open is the normal case
+at the exact moment somebody presses Update, because that client is what started it.

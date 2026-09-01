@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ridFor } from './coaiInstall';
+import { installFailureHint, ridFor } from './coaiInstall';
 import { claudeSnippet } from './claudeSnippet';
 import { CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
 import { binaryPath, installLatest, installedVersion, updateIsAvailable } from './installer';
@@ -107,7 +107,11 @@ async function installServer(context: vscode.ExtensionContext): Promise<void> {
     const targets = CLIENT_TARGETS.map((t) => `${t.label} (${t.path})`).join(', ');
     void vscode.window.showInformationMessage(`${installedMessage(target.fsPath)} Paste it into: ${targets}`);
   } catch (error) {
-    void vscode.window.showErrorMessage(`coai-mcp was not installed: ${message(error)}`);
+    const raw = message(error);
+    const hint = installFailureHint(raw);
+    void vscode.window.showErrorMessage(
+      hint.length > 0 ? `coai-mcp was not updated: ${hint}` : `coai-mcp was not installed: ${raw}`,
+    );
   }
 }
 

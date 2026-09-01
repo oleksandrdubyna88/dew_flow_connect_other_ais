@@ -11,6 +11,7 @@ import {
   ridFor,
   updateAvailable,
   versionFromTag,
+  installFailureHint,
 } from '../coaiInstall';
 import { CLIENT_TARGETS, installedMessage, mcpServerBlock } from '../mcpBlock';
 import { claudeSnippet } from '../claudeSnippet';
@@ -127,4 +128,29 @@ test('every RID the workflow builds is a RID the extension will install', () => 
 test('an unsupported platform is refused rather than guessed at', () => {
   assert.equal(ridFor('freebsd', 'x64'), undefined);
   assert.equal(ridFor('darwin', 'ppc'), undefined);
+});
+
+/**
+ * Overwriting a binary that is RUNNING is refused by Windows, and an MCP client holding
+ * `coai-mcp.exe` open is the normal case at the exact moment somebody presses Update. The raw
+ * error is an errno; what a person needs is the sentence that says which program to quit.
+ */
+test('an update blocked by the running server says what to close', () => {
+  const hint = installFailureHint('EPERM: operation not permitted, copyfile ... coai-mcp.exe');
+  assert.match(hint, /MCP client/);
+  assert.match(hint, /coai-mcp\.exe/);
+});
+
+test('a busy file and an access denial get the same answer, because they are the same cause', () => {
+  for (const raw of [
+    'EBUSY: resource busy or locked',
+    'EACCES: permission denied',
+    'The process cannot access the file because it is being used by another process.',
+  ]) {
+    assert.match(installFailureHint(raw), /MCP client/, raw);
+  }
+});
+
+test('an ordinary failure is passed through untouched, never dressed up as a lock', () => {
+  assert.equal(installFailureHint('GitHub answered 503 for the release list'), '');
 });

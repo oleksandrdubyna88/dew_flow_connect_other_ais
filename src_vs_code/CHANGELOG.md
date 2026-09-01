@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.14.2 — 2026-09-01
+
+**The Update button works.** It posted `installServer`; the panel's message handler had no case for
+that name, so every click fell into `default: return` — no error, no notification, nothing in a
+log. A button wired to nothing looks exactly like a button whose work failed silently, which is why
+it took somebody reporting it rather than a test.
+
+The panel's command vocabulary is now declared once, beside the markup that emits it, and the
+handler switches over it with an exhaustiveness check: a command without a case no longer
+compiles. A test covers the other direction — a button posting a name nobody declared.
+
+**An update blocked by the running server says what to close.** Windows refuses to overwrite a
+binary that is executing, and the MCP client holding `coai-mcp.exe` open is the normal case at the
+moment you press Update, because that client is what started it. The message names the cure
+instead of an errno.
+
 ## 0.14.1 — 2026-09-01
 
 **The rounds view refreshes while it is open behind another tab.** "Open" was asked of

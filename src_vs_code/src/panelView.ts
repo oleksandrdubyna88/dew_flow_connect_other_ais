@@ -651,6 +651,37 @@ const CSS = `
  * repainted nothing — so the section sat on Week for good, and the buttons read as broken
  * because they were.</p>
  */
+/**
+ * Every command a control in this panel can post.
+ *
+ * <p>It exists because the Update button did nothing for a day. The markup emitted
+ * `data-command="installServer"`, the provider's switch had no case for it, and the click fell
+ * into `default: return` — no error, no notification, no log. A button wired to nothing looks
+ * exactly like a button whose work failed silently.</p>
+ *
+ * <p>The list is declared HERE, beside the markup that emits it, and the provider switches over
+ * this type with an exhaustiveness check: a command added here without a case is a COMPILE error,
+ * not a dead button. The test below adds the other half — a `data-command` in the markup that is
+ * not in this list.</p>
+ */
+export const PANEL_COMMANDS = [
+  'answer',
+  'addVendor',
+  'removeVendor',
+  'runVendor',
+  'installServer',
+  'checkForUpdate',
+  'usageWindow',
+  // Posted by the model picker rather than by a button: "another model…" is a request to type one.
+  'customModel',
+] as const;
+
+export type PanelCommand = (typeof PANEL_COMMANDS)[number];
+
+export function isPanelCommand(value: string | undefined): value is PanelCommand {
+  return value !== undefined && (PANEL_COMMANDS as readonly string[]).includes(value);
+}
+
 export function staticKey(state: PanelState): string {
   return JSON.stringify([
     state.settings,

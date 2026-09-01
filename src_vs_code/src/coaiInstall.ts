@@ -108,3 +108,21 @@ export function newestServerTag(tags: readonly string[]): string | undefined {
     .filter((t) => versionFromTag(t) !== undefined)
     .sort((a, b) => compareVersions(versionFromTag(b)!, versionFromTag(a)!))[0];
 }
+
+/**
+ * What to DO about an install that failed, when the failure is one we recognise.
+ *
+ * <p>Overwriting a binary that is RUNNING is refused by Windows, and an MCP client holding
+ * `coai-mcp.exe` open is the normal case at the exact moment somebody presses Update — the client
+ * was started by the server they are updating. The raw error is an errno; what a person needs is
+ * the sentence naming which program to quit.</p>
+ *
+ * <p>Empty for anything else: dressing an unrelated failure up as a lock would send the reader to
+ * close a program that was never the problem.</p>
+ */
+export function installFailureHint(message: string): string {
+  const locked = ['EPERM', 'EBUSY', 'EACCES', 'used by another process', 'Access is denied'];
+  return locked.some((marker) => message.includes(marker))
+    ? `${binaryNameFor('win-x64')} is in use — quit or restart the MCP client that is running it (it holds the file open), then press Update again.`
+    : '';
+}

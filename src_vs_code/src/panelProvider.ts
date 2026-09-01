@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { EscalationWatcher } from './escalationWatcher';
 import { ModelChoice, parseCodexModels } from './models';
-import { liveRegions, OPEN_BY_DEFAULT, panelHtml, staticKey } from './panelView';
+import { isPanelCommand, liveRegions, OPEN_BY_DEFAULT, panelHtml, staticKey } from './panelView';
 import { parseSession, SessionFile } from './rounds';
 import { parseUsage, UsageEntry, Window } from './usage';
 import { latestServerVersion } from './installer';
@@ -191,7 +191,15 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     await config.update(key, value, vscode.ConfigurationTarget.Global);
   }
 
+  /**
+   * One control's click. Unknown names are ignored; KNOWN ones must all be handled, and the
+   * compiler is what enforces that — see {@link PANEL_COMMANDS}.
+   */
   private async run(command: string | undefined, id: string | undefined): Promise<void> {
+    if (!isPanelCommand(command)) {
+      return;
+    }
+
     switch (command) {
       case 'answer':
         if (id !== undefined) {
@@ -224,8 +232,19 @@ export class PanelProvider implements vscode.WebviewViewProvider {
           await this.customModel(id);
         }
         break;
-      default:
+      case 'installServer':
+        // The panel has no business downloading anything itself: the command that does it is
+        // registered by the extension, is what the ⋯ menu invokes, and reports its own progress
+        // and its own failure. The button's job is only to reach it.
+        await vscode.commands.executeCommand('coai.installServer');
+        break;
+      default: {
+        // A PanelCommand with no case above lands here and fails to compile. That is the whole
+        // guard: the Update button was posting a command nobody handled, and nothing said so.
+        const unhandled: never = command;
+        void unhandled;
         return;
+      }
     }
     await this.render();
   }

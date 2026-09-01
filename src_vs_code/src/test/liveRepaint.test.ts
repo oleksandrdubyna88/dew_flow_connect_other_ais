@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
-import { liveRegions, panelHtml, PanelState, staticKey } from '../panelView';
+import { liveRegions, PANEL_COMMANDS, panelHtml, PanelState, staticKey } from '../panelView';
 import { roundsViewIsOpen } from '../rounds';
 
 /**
@@ -79,4 +79,25 @@ test('another file is never mistaken for the rounds view', () => {
   const target = 'C:\\Users\\me\\AppData\\Local\\coai-mcp\\rounds.md';
   assert.ok(!roundsViewIsOpen(['C:\\Users\\me\\AppData\\Local\\coai-mcp\\usage.jsonl'], target));
   assert.ok(!roundsViewIsOpen([], target));
+});
+
+/**
+ * The other half of the guard on {@link PANEL_COMMANDS}.
+ *
+ * <p>The provider switches over that list with an exhaustiveness check, so a declared command
+ * without a case cannot compile. This covers the reverse: a BUTTON posting a name that was never
+ * declared, which the provider would ignore in silence — exactly how the Update button did
+ * nothing for a day.</p>
+ */
+test('every button in the panel posts a command the panel declares', () => {
+  const html = panelHtml(state({ serverInstalled: true, latestServerVersion: '9.9.9' }), 'n0nce');
+  const posted = [...html.matchAll(/data-command="([a-zA-Z]+)"/g)].map((m) => m[1]!);
+
+  assert.ok(posted.includes('installServer'), 'the Update button is the one this test exists for');
+  for (const command of posted) {
+    assert.ok(
+      (PANEL_COMMANDS as readonly string[]).includes(command),
+      `the markup posts "${command}", which nothing handles — a button wired to nothing looks exactly like one whose work failed silently`,
+    );
+  }
 });
