@@ -47,6 +47,8 @@ export function universalFor(role: string): PromptChoice {
   return promptsFor(role).find((p) => p.universal) ?? PROMPTS[0]!;
 }
 
+
+
 /**
  * What the panel shows as selected for one round — the stored choice, or what the server would
  * actually use, so the box never reads as "nothing" when a prompt is in fact chosen.
@@ -65,5 +67,7 @@ export function selectedFor(
     return universalFor(role).id;
   }
   const order = [...promptsFor(role)].sort((a, b) => Number(b.universal) - Number(a.universal));
-  return order[(round - 1) % order.length]!.id;
+  // A role nobody knows has no prompts, and `% 0` is NaN — which indexes to undefined and throws
+  // on the next property access. A picker for an unknown role should be empty, not fatal.
+  return order.length === 0 ? '' : order[(round - 1) % order.length]!.id;
 }

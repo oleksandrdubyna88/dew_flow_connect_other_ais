@@ -28,8 +28,14 @@ public sealed record UsageEntry(
 /// this cost me this month" — spans every session and must survive all of them being deleted.</para>
 /// <para>JSON Lines, appended, never rewritten: an append cannot corrupt what is already there,
 /// a torn last line costs one entry rather than the file, and reading it is a scan a panel can do
-/// in a millisecond for a year of rounds. Concurrency is a shared lock plus O_APPEND semantics —
-/// two servers on one data directory is the normal case here, not an edge one.</para>
+/// in a millisecond for a year of rounds.</para>
+/// <para><b>Two servers share one data directory routinely</b>, so the append opens the file with
+/// <c>FileShare.ReadWrite</c> and seeks to the end. An in-process lock alone was what the first
+/// version had, and the round that reviewed this file caught it from both vendors:
+/// <c>File.AppendAllText</c> takes a write lock the other process cannot pass, so the loser's line
+/// would be swallowed by the catch below — a silent gap in a spending record, which is the one
+/// place a gap is worse than an error. Each line is written in ONE call and is far below the
+/// atomic-write size, so interleaving cannot split a line.</para>
 /// </remarks>
 public sealed class UsageLedger(string dataDir)
 {
@@ -61,7 +67,7 @@ public sealed class UsageLedger(string dataDir)
             Directory.CreateDirectory(dataDir);
             lock (Gate)
             {
-                File.AppendAllText(Path, JsonSerializer.Serialize(entry, ServerJsonContext.Default.UsageEntry) + "\n");
+                File.AppendAllText(Path, JsonSerializer.Serialize(entry, LedgerJsonContext.Default.UsageEntry) + "\n");
             }
         }
         catch (IOException)

@@ -107,6 +107,12 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
     /// actually said.
     /// </summary>
     /// <remarks>
+    /// The raw text is PASSED IN rather than remembered on this instance. One executor serves the
+    /// whole fan-out — six reviewers at once — so an instance field would hand a failed reviewer
+    /// whichever answer happened to finish last. Both vendors caught that in the round that
+    /// reviewed this file.
+    /// </remarks>
+    /// <remarks>
     /// The first real code round lost a reviewer to "unparseable: still not the schema's JSON
     /// after one repair attempt" and the evidence was gone — the same answer replayed by hand
     /// afterwards succeeded, so the sentence named a symptom nobody could chase. An unparseable
@@ -143,7 +149,7 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
         ReviewerInvocation? repair = null,
         CancellationToken ct = default)
     {
-        var (outcome, review, usage) = await RunOnceAsync(invocation, ct);
+        var (outcome, review, usage, raw) = await RunOnceAsync(invocation, ct);
         if (outcome is not null)
         {
             return outcome;
@@ -157,27 +163,24 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
         if (repair is null)
         {
             return new ReviewerOutcome.Unparseable(
-                Because("the answer was not the schema's JSON, and no repair was configured", Keep(invocation, lastRaw)));
+                Because("the answer was not the schema's JSON, and no repair was configured", Keep(invocation, raw)));
         }
 
-        var (repairOutcome, repaired, repairUsage) = await RunOnceAsync(repair, ct);
+        var (repairOutcome, repaired, repairUsage, repairRaw) = await RunOnceAsync(repair, ct);
         return repairOutcome
                ?? (repaired is { } fixedReview
                    // Both launches are billed, so both are counted — a repaired reviewer that
                    // reported only its second attempt would under-report every time.
                    ? new ReviewerOutcome.Ok(fixedReview, Repaired: true, usage.Add(repairUsage))
                    : new ReviewerOutcome.Unparseable(
-                       Because("still not the schema's JSON after one repair attempt", Keep(repair, lastRaw))));
+                       Because("still not the schema's JSON after one repair attempt", Keep(repair, repairRaw))));
     }
-
-    /// <summary>The most recent raw answer, so an unparseable one can be kept rather than lost.</summary>
-    private string? lastRaw;
 
     private static string Because(string sentence, string? keptAt) =>
         keptAt is null ? sentence : $"{sentence} (the answer was kept at {keptAt})";
 
     /// <summary>One launch. A non-null outcome is terminal; a null review means "unparseable".</summary>
-    private async Task<(ReviewerOutcome?, NormalisedReview?, Usage)> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
+    private async Task<(ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Raw)> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
     {
         ProcessResult result;
         try
@@ -187,53 +190,52 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
         catch (System.ComponentModel.Win32Exception e)
         {
             // One reviewer that cannot start is one reviewer's failure, never the round's.
-            return (new ReviewerOutcome.NotStarted($"'{invocation.Request.Executable}' could not be started: {e.Message}"), null, Usage.None);
+            return (new ReviewerOutcome.NotStarted($"'{invocation.Request.Executable}' could not be started: {e.Message}"), null, Usage.None, null);
         }
 
         if (result.TimedOut)
         {
-            return (new ReviewerOutcome.TimedOut(), null, Usage.None);
+            return (new ReviewerOutcome.TimedOut(), null, Usage.None, null);
         }
 
         if (RateLimit.Hit(result))
         {
-            return (new ReviewerOutcome.RateLimited(RateLimit.Reason(result)), null, Usage.None);
+            return (new ReviewerOutcome.RateLimited(RateLimit.Reason(result)), null, Usage.None, null);
         }
 
         if (result.ExitCode != 0)
         {
             var tail = result.StdErr.Length <= StdErrTail ? result.StdErr : result.StdErr[^StdErrTail..];
-            return (new ReviewerOutcome.NonZeroExit(result.ExitCode, tail.Trim()), null, Usage.None);
+            return (new ReviewerOutcome.NonZeroExit(result.ExitCode, tail.Trim()), null, Usage.None, null);
         }
 
         // Both reads go through the vendor's own adapter: where the answer lands and how the run
         // is billed are vendor knowledge, and keeping them here would have made every new vendor
         // an edit to this class.
         var usage = invocation.Adapter?.ReadUsage(invocation, result) ?? UsageParser.Parse(result.StdOut);
-        return (null, Parse(invocation, result), usage);
+        var (review, raw) = Parse(invocation, result);
+        return (null, review, usage, raw);
     }
 
-    private NormalisedReview? Parse(ReviewerInvocation invocation, ProcessResult result)
+    private static (NormalisedReview? Review, string? Raw) Parse(ReviewerInvocation invocation, ProcessResult result)
     {
-        lastRaw = null;
         var raw = invocation.Adapter is { } adapter
             ? adapter.ReadAnswer(invocation, result)
             : ReviewerOutput.FileOrStdout(invocation, result);
-        lastRaw = raw;
         if (raw is null)
         {
-            return null;
+            return (null, null);
         }
 
         // Gemini answers through its envelope and its habits; codex's -o file is schema-bound
         // already, but the same balanced extraction costs nothing and forgives a stray banner.
         if (GeminiPayload.Extract(raw) is not ExtractOutcome.Payload payload)
         {
-            return null;
+            return (null, raw);
         }
 
         return ReviewParser.Parse(payload.Json, invocation.Provider) is ParseOutcome.Success success
-            ? success.Review
-            : null;
+            ? (success.Review, raw)
+            : (null, raw);
     }
 }

@@ -43,12 +43,31 @@ export interface VendorTotals {
 export function parseUsageLine(line: string): UsageEntry | undefined {
   try {
     const parsed = JSON.parse(line) as Partial<UsageEntry>;
-    return typeof parsed.utc === 'string' && typeof parsed.provider === 'string'
-      ? ({ ...parsed, costUsd: parsed.costUsd ?? null } as UsageEntry)
-      : undefined;
+    if (typeof parsed.utc !== 'string' || typeof parsed.provider !== 'string') {
+      return undefined;
+    }
+    // Every metric is coerced, because ONE missing number turns a sum into NaN and the whole
+    // chart reads "NaN tokens" — a line written by an older server, or a torn one, must cost its
+    // own row and nothing else. Caught by a reviewer on the commit that added this file.
+    return {
+      utc: parsed.utc,
+      provider: parsed.provider,
+      model: typeof parsed.model === 'string' ? parsed.model : '',
+      role: typeof parsed.role === 'string' ? parsed.role : '',
+      stage: typeof parsed.stage === 'string' ? parsed.stage : '',
+      seconds: number(parsed.seconds),
+      tokensIn: number(parsed.tokensIn),
+      tokensOut: number(parsed.tokensOut),
+      costUsd: typeof parsed.costUsd === 'number' && Number.isFinite(parsed.costUsd) ? parsed.costUsd : null,
+      outcome: typeof parsed.outcome === 'string' ? parsed.outcome : 'ok',
+    };
   } catch {
     return undefined;
   }
+}
+
+function number(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
 export function parseUsage(text: string): UsageEntry[] {
