@@ -45,6 +45,15 @@ public sealed record RoundRecord(
     /// <summary>Per-reviewer progress — the live part of a running round.</summary>
     public List<ReviewerState> ReviewerStates { get; init; } = [];
 
+    /// <summary>
+    /// What this round was ABOUT — the plan's file name or its title.
+    /// </summary>
+    /// <remarks>
+    /// A round identified only by branch and number tells a reader which gate ran and nothing
+    /// about what went through it, so a week of rounds reads as a column of numbers.
+    /// </remarks>
+    public string Subject { get; init; } = string.Empty;
+
     public long TokensIn { get; init; }
 
     public long TokensOut { get; init; }

@@ -23,8 +23,11 @@ public sealed class LiveRound
     private readonly Dictionary<string, ReviewerState> _states;
     private readonly DateTime _startedUtc = DateTime.UtcNow;
 
-    public LiveRound(SessionStore store, PersistedSession session, IReadOnlyList<ReviewerWork> work)
+    private readonly string _subject;
+
+    public LiveRound(SessionStore store, PersistedSession session, IReadOnlyList<ReviewerWork> work, string subject = "")
     {
+        _subject = subject;
         _store = store;
         _session = session;
         _states = work.ToDictionary(
@@ -116,6 +119,7 @@ public sealed class LiveRound
             Status = status,
             StartedUtc = _startedUtc,
             RunnerPid = Environment.ProcessId,
+            Subject = _subject,
             ReviewerStates = [.. _states.Values.OrderBy(s => s.Provider).ThenBy(s => s.Role)],
         };
 

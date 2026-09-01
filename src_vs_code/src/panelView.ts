@@ -448,9 +448,20 @@ function roundCard(round: RoundRecord & { branch: string }, nowMs: number): stri
         .join('\n')
     : '';
   const took = elapsed(round, nowMs);
-  return `<div class="verdict">${escapeHtml(round.branch)} · ${escapeHtml(round.stage)} ${round.number} · ${verdict} · ${round.gatingCount} gating</div>
+  // WHAT was reviewed leads the line; the branch and the round number follow it. A list of rounds
+  // identified only by stage and number is a column of numbers — a person scanning it is looking
+  // for the plan they remember, not for round four.
+  const subject = (round.subject ?? '').length > 0
+    ? `<div class="subject">${escapeHtml(round.subject!)}</div>`
+    : '';
+  return `${subject}<div class="verdict">${escapeHtml(stageName(round.stage))} ${round.number} · ${escapeHtml(round.branch)} · ${verdict} · ${round.gatingCount} gating</div>
 <div class="usage">${took.length > 0 ? `${escapeHtml(took)} · ` : ''}${escapeHtml(costPhrase(round))}</div>
 ${reviewers}`;
+}
+
+/** `PlanReview` → `plan review`: the panel speaks the way a person would say it. */
+function stageName(stage: string): string {
+  return stage === 'PlanReview' ? 'plan review' : stage === 'CodeReview' ? 'code review' : stage;
 }
 
 /**
@@ -614,6 +625,7 @@ const CSS = `
   .bar span { display: block; height: 100%; background: var(--vscode-button-background); }
   .warn { color: var(--vscode-editorWarning-foreground); }
   .total { margin-top: 8px; border-top: 1px solid var(--vscode-widget-border); padding-top: 6px; }
+  .subject { font-weight: 600; margin: 6px 0 1px; }
   .empty { opacity: .6; font-style: italic; margin: 6px 0; }
   .status { margin: 2px 0 0; }
 `;

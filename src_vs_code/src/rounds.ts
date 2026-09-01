@@ -24,6 +24,8 @@ export interface RoundRecord {
   readonly status?: string;
   readonly startedUtc?: string;
   readonly reviewerStates?: readonly ReviewerState[];
+  /** What the round was about — the plan's file name or title. Absent in older files. */
+  readonly subject?: string;
   readonly tokensIn?: number;
   readonly tokensOut?: number;
   /** Only vendors that price their own runs report this; absent is "unknown", never "free". */

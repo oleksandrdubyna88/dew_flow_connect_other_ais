@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.11.1 — 2026-09-01
+
+**A round says what it was about.** Recent rounds led with `main · PlanReview 4`, which names the
+gate and nothing that went through it — a week of work read as a column of numbers. Each round now
+carries the plan's title, or its file name when a path was passed, and the stage is spoken the way
+a person says it: *plan review 4 · main · call_human · 3 gating*.
+
+Needs **coai-mcp 0.5.2**, which is what derives and records the subject; rounds written by an
+older server simply have none.
+
 ## 0.11.0 — 2026-09-01
 
 **The Server section tells you what is published.** It shows the installed version, the newest

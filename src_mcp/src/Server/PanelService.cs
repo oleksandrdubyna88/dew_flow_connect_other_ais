@@ -286,7 +286,10 @@ public sealed class PanelService
 
             // The round exists on disk BEFORE the first CLI starts: the panel shows "running" for
             // its whole duration instead of nothing at all, and a crash leaves something to sweep.
-            var live = new LiveRound(_store, session, work);
+            // What the round is about, derived from the plan the caller passed — a file name if
+            // they handed a path, its title otherwise. Nobody has to remember to name the work.
+            var subject = RoundSubject.From(planText, File.Exists);
+            var live = new LiveRound(_store, session, work, subject);
             var audit = new RoundAudit(_log, session.State.Stage.ToString(), session.State.RoundsRunThisStage + 1);
             audit.Opening(work, workingDir, _settings.ReviewerTimeout);
             var results = await _scheduler.RunAllAsync(work, _executor, ct, progress =>
