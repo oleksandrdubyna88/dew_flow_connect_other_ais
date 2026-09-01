@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.13.0 — 2026-09-01
+
+**A help page, behind the yellow ? in the title bar.** Searchable, in English or Russian, with the
+± text size every page of its sibling product carries. Seventeen articles in one fixed shape —
+what it is, why, how to set it up, how to use it, what can go wrong.
+
+The first four are the first four things you do: install the server, choose reviewers, tell your AI
+to use the gate, set the gate. Then one article per panel control, then the machinery you cannot
+see from the panel: where a reviewer actually runs, what happens when one fails, how a setting
+reaches the server, and what the audit trail holds.
+
+**The prompts, in full.** Every prompt the product sends, verbatim, held byte-for-byte against the
+server's own files by a test — so the page cannot quietly describe a question the product stopped
+asking. Overriding one is a file in the server's data directory, and the article says how.
+
+Two tests keep the help alive: one fails the build when a command or setting has nothing written
+about it, and it found two gaps on its first run.
+
 ## 0.12.0 — 2026-09-01
 
 **A `call_human` verdict now reaches the human.** It used to be an instruction to the calling AI,

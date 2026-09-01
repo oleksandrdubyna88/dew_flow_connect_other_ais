@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "Your AI writes the code; other vendors' models review it — the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -20,6 +20,15 @@
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
+      {
+        "command": "coai.help",
+        "title": "Help",
+        "category": "ConnectOtherAIs",
+        "icon": {
+          "light": "media/help-yellow-light.svg",
+          "dark": "media/help-yellow.svg"
+        }
+      },
       {
         "command": "coai.installServer",
         "title": "Install the MCP server…",
@@ -68,7 +77,9 @@
           "markdownDescription": "Which prompt each role uses on each round, by catalog id — `{ \"Architecture\": [\"architecture\", \"arch-boundaries\"] }`. Index 0 is round 1. An empty or unknown entry is treated as *not chosen*: it falls back to the rotation when **Rotate the lenses automatically** is on, and to that role's universal prompt otherwise.",
           "additionalProperties": {
             "type": "array",
-            "items": { "type": "string" }
+            "items": {
+              "type": "string"
+            }
           }
         },
         "coai.maxRounds": {
@@ -212,6 +223,26 @@
               }
             }
           }
+        },
+        "coai.uiScale": {
+          "type": "number",
+          "default": 0,
+          "minimum": -5,
+          "maximum": 5,
+          "markdownDescription": "Text size on the ConnectOtherAIs help page, in steps of 10% from the base — `5` is about ×1.6, `-5` about ÷1.6. The ± buttons on the page write this same setting, and it syncs with your other machines."
+        },
+        "coai.helpLanguage": {
+          "type": "string",
+          "default": "en",
+          "enum": [
+            "en",
+            "ru"
+          ],
+          "enumDescriptions": [
+            "English",
+            "Русский"
+          ],
+          "markdownDescription": "The language of the **Help** pages only. Articles not yet translated show English with a note. The switch at the top of the help page writes this same setting."
         }
       }
     },
@@ -235,6 +266,11 @@
     },
     "menus": {
       "view/title": [
+        {
+          "command": "coai.help",
+          "when": "view == coai.panel",
+          "group": "navigation@0"
+        },
         {
           "command": "coai.answerQuestion",
           "when": "view == coai.panel && !coai.hasQuestions",

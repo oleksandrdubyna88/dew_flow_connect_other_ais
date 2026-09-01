@@ -6,6 +6,7 @@ import { binaryPath, installLatest, installedVersion, updateIsAvailable } from '
 import { EscalationWatcher } from './escalationWatcher';
 import { PanelProvider } from './panelProvider';
 import { renderEscalations } from './escalations';
+import { showHelp } from './helpPanel';
 import { parseSession, renderRounds, SessionFile } from './rounds';
 import { envBlock, settingsFrom } from './settingsShape';
 
@@ -42,6 +43,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     watcher,
     vscode.window.registerWebviewViewProvider(PanelProvider.viewType, panel),
+    vscode.commands.registerCommand('coai.help', showHelp),
     vscode.commands.registerCommand('coai.installServer', () => installServer(context)),
     vscode.commands.registerCommand('coai.copyConfigBlock', () => copyConfigBlock(context)),
     vscode.commands.registerCommand('coai.copyClaudeSnippet', copyClaudeSnippet),

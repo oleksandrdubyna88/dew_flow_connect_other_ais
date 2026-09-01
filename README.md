@@ -127,3 +127,21 @@ Token accounting is each vendor's own, because a shared rule is wrong for at lea
 codex folds cached tokens INTO its input count, claude reports them BESIDE it, and antigravity's
 thinking tokens sit inside its output count. Claude reports one run twice and the two disagree —
 `usage` is the last message, `modelUsage` is the session — and the ledger reads the second.
+
+## The help, in the panel
+
+The yellow **?** in the panel's title bar opens a searchable help page. It carries one article per
+control and per setting, plus the machinery you cannot see from the panel — where a reviewer
+actually runs, what happens when one fails, how a setting reaches the server, and what the audit
+trail holds.
+
+The first four articles are the first four things a person does: install the server, choose the
+reviewers, tell your AI to use the gate, and set the gate itself. Search runs over the full text,
+the language switch and the ± text size are real settings so they sync, and **The prompts, in
+full** prints every prompt verbatim — held byte-for-byte against the server's own files by a test,
+so the page cannot describe a question the product no longer asks.
+
+Two tests keep it honest. One fails the build when a command or a setting has nothing written
+about it — a new button either gets an article, or an alias naming the words the help uses, or a
+written reason why it needs none; there is no fourth way and no silent default. The other holds the
+printed prompts against the shipped ones.
