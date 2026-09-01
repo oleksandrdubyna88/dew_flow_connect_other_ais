@@ -137,3 +137,39 @@ test('article ids are unique, because a lookup returns the first match', () => {
   const ids = HELP_ARTICLES.map((a) => a.id);
   assert.equal(new Set(ids).size, ids.length);
 });
+
+/**
+ * The fallback is honest, which is exactly why it needs a test of its own.
+ *
+ * <p>{@link bodyFor} answers an untranslated article with the English body and a visible note, so
+ * every test above passes whether or not a translation exists. That is right for a reader and
+ * wrong for a build: a new article would quietly become English-only in four languages and
+ * nothing would say so.</p>
+ */
+test('every article exists in every language the switch offers', () => {
+  const missing: string[] = [];
+  for (const article of HELP_ARTICLES) {
+    for (const language of HELP_LANGUAGES) {
+      if (language !== 'en' && bodyFor(article, language).fallback) {
+        missing.push(`${article.id}/${language}`);
+      }
+    }
+  }
+  assert.deepEqual(missing, [], `untranslated: ${missing.join(', ')}`);
+});
+
+test('a translation is a translation, not the English text pasted across', () => {
+  for (const article of HELP_ARTICLES) {
+    for (const language of HELP_LANGUAGES) {
+      if (language === 'en') {
+        continue;
+      }
+      const { body } = bodyFor(article, language);
+      assert.notEqual(
+        body.whatItIs.trim(),
+        article.en.whatItIs.trim(),
+        `${article.id}/${language}: the body is the English one, so the fallback would have been more honest`,
+      );
+    }
+  }
+});

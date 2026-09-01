@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.14.0 — 2026-09-01
+
+**Antigravity is the reviewer you get, not one you have to know about.** The adapter shipped a day
+earlier and nothing used it: no preset offered it, every default still named `gemini`, and a saved
+reviewer list therefore went on naming a CLI that Google had closed. Supporting a vendor and
+DEFAULTING to it turn out to be different changes, and only the first had been made.
+
+Antigravity is now a preset and a shipped default. A reviewer saved with `runtime: "gemini"` is
+migrated to it, keeping its id — the id names the row, its usage history and its vault key, so
+renaming it would orphan all three. A vendor with its own base URL is never touched: that is not
+Google's CLI at all. Gemini remains in the list, marked retired, for a Workspace account that still
+has Code Assist.
+
+**A `call_human` verdict now reaches you** — see the server's 0.7.0 notes; the panel showed *No
+ConnectOtherAIs review is waiting on an answer* while a gate sat blocked, twice in one day.
+
+**The spending window buttons work.** Today, Month and Year recorded the choice and repainted
+nothing, so the section sat on Week for good. The panel repaints on a key over its state, and
+anything missing from that key is a control that can never change; `usageWindow` is in it now. The
+spending rows became a live region instead, so they advance mid-round without closing a dropdown —
+and the tabs deliberately stay outside that region, because a button inside a patched one loses its
+click listener on the next tick.
+
+**`rounds.md` refreshes for a restored tab too.** "Is it open" compared two Windows paths exactly,
+and VS Code answers a lower-case drive letter for a tab it restored and an upper-case one for a tab
+the extension opened — so a restored tab silently stopped being refreshed and the file went stale
+while rounds kept running.
+
+**The help speaks five languages.** English, Русский, Українська, Deutsch and Español, one module
+per language, with a visible English fallback for anything not yet translated. Two new tests keep
+it that way: one fails when an article exists in no translation, one fails when a "translation" is
+the English text pasted across.
+
 ## 0.13.1 — 2026-09-01
 
 **macOS is a supported platform.** The release now builds `osx-arm64` and `osx-x64` beside the
