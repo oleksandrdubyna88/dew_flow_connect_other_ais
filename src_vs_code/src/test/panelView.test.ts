@@ -15,7 +15,9 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   serverVersion: '',
   questions: [],
   sessions: [],
-  openSections: ['reviewers', 'language', 'gate', 'limits', 'keys', 'server', 'rounds'],
+  openSections: ['reviewers', 'language', 'prompts', 'gate', 'limits', 'keys', 'server', 'usage', 'rounds'],
+  usage: [],
+  usageWindow: 'week',
   ...over,
 });
 

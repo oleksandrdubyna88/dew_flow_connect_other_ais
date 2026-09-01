@@ -3,6 +3,7 @@ import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { ModelChoice, modelsFor, modelsProvenance } from './models';
 import { ROLES, promptsFor, selectedFor } from './prompts';
+import { barWidth, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, WINDOWS, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerLines, RoundRecord, SessionFile } from './rounds';
 import { Vendor } from './vendors';
 
@@ -33,6 +34,10 @@ export interface PanelState {
   readonly sessions: readonly SessionFile[];
   /** Which collapsible sections are open. Empty falls back to {@link OPEN_BY_DEFAULT}. */
   readonly openSections: readonly string[];
+  /** Every reviewer run the server has recorded, newest last. */
+  readonly usage: readonly UsageEntry[];
+  /** Which window the spending chart is showing. */
+  readonly usageWindow: Window;
 }
 
 /**
@@ -55,6 +60,7 @@ export function panelHtml(state: PanelState, nonce: string): string {
     section('limits', 'Limits', open, limitsBody(state.settings)),
     section('keys', 'Vendor keys', open, keysBody(state)),
     section('server', 'Server', open, serverBody(state)),
+    section('usage', 'What each AI has used', open, usageBody(state)),
     section('rounds', 'Recent rounds', open, `<div id="live-rounds">${roundsBody(state.sessions)}</div>`),
   ].join('\n');
 
@@ -350,6 +356,56 @@ ${pickers}
 ${rows}`;
 }
 
+/**
+ * What each vendor has consumed, over a window a person picks.
+ *
+ * <p>Bars rather than a plotted chart: the comparison that matters is BETWEEN vendors in one
+ * window, not a shape over time, and a bar made of a div needs no library, no canvas and no
+ * network — three things a webview under a strict content policy cannot have anyway.</p>
+ *
+ * <p>Money is a dash where a vendor does not price its own runs. Rendering that as $0.00 would
+ * read as "free", and free and unreported are different facts.</p>
+ */
+function usageBody(state: PanelState): string {
+  const tabs = WINDOWS.map(
+    (w) =>
+      `<button class="tab${w.id === state.usageWindow ? ' on' : ''}" data-command="usageWindow" data-id="${w.id}">${escapeHtml(w.label)}</button>`,
+  ).join('');
+
+  const rows = totalsByVendor(within(state.usage, state.usageWindow, new Date()));
+  if (rows.length === 0) {
+    return `<div class="tabs">${tabs}</div>
+<div class="empty">Nothing recorded in this window yet.</div>`;
+  }
+
+  const busiest = Math.max(...rows.map((r) => r.tokensIn + r.tokensOut));
+  const cards = rows
+    .map((r) => {
+      const total = r.tokensIn + r.tokensOut;
+      const failed = r.failed === 0 ? '' : ` · <span class="warn">${r.failed} failed</span>`;
+      return `<div class="usage">
+  <div class="head"><span class="name">${escapeHtml(r.provider)}</span><span class="hint">${money(r.costUsd)}</span></div>
+  <div class="bar"><span style="width:${barWidth(total, busiest)}%"></span></div>
+  <div class="hint">${shortNumber(r.tokensIn)} in · ${shortNumber(r.tokensOut)} out · ${r.runs} run(s)${failed}</div>
+  <div class="hint">${shortDuration(r.seconds)} total · ${shortDuration(r.averageSeconds)} average</div>
+</div>`;
+    })
+    .join('\n');
+
+  const all = rows.reduce(
+    (t, r) => ({
+      tokens: t.tokens + r.tokensIn + r.tokensOut,
+      cost: r.costUsd === null ? t.cost : (t.cost ?? 0) + r.costUsd,
+      seconds: t.seconds + r.seconds,
+    }),
+    { tokens: 0, cost: null as number | null, seconds: 0 },
+  );
+
+  return `<div class="tabs">${tabs}</div>
+${cards}
+<div class="hint total">All vendors: ${shortNumber(all.tokens)} tokens · ${money(all.cost)} · ${shortDuration(all.seconds)}</div>`;
+}
+
 function roundsBody(sessions: readonly SessionFile[], nowMs: number = Date.now()): string {
   const rounds = sessions
     .flatMap((s) => s.rounds.map((r) => ({ branch: s.state.branch, ...r })))
@@ -527,6 +583,18 @@ const CSS = `
     background: var(--vscode-inputValidation-warningBorder);
     color: var(--vscode-editor-background);
   }
+  .tabs { display: flex; gap: 4px; margin: 0 0 8px; }
+  .tab { flex: 1; padding: 3px 6px; font: inherit; color: var(--vscode-foreground);
+         background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-widget-border);
+         border-radius: 3px; cursor: pointer; }
+  .tab.on { background: var(--vscode-button-background); color: var(--vscode-button-foreground);
+            border-color: var(--vscode-button-background); }
+  .usage { margin: 0 0 10px; }
+  .bar { height: 6px; background: var(--vscode-editorWidget-background); border-radius: 3px;
+         overflow: hidden; margin: 3px 0; }
+  .bar span { display: block; height: 100%; background: var(--vscode-button-background); }
+  .warn { color: var(--vscode-editorWarning-foreground); }
+  .total { margin-top: 8px; border-top: 1px solid var(--vscode-widget-border); padding-top: 6px; }
   .empty { opacity: .6; font-style: italic; margin: 6px 0; }
   .status { margin: 2px 0 0; }
 `;

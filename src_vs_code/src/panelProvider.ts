@@ -4,6 +4,7 @@ import { ModelChoice, parseCodexModels } from './models';
 import { liveRegions, OPEN_BY_DEFAULT, panelHtml } from './panelView';
 import { selectedFor } from './prompts';
 import { parseSession, SessionFile } from './rounds';
+import { parseUsage, UsageEntry, Window } from './usage';
 import { serverSettingsJson } from './serverSettingsFile';
 import { settingsFrom } from './settingsShape';
 import { normaliseId, Vendor, VENDOR_PRESETS, vendorsFrom } from './vendors';
@@ -33,6 +34,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   /** Which sections the person has open — kept HERE because the panel repaints on every
       change, and a section that snapped shut mid-edit would be worse than none. */
   private openSections: string[] = [...OPEN_BY_DEFAULT];
+  /** Which window the spending chart shows. A view preference, so it lives here, not in config. */
+  private usageWindow: Window = 'week';
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -89,6 +92,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       questions: this.watcher.openQuestions,
       openSections: this.openSections,
       sessions: await this.readSessions(),
+      usage: await this.readUsage(),
+      usageWindow: this.usageWindow,
     };
 
     // Two update paths, and which one runs is the whole fix for the pickers.
@@ -199,6 +204,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       case 'runVendor':
         if (id !== undefined) {
           await this.runVendor(id);
+        }
+        break;
+      case 'usageWindow':
+        if (id !== undefined) {
+          this.usageWindow = id as Window;
         }
         break;
       case 'customModel':
@@ -352,6 +362,21 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return parseCodexModels(new TextDecoder().decode(bytes));
     } catch {
       return []; // codex has never run here, or keeps its cache elsewhere
+    }
+  }
+
+  /**
+   * The server's append-only spending ledger.
+   *
+   * <p>Read whole: a year of rounds is a few hundred kilobytes, and streaming it would buy
+   * nothing a person could notice while adding a second way for the chart to be wrong.</p>
+   */
+  private async readUsage(): Promise<UsageEntry[]> {
+    try {
+      const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.dataDir, 'usage.jsonl'));
+      return parseUsage(new TextDecoder().decode(bytes));
+    } catch {
+      return []; // nothing has run yet, which the chart says in words
     }
   }
 

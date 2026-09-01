@@ -32,6 +32,7 @@ public sealed class PanelService
     private readonly RolePrompts _prompts;
     private readonly Escalations _escalations;
     private readonly ITranslator _translator;
+    private readonly UsageLedger _ledger;
 
     public PanelService(PanelSettings settings, VaultKeys keys, DateTime vaultReadUtc, IProcessLauncher launcher, Serilog.ILogger log)
     {
@@ -51,6 +52,7 @@ public sealed class PanelService
         _prompts = new RolePrompts(settings.DataDir);
         _escalations = new Escalations(settings.DataDir);
         _translator = new CliTranslator(launcher, settings.Translator);
+        _ledger = new UsageLedger(settings.DataDir);
 
         // Rounds this server never finished cannot be running any more, whatever their file says.
         // A round left at "running" would sit in the panel forever; sweeping only rounds whose
@@ -291,6 +293,18 @@ public sealed class PanelService
             {
                 live.Report(progress);
                 audit.Moved(progress);
+                // Every finished reviewer is recorded as it finishes, not at the end: a round that
+                // is killed halfway still cost money, and a ledger that only writes on success
+                // would under-report exactly the runs worth questioning.
+                if (progress.Outcome is { } finished)
+                {
+                    _ledger.Record(
+                        work.First(w => w.Invocation.Provider == progress.Provider && w.Invocation.Role == progress.Role).Invocation,
+                        finished,
+                        ModelOf(progress.Provider),
+                        session.State.Stage.ToString(),
+                        progress.Elapsed);
+                }
             });
             var summary = ReviewerSummaryFactory.From(results);
             var reviews = results.Select(r => r.Outcome).OfType<ReviewerOutcome.Ok>().Select(o => o.Review).ToList();
@@ -336,6 +350,9 @@ public sealed class PanelService
     /// universal one. Resolved per round rather than per session, which is the whole point:
     /// round two can ask a different question instead of the same one louder.
     /// </summary>
+    private string ModelOf(string provider) =>
+        _settings.Providers.FirstOrDefault(p => p.Provider == provider)?.Model ?? string.Empty;
+
     private PromptChoice ChoiceFor(ReviewRole role, int round) =>
         PromptCatalog.ForRound(
             role.ToString(),

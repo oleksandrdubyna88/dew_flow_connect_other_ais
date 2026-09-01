@@ -72,6 +72,7 @@ public sealed record DecisionDto(int Finding, string Action, string Reason = "")
     WriteIndented = true,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(PersistedSession))]
+[JsonSerializable(typeof(UsageEntry))]
 [JsonSerializable(typeof(ProvidersAnswer))]
 [JsonSerializable(typeof(SessionAnswer))]
 [JsonSerializable(typeof(ReviewAnswer))]
