@@ -1,5 +1,7 @@
 # Claude Code — ConnectOtherAIs
 
+Local rules live in `.claude/rules/common/`; [review-gate.md](.claude/rules/common/review-gate.md) governs how this product's own gate is called — a code round is fed the SCOPE as well as the diff, and the server refuses one without it.
+
 Shared family rules are mounted at `.claude/rules/shared` (the `dew_flow_conventions` submodule) and
 apply here exactly as local rules would. Fresh clone: `git submodule update --init .claude/rules/shared`.
 

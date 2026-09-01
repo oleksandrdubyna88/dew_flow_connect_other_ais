@@ -74,12 +74,23 @@ internal static class Tools
                 Name = "review_code",
                 Title = "Three independent reviewers per provider over the branch diff",
                 Description = """
-                    The code gate — REFUSES until a plan round reached `proceed`. Per enabled
-                    provider, three reviewers (architecture / security+reliability / UX-DX & code
-                    performance) read the plan, the shaped diff of `branch` over `baseRef` (lock
-                    files and build output excluded, binaries named not inlined), and a read-only
-                    worktree pinned to one SHA. Same reply shape and the same `resolve` duty as
-                    review_plan.
+                    The code gate — REFUSES until a plan round reached `proceed`, and REFUSES a
+                    bare diff. Per enabled provider, three reviewers (architecture /
+                    security+reliability / UX-DX & code performance) read the SCOPE, the shaped diff
+                    of `branch` over `baseRef` (lock files and build output excluded, binaries named
+                    not inlined), and a read-only worktree pinned to one SHA.
+
+                    `planText` IS that scope: what this change was supposed to achieve — the
+                    symptom or goal, what must be true when it is done, the constraints. Not a
+                    commit subject. A reviewer holding only a diff can judge whether the code is
+                    defensible; it cannot judge whether the code is what was asked for, which is
+                    the question this gate exists to answer. The plan text from the plan stage is
+                    kept with the session and reused when you send none.
+
+                    Reviewing an existing commit: state what it was supposed to do as `planText`,
+                    pass the commit as `branch` and its parent as `baseRef`.
+
+                    Same reply shape and the same `resolve` duty as review_plan.
                     """,
                 ReadOnly = true, Idempotent = false, Destructive = false, OpenWorld = true,
             });

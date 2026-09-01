@@ -135,3 +135,22 @@ sit at opposite ends instead of reading as `antigravity—`), its own `.cost`, a
 that is NOT a hint: the tokens are what the section exists to show. A test walks the emitted CSS
 and fails on any selector defined twice — the dimming had no other symptom, and nobody would have
 gone looking for a stylesheet collision.
+
+### Installing a reviewer's CLI from the row (2026-09-01)
+
+A fresh WSL box has none of these CLIs, and the panel is where somebody is standing when they find
+that out. The `⤓` button beside `▶` opens a terminal with the install command typed and waiting.
+
+- The command itself is identical in both shells — `npm install -g` does not care. What differs is
+  getting node in the first place, which is the actual reason somebody is reading this on a fresh
+  machine, so the PREREQUISITE is what is chosen per shell. The shell is read from the terminal
+  profile rather than from the platform: a Windows machine whose default profile is WSL wants the
+  apt line, and that is precisely the machine someone is on when they press it.
+- **A CLI npm does not publish is pointed at, never invented.** `agy` ships as a Go binary with the
+  Antigravity app; a plausible npm line for it would be a command that fails, in the one place
+  somebody came to because they did not know the answer. That row opens the documentation instead.
+
+Fixed alongside it: `vendorTerminal` resolved its executable with a two-step chain that fell through
+to `codex`, so `▶` on an Antigravity row opened a different vendor's CLI under that vendor's name —
+the wrong-model defect again, on the button whose whole purpose is signing that vendor in. Every
+runtime this build knows is now a row in one table.

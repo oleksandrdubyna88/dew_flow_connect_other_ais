@@ -36,6 +36,30 @@ has reached \`proceed\`.**
 5. **When the branch is written**, call \`review_code\` with the same \`planText\` and the
    \`baseRef\` you branched from. Three independent reviewers per vendor read the diff. Same
    \`resolve\` duty, same loop.
+
+   **A code round is never given a bare diff.** \`planText\` is the SCOPE — what this change was
+   supposed to achieve — and the server refuses a code round without one. A reviewer holding only a
+   diff can judge whether the code is defensible; it cannot judge whether the code is what was
+   ASKED for, and those come apart constantly: a change can be well written, well tested, and solve
+   the wrong problem. Only the second question catches that.
+
+   So the scope must say the symptom or goal, what must be true when it is done, and the
+   constraints — not a commit subject. Reviewing an EXISTING commit works the same way: state what
+   that commit was supposed to do as the scope, pass the commit as \`branch\` and its parent as
+   \`baseRef\`. The plan you passed at step 2 is kept with the session and reused automatically,
+   so in the normal flow this costs you nothing.
+
+   **A code round is never given a bare diff.** \`planText\` is the SCOPE — what this change was
+   supposed to achieve — and the server refuses a code round without one. A reviewer holding only a
+   diff can judge whether the code is defensible; it cannot judge whether the code is what was
+   ASKED for, and those come apart constantly: a change can be well written, well tested, and solve
+   the wrong problem. Only the second question catches that.
+
+   So the scope must say the symptom or goal, what must be true when it is done, and the
+   constraints — not a commit subject. Reviewing an EXISTING commit works the same way: state what
+   that commit was supposed to do as the scope, pass the commit as \`branch\` and its parent as
+   \`baseRef\`. The plan you passed at step 2 is kept with the session and reused automatically,
+   so in the normal flow this costs you nothing.
 6. Verdict \`call_human\` → surface the open findings to the person and stop.
    **Do not proceed on your own judgement.** Verdict \`escalated\` → apply the named step and run
    a fresh round.

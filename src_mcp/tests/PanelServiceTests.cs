@@ -30,6 +30,22 @@ public sealed class FakeCliEnvCollection;
 [Collection("fakecli-env")]
 public sealed class PanelServiceTests : IAsyncLifetime
 {
+    /// <summary>
+    /// A scope, not a title. The code gate refuses a bare diff, so every code round in these tests
+    /// carries what the change was supposed to achieve — which is what a real caller sends.
+    /// </summary>
+    private const string Scope = """
+        # SCOPE
+
+        The reviewer's own words must survive a failure. A reviewer that falls over is recorded with
+        an outcome and nothing else, so the round summary says "unparseable" without the text that
+        would not parse, and the same answer replayed by hand goes through cleanly.
+
+        When it is done: the raw answer is kept beside the session, the refusal names the file, and
+        a failed reviewer still reports what it consumed. Constraint: no new dependency, and the
+        launcher stays the one in v2.Shared.
+        """;
+
     private const string CleanReview = """{"findings": []}""";
 
     private const string OneMajor = """
@@ -128,7 +144,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
         var service = Service();
         await service.OpenAsync(_repo, "feature");
 
-        var answer = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", "the plan"));
+        var answer = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope));
 
         answer.GetProperty("error").GetString().Should().Contain("plan gate comes first");
     }
@@ -160,7 +176,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
         Parse(await service.ResolveAsync(_repo, "feature", "[]"))
             .GetProperty("instruction").GetString().Should().Contain("review_code");
 
-        Parse(await service.ReviewCodeAsync(_repo, "feature", "main", "the plan"))
+        Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope))
             .GetProperty("verdict").GetString().Should().Be("proceed");
         Parse(await service.ResolveAsync(_repo, "feature", "[]"))
             .GetProperty("stage").GetString().Should().Be("Done");
@@ -232,7 +248,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
                 File.Delete(file);
             }
 
-            await service.ReviewCodeAsync(_repo, "feature", "main", "the plan");
+            await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
 
             // Every recorded launch is the FIRST attempt here (the fake answers correctly), so the
             // assertion is on how the repair was BUILT: its working directory is not the worktree.
@@ -270,7 +286,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
                 File.Delete(file);
             }
 
-            await service.ReviewCodeAsync(_repo, "feature", "main", "the plan");
+            await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
 
             var argvs = Directory.GetFiles(record, "*.argv")
                 .Select(f => File.ReadAllText(f).Split('\0'))

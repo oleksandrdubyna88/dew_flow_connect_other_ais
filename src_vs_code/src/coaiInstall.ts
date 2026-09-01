@@ -120,9 +120,79 @@ export function newestServerTag(tags: readonly string[]): string | undefined {
  * <p>Empty for anything else: dressing an unrelated failure up as a lock would send the reader to
  * close a program that was never the problem.</p>
  */
-export function installFailureHint(message: string): string {
-  const locked = ['EPERM', 'EBUSY', 'EACCES', 'used by another process', 'Access is denied'];
-  return locked.some((marker) => message.includes(marker))
-    ? `${binaryNameFor('win-x64')} is in use — quit or restart the MCP client that is running it (it holds the file open), then press Update again.`
+export function installFailureHint(message: string, code = ''): string {
+  if (!onTheBinary(message)) {
+    return '';
+  }
+
+  if (SHARING_VIOLATION.includes(code) || message.includes('used by another process')) {
+    return `${binaryNameFor('win-x64')} is in use — quit or restart the MCP client that is running it (it holds the file open), then press Update again.`;
+  }
+
+  return ACCESS_DENIED.includes(code)
+    ? `${binaryNameFor('win-x64')} could not be replaced: writing to it was denied. If an MCP client is running it, quit that client; otherwise check the file's permissions — it may be read-only.`
     : '';
+}
+
+/**
+ * Unambiguous: something HAS the file open. Nothing else produces these on a copy.
+ *
+ * <p>Windows' own sentence is listed with them at the call site because it is the one case that
+ * carries no machine-readable code — it arrives inside the message of a wrapped error.</p>
+ */
+const SHARING_VIOLATION = ['EBUSY', 'ETXTBSY', 'Unavailable'];
+
+/**
+ * Ambiguous, and the reason these are separated at all.
+ *
+ * <p>Overwriting a running executable on Windows can surface as `EPERM`, and so can a read-only
+ * attribute or an ACL on the same file with no process holding it. Both reviewers named the cost
+ * of collapsing the two: somebody is sent to close a program that was never the problem, retries
+ * fail with the same confident sentence, and the real cause — a permission on disk — is hidden by
+ * the message that was supposed to explain it. So this branch names BOTH possibilities instead of
+ * asserting one.</p>
+ */
+const ACCESS_DENIED = ['EPERM', 'EACCES', 'NoPermissions'];
+
+/** The hint is only ever about the target binary; a failure on the scratch directory is not this. */
+function onTheBinary(message: string): boolean {
+  return message.includes(binaryNameFor('win-x64')) || message.includes(BINARY);
+}
+
+/**
+ * One run at a time, however many callers ask.
+ *
+ * <p>The panel's Update button and the ⋯ menu invoke the same command, and a download takes long
+ * enough that a second click lands mid-flight. Two installs racing on one destination path is a
+ * corrupt binary or a checksum that fails for a reason nobody could reconstruct — and pressing a
+ * button twice because the first press seemed to do nothing is exactly the habit this button
+ * taught its users.</p>
+ *
+ * <p>The second caller JOINS the first rather than being refused: they asked for the same thing,
+ * and an error telling somebody their own click was too fast is noise.</p>
+ *
+ * <p><b>The reference is cleared whether the work succeeded or threw</b>, which is the half both
+ * reviewers went looking for: a download that fails on a dropped connection must not leave every
+ * later click joining that same rejected promise until the window is reloaded. A retry after a
+ * failure is the most likely next thing a person does.</p>
+ */
+export class SingleFlight<T> {
+  private inFlight: Promise<T> | undefined;
+
+  public get isRunning(): boolean {
+    return this.inFlight !== undefined;
+  }
+
+  public async run(work: () => Promise<T>): Promise<T> {
+    if (this.inFlight !== undefined) {
+      return this.inFlight;
+    }
+
+    this.inFlight = work();
+    try {
+      return await this.inFlight;
+    } finally {
+      this.inFlight = undefined;
+    }
+  }
 }

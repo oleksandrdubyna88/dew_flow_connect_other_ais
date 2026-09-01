@@ -21,6 +21,22 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed class EndToEndTests : IAsyncLifetime
 {
+    /// <summary>
+    /// A scope, not a title. The code gate refuses a bare diff, so every code round in these tests
+    /// carries what the change was supposed to achieve — which is what a real caller sends.
+    /// </summary>
+    private const string Scope = """
+        # SCOPE
+
+        The reviewer's own words must survive a failure. A reviewer that falls over is recorded with
+        an outcome and nothing else, so the round summary says "unparseable" without the text that
+        would not parse, and the same answer replayed by hand goes through cleanly.
+
+        When it is done: the raw answer is kept beside the session, the refusal names the file, and
+        a failed reviewer still reports what it consumed. Constraint: no new dependency, and the
+        launcher stays the one in v2.Shared.
+        """;
+
     private const string Clean = """{"findings": []}""";
 
     private const string FourMajors = """
@@ -151,7 +167,7 @@ public sealed class EndToEndTests : IAsyncLifetime
 
         // The code stage: clean, so the session finishes.
         Script(Clean);
-        var code = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", "the improved plan"));
+        var code = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope));
         code.GetProperty("verdict").GetString().Should().Be("proceed");
         code.GetProperty("reviewers").GetString().Should().Contain("all 6 reviewers answered", "3 roles x 2 providers");
         Parse(await service.ResolveAsync(_repo, "feature", "[]")).GetProperty("stage").GetString().Should().Be("Done");
@@ -176,7 +192,7 @@ public sealed class EndToEndTests : IAsyncLifetime
         await service.ResolveAsync(_repo, "feature", "[]");
 
         Script(Clean, exit: 1, stderr: "429 Too Many Requests");
-        var code = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", "plan"));
+        var code = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope));
 
         code.GetProperty("verdict").GetString().Should().Be("call_human");
         code.GetProperty("reviewers").GetString().Should().Contain("0 of 6").And.Contain("rate limited");
@@ -241,7 +257,7 @@ public sealed class EndToEndTests : IAsyncLifetime
         Script(Clean);
         await service.ReviewPlanAsync(_repo, "feature", "plan");
         await service.ResolveAsync(_repo, "feature", "[]");
-        await service.ReviewCodeAsync(_repo, "feature", "main", "plan");
+        await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
         await service.ResolveAsync(_repo, "feature", "[]");
 
         // No worktrees, and the live checkout untouched.

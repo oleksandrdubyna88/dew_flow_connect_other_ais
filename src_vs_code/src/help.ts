@@ -19,6 +19,9 @@ export const HELP = {
   runVendor:
     'Open this vendor’s own CLI in a terminal, with its usage command ready at the prompt — press Enter to see what you have spent. This is also where you sign a CLI in: a vendor whose CLI is not authenticated fails every round with a timeout.',
 
+  installVendorCli:
+    'Install this vendor’s CLI. It opens a terminal with the exact command typed and waiting — one npm line, plus how to get node first if this machine has none. A fresh WSL box has none of these CLIs, and the answer being on somebody else’s docs page is why a reviewer never gets added.',
+
   addVendor:
     'Add another independent reviewer: a preset, or any OpenAI-compatible endpoint by name and URL. More vendors means more independent eyes — and more cost per round.',
 

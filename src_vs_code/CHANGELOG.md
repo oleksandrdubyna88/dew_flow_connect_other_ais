@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.15.0 — 2026-09-01
+
+**Install a reviewer's CLI from its own row.** The new `⤓` button beside `▶` opens a terminal with
+the install command typed and waiting. A fresh WSL box has none of these CLIs and the panel is where
+you are standing when you find that out; the answer living on somebody else's docs page is why a
+reviewer never gets added. The command is the same in PowerShell and bash — npm does not care — so
+what is chosen per shell is how to get node first, read from your terminal profile rather than from
+the platform. The Antigravity CLI ships with its app rather than through npm, so that row opens the
+instructions instead of a command that would fail.
+
+**`▶` opens the right CLI.** Its executable came from a two-step chain that fell through to
+`codex`, so an Antigravity row started a different vendor's CLI under that vendor's name — on the
+button whose whole purpose is signing that vendor in.
+
+**An update from the ⋯ menu repaints the panel too.** Only the panel's own button did, so an update
+started from the menu left the Server section showing the version it had just replaced — the very
+symptom the button was fixed for. Both doors repaint now.
+
+**A blocked update tells the truth about which failure it was.** A sharing violation (something has
+the file open) and an access denial (a read-only attribute, an ACL) are different problems with
+different cures, and collapsing them sent people to close a program that was never the reason. They
+are classified by error code now, and the ambiguous one names both possibilities instead of
+asserting one.
+
+**Two clicks are one install**, and a failed one leaves the next click free to retry.
+
+Every fix above except the first came out of a real review round through the gate itself, on one of
+this extension's own commits. Two of them were findings both vendors raised independently.
+
 ## 0.14.3 — 2026-09-01
 
 **The spending section is legible.** It looked switched off, and nothing was broken: `.usage` was

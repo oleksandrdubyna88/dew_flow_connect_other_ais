@@ -67,6 +67,17 @@ public sealed record PersistedSession(SessionState State, List<RoundRecord> Roun
 {
     /// <summary>The last round's merged findings — what `resolve`'s indices point into.</summary>
     public List<Finding> Pending { get; init; } = [];
+
+    /// <summary>
+    /// The scope: what this change was supposed to achieve, as the plan stage stated it.
+    /// </summary>
+    /// <remarks>
+    /// Kept because it is the SAME scope the code stage needs, and it was already agreed by both
+    /// halves. Throwing it away between the stages and then asking the caller to send it again is
+    /// how a caller ends up sending nothing — and a reviewer handed a bare diff can only judge
+    /// whether the code is defensible, never whether it is what was asked for.
+    /// </remarks>
+    public string PlanText { get; init; } = string.Empty;
 }
 
 /// <summary>

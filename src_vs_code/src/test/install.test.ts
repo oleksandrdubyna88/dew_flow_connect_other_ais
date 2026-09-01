@@ -12,7 +12,9 @@ import {
   updateAvailable,
   versionFromTag,
   installFailureHint,
+  SingleFlight,
 } from '../coaiInstall';
+import { VSCODE_COMMAND_FOR } from '../panelView';
 import { CLIENT_TARGETS, installedMessage, mcpServerBlock } from '../mcpBlock';
 import { claudeSnippet } from '../claudeSnippet';
 
@@ -136,21 +138,91 @@ test('an unsupported platform is refused rather than guessed at', () => {
  * error is an errno; what a person needs is the sentence that says which program to quit.
  */
 test('an update blocked by the running server says what to close', () => {
-  const hint = installFailureHint('EPERM: operation not permitted, copyfile ... coai-mcp.exe');
+  const hint = installFailureHint('EPERM: operation not permitted, copyfile ... coai-mcp.exe', 'EPERM');
   assert.match(hint, /MCP client/);
   assert.match(hint, /coai-mcp\.exe/);
 });
 
-test('a busy file and an access denial get the same answer, because they are the same cause', () => {
-  for (const raw of [
-    'EBUSY: resource busy or locked',
-    'EACCES: permission denied',
-    'The process cannot access the file because it is being used by another process.',
-  ]) {
-    assert.match(installFailureHint(raw), /MCP client/, raw);
-  }
-});
 
 test('an ordinary failure is passed through untouched, never dressed up as a lock', () => {
   assert.equal(installFailureHint('GitHub answered 503 for the release list'), '');
+});
+
+/**
+ * The exhaustiveness check proves a `case` exists, not that it invokes the right thing — a typo in
+ * the command id compiles, passes every guard, and reproduces the original silence exactly. The
+ * manifest is the only place that can settle it.
+ */
+test('every command the panel delegates to is one the manifest actually registers', () => {
+  const registered = new Set(
+    (JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')) as {
+      contributes: { commands: { command: string }[] };
+    }).contributes.commands.map((c) => c.command),
+  );
+
+  for (const [panelCommand, id] of Object.entries(VSCODE_COMMAND_FOR)) {
+    assert.ok(registered.has(id), `${panelCommand} delegates to "${id}", which nothing registers`);
+  }
+});
+
+
+
+test('a sharing violation is named plainly, whichever layer reported it', () => {
+  // The CODE decides. Windows' own sentence is the exception: it arrives inside the message of a
+  // wrapped error and carries no machine-readable code at all.
+  for (const [raw, code] of [
+    ['EBUSY: resource busy or locked, copyfile coai-mcp.exe', 'EBUSY'],
+    ['ETXTBSY: text file busy, copyfile coai-mcp.exe', 'ETXTBSY'],
+    ['cannot write coai-mcp.exe', 'Unavailable'],
+    // As VS Code wraps it: the path is in the message, which is what keeps this branch about
+    // the binary rather than about anything else the install touched.
+    ['Unable to write file coai-mcp.exe: The process cannot access the file because it is being used by another process.', ''],
+  ] as const) {
+    assert.match(installFailureHint(raw, code), /MCP client/, raw);
+  }
+});
+
+test('a failure on something that is not the binary keeps its own message', () => {
+  // A read-only attribute or an ACL on the scratch directory is EPERM too, and neither sentence
+  // this function can produce would be about the right file.
+  assert.equal(installFailureHint('EPERM: operation not permitted, mkdir .download-1', 'EPERM'), '');
+  assert.equal(installFailureHint('GitHub answered 503 for the release list'), '');
+});
+
+test('a second Update while one is running joins it instead of racing it', async () => {
+  const flight = new SingleFlight<number>();
+  let started = 0;
+  const work = async (): Promise<number> => {
+    started += 1;
+    await new Promise((r) => setTimeout(r, 20));
+    return started;
+  };
+
+  const [a, b] = await Promise.all([flight.run(work), flight.run(work)]);
+  assert.equal(started, 1, 'two installs racing on one destination is a corrupt binary');
+  assert.equal(a, b, 'the second caller wanted the same thing, so it gets the same answer');
+  assert.equal(flight.isRunning, false, 'and the gate reopens once it is done');
+});
+
+test('a failed install does not wedge the button until the window is reloaded', async () => {
+  // Both reviewers went looking for this half: a download dropped by a flaky connection must not
+  // leave every later click joining that same rejected promise. A retry is the most likely next
+  // thing a person does after a failure.
+  const flight = new SingleFlight<string>();
+  await assert.rejects(flight.run(() => Promise.reject(new Error('connection reset'))), /connection reset/);
+  assert.equal(flight.isRunning, false);
+  assert.equal(await flight.run(() => Promise.resolve('second attempt ran')), 'second attempt ran');
+});
+
+test('an access denial on the binary names both causes instead of asserting one', () => {
+  // EPERM covers a running exe AND a read-only attribute with nothing holding it. Naming only the
+  // first sends somebody to close a program that was never the problem, and hides the real cause.
+  const denied = installFailureHint('EPERM: operation not permitted, copyfile coai-mcp.exe', 'EPERM');
+  assert.match(denied, /quit that client/);
+  assert.match(denied, /read-only|permissions/);
+  assert.doesNotMatch(denied, /is in use —/, 'that sentence is for an unambiguous sharing violation');
+});
+
+test('a sharing violation still says plainly that something has the file open', () => {
+  assert.match(installFailureHint('EBUSY: resource busy or locked, copyfile coai-mcp.exe', 'EBUSY'), /is in use/);
 });

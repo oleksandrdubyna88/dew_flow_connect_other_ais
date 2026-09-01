@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { installFailureHint, ridFor } from './coaiInstall';
+import { installFailureHint, ridFor, SingleFlight } from './coaiInstall';
 import { claudeSnippet } from './claudeSnippet';
 import { CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
 import { binaryPath, installLatest, installedVersion, updateIsAvailable } from './installer';
@@ -44,7 +44,13 @@ export function activate(context: vscode.ExtensionContext): void {
     watcher,
     vscode.window.registerWebviewViewProvider(PanelProvider.viewType, panel),
     vscode.commands.registerCommand('coai.help', showHelp),
-    vscode.commands.registerCommand('coai.installServer', () => installServer(context)),
+    // Both doors repaint. The panel's own button used to be the only path that did — it awaits
+    // the command and then renders — so an update started from THIS menu left the Server section
+    // showing the version it had replaced, which is the very symptom the button was fixed for.
+    vscode.commands.registerCommand('coai.installServer', async () => {
+      await installServer(context);
+      await panel.render();
+    }),
     vscode.commands.registerCommand('coai.copyConfigBlock', () => copyConfigBlock(context)),
     vscode.commands.registerCommand('coai.copyClaudeSnippet', copyClaudeSnippet),
     vscode.commands.registerCommand('coai.showRounds', () => showRounds(watcher)),
@@ -97,7 +103,14 @@ function settings(): ReturnType<typeof settingsFrom> {
   return settingsFrom((section) => config.get(section));
 }
 
+/** One install at a time: the panel button and the ⋯ menu are two doors to the same work. */
+const installing = new SingleFlight<void>();
+
 async function installServer(context: vscode.ExtensionContext): Promise<void> {
+  await installing.run(() => install(context));
+}
+
+async function install(context: vscode.ExtensionContext): Promise<void> {
   try {
     const target = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: 'Installing coai-mcp…' },
@@ -108,7 +121,7 @@ async function installServer(context: vscode.ExtensionContext): Promise<void> {
     void vscode.window.showInformationMessage(`${installedMessage(target.fsPath)} Paste it into: ${targets}`);
   } catch (error) {
     const raw = message(error);
-    const hint = installFailureHint(raw);
+    const hint = installFailureHint(raw, codeOf(error));
     void vscode.window.showErrorMessage(
       hint.length > 0 ? `coai-mcp was not updated: ${hint}` : `coai-mcp was not installed: ${raw}`,
     );
@@ -253,4 +266,10 @@ async function offerUpdate(context: vscode.ExtensionContext): Promise<void> {
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Node puts an errno here; `vscode.FileSystemError` puts its own name. Absent is empty, never a guess. */
+function codeOf(error: unknown): string {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === 'string' ? code : '';
 }

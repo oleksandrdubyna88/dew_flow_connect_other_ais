@@ -174,6 +174,8 @@ function vendorCard(vendor: Vendor, codexModels: readonly ModelChoice[]): string
     <label class="name" for="v-${id}">${id}</label>
     <button class="run" data-command="runVendor" data-id="${id}" title="${escapeHtml(HELP.runVendor)}"
             aria-label="Open ${id} in a terminal">▶</button>
+    <button class="run get" data-command="installVendorCli" data-id="${id}" title="${escapeHtml(HELP.installVendorCli)}"
+            aria-label="Install the ${id} CLI">⤓</button>
     <button class="link" data-command="removeVendor" data-id="${id}">remove</button>
   </div>
   <div class="field">
@@ -595,6 +597,9 @@ const CSS = `
   .vendor .name { font-weight: 600; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .vendor input[type="checkbox"] { flex: 0 0 auto; margin: 0; }
   /* The play button sits between the name and remove, centred in the gap they leave. */
+  /* The install button sits beside ▶ and is deliberately quieter: it is the thing you press
+     once, on a machine that does not have the CLI yet. */
+  .vendor .head .get { font-size: 11px; }
   .vendor .head .run {
     flex: 0 0 auto; width: auto; margin: 0 auto; padding: 1px 8px; line-height: 1.2;
     background: none; color: var(--vscode-charts-green); font-size: 13px;
@@ -685,11 +690,24 @@ export const PANEL_COMMANDS = [
   'installServer',
   'checkForUpdate',
   'usageWindow',
+  'installVendorCli',
   // Posted by the model picker rather than by a button: "another model…" is a request to type one.
   'customModel',
 ] as const;
 
 export type PanelCommand = (typeof PANEL_COMMANDS)[number];
+
+/**
+ * Panel commands that are only a request to run a command the extension registered, by id.
+ *
+ * <p>Named here rather than typed at the call site because the exhaustiveness check proves a
+ * `case` EXISTS, not that it invokes the right thing: a typo in the id would compile, pass every
+ * guard, and reproduce the original silence exactly. A test holds these ids against the manifest's
+ * own contributed commands, which is the only check that can catch that.</p>
+ */
+export const VSCODE_COMMAND_FOR = {
+  installServer: 'coai.installServer',
+} as const satisfies Partial<Record<PanelCommand, string>>;
 
 export function isPanelCommand(value: string | undefined): value is PanelCommand {
   return value !== undefined && (PANEL_COMMANDS as readonly string[]).includes(value);

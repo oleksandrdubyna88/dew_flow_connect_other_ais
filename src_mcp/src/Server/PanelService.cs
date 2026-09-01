@@ -242,26 +242,58 @@ public sealed class PanelService
     /// is expected to sit through.</para>
     /// </remarks>
     public Task<string> ReviewPlanAsync(string repoPath, string branch, string planText, CancellationToken ct = default) =>
+        // No floor here on purpose. A three-line plan is a BAD plan, and saying so is the reviewers'
+        // job — refusing it at the gate does their work for them and takes away the one round that
+        // would have told the person why. The floor belongs to the code stage, where the scope has
+        // something to be checked against.
         RunStageAsync(repoPath, branch, planText, RoundMachine.BeginPlanRound, needsWorktree: false,
             (session, workingDir, _) => Task.FromResult<IReadOnlyList<ReviewerWork>>(
                 BuildWork([ReviewRole.PlanCritique], workingDir, $"## The plan under review\n\n{planText}",
                     session.State.RoundsRunThisStage + 1)),
             ct);
 
-    /// <summary>The code gate — three reviewers per provider, over the branch in a read-only tree.</summary>
-    public Task<string> ReviewCodeAsync(string repoPath, string branch, string baseRef, string planText, CancellationToken ct = default) =>
-        RunStageAsync(repoPath, branch, planText, RoundMachine.BeginCodeRound, needsWorktree: true,
+    /// <summary>
+    /// The code gate — three reviewers per provider, over the branch in a read-only tree, and
+    /// never over a bare diff.
+    /// </summary>
+    /// <remarks>
+    /// <para>An empty <c>planText</c> used to be accepted in silence. That quietly narrowed every
+    /// reviewer's job from "is this what was asked for" to "is this diff reasonable" — two
+    /// different questions, and only the first catches a change that solved the wrong problem
+    /// well.</para>
+    /// <para>The plan stage's own text is reused when the caller sends none: it is the same scope,
+    /// it was already agreed by both halves, and asking for it twice is how a caller ends up
+    /// sending nothing.</para>
+    /// </remarks>
+    public Task<string> ReviewCodeAsync(string repoPath, string branch, string baseRef, string planText, CancellationToken ct = default)
+    {
+        var scope = Scope(repoPath, branch, planText);
+        // Only once the stage itself is reachable. "The plan stage has not passed" is the more
+        // useful sentence for a caller who skipped it, and telling them to send a scope for a
+        // round that could not have run either way sends them to fix the wrong thing.
+        if (_store.Load(repoPath, branch) is { State.PlanProceeded: true } && !CodeScope.IsSubstantial(scope))
+        {
+            // Refused before any worktree, any launcher, any token: nothing has to run to know it.
+            return Task.FromResult(Error(CodeScope.Refusal));
+        }
+
+        return RunStageAsync(repoPath, branch, scope, RoundMachine.BeginCodeRound, needsWorktree: true,
             async (session, workingDir, sha) =>
             {
                 var files = await _context.CollectAsync(repoPath, baseRef, sha, ct: ct);
                 var shaped = DiffShaper.Shape(files);
-                var bundle = new ReviewBundle(planText, branch, baseRef, sha, shaped);
+                var bundle = new ReviewBundle(scope, branch, baseRef, sha, shaped);
                 var context =
                     $"## The plan this change implements\n\n{bundle.PlanText}\n\n" +
                     $"## The change ({bundle.Branch} over {bundle.BaseRef}, at {bundle.Sha})\n\n{bundle.Diff.Text}";
                 return BuildWork(CodeRoles, workingDir, context, session.State.RoundsRunThisStage + 1);
             },
             ct);
+    }
+
+    /// <summary>What the caller sent, or what the plan stage already agreed — in that order.</summary>
+    private string Scope(string repoPath, string branch, string planText) =>
+        planText.Trim().Length > 0 ? planText : _store.Load(repoPath, branch)?.PlanText ?? string.Empty;
 
     /// <param name="needsWorktree">
     /// Whether the reviewers get a checkout at all. Only the code stage does: a plan reviewer with a
@@ -347,6 +379,11 @@ public sealed class PanelService
                 State = completed.State,
                 Rounds = [.. session.Rounds, record],
                 Pending = [.. merged],
+                // The scope is kept with the session so the CODE stage has it without the caller
+                // sending it twice. Asking for it again is how a caller ends up sending nothing,
+                // and a reviewer handed a bare diff answers a different question than the one the
+                // gate exists to ask.
+                PlanText = planText,
             });
             audit.Closing(answer.Verdict, gate.GatingCount, summary.Sentence, record);
             audit.Findings(merged);

@@ -134,3 +134,32 @@ used `ask_human` yet, the notice that exists to end this silence was itself sile
 `ProbeAsync` consults `VendorDiagnosis.ForRuntime` BEFORE launching `--version`, because a retired
 CLI answers `--version` from disk. See the retirement table in
 [module_runners.md](module_runners.md).
+
+### A code round is never handed a bare diff (2026-09-01)
+
+`review_code` took `planText` as an ordinary argument and an empty one was accepted in silence, so
+the reviewers' job could quietly narrow from *is this what was asked for* to *is this diff
+reasonable*. Those are different questions and the second is the cheap one: a change can be well
+written, well tested, and solve the wrong problem — a diff-only review approves it, because on its
+own terms nothing is wrong with it. It is also the only way an ABSENCE becomes visible: a diff shows
+what is there, and only a scope makes the unhandled case or the missing test show up as missing.
+
+Three parts:
+
+- `CodeScope` (`core/Rounds/CodeScope.cs`) — the floor and the refusal text. The floor is 200
+  characters and the honesty about it is in the code: this cannot measure whether a scope is GOOD,
+  only whether one was written. "fix the update button" passes any is-it-empty check and tells a
+  reviewer nothing.
+- `PersistedSession.PlanText` — the scope the plan stage agreed on is KEPT, so the code stage reuses
+  it and the caller is not asked for it twice. Asking twice is how a caller ends up sending nothing.
+- `PanelService.ReviewCodeAsync` refuses before any worktree, launcher or token — but only once the
+  stage itself is reachable. "The plan stage has not passed" is the more useful sentence for a caller
+  who skipped it, and telling them to send a scope for a round that could not have run either way
+  sends them to fix the wrong thing.
+
+**No floor at the plan stage, deliberately.** A three-line plan is a BAD plan and saying so is the
+reviewers' job — refusing it at the gate does their work for them and takes away the one round that
+would have explained why.
+
+The rule this implements, including how to review an EXISTING commit (scope from the intent, commit
+as `branch`, its parent as `baseRef`): [.claude/rules/common/review-gate.md](../.claude/rules/common/review-gate.md).

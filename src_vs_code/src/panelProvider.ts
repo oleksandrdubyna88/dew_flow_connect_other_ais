@@ -1,14 +1,21 @@
 import * as vscode from 'vscode';
 import { EscalationWatcher } from './escalationWatcher';
 import { ModelChoice, parseCodexModels } from './models';
-import { isPanelCommand, liveRegions, OPEN_BY_DEFAULT, panelHtml, staticKey } from './panelView';
+import {
+  isPanelCommand,
+  liveRegions,
+  OPEN_BY_DEFAULT,
+  panelHtml,
+  staticKey,
+  VSCODE_COMMAND_FOR,
+} from './panelView';
 import { parseSession, SessionFile } from './rounds';
 import { parseUsage, UsageEntry, Window } from './usage';
 import { latestServerVersion } from './installer';
 import { serverSettingsJson } from './serverSettingsFile';
 import { settingsFrom } from './settingsShape';
 import { normaliseId, Vendor, VENDOR_PRESETS, vendorsFrom } from './vendors';
-import { vendorTerminal } from './vendorTerminal';
+import { vendorInstall, vendorTerminal } from './vendorTerminal';
 
 /**
  * The sidebar panel: reviewers, language, the gate, the limits, and what is waiting on you.
@@ -148,6 +155,47 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   }
 
   /**
+   * The CLI a reviewer needs, in a terminal with the command typed and waiting.
+   *
+   * <p>Typed rather than sent, for the same reason the ▶ button does it: installing something
+   * globally is the person's decision, and a command pushed into a shell that has not finished
+   * starting is a line of stray text.</p>
+   *
+   * <p>The shell decides which prerequisite is shown, because that is the only part where
+   * PowerShell and bash differ — `npm install -g` is identical in both. A CLI that npm does not
+   * publish gets its documentation opened instead of a command that would fail.</p>
+   */
+  private async installVendorCli(id: string): Promise<void> {
+    const vendor = vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors')).find((v) => v.id === id);
+    if (vendor === undefined) {
+      return;
+    }
+
+    const install = vendorInstall(vendor);
+    if (install.command.length === 0) {
+      const open = 'Open the instructions';
+      const choice = await vscode.window.showInformationMessage(install.note, open);
+      if (choice === open) {
+        await vscode.env.openExternal(vscode.Uri.parse(install.docs));
+      }
+      return;
+    }
+
+    const terminal = vscode.window.createTerminal({ name: `coai · install ${vendor.id}` });
+    terminal.show();
+    if (install.note.length > 0) {
+      void vscode.window.showInformationMessage(install.note);
+    }
+
+    // Both lines are typed, newest last, so the prompt holds the install command itself: a machine
+    // that already has node needs only that one, and a machine that does not can scroll up one.
+    const shell = isPowerShell() ? install.prerequisite.powershell : install.prerequisite.bash;
+    terminal.sendText(`# needs node first? ${shell}`, false);
+    terminal.sendText('', true);
+    terminal.sendText(install.command, false);
+  }
+
+  /**
    * One role's prompt for one round.
    *
    * <p>Stored as <code>role -&gt; [round1, round2, ...]</code> — the shape the server reads and
@@ -232,11 +280,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
           await this.customModel(id);
         }
         break;
+      case 'installVendorCli':
+        if (id !== undefined) {
+          await this.installVendorCli(id);
+        }
+        break;
       case 'installServer':
         // The panel has no business downloading anything itself: the command that does it is
         // registered by the extension, is what the ⋯ menu invokes, and reports its own progress
         // and its own failure. The button's job is only to reach it.
-        await vscode.commands.executeCommand('coai.installServer');
+        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.installServer);
         break;
       default: {
         // A PanelCommand with no case above lands here and fails to compile. That is the whole
@@ -451,3 +504,16 @@ function nonce(): string {
   return Array.from({ length: 32 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
 }
 
+/**
+ * Which shell VS Code will actually open, so the right prerequisite is the one shown.
+ *
+ * <p>Read from the terminal profile rather than from the platform: a Windows machine whose
+ * default profile is a WSL shell wants the apt line, and that is precisely the machine somebody
+ * is on when they press this.</p>
+ */
+function isPowerShell(): boolean {
+  const profile = vscode.workspace
+    .getConfiguration('terminal.integrated.defaultProfile')
+    .get<string>(process.platform === 'win32' ? 'windows' : 'linux');
+  return process.platform === 'win32' && !/wsl|bash|ubuntu|git bash/i.test(profile ?? 'PowerShell');
+}
