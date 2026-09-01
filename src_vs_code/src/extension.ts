@@ -182,13 +182,30 @@ async function writeRoundsFile(watcher: EscalationWatcher): Promise<vscode.Uri |
 /**
  * Keeps an OPEN rounds view current while a round runs.
  *
- * <p>Only when it is already open in a tab: writing a file nobody is looking at every few seconds
- * is churn, and a document VS Code has open is reloaded from disk by the editor itself, so the
- * numbers advance without anybody pressing anything.</p>
+ * <p>Only when it is already open: writing a file nobody is looking at every few seconds is churn,
+ * and a document VS Code has open is reloaded from disk by the editor itself, so the numbers
+ * advance without anybody pressing anything.</p>
+ *
+ * <p><b>"Open" means a TAB, not a loaded document.</b> `workspace.textDocuments` is the editor's
+ * own cache and VS Code is free to drop an entry for a file the person is not currently looking
+ * at — so a rounds view left open behind another tab stopped being refreshed, and the file went
+ * stale with nothing to see but a number that would not move. A tab is what the person sees, so a
+ * tab is what this asks about. A document that IS loaded and has unsaved edits still wins: an
+ * automatic rewrite must never discard something somebody typed.</p>
  */
 async function refreshRoundsFile(watcher: EscalationWatcher): Promise<void> {
-  const open = vscode.workspace.textDocuments.filter((d) => !d.isDirty).map((d) => d.uri.fsPath);
-  if (roundsViewIsOpen(open, roundsFile().fsPath)) {
+  const path = roundsFile().fsPath;
+  const dirty = vscode.workspace.textDocuments.filter((d) => d.isDirty).map((d) => d.uri.fsPath);
+  if (roundsViewIsOpen(dirty, path)) {
+    return;
+  }
+
+  const tabs = vscode.window.tabGroups.all
+    .flatMap((group) => group.tabs)
+    .map((tab) => (tab.input instanceof vscode.TabInputText ? tab.input.uri.fsPath : ''))
+    .filter((p) => p.length > 0);
+  const loaded = vscode.workspace.textDocuments.map((d) => d.uri.fsPath);
+  if (roundsViewIsOpen([...tabs, ...loaded], path)) {
     await writeRoundsFile(watcher);
   }
 }

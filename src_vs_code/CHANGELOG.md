@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.1 — 2026-09-01
+
+**The rounds view refreshes while it is open behind another tab.** "Open" was asked of
+`workspace.textDocuments`, which is the editor's own cache — VS Code is free to drop an entry for
+a file nobody is currently looking at, and it does. So a rounds view left open behind another tab
+quietly stopped being rewritten, and the only symptom was a number that would not move. It now
+asks about a TAB, which is what the person actually sees. A loaded document with unsaved edits
+still wins: an automatic rewrite must never discard something somebody typed.
+
 ## 0.14.0 — 2026-09-01
 
 **Antigravity is the reviewer you get, not one you have to know about.** The adapter shipped a day
