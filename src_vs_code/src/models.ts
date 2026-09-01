@@ -16,7 +16,7 @@ export interface ModelChoice {
 }
 
 /** The shape of a vendor's CLI — what argv to build, not who the vendor is. */
-export type Runtime = 'codex' | 'gemini' | 'claude';
+export type Runtime = 'codex' | 'gemini' | 'claude' | 'antigravity';
 
 /** `~/.codex/models_cache.json` → the slugs it lists. A missing or broken cache is simply none. */
 export function parseCodexModels(text: string): ModelChoice[] {
@@ -73,12 +73,30 @@ export function modelsFor(
       ? [...discoveredCodex]
       : runtime === 'claude'
         ? [...CURATED_CLAUDE_MODELS]
-        : [...CURATED_GEMINI_MODELS];
+        : runtime === 'antigravity'
+          ? [...ANTIGRAVITY_MODELS]
+          : [...CURATED_GEMINI_MODELS];
   if (current.length > 0 && !base.some((m) => m.id === current)) {
     base.unshift({ id: current, label: `${current} (yours)` });
   }
   return base;
 }
+
+/**
+ * What `agy models` lists on a Google AI Pro subscription.
+ *
+ * <p>One subscription, three families: the effort level is part of the model id rather than a
+ * separate setting, which is why `-high` and `-low` are listed as distinct choices.</p>
+ */
+const ANTIGRAVITY_MODELS: readonly ModelChoice[] = [
+  { id: 'gemini-3.7-flash-high', label: 'Gemini 3.7 Flash (High)' },
+  { id: 'gemini-3.7-flash-medium', label: 'Gemini 3.7 Flash (Medium)' },
+  { id: 'gemini-3.7-flash-low', label: 'Gemini 3.7 Flash (Low)' },
+  { id: 'gemini-3.1-pro-high', label: 'Gemini 3.1 Pro (High)' },
+  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Thinking)' },
+  { id: 'claude-opus-4-6-thinking', label: 'Claude Opus 4.6 (Thinking)' },
+  { id: 'gpt-oss-120b-medium', label: 'GPT-OSS 120B (Medium)' },
+];
 
 /** Where the list came from, said in the panel so nobody mistakes curation for discovery. */
 export function modelsProvenance(runtime: Runtime, discoveredCodex: readonly ModelChoice[]): string {
@@ -87,6 +105,9 @@ export function modelsProvenance(runtime: Runtime, discoveredCodex: readonly Mod
   }
   if (runtime === 'claude') {
     return 'aliases the Claude CLI resolves to the latest of each family. Any exact id can be typed in.';
+  }
+  if (runtime === 'antigravity') {
+    return 'what `agy models` lists for this subscription — Gemini, Claude and GPT-OSS through one CLI.';
   }
   return discoveredCodex.length > 0
     ? `${discoveredCodex.length} models the Codex CLI has cached for this machine.`

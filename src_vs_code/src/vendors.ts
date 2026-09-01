@@ -1,5 +1,8 @@
 import { Runtime } from './models';
 
+/** Every CLI shape this build can drive. Kept beside the parser that has to recognise them. */
+const RUNTIMES: readonly Runtime[] = ['codex', 'gemini', 'claude', 'antigravity'];
+
 /**
  * The reviewers, as an editable LIST rather than a fixed three.
  *
@@ -95,12 +98,11 @@ export function vendorsFrom(value: unknown): Vendor[] {
     .filter((v): v is Record<string, unknown> => typeof v === 'object' && v !== null)
     .map((v) => ({
       id: typeof v['id'] === 'string' ? v['id'].trim().toLowerCase() : '',
-      runtime:
-        v['runtime'] === 'gemini'
-          ? ('gemini' as const)
-          : v['runtime'] === 'claude'
-            ? ('claude' as const)
-            : ('codex' as const),
+      // An unknown runtime becomes `codex` because that is the one that takes a base URL — but
+      // every runtime this build KNOWS must be listed in RUNTIMES. A missing name silently runs
+      // the wrong vendor's model and reports the answer under the right vendor's name, which is
+      // exactly the defect the server side had until a reviewer named it.
+      runtime: RUNTIMES.includes(v['runtime'] as Runtime) ? (v['runtime'] as Runtime) : ('codex' as const),
       model: typeof v['model'] === 'string' ? v['model'].trim() : '',
       enabled: v['enabled'] !== false,
       baseUrl: typeof v['baseUrl'] === 'string' ? v['baseUrl'].trim() : '',
