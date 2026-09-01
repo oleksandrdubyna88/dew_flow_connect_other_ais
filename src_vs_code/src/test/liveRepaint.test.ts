@@ -32,6 +32,7 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   sessions: [],
   usage,
   usageWindow: 'week',
+  cliStatus: {},
   ...over,
 });
 

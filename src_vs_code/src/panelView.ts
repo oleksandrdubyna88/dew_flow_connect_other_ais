@@ -5,6 +5,7 @@ import { ModelChoice, modelsFor, modelsProvenance } from './models';
 import { ROLES, promptsFor, selectedFor } from './prompts';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, WINDOWS, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerLines, RoundRecord, SessionFile, stageName } from './rounds';
+import { CliStatus, cliStatusNote, updateAvailable, UNKNOWN_CLI } from './cliVersions';
 import { Vendor } from './vendors';
 
 /**
@@ -40,6 +41,14 @@ export interface PanelState {
   readonly usageWindow: Window;
   /** The newest published server version, or empty while it is unknown or unreachable. */
   readonly latestServerVersion: string;
+  /**
+   * Each vendor's installed and published CLI version, by vendor id.
+   *
+   * <p>Absent, or both fields empty, is a legitimate answer — an offline machine, a CLI that is not
+   * installed, a vendor this build has no official version source for — and it renders as a grey
+   * button rather than as an error.</p>
+   */
+  readonly cliStatus: Readonly<Record<string, CliStatus>>;
 }
 
 /**
@@ -143,18 +152,30 @@ ${body}
  * section that snapped shut while somebody was typing in it would be worse than no collapsing.</p>
  */
 function section(id: string, title: string, open: readonly string[], body: string): string {
-  return `<details class="section" data-section="${id}"${open.includes(id) ? ' open' : ''}>
+  return `<details class="section sec-${id}" data-section="${id}"${open.includes(id) ? ' open' : ''}>
   <summary>${escapeHtml(title)}</summary>
 ${body}
 </details>`;
 }
 
+/**
+ * What a screen reader says, which cannot be a colour.
+ *
+ * <p>The green is the fast signal and it is never the only one: the label and the tooltip both
+ * carry the same fact in words.</p>
+ */
+function updateLabel(id: string, cli: CliStatus): string {
+  return updateAvailable(cli.installed, cli.latest)
+    ? `Update the ${id} CLI to ${cli.latest}`
+    : `The ${id} CLI is up to date`;
+}
+
 function reviewersBody(state: PanelState): string {
-  return `${state.vendors.map((v) => vendorCard(v, state.codexModels)).join('\n')}
+  return `${state.vendors.map((v) => vendorCard(v, state.codexModels, state.cliStatus[v.id] ?? UNKNOWN_CLI)).join('\n')}
 <button class="add" data-command="addVendor" title="${escapeHtml(HELP.addVendor)}">＋&nbsp; Add a reviewer</button>`;
 }
 
-function vendorCard(vendor: Vendor, codexModels: readonly ModelChoice[]): string {
+function vendorCard(vendor: Vendor, codexModels: readonly ModelChoice[], cli: CliStatus): string {
   const id = escapeHtml(vendor.id);
   const models = modelsFor(vendor.runtime, codexModels, vendor.model);
   const endpoint =
@@ -195,6 +216,9 @@ function vendorCard(vendor: Vendor, codexModels: readonly ModelChoice[]): string
             aria-label="Open ${id} in a terminal">▶</button>
     <button class="run get" data-command="installVendorCli" data-id="${id}" title="${escapeHtml(HELP.installVendorCli)}"
             aria-label="Install the ${id} CLI">⤓</button>
+    <button class="run upd${updateAvailable(cli.installed, cli.latest) ? ' has-update' : ''}"
+            data-command="updateVendorCli" data-id="${id}" title="${escapeHtml(cliStatusNote(vendor.id, cli))}"
+            aria-label="${escapeHtml(updateLabel(vendor.id, cli))}">⟳</button>
     <button class="link" data-command="removeVendor" data-id="${id}">remove</button>
   </div>
   <div class="field">
@@ -618,11 +642,28 @@ const CSS = `
   }
   .section { border-top: 1px solid var(--vscode-panel-border); padding: 0 0 8px; }
   .section > summary {
-    font-size: 11px; text-transform: uppercase; letter-spacing: .06em; opacity: .75;
+    /* .9 rather than .75: coloured text at .75 on a dark ground is muddy, and the colour is
+       doing the separating now. */
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em; opacity: .9;
     font-weight: 600; padding: 10px 0 6px; cursor: pointer; list-style: none;
     display: flex; align-items: center; gap: 6px; user-select: none;
   }
   .section > summary:hover { opacity: 1; }
+  /* Each header that opens carries its own tone, from the same palette the role boxes use, so a
+     column of eight identical grey words becomes something you can aim at. The chevron follows for
+     free: it is drawn from currentColor.
+
+     Colour is never the only signal — every heading is also its own word — and each tone is a
+     --vscode-charts-* token with a hex fallback, so a theme that redefines the charts palette
+     moves these with it. */
+  .sec-reviewers > summary { color: var(--tone-arch); }
+  .sec-prompts   > summary { color: var(--tone-plan); }
+  .sec-gate      > summary { color: var(--tone-sec); }
+  .sec-limits    > summary { color: var(--tone-limits); }
+  .sec-keys      > summary { color: var(--tone-keys); }
+  .sec-server    > summary { color: var(--tone-uxdx); }
+  .sec-usage     > summary { color: var(--tone-arch); }
+  .sec-rounds    > summary { color: var(--tone-plan); }
   .section > summary::-webkit-details-marker { display: none; }
   /* A real chevron, drawn from two borders rather than borrowed from punctuation: it matches the
      Explorer's weight, scales with the text, and points the right way in both states with no
@@ -675,6 +716,14 @@ const CSS = `
   /* The install button sits beside ▶ and is deliberately quieter: it is the thing you press
      once, on a machine that does not have the CLI yet. */
   .vendor .head .get { font-size: 11px; }
+  /* The update button says, by its colour, whether there is anything to do — which is the question
+     somebody actually has, and the one they used to answer by leaving the panel. Grey is the
+     resting state AND the "could not tell" state: a button that lights up because a fetch failed
+     would be worse than one that never lights up. */
+  .vendor .head .upd { font-size: 12px; color: var(--vscode-descriptionForeground); }
+  .vendor .head .upd.has-update { color: var(--vscode-charts-green); font-weight: 600; }
+  .vendor .head .upd:hover { border-color: var(--vscode-descriptionForeground); }
+  .vendor .head .upd.has-update:hover { border-color: var(--vscode-charts-green); }
   .vendor .head .run {
     flex: 0 0 auto; width: auto; margin: 0 auto; padding: 1px 8px; line-height: 1.2;
     background: none; color: var(--vscode-charts-green); font-size: 13px;
@@ -710,6 +759,8 @@ const CSS = `
     --tone-arch: var(--vscode-charts-blue, #569cd6);
     --tone-sec: var(--vscode-charts-orange, #ce9178);
     --tone-uxdx: var(--vscode-charts-green, #b5cea8);
+    --tone-limits: var(--vscode-charts-yellow, #d7ba7d);
+    --tone-keys: var(--vscode-charts-red, #f14c4c);
     --tone-code: var(--vscode-widget-border, #454545);
   }
   .role-group { border: 1px solid var(--vscode-widget-border); border-radius: 4px; padding: 6px 8px 2px; margin: 0 0 10px; }
@@ -789,6 +840,7 @@ export const PANEL_COMMANDS = [
   'checkForUpdate',
   'usageWindow',
   'installVendorCli',
+  'updateVendorCli',
   // Posted by the model picker rather than by a button: "another model…" is a request to type one.
   'customModel',
 ] as const;

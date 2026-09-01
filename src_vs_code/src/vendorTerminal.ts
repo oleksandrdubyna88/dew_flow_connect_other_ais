@@ -36,6 +36,27 @@ const EXECUTABLE: Record<string, string> = {
   antigravity: 'agy',
 };
 
+/**
+ * Which binary this vendor actually is, on this machine.
+ *
+ * <p>A CLI path somebody set wins over the runtime's default name. The whole point of that field is
+ * that PATH could not answer — in WSL, `codex` resolves to the WINDOWS npm shim through the interop
+ * PATH and dies on a missing Linux binary — so anything that runs this vendor and ignores the field
+ * runs the wrong software under the right name.</p>
+ *
+ * <p>UNQUOTED. Quoting is a command-LINE concern: a path with a space is two arguments there and one
+ * argument to `spawn`, which would look for a directory literally named with quotes.</p>
+ *
+ * <p>An unknown runtime rides the Codex CLI, which is the deliberate fallback everywhere else too —
+ * a runtime this build KNOWS must be in the table above, because the chain this replaced quietly
+ * opened codex for `antigravity` and the sign-in button started a different vendor's CLI.</p>
+ */
+export function executableFor(vendor: Vendor): string {
+  return vendor.executablePath.length > 0
+    ? vendor.executablePath
+    : (EXECUTABLE[vendor.runtime] ?? 'codex');
+}
+
 export function vendorTerminal(vendor: Vendor): VendorTerminal {
   // An unknown runtime rides the Codex CLI against its own base URL, which is the deliberate
   // fallback everywhere else too. A runtime this build KNOWS must be listed above: the chain this
@@ -45,10 +66,7 @@ export function vendorTerminal(vendor: Vendor): VendorTerminal {
   // A CLI path somebody set wins over both. The whole point of the field is that PATH could not
   // answer; a button that then runs the bare name ignores the one thing they told it. Quoted,
   // because a path with a space is otherwise two arguments.
-  const executable =
-    vendor.executablePath.length > 0
-      ? quoteIfNeeded(vendor.executablePath)
-      : (EXECUTABLE[vendor.runtime] ?? 'codex');
+  const executable = quoteIfNeeded(executableFor(vendor));
   const model =
     vendor.model.length === 0
       ? []

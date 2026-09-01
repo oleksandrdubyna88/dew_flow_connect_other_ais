@@ -18,6 +18,7 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   openSections: ['reviewers', 'language', 'prompts', 'gate', 'limits', 'keys', 'server', 'usage', 'rounds'],
   usage: [],
   usageWindow: 'week',
+  cliStatus: {},
   latestServerVersion: '',
   ...over,
 });

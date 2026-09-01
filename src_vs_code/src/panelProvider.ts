@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import * as vscode from 'vscode';
 import { EscalationWatcher } from './escalationWatcher';
 import { ModelChoice, parseCodexModels } from './models';
@@ -11,11 +12,17 @@ import {
 } from './panelView';
 import { parseSession, SessionFile } from './rounds';
 import { parseUsage, UsageEntry, Window } from './usage';
+import {
+  CliStatus,
+  latestCliVersion,
+  parseCliVersion,
+  versionSourceFor,
+} from './cliVersions';
 import { latestServerVersion } from './installer';
 import { serverSettingsJson } from './serverSettingsFile';
 import { roleRecordUpdate, SettingMessage, settingsFrom, settingWrite } from './settingsShape';
 import { normaliseId, Vendor, VENDOR_PRESETS, vendorsFrom } from './vendors';
-import { Platform, vendorInstall, vendorTerminal } from './vendorTerminal';
+import { executableFor, Platform, vendorInstall, vendorTerminal } from './vendorTerminal';
 
 /**
  * The sidebar panel: reviewers, language, the gate, the limits, and what is waiting on you.
@@ -46,6 +53,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   /** The newest published server version, and when GitHub last answered. */
   private latestServer = '';
   private latestCheckedAt = 0;
+  /** Each vendor's installed and published CLI version, and when they were last read. */
+  private cliStatus: Record<string, CliStatus> = {};
+  private cliCheckedAt = 0;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -105,6 +115,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       usage: await this.readUsage(),
       usageWindow: this.usageWindow,
       latestServerVersion: await this.publishedVersion(),
+      cliStatus: await this.vendorCliStatus(vendors),
     };
 
     // Two update paths, and which one runs is the whole fix for the pickers.
@@ -125,6 +136,79 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
 
     void this.view.webview.postMessage({ type: 'live', ...liveRegions(state) });
+  }
+
+  /**
+   * What each reviewer's CLI is, and what its vendor publishes.
+   *
+   * <p>Cached for half an hour, like the server's own update check and for the same reason: the
+   * panel repaints whenever anything changes, and an uncached read would spawn one process and open
+   * one connection PER VENDOR every time. Pressing the button clears the cache, so "I just
+   * updated it" is answered immediately rather than in twenty minutes.</p>
+   *
+   * <p>Nothing here can fail loudly. A CLI that is not installed, a machine with no network, a
+   * vendor with no official version source — each leaves its entry empty, and an empty entry is a
+   * grey button. Guessing would be worse: a button that lights up because a fetch failed is a
+   * button that lies.</p>
+   */
+  private async vendorCliStatus(vendors: readonly Vendor[]): Promise<Record<string, CliStatus>> {
+    const HALF_AN_HOUR = 30 * 60 * 1000;
+    if (Date.now() - this.cliCheckedAt < HALF_AN_HOUR) {
+      return this.cliStatus;
+    }
+    this.cliCheckedAt = Date.now();
+
+    const entries = await Promise.all(vendors.map(async (vendor) => [vendor.id, await this.oneCliStatus(vendor)] as const));
+    this.cliStatus = Object.fromEntries(entries);
+
+    return this.cliStatus;
+  }
+
+  private async oneCliStatus(vendor: Vendor): Promise<CliStatus> {
+    const source = versionSourceFor(vendor.runtime, platform(), process.arch === 'arm64' ? 'arm64' : 'x64');
+
+    const [installed, latest] = await Promise.all([
+      this.installedCliVersion(vendor),
+      source === undefined ? Promise.resolve('') : latestCliVersion(source),
+    ]);
+
+    return { installed, latest };
+  }
+
+  /**
+   * What the binary on this machine says when asked.
+   *
+   * <p>The vendor's CLI path wins over the bare name, exactly as the ▶ and ⤓ buttons do: the whole
+   * point of that field is that PATH could not answer, and asking the wrong binary its version
+   * would report a number for software the reviews do not run.</p>
+   */
+  private async installedCliVersion(vendor: Vendor): Promise<string> {
+    const executable = executableFor(vendor);
+    if (executable.length === 0) {
+      return '';
+    }
+
+    return new Promise((resolve) => {
+      // A CLI that hangs must not hold up a repaint, so the wait is short and its failure is the
+      // same "could not tell" every other failure here produces.
+      const child = spawn(executable, ['--version'], { shell: false });
+      const timer = setTimeout(() => {
+        child.kill();
+        resolve('');
+      }, 8000);
+      let output = '';
+      child.stdout?.on('data', (chunk: Buffer) => {
+        output += chunk.toString();
+      });
+      child.on('error', () => {
+        clearTimeout(timer);
+        resolve('');
+      });
+      child.on('close', () => {
+        clearTimeout(timer);
+        resolve(parseCliVersion(output));
+      });
+    });
   }
 
   /**
@@ -321,6 +405,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         break;
       case 'installVendorCli':
         if (id !== undefined) {
+          await this.installVendorCli(id);
+        }
+        break;
+      case 'updateVendorCli':
+        if (id !== undefined) {
+          // The SAME command the install button runs, and that is the vendors' own answer rather
+          // than a shortcut: OpenAI prints one line under both "Install Codex" and "Update Codex",
+          // Anthropic's native install is the same script, and `agy` has no update subcommand at
+          // all. Re-running the installer IS the update for every CLI here.
+          this.cliCheckedAt = 0; // so the button stops being green as soon as the version moves
           await this.installVendorCli(id);
         }
         break;

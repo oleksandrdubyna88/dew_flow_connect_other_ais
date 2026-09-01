@@ -241,3 +241,36 @@ identical for three roles instead of one.
 could not save. A test written by copying markup can only confirm that markup;
 `settingWrite.test.ts` asks where the value LANDS, and one of its assertions is that no role-keyed
 control arrives in the vendor slot at all.
+
+### Where a CLI version comes from (2026-09-01)
+
+`cliVersions.ts` answers two questions per vendor and the panel colours one button from them.
+
+**Installed** is the binary's own `--version`, spawned with an 8-second cap, through
+`executableFor(vendor)` — the same "a CLI path beats the bare name" decision the ▶ and ⤓ buttons
+make, extracted so there is one of it. The output formats all differ (`codex-cli 0.152.0`, a bare
+`1.1.23`, `2.1.211 (Claude Code)`), and a node CLI that FAILS prints its own banner last, so the
+parser drops any line naming Node.js before looking for a semver — the same trap the reviewer
+summaries already learned.
+
+**Published** comes from the vendor, never from a table shipped here:
+
+| runtime | source | checked |
+|---|---|---|
+| codex, gemini, claude | `registry.npmjs.org/<package>/latest` | queried live: 0.152.0, 0.57.0, 2.1.257 |
+| antigravity | `…run.app/manifests/${os}_${arch}.json` — the endpoint Google's own `install.sh` reads at line 99 | six manifests, all answered 1.1.23 |
+
+A runtime this build does not know gets `undefined`, not a guess. An unknown runtime rides the Codex
+CLI for REVIEWS, which is deliberate — but reporting codex's version for a vendor that is not codex
+would be a confident lie.
+
+**There is no update COMMAND.** Every vendor here updates by re-running its own installer, which was
+established by reading their sites rather than assumed: OpenAI prints one line under both *Install
+Codex* and *Update Codex*, Anthropic's native install is the same script, `agy` has no `update`
+subcommand. So ⟳ runs exactly what ⤓ runs, and the only new knowledge is the pair of numbers.
+
+Both reads are cached for half an hour — the panel repaints on every change, and uncached this would
+spawn a process and open a connection per vendor each time. Pressing the button clears the cache, so
+"I just updated it" is answered now rather than in twenty minutes. Every failure path lands on an
+empty string, which renders grey: a button that lights up because a fetch failed is a button that
+lies.

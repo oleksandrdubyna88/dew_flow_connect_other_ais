@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.20.0 — 2026-09-01
+
+**Every reviewer row has an update button, and it says by its colour whether there is anything to
+update.** Green when the vendor publishes a version newer than the one on this machine, grey when you
+are on the newest — and grey again when either number could not be read, because a button that
+lights up on a failed fetch is worse than one that never lights up. Both versions are in the tooltip
+and in the accessible label, so the colour is the fast signal and never the only one.
+
+Pressing it opens a terminal with the same command the install button uses. **That is the vendors'
+own answer, not a shortcut**: OpenAI's quickstart prints the identical `curl … install.sh | sh` under
+*Install Codex* and under *Update Codex*, Anthropic's native install is the same script, and `agy`
+has no `update` subcommand at all. Re-running the installer IS the update for every CLI here.
+
+Where the published version is read from, checked at each vendor's own site rather than recalled:
+npm's registry for `@openai/codex`, `@google/gemini-cli` and `@anthropic-ai/claude-code`; for
+Antigravity, the release manifest Google's own `install.sh` reads. A vendor this build has no
+official source for gets no guess — its button stays grey.
+
+**The collapsible headers carry the panel's colours.** Eight identical grey words were a column you
+had to read; each one now has its own tone from the same palette the role boxes use, and the chevron
+follows for free. Every tone is a `--vscode-charts-*` token with a hex fallback, so a theme that
+defines the charts palette moves these with it.
+
 ## 0.19.1 — 2026-09-01
 
 **A role's Rounds number would not stick, and the prompt pickers would not follow it.** Type 3 into
