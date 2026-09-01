@@ -56,20 +56,38 @@ export function universalFor(role: string): PromptChoice {
  * What the panel shows as selected for one round — the stored choice, or what the server would
  * actually use, so the box never reads as "nothing" when a prompt is in fact chosen.
  */
+/** The one prompt that judges nothing but the project's own written rules. */
+const CONVENTIONS_ID = 'conventions';
+
 export function selectedFor(
   role: string,
   round: number,
   stored: Readonly<Record<string, readonly string[]>>,
   rotating: boolean,
+  hasRules = true,
 ): string {
   const chosen = stored[role]?.[round - 1];
   if (chosen !== undefined && promptsFor(role).some((p) => p.id === chosen)) {
     return chosen;
   }
+  // ROUND ONE of a CODE role is the conventions pass, mirroring PromptCatalog.ForRound on the
+  // server. Without this the panel showed `Universal` for a round the server would run
+  // `conventions` in — the panel saying one thing while the server does another, which is the
+  // defect this product keeps producing. Its twin is ConventionsPassTests in the C# suite.
+  //
+  // `hasRules` is optimistic here because the panel cannot know: the server decides at round time
+  // by looking in the worktree. The section text says so, and a repo with no written rules falls
+  // back to the universal prompt on the server side.
+  if (hasRules && round === 1 && role !== 'PlanCritique') {
+    return CONVENTIONS_ID;
+  }
+
   if (!rotating) {
     return universalFor(role).id;
   }
-  const order = [...promptsFor(role)].sort((a, b) => Number(b.universal) - Number(a.universal));
+  const order = [...promptsFor(role)]
+    .filter((p) => p.id !== CONVENTIONS_ID)
+    .sort((a, b) => Number(b.universal) - Number(a.universal));
   // A role nobody knows has no prompts, and `% 0` is NaN — which indexes to undefined and throws
   // on the next property access. A picker for an unknown role should be empty, not fatal.
   return order.length === 0 ? '' : order[(round - 1) % order.length]!.id;

@@ -22,6 +22,9 @@ export const HELP = {
   runVendor:
     'Open this vendor’s own CLI in a terminal, with its usage command ready at the prompt — press Enter to see what you have spent. This is also where you sign a CLI in: a vendor whose CLI is not authenticated fails every round with a timeout.',
 
+  vendorPrice:
+    'What this vendor bills per million tokens, in and out. From YOU, never from a table this product ships: a shipped price list is wrong for anyone on a flat subscription, wrong the first time a vendor changes a price, and wrong silently in both cases. Only Claude reports its own cost; codex and antigravity report tokens and nothing else, so their money read as a dash until you fill these in. What is computed from your rate is marked with a tilde — ~$0.42 is what the tokens work out to, $0.42 is what a vendor actually charged, and the totals keep the two apart.',
+
   installVendorCli:
     'Install this vendor’s CLI. It opens a terminal with the exact command typed and waiting — one npm line, plus how to get node first if this machine has none. A fresh WSL box has none of these CLIs, and the answer being on somebody else’s docs page is why a reviewer never gets added.',
 

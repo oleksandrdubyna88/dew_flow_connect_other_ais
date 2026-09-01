@@ -1,3 +1,4 @@
+import { money } from './usage';
 /**
  * Reading the server's own session files, so the rounds view shows what actually happened rather
  * than what the extension guessed. Pure apart from the read: the shapes and the rendering are
@@ -70,10 +71,6 @@ export function costPhrase(round: RoundRecord): string {
   return round.costUsd == null ? `${tokens} · no cost reported` : `${tokens} · ${money(round.costUsd)}`;
 }
 
-/** Cents matter here: a round is fractions of a dollar, and rounding to cents shows $0.00. */
-export function money(usd: number): string {
-  return usd >= 1 ? `$${usd.toFixed(2)}` : `$${usd.toFixed(4)}`;
-}
 
 function thousands(count: number): string {
   return count >= 1000 ? `${(count / 1000).toFixed(count >= 10000 ? 0 : 1)}k` : String(count);
@@ -133,19 +130,63 @@ export function renderSession(session: SessionFile, nowMs: number = Date.now()):
   // none in the other — and a person comparing them asked which was right, which is the only
   // sensible response to a product that says two things about one round.
   const rows = session.rounds
-    .map(
-      (r) =>
-        `| ${stageName(r.stage)} | ${r.number} | ${r.subject ?? ''} | ${statusCell(r)} | ` +
-        `\`${r.verdict}\` | ${r.gatingCount} | ${elapsed(r, nowMs)} | ${costPhrase(r)} | ${r.reviewers} |`,
+    .map((r) =>
+      row([
+        stageName(r.stage),
+        String(r.number),
+        r.subject ?? '',
+        statusCell(r),
+        `\`${r.verdict}\``,
+        String(r.gatingCount),
+        elapsed(r, nowMs),
+        costPhrase(r),
+        r.reviewers,
+      ]),
     )
     .join('\n');
   const live = session.rounds.filter(isRunning).flatMap((r) => reviewerLines(r));
   const liveBlock =
     live.length === 0 ? '' : `\n**In flight now**\n\n${live.map((l) => `- ${l}`).join('\n')}\n`;
   return (
-    `${head}| Stage | Round | What | Status | Verdict | Gating | Took | Tokens · cost | Reviewers |\n` +
-    `|---|---|---|---|---|---|---|---|\n${rows}\n${liveBlock}`
+    `${head}${row(COLUMNS)}\n${delimiter(COLUMNS.length)}\n${rows}\n${liveBlock}`
   );
+}
+
+/** The columns, once. The header and the delimiter are both BUILT from this. */
+const COLUMNS: readonly string[] = [
+  'Stage',
+  'Round',
+  'What',
+  'Status',
+  'Verdict',
+  'Gating',
+  'Took',
+  'Tokens · cost',
+  'Reviewers',
+];
+
+/**
+ * One table row, and it is one LINE.
+ *
+ * <p>Markdown is unforgiving here in two ways this renderer got wrong. A delimiter row with a
+ * different cell count than the header means the block is not a table at all — the whole thing
+ * renders as one paragraph of pipes, which is what a preview showed after the `What` column was
+ * added and the hand-written `|---|` row was not. And a cell containing a newline ends the table
+ * mid-row, which a reviewer sentence can do at any time, since it carries a vendor's own words.</p>
+ *
+ * <p>So: the columns are declared once, the header and delimiter are derived from them, and every
+ * cell is flattened. A pipe inside a cell is escaped for the same reason.</p>
+ */
+function row(cells: readonly string[]): string {
+  return `| ${cells.map(cell).join(' | ')} |`;
+}
+
+function cell(text: string): string {
+  return text.replace(/\r?\n/g, ' ').replace(/\|/g, '\\|').trim();
+}
+
+function delimiter(count: number): string {
+  return `|${'---|'.repeat(count)}`;
 }
 
 function statusCell(round: RoundRecord): string {

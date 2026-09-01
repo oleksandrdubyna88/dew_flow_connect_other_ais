@@ -1,3 +1,5 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULTS, envBlock, settingsFrom } from '../settingsShape';
@@ -58,10 +60,10 @@ test('a stored vendor list that names nothing runnable is an accident, not a con
 
 test('a vendor is read with its runtime, model, endpoint and switch', () => {
   const vendors = vendorsFrom([
-    { id: 'Mistral', runtime: 'codex', model: 'mistral-large', enabled: false, baseUrl: 'https://api.mistral.ai/v1', executablePath: '' },
+    { id: 'Mistral', runtime: 'codex', model: 'mistral-large', enabled: false, baseUrl: 'https://api.mistral.ai/v1', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
   ]);
   assert.deepEqual(vendors, [
-    { id: 'mistral', runtime: 'codex', model: 'mistral-large', enabled: false, baseUrl: 'https://api.mistral.ai/v1', executablePath: '' },
+    { id: 'mistral', runtime: 'codex', model: 'mistral-large', enabled: false, baseUrl: 'https://api.mistral.ai/v1', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
   ]);
 });
 
@@ -102,8 +104,8 @@ test('only what differs from the defaults reaches the env block', () => {
 
 test('a changed reviewer list travels as JSON, which a comma list could not carry', () => {
   const vendors: Vendor[] = [
-    { id: 'gemini', runtime: 'gemini', model: 'gemini-pro-latest', enabled: true, baseUrl: '', executablePath: '' },
-    { id: 'mistral', runtime: 'codex', model: '', enabled: true, baseUrl: 'https://api.mistral.ai/v1', executablePath: '' },
+    { id: 'gemini', runtime: 'gemini', model: 'gemini-pro-latest', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+    { id: 'mistral', runtime: 'codex', model: '', enabled: true, baseUrl: 'https://api.mistral.ai/v1', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
   ];
   const env = envBlock(settingsFrom(reader({})), vendors);
   const parsed = JSON.parse(env['COAI_VENDORS'] ?? '[]') as { id: string; runtime: string; baseUrl: string }[];
@@ -117,8 +119,8 @@ test('a changed reviewer list travels as JSON, which a comma list could not carr
 test('a switched-off reviewer is not sent at all', () => {
   const parsed = JSON.parse(
     vendorsEnv([
-      { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '' },
-      { id: 'gemini', runtime: 'gemini', model: '', enabled: false, baseUrl: '', executablePath: '' },
+      { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+      { id: 'gemini', runtime: 'gemini', model: '', enabled: false, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
     ]),
   ) as { id: string }[];
   assert.deepEqual(
@@ -147,4 +149,16 @@ test('good enough is a real choice, not a string the reader drops', () => {
 test('the choice travels to the server under the name the server parses', () => {
   const env = envBlock({ ...DEFAULTS, onExhausted: 'good_enough' });
   assert.equal(env['COAI_ON_EXHAUSTED'], 'good_enough');
+});
+
+test('the manifest’s own default vendor list matches the one the code ships', () => {
+  // The manifest still defaulted to codex + the RETIRED gemini, and carried none of the fields
+  // added since — so a fresh install read its reviewers from a list the product had moved past.
+  // Two copies of one default is one copy too many; this is the test that keeps them equal.
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')) as {
+    contributes: { configuration: { properties: Record<string, { default?: unknown }> } };
+  };
+  const shipped = manifest.contributes.configuration.properties['coai.vendors']!.default;
+
+  assert.deepEqual(shipped, DEFAULT_VENDORS.map((v) => ({ ...v })));
 });

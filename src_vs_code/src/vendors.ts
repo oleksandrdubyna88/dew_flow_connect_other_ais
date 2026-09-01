@@ -27,6 +27,17 @@ export interface Vendor {
    * failed every time, whatever anybody configured.</p>
    */
   readonly executablePath: string;
+  /**
+   * What this vendor bills, per million tokens. Zero means "not set".
+   *
+   * <p>From the PERSON, never from a table we ship. A shipped price list is wrong for anyone on a
+   * flat subscription, wrong the first time a vendor changes a price, and wrong silently in both
+   * cases. Only Claude reports its own cost; codex and antigravity report tokens and nothing else,
+   * so every row in the spending section read a dash — true, and useless against the question a
+   * person actually has.</p>
+   */
+  readonly pricePerMillionIn: number;
+  readonly pricePerMillionOut: number;
 }
 
 /** The model an Antigravity row starts on: flash at high effort, the CLI's own active model. */
@@ -42,8 +53,8 @@ export const ANTIGRAVITY_DEFAULT_MODEL = 'gemini-3.7-flash-high';
  * DEFAULTING to it are different changes, and only the first one had been made.</p>
  */
 export const DEFAULT_VENDORS: readonly Vendor[] = [
-  { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '' },
-  { id: 'antigravity', runtime: 'antigravity', model: ANTIGRAVITY_DEFAULT_MODEL, enabled: true, baseUrl: '', executablePath: '' },
+  { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+  { id: 'antigravity', runtime: 'antigravity', model: ANTIGRAVITY_DEFAULT_MODEL, enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
 ];
 
 /**
@@ -63,6 +74,8 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     enabled: true,
     baseUrl: '',
     executablePath: '',
+    pricePerMillionIn: 0,
+    pricePerMillionOut: 0,
   },
   {
     label: 'Antigravity (Google)',
@@ -73,6 +86,8 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     enabled: true,
     baseUrl: '',
     executablePath: '',
+    pricePerMillionIn: 0,
+    pricePerMillionOut: 0,
   },
   {
     label: 'Gemini (Google) — retired',
@@ -83,6 +98,8 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     enabled: true,
     baseUrl: '',
     executablePath: '',
+    pricePerMillionIn: 0,
+    pricePerMillionOut: 0,
   },
   {
     label: 'Claude (a second one)',
@@ -93,6 +110,8 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     enabled: true,
     baseUrl: '',
     executablePath: '',
+    pricePerMillionIn: 0,
+    pricePerMillionOut: 0,
   },
   {
     label: 'DeepSeek',
@@ -103,6 +122,8 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     enabled: true,
     baseUrl: 'https://api.deepseek.com/v1',
     executablePath: '',
+    pricePerMillionIn: 0,
+    pricePerMillionOut: 0,
   },
   {
     label: 'OpenRouter',
@@ -113,6 +134,8 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     enabled: true,
     baseUrl: 'https://openrouter.ai/api/v1',
     executablePath: '',
+    pricePerMillionIn: 0,
+    pricePerMillionOut: 0,
   },
   {
     label: 'Another OpenAI-compatible endpoint',
@@ -123,6 +146,8 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     enabled: true,
     baseUrl: '',
     executablePath: '',
+    pricePerMillionIn: 0,
+    pricePerMillionOut: 0,
   },
 ];
 
@@ -144,6 +169,8 @@ export function vendorsFrom(value: unknown): Vendor[] {
       enabled: v['enabled'] !== false,
       baseUrl: typeof v['baseUrl'] === 'string' ? v['baseUrl'].trim() : '',
       executablePath: typeof v['executablePath'] === 'string' ? v['executablePath'].trim() : '',
+      pricePerMillionIn: rate(v['pricePerMillionIn']),
+      pricePerMillionOut: rate(v['pricePerMillionOut']),
     }))
     .filter((v) => v.id.length > 0)
     .map(migrateRetired);
@@ -172,6 +199,11 @@ function migrateRetired(vendor: Vendor): Vendor {
 function dedupe(vendors: Vendor[]): Vendor[] {
   const seen = new Set<string>();
   return vendors.filter((v) => (seen.has(v.id) ? false : (seen.add(v.id), true)));
+}
+
+/** A rate is a non-negative number or it is unset; a negative price would credit the person. */
+function rate(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
 }
 
 /** A name a person typed → something usable as an id, an env-var suffix and a vault key. */

@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.18.0 — 2026-09-01
+
+**Money, for the vendors that do not report any.** Only Claude prices its own runs, so every other
+row read a dash — true, and useless against the question you actually have. Each reviewer now takes
+two rates, `$ / 1M in` and `$ / 1M out`, and the spending section shows what a vendor cost. The rates
+come from YOU, never from a table shipped here: a price list would be wrong for anyone on a flat
+subscription, wrong the first time a vendor changes a price, and wrong silently both times.
+
+What is worked out from a rate is marked with a tilde — `~$0.42` — and what a vendor actually billed
+is not. The totals keep the two apart for the same reason. The rates never leave the panel: the
+ledger records tokens, which are facts, so correcting a rate re-prices your whole history.
+
+**Rounding fixed while in there.** There were two `money` functions, and the one the spending section
+used rounded to cents — so a round costing $0.0004 displayed as `$0.00`, which reads as free. Its
+twin, four lines away in another file, carried a comment warning about exactly that. One now.
+
+**The markdown rounds view renders as a table again.** Its delimiter row had eight cells against a
+nine-column header after the `What` column was added, and markdown answers a mismatch by not
+treating the block as a table at all — hence a preview full of pipes. The columns are declared once
+and the header, the delimiter and every row are built from them; cells are flattened, so a reviewer
+sentence carrying a newline can no longer end the table mid-row.
+
+**The code stage says its own arithmetic.** "Three reviewers per vendor" made a reader ask whether
+each reviewer runs six times. It does not — six is the number of reviewers in a round — so the
+section now multiplies it out in your own numbers: *2 vendors × 3 roles = 6 reviewers per round, each
+runs once per round, up to 2 rounds*.
+
+**And the panel no longer lies about round 1.** It showed `Universal` for a round the server would
+run `Conventions` in, because the conventions rule had been added on the server side only.
+
 ## 0.17.0 — 2026-09-01
 
 **WSL works, and this is the release that makes it possible.** Three separate blockers, measured

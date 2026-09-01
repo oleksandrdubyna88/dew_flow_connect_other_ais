@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "Your AI writes the code; other vendors' models review it — the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -169,14 +169,20 @@
               "runtime": "codex",
               "model": "",
               "enabled": true,
-              "baseUrl": ""
+              "baseUrl": "",
+              "executablePath": "",
+              "pricePerMillionIn": 0,
+              "pricePerMillionOut": 0
             },
             {
-              "id": "gemini",
-              "runtime": "gemini",
-              "model": "",
+              "id": "antigravity",
+              "runtime": "antigravity",
+              "model": "gemini-3.7-flash-high",
               "enabled": true,
-              "baseUrl": ""
+              "baseUrl": "",
+              "executablePath": "",
+              "pricePerMillionIn": 0,
+              "pricePerMillionOut": 0
             }
           ],
           "markdownDescription": "The reviewers. Edit them in the **ConnectOtherAIs** panel — add a vendor, remove one, or point it at another model. `runtime` is which CLI shape it uses (`codex` or `gemini`); `baseUrl` makes it an OpenAI-compatible endpoint driven through the Codex CLI.",

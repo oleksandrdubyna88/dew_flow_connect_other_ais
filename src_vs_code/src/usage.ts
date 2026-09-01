@@ -1,3 +1,4 @@
+import { Vendor } from './vendors';
 /**
  * What each AI has consumed, read from the server's append-only ledger.
  *
@@ -35,6 +36,15 @@ export interface VendorTotals {
   readonly tokensOut: number;
   /** Only from vendors that price their own runs; null when nobody in this row reported money. */
   readonly costUsd: number | null;
+  /**
+   * What this row cost according to the RATES the person entered, when the vendor reported none.
+   *
+   * <p>Null when there is no rate, and null when the vendor reported a real cost — an estimate
+   * beside a bill is noise, and the bill is the fact. Marked with a tilde wherever it is shown,
+   * because a number derived from tokens is not the same kind of thing as a number a vendor
+   * charged.</p>
+   */
+  readonly estimatedUsd: number | null;
   readonly seconds: number;
   readonly averageSeconds: number;
 }
@@ -96,7 +106,7 @@ export function within(entries: readonly UsageEntry[], window: Window, now: Date
 }
 
 /** Per vendor, biggest spender first — the row order a person actually scans for. */
-export function totalsByVendor(entries: readonly UsageEntry[]): VendorTotals[] {
+export function totalsByVendor(entries: readonly UsageEntry[], vendors: readonly Vendor[] = []): VendorTotals[] {
   const byProvider = new Map<string, UsageEntry[]>();
   for (const e of entries) {
     byProvider.set(e.provider, [...(byProvider.get(e.provider) ?? []), e]);
@@ -106,13 +116,21 @@ export function totalsByVendor(entries: readonly UsageEntry[]): VendorTotals[] {
     .map(([provider, rows]) => {
       const priced = rows.filter((r) => typeof r.costUsd === 'number');
       const seconds = sum(rows.map((r) => r.seconds));
+      const tokensIn = sum(rows.map((r) => r.tokensIn));
+      const tokensOut = sum(rows.map((r) => r.tokensOut));
+      const reported = priced.length === 0 ? null : sum(priced.map((r) => r.costUsd as number));
+      const price = priceOf(provider, vendors);
       return {
         provider,
         runs: rows.length,
         failed: rows.filter((r) => r.outcome !== 'ok').length,
-        tokensIn: sum(rows.map((r) => r.tokensIn)),
-        tokensOut: sum(rows.map((r) => r.tokensOut)),
-        costUsd: priced.length === 0 ? null : sum(priced.map((r) => r.costUsd as number)),
+        tokensIn,
+        tokensOut,
+        costUsd: reported,
+        estimatedUsd:
+          reported !== null || price === undefined
+            ? null
+            : round4((tokensIn / 1_000_000) * price.in + (tokensOut / 1_000_000) * price.out),
         seconds,
         averageSeconds: rows.length === 0 ? 0 : seconds / rows.length,
       };
@@ -152,10 +170,46 @@ export function shortDuration(seconds: number): string {
  * render as `$0.00`: free and unreported are different facts, and only one of them is good news.</p>
  */
 export function money(costUsd: number | null): string {
-  return costUsd === null ? '—' : `$${costUsd.toFixed(2)}`;
+  if (costUsd === null) {
+    return '—';
+  }
+
+  // Cents are not enough. A single round is fractions of a dollar, and `toFixed(2)` turns $0.0004
+  // into "$0.00", which reads as free. There were TWO of this function — this one rounding to cents
+  // and the one in rounds.ts using four decimals, whose comment warned about exactly the bug this
+  // one had. One concept, one implementation.
+  return costUsd >= 1 ? `$${costUsd.toFixed(2)}` : `$${costUsd.toFixed(4)}`;
 }
 
 /** The bar width for one row, as a percentage of the busiest row. */
 export function barWidth(value: number, max: number): number {
   return max <= 0 ? 0 : Math.max(2, Math.round((value / max) * 100));
+}
+
+/**
+ * This vendor's rates, or nothing when it has none.
+ *
+ * <p>Found by ID, because that is what the ledger records and what the panel row is named by — the
+ * model can change between runs and the rate follows the vendor, not the model.</p>
+ */
+export function priceOf(
+  provider: string,
+  vendors: readonly Vendor[],
+): { readonly in: number; readonly out: number } | undefined {
+  const vendor = vendors.find((v) => v.id === provider);
+  if (vendor === undefined || (vendor.pricePerMillionIn === 0 && vendor.pricePerMillionOut === 0)) {
+    return undefined;
+  }
+
+  return { in: vendor.pricePerMillionIn, out: vendor.pricePerMillionOut };
+}
+
+/** An estimate, marked as one. The tilde is the whole point: this is not what anybody billed. */
+export function estimated(usd: number): string {
+  return `~${money(usd)}`;
+}
+
+/** Four decimals, so a fraction of a cent does not become zero on the way through. */
+function round4(usd: number): number {
+  return Math.round(usd * 10_000) / 10_000;
 }

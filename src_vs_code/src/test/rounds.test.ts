@@ -184,3 +184,55 @@ test('a start date from an older server does not render as a billion minutes', (
   );
   assert.ok(!/\d{4,}m/.test(view), view);
 });
+
+test('the rendered table is a table — the delimiter has as many cells as the header', () => {
+  // It did not, and markdown is unforgiving about it: a delimiter row with a different cell count
+  // than the header means the block is not a table at all, so a preview renders the whole thing as
+  // one paragraph of pipes. The `What` column was added and this row was not extended with it.
+  const markdown = renderRounds([
+    {
+      state: { sessionId: 's', repoPath: 'D:/r', branch: 'main', stage: 'CodeReview', awaitingResolve: false },
+      rounds: [
+        {
+          stage: 'CodeReview', number: 1, verdict: 'proceed', gatingCount: 0, reviewers: 'all 2 reviewers answered',
+          completedUtc: '2026-09-01T12:00:00Z', startedUtc: '2026-09-01T11:58:00Z', status: 'done',
+          subject: 'S1.1 — payment is a kind', tokensIn: 531_000, tokensOut: 23_000, costUsd: null,
+        },
+      ],
+    },
+  ]);
+
+  const lines = markdown.split('\n').filter((l) => l.startsWith('|'));
+  const cells = (line: string): number => line.split('|').length;
+  const [header, delimiter, ...rows] = lines;
+
+  assert.ok(header !== undefined && delimiter !== undefined);
+  assert.match(delimiter!, /^\|[-|]+\|$/, 'the second line must be the delimiter');
+  assert.equal(cells(delimiter!), cells(header!), 'a mismatched delimiter means markdown sees no table');
+  for (const row of rows) {
+    assert.equal(cells(row), cells(header!), `a data row disagrees with the header: ${row}`);
+  }
+});
+
+test('a table row never contains a newline, because one row is one line', () => {
+  const markdown = renderRounds([
+    {
+      state: { sessionId: 's', repoPath: 'D:/r', branch: 'main', stage: 'PlanReview', awaitingResolve: false },
+      rounds: [
+        {
+          stage: 'PlanReview', number: 1, verdict: 'call_human', gatingCount: 0, reviewers: 'failed: codex/PlanCritique: exit 1\nand a second line',
+          completedUtc: '2026-09-01T12:00:00Z', startedUtc: '2026-09-01T11:58:00Z', status: 'done',
+          tokensIn: 0, tokensOut: 0, costUsd: null,
+        },
+      ],
+    },
+  ]);
+
+  for (const line of markdown.split('\n')) {
+    if (line.startsWith('| plan review')) {
+      assert.ok(!line.includes('\n'));
+    }
+  }
+  // A reviewer sentence with a newline in it would end the table mid-row.
+  assert.ok(!markdown.includes('exit 1\nand a second line'), 'the newline must be flattened');
+});

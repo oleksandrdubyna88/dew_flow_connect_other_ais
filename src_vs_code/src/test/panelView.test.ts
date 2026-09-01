@@ -43,7 +43,7 @@ test('each reviewer gets a switch, a model field and a way out', () => {
 
 test('a disabled reviewer is shown unchecked', () => {
   const html = panelHtml(
-    state({ vendors: [{ id: 'codex', runtime: 'codex', model: '', enabled: false, baseUrl: '', executablePath: '' }] }),
+    state({ vendors: [{ id: 'codex', runtime: 'codex', model: '', enabled: false, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }] }),
     'n0nce',
   );
   assert.ok(!html.includes('data-vendor="codex" checked'));
@@ -66,7 +66,7 @@ test('the picker is a SELECT with every model visible, never a filtering datalis
 
 test('a model the person typed stays in its own list', () => {
   const html = panelHtml(
-    state({ vendors: [{ id: 'codex', runtime: 'codex', model: 'something-new', enabled: true, baseUrl: '', executablePath: '' }] }),
+    state({ vendors: [{ id: 'codex', runtime: 'codex', model: 'something-new', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }] }),
     'n0nce',
   );
   assert.ok(html.includes('value="something-new"'));
@@ -75,7 +75,7 @@ test('a model the person typed stays in its own list', () => {
 
 test('a custom endpoint is editable; a first-party vendor shows no URL field', () => {
   const custom = panelHtml(
-    state({ vendors: [{ id: 'mistral', runtime: 'codex', model: '', enabled: true, baseUrl: 'https://api.mistral.ai/v1', executablePath: '' }] }),
+    state({ vendors: [{ id: 'mistral', runtime: 'codex', model: '', enabled: true, baseUrl: 'https://api.mistral.ai/v1', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }] }),
     'n0nce',
   );
   assert.ok(custom.includes('data-setting="baseUrl" data-vendor="mistral"'));
@@ -231,8 +231,8 @@ test('the keys section answers "do I need this?" before showing the field', () =
   const needsKeys = panelHtml(
     state({
       vendors: [
-        { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '' },
-        { id: 'deepseek', runtime: 'codex', model: '', enabled: true, baseUrl: 'https://api.deepseek.com/v1', executablePath: '' },
+        { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+        { id: 'deepseek', runtime: 'codex', model: '', enabled: true, baseUrl: 'https://api.deepseek.com/v1', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
       ],
     }),
     'n',
@@ -244,7 +244,7 @@ test('the keys section answers "do I need this?" before showing the field', () =
 
 test('a disabled vendor with an endpoint does not demand a key', () => {
   const html = panelHtml(
-    state({ vendors: [{ id: 'deepseek', runtime: 'codex', model: '', enabled: false, baseUrl: 'https://x/v1', executablePath: '' }] }),
+    state({ vendors: [{ id: 'deepseek', runtime: 'codex', model: '', enabled: false, baseUrl: 'https://x/v1', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }] }),
     'n',
   );
   assert.ok(html.includes('Nothing to fill in yet'), 'a reviewer that does not run needs nothing');
@@ -258,7 +258,7 @@ test('the server line is body text, not a footnote', () => {
 test('claude is offered as a translator and as a reviewer preset', () => {
   assert.ok(panelHtml(state(), 'n').includes('Claude, a small model'));
   const claude = panelHtml(
-    state({ vendors: [{ id: 'claude', runtime: 'claude', model: 'haiku', enabled: true, baseUrl: '', executablePath: '' }] }),
+    state({ vendors: [{ id: 'claude', runtime: 'claude', model: 'haiku', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }] }),
     'n',
   );
   assert.ok(claude.includes('value="haiku"'));
@@ -485,4 +485,39 @@ test('code round 1 is the conventions pass, and says so', () => {
   const html = panelHtml(state(), 'n0nce');
   assert.match(html, /Round 1[\s\S]{0,400}?Conventions/, 'the first code round defaults to the rules check');
   assert.ok(html.includes('written down'), 'and the section says what that pass judges against');
+});
+
+test('the code stage states its own arithmetic, in the numbers actually configured', () => {
+  // "three reviewers per vendor, every round" made a reader ask whether each reviewer runs six
+  // times. It does not: six is the number of REVIEWERS in a round — vendors × roles — each run
+  // once. The panel showing 3 roles × 2 round-pickers is what looks like six runs, so the sentence
+  // has to do the multiplication out loud.
+  const html = panelHtml(
+    state({
+      vendors: [
+        { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+        { id: 'antigravity', runtime: 'antigravity', model: '', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+      ],
+      settings: { ...DEFAULTS, maxRoundsCode: 2 },
+    }),
+    'n0nce',
+  );
+
+  assert.match(html, /2 vendors × 3 roles = 6 reviewers/);
+  assert.match(html, /each runs once per round/i, 'the answer to the question that was actually asked');
+  assert.match(html, /up to 2 rounds/);
+});
+
+test('a disabled vendor is not counted in the arithmetic', () => {
+  const html = panelHtml(
+    state({
+      vendors: [
+        { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+        { id: 'antigravity', runtime: 'antigravity', model: '', enabled: false, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+      ],
+    }),
+    'n0nce',
+  );
+
+  assert.match(html, /1 vendor × 3 roles = 3 reviewers/, 'a reviewer that will not run is not one');
 });

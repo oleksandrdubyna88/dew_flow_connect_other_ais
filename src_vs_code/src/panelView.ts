@@ -3,7 +3,7 @@ import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { ModelChoice, modelsFor, modelsProvenance } from './models';
 import { ROLES, promptsFor, selectedFor } from './prompts';
-import { barWidth, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, WINDOWS, within } from './usage';
+import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, WINDOWS, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerLines, RoundRecord, SessionFile, stageName } from './rounds';
 import { Vendor } from './vendors';
 
@@ -174,6 +174,16 @@ function vendorCard(vendor: Vendor, codexModels: readonly ModelChoice[]): string
   <div class="field">
     <input type="text" data-setting="executablePath" data-vendor="${id}" title="${escapeHtml(HELP.vendorExecutablePath)}"
            placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(vendor.executablePath)}">
+  </div>
+  <div class="field inline">
+    ${labelled(`price-in-${id}`, '$ / 1M in', 'vendorPrice')}
+    <input type="number" id="price-in-${id}" min="0" step="0.01" data-setting="pricePerMillionIn" data-vendor="${id}"
+           value="${vendor.pricePerMillionIn === 0 ? '' : vendor.pricePerMillionIn}" placeholder="—">
+  </div>
+  <div class="field inline">
+    ${labelled(`price-out-${id}`, '$ / 1M out', 'vendorPrice')}
+    <input type="number" id="price-out-${id}" min="0" step="0.01" data-setting="pricePerMillionOut" data-vendor="${id}"
+           value="${vendor.pricePerMillionOut === 0 ? '' : vendor.pricePerMillionOut}" placeholder="—">
   </div>`;
 
   return `<div class="vendor">
@@ -385,6 +395,25 @@ const ROLE_TONE: Record<string, string> = {
   UxDxPerformance: 'uxdx',
 };
 
+/**
+ * The fan-out, multiplied out loud.
+ *
+ * <p>"three reviewers per vendor, every round" made a reader ask whether each reviewer runs six
+ * times. It does not: six is the number of REVIEWERS in a round — vendors times roles — each run
+ * once. What looks like six runs is the panel itself: three roles, each with a picker per round.
+ * So the sentence does the arithmetic in the numbers actually configured, and a disabled vendor is
+ * not counted, because a reviewer that will not run is not one.</p>
+ */
+function fanOut(state: PanelState): string {
+  const vendors = state.vendors.filter((v) => v.enabled).length;
+  const reviewers = vendors * 3;
+  const rounds = Math.max(1, state.settings.maxRoundsCode);
+  return (
+    `${vendors} vendor${vendors === 1 ? '' : 's'} × 3 roles = ${reviewers} reviewer${reviewers === 1 ? '' : 's'} ` +
+    `per round, each runs once per round, up to ${rounds} round${rounds === 1 ? '' : 's'}`
+  );
+}
+
 function promptsBody(state: PanelState): string {
   const roleRow = (role: (typeof ROLES)[number]): string => {
     // Each stage shows the rounds IT will run: a picker for a round nobody reaches is a control
@@ -424,7 +453,7 @@ ${pickers}
 ${plan}
 </div>
 <div class="role-group">
-  <div class="group-head">Code stage — three reviewers per vendor, every round</div>
+  <div class="group-head">Code stage — ${fanOut(state)}</div>
   <div class="hint">Round 1 defaults to <b>Conventions</b>: it judges the diff against the rules this project has written down — <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>GEMINI.md</code>, <code>.claude/rules</code> — and nothing else. Pick something else for round 1 and that wins.</div>
 ${code}
 </div>`;
@@ -456,8 +485,35 @@ function usageBody(state: PanelState): string {
  * The spending itself, which advances while a round runs, so it travels as a patch rather than a
  * repaint: a repaint reloads the webview, and a reload closes whatever dropdown was open.
  */
-export function usageRows(state: PanelState): string {
-  const rows = totalsByVendor(within(state.usage, state.usageWindow, new Date()));
+export /**
+ * What one vendor cost: what it billed, or what its rates say, or nothing.
+ *
+ * <p>Never both. A reported cost is the fact and an estimate beside it is noise; an estimate with
+ * no rate behind it is a guess dressed as a number, so that stays a dash. The tilde is load-bearing
+ * — it is the difference between what somebody charged and what we worked out.</p>
+ */
+function spend(row: { costUsd: number | null; estimatedUsd: number | null }): string {
+  return row.costUsd !== null
+    ? money(row.costUsd)
+    : row.estimatedUsd !== null
+      ? estimated(row.estimatedUsd)
+      : '—';
+}
+
+/** The total, saying which half is billed and which is worked out. */
+function total(billed: number | null, guessed: number | null): string {
+  if (billed === null && guessed === null) {
+    return '—';
+  }
+  if (guessed === null) {
+    return money(billed);
+  }
+
+  return billed === null ? estimated(guessed) : `${money(billed)} + ${estimated(guessed)}`;
+}
+
+function usageRows(state: PanelState): string {
+  const rows = totalsByVendor(within(state.usage, state.usageWindow, new Date()), state.vendors);
   if (rows.length === 0) {
     return '<div class="empty">Nothing recorded in this window yet.</div>';
   }
@@ -468,7 +524,7 @@ export function usageRows(state: PanelState): string {
       const total = r.tokensIn + r.tokensOut;
       const failed = r.failed === 0 ? '' : ` · <span class="warn">${r.failed} failed</span>`;
       return `<div class="spend">
-  <div class="head"><span class="name">${escapeHtml(r.provider)}</span><span class="cost">${money(r.costUsd)}</span></div>
+  <div class="head"><span class="name">${escapeHtml(r.provider)}</span><span class="cost">${spend(r)}</span></div>
   <div class="bar"><span style="width:${barWidth(total, busiest)}%"></span></div>
   <div class="figures">${shortNumber(r.tokensIn)} in · ${shortNumber(r.tokensOut)} out · ${r.runs} run(s)${failed}</div>
   <div class="hint">${shortDuration(r.seconds)} total · ${shortDuration(r.averageSeconds)} average</div>
@@ -480,13 +536,16 @@ export function usageRows(state: PanelState): string {
     (t, r) => ({
       tokens: t.tokens + r.tokensIn + r.tokensOut,
       cost: r.costUsd === null ? t.cost : (t.cost ?? 0) + r.costUsd,
+      // Kept apart from `cost` all the way to the end: a total that mixes what a vendor billed with
+      // what we worked out from a rate somebody typed is a number nobody can check.
+      guess: r.estimatedUsd === null ? t.guess : (t.guess ?? 0) + r.estimatedUsd,
       seconds: t.seconds + r.seconds,
     }),
-    { tokens: 0, cost: null as number | null, seconds: 0 },
+    { tokens: 0, cost: null as number | null, guess: null as number | null, seconds: 0 },
   );
 
   return `${cards}
-<div class="hint total">All vendors: ${shortNumber(all.tokens)} tokens · ${money(all.cost)} · ${shortDuration(all.seconds)}</div>`;
+<div class="hint total">All vendors: ${shortNumber(all.tokens)} tokens · ${total(all.cost, all.guess)} · ${shortDuration(all.seconds)}</div>`;
 }
 
 function roundsBody(sessions: readonly SessionFile[], nowMs: number = Date.now()): string {
