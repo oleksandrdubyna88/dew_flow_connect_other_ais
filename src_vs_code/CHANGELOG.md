@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.10.0 — 2026-09-01
+
+**Prompts per round.** Each reviewer role now has a universal prompt and two narrow lenses, and the
+new *Prompts per round* section picks which one each round uses — or rotates through them
+automatically. Rotation is off by default, and the README says plainly what the measurement behind
+the lenses does and does not establish: the same prompt on the same text three times produced 6, 4
+and 5 findings whose overlaps were 3, 1 and zero, so the lenses are an aim rather than a proven
+improvement.
+
+**What each AI has used.** A new section charts tokens, money and time per vendor over a day, a
+week, a month or a year, with totals and averages. Failed reviewers are counted too: a run that
+burned ninety seconds and answered nothing is exactly what a spending record must not hide. A
+vendor that does not price its own runs shows a dash, never `$0.00`.
+
+Pair it with **coai-mcp 0.5.0**, which adds the Antigravity CLI as a vendor — Google retired Gemini
+Code Assist for individuals, and `agy` is the migration — reads each vendor's token accounting the
+way that vendor actually reports it, and writes the spending ledger this chart reads.
+
 ## 0.9.1 — 2026-08-31
 
 **The packaged extension is the extension you built.** `vsce package` was bundling after it had
