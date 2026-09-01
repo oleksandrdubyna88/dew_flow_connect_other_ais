@@ -93,8 +93,12 @@ public sealed class RetiredVendorTests
     [Fact]
     public void ARuntimeThatStillWorks_IsNotMarkedRetired()
     {
-        VendorDiagnosis.ForRuntime("antigravity").Should().BeNull();
-        VendorDiagnosis.ForRuntime("codex").Should().BeNull();
+        // The platform is stated rather than inherited. Antigravity's answer legitimately DEPENDS on
+        // it — it works on Windows and has no CLI to install on Linux — so a test that let the host
+        // decide passed on my machine and failed on CI, which is worse than a failing test.
+        VendorDiagnosis.ForRuntime("antigravity", linux: false).Should().BeNull();
+        VendorDiagnosis.ForRuntime("codex", linux: false).Should().BeNull();
+        VendorDiagnosis.ForRuntime("codex", linux: true).Should().BeNull("codex installs from npm everywhere");
     }
 }
 
