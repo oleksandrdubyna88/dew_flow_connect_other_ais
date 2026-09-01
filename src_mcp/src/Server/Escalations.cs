@@ -79,6 +79,10 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
     {
         try
         {
+            // The directory, first: on a machine where nobody had used `ask_human` yet it does not
+            // exist, and the catch below swallows DirectoryNotFoundException with every other IO
+            // failure — so the verdict that says "a person must decide" reached nobody, silently.
+            System.IO.Directory.CreateDirectory(Directory);
             WriteAtomic(QuestionPath(question.Id), JsonSerializer.Serialize(question, EscalationJsonContext.Default.EscalationQuestion));
         }
         catch (IOException)

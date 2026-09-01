@@ -79,3 +79,25 @@ flowchart LR
 90 `node:test` cases over the pure modules; `.vsix` packaged in CI and installed by hand on
 2026-08-31; the released win-x64 asset downloaded, checksum-matched, extracted with Windows
 bsdtar and registered — `claude mcp list` reported `coai ✔ Connected`.
+
+### What repaints, and what is patched (2026-09-01)
+
+The panel has two update paths, and `staticKey` (in `panelView.ts`, so it is testable without
+`vscode`) decides which one runs. A repaint reloads the webview and closes any open dropdown, so it
+is reserved for the person's own doing; everything that moves by itself travels through
+`liveRegions` and is patched into `#live-questions`, `#live-rounds` and `#live-usage`.
+
+**Anything missing from that key is a control that can never change.** The spending window was
+missing: clicking Today, Month or Year recorded the choice, produced an identical key, and
+repainted nothing — the section sat on Week for good and the buttons read as broken, because they
+were. `usageWindow` and `latestServerVersion` are now in the key; the spending ROWS are a live
+region, so they advance mid-round without closing a dropdown. The window tabs deliberately sit
+OUTSIDE that region: a button inside a patched region loses its click listener on the next tick.
+
+### The rounds view refreshes for a RESTORED tab too
+
+`refreshRoundsFile` rewrites `rounds.md` only while somebody has it open, and "open" was an exact
+string comparison of two Windows paths. VS Code hands back `c:\Users\…` for a tab it restored and
+`C:\Users\…` for one this extension opened, so a restored tab silently stopped being refreshed and
+the file went stale while rounds kept running. `roundsViewIsOpen` (in `rounds.ts`, pure) compares
+case-insensitively.

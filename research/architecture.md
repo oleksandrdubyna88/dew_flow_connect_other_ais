@@ -24,7 +24,7 @@ C4Container
   }
   System_Ext(main, "Main AI (Claude Code)", "Writes the plan and the code")
   System_Ext(codex, "codex exec", "Reviewer CLI")
-  System_Ext(gem, "gemini -p", "Reviewer CLI")
+  System_Ext(gem, "agy (Antigravity)", "Reviewer CLI")
   System_Ext(creds, "CredsForDevs", "config entry holding vendor keys")
   Rel(main, mcp, "MCP tools over stdio")
   Rel(mcp, codex, "spawn, read-only sandbox")

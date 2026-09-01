@@ -205,3 +205,20 @@ export function parseSession(text: string): SessionFile | undefined {
     return undefined;
   }
 }
+
+/**
+ * Is the rounds view one of these open documents?
+ *
+ * <p>Decided case-insensitively, because VS Code hands back <c>c:\Users\…</c> for a tab it
+ * restored and <c>C:\Users\…</c> for one this extension opened. An exact comparison therefore
+ * stopped refreshing a RESTORED tab, and the file went stale while rounds kept running — with
+ * nothing to see, since the only symptom is a number that does not move.</p>
+ *
+ * <p>Case-insensitive everywhere rather than only on Windows: two paths differing only in case
+ * are the same file on macOS too, and a Linux repo that manages to have both is not a case this
+ * has to serve.</p>
+ */
+export function roundsViewIsOpen(openPaths: readonly string[], target: string): boolean {
+  const wanted = target.toLowerCase();
+  return openPaths.some((p) => p.toLowerCase() === wanted);
+}

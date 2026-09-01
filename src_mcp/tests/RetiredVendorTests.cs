@@ -1,0 +1,111 @@
+using CoaiMcp.Core.Context;
+using CoaiMcp.Runners.Processes;
+using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Runners.Translation;
+using CoaiMcp.Server;
+using FluentAssertions;
+using Xunit;
+
+namespace CoaiMcp.Tests;
+
+/// <summary>
+/// What a fresh install — and an install made before the retirement — actually RUNS.
+/// </summary>
+/// <remarks>
+/// <para>The Antigravity adapter shipped on 2026-08-31 and nothing started using it. Every default
+/// in the product still named <c>gemini</c>, the panel offered no way to add Antigravity at all,
+/// and the operator's saved reviewer list therefore still pointed at a CLI Google had closed. The
+/// gate went on launching it for a day, on two machines, and the answer to "why is it still
+/// calling gemini" was: because supporting a vendor and DEFAULTING to it are different changes,
+/// and only the first one was made.</para>
+/// <para>These tests hold the second one.</para>
+/// </remarks>
+public sealed class RetiredVendorTests
+{
+    // ---------- what a fresh install reviews with ----------
+
+    [Fact]
+    public void TheShippedReviewerList_NamesNoRetiredCli()
+    {
+        var providers = new PanelSettings().Providers;
+
+        providers.Should().NotContain(p => p.Provider == "gemini",
+            "a default is what an install runs before anybody configures anything");
+        providers.Should().Contain(p => p.Provider == "antigravity" && p.Enabled);
+    }
+
+    [Fact]
+    public void WithNothingConfigured_TheFanOutIsCodexAndAntigravity()
+    {
+        var settings = PanelSettings.FromEnvironment(_ => null);
+
+        settings.Providers.Select(p => p.Provider).Should().BeEquivalentTo(["codex", "antigravity"]);
+    }
+
+    [Fact]
+    public void TheTranslator_DoesNotDefaultToTheRetiredCli()
+    {
+        // The operator runs with COAI_LANGUAGE=ru, so EVERY question a person is shown goes
+        // through this CLI. It defaulted to the one that no longer answers.
+        new PanelSettings().Translator.Provider.Should().NotBe("gemini");
+    }
+
+    // ---------- an antigravity translator must launch antigravity ----------
+
+    [Fact]
+    public async Task TheAntigravityTranslator_LaunchesAgy_NotTheGeminiCli()
+    {
+        var launcher = new RecordingLauncher("привет");
+
+        await new CliTranslator(launcher, new TranslatorSettings("antigravity"))
+            .TranslateAsync("hello", Language.Russian, "question");
+
+        Path.GetFileNameWithoutExtension(launcher.Last!.Executable).Should().Be("agy",
+            "a provider that falls through to another vendor's binary is the wrong-model defect again");
+    }
+
+    [Fact]
+    public async Task TheAntigravityTranslator_SendsTheTextOnStdIn()
+    {
+        var launcher = new RecordingLauncher("привет");
+
+        await new CliTranslator(launcher, new TranslatorSettings("antigravity"))
+            .TranslateAsync("hello", Language.Russian, "question");
+
+        launcher.Last!.StdIn.Should().Contain("hello");
+        launcher.Last.Arguments.Should().NotContain(a => a.Contains("hello"),
+            "a prompt on the command line is truncated at the first newline by cmd.exe");
+    }
+
+    // ---------- providers must not call a closed door healthy ----------
+
+    [Fact]
+    public void AVersionFlagThatSucceeds_DoesNotMakeARetiredRuntimeHealthy()
+    {
+        // `gemini --version` exits 0: it prints a version without ever reaching Google. The
+        // retirement only surfaces at sign-in, so a probe built on --version is structurally
+        // incapable of seeing it — and reported "own auth, the CLI's own sign-in is used" for a
+        // vendor that could not sign in at all. Green health on a dead vendor is worse than none.
+        VendorDiagnosis.ForRuntime("gemini").Should().NotBeNull()
+            .And.Subject.As<string>().Should().Contain("antigravity");
+    }
+
+    [Fact]
+    public void ARuntimeThatStillWorks_IsNotMarkedRetired()
+    {
+        VendorDiagnosis.ForRuntime("antigravity").Should().BeNull();
+        VendorDiagnosis.ForRuntime("codex").Should().BeNull();
+    }
+}
+
+/// <summary>Captures the request instead of launching it.</summary>
+internal sealed class RecordingLauncher(string stdOut = "", int exitCode = 0) : IProcessLauncher
+{
+    public ProcessRequest? Last { get; private set; }
+
+    public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+    {
+        Last = request;
+        return Task.FromResult(new ProcessResult(exitCode, stdOut, string.Empty, TimedOut: false));
+    }
+}

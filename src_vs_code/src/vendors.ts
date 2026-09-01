@@ -19,10 +19,21 @@ export interface Vendor {
   readonly baseUrl: string;
 }
 
-/** What a fresh install reviews with: the two vendors whose CLIs authenticate themselves. */
+/** The model an Antigravity row starts on: flash at high effort, the CLI's own active model. */
+export const ANTIGRAVITY_DEFAULT_MODEL = 'gemini-3.7-flash-high';
+
+/**
+ * What a fresh install reviews with: the two vendors whose CLIs authenticate themselves.
+ *
+ * <p><b>Antigravity, not Gemini, since 2026-09-01.</b> Google retired Code Assist for individual
+ * accounts and its CLI now refuses before it reaches a model. The adapter for the replacement had
+ * shipped the day before and nothing used it: no preset offered it, every default still named
+ * gemini, and a saved list therefore went on pointing at a closed door. Supporting a vendor and
+ * DEFAULTING to it are different changes, and only the first one had been made.</p>
+ */
 export const DEFAULT_VENDORS: readonly Vendor[] = [
   { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '' },
-  { id: 'gemini', runtime: 'gemini', model: '', enabled: true, baseUrl: '' },
+  { id: 'antigravity', runtime: 'antigravity', model: ANTIGRAVITY_DEFAULT_MODEL, enabled: true, baseUrl: '' },
 ];
 
 /**
@@ -43,8 +54,17 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     baseUrl: '',
   },
   {
-    label: 'Gemini (Google)',
-    hint: 'RETIRED by Google for individual accounts — it now refuses before reaching a model. Use Antigravity instead.',
+    label: 'Antigravity (Google)',
+    hint: 'Google’s replacement for Code Assist — one subscription reaching Gemini, Claude and GPT-OSS.',
+    id: 'antigravity',
+    runtime: 'antigravity',
+    model: ANTIGRAVITY_DEFAULT_MODEL,
+    enabled: true,
+    baseUrl: '',
+  },
+  {
+    label: 'Gemini (Google) — retired',
+    hint: 'RETIRED by Google for individual accounts: it refuses before reaching a model. Kept only for a Workspace account that still has Code Assist.',
     id: 'gemini',
     runtime: 'gemini',
     model: '',
@@ -107,10 +127,27 @@ export function vendorsFrom(value: unknown): Vendor[] {
       enabled: v['enabled'] !== false,
       baseUrl: typeof v['baseUrl'] === 'string' ? v['baseUrl'].trim() : '',
     }))
-    .filter((v) => v.id.length > 0);
+    .filter((v) => v.id.length > 0)
+    .map(migrateRetired);
 
   // A stored list that names nothing runnable is not a configuration, it is an accident.
   return vendors.length > 0 ? dedupe(vendors) : [...DEFAULT_VENDORS];
+}
+
+/**
+ * A reviewer saved before the retirement, moved to the CLI Google pointed at.
+ *
+ * <p>The RUNTIME moves and the id stays: the id names the row, its usage history and its vault
+ * key, so renaming it would orphan all three. The model goes with the runtime, because a model id
+ * from the old CLI is not one the new CLI lists — <c>gemini-flash-latest</c> is not an `agy`
+ * model, and leaving it would trade a dead CLI for a refused one.</p>
+ *
+ * <p>A vendor with its own base URL is never touched: that is not Google's CLI at all.</p>
+ */
+function migrateRetired(vendor: Vendor): Vendor {
+  return vendor.runtime === 'gemini' && vendor.baseUrl.length === 0
+    ? { ...vendor, runtime: 'antigravity', model: ANTIGRAVITY_DEFAULT_MODEL }
+    : vendor;
 }
 
 /** One id, one vendor: two rows with the same name would fight over the same key and env. */

@@ -1,0 +1,82 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { DEFAULTS } from '../settingsShape';
+import { DEFAULT_VENDORS } from '../vendors';
+import { liveRegions, panelHtml, PanelState, staticKey } from '../panelView';
+import { roundsViewIsOpen } from '../rounds';
+
+/**
+ * What has to repaint, and what must not.
+ *
+ * <p>The panel takes two update paths: a repaint (which reloads the webview and closes any open
+ * dropdown) and a patch of the live regions. Which one runs is decided by a KEY over the state,
+ * and anything missing from that key is a control that can never change — which is what happened
+ * to the spending chart: clicking Today, Month or Year recorded the choice and repainted nothing,
+ * so the section sat on Week for good.</p>
+ */
+
+const usage = [
+  { utc: new Date().toISOString(), provider: 'codex', model: 'gpt-5.6', role: 'PlanCritique',
+    stage: 'PlanReview', outcome: 'Ok', tokensIn: 40_500, tokensOut: 4_500, costUsd: null, seconds: 59 },
+];
+
+const state = (over: Partial<PanelState> = {}): PanelState => ({
+  settings: DEFAULTS,
+  vendors: DEFAULT_VENDORS,
+  codexModels: [],
+  serverInstalled: true,
+  serverVersion: '0.6.0',
+  latestServerVersion: '0.6.0',
+  questions: [],
+  openSections: ['usage'],
+  sessions: [],
+  usage,
+  usageWindow: 'week',
+  ...over,
+});
+
+test('choosing a different window is a repaint, not a silent preference', () => {
+  assert.notEqual(
+    staticKey(state({ usageWindow: 'month' })),
+    staticKey(state()),
+    'the click changed the state and the panel would have painted the same HTML',
+  );
+});
+
+test('a newly published server version repaints the Server section', () => {
+  assert.notEqual(staticKey(state({ latestServerVersion: '0.7.0' })), staticKey(state()));
+});
+
+test('spending that advanced mid-round does NOT force a repaint', () => {
+  // A repaint reloads the webview and closes an open dropdown. Usage moves every time a reviewer
+  // finishes, so it must travel as a patch — the same treatment the round in flight gets.
+  const busier = [...usage, { ...usage[0]!, provider: 'antigravity' }];
+  assert.equal(staticKey(state({ usage: busier })), staticKey(state()));
+  assert.ok(liveRegions(state({ usage: busier })).usage.includes('antigravity'));
+});
+
+test('the window tabs stay outside the patched region, so a click always lands', () => {
+  const html = panelHtml(state(), 'n0nce');
+  const tabs = html.indexOf('data-command="usageWindow"');
+  const live = html.indexOf('id="live-usage"');
+  assert.ok(tabs > 0 && live > 0);
+  assert.ok(tabs < live, 'a button inside a patched region loses its listener on the next tick');
+});
+
+/**
+ * The rounds view is rewritten only while somebody has it open, and "open" was decided by an
+ * exact string comparison of two Windows paths. VS Code hands back `c:\\Users\\…` for a tab it
+ * restored and `C:\\Users\\…` for one this extension opened, so a restored tab silently stopped
+ * being refreshed and the file went stale while rounds kept running.
+ */
+test('a restored tab is still the rounds view, whatever case the drive letter came back in', () => {
+  const target = 'C:\\Users\\me\\AppData\\Local\\coai-mcp\\rounds.md';
+  assert.ok(roundsViewIsOpen(['c:\\Users\\me\\AppData\\Local\\coai-mcp\\rounds.md'], target));
+  assert.ok(roundsViewIsOpen([target], target));
+});
+
+test('another file is never mistaken for the rounds view', () => {
+  const target = 'C:\\Users\\me\\AppData\\Local\\coai-mcp\\rounds.md';
+  assert.ok(!roundsViewIsOpen(['C:\\Users\\me\\AppData\\Local\\coai-mcp\\usage.jsonl'], target));
+  assert.ok(!roundsViewIsOpen([], target));
+});

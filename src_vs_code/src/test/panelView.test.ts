@@ -33,7 +33,7 @@ test('every language and translator is offered', () => {
 
 test('each reviewer gets a switch, a model field and a way out', () => {
   const html = panelHtml(state(), 'n0nce');
-  for (const id of ['codex', 'gemini']) {
+  for (const id of ['codex', 'antigravity']) {
     assert.ok(html.includes(`data-setting="enabled" data-vendor="${id}"`), `${id} can be switched off`);
     assert.ok(html.includes(`data-setting="model" data-vendor="${id}"`), `${id} takes a model`);
     assert.ok(html.includes(`data-command="removeVendor" data-id="${id}"`), `${id} can be removed`);
@@ -49,12 +49,12 @@ test('a disabled reviewer is shown unchecked', () => {
   assert.ok(!html.includes('data-vendor="codex" checked'));
 });
 
-test("codex offers the CLI's own cached models; gemini offers a curated list", () => {
+test("codex offers the CLI's own cached models; antigravity offers what agy lists", () => {
   const html = panelHtml(state(), 'n0nce');
   assert.ok(html.includes('value="gpt-5.6-sol"'), 'discovered from ~/.codex/models_cache.json');
   assert.ok(html.includes('models the Codex CLI has cached'));
-  assert.ok(html.includes('value="gemini-flash-latest"'));
-  assert.ok(html.includes('a curated list'), 'curation is admitted, never passed off as discovery');
+  assert.ok(html.includes('value="gemini-3.7-flash-high"'));
+  assert.ok(html.includes('one CLI'), 'the provenance of the list is admitted, never passed off as discovery');
 });
 
 test('the picker is a SELECT with every model visible, never a filtering datalist', () => {

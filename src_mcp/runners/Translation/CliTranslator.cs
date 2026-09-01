@@ -81,11 +81,35 @@ public sealed class CliTranslator(IProcessLauncher launcher, TranslatorSettings 
         var provider = settings.Provider.ToLowerInvariant();
         var executable = settings.ExecutablePath.Length > 0
             ? settings.ExecutablePath
-            : provider switch { "codex" => "codex", "claude" => "claude", _ => "gemini" };
+            : provider switch
+            {
+                "codex" => "codex",
+                "claude" => "claude",
+                "antigravity" => Reviewers.AntigravityStream.InstalledExecutable,
+                _ => "gemini",
+            };
 
         // The instruction and the text travel together on stdin; the flag arguments never carry
         // either, so nothing can be truncated at a newline.
         var payload = $"{instruction}\n\n---\n{text}";
+
+        if (provider == "antigravity")
+        {
+            // The same wire format the reviewer adapter uses, from the same class: the day the
+            // Gemini CLI was retired this default moved here, and a second NDJSON shape written
+            // beside the first is how the two drift.
+            return new ProcessRequest(
+                executable,
+                [
+                    .. Reviewers.AntigravityStream.StreamingFlags,
+                    .. settings.Model.Length > 0 ? (string[])["--model", settings.Model] : [],
+                ],
+                Environment.CurrentDirectory)
+            {
+                StdIn = Reviewers.AntigravityStream.UserMessage(payload),
+                Timeout = settings.Timeout,
+            };
+        }
 
         if (provider == "claude")
         {
@@ -134,9 +158,17 @@ public sealed class CliTranslator(IProcessLauncher launcher, TranslatorSettings 
             };
     }
 
-    /// <summary>Gemini answers inside its own envelope; codex writes the message to stdout.</summary>
+    /// <summary>
+    /// Gemini answers inside its own envelope, antigravity inside an NDJSON stream, and codex
+    /// writes the message straight to stdout.
+    /// </summary>
     internal static string Extract(string stdout)
     {
+        if (Reviewers.AntigravityStream.Response(stdout) is { Length: > 0 } streamed)
+        {
+            return streamed;
+        }
+
         var trimmed = stdout.Trim();
         if (trimmed.StartsWith('{'))
         {

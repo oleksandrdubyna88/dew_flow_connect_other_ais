@@ -170,4 +170,26 @@ public sealed class EscalationsTests : IDisposable
 
         (await task).Should().BeOfType<EscalationOutcome.Answered>();
     }
+
+    /// <summary>
+    /// A <c>call_human</c> notice must survive being the FIRST thing ever written there.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Escalations.AskAsync"/> creates the directory; <see cref="Escalations.Notify"/>
+    /// did not, and its catch swallows <c>DirectoryNotFoundException</c> along with every other
+    /// IO failure. On a machine where nobody had used <c>ask_human</c> yet, the verdict that says
+    /// "a person must decide" therefore reached nobody, silently — which is the exact failure the
+    /// notice was added to end.
+    /// </remarks>
+    [Fact]
+    public void ANotice_IsWritten_EvenWhenNobodyHasEverBeenAskedBefore()
+    {
+        var fresh = Path.Combine(Directory.CreateTempSubdirectory("coai-esc-fresh-").FullName, "never-used");
+        var escalations = new Escalations(fresh);
+
+        escalations.Notify(Question("qFirst"));
+
+        File.Exists(escalations.QuestionPath("qFirst")).Should().BeTrue(
+            "a notice nobody can see is the defect, not the cure");
+    }
 }

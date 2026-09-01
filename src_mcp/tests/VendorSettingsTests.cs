@@ -19,7 +19,7 @@ public sealed class VendorSettingsTests
     {
         var settings = From([]);
 
-        settings.Providers.Select(p => p.Provider).Should().Equal("codex", "gemini");
+        settings.Providers.Select(p => p.Provider).Should().Equal("codex", "antigravity");
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public sealed class VendorSettingsTests
         var settings = From(new() { ["COAI_VENDORS"] = "[{oops" });
 
         // A review run against a vendor list somebody half-wrote is worse than the default one.
-        settings.Providers.Select(p => p.Provider).Should().Equal(["codex", "gemini"]);
+        settings.Providers.Select(p => p.Provider).Should().Equal(["codex", "antigravity"]);
     }
 
     [Fact]

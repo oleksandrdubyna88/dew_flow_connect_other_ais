@@ -114,3 +114,23 @@ and recording never throws: a ledger that can fail a review is worse than one wi
 Debug, so a failure can be reproduced by pasting it into a terminal), each reviewer's start, its
 answer with tokens and cost, every failure as a WARNING naming the reason, and every finding with
 its origin. It rides the same per-run log file as everything else.
+
+### A `call_human` verdict reaches the person (2026-09-01)
+
+`RoundMachine` can end a round with `call_human`, and that verdict is returned to the calling AI —
+which then decides whether to pass it on. It did not, twice in one day, and the operator watched a
+panel that said *No ConnectOtherAIs review is waiting on an answer* while a gate sat blocked.
+
+`PanelService.NotifyIfAPersonMustDecide` now writes an escalation file for that verdict, in the
+same shape `ask_human` uses, so the panel shows and answers it identically. It does not block: the
+round is already over.
+
+**`Escalations.Notify` creates the directory first.** It did not, and its `catch (IOException)`
+swallows `DirectoryNotFoundException` along with everything else — so on a machine where nobody had
+used `ask_human` yet, the notice that exists to end this silence was itself silent.
+
+### The health probe cannot report a closed door as healthy
+
+`ProbeAsync` consults `VendorDiagnosis.ForRuntime` BEFORE launching `--version`, because a retired
+CLI answers `--version` from disk. See the retirement table in
+[module_runners.md](module_runners.md).

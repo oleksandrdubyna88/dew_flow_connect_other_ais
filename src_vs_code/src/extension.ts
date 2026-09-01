@@ -7,7 +7,7 @@ import { EscalationWatcher } from './escalationWatcher';
 import { PanelProvider } from './panelProvider';
 import { renderEscalations } from './escalations';
 import { showHelp } from './helpPanel';
-import { parseSession, renderRounds, SessionFile } from './rounds';
+import { parseSession, renderRounds, roundsViewIsOpen, SessionFile } from './rounds';
 import { envBlock, settingsFrom } from './settingsShape';
 
 /**
@@ -187,9 +187,8 @@ async function writeRoundsFile(watcher: EscalationWatcher): Promise<vscode.Uri |
  * numbers advance without anybody pressing anything.</p>
  */
 async function refreshRoundsFile(watcher: EscalationWatcher): Promise<void> {
-  const path = roundsFile().fsPath;
-  const isOpen = vscode.workspace.textDocuments.some((d) => d.uri.fsPath === path && !d.isDirty);
-  if (isOpen) {
+  const open = vscode.workspace.textDocuments.filter((d) => !d.isDirty).map((d) => d.uri.fsPath);
+  if (roundsViewIsOpen(open, roundsFile().fsPath)) {
     await writeRoundsFile(watcher);
   }
 }

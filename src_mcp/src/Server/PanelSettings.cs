@@ -28,8 +28,14 @@ public sealed record ProviderSettings(string Provider)
 /// </summary>
 public sealed record PanelSettings
 {
+    /// <remarks>
+    /// Antigravity rather than Gemini since 2026-09-01: Google retired Code Assist for individual
+    /// accounts, and the Gemini CLI now refuses before it reaches a model. The adapter for its
+    /// replacement had shipped a day earlier and nothing used it — supporting a vendor and
+    /// DEFAULTING to it are different changes, and only the first one had been made.
+    /// </remarks>
     public IReadOnlyList<ProviderSettings> Providers { get; init; } =
-        [new("codex"), new("gemini"), new("deepseek") { Enabled = false }];
+        [new("codex"), new("antigravity"), new("deepseek") { Enabled = false }];
 
     public PanelConfig Rounds { get; init; } = new();
 
@@ -59,11 +65,14 @@ public sealed record PanelSettings
     /// Which small, fast model translates when the AI did not already write in that language.
     /// </summary>
     /// <remarks>
-    /// Gemini Flash by default because the Gemini CLI is usually already signed in and a flash
-    /// model answers a one-sentence job while a person waits. `none` switches translation off and
-    /// shows the original — which is also what happens, with a note, when the CLI cannot run.
+    /// Antigravity by default: its CLI is usually already signed in, and a flash model answers a
+    /// one-sentence job while a person waits. The model is left unset so the CLI picks its own.
+    /// This ran through the Gemini CLI until the retirement, which meant the one path a person
+    /// actually SEES — the question in their own language — went through a CLI that had stopped
+    /// answering. `none` switches translation off and shows the original, which is also what
+    /// happens, with a note, when the CLI cannot run.
     /// </remarks>
-    public TranslatorSettings Translator { get; init; } = new("gemini") { Model = "gemini-flash-latest" };
+    public TranslatorSettings Translator { get; init; } = new("antigravity");
 
     /// <summary>
     /// Which prompt each role uses on each round — <c>role -> [round1, round2, ...]</c>, by
@@ -110,9 +119,9 @@ public sealed record PanelSettings
             ? TimeSpan.FromSeconds(IntVar(env, "COAI_ESCALATION_SECONDS", 30))
             : TimeSpan.FromMinutes(IntVar(env, "COAI_ESCALATION_MINUTES", 30)),
         Language = Language.For(env("COAI_LANGUAGE")),
-        Translator = new TranslatorSettings(env("COAI_TRANSLATOR_PROVIDER") is { Length: > 0 } tp ? tp : "gemini")
+        Translator = new TranslatorSettings(env("COAI_TRANSLATOR_PROVIDER") is { Length: > 0 } tp ? tp : "antigravity")
         {
-            Model = env("COAI_TRANSLATOR_MODEL") ?? "gemini-flash-latest",
+            Model = env("COAI_TRANSLATOR_MODEL") ?? string.Empty,
             ExecutablePath = env("COAI_TRANSLATOR_EXE") ?? string.Empty,
         },
         DataDir = env("COAI_DATA_DIR") is { Length: > 0 } dir ? dir : DefaultDataDir,
@@ -164,7 +173,7 @@ public sealed record PanelSettings
         var listed = env("COAI_PROVIDERS");
         var providers = (listed is { Length: > 0 }
                 ? listed.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                : ["codex", "gemini"])
+                : ["codex", "antigravity"])
             .Select(p => new ProviderSettings(p.ToLowerInvariant())
             {
                 Model = env($"COAI_MODEL_{p.ToUpperInvariant()}") ?? string.Empty,

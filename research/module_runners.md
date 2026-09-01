@@ -23,7 +23,7 @@ sequenceDiagram
   S->>B: RunAllAsync(work[], executor)
   B->>E: per job, under global(3) + per-provider(2) semaphores
   E->>V: launch (read-only, ephemeral); timeout kills the TREE
-  V-->>E: -o file (codex) / stdout envelope (gemini)
+  V-->>E: -o file (codex) / stdout envelope (gemini) / NDJSON result (antigravity)
   E-->>B: Ok | NonZeroExit | TimedOut | Unparseable | RateLimited
   B-->>S: outcomes → ReviewerSummaryFactory → "N of M answered"
   S->>W: lease.DisposeAsync() — the finally
@@ -117,3 +117,31 @@ Three failures cost hours because the reason was discarded at the last step:
 - an unparseable answer whose text was thrown away → kept under `<dataDir>/unparseable/` now, with
   the outcome naming the file. The one replayed by hand afterwards succeeded, which is precisely
   the case where the raw text is the whole story.
+
+### The Gemini retirement (2026-09-01)
+
+Google closed Gemini Code Assist for individual accounts. The CLI now fails inside `_doSetupUser`,
+BEFORE it reaches a model, so every symptom it produces belongs to something else — three
+observers read the same failure as a daily quota, a timeout and an untrusted directory.
+
+`AntigravityRuntime` shipped on 2026-08-31 and **nothing used it for a day**: no preset offered it,
+every default still named `gemini`, and a reviewer list saved before the retirement went on naming
+the closed door. Supporting a vendor and DEFAULTING to it are different changes, and only the first
+had been made. What changed on 2026-09-01:
+
+| Where | Was | Is |
+|---|---|---|
+| `PanelSettings.Providers` | codex, gemini, deepseek(off) | codex, **antigravity**, deepseek(off) |
+| `COAI_PROVIDERS` fallback | `codex, gemini` | `codex, antigravity` |
+| `PanelSettings.Translator` | `gemini` / `gemini-flash-latest` | `antigravity`, model unset |
+| extension `DEFAULT_VENDORS` | codex, gemini | codex, **antigravity** (`gemini-3.7-flash-high`) |
+| extension presets | no Antigravity entry at all | Antigravity first-class; Gemini kept, marked retired |
+| a SAVED `runtime: "gemini"` | run as-is | migrated to `antigravity` (id kept — it names the row, the usage history and the vault key) |
+| `providers` health | `--version` exits 0 ⇒ "own auth" | `VendorDiagnosis.ForRuntime` answers **before** the probe |
+
+That last row is the one worth remembering: `gemini --version` exits 0 because it prints a version
+without ever reaching Google, so a probe built on `--version` is *structurally* incapable of seeing
+the retirement. Green health on a dead vendor is worse than no health at all — it is why a round
+was still being spent on it a day later.
+
+A vendor with its own `baseUrl` is never migrated: that is not Google's CLI at all.

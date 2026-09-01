@@ -113,11 +113,15 @@ ${body}
     }
     const questions = document.getElementById('live-questions');
     const rounds = document.getElementById('live-rounds');
+    const usage = document.getElementById('live-usage');
     if (questions !== null) {
       questions.innerHTML = message.questions;
     }
     if (rounds !== null) {
       rounds.innerHTML = message.rounds;
+    }
+    if (usage !== null) {
+      usage.innerHTML = message.usage;
     }
     // The answer buttons live inside the patched HTML, so they are re-bound here.
     for (const el of document.querySelectorAll('#live-questions [data-command]')) {
@@ -391,10 +395,20 @@ function usageBody(state: PanelState): string {
       `<button class="tab${w.id === state.usageWindow ? ' on' : ''}" data-command="usageWindow" data-id="${w.id}">${escapeHtml(w.label)}</button>`,
   ).join('');
 
+  // The tabs sit OUTSIDE the patched region on purpose: a button inside one loses its click
+  // listener the next time the region is replaced, and the listener IS the button.
+  return `<div class="tabs">${tabs}</div>
+<div id="live-usage">${usageRows(state)}</div>`;
+}
+
+/**
+ * The spending itself, which advances while a round runs, so it travels as a patch rather than a
+ * repaint: a repaint reloads the webview, and a reload closes whatever dropdown was open.
+ */
+export function usageRows(state: PanelState): string {
   const rows = totalsByVendor(within(state.usage, state.usageWindow, new Date()));
   if (rows.length === 0) {
-    return `<div class="tabs">${tabs}</div>
-<div class="empty">Nothing recorded in this window yet.</div>`;
+    return '<div class="empty">Nothing recorded in this window yet.</div>';
   }
 
   const busiest = Math.max(...rows.map((r) => r.tokensIn + r.tokensOut));
@@ -420,8 +434,7 @@ function usageBody(state: PanelState): string {
     { tokens: 0, cost: null as number | null, seconds: 0 },
   );
 
-  return `<div class="tabs">${tabs}</div>
-${cards}
+  return `${cards}
 <div class="hint total">All vendors: ${shortNumber(all.tokens)} tokens · ${money(all.cost)} · ${shortDuration(all.seconds)}</div>`;
 }
 
@@ -464,8 +477,9 @@ ${reviewers}`;
  * a waiting question. Everything else on the panel is a control, and a control only changes when
  * the person changes it.
  */
-export function liveRegions(state: PanelState, nowMs: number = Date.now()): { questions: string; rounds: string } {
-  return { questions: questionsSection(state.questions), rounds: roundsBody(state.sessions, nowMs) };
+export function liveRegions(state: PanelState, nowMs: number = Date.now()): { questions: string; rounds: string; usage: string } {
+  return {
+    usage: usageRows(state), questions: questionsSection(state.questions), rounds: roundsBody(state.sessions, nowMs) };
 }
 
 /**
@@ -624,3 +638,29 @@ const CSS = `
   .empty { opacity: .6; font-style: italic; margin: 6px 0; }
   .status { margin: 2px 0 0; }
 `;
+
+/**
+ * What the panel paints on: a key over the state that a REPAINT would change.
+ *
+ * <p>A repaint reloads the webview, which closes any dropdown that was open, so it is reserved
+ * for the person's own doing. Everything that moves by itself travels through
+ * {@link liveRegions} instead.</p>
+ *
+ * <p><b>Anything left out of this key is a control that can never change.</b> The spending
+ * window was: clicking Today, Month or Year recorded the choice, produced an identical key, and
+ * repainted nothing — so the section sat on Week for good, and the buttons read as broken
+ * because they were.</p>
+ */
+export function staticKey(state: PanelState): string {
+  return JSON.stringify([
+    state.settings,
+    state.vendors,
+    state.codexModels,
+    state.serverInstalled,
+    state.serverVersion,
+    // Rare, and both are a person's doing or an answer they asked for.
+    state.latestServerVersion,
+    state.usageWindow,
+    state.openSections,
+  ]);
+}

@@ -40,4 +40,21 @@ public static class VendorDiagnosis
         string.IsNullOrWhiteSpace(text)
             ? null
             : Known.FirstOrDefault(k => text.Contains(k.Marker, StringComparison.OrdinalIgnoreCase)).Sentence;
+
+    /// <summary>
+    /// A runtime this product knows is CLOSED, whatever its binary says when asked its version.
+    /// </summary>
+    /// <remarks>
+    /// <c>gemini --version</c> exits 0: it prints a version without ever reaching Google, and the
+    /// retirement only surfaces at sign-in. So the health probe — built on <c>--version</c> — was
+    /// structurally incapable of seeing it, and reported "own auth, the CLI's own sign-in is used"
+    /// for a vendor that could not sign in at all. Green health on a dead vendor is worse than no
+    /// health at all: it is the reason a round was still being spent on it a day later.
+    /// </remarks>
+    public static string? ForRuntime(string runtime) => runtime?.Trim().ToLowerInvariant() switch
+    {
+        "gemini" => "RETIRED by Google for individual accounts: this CLI refuses before it reaches " +
+                    "a model. Switch this vendor's runtime to 'antigravity'.",
+        _ => null,
+    };
 }

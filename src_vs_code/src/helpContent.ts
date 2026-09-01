@@ -1,3 +1,8 @@
+import { DE } from './helpDe';
+import { ES } from './helpEs';
+import { RU } from './helpRu';
+import { UK } from './helpUk';
+
 /**
  * The help catalog: every article, in one fixed shape — what it is → why → how to set it up →
  * how to use it → what can go wrong.
@@ -12,12 +17,15 @@
  * back VISIBLY — a missing translation must never hide an article.</p>
  */
 
-export const HELP_LANGUAGES = ['en', 'ru'] as const;
+export const HELP_LANGUAGES = ['en', 'ru', 'uk', 'de', 'es'] as const;
 export type HelpLanguage = (typeof HELP_LANGUAGES)[number];
 
 export const HELP_LANGUAGE_LABELS: Readonly<Record<HelpLanguage, string>> = {
   en: 'English',
   ru: 'Русский',
+  uk: 'Українська',
+  de: 'Deutsch',
+  es: 'Español',
 };
 
 /** One article's text in one language. Every field required — the style IS the schema. */
@@ -32,18 +40,37 @@ export interface HelpBody {
 
 export interface HelpArticle {
   readonly id: string;
-  /** English is the floor; the rest appear as they are translated. */
+  /** English is the floor; every other language lives in its own module. */
   readonly en: HelpBody;
-  readonly ru?: HelpBody;
 }
+
+/**
+ * The translations, one module per language.
+ *
+ * <p>Separate files rather than more fields on the article, because a catalog with five languages
+ * inline is one literal nobody can edit without breaking a quote — and because a translation pass
+ * is then a file, reviewable on its own, instead of a diff threaded through eighteen articles.</p>
+ *
+ * <p>A language may be PARTIAL. What it does not carry falls back to English with a visible note,
+ * which is the one behaviour a missing translation must have: never a blank page.</p>
+ */
+const TRANSLATIONS: Readonly<Record<Exclude<HelpLanguage, 'en'>, Readonly<Record<string, HelpBody>>>> = {
+  ru: RU,
+  uk: UK,
+  de: DE,
+  es: ES,
+};
 
 /** The article as shown: the asked language, or English with a visible note. */
 export function bodyFor(
   article: HelpArticle,
   language: HelpLanguage,
 ): { body: HelpBody; fallback: boolean } {
-  const body = article[language];
-  return body === undefined ? { body: article.en, fallback: language !== 'en' } : { body, fallback: false };
+  if (language === 'en') {
+    return { body: article.en, fallback: false };
+  }
+  const body = TRANSLATIONS[language][article.id];
+  return body === undefined ? { body: article.en, fallback: true } : { body, fallback: false };
 }
 
 export const HELP_ARTICLES: readonly HelpArticle[] = [
@@ -63,19 +90,6 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       whatCanGoWrong:
         'If the panel says the published version cannot be read, GitHub was unreachable — nothing is broken, and the installed server keeps working.\n\nIf your assistant does not list the tools after pasting the block, it has not restarted. The config block names the exact binary path; a copied block from another machine points at a path that does not exist here.',
     },
-    ru: {
-      title: 'Начните отсюда: установите MCP-сервер',
-      whatItIs:
-        'Расширение — это лицо. Ревью делает `coai-mcp`, небольшая программа, которую запускает ваш ИИ-ассистент. Пока она не установлена, ревью не делает никто.',
-      why:
-        'Ревью должно идти там, где лежит ваш код, запускать CLI вендоров и работать минутами. Расширение VS Code этого не умеет, а сервер, которым владело бы окно VS Code, умирал бы вместе с ним.',
-      setup:
-        'Откройте раздел **Server**. Там видно, что установлено, что опубликовано, и кнопка, когда они расходятся — нажмите её. Загрузка сверяется с `.sha256` самого релиза, бинарь ложится в приватное хранилище расширения и не попадает в `PATH`.\n\nЗатем меню ⋯ → **Copy the MCP config block** и вставьте блок в конфигурацию ассистента. Это делается ОДИН раз. Перезапустите ассистента, чтобы он поднял сервер.',
-      usage:
-        'Дальше в раздел Server вы заходите редко: опубликованную версию он перепроверяет не чаще раза в полчаса, а **Check again** спрашивает прямо сейчас.\n\nБинарь свой на каждую платформу. Для каждого релиза публикуются сборки под Windows, macOS и Linux; машина без своей сборки честно скажет об этом, а не скачает чужую.',
-      whatCanGoWrong:
-        'Если панель пишет, что опубликованную версию прочитать не удалось — не достучались до GitHub. Ничего не сломано, установленный сервер работает.\n\nЕсли после вставки блока ассистент не показывает инструменты — он не перезапущен. В блоке прописан точный путь к бинарю; блок, скопированный с другой машины, указывает на несуществующий здесь путь.',
-    },
   },
   {
     id: 'choose-reviewers',
@@ -91,19 +105,6 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
         'Two reviewers is the useful minimum, because agreement is the signal. Three costs three times as much and rarely says three times as much.\n\nThe model picker lists what that CLI can actually reach on this machine — for Codex, its own cached model list; for the others, a curated list. **another model…** takes any exact id you type.',
       whatCanGoWrong:
         'Removing the last reviewer is refused: a panel with nobody in it reviews nothing.\n\nA vendor whose CLI is not installed reports that in **providers** before a round rather than failing halfway through one. Gemini in particular is marked RETIRED — Google closed Code Assist for individual accounts, and that CLI now refuses before it reaches a model. Use Antigravity instead.',
-    },
-    ru: {
-      title: 'Затем: выберите, кто ревьюит',
-      whatItIs:
-        'Раздел **Reviewers** — это состав чужих моделей, которые будут читать ваш план и ваш код. Каждая строка — один вендор: галочка включения, выбор модели, ▶ для открытия его CLI в терминале и **remove**.',
-      why:
-        'Весь смысл в том, что ревьюер — не автор. Второе мнение той же модели, что писала код, стоит меньше, чем первое мнение другой. А находка, на которой сошлись два вендора, — самый сильный сигнал, который этот продукт вообще выдаёт.',
-      setup:
-        '**＋ Add a reviewer** предлагает вендоров, которых знает эта сборка: Codex, Antigravity (Gemini, Claude и GPT-OSS через одну подписку), второй Claude, DeepSeek, OpenRouter и пустую строку под любой OpenAI-совместимый endpoint.\n\nБольшинство авторизуются сами: если CLI на этой машине залогинен, ключ не нужен. Кнопка ▶ в строке открывает терминал с этим CLI — там вы его и логините, и там же уже набрана его команда расхода, останется нажать Enter.',
-      usage:
-        'Два ревьюера — полезный минимум, потому что сигналом является совпадение. Три стоят втрое и втрое больше говорят редко.\n\nВыбор модели показывает то, до чего этот CLI реально дотягивается на этой машине: у Codex — его собственный кеш моделей, у остальных — выверенный список. **another model…** принимает любой точный id.',
-      whatCanGoWrong:
-        'Удалить последнего ревьюера нельзя: панель без участников не ревьюит ничего.\n\nВендор, чей CLI не установлен, скажет об этом в **providers** до раунда, а не посреди него. Отдельно про Gemini: он помечен RETIRED — Google закрыл Code Assist для индивидуальных аккаунтов, и этот CLI теперь отказывает ещё до обращения к модели. Используйте Antigravity.',
     },
   },
   {
@@ -137,19 +138,6 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       whatCanGoWrong:
         'A threshold of zero means every finding of any severity gates, which in practice means a review never passes.\n\nRounds are per STAGE: the plan gate and the code gate each get the full count.',
     },
-    ru: {
-      title: 'Ворота: раунды, порог и что делать, когда они кончились',
-      whatItIs:
-        'Три настройки, решающие, когда ревью закончено. **Rounds per stage** — сколько попыток даётся стадии. **Passes at or under** — сколько блокирующих находок допустимо. **When the rounds run out** — что делать, если так и не дошли.',
-      why:
-        'Без предела цикл ревью не заканчивается никогда: ещё одна находка найдётся всегда. Порог называет числом, что считать «достаточно», ещё до начала спора.',
-      setup:
-        'По умолчанию три раунда, порог два и *Ask a human*. К порогу считаются только находки **blocking** и **major**; minor и nit не блокируют никогда.\n\nНаходка, поднятая двумя вендорами, считается ОДИН раз. Находка, которую вы отклонили с обоснованием, не учитывается, пока ревьюер не поднимет её снова с новым доводом.',
-      usage:
-        '*Ask a human* — честный вариант по умолчанию: ворота останавливаются и кладут решение перед вами. *Continue anyway* идёт дальше и вслух говорит, что находки остались. *Escalate* поднимается по лестнице — больше усилий ревьюера, потом более сильная модель ревьюера, потом более сильный арбитр — и каждый раз даёт стадии новый комплект раундов.',
-      whatCanGoWrong:
-        'Порог ноль означает, что блокирует любая находка любой серьёзности — то есть ревью не пройдёт никогда.\n\nРаунды считаются на СТАДИЮ: у плана и у кода свой полный комплект.',
-    },
   },
 
   // ---------- the rest of the panel, control by control ----------
@@ -167,19 +155,6 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
         'Rotation is OFF by default, and that is a considered choice rather than caution. It was measured against the universal prompt over two code rounds: rotation found FEWER distinct findings (17 against 25) for less money.\n\nRead the full text of every prompt in **The prompts, in full**.',
       whatCanGoWrong:
         '**What the measurement does not establish.** Across three plans the union of three lenses found roughly twice what any single one did — and that result does not survive its own control: the SAME prompt on the SAME text three times produced 6, 4 and 5 findings whose overlaps were 3, 1 and zero. Run-to-run variance alone explains the spread. The lenses are offered because they are useful to aim, not because they were shown to find more.',
-    },
-    ru: {
-      title: 'Промпты по раундам и автоматическая смена',
-      whatItIs:
-        'У каждой роли ревьюера есть универсальный промпт и две узкие линзы. Этот раздел выбирает, какой промпт использует каждый РАУНД, по каждой роли — либо разрешает раундам перебирать их автоматически.',
-      why:
-        'Один промпт на роль навсегда — правильное умолчание и неправильный потолок. Когда модель просят смотреть на всё, она размазывается, а второй раунд того же широкого вопроса обычно возвращает те же широкие ответы.',
-      setup:
-        'По одному выбору на раунд для каждой роли; у каждого варианта его назначение во всплывающей подсказке. **Rotate the lenses automatically** тратит первый раунд на универсальный вопрос, а каждый следующий — на другую линзу. Явный выбор всегда главнее ротации.\n\nРаунд, которого вы не касались, остаётся незаданным, и ротация продолжает на него действовать.',
-      usage:
-        'Ротация по умолчанию ВЫКЛЮЧЕНА, и это обдуманный выбор, а не осторожность. Её мерили против универсального промпта на двух раундах кода: ротация дала МЕНЬШЕ различных находок (17 против 25) за меньшие деньги.\n\nПолные тексты всех промптов — в статье **Промпты целиком**.',
-      whatCanGoWrong:
-        '**Чего измерение не доказывает.** На трёх планах объединение трёх линз нашло примерно вдвое больше, чем любая одна — и этот результат не пережил собственного контроля: тот же промпт на том же тексте три раза дал 6, 4 и 5 находок с пересечениями 3, 1 и ноль. Разброс модели объясняет всё сам. Линзы предлагаются как способ прицелиться, а не как доказанный способ найти больше.',
     },
   },
   {
@@ -245,19 +220,6 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       whatCanGoWrong:
         'A round abandoned by a crashed server reads as *interrupted* rather than running forever. Rounds written by an older server may show no usage and no subject — those numbers were not recorded then, and inventing them afterwards would be a guess.',
     },
-    ru: {
-      title: 'Recent rounds: что было и что идёт прямо сейчас',
-      whatItIs:
-        'Последние раунды, свежие сверху, а идущий прямо сейчас — всегда первым. В строке: что ревьюилось, стадия, вердикт, число блокирующих находок, время и расход.',
-      why:
-        'Ревью идёт минутами. Без этого панель не отличала бы «работают шесть ревьюеров» от «здесь никогда ничего не запускалось», и человеку приходилось бы лезть в лог.',
-      setup:
-        'Настраивать нечего. Сервер записывает раунд на диск в момент старта и обновляет по мере движения ревьюеров, поэтому картина переживает перезагрузку окна, перезапуск расширения и убитый сервер.',
-      usage:
-        'Идущий раунд показывает своих ревьюеров и что делает каждый. **Show review rounds** в меню ⋯ открывает то же самое файлом, который можно держать открытым рядом с работой — он переписывает себя по мере хода раундов.',
-      whatCanGoWrong:
-        'Раунд, брошенный упавшим сервером, читается как *interrupted*, а не «идёт вечно». У раундов, записанных старым сервером, может не быть ни расхода, ни темы: тогда эти данные не писались, а дорисовывать их задним числом было бы выдумкой.',
-    },
   },
   {
     id: 'what-each-ai-has-used',
@@ -274,19 +236,6 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       whatCanGoWrong:
         'Token counting is per vendor because one rule would be wrong for at least one of them: Codex folds cached tokens INTO its input count, Claude reports them BESIDE it, and Antigravity\'s thinking tokens sit inside its output count. Claude also reports the same run twice with different numbers; the aggregate one is used.',
     },
-    ru: {
-      title: 'What each AI has used: токены, деньги и время',
-      whatItIs:
-        'Полоса на вендора за день, неделю, месяц или год: токены на вход и выход, деньги, число прогонов, сколько упало, суммарное и среднее время, и общий итог.',
-      why:
-        'Панель ревью тратит настоящие деньги на каждом раунде, а вопрос «сколько это стоило за месяц» из файла сессии не отвечается: сессии переписываются по ходу раундов и держат одну ветку каждая.',
-      setup:
-        'Настраивать нечего. Сервер дописывает по строке на ревьюера в `usage.jsonl` в своём каталоге данных, а этот раздел его читает.',
-      usage:
-        '**Упавший ревьюер тоже считается.** Прогон, который сжёг девяносто секунд и ничего не ответил, — ровно то, что запись о тратах не должна прятать; поэтому у каждой строки есть исход, а число упавших стоит рядом с токенами.\n\nВ деньгах стоит прочерк там, где вендор сам себя не тарифицирует: «бесплатно» и «не сообщил» — разные факты, и хорошая новость только одна из них. Деньги сообщает Claude; Codex и Antigravity — только токены.',
-      whatCanGoWrong:
-        'Токены считаются по правилам каждого вендора, потому что одно общее правило было бы неверным хотя бы для одного: у Codex кеш ВХОДИТ во входные токены, у Claude — прибавляется к ним, а у Antigravity токены размышления лежат внутри выходных. Claude вдобавок отчитывается об одном прогоне дважды и по-разному; берётся агрегат.',
-    },
   },
   {
     id: 'questions-waiting',
@@ -302,19 +251,6 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
         'Answer it in the panel, in the modal, or from the status bar; they are the same action. Your answer goes back to the AI that asked, translated into the language it asked in, with your own words kept beside it.',
       whatCanGoWrong:
         'A `call_human` verdict raises one of these too, so a gate that ran out of rounds reaches you even if the AI says nothing. That was not always true: the verdict used to be an instruction to the AI alone, and a person could watch the panel all day and never learn the gate had asked for them.',
-    },
-    ru: {
-      title: 'Вопрос, ожидающий вас',
-      whatItIs:
-        'Когда воротам нужен человек, наверху панели появляется карточка с вопросом и всё ещё блокирующими находками. Открывается модальное окно, появляется элемент в строке состояния, а значок в заголовке становится зелёным.',
-      why:
-        'За этим вопросом ЗАБЛОКИРОВАН раунд. Уведомление, которое можно пропустить, для такого не годится — поэтому поверхностей три, и закрытие модального окна ничего не теряет.',
-      setup:
-        'Настраивать нечего. Сервер пишет вопрос файлом в каталог, за которым расширение и так следит: ни одна из половин не открывает порт.',
-      usage:
-        'Ответить можно в панели, в модальном окне или из строки состояния — это одно и то же действие. Ответ уходит к спросившему ИИ, переведённый на язык, на котором он спрашивал, а ваши собственные слова сохраняются рядом.',
-      whatCanGoWrong:
-        'Вердикт `call_human` тоже поднимает такую карточку, поэтому ворота, исчерпавшие раунды, дойдут до вас, даже если ИИ промолчит. Так было не всегда: раньше вердикт был указанием только для ИИ, и человек мог весь день смотреть на панель и не узнать, что его звали.',
     },
   },
 
@@ -334,19 +270,6 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       whatCanGoWrong:
         'An override is not validated. A prompt that does not ask for the finding schema will produce answers that cannot be parsed, and the round will report that reviewer as unparseable — with its raw answer kept on disk so you can see what you asked for.',
     },
-    ru: {
-      title: 'Промпты целиком',
-      whatItIs:
-        'Полный текст каждого промпта, который продукт отправляет ревьюеру — четыре универсальных и восемь узких линз. Здесь ничего не пересказано: это то, что читает модель.',
-      why:
-        'Ревью, которое нельзя проверить, приходится принимать на веру. Знание точной постановки вопроса — единственное, что позволяет судить, справедлив ли ответ, и от плохой ли модели пришла находка, с которой вы не согласны, или от плохого вопроса.',
-      setup:
-        'Настраивать нечего. То, что напечатано ниже, сверяется тестом с собственными файлами промптов сервера, поэтому разойтись с тем, что реально запускается, оно не может.',
-      usage:
-        'Каждый промпт заканчивается одной и той же дисциплиной: находка обязана назвать конкретную ситуацию и неверный исход, четыре вида «не-находок» названы и запрещены, а пустой список объявлен допустимым ответом — ревьюер, которому велено всегда что-то найти, всегда что-то найдёт.\n\nЛюбой из них можно переопределить: положите файл с именем промпта в каталог `prompts/` внутри каталога данных сервера, и он будет действовать, пока существует. Удалите — вернётся штатный текст.',
-      whatCanGoWrong:
-        'Переопределение не проверяется. Промпт, не требующий схему находок, даст ответы, которые невозможно разобрать, и раунд отчитается об этом ревьюере как о неразобранном — сохранив его сырой ответ на диске, чтобы вы увидели, о чём именно спросили.',
-    },
   },
 
   {
@@ -363,19 +286,6 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
         'The search runs over titles AND the full text of every article in the language shown, so a word you remember from a paragraph finds the article it was in. Escape closes an article back to the index, and Back keeps whatever you had typed.\n\nAn article not yet translated shows English with a visible note rather than an empty page.',
       whatCanGoWrong:
         'A translation that lags behind the English is normal and is marked as such. What cannot happen is a missing article: the coverage test fails the build when a command or a setting has nothing written about it, which is why this page cannot quietly rot into a description of a product that no longer exists.',
-    },
-    ru: {
-      title: 'Эта страница: поиск, язык и размер текста',
-      whatItIs:
-        'Жёлтый ? в заголовке панели открывает эту справку. Список показывает каждую статью с первой строкой; поле сверху ищет по всем; селект меняет язык; кнопки ± меняют размер текста.',
-      why:
-        'Панели настроек с шестнадцатью элементами нужно место, где сказано, что делает каждый — всплывающая подсказка для этого не годится. Размер текста здесь потому, что зрение — не предмет для спора: пять шагов в каждую сторону это примерно ×1.6 вверх или вниз.',
-      setup:
-        'Настраивать нечего. Переключатель языка пишет `coai.helpLanguage` и действует только на эти страницы — это не язык, на котором спрашивают ваших ревьюеров, он в разделе **Language**. Кнопки ± пишут `coai.uiScale`. И то и другое — настоящие настройки, поэтому синхронизируются на другие ваши машины.',
-      usage:
-        'Поиск идёт по заголовкам И по полному тексту каждой статьи на показанном языке, поэтому слово, запомнившееся из абзаца, находит статью, в которой оно было. Escape закрывает статью обратно к списку, а Back сохраняет набранное.\n\nНепереведённая статья показывает английский с видимой пометкой, а не пустую страницу.',
-      whatCanGoWrong:
-        'Отставание перевода от английского — нормально и помечается. Чего не может случиться, так это пропавшей статьи: тест покрытия роняет сборку, когда о команде или настройке ничего не написано. Именно поэтому эта страница не может тихо превратиться в описание продукта, которого больше нет.',
     },
   },
 
@@ -394,19 +304,6 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
         'A rejection needs a reason, and the reason is kept: a finding you rejected is discounted in later rounds unless a reviewer raises it again with something new. That is what stops a loop from re-litigating a decision you already made.',
       whatCanGoWrong:
         'A round where NOBODY answered never passes. An empty result set is the absence of evidence, not evidence of absence — the gate calls for a person instead, which is the one case where "no findings" must not mean "approved".',
-    },
-    ru: {
-      title: 'Под капотом: протокол, которому следует ваш ИИ',
-      whatItIs:
-        'Семь инструментов в жёстком порядке. `open` открывает сессию для репозитория и ветки. `review_plan` отправляет план всем ревьюерам. `resolve` фиксирует принятие или отклонение КАЖДОЙ находки. `review_code` делает то же для диффа, тремя ролями на вендора. `providers` показывает здоровье, `status` возвращает в контекст возобновлённый разговор, `ask_human` эскалирует к вам.',
-      why:
-        'Порядок держится отказом, а не хорошим поведением: `review_code` отказывает, пока раунд плана не дошёл до *proceed*, поэтому пропустить стадию невозможно, а не «не рекомендуется».',
-      setup:
-        'Настраивать нечего — этим управляет ваш ИИ. Порядок ему сообщает тот самый фрагмент, который вы вставили в репозиторий.',
-      usage:
-        'Отклонение требует обоснования, и обоснование сохраняется: отклонённая находка не учитывается в следующих раундах, пока ревьюер не поднимет её снова с новым доводом. Именно это не даёт циклу пересматривать уже принятое вами решение.',
-      whatCanGoWrong:
-        'Раунд, в котором не ответил НИКТО, не проходит никогда. Пустой результат — это отсутствие свидетельств, а не свидетельство отсутствия: ворота вместо этого зовут человека. Это единственный случай, когда «находок нет» не должно значить «одобрено».',
     },
   },
   {
@@ -455,19 +352,6 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
         'A variable set in your assistant\'s own config still outranks the file — a variable there is more specific than a file any window may rewrite.\n\nThe panel writes only what DIFFERS from the defaults, so returning a setting to its default removes it from the file rather than pinning it.',
       whatCanGoWrong:
         'A half-written file leaves the last good configuration in place. A torn read that produced an empty vendor list would fail every reviewer and then report a panel that agreed with itself.',
-    },
-    ru: {
-      title: 'Под капотом: как настройка доходит до сервера',
-      whatItIs:
-        'Панель пишет ваши настройки в файл внутри каталога данных сервера, а сервер перечитывает этот файл при каждом его изменении.',
-      why:
-        'Раньше настройки доезжали до сервера только внутри вставленного конфиг-блока, и каждое изменение порога превращалось в возню: скопировать блок, найти конфиг клиента, вставить, перезапустить. А применялись они только при старте — разрыв, невидимый с обеих сторон, потому что панель сохраняет мгновенно и так и пишет.',
-      setup:
-        'Настраивать нечего. Изменение в панели действует со СЛЕДУЮЩЕГО раунда: ни перезапуска, ни повторной вставки.',
-      usage:
-        'Переменная, заданная в конфигурации самого ассистента, по-прежнему главнее файла: она конкретнее, чем файл, который может переписать любое окно.\n\nПанель пишет только то, что ОТЛИЧАЕТСЯ от умолчаний, поэтому возврат настройки к умолчанию убирает её из файла, а не фиксирует.',
-      whatCanGoWrong:
-        'Недописанный файл оставляет в силе прошлую рабочую конфигурацию. Порванное чтение, давшее пустой список вендоров, провалило бы всех ревьюеров и отчиталось бы панелью, согласной сама с собой.',
     },
   },
   {

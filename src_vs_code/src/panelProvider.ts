@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { EscalationWatcher } from './escalationWatcher';
 import { ModelChoice, parseCodexModels } from './models';
-import { liveRegions, OPEN_BY_DEFAULT, panelHtml } from './panelView';
+import { liveRegions, OPEN_BY_DEFAULT, panelHtml, staticKey } from './panelView';
 import { parseSession, SessionFile } from './rounds';
 import { parseUsage, UsageEntry, Window } from './usage';
 import { latestServerVersion } from './installer';
@@ -432,17 +432,3 @@ function nonce(): string {
   return Array.from({ length: 32 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
 }
 
-/**
- * Everything a repaint is needed for - the CONTROLS. Deliberately excludes the live regions
- * (rounds, questions), which are patched in place instead so an open dropdown survives.
- */
-function staticKey(state: Parameters<typeof panelHtml>[0]): string {
-  return JSON.stringify([
-    state.settings,
-    state.vendors,
-    state.codexModels,
-    state.serverInstalled,
-    state.serverVersion,
-    state.openSections,
-  ]);
-}

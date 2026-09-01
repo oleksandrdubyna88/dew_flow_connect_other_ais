@@ -67,10 +67,7 @@ public sealed class AntigravityRuntime : IReviewerRuntime
     }
 
     /// <summary>One NDJSON line. Serialised, never interpolated — a prompt contains quotes.</summary>
-    private static string UserMessage(string prompt) =>
-        JsonSerializer.Serialize(
-            new StreamMessage("user", new StreamContent("user", prompt)),
-            AntigravityJson.Default.StreamMessage) + "\n";
+    private static string UserMessage(string prompt) => AntigravityStream.UserMessage(prompt);
 
     /// <summary>
     /// The plan stage runs in an empty scratch directory and must NOT be given a workspace: an
@@ -90,15 +87,7 @@ public sealed class AntigravityRuntime : IReviewerRuntime
     /// MCP server is usually one that was started before. So the well-known install location is a
     /// fallback rather than a guess.
     /// </summary>
-    public string DefaultExecutable
-    {
-        get
-        {
-            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var installed = Path.Combine(localAppData, "agy", "bin", "agy.exe");
-            return OperatingSystem.IsWindows() && File.Exists(installed) ? installed : "agy";
-        }
-    }
+    public string DefaultExecutable => AntigravityStream.InstalledExecutable;
 
     private string Executable(ReviewerSettings settings) =>
         settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : DefaultExecutable;
@@ -130,7 +119,46 @@ public sealed class AntigravityRuntime : IReviewerRuntime
         element.TryGetProperty(name, out var value) && value.TryGetInt64(out var number) ? number : 0;
 
     /// <summary>The `result` event out of the NDJSON stream — the last word, whatever preceded it.</summary>
-    private static JsonElement? Result(string stdout)
+    private static JsonElement? Result(string stdout) => AntigravityStream.Result(stdout);
+}
+
+/// <summary>
+/// The <c>agy</c> stream-json wire format, shared by everything that drives that CLI.
+/// </summary>
+/// <remarks>
+/// Two callers now: the reviewer adapter and the translator. The translator reached the point of
+/// needing this on the day the Gemini CLI was retired, and the tempting move was a second NDJSON
+/// line beside a second parser: that is how the two would have drifted. One shape, one parser.
+/// </remarks>
+public static class AntigravityStream
+{
+    /// <summary>The flags every launch shares: read-only, prompt on stdin, NDJSON both ways.</summary>
+    /// <remarks>
+    /// <c>--print</c> takes its prompt as a flag VALUE and a review prompt is ~33 KB, past the
+    /// ~32 KB Windows command line. The empty <c>--print=</c> is mandatory even in stream mode.
+    /// </remarks>
+    public static string[] StreamingFlags =>
+        ["--print=", "--input-format", "stream-json", "--output-format", "stream-json", "--mode", "plan"];
+
+    /// <summary>Where the installer puts it, for a shell that started before the install ran.</summary>
+    public static string InstalledExecutable
+    {
+        get
+        {
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var installed = Path.Combine(localAppData, "agy", "bin", "agy.exe");
+            return OperatingSystem.IsWindows() && File.Exists(installed) ? installed : "agy";
+        }
+    }
+
+    /// <summary>One NDJSON line. Serialised, never interpolated: a prompt contains quotes.</summary>
+    public static string UserMessage(string prompt) =>
+        JsonSerializer.Serialize(
+            new StreamMessage("user", new StreamContent("user", prompt)),
+            AntigravityJson.Default.StreamMessage) + "\n";
+
+    /// <summary>The `result` event out of the NDJSON stream, whatever preceded it.</summary>
+    public static JsonElement? Result(string stdout)
     {
         foreach (var line in stdout.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {
@@ -157,6 +185,12 @@ public sealed class AntigravityRuntime : IReviewerRuntime
 
         return null;
     }
+
+    /// <summary>The text of a `result` event, or nothing: how a translated sentence is read.</summary>
+    public static string? Response(string stdout) =>
+        Result(stdout) is { } r && r.TryGetProperty("response", out var response)
+            ? response.GetString()
+            : null;
 }
 
 /// <summary>The stdin message shape the CLI accepts, discovered by its own error messages.</summary>

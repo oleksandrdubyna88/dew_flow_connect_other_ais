@@ -21,7 +21,7 @@ test('defaults match the master plan configuration table', () => {
 test('the shipped reviewers are the two whose CLIs authenticate themselves', () => {
   assert.deepEqual(
     DEFAULT_VENDORS.map((v) => v.id),
-    ['codex', 'gemini'],
+    ['codex', 'antigravity'],
   );
   assert.ok(DEFAULT_VENDORS.every((v) => v.enabled && v.baseUrl === ''));
 });

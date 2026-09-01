@@ -28,11 +28,17 @@ export interface HelpPageOptions {
 const SECTION_LABELS: Record<HelpLanguage, Readonly<Record<'whatItIs' | 'why' | 'setup' | 'usage' | 'whatCanGoWrong', string>>> = {
   en: { whatItIs: 'What it is', why: 'Why', setup: 'How to set it up', usage: 'How to use it', whatCanGoWrong: 'What can go wrong' },
   ru: { whatItIs: 'Что это', why: 'Зачем', setup: 'Как настроить', usage: 'Как пользоваться', whatCanGoWrong: 'Что может пойти не так' },
+  uk: { whatItIs: 'Що це', why: 'Навіщо', setup: 'Як налаштувати', usage: 'Як користуватися', whatCanGoWrong: 'Що може піти не так' },
+  de: { whatItIs: 'Was es ist', why: 'Warum', setup: 'Einrichtung', usage: 'Verwendung', whatCanGoWrong: 'Was schiefgehen kann' },
+  es: { whatItIs: 'Qué es', why: 'Por qué', setup: 'Cómo configurarlo', usage: 'Cómo usarlo', whatCanGoWrong: 'Qué puede salir mal' },
 };
 
 const UI: Record<HelpLanguage, { search: string; back: string; home: string; fallback: string; noHits: string }> = {
   en: { search: 'Search the help…', back: '← Back', home: 'Help', fallback: 'Not translated yet — showing English.', noHits: 'Nothing matches.' },
   ru: { search: 'Поиск по справке…', back: '← Назад', home: 'Справка', fallback: 'Ещё не переведено — показан английский.', noHits: 'Ничего не найдено.' },
+  uk: { search: 'Пошук у довідці…', back: '← Назад', home: 'Довідка', fallback: 'Ще не перекладено — показано англійську.', noHits: 'Нічого не знайдено.' },
+  de: { search: 'Hilfe durchsuchen…', back: '← Zurück', home: 'Hilfe', fallback: 'Noch nicht übersetzt — Englisch wird angezeigt.', noHits: 'Keine Treffer.' },
+  es: { search: 'Buscar en la ayuda…', back: '← Atrás', home: 'Ayuda', fallback: 'Aún sin traducir — se muestra en inglés.', noHits: 'Sin resultados.' },
 };
 
 /** What the page's search runs over — titles and bodies in the shown language, per article. */

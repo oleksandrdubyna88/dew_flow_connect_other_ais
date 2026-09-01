@@ -116,6 +116,14 @@ public sealed class PanelService
                 "unavailable", ReviewerRuntimeSelector.Default.RefusalFor(provider.Provider));
         }
 
+        // A retired runtime is answered before the probe, not by it: `gemini --version` exits 0
+        // without ever reaching Google, so a probe built on --version is structurally incapable of
+        // seeing the retirement and reported "own auth" for a vendor that could not sign in at all.
+        if (VendorDiagnosis.ForRuntime(RuntimeNameOf(provider)) is { } retired)
+        {
+            return new ProviderStatus(provider.Provider, provider.Enabled, false, "", "unavailable", retired);
+        }
+
         var (auth, authNote) = AuthFor(provider);
         if (!provider.Enabled)
         {
@@ -158,6 +166,12 @@ public sealed class PanelService
     /// The runtime for one configured reviewer: a built-in by name, or — when the operator gave it
     /// a base URL — the generic custom one. A vendor added in the panel is DATA, not a release.
     /// </summary>
+    /// <summary>Which runtime a vendor actually drives, by the same order the launcher uses.</summary>
+    private static string RuntimeNameOf(ProviderSettings provider) =>
+        provider.BaseUrl.Length > 0 ? "codex"
+        : provider.Runtime.Length > 0 ? provider.Runtime
+        : provider.Provider;
+
     private static IReviewerRuntime? RuntimeFor(ProviderSettings provider) =>
         provider.BaseUrl.Length > 0
             ? new CustomCodexRuntime(provider.Provider, provider.BaseUrl)
