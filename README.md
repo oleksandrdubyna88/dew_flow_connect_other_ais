@@ -1,7 +1,8 @@
 # ConnectOtherAIs
 
 A multi-model review gate. Your main AI writes the plan and the code; **other vendors' models** —
-Codex, Gemini, DeepSeek — review both in rounds, until the findings that matter drop under a
+Codex, Antigravity (Gemini/Claude/GPT-OSS), a second Claude, DeepSeek — review both in rounds,
+until the findings that matter drop under a
 threshold, or a human is called.
 
 The value is not "more review". It is **review by a model that cannot see the author's reasoning**,
@@ -59,7 +60,8 @@ Without a rule, three verbose reviewers guarantee escalation forever. So:
 2. **The instructions**: *ConnectOtherAIs: Copy the CLAUDE.md snippet* gives the text that teaches a
    repository's main AI when to call the tools.
 
-Codex and Gemini authenticate themselves — if their CLIs are signed in, no key is needed. DeepSeek
+Codex, Antigravity and Claude authenticate themselves — if their CLIs are signed in, no key is
+needed. DeepSeek
 rides the Codex CLI's custom-provider config and needs a key, which comes from **one CredsForDevs
 `config` entry** read once at startup. That is the only key path: a `credential` entry cannot serve
 it, because nothing in the vault's read routes returns a secret.
@@ -90,3 +92,38 @@ against the **published** one.
 `research/architecture.md` is the entry point; `module_core`, `module_runners`, `module_server` and
 `module_extension` deep-dive each half. Plans live in `todo/` while open and move to `research/`
 with an `IMPLEMENTED` status when they ship — a rule this repository's CI enforces.
+
+## Prompts: a universal question, and eight narrow lenses
+
+Each reviewer role ships a **universal** prompt and two narrow ones, and the panel can pick which
+prompt each ROUND uses — or rotate through them automatically (universal first, then each lens).
+
+| Role | Universal | Lens 1 | Lens 2 |
+|---|---|---|---|
+| Plan | the whole plan | assumptions & verification | the human path |
+| Architecture | boundaries + evolution | boundaries & duplication | cost of the next change |
+| Security & reliability | the whole surface | what it holds and leaves | attack surface |
+| Performance & UX-DX | both | cost at scale | ergonomics & waiting |
+
+**What is not claimed.** The lenses were measured against the universal prompt over three plans,
+and the union of all three found roughly twice what any single one did. That result does not
+survive its own control: running the SAME prompt on the SAME text three times produced 6, 4 and 5
+findings whose overlaps were 3, 1 and **0**. Run-to-run variance alone explains the spread, so the
+lenses are offered because they are useful to aim, not because they are proven to find more.
+
+The measurement that matters for a gate is a different one: a finding raised by two vendors
+independently is stronger evidence than one raised twice by the same prompt, and every finding
+carries the `providers` that raised it.
+
+## What each AI has used
+
+The server appends one line per reviewer to `usage.jsonl` — vendor, model, role, stage, seconds,
+tokens, cost, outcome — and the panel charts it per vendor over a day, week, month or year.
+Failed reviewers are recorded too: a run that burned ninety seconds and answered nothing is
+exactly what a spending record must not hide. A vendor that does not price its own runs shows a
+dash rather than `$0.00`, because free and unreported are different facts.
+
+Token accounting is each vendor's own, because a shared rule is wrong for at least one of them:
+codex folds cached tokens INTO its input count, claude reports them BESIDE it, and antigravity's
+thinking tokens sit inside its output count. Claude reports one run twice and the two disagree —
+`usage` is the last message, `modelUsage` is the session — and the ledger reads the second.

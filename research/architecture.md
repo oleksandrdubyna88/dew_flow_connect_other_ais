@@ -52,3 +52,15 @@ C4Container
 - **Logging** per the shared Serilog rule; stdio hosts log console to stderr.
 - **Conventions** are the `dew_flow_conventions` submodule at `.claude/rules/shared`;
   `.claude/settings.json` is a byte-identical copy of its reference.
+
+## Additions after the first real runs (2026-08-31 → 09-01)
+
+| What | Where | Why it is here |
+|---|---|---|
+| Antigravity vendor adapter | `runners/Reviewers/AntigravityRuntime.cs` | Google retired Gemini Code Assist for individuals; `agy` is the migration, and it fits the contract better than anything else here |
+| Per-vendor token & cost reading | each adapter's `ReadUsage` | one shared rule is wrong for at least one vendor by a factor of two, silently |
+| Prompt catalog + per-round choice + rotation | `core/Rounds/PromptCatalog.cs`, panel section | one prompt per role forever is the right default and the wrong ceiling |
+| Settings re-read per call | `src/Server/PanelServiceHost.cs` | a setting that applies only after a client restart is a setting nobody can tell is broken |
+| Spending ledger + chart | `src/Server/UsageLedger.cs`, `src_vs_code/src/usage.ts` | spending spans sessions and must outlive them |
+| Audit trail per reviewer | `src/Server/RoundAudit.cs` | a gate that cannot say why a reviewer did not review cannot be trusted with a verdict |
+| Evidence kept for unparseable answers | `runners/Reviewers/ReviewerExecutor.cs` | the one failure whose raw text IS the diagnosis |

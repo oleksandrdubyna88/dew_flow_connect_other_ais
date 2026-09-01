@@ -78,3 +78,39 @@ first one's live round dead.
   vendor-mode fake CLI: dedup across providers, the standing-rejection discount, restart survival,
   and the six-launch fan-out with three distinct role prompts, all observed.
 - Stdout purity is a test: verbose logging on, every stdout line must parse as JSON.
+
+## Prompts are a catalog, resolved per round
+
+`PromptCatalog` (in the core) holds twelve prompts — a universal one and two narrow lenses for each
+of the four roles. `PromptCatalog.ForRound(role, round, chosen, rotating)` answers one round's
+prompt: the panel's explicit choice first, then the rotation (universal, then each lens in turn),
+then the universal one. An id that is empty, stale or belonging to another role falls THROUGH
+rather than leaving a round with no prompt.
+
+`RolePrompts` serves any catalog entry with the same override-first layering the role defaults
+already had: a file under `<dataDir>/prompts/<id>.md` wins while it exists, the embedded copy
+otherwise. The extension mirrors the catalog so the panel can draw before any server has started,
+and a test holds the two lists together — that promise was written as a comment before the test
+existed, which is exactly how mirrored lists begin to drift.
+
+## Settings apply to the next round, not the next restart
+
+`PanelServiceHost` stats the panel's settings file on every tool call and rebuilds `PanelService`
+when it has changed. Settings used to be read once at startup, which made every change in the
+sidebar silently ineffective until the MCP client was restarted — a gap invisible from both ends,
+because the panel saves instantly and says so. Environment variables still outrank the file.
+
+## The spending ledger
+
+`UsageLedger` appends one JSON line per reviewer to `<dataDir>/usage.jsonl`: vendor, model, role,
+stage, seconds, tokens, cost and outcome. It is separate from the session files on purpose —
+sessions are rewritten as rounds advance and hold one repo+branch, while "what has this cost me
+this month" spans every session and must outlive all of them. Failed reviewers are recorded too,
+and recording never throws: a ledger that can fail a review is worse than one with a gap in it.
+
+## The audit trail
+
+`RoundAudit` writes what the one-line round summary cannot: the roster and the exact argv (at
+Debug, so a failure can be reproduced by pasting it into a terminal), each reviewer's start, its
+answer with tokens and cost, every failure as a WARNING naming the reason, and every finding with
+its origin. It rides the same per-run log file as everything else.

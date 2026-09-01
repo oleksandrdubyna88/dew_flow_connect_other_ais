@@ -37,7 +37,7 @@ sequenceDiagram
 | `ExecutableResolver` | `Processes/ExecutableResolver.cs` | npm Windows shims: the PATHEXT resolution `Process.Start` does not do |
 | `WorktreeManager`, `WorktreeLease` | `Worktrees/WorktreeManager.cs` | one detached tree per round, `coai-wt-` prefix under OUR storage; prune-on-open; disposal = finally; never touches a human's worktree |
 | `DiffExclusions`, `ContextAssembler` | `Context/ContextAssembler.cs` | numstat → per-file diffs with `:(exclude,glob)` pathspecs; binary sizes via `cat-file -s` |
-| `IReviewerRuntime`: `CodexRuntime`, `DeepseekRuntime`, `GeminiRuntime`, `ClaudeRuntime`, `CustomCodexRuntime` | `Reviewers/ReviewerRuntime.cs`, `ClaudeRuntime.cs`, `CustomRuntime.cs` | THE vendor adapter: `Build` (argv, pure) + `ReadAnswer` + `ReadUsage`, the last two with working defaults. Flags verified against codex 0.147.0 / gemini 0.55.1 / claude 2.1.197; keys ride env, never argv; DeepSeek = Codex config-shifted |
+| `IReviewerRuntime`: `CodexRuntime`, `DeepseekRuntime`, `GeminiRuntime`, `ClaudeRuntime`, `AntigravityRuntime`, `CustomCodexRuntime` | `Reviewers/ReviewerRuntime.cs`, `ClaudeRuntime.cs`, `CustomRuntime.cs` | THE vendor adapter: `Build` (argv, pure) + `ReadAnswer` + `ReadUsage`, the last two with working defaults. Flags verified against codex 0.147.0 / gemini 0.55.1 / claude 2.1.197 / agy 1.1.22; keys ride env, never argv; DeepSeek = Codex config-shifted |
 | `ReviewerRuntimeSelector` | same | unknown provider refuses naming the catalog |
 | `ReviewerOutcome` (closed), `ReviewerExecutor`, `RateLimit` | `Reviewers/ReviewerExecutor.cs` | one launch + one repair; SIX named outcomes incl. NotStarted; `Ok` carries the run's `Usage`, both launches counted when repaired |
 | `Usage`, `UsageParser` | `core/Findings/UsageParser.cs` | schema-less scan over any vendor envelope; MAX per key name then sum per category, so a streamed cumulative total is never summed with itself; money only when the vendor priced the run |
@@ -49,13 +49,22 @@ sequenceDiagram
   moving branch would be six different inputs to one comparison.
 - **Provider cap beside the global cap** — a rate limit is per vendor; a global cap alone puts all
   its slots on one provider.
+- **Antigravity (`agy`) is the closest fit to this product's contract**: `--json-schema` puts the
+  finding schema straight into `result.response`, the same envelope carries `usage`, and the model
+  ids carry their own reasoning effort. Its prompt rides `--input-format stream-json` on stdin as
+  one NDJSON line (`{"event":"user","message":{"role":"user","content":"..."}}`) because `--print`
+  takes its prompt as a flag VALUE and a review prompt is ~33 KB — past the Windows command line.
+  It exists because Google retired Gemini Code Assist for individuals mid-2026-08-31: the Gemini
+  CLI now fails in `_doSetupUser` with "migrate to the Antigravity suite", before any model is
+  reached, which was mistaken in turn for a quota, a timeout and an untrusted folder.
+
 - **Codex reads from `-o`, Gemini from stdout, Claude from its JSON envelope's `result`** — each
   through its OWN adapter, because where an answer lands is vendor knowledge; exit-0-with-no-output
   is `Unparseable`, never `Ok`.
 - **Adding a vendor is one class, not an edit to the executor** — `IReviewerRuntime` carries launch,
   answer and usage; the executor asks the adapter and knows no vendor's name.
 - **Tokens come from the vendor, money only when the vendor prices it** — claude reports
-  `total_cost_usd`, codex and gemini report tokens alone. A price table of our own would be wrong
+  `total_cost_usd`, codex, gemini and antigravity report tokens alone. A price table of our own would be wrong
   within a month, and a wrong number is worse than an absent one, so `costUsd` stays null and the
   UI says "no cost reported" rather than "$0.00".
 - **Subset counts are never added** — codex's `cached_input_tokens` and `reasoning_output_tokens`
@@ -81,3 +90,30 @@ Both cost a whole run each; see [RESULTS_first_real_run.md](RESULTS_first_real_r
 ## External dependencies
 
 `git` on PATH (worktrees, diffs); the vendor CLIs only at real runtime, never in tests.
+
+## Token accounting is per vendor, because a shared rule is wrong for one of them
+
+| Vendor | Cache tokens | Reads |
+|---|---|---|
+| codex | `cached_input_tokens` is a SUBSET of `input_tokens` — adding it double-bills | the generic scan over `--json` events |
+| claude | `cache_creation_input_tokens` / `cache_read_input_tokens` sit BESIDE the input count and are both billed | `modelUsage`, not `usage` — see below |
+| antigravity | `thinking_tokens` inside `output_tokens`, `cache_read_tokens` inside `input_tokens`; its own `total_tokens` = in + out proves it | `result.usage` on the stream's result event |
+
+Claude reports the SAME run twice and the two disagree: measured on a real call, `usage` said 10
+input / 44 output while `modelUsage` said 532 / 57. `usage` is the last message's usage;
+`modelUsage` is the aggregate across every turn, which is what a multi-turn review actually
+consumed. Five tests pin all of this to envelopes captured from real calls.
+
+## Evidence is kept, never summarised away
+
+Three failures cost hours because the reason was discarded at the last step:
+
+- a non-zero exit reported as `exit 1` while the executor held the stderr → the reason travels with
+  the code now, chosen by CONTENT (the first line that announces an error), because "the last line"
+  picks node's version banner on exactly the vendor CLIs this product drives;
+- a rate limit reported without saying WHICH limit → a daily quota and a per-minute throttle read
+  identically and only one is worth retrying, so the vendor's words travel and a hopeless limit
+  skips its retry;
+- an unparseable answer whose text was thrown away → kept under `<dataDir>/unparseable/` now, with
+  the outcome naming the file. The one replayed by hand afterwards succeeded, which is precisely
+  the case where the raw text is the whole story.
