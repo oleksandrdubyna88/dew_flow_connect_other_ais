@@ -416,10 +416,10 @@ export function usageRows(state: PanelState): string {
     .map((r) => {
       const total = r.tokensIn + r.tokensOut;
       const failed = r.failed === 0 ? '' : ` · <span class="warn">${r.failed} failed</span>`;
-      return `<div class="usage">
-  <div class="head"><span class="name">${escapeHtml(r.provider)}</span><span class="hint">${money(r.costUsd)}</span></div>
+      return `<div class="spend">
+  <div class="head"><span class="name">${escapeHtml(r.provider)}</span><span class="cost">${money(r.costUsd)}</span></div>
   <div class="bar"><span style="width:${barWidth(total, busiest)}%"></span></div>
-  <div class="hint">${shortNumber(r.tokensIn)} in · ${shortNumber(r.tokensOut)} out · ${r.runs} run(s)${failed}</div>
+  <div class="figures">${shortNumber(r.tokensIn)} in · ${shortNumber(r.tokensOut)} out · ${r.runs} run(s)${failed}</div>
   <div class="hint">${shortDuration(r.seconds)} total · ${shortDuration(r.averageSeconds)} average</div>
 </div>`;
     })
@@ -626,11 +626,24 @@ const CSS = `
   .tab { flex: 1; padding: 3px 6px; font: inherit; color: var(--vscode-foreground);
          background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-widget-border);
          border-radius: 3px; cursor: pointer; }
+  .tab:hover { background: var(--vscode-toolbar-hoverBackground); }
   .tab.on { background: var(--vscode-button-background); color: var(--vscode-button-foreground);
             border-color: var(--vscode-button-background); }
-  .usage { margin: 0 0 10px; }
+  .tab.on:hover { background: var(--vscode-button-hoverBackground); }
+  /* The spending card. It was called .usage, which the rounds section had already claimed for its
+     own line - so opacity .7 from a rule written for something else dimmed every card, and the
+     .hint inside it to .7 x .65. Nothing was broken; the whole section just read as disabled.
+     A name each. */
+  .spend { margin: 0 0 12px; }
+  .spend .head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .spend .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+  /* The money is the quiet half of the row: a dash where a vendor does not price its own runs. */
+  .spend .cost { font-size: 11px; opacity: .75; flex: 0 0 auto; }
+  /* The tokens are what the section is FOR, so they are read at full strength; the durations
+     underneath stay a .hint, because they are context rather than the answer. */
+  .spend .figures { font-size: 11px; margin: 3px 0 0; line-height: 1.45; }
   .bar { height: 6px; background: var(--vscode-editorWidget-background); border-radius: 3px;
-         overflow: hidden; margin: 3px 0; }
+         overflow: hidden; margin: 4px 0 2px; }
   .bar span { display: block; height: 100%; background: var(--vscode-button-background); }
   .warn { color: var(--vscode-editorWarning-foreground); }
   .total { margin-top: 8px; border-top: 1px solid var(--vscode-widget-border); padding-top: 6px; }

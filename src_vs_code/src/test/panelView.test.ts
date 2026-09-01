@@ -374,3 +374,41 @@ test('a running round shows its status, its reviewers and what it has cost', () 
   assert.ok(html.includes('5.3k in / 260 out'));
   assert.ok(html.includes('no cost reported'));
 });
+
+/**
+ * Two sections must not fight over one class name.
+ *
+ * <p>`.usage` was defined twice — once for the per-round usage line in Recent rounds
+ * (`font-size: 11px; opacity: .7`) and once for the spending cards. CSS does not care which was
+ * meant: every spending card was dimmed to 70%, and the `.hint` lines inside it to .7 × .65 = 45%,
+ * so the whole section read as disabled. Nothing was broken and nothing said anything; it just
+ * looked switched off.</p>
+ */
+test('no two sections define the same class, because the loser is dimmed in silence', () => {
+  const html = panelHtml(state(), 'n0nce');
+  const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+  const selectors = [...css.matchAll(/(?:^|\n)\s*([.#][^\s{][^{\r\n]*?)\s*\{/g)].map((m) => m[1]!.trim());
+
+  const seen = new Set<string>();
+  const twice = selectors.filter((s) => (seen.has(s) ? true : (seen.add(s), false)));
+  assert.deepEqual(twice, [], `defined twice: ${twice.join(', ')}`);
+});
+
+test('a spending row shows the vendor and its cost apart, not run together', () => {
+  const html = panelHtml(
+    state({
+      usage: [
+        { utc: new Date().toISOString(), provider: 'antigravity', model: 'm', role: 'PlanCritique',
+          stage: 'PlanReview', outcome: 'Ok', tokensIn: 55_800, tokensOut: 25_500, costUsd: null, seconds: 84 },
+      ],
+    }),
+    'n0nce',
+  );
+
+  // "antigravity—" is what a name butted against the money dash reads as, and it read as a typo.
+  // The two are adjacent in the markup on purpose — it is the ROW that holds them apart, so the
+  // assertion is on the class that gets positioned and on the rule that positions it.
+  assert.match(html, /<span class="cost">/, 'the money needs an element the row can push to its far end');
+  assert.match(html, /\.spend \.head \{[^}]*space-between/, 'the row puts the name and the cost at opposite ends');
+  assert.match(html, /\.spend \.figures \{/, 'the tokens are the answer, so they are not styled as a hint');
+});

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.14.3 — 2026-09-01
+
+**The spending section is legible.** It looked switched off, and nothing was broken: `.usage` was
+defined twice in the panel's stylesheet — once for the per-round line in Recent rounds, once for
+the spending card. CSS does not care which was meant, so every card rendered at 70% opacity and the
+lines inside it at 45%.
+
+The card is `.spend` now, with the vendor and its cost at opposite ends of the row instead of
+reading as `antigravity—`, and with the tokens at full strength: they are what the section exists
+to show, so they are no longer styled as a hint. The window tabs got a hover, so a live control
+stops looking like a label. A test walks the emitted CSS and fails on any selector defined twice —
+dimming has no other symptom, and nobody goes looking for a stylesheet collision.
+
 ## 0.14.2 — 2026-09-01
 
 **The Update button works.** It posted `installServer`; the panel's message handler had no case for

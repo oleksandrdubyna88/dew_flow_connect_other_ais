@@ -122,3 +122,16 @@ A test covers the reverse — a button posting a name nobody declared.
 The install itself now answers a locked binary with the cure rather than an errno: overwriting a
 running `coai-mcp.exe` is refused by Windows, and an MCP client holding it open is the normal case
 at the exact moment somebody presses Update, because that client is what started it.
+
+### One class, one section (2026-09-01)
+
+The spending cards were dim enough to read as disabled. Nothing was broken: `.usage` was defined
+TWICE in the panel's stylesheet — once for the per-round usage line in Recent rounds
+(`font-size: 11px; opacity: .7`) and once for the spending card. CSS does not care which was meant,
+so every card rendered at 70%, and the `.hint` lines inside at .7 x .65 = 45%.
+
+The spending card is `.spend` now, with its own head (`space-between`, so the vendor and its cost
+sit at opposite ends instead of reading as `antigravity—`), its own `.cost`, and a `.figures` line
+that is NOT a hint: the tokens are what the section exists to show. A test walks the emitted CSS
+and fails on any selector defined twice — the dimming had no other symptom, and nobody would have
+gone looking for a stylesheet collision.
