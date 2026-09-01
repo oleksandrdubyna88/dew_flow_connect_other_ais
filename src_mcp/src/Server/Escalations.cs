@@ -64,6 +64,32 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
     public string AnswerPath(string id) => Path.Combine(Directory, $"{id}.answer.json");
 
     /// <summary>Writes the question, then waits for its answer or the budget, whichever comes first.</summary>
+    /// <summary>
+    /// Puts a question in front of a person WITHOUT waiting for the answer.
+    /// </summary>
+    /// <remarks>
+    /// A <c>call_human</c> verdict is returned to the calling AI, and the AI decides whether to
+    /// pass it on — so a gate that had exhausted its rounds could leave a person with nothing to
+    /// see, which is what happened: the operator watched the panel all day and never learned the
+    /// gate had asked for them. A verdict that says "a person decides" must reach that person
+    /// whatever the AI does next. It does not block, because the round is already over; the file
+    /// is the same shape as any other escalation, so the panel shows and answers it identically.
+    /// </remarks>
+    public void Notify(EscalationQuestion question)
+    {
+        try
+        {
+            WriteAtomic(QuestionPath(question.Id), JsonSerializer.Serialize(question, EscalationJsonContext.Default.EscalationQuestion));
+        }
+        catch (IOException)
+        {
+            // A notice nobody could write is not a round that failed.
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
     public async Task<EscalationOutcome> AskAsync(
         EscalationQuestion question,
         TimeSpan budget,

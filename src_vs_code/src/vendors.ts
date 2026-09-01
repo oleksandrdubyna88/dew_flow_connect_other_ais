@@ -44,7 +44,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
   },
   {
     label: 'Gemini (Google)',
-    hint: 'The Gemini CLI, signed in as itself. Needs an interactive login or a key in the vault.',
+    hint: 'RETIRED by Google for individual accounts — it now refuses before reaching a model. Use Antigravity instead.',
     id: 'gemini',
     runtime: 'gemini',
     model: '',

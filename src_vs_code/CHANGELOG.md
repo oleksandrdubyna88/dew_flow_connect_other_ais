@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.12.0 — 2026-09-01
+
+**A `call_human` verdict now reaches the human.** It used to be an instruction to the calling AI,
+and whether a person ever heard about it depended on what that AI did next — so a gate could
+exhaust its rounds and the panel would sit empty all day. The server raises a notice with the open
+findings; it appears where every other question does, and answering it works the same way.
+
+**The rounds file and the panel tell the same story.** Two renderers over one file had drifted:
+`PlanReview` in one and `plan review` in the other, the round's subject in one and not the other.
+Same columns, same words, one function.
+
+**A billion-minute round is gone.** Rounds written before the start time existed carry .NET's
+default date — year one — and the subtraction rendered `1065396701m 44s`. A duration longer than a
+day is a missing start, not a long review.
+
+**Gemini is marked retired in the picker**, because it is: Google closed Code Assist for
+individuals and the CLI now refuses before reaching a model. Pair with **coai-mcp 0.5.3**, which
+reports that failure — and four others — as what to DO rather than as a stack frame.
+
 ## 0.11.1 — 2026-09-01
 
 **A round says what it was about.** Recent rounds led with `main · PlanReview 4`, which names the

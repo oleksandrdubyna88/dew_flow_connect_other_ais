@@ -46,7 +46,9 @@ public sealed class GateReportingTests
 
         var sentence = Sentence(new ReviewerOutcome.NonZeroExit(1, stderr));
 
-        sentence.Should().Contain("Missing optional dependency");
+        // The diagnosis table now recognises this one and answers with the CURE rather than the
+        // vendor's phrasing — which is the same intent this test was written for, one step further.
+        sentence.Should().Contain("reinstall");
         sentence.Should().NotContain("Node.js v20.20.2", "the version banner is the one line that explains nothing");
     }
 
@@ -118,6 +120,40 @@ public sealed class GateReportingTests
         // exist — the vendor's envelope had come back empty.
         Sentence(new ReviewerOutcome.Unparseable("the vendor returned an empty answer after one repair attempt"))
             .Should().Contain("empty answer").And.NotContain("not the schema");
+    }
+
+    // ---------- a closed door is named, not left as a stack trace ----------
+
+    [Fact]
+    public void TheGeminiRetirement_IsReportedAsWhatToDo_NotAsExitOne()
+    {
+        // Three observers read this failure as three different things — a daily quota, a timeout,
+        // and an untrusted directory — because what it says is buried in a node stack.
+        const string stderr = """
+            Code Assist for individuals. To continue using Gemini, please migrate to the Antigravity suite of products: https://antigravity.google
+                at throwIneligibleOrProjectIdError (file:///C:/Users/x/gemini-cli/bundle/chunk.js:310101:11)
+                at _doSetupUser (file:///C:/Users/x/gemini-cli/bundle/chunk.js:310090:5)
+            """;
+
+        var sentence = Sentence(new ReviewerOutcome.NonZeroExit(1, stderr));
+
+        sentence.Should().Contain("retired").And.Contain("antigravity");
+        sentence.Should().NotContain("throwIneligible", "a stack frame is evidence, not a diagnosis");
+    }
+
+    [Fact]
+    public void AnUntrustedDirectory_SaysWhichFlagFixesIt()
+    {
+        Sentence(new ReviewerOutcome.NonZeroExit(55, "Gemini CLI is not running in a trusted directory."))
+            .Should().Contain("--skip-trust");
+    }
+
+    [Fact]
+    public void AFailureNobodyHasSeenBefore_StillReportsTheClisOwnWords()
+    {
+        // The table is a shortcut for the failures we KNOW; it must not swallow the ones we do not.
+        Sentence(new ReviewerOutcome.NonZeroExit(3, "Error: the frobnicator is out of widgets"))
+            .Should().Contain("frobnicator is out of widgets");
     }
 
     // ---------- D1: the audit line survives a non-string property ----------

@@ -130,10 +130,16 @@ public sealed class PanelService
             var result = await _launcher.RunAsync(
                 new ProcessRequest(exe, ["--version"], Environment.CurrentDirectory) { Timeout = TimeSpan.FromSeconds(30) },
                 ct);
-            return result.ExitCode == 0
-                ? new ProviderStatus(provider.Provider, true, true, result.StdOut.Trim(), auth, authNote)
-                : new ProviderStatus(provider.Provider, true, true, "", auth,
-                    $"--version exited {result.ExitCode}: {result.StdErr.Trim()}");
+            if (result.ExitCode == 0)
+            {
+                return new ProviderStatus(provider.Provider, true, true, result.StdOut.Trim(), auth, authNote);
+            }
+
+            // `providers` is the health probe a person reads before trusting a panel, so a known
+            // closed door is named here too rather than only when a round has already failed.
+            var cure = VendorDiagnosis.For(result.StdErr + result.StdOut);
+            return new ProviderStatus(provider.Provider, true, true, "", auth,
+                cure ?? $"--version exited {result.ExitCode}: {result.StdErr.Trim()}");
         }
         catch (System.ComponentModel.Win32Exception)
         {
@@ -330,6 +336,7 @@ public sealed class PanelService
             });
             audit.Closing(answer.Verdict, gate.GatingCount, summary.Sentence, record);
             audit.Findings(merged);
+            NotifyIfAPersonMustDecide(completed.Verdict, session, merged);
             return Json(answer, ServerJsonContext.Default.ReviewAnswer);
         }
         catch (Exception e) when (e is WorktreeException or ContextException)
@@ -400,6 +407,38 @@ public sealed class PanelService
             round,
             _settings.PromptsPerRound.GetValueOrDefault(role.ToString(), []),
             _settings.RotatePrompts);
+
+    /// <summary>
+    /// A <c>call_human</c> verdict reaches the PERSON, not only the AI that asked.
+    /// </summary>
+    /// <remarks>
+    /// The verdict is an instruction to the caller, and the caller decides what to do with it —
+    /// so a gate that had exhausted its rounds could be answered by an AI writing a paragraph in
+    /// a chat window while the panel stayed empty all day. That is what happened. The notice is
+    /// the same shape as any escalation, so it shows up where a person is already looking and can
+    /// be answered there; it does not block, because the round has already returned.
+    /// </remarks>
+    private void NotifyIfAPersonMustDecide(RoundVerdict verdict, PersistedSession session, ImmutableArray<Finding> merged)
+    {
+        if (verdict is not RoundVerdict.CallHuman human)
+        {
+            return;
+        }
+
+        _escalations.Notify(new EscalationQuestion(
+            Guid.NewGuid().ToString("N")[..12],
+            session.State.SessionId,
+            session.State.RepoPath,
+            session.State.Branch,
+            $"The {RoundSubject.StageName(session.State.Stage.ToString())} gate needs your decision: {human.Reason}. " +
+            "Proceed anyway, or fix the findings and review again?",
+            string.Empty,
+            _settings.Language.Code,
+            string.Empty,
+            [.. merged.Where(f => f.IsGating)],
+            DateTime.UtcNow.ToString("O")));
+        _log.Information("a person was asked to decide: {Reason}", human.Reason);
+    }
 
     private IReadOnlyList<ReviewerWork> BuildWork(IReadOnlyList<ReviewRole> roles, string worktreePath, string context, int round)
     {

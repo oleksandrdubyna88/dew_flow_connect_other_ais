@@ -23,6 +23,16 @@ public sealed class RoundSubjectTests
     }
 
     [Fact]
+    public void APosixPath_IsNamedByItsFileToo_BecauseTheServerRunsOnBothPlatforms()
+    {
+        // CI caught the first version on Linux: `Path.GetFileName` asks the RUNNING platform what
+        // separates directories, so a Windows path came back whole. A server under WSL is handed
+        // Windows-shaped paths routinely.
+        Subject("/home/jinx/coai/todo/PLAN_corpus_variants.md", exists: _ => true)
+            .Should().Be("PLAN_corpus_variants.md");
+    }
+
+    [Fact]
     public void APathThatDoesNotExist_IsTreatedAsText_NotAsAFileName()
     {
         Subject(@"D:\gone\PLAN_missing.md").Should().Be(@"D:\gone\PLAN_missing.md");

@@ -87,7 +87,22 @@ export function elapsed(round: RoundRecord, nowMs: number): string {
   }
   const endMs = isRunning(round) ? nowMs : Date.parse(round.completedUtc);
   const seconds = Math.max(0, Math.round(((Number.isNaN(endMs) ? nowMs : endMs) - started) / 1000));
+
+  // A round written before this field existed carries .NET's default date — year ONE — and the
+  // subtraction produced "1065396701m 44s", a billion minutes, in the panel and in the file
+  // alike. A duration longer than any review could take is a missing start, not a long round.
+  if (seconds > MAX_PLAUSIBLE_SECONDS) {
+    return '';
+  }
   return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
+/** A day. The reviewer timeout is minutes; anything past this is a clock, not a review. */
+const MAX_PLAUSIBLE_SECONDS = 24 * 60 * 60;
+
+/** `PlanReview` -> `plan review`: both renderers speak the way a person would say it. */
+export function stageName(stage: string): string {
+  return stage === 'PlanReview' ? 'plan review' : stage === 'CodeReview' ? 'code review' : stage;
 }
 
 /** The reviewers of a running round, as "codex/Architecture running" lines. */
@@ -113,18 +128,22 @@ export function renderSession(session: SessionFile, nowMs: number = Date.now()):
   if (session.rounds.length === 0) {
     return `${head}_No rounds yet._\n`;
   }
+  // The SAME columns the panel shows, in the same words. Two renderers over one file had drifted
+  // into two different stories — `PlanReview` here and `plan review` there, a subject in one and
+  // none in the other — and a person comparing them asked which was right, which is the only
+  // sensible response to a product that says two things about one round.
   const rows = session.rounds
     .map(
       (r) =>
-        `| ${r.stage} | ${r.number} | ${statusCell(r)} | \`${r.verdict}\` | ${r.gatingCount} | ` +
-        `${elapsed(r, nowMs)} | ${costPhrase(r)} | ${r.reviewers} |`,
+        `| ${stageName(r.stage)} | ${r.number} | ${r.subject ?? ''} | ${statusCell(r)} | ` +
+        `\`${r.verdict}\` | ${r.gatingCount} | ${elapsed(r, nowMs)} | ${costPhrase(r)} | ${r.reviewers} |`,
     )
     .join('\n');
   const live = session.rounds.filter(isRunning).flatMap((r) => reviewerLines(r));
   const liveBlock =
     live.length === 0 ? '' : `\n**In flight now**\n\n${live.map((l) => `- ${l}`).join('\n')}\n`;
   return (
-    `${head}| Stage | Round | Status | Verdict | Gating | Took | Tokens · cost | Reviewers |\n` +
+    `${head}| Stage | Round | What | Status | Verdict | Gating | Took | Tokens · cost | Reviewers |\n` +
     `|---|---|---|---|---|---|---|---|\n${rows}\n${liveBlock}`
   );
 }

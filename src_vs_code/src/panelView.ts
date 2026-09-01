@@ -4,7 +4,7 @@ import { HELP, HelpKey } from './help';
 import { ModelChoice, modelsFor, modelsProvenance } from './models';
 import { ROLES, promptsFor, selectedFor } from './prompts';
 import { barWidth, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, WINDOWS, within } from './usage';
-import { costPhrase, elapsed, isRunning, reviewerLines, RoundRecord, SessionFile } from './rounds';
+import { costPhrase, elapsed, isRunning, reviewerLines, RoundRecord, SessionFile, stageName } from './rounds';
 import { Vendor } from './vendors';
 
 /**
@@ -457,11 +457,6 @@ function roundCard(round: RoundRecord & { branch: string }, nowMs: number): stri
   return `${subject}<div class="verdict">${escapeHtml(stageName(round.stage))} ${round.number} · ${escapeHtml(round.branch)} · ${verdict} · ${round.gatingCount} gating</div>
 <div class="usage">${took.length > 0 ? `${escapeHtml(took)} · ` : ''}${escapeHtml(costPhrase(round))}</div>
 ${reviewers}`;
-}
-
-/** `PlanReview` → `plan review`: the panel speaks the way a person would say it. */
-function stageName(stage: string): string {
-  return stage === 'PlanReview' ? 'plan review' : stage === 'CodeReview' ? 'code review' : stage;
 }
 
 /**

@@ -47,7 +47,10 @@ test('rounds render as a table with the verdict and the honest reviewer count', 
       },
     ]),
   );
-  assert.ok(view.includes('| PlanReview | 1 | ✔ done | `revise` | 3 |'));
+  // The row leads with the stage as a person says it, then the round, then WHAT was reviewed —
+  // the same shape and the same words the panel uses, because two renderers over one file that
+  // disagree make a reader ask which one is lying.
+  assert.ok(view.includes('| plan review | 1 |  | ✔ done | `revise` | 3 |'), view);
   assert.ok(view.includes('4 of 6'), 'a partial round must not read as a full panel');
   assert.ok(view.includes('feature/x'));
 });
@@ -144,4 +147,40 @@ test('isRunning, elapsed and reviewerLines are honest about missing data', () =>
   assert.equal(elapsed(round(), Date.now()), '', 'a round with no start time claims no duration');
   assert.deepEqual(reviewerLines(round()), []);
   assert.equal(costPhrase(round()), 'no usage reported');
+});
+
+test('a round carries what it was about, and an older round without one still renders', () => {
+  const withSubject = renderSession(
+    session({}, [
+      {
+        stage: 'CodeReview',
+        number: 2,
+        verdict: 'revise',
+        gatingCount: 7,
+        reviewers: 'all 6 reviewers answered',
+        completedUtc: '2026-09-01T09:00:00Z',
+        subject: 'PLAN — payment instruments',
+      },
+    ]),
+  );
+  assert.ok(withSubject.includes('| code review | 2 | PLAN — payment instruments |'), withSubject);
+});
+
+test('a start date from an older server does not render as a billion minutes', () => {
+  // .NET's default date is year ONE, and the subtraction produced "1065396701m 44s" in the panel
+  // and in the file alike.
+  const view = renderSession(
+    session({}, [
+      {
+        stage: 'PlanReview',
+        number: 1,
+        verdict: 'revise',
+        gatingCount: 1,
+        reviewers: 'all 2',
+        completedUtc: '2026-09-01T09:00:00Z',
+        startedUtc: '0001-01-01T00:00:00',
+      },
+    ]),
+  );
+  assert.ok(!/\d{4,}m/.test(view), view);
 });

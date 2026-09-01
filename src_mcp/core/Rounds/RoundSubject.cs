@@ -30,11 +30,23 @@ public static class RoundSubject
         // path is the honest mistake to make and the answer is more useful than the path itself.
         if (!trimmed.Contains('\n') && trimmed.Length < 260 && fileExists(trimmed))
         {
-            return Path.GetFileName(trimmed);
+            return FileName(trimmed);
         }
 
         return Shorten(Heading(trimmed) ?? FirstWords(trimmed));
     }
+
+    /// <summary>
+    /// The last path segment, on EITHER separator.
+    /// </summary>
+    /// <remarks>
+    /// Not <see cref="Path.GetFileName(string)"/>: that asks the RUNNING platform which character
+    /// separates directories, and on Linux a backslash is an ordinary character — so a Windows
+    /// path came back whole. CI caught it, and the same case reaches a server running under WSL,
+    /// which is handed Windows-shaped paths routinely.
+    /// </remarks>
+    private static string FileName(string path) =>
+        path.Split('/', '\\').Last(segment => segment.Length > 0);
 
     /// <summary>The document's own title, which is what its author chose to call the work.</summary>
     private static string? Heading(string text)

@@ -236,6 +236,14 @@ public static class ReviewerSummaryFactory
 
     private static string Because(string stdErrTail)
     {
+        // A vendor that named a closed door gets its cure quoted instead of its stack trace. The
+        // Gemini retirement was mistaken for three different things because the sentence a reader
+        // saw was `exit 1` and the sentence that mattered was eight lines inside a node stack.
+        if (VendorDiagnosis.For(stdErrTail) is { } cure)
+        {
+            return $": {cure}";
+        }
+
         var lines = stdErrTail
             .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
             .Where(l => l.Length > 0)
