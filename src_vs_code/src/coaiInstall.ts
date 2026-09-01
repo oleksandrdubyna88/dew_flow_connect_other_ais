@@ -6,14 +6,29 @@
  *   full path is what the config block hands out anyway.
  * - The installed version is REMEMBERED, because the binary cannot be asked (`coai-mcp` answers
  *   `--help`, not `--version`) — what is on disk is paired with what we recorded putting it there.
- * - macOS is honestly absent: the release matrix builds four RIDs and no `osx-*`; a guessed
- *   nearby RID downloads a binary that cannot execute and reports a network problem instead.
+ * - A platform the matrix does not build is refused BY NAME rather than guessed at: a nearby RID
+ *   downloads a binary that cannot execute and then reports a network problem instead.
  *
  * Pure and `vscode`-free, so the shape is a unit test rather than a half-working download on
  * somebody's laptop.
  */
 
-export type CoaiRid = 'win-x64' | 'win-arm64' | 'linux-x64' | 'linux-arm64';
+export type CoaiRid = 'win-x64' | 'win-arm64' | 'linux-x64' | 'linux-arm64' | 'osx-x64' | 'osx-arm64';
+
+/**
+ * Every build the release publishes, in one list.
+ *
+ * <p>It exists so the "no build for your platform" message cannot name a matrix that no longer
+ * matches the workflow: the sentence is BUILT from this, and this is what `ridFor` maps onto.</p>
+ */
+export const COAI_RIDS: readonly CoaiRid[] = [
+  'win-x64',
+  'win-arm64',
+  'linux-x64',
+  'linux-arm64',
+  'osx-x64',
+  'osx-arm64',
+];
 
 /** The release line: tags `mcp-v0.1.0`, assets `coai-mcp-<version>-<rid>.(zip|tar.gz)`. */
 export const TAG_PREFIX = 'mcp-v';
@@ -22,11 +37,18 @@ export const BINARY = 'coai-mcp';
 
 export const RELEASES_REPO = 'oleksandrdubyna88/dew_flow_connect_other_ais';
 
-/** The build for this machine, or `undefined` when the release matrix has none (macOS). */
+/** The build for this machine, or `undefined` when the release matrix has none. */
 export function ridFor(platform: string, arch: string): CoaiRid | undefined {
-  const os = platform === 'win32' ? 'win' : platform === 'linux' ? 'linux' : undefined;
+  // `darwin` is what node calls macOS and `osx` is what .NET calls it; the mapping is the whole
+  // reason a Mac was told there was no build for it while the runtime had supported one all along.
+  const os =
+    platform === 'win32' ? 'win' : platform === 'linux' ? 'linux' : platform === 'darwin' ? 'osx' : undefined;
   const cpu = arch === 'x64' || arch === 'arm64' ? arch : undefined;
-  return os === undefined || cpu === undefined ? undefined : (`${os}-${cpu}` as CoaiRid);
+  if (os === undefined || cpu === undefined) {
+    return undefined;
+  }
+  const rid = `${os}-${cpu}` as CoaiRid;
+  return COAI_RIDS.includes(rid) ? rid : undefined;
 }
 
 /** The archive the release carries for one build — the name the workflow packages. */

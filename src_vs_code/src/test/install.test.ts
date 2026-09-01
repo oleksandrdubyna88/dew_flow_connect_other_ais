@@ -1,6 +1,9 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  COAI_RIDS,
   assetNameFor,
   binaryNameFor,
   compareVersions,
@@ -12,13 +15,14 @@ import {
 import { CLIENT_TARGETS, installedMessage, mcpServerBlock } from '../mcpBlock';
 import { claudeSnippet } from '../claudeSnippet';
 
-test('ridFor matches the release matrix, and says no to macOS', () => {
+test('ridFor matches the release matrix', () => {
   assert.equal(ridFor('win32', 'x64'), 'win-x64');
   assert.equal(ridFor('win32', 'arm64'), 'win-arm64');
   assert.equal(ridFor('linux', 'x64'), 'linux-x64');
   assert.equal(ridFor('linux', 'arm64'), 'linux-arm64');
-  assert.equal(ridFor('darwin', 'arm64'), undefined, 'a guessed RID downloads a binary that cannot run');
-  assert.equal(ridFor('linux', 'ia32'), undefined);
+  // macOS used to be refused here, correctly, because the matrix did not build it. It does now.
+  assert.equal(ridFor('darwin', 'arm64'), 'osx-arm64');
+  assert.equal(ridFor('linux', 'ia32'), undefined, 'a guessed RID downloads a binary that cannot run');
 });
 
 test('asset and entry names match what the release workflow packages', () => {
@@ -98,4 +102,29 @@ test('the snippet states the ordering contract and the human stop', () => {
   assert.ok(snippet.includes('Do not proceed on your own judgement'));
   assert.ok(snippet.includes('a rejection'), 'the reason duty is stated');
   assert.ok(snippet.includes('needs a reason'));
+});
+
+test('a Mac gets its own build, because .NET calls that platform osx and node calls it darwin', () => {
+  // The mapping is the whole reason a Mac was told "there is no published build" while the
+  // runtime had supported one all along.
+  assert.equal(ridFor('darwin', 'arm64'), 'osx-arm64');
+  assert.equal(ridFor('darwin', 'x64'), 'osx-x64');
+});
+
+test('every RID the workflow builds is a RID the extension will install', () => {
+  // The two lists live in different files and different languages; this is what holds them
+  // together. A build added to the matrix that the extension does not know is a download nobody
+  // can start; one the extension knows and the matrix does not build is a 404 at install time.
+  const workflow = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', '.github', 'workflows', 'release.yml'),
+    'utf8',
+  );
+  const built = [...workflow.matchAll(/^\s+- rid:\s*(\S+)\s*$/gm)].map((m) => m[1]!);
+
+  assert.deepEqual([...built].sort(), [...COAI_RIDS].sort());
+});
+
+test('an unsupported platform is refused rather than guessed at', () => {
+  assert.equal(ridFor('freebsd', 'x64'), undefined);
+  assert.equal(ridFor('darwin', 'ppc'), undefined);
 });

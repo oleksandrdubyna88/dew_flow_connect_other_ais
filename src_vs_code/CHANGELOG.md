@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.13.1 — 2026-09-01
+
+**macOS is a supported platform.** The release now builds `osx-arm64` and `osx-x64` beside the
+Windows and Linux ones, and the extension maps node's `darwin` onto .NET's `osx` — the missing
+line that told a Mac there was no build while the runtime had supported one all along.
+
+The "no build for your platform" message is now built from the RID list instead of being typed,
+so it cannot name a matrix that has moved on, and a test holds the extension's list against the
+workflow's own matrix.
+
 ## 0.13.0 — 2026-09-01
 
 **A help page, behind the yellow ? in the title bar.** Searchable, in English or Russian, with the

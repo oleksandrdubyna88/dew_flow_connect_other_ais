@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { execFile } from 'node:child_process';
 import * as crypto from 'node:crypto';
 import {
+  COAI_RIDS,
   CoaiRid,
   RELEASES_REPO,
   assetNameFor,
@@ -43,8 +44,10 @@ export async function installLatest(
   const rid = ridFor(process.platform, process.arch);
   if (rid === undefined) {
     throw new Error(
-      `there is no published build for ${process.platform}/${process.arch} — the release matrix ` +
-        'builds win-x64, win-arm64, linux-x64 and linux-arm64.',
+      // The list is BUILT from the RIDs rather than typed, so the sentence cannot name a matrix
+      // that has moved on — which is exactly what it did the day macOS was added.
+      `there is no published build for ${process.platform}/${process.arch} — ` +
+        `the release matrix builds ${COAI_RIDS.join(', ')}.`,
     );
   }
 
