@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.19.1 — 2026-09-01
+
+**A role's Rounds number would not stick, and the prompt pickers would not follow it.** Type 3 into
+Architecture's *Rounds*, switch to another view and back, and the old number was there again — and the
+round pickers never changed count either. Two symptoms of one defect: the input travelled as
+`data-vendor="Architecture"`, and `data-vendor` means A VENDOR. The provider looked for a vendor with
+that id, found none, wrote the vendor list back unchanged, and never touched `coai.rounds` at all.
+
+The rendering had been right the whole time — it sizes the pickers from that role's own rounds — and it
+was reading a value nothing could change. What was wrong is that one attribute carried two different
+KINDS of key with nothing to tell them apart, so the routing is now a decision with three named
+outcomes (a plain setting, one vendor's property, one role's entry) that is tested without VS Code,
+and the record is merged rather than replaced so writing one role keeps the other three.
+
+Two tests in this repository had pinned the broken markup in place — they asserted the control existed,
+which it did, while it could not save anything. A test that copies markup can only confirm it; the new
+one asks where the value LANDS.
+
+**Two translator leftovers went with it**, found by the compiler on the way through: a
+`customModel` branch still writing `coai.translator.model`, a setting the manifest no longer has, and a
+webview id that still nominated `__translator__` for a model box with no vendor. Neither was reachable.
+
 ## 0.19.0 — 2026-09-01
 
 **Rounds and a threshold PER ROLE.** They were per stage, and one number for both before that — the

@@ -78,6 +78,62 @@ export interface CoaiSettings {
 }
 
 /** The defaults, matching the master plan's configuration table — pinned by tests. */
+/**
+ * Where one changed control is kept: a plain setting, one vendor's property, or one role's entry in
+ * a role-keyed record.
+ *
+ * <p>Three kinds because there ARE three, and the panel used to have two slots for them. `rounds`
+ * and `thresholds` are records keyed by role, and their inputs travelled in the vendor slot — so the
+ * provider looked for a vendor called `Architecture`, found none, and wrote nothing. The number
+ * reverted on the next repaint and the prompt pickers never changed count.</p>
+ */
+export type SettingWrite =
+  | { readonly kind: 'plain'; readonly key: string; readonly value: unknown }
+  | { readonly kind: 'vendor'; readonly key: string; readonly value: unknown; readonly vendor: string }
+  | { readonly kind: 'role'; readonly key: string; readonly value: unknown; readonly role: string };
+
+/** What the webview said it changed. A message with no key changes nothing. */
+export interface SettingMessage {
+  readonly key: string | undefined;
+  readonly value: unknown;
+  readonly vendor?: string | undefined;
+  readonly role?: string | undefined;
+}
+
+/**
+ * Route one changed control. Pure: the `vscode` call it leads to is the provider's business, and
+ * this is the part that was wrong.
+ */
+export function settingWrite(message: SettingMessage): SettingWrite | undefined {
+  const { key, value } = message;
+  if (key === undefined || key.length === 0) {
+    return undefined;
+  }
+  if (message.role !== undefined && message.role.length > 0) {
+    return { kind: 'role', key, value, role: message.role };
+  }
+  if (message.vendor !== undefined && message.vendor.length > 0) {
+    return { kind: 'vendor', key, value, vendor: message.vendor };
+  }
+
+  return { kind: 'plain', key, value };
+}
+
+/**
+ * One role's entry changed inside a role-keyed record, with every other role kept.
+ *
+ * <p>A record, MERGED rather than replaced. Replacing it would drop the three roles the person did
+ * not touch, and the symptom would be the one this shape was introduced to fix — a number that will
+ * not stick — for three roles instead of one.</p>
+ */
+export function roleRecordUpdate(
+  current: Readonly<Record<string, unknown>>,
+  role: string,
+  value: unknown,
+): Record<string, unknown> {
+  return { ...current, [role]: value };
+}
+
 export const DEFAULTS: CoaiSettings = {
   rounds: { PlanCritique: 3, Architecture: 2, SecurityReliability: 2, UxDxPerformance: 2 },
   thresholds: { PlanCritique: 2, Architecture: 3, SecurityReliability: 3, UxDxPerformance: 3 },

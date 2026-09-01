@@ -29,8 +29,13 @@ test('each role shows its own rounds, its own threshold and its own prompts', ()
   const html = panelHtml(state(), 'n0nce');
 
   for (const role of ['PlanCritique', 'Architecture', 'SecurityReliability', 'UxDxPerformance']) {
-    assert.ok(html.includes(`data-setting="rounds" data-vendor="${role}"`), `${role} has no rounds control`);
-    assert.ok(html.includes(`data-setting="thresholds" data-vendor="${role}"`), `${role} has no threshold control`);
+    // `data-role`, not `data-vendor`. These two assertions read `data-vendor` until 2026-09-01 and
+    // so passed while neither input could save anything: the provider takes `data-vendor` to mean a
+    // VENDOR, hunted for one called `Architecture`, and wrote the vendor list back unchanged. A test
+    // that copies the markup can only ever confirm it — the one with teeth is settingWrite.test.ts,
+    // which asks where the value LANDS.
+    assert.ok(html.includes(`data-setting="rounds" data-role="${role}"`), `${role} has no rounds control`);
+    assert.ok(html.includes(`data-setting="thresholds" data-role="${role}"`), `${role} has no threshold control`);
     assert.ok(html.includes(`data-prompt="${role}" data-round="1"`), `${role} has no round-1 prompt`);
   }
 

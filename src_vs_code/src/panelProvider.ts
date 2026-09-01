@@ -13,7 +13,7 @@ import { parseSession, SessionFile } from './rounds';
 import { parseUsage, UsageEntry, Window } from './usage';
 import { latestServerVersion } from './installer';
 import { serverSettingsJson } from './serverSettingsFile';
-import { settingsFrom } from './settingsShape';
+import { roleRecordUpdate, SettingMessage, settingsFrom, settingWrite } from './settingsShape';
 import { normaliseId, Vendor, VENDOR_PRESETS, vendorsFrom } from './vendors';
 import { Platform, vendorInstall, vendorTerminal } from './vendorTerminal';
 
@@ -65,8 +65,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
             : this.openSections.filter((s) => s !== m.id);
         } else if (m.type === 'prompt' && m.role !== undefined && m.round !== undefined) {
           void this.choosePrompt(m.role, m.round, String(m.value));
-        } else if (m.type === 'setting' && m.key !== undefined) {
-          void this.write(m.key, m.value, m.vendor);
+        } else if (m.type === 'setting') {
+          void this.write({ key: m.key, value: m.value, vendor: m.vendor, role: m.role });
         } else if (m.type === 'command') {
           void this.run(m.command, m.id);
         }
@@ -232,17 +232,50 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * properties of YOU, not of one checkout — and a workspace write would surprise anyone whose
    * `.vscode/settings.json` is in git.</p>
    */
-  private async write(key: string, value: unknown, vendorId?: string): Promise<void> {
-    const config = vscode.workspace.getConfiguration('coai');
-    if (vendorId !== undefined) {
-      const vendors = vendorsFrom(config.get('vendors')).map((v) =>
-        v.id === vendorId ? { ...v, [key]: value } : v,
-      );
-      await config.update('vendors', vendors, vscode.ConfigurationTarget.Global);
+  /**
+   * One changed control, written where it is kept.
+   *
+   * <p>The routing is {@link settingWrite}, decided without `vscode` so it can be tested; this
+   * method is the three writes it names. Nothing here may fall through: a role-keyed setting once
+   * travelled in the vendor slot, so the provider hunted for a vendor called `Architecture`, wrote
+   * the vendor list back unchanged, and `coai.rounds` was never written at all — which read, from
+   * the panel, as a number that would not stick.</p>
+   */
+  private async write(message: SettingMessage): Promise<void> {
+    const write = settingWrite(message);
+    if (write === undefined) {
       return;
     }
 
-    await config.update(key, value, vscode.ConfigurationTarget.Global);
+    const config = vscode.workspace.getConfiguration('coai');
+    switch (write.kind) {
+      case 'vendor': {
+        const vendors = vendorsFrom(config.get('vendors')).map((v) =>
+          v.id === write.vendor ? { ...v, [write.key]: write.value } : v,
+        );
+        await config.update('vendors', vendors, vscode.ConfigurationTarget.Global);
+        return;
+      }
+      case 'role': {
+        // A record, merged rather than replaced: writing one role's number must not drop the other
+        // three, and the stored object is what every other role reads on the next repaint.
+        const current = config.get<Record<string, unknown>>(write.key) ?? {};
+        await config.update(
+          write.key,
+          roleRecordUpdate(current, write.role, write.value),
+          vscode.ConfigurationTarget.Global,
+        );
+        return;
+      }
+      case 'plain':
+        await config.update(write.key, write.value, vscode.ConfigurationTarget.Global);
+        return;
+      default: {
+        // Every kind is handled, and the compiler is what says so.
+        const unhandled: never = write;
+        return unhandled;
+      }
+    }
   }
 
   /**
@@ -314,7 +347,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    */
   private async customModel(id: string): Promise<void> {
     const model = await vscode.window.showInputBox({
-      title: id === '__translator__' ? 'Translator model' : `Model for ${id}`,
+      title: `Model for ${id}`,
       prompt: "The exact model id the CLI should be given. Empty keeps the CLI's default.",
       placeHolder: 'e.g. gemini-2.5-flash, gpt-5.4-mini, haiku',
     });
@@ -322,13 +355,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return; // dismissed — the picker snaps back to the saved value on re-render
     }
 
-    if (id === '__translator__') {
-      await vscode.workspace
-        .getConfiguration('coai')
-        .update('translator.model', model.trim(), vscode.ConfigurationTarget.Global);
-      return;
-    }
-    await this.write('model', model.trim(), id);
+    await this.write({ key: 'model', value: model.trim(), vendor: id });
   }
 
   /** A preset, or a name and an endpoint typed in — the list is not meant to stay at two. */

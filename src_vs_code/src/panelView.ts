@@ -82,10 +82,11 @@ ${body}
       const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
       if (value === '__other__') {
         // Not a model — a request to type one; the input box comes from the provider side.
-        vscode.postMessage({ type: 'command', command: 'customModel', id: el.dataset.vendor ?? '__translator__' });
+        vscode.postMessage({ type: 'command', command: 'customModel', id: el.dataset.vendor });
         return;
       }
-      vscode.postMessage({ type: 'setting', key: el.dataset.setting, value, vendor: el.dataset.vendor });
+      vscode.postMessage({ type: 'setting', key: el.dataset.setting, value,
+                           vendor: el.dataset.vendor, role: el.dataset.role });
     });
   }
   for (const el of document.querySelectorAll('[data-prompt]')) {
@@ -391,12 +392,12 @@ function promptsBody(state: PanelState): string {
   <div class="head"><span class="name">${escapeHtml(role.label)}</span></div>
   <div class="field inline">
     ${labelled(`rounds-${role.id}`, 'Rounds', 'maxRounds')}
-    <input type="number" id="rounds-${role.id}" min="1" max="6" data-setting="rounds" data-vendor="${role.id}"
+    <input type="number" id="rounds-${role.id}" min="1" max="6" data-setting="rounds" data-role="${role.id}"
            value="${s.rounds[role.id] ?? 2}">
   </div>
   <div class="field inline">
     ${labelled(`threshold-${role.id}`, 'Passes at or under', 'gateThreshold')}
-    <input type="number" id="threshold-${role.id}" min="0" data-setting="thresholds" data-vendor="${role.id}"
+    <input type="number" id="threshold-${role.id}" min="0" data-setting="thresholds" data-role="${role.id}"
            value="${s.thresholds[role.id] ?? 3}">
   </div>
 ${pickers}

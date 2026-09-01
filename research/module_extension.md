@@ -217,3 +217,27 @@ The same pass removed three orphan tooltips — `language`, `translator`, `trans
 `help.ts` when the translator went. `helpTooltips.test.ts` now fails when a tooltip describes a
 control the panel does not render: the coverage test next door fails when a control has no help, and
 a catalog needs both directions because only one of them is caught by using the product.
+
+### One slot cannot carry two kinds of key (2026-09-01)
+
+Every control in the panel posts `{key, value, vendor}` and the provider decided from `vendor`
+whether this was a vendor property or a plain setting. When rounds and thresholds became per-ROLE,
+their inputs were given `data-vendor="Architecture"` — the only slot there was — and the provider
+dutifully searched the vendor list for a vendor by that name, found none, and wrote the list back
+unchanged. `coai.rounds` was never written.
+
+From the panel that read as two separate bugs: a number that reverted on the next repaint, and prompt
+pickers whose count never followed the rounds. Both were the same write going nowhere. The rendering
+had always sized the pickers from `settings.rounds[role]`; it was reading a value nothing could change.
+
+The routing is now `settingWrite` in `settingsShape.ts` — pure, `vscode`-free, three named outcomes
+(`plain`, `vendor`, `role`) — and `PanelProvider.write` switches on it under a `never` guard, the shape
+this file already used for commands. `roleRecordUpdate` merges one role into the record rather than
+replacing it: replacing would drop the three roles nobody touched, and the symptom would have been
+identical for three roles instead of one.
+
+**Two tests had pinned the broken markup.** `panelView.test.ts` asserted
+`data-setting="rounds" data-vendor="${role}"` and passed, because the control did exist — it simply
+could not save. A test written by copying markup can only confirm that markup;
+`settingWrite.test.ts` asks where the value LANDS, and one of its assertions is that no role-keyed
+control arrives in the vendor slot at all.
