@@ -83,6 +83,28 @@ no test naming them.
 - **The warning**: a test that a non-loopback endpoint cannot reach a review without the row having
   said so — which only becomes meaningful once §1 exists.
 
+## 5. A reasoning model's thinking cannot be bounded through the OpenAI route
+
+**Measured 2026-09-02.** Gemma4 26B on Ollama 0.33.2 answered the planted-defect plan once in 171 s
+and, on the identical request, once filled a 64k context with 110 000 characters of `reasoning` and
+returned an empty `content` after 1056 s. `think: false` and `reasoning_effort: low` on `/v1` are
+silently ignored — the two requests produce byte-identical answers. Ollama's native `/api/chat`
+honours `think`, and vLLM does not serve it.
+
+So the shim needs an engine-aware path: when the endpoint is Ollama (the probe already knows —
+`api/version` answered), send the completion through `/api/chat` with `think` bounded or off, and
+keep `/v1` for everything else. Whether a review WITHOUT thinking finds as much is the measurement
+to run first; the one with thinking finds four of eight when it finishes and nothing when it does
+not.
+
+## 6. A prompt longer than `num_ctx` is truncated without a word
+
+Ollama cuts the prompt to the model's context and reviews what is left, reporting it as a review.
+The hosted code-stage prompt is ~205k tokens against a 64k model, so a local code round would
+silently review the first third of the diff. The shim can detect it: `usage.prompt_tokens` coming
+back far below a tokens-per-character estimate of what was sent is truncation, and the round must
+refuse with the sizes rather than return findings about a fragment.
+
 ## Build order
 
 1. §4's race test first, against today's code — it is a test for behaviour that already exists and
@@ -99,3 +121,6 @@ no test naming them.
 - [ ] The streaming question is answered by a measurement against a non-Ollama engine, and the answer
       is recorded whichever way it goes.
 - [ ] The endpoint race has a test that was watched fail.
+- [ ] On Ollama, thinking is bounded or off through the native route, and the with/without
+      difference on the planted-defect plan is measured before the default is chosen.
+- [ ] A prompt truncated to `num_ctx` refuses the round with the two sizes, never reviews a fragment.

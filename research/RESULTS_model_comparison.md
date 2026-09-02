@@ -1,8 +1,8 @@
 # RESULTS — which MODEL to review with: plan stage, thirteen models, two runs each
 
-> Status: **plan half complete, 2026-09-01.** 26 runs against the Release `coai-mcp` in WSL, one
-> vendor and one model per run, driven over stdio. The code half is in
-> [RESULTS_model_comparison_code.md](RESULTS_model_comparison_code.md).
+> Status: **plan half complete, 2026-09-01; a LOCAL model added 2026-09-02.** 26 runs against the
+> Release `coai-mcp` in WSL, one vendor and one model per run, driven over stdio, plus the local rows
+> below. The code half is in [RESULTS_model_comparison_code.md](RESULTS_model_comparison_code.md).
 >
 > Related: [RESULTS_prompt_measurement.md](RESULTS_prompt_measurement.md),
 > [RESULTS_conventions_prompt.md](RESULTS_conventions_prompt.md).
@@ -53,6 +53,58 @@ rates. (Reviews here run on a subscription; the money column is an order of magn
 | GPT-5.6-Terra | 5 | 4 | 4.5 | 1 | 21 / 28 | $0.030 |
 | Gemini 3.7 Flash (Medium) | 4 | 4 | 4.0 | 0 | 38 / 28 | $0.053 |
 | GPT-5.4-Mini | 4 | 3 | 3.5 | 1 | 88 / 52 | $0.036 |
+| **Gemma4 26B-A4B, local** (Ollama, 64k) | 4 | **—** | *(4)* | — | 171 / **1056, no answer** | electricity |
+| Qwen3.5 35B-A3B, local (Ollama, 64k) | — | — | — | — | 1027, no answer | electricity |
+
+## The local rows, and why one of them is a dash
+
+Two models on this machine were run on the same plan, through the same server, by the same
+harness — the local runtime added on 2026-09-02, reaching Ollama's OpenAI-compatible route with the
+finding schema as `response_format`, `temperature` 0 and a seed. What it took to get even one number
+is most of the result.
+
+**Gemma4 26B-A4B (Q5_K_M, 64k context) — 4 of 8, once.** Run 1 answered in 171 s with four findings,
+and every one of them was a planted defect: D1 (the `DELETE` before the load), D2 (the password on
+the `psql` command line), D3 (the table created after the steps that use it), D6 (the whole ledger in
+memory). It missed the retry loop, the rename under a live writer, the unmeasured "fast", and
+idempotency — the four that need the reviewer to imagine the job RUNNING rather than read it. Four
+puts it level with Gemini 3.7 Flash at medium effort and above GPT-5.4-Mini, at six to fifteen times
+their wall clock.
+
+**Run 2 produced nothing after 1056 seconds.** Not a crash: the engine returned HTTP 200 with an
+empty `content`. Reproduced by hand with the identical request, the failure has a shape —
+`finish_reason: length`, `completion_tokens` filling the entire context, 110 000 characters in the
+model's `reasoning` field and none in `content`. The same request, same seed, same temperature had
+answered twenty minutes earlier after 41 000 characters of reasoning. **This model's thinking is
+unbounded and not reproducible**, and when it outruns the context there is no answer at all; raising
+the context from 32k to 64k moved the cliff and did not remove it (1056 s of thinking against 508 s).
+
+**Qwen3.5 35B-A3B (Q5_K_M, 64k) — no row at all.** 1027 seconds, no content. Two things separate it
+from Gemma, both measured directly: it generates at roughly three tokens a second even fully in VRAM,
+and it puts its chain of thought INTO `content` rather than a separate field — asked to return
+`{"ok":true}` and nothing else, it returned 300 tokens of *"Verify Constraints… Draft Output…
+Self-Correction on Markdown"* and hit the length cap before the JSON. A reviewer that cannot finish
+one line in under a minute cannot finish a review.
+
+**What cannot be switched off.** Ollama 0.33.2's `/v1` route silently ignores both `think: false`
+and `reasoning_effort: low` — verified: the two requests produced byte-identical answers with the
+same 6 250 characters of reasoning. Bounding a reasoning model on this route is not possible from the
+client; it needs Ollama's native `/api/chat`, which the runtime does not use because vLLM does not
+serve it. That is an open item in
+[PLAN_local_trust_and_vllm.md](../todo/PLAN_local_trust_and_vllm.md).
+
+**The code half was not attempted.** The hosted models were sent about 205k input tokens for it;
+this model's context is 64k, and Ollama truncates a prompt to `num_ctx` without saying so — a review
+of the diff's first third reported as a review of the diff. Refusing to run it is the honest result;
+detecting that truncation is the other open item in the same plan.
+
+**What the local rows say, read together.** A model on this machine can score in the hosted table's
+lower half and cost nothing per token. What it cannot yet do is finish reliably: one of two runs, and
+the failed run took six times longer than the successful one. For the plan gate, where the hosted
+models answer in under a minute, that is not a trade anybody would take today; for a machine with no
+paid vendor at all, it is four real defects found for the price of a busy card.
+
+## What the second run changed — read this before the table above
 
 ## What the second run changed — read this before the table above
 
