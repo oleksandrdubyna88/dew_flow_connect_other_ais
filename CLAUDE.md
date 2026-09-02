@@ -1,6 +1,6 @@
 # Claude Code — ConnectOtherAIs
 
-Local rules live in `.claude/rules/common/`; [review-gate.md](.claude/rules/common/review-gate.md) governs how this product's own gate is called — a code round is fed the SCOPE as well as the diff, and the server refuses one without it.
+Local rules live in `.claude/rules/common/`; [review-gate.md](.claude/rules/common/review-gate.md) governs how this product's own gate is called — a code round is fed the SCOPE as well as the diff, and the server refuses one without it. [vendor-routing.md](.claude/rules/common/vendor-routing.md) fixes which CLI each model runs on — a Claude model goes through the `claude` CLI and never through `agy` or `codex`, which is a rule because breaking it is invisible in the output and cost this project three cells of a measurement.
 
 Shared family rules are mounted at `.claude/rules/shared` (the `dew_flow_conventions` submodule) and
 apply here exactly as local rules would. Fresh clone: `git submodule update --init .claude/rules/shared`.
