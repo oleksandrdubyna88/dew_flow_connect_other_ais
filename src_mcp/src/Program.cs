@@ -214,6 +214,15 @@ internal static class Program
                 string.Join(",", settings.Providers.Where(p => p.Enabled).Select(p => p.Provider)),
                 keys.Available ? "keys loaded" : keys.Unavailability);
 
+            // A setting this build cannot understand is said out loud at startup, because the
+            // alternative is what actually happened: a configuration that had been applied, read and
+            // reloaded correctly looked broken for twenty minutes, and the one thing that would have
+            // ended it in a second was this line.
+            foreach (var mismatch in settings.Unrecognised)
+            {
+                log.Warning("{Mismatch}", mismatch);
+            }
+
             // The file the panel writes is re-read per call, so a vendor or a threshold changed
             // in the sidebar reaches the NEXT round without restarting the MCP client.
             var host = new PanelServiceHost(Environment.GetEnvironmentVariable, keys, vaultReadUtc, launcher, log);

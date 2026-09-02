@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.23.0 — 2026-09-02
+
+**A model on your own machine can be a reviewer.** *＋ Add a reviewer → Local model (Ollama / vLLM)*
+adds a row called `local` whose dropdown is what THIS machine has installed — each with its parameter
+size, quantisation and disk size, read from the engine rather than from a list shipped here. Nothing
+found says where it looked and why, because an empty dropdown with no reason is indistinguishable
+from “you have no models”.
+
+It is deliberately **not** the Codex CLI pointed at a local endpoint. That was tried first and it
+answers — but codex's own system prompt is 21k tokens before any review content, measured, so a small
+model is refused outright and a large one pays for a prompt unrelated to the review. A local reviewer
+is a direct call to the engine's OpenAI-compatible endpoint with the finding schema, `temperature`
+and `seed` pinned, run as a process like every other reviewer so the timeouts, the kill and the usage
+parsing are the ones that were already there.
+
+**An endpoint that is not on this machine says so in the row**, naming the host and what is sent to
+it — the plan, the diffs, and the file contents around them. `localhost`, `::1` and the whole
+127.0.0.0/8 block are this machine, decided by parsing the host, so `127.0.0.1.evil.test` is
+somebody else's.
+
+**Local tokens are real; local money is a dash.** The engine reports what it used, so a local round
+appears in the spending chart with real numbers. Cost stays null rather than 0, because free and
+unpriced are different facts: what a local run costs is electricity and a busy card.
+
+**A setting value the server does not understand now says so at startup** instead of quietly doing
+something else. This one came from a bug report that was not one — “I set this and it still keeps
+asking me” — where the setting was applied, the value was read, and the running server was a build
+from the day before that value existed. The fallback stays; what changed is that it is audible, and
+that the message says which half to update.
+
 ## 0.22.0 — 2026-09-01
 
 **The pasted CLAUDE.md snippet carries a version, and the panel says when a copy has fallen behind.**

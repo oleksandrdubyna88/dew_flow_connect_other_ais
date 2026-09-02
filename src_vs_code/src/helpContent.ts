@@ -140,6 +140,22 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     },
   },
 
+  {
+    id: 'a-local-model',
+    en: {
+      title: 'A model on your own machine as a reviewer',
+      whatItIs:
+        'A reviewer called **local**, backed by an engine running on this machine — Ollama, or a vLLM, or anything speaking the same OpenAI-compatible shape. Its model dropdown is what YOU have installed, with each model\'s parameter size, quantisation and disk size, because what is installed is a fact about your machine rather than a list this extension could ship.',
+      why:
+        'It costs nothing per round and nothing leaves the building. That makes it the reviewer you can afford to run on every push, and the only one you can use on a change you are not allowed to send anywhere. It is a different kind of reviewer from the hosted ones rather than a cheaper one: the panel exists so you can mix.',
+      setup:
+        'Add it from **＋ Add a reviewer**, and the row fills itself in: the engine is found on 11434 (Ollama) or 8000 (vLLM), and the dropdown lists what it has. Nothing found says where it looked and why — refused, timed out, or answered something odd — rather than showing an empty list.\n\nThe endpoint box is for everything the probe cannot see: a vLLM on another port, a machine on your network, an engine behind a proxy. It wants the OpenAI-compatible base, ending in `/v1` — which is NOT the address you would open in a browser: Ollama serves its own API at the root and the compatible one under `/v1`, and a base without it fails at the first review with a 404 that reads like a model problem.\n\n⟳ asks the engine again. A successful probe is cached for a minute so the panel is not listing models on every repaint, which means a model you have just pulled is not there yet; that is the button for it.',
+      usage:
+        '**Give it room.** A review is the prompt, the plan or the diff, and the schema, all in one request. A model with a small context window refuses rather than answering badly — which is honest and still a wasted round — so prefer the larger-context build of a model where you have both.\n\nThere are no ▶, ⤓ or ⤤ buttons on this row, because those are a CLI\'s: there is nothing to sign in, install or update. Tokens ARE counted — the engine reports them and they appear in the spending chart — but money is a dash, because a model on your own hardware has no token bill. What it costs is electricity and the card being busy, and this panel can see neither.',
+      whatCanGoWrong:
+        '**An endpoint that is not on this machine is announced in the row, in red.** Every review sends the prompt — your plan, your diffs and the file contents around them — to whatever host is in that box. That is the whole point of a remote engine and it is also how source code leaves a building by accident, so the row says which host and what goes to it. Only use one you control.\n\n**In a window attached to WSL, an engine on the Windows side needs two fixes, not one.** It is bound to `127.0.0.1`, so start it with `OLLAMA_HOST=0.0.0.0` — and this side\'s `127.0.0.1` is WSL\'s own loopback rather than the Windows host, so the endpoint must point at the Windows host address.\n\n**A model the engine no longer lists** stays in the dropdown marked *NOT on this engine any more*, rather than vanishing — which would silently switch your reviewer — or looking normal, which would send a round for a model that answers 404.',
+    },
+  },
   // ---------- the rest of the panel, control by control ----------
   {
     id: 'prompts-per-round',

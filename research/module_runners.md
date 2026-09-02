@@ -219,3 +219,50 @@ runtime is `antigravity` reported `codex-cli` as its version, while `agy --versi
 machine returns 1.1.23 and the same probe on Windows had reported 1.1.23 for it. Either the probe
 resolved the wrong executable or the reading was wrong; it has not been reproduced and is not yet a
 bug report.
+
+### A local model is a direct call, not a CLI (2026-09-02)
+
+`LocalRuntime` is the fifth vendor adapter and the only one whose "CLI" is this binary:
+`coai-mcp --ask-local` reads a prompt file, POSTs one completion to an OpenAI-compatible endpoint
+with the finding schema, and prints the answer where the executor already looks.
+
+**Why not `CustomCodexRuntime`.** That adapter points the Codex CLI at any OpenAI-compatible base and
+it does reach a local Ollama — verified, it answered `LOCAL_OK`. But codex's own system prompt is
+**21k tokens** before any review content, so a model with an 8k window is refused outright and a
+larger one pays for a prompt that has nothing to do with the review. A direct call pays none of it.
+
+**Why a process at all.** `IReviewerRuntime.Build` returns a `ProcessRequest` and the executor runs
+it; letting an adapter answer in-process would reach `BoundedScheduler`, the concurrency accounting,
+the usage parser and the failure classification. The process boundary also buys a hard deadline —
+and the shim is given one DERIVED from the reviewer timeout and deliberately shorter, so reaching it
+produces a sentence rather than the silence of being killed.
+
+**What killing it actually stops, measured.** A long generation was started, the shim killed with
+force, and GPU compute was 0% six seconds later. The mechanism is the SOCKET closing on process
+death, which Ollama reads as a client disconnect — not process-tree termination, which an earlier
+version of this comment claimed and which would not have stopped a daemon outside the tree. Verified
+for Ollama; unmeasured for vLLM, where a non-streaming handler may not notice (see
+[PLAN_local_trust_and_vllm.md](../todo/PLAN_local_trust_and_vllm.md) §3).
+
+**Routing.** `RuntimeFor` sends any vendor with a base URL to the Codex CLI, and a local vendor IS a
+vendor with a base URL — so `runtime == "local"` is checked BEFORE that arm. `providers` answers for
+it without a `--version` probe, there being no binary to version. `DefaultExecutable` resolves the
+dotnet-host case: `Environment.ProcessPath` is the app in a Native AOT release and `dotnet.exe` when
+the same code runs framework-dependent, so the invocation carries the dll ahead of its own flags.
+
+### A setting value this build cannot read is said out loud (2026-09-02)
+
+`PanelSettings.Unrecognised` carries a sentence per setting whose VALUE this build does not
+understand, written to the log at startup and returned by `providers`.
+
+It exists because of a bug report that was not one: *"I set this and it still keeps asking me —
+settings are not applied without a restart again."* They were applied. The file said
+`COAI_ON_EXHAUSTED: good_enough`, nothing in the environment overrode it, and the reload watcher
+worked — the running server was a build from the day before `good_enough` existed, so it read the
+value, did not recognise it, and fell through to `Human`. Three hypotheses and twenty minutes went
+into the settings file, the env precedence and the watcher, and one line of output would have ended
+it immediately.
+
+The fallback stays, because refusing to start over a value from a future panel would be worse. What
+changed is that it is audible, and that the message names the likely cure — the panel and the server
+version separately, so "the panel is newer than this server" is the first thing to check.

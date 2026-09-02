@@ -78,7 +78,37 @@ Codex, Antigravity and Claude authenticate themselves — if their CLIs are sign
 needed. DeepSeek
 rides the Codex CLI's custom-provider config and needs a key, which comes from **one CredsForDevs
 `config` entry** read once at startup. That is the only key path: a `credential` entry cannot serve
-it, because nothing in the vault's read routes returns a secret.
+it, because nothing in the vault's read routes returns a secret. A **local** reviewer needs neither:
+there is no CLI to sign in and no account to bill.
+
+## A model on your own machine
+
+*＋ Add a reviewer → Local model (Ollama / vLLM)* adds a row called `local` whose model dropdown is
+what THIS machine has installed — each with its parameter size, quantisation and disk size, read from
+the engine rather than from a list shipped here. Nothing found says where it looked and why, because
+an empty dropdown with no reason is indistinguishable from "you have no models".
+
+It is **not** the Codex CLI pointed at a local endpoint. That was tried first and it answers, but
+codex's own system prompt is 21k tokens before any review content — measured — so a small-context
+model is refused outright and a large one pays for a prompt unrelated to the review. A local reviewer
+is a direct call: `coai-mcp --ask-local` POSTs to the engine's OpenAI-compatible endpoint with the
+finding schema, `temperature` and `seed` pinned in the request, and prints the answer where the
+executor already looks. It is a process like every other reviewer, so the timeouts, the kill, the
+usage parsing and the unparseable handling are the ones that were already there.
+
+Three things worth knowing before using one:
+
+- **Two structured-output modes exist and only one works.** `response_format: {"type":"json_schema"}`
+  returns well-formed findings; the weaker `json_object` answers with a shape it invented. There is
+  no fallback to it, because a fallback would buy a full generation and an unusable round.
+- **An endpoint that is not on this machine is announced in the row**, naming the host and saying
+  that the plan, the diffs and the file contents around them are sent to it. `localhost`, `::1` and
+  the whole 127.0.0.0/8 block are this machine, decided by PARSING the host — `127.0.0.1.evil.test`
+  is somebody else's.
+- **Tokens are counted, money is a dash.** The engine reports `prompt_tokens` and
+  `completion_tokens`, so a local round appears in the spending chart with real numbers. Cost stays
+  null rather than 0, because free and unpriced are different facts: what a local run costs is
+  electricity and a busy card, and this product can see neither.
 
 ## Reviewers are read-only, and share one tree
 

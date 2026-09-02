@@ -298,3 +298,33 @@ Five outcomes rather than a boolean, because they want different sentences: `cur
 say nothing (a repository that never adopted the gate is entitled not to), `unversioned` means the
 copy predates the marker, `older` names both numbers, and `ahead` — an extension older than the
 repository — says to update this build rather than paste over the repo.
+
+### Discovering an engine on this machine (2026-09-02)
+
+`localEngines.ts` probes for a local model engine and `PanelProvider` calls it only when a local
+reviewer is configured — probing two ports on every repaint of every panel would be this extension
+knocking on a developer's machine for a feature they are not using.
+
+Three decisions, each measured rather than assumed:
+
+- **`/v1/models` is the source of truth and `api/tags` is enrichment.** Both Ollama and vLLM answer
+  the first; only Ollama answers the second, and it is where the parameter size, quantisation and
+  disk size come from. `mergeModels` maps over the PORTABLE list, so a model the native list does not
+  mention keeps its id with an empty detail — which is what makes a vLLM work at all.
+- **The probe URL and the OpenAI base are different URLs.** Ollama serves its own API at the root and
+  the compatible one under `/v1`; a configuration holding the probe URL fails at its first completion
+  with a 404 that reads like a model problem.
+- **Failure carries a reason.** Refused, `answered 502` and `no answer within 4s` want different
+  actions, and each GET has an explicit timeout because `fetch` has none by default.
+
+The cache is keyed BY endpoint, an answer arriving after the endpoint changed is discarded, and a
+probe that found NOTHING is not cached at all — so starting an engine after opening the panel is
+noticed on the next repaint rather than after a TTL. `⟳` on the row clears it by hand, which was left
+out of the first version as "a CLI's button" until the gate pointed out that a cache with no way to
+clear it is a stale list with no way out.
+
+**The trust line is not decoration.** The endpoint field is advertised for "a box on the network", so
+a URL can be pasted — or arrive in workspace settings from a cloned repository — and every review
+POSTs the plan, the diffs and the file contents around them to it. `isLoopback` parses the host, so
+`http://127.0.0.1.evil.test` is somebody else's machine and the whole 127.0.0.0/8 block is this one,
+and anything else puts a visible line in the row naming the host and what leaves with it.

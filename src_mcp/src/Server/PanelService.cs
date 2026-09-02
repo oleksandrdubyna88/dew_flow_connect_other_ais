@@ -101,7 +101,8 @@ public sealed class PanelService
         return Json(new ProvidersAnswer(
             statuses,
             _vaultReadUtc == default ? "never" : _vaultReadUtc.ToString("O"),
-            _keys.Available ? $"{_keys.Keys.Count} vendor key(s) loaded" : _keys.Unavailability),
+            _keys.Available ? $"{_keys.Keys.Count} vendor key(s) loaded" : _keys.Unavailability,
+                _settings.Unrecognised),
             ServerJsonContext.Default.ProvidersAnswer);
     }
 

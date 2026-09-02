@@ -1,11 +1,37 @@
 # PLAN — a local model as a third reviewer
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/localEngines.ts` (new),
+> Status: **IMPLEMENTED, 2026-09-02.** Scope: `src_vs_code/src/localEngines.ts` (new),
 > `vendors.ts`, `models.ts`, `panelView.ts`, `panelProvider.ts`; `src_mcp/runners/Reviewers/`
-> (a new runtime) and a `--ask-local` mode on `coai-mcp`.
+> (`LocalRuntime`, `LocalAsk`) and the `--ask-local` mode on `coai-mcp`.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [module_runners.md](../research/module_runners.md).
+> Related docs: [module_extension.md](module_extension.md), [module_runners.md](module_runners.md).
+> The tail this plan did not close is
+> [PLAN_local_trust_and_vllm.md](../todo/PLAN_local_trust_and_vllm.md).
+
+## What shipped, and where it deviated
+
+Everything above shipped as written — the row, the engine discovery, the shim, the direct call, the
+tokens, the null cost. Four deviations, all of them from the gate rather than from second thoughts:
+
+1. **The shim's own deadline is derived, not passed.** The plan had the reviewer timeout reaching the
+   shim; the reviewers pointed out that a shim killed at exactly the deadline produces silence rather
+   than a sentence, so `ShimDeadlineSeconds` takes ten seconds off the reviewer's budget and the
+   difference is spent saying what happened.
+2. **`Environment.ProcessPath` is not always this program.** It is `dotnet.exe` in a
+   framework-dependent run, so the shim would have launched `dotnet --ask-local`. Found by the gate,
+   not by the tests — which had only ruled out codex, agy and claude. `SelfInvocation` now carries
+   the dll ahead of its own flags.
+3. **There is no empty-schema fallback.** The draft fell back to `{}` when the schema would not
+   parse, which contradicts this plan's own reason for refusing `json_object`: a request that cannot
+   constrain the shape buys a full generation and an unusable answer. It exits 65 before the request.
+4. **The row has a re-probe button.** Left out as “a CLI's control” until a reviewer observed that a
+   cache with no way to clear it is a stale list with no way out.
+
+The gate ran three times over this change — nine findings, then seven, then seven — and ended in
+`call_human`. The operator took those four and deferred the remaining four to
+[PLAN_local_trust_and_vllm.md](../todo/PLAN_local_trust_and_vllm.md): acknowledging a non-loopback
+host, a key path for a served vLLM, streaming so cancellation is not Ollama-specific, and the two
+tests the reviewers asked for by name.
 
 ## The goal
 

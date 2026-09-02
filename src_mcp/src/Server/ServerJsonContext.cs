@@ -16,7 +16,17 @@ public sealed record ProviderStatus(
 public sealed record ProvidersAnswer(
     IReadOnlyList<ProviderStatus> Providers,
     string VaultReadUtc,
-    string VaultNote);
+    string VaultNote,
+    /// <summary>
+    /// Settings whose value this build does not understand, each as a sentence for a person.
+    /// </summary>
+    /// <remarks>
+    /// It rides on the health probe because that is where somebody looks when the gate does not
+    /// behave as configured — and the case it exists for is exactly that: a panel newer than this
+    /// server writes a policy this server has never heard of, falls back correctly, and looks like a
+    /// setting that was never applied.
+    /// </remarks>
+    IReadOnlyList<string> Unrecognised);
 
 /// <summary>What `open` and `status` return.</summary>
 public sealed record SessionAnswer(

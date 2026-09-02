@@ -26,3 +26,4 @@ Documentation of shipped behaviour: [architecture.md](architecture.md) is the en
 | [RESULTS_predelivery_campaign.md](RESULTS_predelivery_campaign.md) | Eleven real runs over two plans and two commits under seven settings combinations — what held, what was never exercised, and the panel-versus-server defect it found |
 | [PLAN_cli_update_button.md](PLAN_cli_update_button.md) | IMPLEMENTED 2026-09-01 — an update button per reviewer CLI that says by its colour whether there is anything to update, and colour on every collapsible header |
 | [PLAN_snippet_version.md](PLAN_snippet_version.md) | IMPLEMENTED 2026-09-01 — the pasted CLAUDE.md snippet carries a version, the panel reads it back, and a hash guard makes forgetting to bump it a red build |
+| [PLAN_local_models.md](PLAN_local_models.md) | IMPLEMENTED 2026-09-02 — a model on this machine as a third reviewer: engine discovery, the direct call that is not the Codex CLI, real tokens and a null cost |

@@ -92,6 +92,19 @@ public sealed record PanelSettings
     /// <summary>Where sessions, prompts overrides and round artifacts live.</summary>
     public string DataDir { get; init; } = DefaultDataDir;
 
+    /// <summary>
+    /// Settings whose VALUE this build does not understand, each as a sentence for a person.
+    /// </summary>
+    /// <remarks>
+    /// <para>The panel and the server ship separately and update separately, so a panel newer than
+    /// the server writes values the server has never heard of. Falling back is right — refusing to
+    /// start over a future policy would be worse — but falling back in SILENCE is what made a
+    /// working configuration look broken: the setting was applied, the value was read, and the
+    /// behaviour was the old one with nothing anywhere saying why.</para>
+    /// <para>Empty is the normal state. A value nobody set is not a mismatch.</para>
+    /// </remarks>
+    public IReadOnlyList<string> Unrecognised { get; init; } = [];
+
     public static string DefaultDataDir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "coai-mcp");
@@ -103,13 +116,8 @@ public sealed record PanelSettings
             // single pair. Somebody who set a threshold once must not have their gate change under
             // them, and somebody who set a stage must not have to repeat it for three roles.
             Roles: RoleGates(env),
-            OnExhausted: env("COAI_ON_EXHAUSTED")?.ToLowerInvariant() switch
-            {
-                "continue" => StagePolicy.Continue,
-                "escalate" => StagePolicy.Escalate,
-                "good_enough" or "goodenough" => StagePolicy.GoodEnough,
-                _ => StagePolicy.Human,
-            }),
+            OnExhausted: PolicyOf(env("COAI_ON_EXHAUSTED"))),
+        Unrecognised = UnknownValues(env),
         GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),
         PerProviderConcurrency = IntVar(env, "COAI_MAX_PER_PROVIDER", 2),
         ReviewerTimeout = TimeSpan.FromMinutes(IntVar(env, "COAI_REVIEWER_TIMEOUT_MINUTES", 10)),
@@ -125,6 +133,43 @@ public sealed record PanelSettings
         DealCodeLenses = Flag(env, "COAI_DEAL_CODE") || Flag(env, "COAI_ROTATE_PROMPTS"),
         PromptsPerRound = ParsePromptRounds(env("COAI_PROMPTS_PER_ROUND")),
     }.WithProvidersFrom(env);
+
+    /// <summary>What a policy name means, or Human when this build does not know the name.</summary>
+    /// <remarks>
+    /// Human is the fallback because it is the end of the range that STOPS: a policy this build
+    /// cannot honour must never resolve to proceeding over open findings.
+    /// </remarks>
+    private static StagePolicy PolicyOf(string? value) => value?.ToLowerInvariant() switch
+    {
+        "continue" => StagePolicy.Continue,
+        "escalate" => StagePolicy.Escalate,
+        "good_enough" or "goodenough" => StagePolicy.GoodEnough,
+        _ => StagePolicy.Human,
+    };
+
+    /// <summary>
+    /// The settings whose values this build does not understand, as sentences a person can act on.
+    /// </summary>
+    /// <remarks>
+    /// It names the setting, the value, what happened instead, and that updating the server is the
+    /// likely cure — because the likely cause is a panel newer than the server, and "unknown value"
+    /// alone sends somebody back into the settings file where the answer is not.
+    /// </remarks>
+    private static IReadOnlyList<string> UnknownValues(Func<string, string?> env)
+    {
+        var unknown = new List<string>();
+        if (env("COAI_ON_EXHAUSTED") is { Length: > 0 } policy
+            && PolicyOf(policy) == StagePolicy.Human
+            && !string.Equals(policy, "human", StringComparison.OrdinalIgnoreCase))
+        {
+            unknown.Add(
+                $"COAI_ON_EXHAUSTED is '{policy}', which this server does not know — it is asking a "
+                + "person instead. The panel is probably newer than this server: update it in the "
+                + "panel's Server section.");
+        }
+
+        return unknown;
+    }
 
     /// <summary>
     /// <c>{"Architecture":["architecture","arch-boundaries"],...}</c> — the panel's per-round
