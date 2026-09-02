@@ -162,7 +162,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'Prompts per round: which question each round asks',
       whatItIs:
-        'Each reviewer role has a universal prompt and two narrow lenses. This section picks which prompt each ROUND of that role uses, and it sits with that role\'s rounds and threshold, because those three settings answer one question together.',
+        'Each reviewer role has a universal prompt and five narrow lenses. This section picks which prompt each ROUND of that role uses, and it sits with that role\'s rounds and threshold, because those three settings answer one question together.\n\nThe last twelve lenses were measured before they shipped: three wordings each, two runs each. The three wordings turned out to be three SHAPES, and they find the same AMOUNT while differing in how much survives a second run — a lens written as a task to perform (*“run it twice, a millisecond apart, and narrate both”*) repeated itself half again as often as the same question asked as a checklist.',
       why:
         'One prompt per role forever is the right default and the wrong ceiling. Asked to look at everything, a model spreads itself thin, and a second round of the same broad question tends to return the same broad answers.',
       setup:
@@ -277,7 +277,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'The prompts, in full',
       whatItIs:
-        'The complete text of every prompt this product sends to a reviewer — the four universal ones, the eight narrow lenses, and the conventions pass. Nothing is paraphrased here; this is what the model reads.',
+        'The complete text of every prompt this product sends to a reviewer — the four universal ones, the twenty narrow lenses, and the conventions pass. Nothing is paraphrased here; this is what the model reads.',
       why:
         'A review you cannot audit is a review you have to take on faith. Knowing exactly what was asked is what lets you judge whether an answer was fair — and whether a finding you disagree with came from a bad model or a bad question.',
       setup:

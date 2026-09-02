@@ -81,8 +81,17 @@ first one's live round dead.
 
 ## Prompts are a catalog, resolved per round
 
-`PromptCatalog` (in the core) holds twelve prompts — a universal one and two narrow lenses for each
-of the four roles. `PromptCatalog.ForRound(role, round, chosen, rotating)` answers one round's
+`PromptCatalog` (in the core) holds twenty-five prompts — a universal one and five narrow lenses for
+each of the four roles, plus the conventions pass the three code roles share. The last twelve lenses
+were measured before they were added (`RESULTS_focused_prompts.md`): the finding that shaped them is
+that a lens written as a TASK to enact repeats itself across runs half again as often as the same
+question written as a checklist, while finding the same amount.
+
+The panel's copy in `src_vs_code/src/prompts.ts` and the help's copy in `helpPrompts.ts` are both
+held to this file by tests, and the help's copy is now GENERATED
+(`src_vs_code/scripts/generate-help-prompts.mjs`) rather than maintained by hand — it takes its
+order from `prompts.ts` so a lens cannot be ordered differently in the two mirrors, and it refuses
+when the catalog and the prompts folder disagree. `PromptCatalog.ForRound(role, round, chosen, rotating)` answers one round's
 prompt: the panel's explicit choice first, then the rotation (universal, then each lens in turn),
 then the universal one. An id that is empty, stale or belonging to another role falls THROUGH
 rather than leaving a round with no prompt.

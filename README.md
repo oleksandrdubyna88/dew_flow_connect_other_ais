@@ -137,9 +137,9 @@ against the **published** one.
 `module_extension` deep-dive each half. Plans live in `todo/` while open and move to `research/`
 with an `IMPLEMENTED` status when they ship — a rule this repository's CI enforces.
 
-## Prompts: a universal question, and eight narrow lenses
+## Prompts: a universal question, and twenty narrow lenses
 
-Each reviewer role ships a **universal** prompt and two narrow ones, and the panel can pick which
+Each reviewer role ships a **universal** prompt and five narrow ones, and the panel can pick which
 prompt each ROUND uses.
 
 **Round 1 of every code role is the conventions pass**: it judges the diff against the rules this
@@ -153,18 +153,29 @@ question and two vendors agreeing on a finding is a fact the gate can use. On, t
 are dealt out one per vendor: every lens gets asked once at half the launches, and that agreement is
 gone. It is a real trade and the default is the conservative half of it.
 
-| Role | Universal | Lens 1 | Lens 2 |
-|---|---|---|---|
-| Plan | the whole plan | assumptions & verification | the human path |
-| Architecture | boundaries + evolution | boundaries & duplication | cost of the next change |
-| Security & reliability | the whole surface | what it holds and leaves | attack surface |
-| Performance & UX-DX | both | cost at scale | ergonomics & waiting |
+| Role | Universal | Lenses |
+|---|---|---|
+| Plan | the whole plan | assumptions & verification · the human path · data loss & recovery · operability · scope & budget |
+| Architecture | boundaries + evolution | boundaries & duplication · cost of the next change · coupling & knowledge · names & the shape they imply · testability of the seams |
+| Security & reliability | the whole surface | what it holds and leaves · attack surface · blast radius · two at once · what this change trusts |
+| Performance & UX-DX | both | cost at scale · ergonomics & waiting · the first run and the empty case · work done twice · what cannot be taken back |
 
-**What is not claimed.** The lenses were measured against the universal prompt over three plans,
-and the union of all three found roughly twice what any single one did. That result does not
-survive its own control: running the SAME prompt on the SAME text three times produced 6, 4 and 5
-findings whose overlaps were 3, 1 and **0**. Run-to-run variance alone explains the spread, so the
-lenses are offered because they are useful to aim, not because they are proven to find more.
+**The last twelve were measured before they shipped**, and the measurement found something better
+than a winning sentence. Each was drafted three times, and the three drafts turned out to be three
+SHAPES held constant across all twelve — a question list, a task to enact, a rule with exceptions.
+Seventy-two runs later ([RESULTS_focused_prompts.md](research/RESULTS_focused_prompts.md)): the
+shapes find the same AMOUNT (6.6–6.9 findings, 79–82 % gating, flat) and differ in whether they find
+the same thing TWICE — **42 % against 32 %**. So a lens here is written as a task to perform wherever
+its subject has a sequence to enact, and as a question list only where it does not. Five of the
+twelve picks were decided by that measurement; seven were inside its noise and took the shape result
+as a prior, which the document says rather than presenting twelve winners.
+
+**What is still not claimed.** Whether a lens finds what the universal prompt MISSES is a different
+question, and the campaign that asks it compares the two arms over one real change. Over three plans
+the union of all lenses found roughly twice what any single one did — and that result does not
+survive its own control: the SAME prompt on the SAME text three times produced 6, 4 and 5 findings
+whose overlaps were 3, 1 and **0**. Run-to-run variance alone explains the spread, which is exactly
+why repeatability, not yield, is what the shape measurement was scored on.
 
 The measurement that matters for a gate is a different one: a finding raised by two vendors
 independently is stronger evidence than one raised twice by the same prompt, and every finding
