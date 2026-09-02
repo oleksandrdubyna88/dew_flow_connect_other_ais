@@ -22,6 +22,18 @@ export const HELP = {
   runVendor:
     'Open this vendor’s own CLI in a terminal, with its usage command ready at the prompt — press Enter to see what you have spent. This is also where you sign a CLI in: a vendor whose CLI is not authenticated fails every round with a timeout.',
 
+  localModel:
+    'Which model on this machine reviews. The list is what the engine reports right now, with its parameter size, quantisation and disk size — not a list shipped with this extension, because what is installed is a fact about your machine. Empty means whatever the engine answers with when asked for no model in particular. A review needs room: the prompt, the plan or the diff and the schema all go in one request, so a small context window is refused by the engine rather than answered badly.',
+
+  localPrice:
+    'Left here for accounting, and normally left empty: a model on your own hardware has no token bill. What it costs is electricity and the card being busy, neither of which this panel can see. Fill these in only if you want the spending chart to price local runs anyway — at a rate you invent.',
+
+  reprobeLocal:
+    'Ask the engine again what it has. A successful probe is cached for a minute so the panel is not listing models on every repaint — which means a model you just pulled, or an engine you just started, is not there yet. This is the button for that. It was left out of the first version as "a CLI’s button", and the gate reviewing this feature pointed out that a cache with no way to clear it is a stale list with no way out.',
+
+  localEndpoint:
+    'The OpenAI-compatible base of a local engine, ending in /v1. Leave it empty to use whatever the probe found on this machine — Ollama on 11434, a vLLM on 8000. Fill it in for anything else: a vLLM on another port, a model server on the network, or an engine the probe cannot see. The probe URL and this base are NOT the same address: Ollama serves its own API at the root and its OpenAI-compatible surface under /v1, and a base without it fails at the first review with a 404 that reads like a model problem.',
+
   vendorPrice:
     'What this vendor bills per million tokens, in and out. From YOU, never from a table this product ships: a shipped price list is wrong for anyone on a flat subscription, wrong the first time a vendor changes a price, and wrong silently in both cases. Only Claude reports its own cost; codex and antigravity report tokens and nothing else, so their money read as a dash until you fill these in. What is computed from your rate is marked with a tilde — ~$0.42 is what the tokens work out to, $0.42 is what a vendor actually charged, and the totals keep the two apart.',
 

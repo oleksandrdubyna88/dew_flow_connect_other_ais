@@ -7,6 +7,7 @@ import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor,
 import { costPhrase, elapsed, isRunning, reviewerLines, RoundRecord, SessionFile, stageName } from './rounds';
 import { CliStatus, cliStatusNote, updateAvailable, UNKNOWN_CLI } from './cliVersions';
 import { SnippetStatus, snippetNote } from './claudeSnippet';
+import { LocalEngine, remoteWarning } from './localEngines';
 import { ModelPrice } from './modelPrices';
 import { Vendor } from './vendors';
 
@@ -43,6 +44,14 @@ export interface PanelState {
   readonly usageWindow: Window;
   /** The newest published server version, or empty while it is unknown or unreachable. */
   readonly latestServerVersion: string;
+  /**
+   * The local model engine on this machine, probed at repaint.
+   *
+   * <p>A local reviewer's model list is the only one that cannot be shipped: what is installed is a
+   * fact about the machine the panel is running on. Undefined means nothing has been probed yet,
+   * which is a different sentence from "nothing answered".</p>
+   */
+  readonly localEngine?: LocalEngine | undefined;
   /**
    * What the CLAUDE.md snippet pasted into this workspace is, next to what this build hands out.
    *
@@ -175,6 +184,20 @@ ${body}
 </details>`;
 }
 
+/**
+ * A visible line when a local reviewer points somewhere that is not this machine.
+ *
+ * <p>Visible, not a tooltip: the thing being warned about is that source code leaves the machine,
+ * and a warning nobody hovers over is a warning nobody reads. Found by this product's own gate
+ * reviewing the plan for this feature — the field was advertised for "a box on the network" with
+ * nothing anywhere saying what that costs.</p>
+ */
+function remoteNotice(endpoint: string): string {
+  const warning = remoteWarning(endpoint);
+
+  return warning.length === 0 ? '' : `    <div class="stale remote">${escapeHtml(warning)}</div>`;
+}
+
 /** A published rate in the box, greyed as a placeholder — visibly not somebody's own number. */
 function ratePlaceholder(perMillion: number | undefined): string {
   return perMillion === undefined || perMillion <= 0 ? '—' : String(perMillion);
@@ -190,7 +213,7 @@ function ratePlaceholder(perMillion: number | undefined): string {
  */
 function rateNote(model: string, price: ModelPrice | undefined): string {
   if (price === undefined) {
-    return `What this vendor bills per million tokens, in and out. No public list prices ${model.length === 0 ? 'this model' : model}, so this one has to come from you.`;
+    return `What this vendor bills per million tokens, in and out. No public list carries a price for ${model.length === 0 ? 'this model' : model}, so this one has to come from you.`;
   }
   const list = price.source === 'openrouter' ? "OpenRouter's model list" : "LiteLLM's public price file";
 
@@ -210,7 +233,7 @@ function updateLabel(id: string, cli: CliStatus): string {
 }
 
 function reviewersBody(state: PanelState): string {
-  return `${state.vendors.map((v) => vendorCard(v, state.codexModels, state.cliStatus[v.id] ?? UNKNOWN_CLI, state.modelPrices[v.model])).join('\n')}
+  return `${state.vendors.map((v) => vendorCard(v, state.codexModels, state.cliStatus[v.id] ?? UNKNOWN_CLI, state.modelPrices[v.model], state.localEngine)).join('\n')}
 <button class="add" data-command="addVendor" title="${escapeHtml(HELP.addVendor)}">＋&nbsp; Add a reviewer</button>`;
 }
 
@@ -219,17 +242,27 @@ function vendorCard(
   codexModels: readonly ModelChoice[],
   cli: CliStatus,
   price: ModelPrice | undefined,
+  localEngine?: LocalEngine,
 ): string {
   const id = escapeHtml(vendor.id);
-  const models = modelsFor(vendor.runtime, codexModels, vendor.model);
+  const local = vendor.runtime === 'local';
+  const models = modelsFor(vendor.runtime, codexModels, vendor.model, localEngine);
+  // A local vendor ALWAYS shows the endpoint field, where every other vendor shows it only once one
+  // is set. This is the case where somebody needs to type one — a vLLM on another port, a box on the
+  // network, an engine the probe cannot see — and a field that appears only after it is filled
+  // cannot be filled.
   const endpoint =
-    vendor.baseUrl.length === 0
+    vendor.baseUrl.length === 0 && !local
       ? ''
       : `
   <div class="field">
-    <input type="url" data-setting="baseUrl" data-vendor="${id}" title="${escapeHtml(HELP.vendorBaseUrl)}"
+    <input type="url" data-setting="baseUrl" data-vendor="${id}" title="${escapeHtml(local ? HELP.localEndpoint : HELP.vendorBaseUrl)}"
+           placeholder="${local ? 'http://127.0.0.1:11434/v1 — empty uses whatever was found' : ''}"
            value="${escapeHtml(vendor.baseUrl)}">
-    <div class="hint">Its OpenAI-compatible endpoint. The key for it lives in the vault entry under <code>${id}</code>.</div>
+    <div class="hint">${local
+      ? 'Its OpenAI-compatible base, ending in <code>/v1</code>. Empty means the engine the probe found.'
+      : `Its OpenAI-compatible endpoint. The key for it lives in the vault entry under <code>${id}</code>.`}</div>
+${local ? remoteNotice(vendor.baseUrl) : ''}
   </div>`;
 
   // Shown for EVERY vendor, not only a custom endpoint. PATH is not always able to answer: in WSL
@@ -244,13 +277,13 @@ function vendorCard(
     ${labelled(`price-in-${id}`, '$ / 1M in', 'vendorPrice')}
     <input type="number" id="price-in-${id}" min="0" step="0.01" data-setting="pricePerMillionIn" data-vendor="${id}"
            value="${vendor.pricePerMillionIn === 0 ? '' : vendor.pricePerMillionIn}"
-           placeholder="${ratePlaceholder(price?.inPerMillion)}" title="${escapeHtml(rateNote(vendor.model, price))}">
+           placeholder="${ratePlaceholder(price?.inPerMillion)}" title="${escapeHtml(local ? HELP.localPrice : rateNote(vendor.model, price))}">
   </div>
   <div class="field inline">
     ${labelled(`price-out-${id}`, '$ / 1M out', 'vendorPrice')}
     <input type="number" id="price-out-${id}" min="0" step="0.01" data-setting="pricePerMillionOut" data-vendor="${id}"
            value="${vendor.pricePerMillionOut === 0 ? '' : vendor.pricePerMillionOut}"
-           placeholder="${ratePlaceholder(price?.outPerMillion)}" title="${escapeHtml(rateNote(vendor.model, price))}">
+           placeholder="${ratePlaceholder(price?.outPerMillion)}" title="${escapeHtml(local ? HELP.localPrice : rateNote(vendor.model, price))}">
   </div>`;
 
   return `<div class="vendor">
@@ -258,20 +291,22 @@ function vendorCard(
     <input type="checkbox" id="v-${id}" data-setting="enabled" data-vendor="${id}"${vendor.enabled ? ' checked' : ''}
            title="${escapeHtml(HELP.vendorEnabled)}">
     <label class="name" for="v-${id}">${id}</label>
-    <button class="run" data-command="runVendor" data-id="${id}" title="${escapeHtml(HELP.runVendor)}"
+    ${local ? `<button class="run upd" data-command="reprobeLocal" data-id="${id}"
+            title="${escapeHtml(HELP.reprobeLocal)}"
+            aria-label="Look for local models again">⟳</button>` : `<button class="run" data-command="runVendor" data-id="${id}" title="${escapeHtml(HELP.runVendor)}"
             aria-label="Open ${id} in a terminal">▶</button>
     <button class="run get" data-command="installVendorCli" data-id="${id}" title="${escapeHtml(HELP.installVendorCli)}"
             aria-label="Install the ${id} CLI">⤓</button>
     <button class="run upd${updateAvailable(cli.installed, cli.latest) ? ' has-update' : ''}"
             data-command="updateVendorCli" data-id="${id}" title="${escapeHtml(cliStatusNote(vendor.id, cli))}"
-            aria-label="${escapeHtml(updateLabel(vendor.id, cli))}">⟳</button>
+            aria-label="${escapeHtml(updateLabel(vendor.id, cli))}">⟳</button>`}
     <button class="link" data-command="removeVendor" data-id="${id}">remove</button>
   </div>
   <div class="field">
-    <select data-setting="model" data-vendor="${id}" title="${escapeHtml(HELP.vendorModel)}">
-      ${modelOptions(models, vendor.model)}
+    <select data-setting="model" data-vendor="${id}" title="${escapeHtml(local ? HELP.localModel : HELP.vendorModel)}">
+      ${modelOptions(models, vendor.model, local ? 'whatever the engine answers with' : "the CLI's default")}
     </select>
-    <div class="hint">${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(vendor.runtime, codexModels))}</div>
+    <div class="hint">${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(vendor.runtime, codexModels, localEngine))}</div>
   </div>${endpoint}${executable}
 </div>`;
 }
@@ -664,18 +699,18 @@ export function liveRegions(state: PanelState, nowMs: number = Date.now()): { qu
 }
 
 /**
- * A model list as SELECT options: the CLI's default first, every known model, the saved value
+ * A model list as SELECT options: the default first, every known model, the saved value
  * kept even when unknown, and "another model…" as the way out of the list.
  *
  * <p>A select rather than a datalist, learned the hard way: a datalist FILTERS its options by the
  * field's current value, so the moment a model was chosen every other option vanished and the
  * picker read as broken.</p>
  */
-function modelOptions(models: readonly ModelChoice[], current: string): string {
+function modelOptions(models: readonly ModelChoice[], current: string, emptyLabel: string): string {
   const known = models
     .map((m) => `<option value="${escapeHtml(m.id)}"${m.id === current ? ' selected' : ''}>${escapeHtml(m.label)}</option>`)
     .join('\n      ');
-  return `<option value=""${current === '' ? ' selected' : ''}>the CLI's default</option>
+  return `<option value=""${current === '' ? ' selected' : ''}>${emptyLabel}</option>
       ${known}
       <option value="__other__">another model…</option>`;
 }
@@ -940,6 +975,7 @@ export const PANEL_COMMANDS = [
   'installVendorCli',
   'updateVendorCli',
   'forgetUsage',
+  'reprobeLocal',
   // Posted by the model picker rather than by a button: "another model…" is a request to type one.
   'customModel',
 ] as const;

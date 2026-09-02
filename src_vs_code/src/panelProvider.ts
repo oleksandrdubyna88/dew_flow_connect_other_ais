@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import * as vscode from 'vscode';
 import { snippetStatus, SnippetStatus } from './claudeSnippet';
+import { discoverEngine, LocalEngine, openAiBaseOf, probeEngine } from './localEngines';
 import { EscalationWatcher } from './escalationWatcher';
 import { ModelChoice, parseCodexModels } from './models';
 import {
@@ -75,6 +76,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   /** Each vendor's installed and published CLI version, and when they were last read. */
   private cliStatus: Record<string, CliStatus> = {};
   private cliCheckedAt = 0;
+  /**
+   * The local engine as last probed, for WHICH endpoint, and when.
+   *
+   * <p>The endpoint is part of the key, not a detail. Without it a probe still in flight for
+   * endpoint A can land after the person has typed endpoint B and populate B's row with A's models
+   * — raised by this product's own gate on the plan for this feature.</p>
+   */
+  private localEngine: LocalEngine | undefined;
+  private localProbedEndpoint = '';
+  private localCheckedAt = 0;
   /** The two public price lists, and when they were last fetched. */
   private openRouterPrices: PriceTable = {};
   private liteLlmPrices: PriceTable = {};
@@ -141,6 +152,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       cliStatus: await this.vendorCliStatus(vendors),
       modelPrices: await this.modelPrices(vendors),
       snippetStatus: await this.pastedSnippet(),
+      localEngine: await this.probeLocalEngine(vendors),
     };
 
     // Two update paths, and which one runs is the whole fix for the pickers.
@@ -161,6 +173,56 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
 
     void this.view.webview.postMessage({ type: 'live', ...liveRegions(state) });
+  }
+
+  /**
+   * The local model engine, probed only when a local reviewer is actually configured.
+   *
+   * <p>Only then, and that is deliberate: probing two ports on every repaint of every panel would
+   * be this extension knocking on a developer's own machine for a feature they are not using.</p>
+   *
+   * <p>Cached for a minute rather than half an hour, unlike the CLI versions: somebody who has just
+   * started Ollama, or just pulled a model, expects the list to notice. A minute is short enough to
+   * feel live and long enough that a repaint storm costs one probe.</p>
+   *
+   * <p>An endpoint somebody TYPED is asked directly and nothing else is probed — they have said
+   * where it is, and looking elsewhere would be second-guessing them.</p>
+   */
+  private async probeLocalEngine(vendors: readonly Vendor[]): Promise<LocalEngine | undefined> {
+    const local = vendors.find((v) => v.runtime === 'local');
+    if (local === undefined) {
+      return undefined;
+    }
+    const A_MINUTE = 60 * 1000;
+    const wanted = local.baseUrl.length > 0 ? openAiBaseOf(local.baseUrl) : '';
+    // A probe that found NOTHING is not cached, and that is the fix for the other half of the
+    // finding: somebody opens the panel, sees "no local engine answered", starts Ollama, and would
+    // otherwise wait out the TTL staring at a stale sentence. Two connection refusals cost
+    // nothing, so the empty answer is simply re-asked. A successful probe is cached, because
+    // listing models on every repaint is what the cache is for.
+    const fresh = Date.now() - this.localCheckedAt < A_MINUTE && (this.localEngine?.reachable ?? false);
+    if (this.localEngine !== undefined && fresh && this.localProbedEndpoint === wanted) {
+      return this.localEngine;
+    }
+
+    this.localCheckedAt = Date.now();
+    this.localProbedEndpoint = wanted;
+    const engine = wanted.length > 0 ? await probeEngine(wanted) : await discoverEngine();
+    // The endpoint may have changed WHILE this probe was in flight; the answer then belongs to a
+    // configuration nobody is looking at any more, and showing it would be worse than showing
+    // nothing. The next repaint probes the current one.
+    const current = vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors'))
+      .find((v) => v.runtime === 'local');
+    const currentWanted = current === undefined ? ''
+      : current.baseUrl.length > 0 ? openAiBaseOf(current.baseUrl) : '';
+    if (currentWanted !== wanted) {
+      this.localCheckedAt = 0;
+
+      return this.localEngine;
+    }
+    this.localEngine = engine;
+
+    return this.localEngine;
   }
 
   /**
@@ -576,6 +638,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
           this.cliCheckedAt = 0; // the button stops being green as soon as the version moves
           await this.updateVendorCli(id);
         }
+        break;
+      case 'reprobeLocal':
+        // Clearing the cache is the whole action: the next render probes, because a probe that is
+        // not fresh is not reused. Nothing else to do and nothing to await beyond the repaint.
+        this.localCheckedAt = 0;
+        await this.render();
         break;
       case 'forgetUsage':
         if (id !== undefined) {

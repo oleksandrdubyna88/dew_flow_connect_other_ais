@@ -121,6 +121,18 @@ public sealed class PanelService
             return new ProviderStatus(provider.Provider, provider.Enabled, false, "", "unavailable", retired);
         }
 
+        // A local engine is not a CLI: there is nothing to run `--version` on, and the version
+        // that matters is the ENGINE's, which the panel already probes over HTTP. Answering here
+        // rather than falling through avoids a probe that would report a working endpoint as a
+        // missing binary — the shape of a defect this file has already had once.
+        if (RuntimeNameOf(provider) == "local")
+        {
+            var endpoint = provider.BaseUrl.Length > 0 ? provider.BaseUrl : LocalRuntime.DefaultEndpoint;
+
+            return new ProviderStatus(provider.Provider, provider.Enabled, true, "", "own auth",
+                $"a local engine at {endpoint} — no CLI, no key, no bill");
+        }
+
         var (auth, authNote) = AuthFor(provider);
         if (!provider.Enabled)
         {
@@ -173,12 +185,20 @@ public sealed class PanelService
     /// </summary>
     /// <summary>Which runtime a vendor actually drives, by the same order the launcher uses.</summary>
     private static string RuntimeNameOf(ProviderSettings provider) =>
-        provider.BaseUrl.Length > 0 ? "codex"
+        // `local` is checked first for the same reason it is in RuntimeFor: a local vendor IS a
+        // vendor with a base url, and the base-url arm means "ride the Codex CLI".
+        provider.Runtime == "local" ? "local"
+        : provider.BaseUrl.Length > 0 ? "codex"
         : provider.Runtime.Length > 0 ? provider.Runtime
         : provider.Provider;
 
     private static IReviewerRuntime? RuntimeFor(ProviderSettings provider) =>
-        provider.BaseUrl.Length > 0
+        // BEFORE the base-url arm, and that order is the point: a local vendor is a vendor WITH a
+        // base url, so without this line it would ride the Codex CLI — whose own system prompt is
+        // 21k tokens before any review content, measured, and which the operator ruled out.
+        provider.Runtime == "local"
+            ? new LocalRuntime(provider.Provider, provider.BaseUrl)
+            : provider.BaseUrl.Length > 0
             ? new CustomCodexRuntime(provider.Provider, provider.BaseUrl)
             // An EXPLICIT runtime outranks the id, and that order is the fix for a real defect:
             // the id was consulted first, so a vendor called `claude` worked by accident while
@@ -191,6 +211,7 @@ public sealed class PanelService
         "claude" => new ClaudeRuntime(),
         "antigravity" => new AntigravityRuntime(),
         "codex" => new CodexRuntime(),
+        "local" => new LocalRuntime("local", string.Empty),
         _ => null,
     };
 

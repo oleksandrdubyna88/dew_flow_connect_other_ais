@@ -64,6 +64,26 @@ export const DEFAULT_VENDORS: readonly Vendor[] = [
  * the list it came from was the only place it existed, so it could never be added back. A default
  * that cannot be restored is a one-way door, and the operator walked through it.</p>
  */
+/**
+ * A model served on this machine, or on a box you can reach.
+ *
+ * <p>Exported on its own because it is the one preset whose MODEL cannot be defaulted here: what is
+ * installed is a fact about the machine the panel is running on, discovered at repaint. An empty
+ * model means "the first one the engine reports", decided there rather than guessed here.</p>
+ */
+export const LOCAL_PRESET: Vendor & { label: string; hint: string } = {
+  label: 'Local model (Ollama / vLLM)',
+  hint: 'A model on this machine, through its OpenAI-compatible endpoint — no CLI, no key, no bill.',
+  id: 'local',
+  runtime: 'local',
+  model: '',
+  enabled: true,
+  baseUrl: '',
+  executablePath: '',
+  pricePerMillionIn: 0,
+  pricePerMillionOut: 0,
+};
+
 export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })[] = [
   {
     label: 'Codex (OpenAI)',
@@ -149,6 +169,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     pricePerMillionIn: 0,
     pricePerMillionOut: 0,
   },
+  LOCAL_PRESET,
 ];
 
 /** Read whatever is stored, keeping only entries that could actually be run. */

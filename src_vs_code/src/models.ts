@@ -1,3 +1,4 @@
+import { engineNote, LocalEngine } from './localEngines';
 /**
  * Which models a vendor can be pointed at, and where that list comes from.
  *
@@ -16,7 +17,7 @@ export interface ModelChoice {
 }
 
 /** The shape of a vendor's CLI — what argv to build, not who the vendor is. */
-export type Runtime = 'codex' | 'gemini' | 'claude' | 'antigravity';
+export type Runtime = 'codex' | 'gemini' | 'claude' | 'antigravity' | 'local';
 
 /** `~/.codex/models_cache.json` → the slugs it lists. A missing or broken cache is simply none. */
 export function parseCodexModels(text: string): ModelChoice[] {
@@ -67,7 +68,26 @@ export function modelsFor(
   runtime: Runtime,
   discoveredCodex: readonly ModelChoice[],
   current: string,
+  localEngine?: LocalEngine,
 ): ModelChoice[] {
+  // A local engine's list is DISCOVERED, and that is the whole difference from the others: what can
+  // be picked is what is installed on this machine this minute. A list compiled when this extension
+  // was built would be wrong on every machine, including the one it was built on. An engine that did
+  // not answer contributes nothing rather than a plausible-looking default.
+  if (runtime === 'local') {
+    const found = (localEngine?.models ?? []).map((m) => ({
+      id: m.id,
+      label: m.detail.length > 0 ? `${m.id} — ${m.detail}` : m.id,
+    }));
+
+    // A selection the engine no longer lists is kept and MARKED, never quietly dropped and never
+    // shown as though it were still installed. Dropping it would silently switch the reviewer to
+    // another model; showing it plainly would let a round be sent for a model that will 404. Raised
+    // by this product's own gate on the plan for this feature.
+    return current.length > 0 && !found.some((m) => m.id === current)
+      ? [{ id: current, label: `${current} — NOT on this engine any more` }, ...found]
+      : found;
+  }
   const base =
     runtime === 'codex'
       ? [...discoveredCodex]
@@ -99,7 +119,16 @@ const ANTIGRAVITY_MODELS: readonly ModelChoice[] = [
 ];
 
 /** Where the list came from, said in the panel so nobody mistakes curation for discovery. */
-export function modelsProvenance(runtime: Runtime, discoveredCodex: readonly ModelChoice[]): string {
+export function modelsProvenance(
+  runtime: Runtime,
+  discoveredCodex: readonly ModelChoice[],
+  localEngine?: LocalEngine,
+): string {
+  if (runtime === 'local') {
+    // The engine's own note carries the reason when nothing answered, which is the case this line
+    // exists for: an empty dropdown with no explanation reads as "you have no models".
+    return localEngine === undefined ? 'no engine probed yet.' : engineNote(localEngine, hostPlatform());
+  }
   if (runtime === 'gemini') {
     return 'a curated list — the Gemini CLI publishes none. Any other model can be typed in.';
   }
@@ -112,4 +141,14 @@ export function modelsProvenance(runtime: Runtime, discoveredCodex: readonly Mod
   return discoveredCodex.length > 0
     ? `${discoveredCodex.length} models the Codex CLI has cached for this machine.`
     : 'the Codex CLI has cached no model list yet — type a model, or run codex once.';
+}
+
+/**
+ * The platform this extension host runs on, for the one message that depends on it.
+ *
+ * <p>`process.platform` rather than anything about the machine: in a window attached to WSL the
+ * host IS linux, and that is exactly the case whose message differs.</p>
+ */
+function hostPlatform(): 'win32' | 'darwin' | 'linux' {
+  return process.platform === 'win32' ? 'win32' : process.platform === 'darwin' ? 'darwin' : 'linux';
 }
