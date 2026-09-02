@@ -32,7 +32,6 @@ import {
   PriceTable,
   priceFor,
 } from './modelPrices';
-import { serverSettingsJson } from './serverSettingsFile';
 import { roleRecordUpdate, SettingMessage, settingsFrom, settingWrite } from './settingsShape';
 import { normaliseId, Vendor, VENDOR_PRESETS, vendorsFrom } from './vendors';
 import {
@@ -117,13 +116,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       },
     );
 
-    this.context.subscriptions.push(
-      vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration('coai')) {
-          void this.render();
-        }
-      }),
-    );
+    // The configuration listener used to be registered HERE, and that was the defect: VS Code
+     // resolves a webview view lazily, so in a window where nobody opened this panel there was
+     // nothing watching the settings and nothing mirroring them to the server. It now lives in
+     // `activate`, which runs whether or not anyone looks at a webview. Registering it here also
+     // added a second listener every time the view was disposed and resolved again.
     void this.render();
   }
 
@@ -136,7 +133,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const settings = settingsFrom((section) => config.get(section));
     const vendors = vendorsFrom(config.get('vendors'));
     this.codexModels = await this.readCodexModels();
-    await this.writeServerSettings(settings, vendors);
     const state = {
       settings,
       vendors,
@@ -759,31 +755,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       vendors.filter((v) => v.id !== id),
       vscode.ConfigurationTarget.Global,
     );
-  }
-
-  /**
-   * Saves the settings where the server reads them.
-   *
-   * <p>This is what ended the chore: settings used to reach the server only inside the pasted
-   * `mcpServers` env block, so every change to a threshold meant copying the block again and
-   * re-pasting it into a client's config. Both halves already share this directory.</p>
-   *
-   * <p>A failure here is not worth interrupting anyone over — the env block still works, and a
-   * settings panel is the wrong place to report a disk problem.</p>
-   */
-  private async writeServerSettings(
-    settings: ReturnType<typeof settingsFrom>,
-    vendors: readonly Vendor[],
-  ): Promise<void> {
-    try {
-      await vscode.workspace.fs.createDirectory(this.dataDir);
-      await vscode.workspace.fs.writeFile(
-        vscode.Uri.joinPath(this.dataDir, 'settings.json'),
-        new TextEncoder().encode(serverSettingsJson(settings, vendors)),
-      );
-    } catch {
-      // Not writable; the pasted env block remains the way in.
-    }
   }
 
   /**

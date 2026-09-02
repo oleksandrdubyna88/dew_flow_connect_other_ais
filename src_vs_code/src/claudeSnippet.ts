@@ -32,10 +32,10 @@
  * carry no marker and report `unversioned`; if anybody ever hand-marks one, v1 is the honest number
  * for it.</p>
  */
-export const SNIPPET_VERSION = 2;
+export const SNIPPET_VERSION = 3;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = 'f2b0e94ac7766ceb';
+export const SNIPPET_BODY_SHA = '6932909d18f69712';
 
 /** What a workspace's pasted copy is, relative to what this build hands out. */
 export type SnippetStatus =
@@ -133,6 +133,13 @@ has reached \`proceed\`.**
    needs a reason. A reasoned rejection is discounted in later rounds unless a reviewer raises it
    again with a genuinely new argument, so disagreeing honestly is cheap and disagreeing silently
    is impossible.
+
+   **Reject in round 1, not only when the rounds run out.** A finding that is wrong, outside this
+   task's scope, or already covered gets its reasoned rejection the FIRST time it appears. Accepting
+   everything to be agreeable is what stops the loop converging: each accepted finding rewrites the
+   plan, and the next round is handed fresh text with new things to find in it, so the count never
+   falls. Rejecting early is not a way to move faster — it is the only way the round after this one
+   is about the same document.
 4. Verdict \`revise\` → fix the accepted findings, run \`review_plan\` again. Verdict \`proceed\`
    → implement.
 5. **When the branch is written**, call \`review_code\` with the same \`planText\` and the

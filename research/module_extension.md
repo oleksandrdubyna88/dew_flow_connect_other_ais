@@ -299,6 +299,35 @@ say nothing (a repository that never adopted the gate is entitled not to), `unve
 copy predates the marker, `older` names both numbers, and `ahead` — an extension older than the
 repository — says to update this build rather than paste over the repo.
 
+### The settings mirror is not the panel's (2026-09-02)
+
+`serverSettingsSync.ts` owns the one job of getting `coai.*` into the file the server reads, and it
+is created in `activate` rather than by `PanelProvider`. That placement is the whole point.
+
+**What it was, and what that cost.** The write lived in `PanelProvider.render()` behind the view
+guard, and `onDidChangeConfiguration` was registered inside `resolveWebviewView`. VS Code resolves a
+webview view LAZILY — `resolveWebviewView` is not called until the view is first made visible — so a
+window in which nobody had opened the panel had no configuration listener at all and never wrote the
+file. Reported from a macOS checkout: `onExhausted` set to `good_enough`, everything restarted, and
+ten consecutive third rounds still answered `call_human` from an `env` block pasted months earlier.
+The mechanism was right, present since `mcp-v0.3.1`, and unreachable.
+
+Three properties now hold, each with a test that was watched fail or that pins the shape:
+
+- **No view anywhere in the call.** The sync takes a read function and a write function and imports
+  nothing from `vscode`, which is what makes it testable at all — `panelProvider.ts` cannot be,
+  and that is why the defect had no test.
+- **An unchanged configuration writes nothing.** `PanelServiceHost` reloads on this file's mtime and
+  length, and the panel repaints on every live poll; identical rewrites would ask the server to
+  re-read its settings several times a minute.
+- **A failed write is not remembered as done.** It runs from a configuration listener, so throwing
+  would put an error in front of somebody for every keystroke in their settings file — but the next
+  change must still try.
+
+A source-shape test asserts the listener and the write are NOT in `panelProvider.ts` and ARE in
+`extension.ts`. It is a blunt instrument, and it is the only one available: a behavioural test would
+have to drive VS Code's lazy view resolution, which is the exact thing that cannot be done here.
+
 ### Discovering an engine on this machine (2026-09-02)
 
 `localEngines.ts` probes for a local model engine and `PanelProvider` calls it only when a local

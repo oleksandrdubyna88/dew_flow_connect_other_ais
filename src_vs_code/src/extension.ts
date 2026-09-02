@@ -9,6 +9,8 @@ import { renderEscalations } from './escalations';
 import { showHelp } from './helpPanel';
 import { parseSession, renderRounds, roundsViewIsOpen, SessionFile } from './rounds';
 import { envBlock, settingsFrom } from './settingsShape';
+import { ServerSettingsSync } from './serverSettingsSync';
+import { vendorsFrom } from './vendors';
 
 /**
  * ConnectOtherAIs — the human surface. Five commands, one directory watcher, and no port: the
@@ -40,7 +42,24 @@ export function activate(context: vscode.ExtensionContext): void {
   };
   watcher.start();
 
+  // The settings the server reads, mirrored from activation — never from the panel.
+  //
+  // This was the defect a colleague hit on macOS: the write lived in `PanelProvider.render()`
+  // behind its view guard, and the configuration listener was registered inside
+  // `resolveWebviewView`. VS Code resolves a webview view LAZILY, so in a window where nobody had
+  // opened the ConnectOtherAIs panel, nothing watched `coai.*` and nothing wrote the file. They
+  // set `onExhausted` to `good_enough`, restarted, and the server went on answering `call_human`
+  // from an `env` block pasted months earlier — ten third rounds in a row.
+  const settingsSync = new ServerSettingsSync(readCoaiConfiguration, (json) => writeSettingsFile(json));
+  void settingsSync.sync();
+
   context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('coai')) {
+        void settingsSync.sync();
+        void panel.render();
+      }
+    }),
     watcher,
     vscode.window.registerWebviewViewProvider(PanelProvider.viewType, panel),
     vscode.commands.registerCommand('coai.help', showHelp),
@@ -65,6 +84,30 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {
   // The watcher is a subscription; VS Code disposes it. No server, no port, nothing else to stop.
+}
+
+/** The `coai.*` settings as the sync wants them: one read, both halves, no VS Code type leaving. */
+function readCoaiConfiguration() {
+  const config = vscode.workspace.getConfiguration('coai');
+  return {
+    settings: settingsFrom((section) => config.get(section)),
+    vendors: vendorsFrom(config.get('vendors')),
+  };
+}
+
+/**
+ * Writes the settings file the server reads out of its own data directory.
+ *
+ * <p>The directory is created first: on a machine where no review has ever run it does not exist
+ * yet, and the settings are the one thing that has to be there BEFORE the first round rather than
+ * after it.</p>
+ */
+async function writeSettingsFile(json: string): Promise<void> {
+  await vscode.workspace.fs.createDirectory(dataDir());
+  await vscode.workspace.fs.writeFile(
+    vscode.Uri.joinPath(dataDir(), 'settings.json'),
+    new TextEncoder().encode(json),
+  );
 }
 
 /** Where `coai-mcp` keeps its sessions and escalations — its default, or `COAI_DATA_DIR`. */

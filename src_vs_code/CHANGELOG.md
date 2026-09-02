@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.24.0 — 2026-09-02
+
+**Settings reach the server even if you never open the panel.** This one came from a colleague on
+macOS, and the report was precise: they set `onExhausted` to `good_enough`, restarted everything,
+and the server launched by Claude Code went on answering `call_human` an hour later — ten third
+rounds in a row, every one rubber-stamped by a person who had already decided otherwise.
+
+The mechanism that was supposed to carry the setting has existed since `mcp-v0.3.1`: the extension
+writes `settings.json` into the data directory and the server reads it underneath the environment,
+which is what makes the pasted config block a one-time paste. **It simply never ran.** The write sat
+in the panel's `render()`, behind `if (this.view === undefined) return`, and the configuration
+listener was registered inside `resolveWebviewView` — which VS Code calls LAZILY, only when somebody
+first opens the view. In a window where nobody had opened the ConnectOtherAIs panel, nothing watched
+the settings and nothing mirrored them, so the server kept running on an `env` block pasted months
+earlier.
+
+The fix is not a bigger guard. Mirroring settings to the server was never the panel's job — the
+server needs them whether a person is looking at a webview or not — so it moved to activation, holds
+no VS Code type, and has tests that fail if it goes back. It also stopped rewriting the file with
+identical content on every repaint, which was asking the server to reload its settings several times
+a minute for nothing, and it no longer registers a second configuration listener each time the view
+is closed and reopened.
+
+**The pasted instructions gained the rule that keeps a review loop converging** (snippet v3, so an
+older copy in a repository now says so). Reject a finding that is wrong, out of scope or already
+covered the FIRST time it appears, not only when the rounds run out. Accepting everything to be
+agreeable is what stops the count falling: each accepted finding rewrites the plan, and the next
+round is handed fresh text with new things to find in it. Also from the same colleague, who worked
+it out from ten rounds that never converged.
+
 ## 0.23.0 — 2026-09-02
 
 **A model on your own machine can be a reviewer.** *＋ Add a reviewer → Local model (Ollama / vLLM)*
