@@ -40,12 +40,19 @@ jobs:
           - rid: win-arm64
             runner: windows-11-arm
           # macOS needs no toolchain step: Native AOT uses the Xcode command line tools,
-          # which the runners already carry. It cannot be cross-compiled from Linux, which
-          # is why each of these is its OWN runner rather than another `-r` on one.
+          # which the runners already carry. It cannot be cross-compiled from LINUX, which is
+          # why macOS gets its own runner at all.
+          #
+          # Both slices are built on the SAME arm64 runner. `macos-13` was the x64 runner and
+          # GitHub retired it: a job targeting it does not fail, it QUEUES — the mcp-v0.10.0
+          # release sat with five of six RIDs done and this one waiting for a machine that no
+          # longer exists. Xcode on the arm64 runner carries the x86_64 slice, so `-r osx-x64`
+          # cross-compiles there; the only thing lost is running the tests on x64 hardware,
+          # which is why the test step below skips a cross-built RID rather than pretending.
           - rid: osx-arm64
             runner: macos-latest
           - rid: osx-x64
-            runner: macos-13
+            runner: macos-latest
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: write
@@ -60,12 +67,18 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang zlib1g-dev
 
-      # Never ship a binary that has not passed its own tests on this architecture.
+      # Never ship a binary that has not passed its own tests on this architecture — except the
+      # one RID that is cross-built, where the runner cannot execute what it produced. Saying
+      # that out loud beats a green step that ran the host's tests and called them the target's.
       - name: Build and test
         shell: bash
         run: |
           dotnet build dew_flow_connect_other_ais.slnx -c Release
-          ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests${{ runner.os == 'Windows' && '.exe' || '' }}
+          if [ "${{ matrix.rid }}" = "osx-x64" ]; then
+            echo "osx-x64 is cross-built on an arm64 runner; its tests run in the osx-arm64 job."
+          else
+            ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests${{ runner.os == 'Windows' && '.exe' || '' }}
+          fi
 
       - name: Publish
         run: dotnet publish src_mcp/src/CoaiMcp.csproj -c Release -r ${{ matrix.rid }} -o out
@@ -73,12 +86,25 @@ jobs:
       # The release smoke the epic demands: the PUBLISHED binary answers a real initialize /
       # tools/list exchange — the contract tests, pointed at it. AOT failures often surface only
       # at first run, and --help alone would not catch a broken tool surface.
+      # The cross-built osx-x64 binary may not be runnable here at all (an arm64 runner without
+      # Rosetta answers "Bad CPU type in executable"). That is the ONE failure allowed to skip
+      # the smoke, and it is matched by its message: any other failure still fails the job,
+      # because "it would not run" is exactly what this step exists to catch.
       - name: Smoke the published binary
         shell: bash
         env:
           COAI_CONTRACT_EXE: ${{ github.workspace }}/out/coai-mcp${{ runner.os == 'Windows' && '.exe' || '' }}
         run: |
-          ./out/coai-mcp${{ runner.os == 'Windows' && '.exe' || '' }} --help | grep -q 'coai-mcp'
+          EXE=./out/coai-mcp${{ runner.os == 'Windows' && '.exe' || '' }}
+          if ! OUT=$("$EXE" --help 2>&1); then
+            if [ "${{ matrix.rid }}" = "osx-x64" ] && printf '%s' "$OUT" | grep -q 'Bad CPU type'; then
+              echo "osx-x64 cannot be executed on this arm64 runner; smoke skipped for this RID."
+              exit 0
+            fi
+            echo "$OUT"
+            exit 1
+          fi
+          printf '%s' "$OUT" | grep -q 'coai-mcp'
           ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests${{ runner.os == 'Windows' && '.exe' || '' }} --filter-class "*McpContractTests"
 
       - name: Package
