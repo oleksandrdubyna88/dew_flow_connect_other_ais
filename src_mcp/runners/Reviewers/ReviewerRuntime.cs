@@ -23,6 +23,12 @@ public sealed record ReviewerSettings(string Provider)
     /// <summary>Passed as <c>-m</c>; empty = the CLI's own default.</summary>
     public string Model { get; init; } = string.Empty;
 
+    /// <summary>
+    /// For a local engine only: what to tell it about thinking. Empty or <c>engine</c> sends nothing.
+    /// See <c>PanelSettings.LocalReasoningEffort</c> for why the default there is <c>none</c>.
+    /// </summary>
+    public string ReasoningEffort { get; init; } = string.Empty;
+
     /// <summary>Empty = the CLI's own authentication (the normal case for codex and gemini).</summary>
     public string ApiKey { get; init; } = string.Empty;
 
@@ -119,9 +125,17 @@ public static class ReviewerOutput
 /// <c>codex exec</c>: read-only sandbox, ephemeral session, schema-bound answer written to a file.
 /// Every one of these flags was verified against codex-cli 0.147.0 before it was written here.
 /// </summary>
-public class CodexRuntime : IReviewerRuntime
+/// <param name="id">
+/// The VENDOR this reviewer answers for, which is what every finding, usage line and vault-key lookup
+/// is filed under. It defaults to the runtime's own name so the bare constructor keeps meaning what
+/// it always did — but a vendor called <c>second-codex</c> must not report itself as <c>codex</c>:
+/// two rows on one runtime then share one provider/role key, and the round's dictionary throws on
+/// the duplicate before any model is reached. Reported as "every round dies on a duplicate
+/// reviewer key".
+/// </param>
+public class CodexRuntime(string id = "codex") : IReviewerRuntime
 {
-    public virtual string Provider => "codex";
+    public virtual string Provider => id;
 
     private protected virtual string KeyVariable => "OPENAI_API_KEY";
 
@@ -177,9 +191,8 @@ public class CodexRuntime : IReviewerRuntime
 /// pointed at its OpenAI-compatible endpoint. One runtime, config-shifted; the key is REQUIRED
 /// because there is no signed-in fallback to fall back to.
 /// </summary>
-public sealed class DeepseekRuntime : CodexRuntime
+public sealed class DeepseekRuntime() : CodexRuntime("deepseek")
 {
-    public override string Provider => "deepseek";
 
     private protected override string KeyVariable => "DEEPSEEK_API_KEY";
 
@@ -196,9 +209,9 @@ public sealed class DeepseekRuntime : CodexRuntime
 /// <c>gemini -p</c>: headless, JSON output, plan mode (read-only). Verified against gemini 0.55.1.
 /// The answer arrives on stdout inside Gemini's envelope — <c>GeminiPayload</c> takes it apart.
 /// </summary>
-public sealed class GeminiRuntime : IReviewerRuntime
+public sealed class GeminiRuntime(string id = "gemini") : IReviewerRuntime
 {
-    public string Provider => "gemini";
+    public string Provider => id;
 
     public ReviewerInvocation Build(ReviewRole role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings)
     {
@@ -261,6 +274,23 @@ public sealed class ReviewerRuntimeSelector(IEnumerable<IReviewerRuntime> runtim
         };
 
     public IReadOnlyCollection<string> Providers => _byProvider.Keys;
+
+    /// <summary>
+    /// A runtime by NAME, answering for a VENDOR. The two are different things and used to be
+    /// conflated: <c>Named("claude")</c> returned a runtime that called itself "claude" whatever row
+    /// had asked for it, so <c>my-claude</c> filed everything under a different row's name and two
+    /// rows on one runtime collided on the round's provider/role key. Local and custom runtimes
+    /// always took the id; the built-ins now do too.
+    /// </summary>
+    public static IReviewerRuntime? Named(string runtime, string vendorId) => runtime switch
+    {
+        "gemini" => new GeminiRuntime(vendorId),
+        "claude" => new ClaudeRuntime(vendorId),
+        "antigravity" => new AntigravityRuntime(vendorId),
+        "codex" => new CodexRuntime(vendorId),
+        "local" => new LocalRuntime(vendorId, string.Empty),
+        _ => null,
+    };
 
     public IReviewerRuntime? Find(string provider) => _byProvider.GetValueOrDefault(provider);
 

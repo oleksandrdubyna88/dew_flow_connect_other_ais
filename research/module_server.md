@@ -79,6 +79,38 @@ first one's live round dead.
   and the six-launch fan-out with three distinct role prompts, all observed.
 - Stdout purity is a test: verbose logging on, every stdout line must parse as JSON.
 
+## A reviewer answers for its VENDOR, not for its runtime (2026-09-02)
+
+`ReviewerRuntimeSelector.Named(runtime, vendorId)` is the one place a runtime is chosen by name, and
+it hands the runtime the vendor's id. Every built-in runtime takes that id in its constructor,
+defaulting to its own name so the bare constructor — `Default`, the tests — means what it always
+did.
+
+Before this the built-ins hard-coded `Provider`, and two things followed. Two rows on one runtime
+(`claude` and `my-claude`; or `codex` beside a `local` row an older parser had turned into codex)
+produced two invocations with one provider/role key, and `LiveRound`'s dictionary threw on the
+duplicate before a model was reached. And a lone `my-claude` filed its usage, its findings and its
+vault-key lookup under `claude` — a different row's name. `LocalRuntime` and `CustomCodexRuntime` had
+always taken the id; the comment beside `RuntimeFor` even named `my-claude` as a real case, but the
+fix made there was to the CHOICE of runtime, not to the name it then gave itself.
+
+`ParseVendors` also drops a second row with an already-seen id, first wins — the extension refuses
+such a list, and a hand-edited settings file is how one reaches the server.
+
+## A local reviewer is told not to think (2026-09-02)
+
+`PanelSettings.LocalReasoningEffort` — `COAI_LOCAL_REASONING_EFFORT`, default `none` — rides
+`ReviewerSettings.ReasoningEffort` into `LocalRuntime.Build` as `--reasoning-effort`, and the shim
+writes it as the OpenAI `reasoning_effort` field. `engine` (or blank) sends nothing.
+
+It is the default because of a measurement: the same request to Gemma4 26B answered once in 171 s
+and once filled 64k of context with reasoning and returned nothing after 1056 s. The escape was found
+first in `dew_flow_rag_qln` (`AiRuntimeOptions.ReasoningEffort`, 2026-08-11): on Ollama's OpenAI
+route `think:false` and `chat_template_kwargs` are ignored and `"low"` still burns the budget; only
+`"none"` returns `finish_reason: stop`. This repository's own probes reproduced all three. What
+thinking is WORTH on a review — four of eight planted defects when it finished — against a reviewer
+that always finishes is the measurement recorded in `RESULTS_model_comparison.md`.
+
 ## One list of runtime names, because two hand-written ones both forgot the same entry (2026-09-02)
 
 `ReviewerRuntimeSelector.RuntimeNames` is the set a configured vendor's `runtime` is validated

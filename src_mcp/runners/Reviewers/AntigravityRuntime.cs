@@ -26,9 +26,9 @@ namespace CoaiMcp.Runners.Reviewers;
 /// missing field in turn until it accepted
 /// <c>{"event":"user","message":{"role":"user","content":"..."}}</c>.</para>
 /// </remarks>
-public sealed class AntigravityRuntime : IReviewerRuntime
+public sealed class AntigravityRuntime(string id = "antigravity") : IReviewerRuntime
 {
-    public string Provider => "antigravity";
+    public string Provider => id;
 
     /// <summary>Flash at high effort: the operator's own choice, and the CLI's active model.</summary>
     public const string DefaultModel = "gemini-3.7-flash-high";

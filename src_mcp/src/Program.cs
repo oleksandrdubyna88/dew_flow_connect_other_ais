@@ -101,6 +101,7 @@ internal static class Program
         var promptFile = flags.GetValueOrDefault("--prompt-file", string.Empty);
         var schemaFile = flags.GetValueOrDefault("--schema-file", string.Empty);
         var outFile = flags.GetValueOrDefault("--out", string.Empty);
+        var reasoningEffort = flags.GetValueOrDefault("--reasoning-effort", string.Empty);
 
         if (promptFile.Length == 0 || outFile.Length == 0)
         {
@@ -120,7 +121,7 @@ internal static class Program
             string body;
             try
             {
-                body = Runners.Reviewers.LocalAsk.RequestBody(model, prompt, schema, seed);
+                body = Runners.Reviewers.LocalAsk.RequestBody(model, prompt, schema, seed, reasoningEffort);
             }
             catch (System.Text.Json.JsonException ex)
             {

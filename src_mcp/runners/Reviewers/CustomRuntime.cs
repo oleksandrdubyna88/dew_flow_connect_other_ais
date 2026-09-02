@@ -11,21 +11,22 @@ namespace CoaiMcp.Runners.Reviewers;
 /// the vault entry, the environment and the panel all agree without a mapping table to keep in
 /// step.</para>
 /// </remarks>
-public sealed class CustomCodexRuntime(string id, string baseUrl) : CodexRuntime
+public sealed class CustomCodexRuntime(string id, string baseUrl) : CodexRuntime(id)
 {
-    public override string Provider => id;
 
     /// <summary>`mistral` → `MISTRAL_API_KEY`; a hyphen is not legal in an environment name.</summary>
     public static string KeyVariableFor(string id) =>
         $"{id.ToUpperInvariant().Replace('-', '_').Replace('.', '_')}_API_KEY";
 
-    private protected override string KeyVariable => KeyVariableFor(id);
+    // `Provider`, not the constructor parameter: the base owns the id now, and a derived class that
+    // both captured it and passed it up would hold two copies of one name (CS9107).
+    private protected override string KeyVariable => KeyVariableFor(Provider);
 
     private protected override IEnumerable<string> ProviderOverrides =>
     [
-        "-c", $"model_provider={id}",
-        "-c", $"model_providers.{id}.name={id}",
-        "-c", $"model_providers.{id}.base_url={baseUrl}",
-        "-c", $"model_providers.{id}.env_key={KeyVariableFor(id)}",
+        "-c", $"model_provider={Provider}",
+        "-c", $"model_providers.{Provider}.name={Provider}",
+        "-c", $"model_providers.{Provider}.base_url={baseUrl}",
+        "-c", $"model_providers.{Provider}.env_key={KeyVariableFor(Provider)}",
     ];
 }

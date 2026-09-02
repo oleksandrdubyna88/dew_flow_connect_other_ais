@@ -93,6 +93,21 @@ public sealed record PanelSettings
     public string DataDir { get; init; } = DefaultDataDir;
 
     /// <summary>
+    /// What a LOCAL reviewer is told about thinking: <c>none</c> by default, a level to ask for it,
+    /// or <c>engine</c> to say nothing and take the engine's own default.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Measured 2026-09-02.</b> Gemma4 26B on Ollama answered the planted-defect plan once
+    /// in 171 s and, on the identical request, once filled a 64k context with 110 000 characters of
+    /// <c>reasoning</c> and returned an empty <c>content</c> after 1056 s. Unbounded thinking that
+    /// outruns the context is a review that never arrives, and one in two is not a reviewer.</para>
+    /// <para>The escape was found in dew_flow_rag_qln first (<c>AiRuntimeOptions.ReasoningEffort</c>,
+    /// 2026-08-11): on Ollama's OpenAI route <c>think:false</c> is ignored and <c>"low"</c> still burns
+    /// the budget; only <c>"none"</c> returns <c>finish_reason: stop</c>. Re-verified here.</para>
+    /// </remarks>
+    public string LocalReasoningEffort { get; init; } = "none";
+
+    /// <summary>
     /// Settings whose VALUE this build does not understand, each as a sentence for a person.
     /// </summary>
     /// <remarks>
@@ -129,6 +144,9 @@ public sealed record PanelSettings
             ? TimeSpan.FromSeconds(IntVar(env, "COAI_ESCALATION_SECONDS", 30))
             : TimeSpan.FromMinutes(IntVar(env, "COAI_ESCALATION_MINUTES", 30)),
         DataDir = env("COAI_DATA_DIR") is { Length: > 0 } dir ? dir : DefaultDataDir,
+        LocalReasoningEffort = env("COAI_LOCAL_REASONING_EFFORT") is { Length: > 0 } effort
+            ? effort.Trim().ToLowerInvariant()
+            : "none",
         DealPlanLenses = Flag(env, "COAI_DEAL_PLAN") || Flag(env, "COAI_ROTATE_PROMPTS"),
         DealCodeLenses = Flag(env, "COAI_DEAL_CODE") || Flag(env, "COAI_ROTATE_PROMPTS"),
         PromptsPerRound = ParsePromptRounds(env("COAI_PROMPTS_PER_ROUND")),
@@ -255,7 +273,12 @@ public sealed record PanelSettings
                         Model = v.Model?.Trim() ?? string.Empty,
                         BaseUrl = v.BaseUrl?.Trim() ?? string.Empty,
                         ExecutablePath = v.ExecutablePath?.Trim() ?? string.Empty,
-                    })];
+                    })
+                    // One id, one vendor — the extension already refuses a duplicate row, and a
+                    // hand-edited settings file is how one reaches the server. The id is the
+                    // provider/role key of every reviewer launch, so two rows sharing it would
+                    // collide in the round's dictionary before any model ran.
+                    .DistinctBy(v => v.Provider)];
         }
         catch (System.Text.Json.JsonException)
         {

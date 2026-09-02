@@ -21,9 +21,9 @@ namespace CoaiMcp.Runners.Reviewers;
 /// envelope carries `usage` and `total_cost_usd`, measured against the installed CLI. The answer
 /// then lives in `result`, which is what <see cref="ReadAnswer"/> is for.</para>
 /// </remarks>
-public sealed class ClaudeRuntime : IReviewerRuntime
+public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
 {
-    public string Provider => "claude";
+    public string Provider => id;
 
     public ReviewerInvocation Build(
         ReviewRole role,

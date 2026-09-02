@@ -233,7 +233,7 @@ public sealed class PanelService
         : provider.Runtime.Length > 0 ? provider.Runtime
         : provider.Provider;
 
-    private static IReviewerRuntime? RuntimeFor(ProviderSettings provider) =>
+    internal static IReviewerRuntime? RuntimeFor(ProviderSettings provider) =>
         // Through RuntimeNameOf, which is the ONE place that answers "what is this vendor". It used
         // to ask `provider.Runtime == "local"` here as well, and a third copy of the same question
         // in AuthFor was never updated — so a local reviewer was silently dropped from every round.
@@ -244,17 +244,10 @@ public sealed class PanelService
             // An EXPLICIT runtime outranks the id, and that order is the fix for a real defect:
             // the id was consulted first, so a vendor called `claude` worked by accident while
             // `my-claude` — same runtime, different name — silently ran the Codex CLI.
-            : Named(provider.Runtime) ?? ReviewerRuntimeSelector.Default.Find(provider.Provider);
-
-    private static IReviewerRuntime? Named(string runtime) => runtime switch
-    {
-        "gemini" => new GeminiRuntime(),
-        "claude" => new ClaudeRuntime(),
-        "antigravity" => new AntigravityRuntime(),
-        "codex" => new CodexRuntime(),
-        "local" => new LocalRuntime("local", string.Empty),
-        _ => null,
-    };
+            // The vendor's own id travels with the runtime — see ReviewerRuntimeSelector.Named for
+            // what happened when it did not.
+            : ReviewerRuntimeSelector.Named(provider.Runtime, provider.Provider)
+                ?? ReviewerRuntimeSelector.Default.Find(provider.Provider);
 
     // ---------- open / status ----------
 
@@ -777,6 +770,7 @@ public sealed class PanelService
                 Model = provider.Model,
                 ApiKey = _keys.Keys.GetValueOrDefault(provider.Provider, string.Empty),
                 Timeout = _settings.ReviewerTimeout,
+                ReasoningEffort = _settings.LocalReasoningEffort,
             };
             var prompt = ComposePrompt(choice, context);
             var repairPrompt = prompt +

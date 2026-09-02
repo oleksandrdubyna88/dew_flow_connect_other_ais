@@ -53,8 +53,9 @@ rates. (Reviews here run on a subscription; the money column is an order of magn
 | GPT-5.6-Terra | 5 | 4 | 4.5 | 1 | 21 / 28 | $0.030 |
 | Gemini 3.7 Flash (Medium) | 4 | 4 | 4.0 | 0 | 38 / 28 | $0.053 |
 | GPT-5.4-Mini | 4 | 3 | 3.5 | 1 | 88 / 52 | $0.036 |
-| **Gemma4 26B-A4B, local** (Ollama, 64k) | 4 | **—** | *(4)* | — | 171 / **1056, no answer** | electricity |
-| Qwen3.5 35B-A3B, local (Ollama, 64k) | — | — | — | — | 1027, no answer | electricity |
+| **Gemma4 26B-A4B, local, thinking OFF** (Ollama, 64k) | 4 | **5** | **4.5** | 1 | **31 / 11** | electricity |
+| Gemma4 26B-A4B, local, thinking on (Ollama, 64k) | 4 | **—** | *(4)* | — | 171 / **1056, no answer** | electricity |
+| Qwen3.5 35B-A3B, local, thinking on (Ollama, 64k) | — | — | — | — | 1027, no answer | electricity |
 
 ## The local rows, and why one of them is a dash
 
@@ -98,11 +99,32 @@ this model's context is 64k, and Ollama truncates a prompt to `num_ctx` without 
 of the diff's first third reported as a review of the diff. Refusing to run it is the honest result;
 detecting that truncation is the other open item in the same plan.
 
-**What the local rows say, read together.** A model on this machine can score in the hosted table's
-lower half and cost nothing per token. What it cannot yet do is finish reliably: one of two runs, and
-the failed run took six times longer than the successful one. For the plan gate, where the hosted
-models answer in under a minute, that is not a trade anybody would take today; for a machine with no
-paid vendor at all, it is four real defects found for the price of a busy card.
+**Thinking off: the same model, the same plan, both runs answering.** The escape —
+`reasoning_effort: "none"`, the one field Ollama's OpenAI route actually honours — had been found in
+`dew_flow_rag_qln` three weeks earlier against the same model family (`AiRuntimeOptions.ReasoningEffort`,
+2026-08-11) and was re-verified here before being made the local reviewer's default. Then the
+baseline was run again:
+
+| | run 1 | run 2 | wall |
+|---|---|---|---|
+| thinking on | 4 (D1 D2 D3 D6) | **no answer** | 171 s / 1056 s |
+| **thinking off** | 4 (D1 D2 D4 D6) | **5** (D1 D2 D4 D6 D8) | **31 s / 11 s** |
+
+Run 2 without thinking credited D8 for *"the plan promises no row is counted twice, but if the rename
+fails the next night reads the old data"* — the idempotency defect by its consequence. Neither
+configuration found D5 (the rename under a live writer) or D7 (the unmeasured "fast"), which are also
+the two the weaker hosted models miss.
+
+**The thinking bought nothing.** Same count on the run that finished, one more on the run that had
+previously not finished at all, at a tenth of the wall clock — and both runs answering, which is the
+number that matters for a gate. Mean 4.5 places it level with GPT-5.6-Terra and above Gemini 3.7
+Flash at medium effort, inside the hosted models' own time band (GPT-5.5: 22 s and 30 s; Flash Low:
+11 s and 23 s).
+
+**What the local rows say, read together.** A model on this machine scores in the hosted table's
+lower-middle, answers in the same time as the hosted ones, and costs nothing per token — once it is
+told not to think. With thinking on, the same model answers one time in two and takes up to eighteen
+minutes to say nothing. That is the whole difference, and it is one request field.
 
 ## What the second run changed — read this before the table above
 

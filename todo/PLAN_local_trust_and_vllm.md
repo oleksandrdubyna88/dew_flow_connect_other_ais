@@ -83,7 +83,17 @@ no test naming them.
 - **The warning**: a test that a non-loopback endpoint cannot reach a review without the row having
   said so — which only becomes meaningful once §1 exists.
 
-## 5. A reasoning model's thinking cannot be bounded through the OpenAI route
+## 5. A reasoning model's thinking cannot be bounded through the OpenAI route — RESOLVED 2026-09-02
+
+**Resolved the day it was written, by the answer `dew_flow_rag_qln` had already found**
+(`AiRuntimeOptions.ReasoningEffort`, measured 2026-08-11): `reasoning_effort: "none"` is honoured on
+Ollama's OpenAI route where `think:false`, `chat_template_kwargs` and `"low"` are not. Shipped in
+mcp 0.11.2 as the local reviewer's default (`COAI_LOCAL_REASONING_EFFORT`, `engine` to send nothing).
+The native-route idea below is therefore NOT needed and is kept only as the record of what was
+considered. What remains open from this section is the panel exposing the setting; today it is
+env-only.
+
+*As originally written:*
 
 **Measured 2026-09-02.** Gemma4 26B on Ollama 0.33.2 answered the planted-defect plan once in 171 s
 and, on the identical request, once filled a 64k context with 110 000 characters of `reasoning` and
@@ -121,6 +131,8 @@ refuse with the sizes rather than return findings about a fragment.
 - [ ] The streaming question is answered by a measurement against a non-Ollama engine, and the answer
       is recorded whichever way it goes.
 - [ ] The endpoint race has a test that was watched fail.
-- [ ] On Ollama, thinking is bounded or off through the native route, and the with/without
-      difference on the planted-defect plan is measured before the default is chosen.
+- [x] Thinking is off by default through `reasoning_effort: "none"` on the OpenAI route itself — no
+      native route needed. The with/without difference on the planted-defect plan is in
+      `RESULTS_model_comparison.md`.
+- [ ] The panel exposes `COAI_LOCAL_REASONING_EFFORT` beside the local row; it is env-only today.
 - [ ] A prompt truncated to `num_ctx` refuses the round with the two sizes, never reviews a fragment.

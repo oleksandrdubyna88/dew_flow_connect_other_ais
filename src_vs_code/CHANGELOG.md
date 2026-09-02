@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.25.2 — 2026-09-02 (server 0.11.2)
+
+**Two rows on one runtime no longer kill the round.** The built-in runtimes hard-coded the name they
+answered to — `CodexRuntime` said *codex*, `ClaudeRuntime` said *claude* — whatever row had selected
+them. So `claude` beside `my-claude`, or `codex` beside a `local` row an older parser had rewritten to
+codex, produced two reviewers with one provider/role key, and the round's dictionary threw on the
+duplicate before any model was reached: *"every round dies on a duplicate reviewer key"*, from a
+colleague's machine. A lone `my-claude` did not crash; it quietly filed its usage, its findings and
+its vault-key lookup under `claude`, the name of a different row. Every runtime now carries the
+VENDOR's id, the way the local and custom ones always did, and a settings file naming one id twice
+keeps the first row rather than colliding.
+
+**A local reviewer is told not to think, by default.** Measured: Gemma4 26B on Ollama answered the
+planted-defect plan once in 171 s and, on the identical request, once spent 1056 s filling a 64k
+context with 110 000 characters of `reasoning` and returned an empty `content`. Its thinking is
+unbounded and not reproducible, and a reviewer that answers one time in two is worth less than one
+that never runs. The escape had already been found in `dew_flow_rag_qln` three weeks earlier, against
+the same model family: on Ollama's OpenAI route `think:false` is ignored and `reasoning_effort:"low"`
+still burns the whole budget — only **`"none"`** returns an answer. Re-verified here (23 s, zero
+reasoning characters, a valid findings object) and now the default; `COAI_LOCAL_REASONING_EFFORT`
+sets a level, or `engine` to send nothing and take the engine's own behaviour. Measured on the same plan afterwards: **4 and 5 of eight planted defects in 31 s and 11 s**, both runs answering — against 4 and nothing in 171 s and 1056 s with thinking on. The thinking bought no defects and cost one review in two.
+
 ## 0.25.1 — 2026-09-02 (server 0.11.1)
 
 **A configured local reviewer never ran, and nothing said so.** Found by running a local model
