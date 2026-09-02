@@ -299,6 +299,22 @@ say nothing (a repository that never adopted the gate is entitled not to), `unve
 copy predates the marker, `older` names both numbers, and `ahead` — an extension older than the
 repository — says to update this build rather than paste over the repo.
 
+### A runtime the type knew and the parser did not (2026-09-02)
+
+`Runtime` is now DERIVED from the `RUNTIMES` array (`models.ts`) rather than declared beside it.
+There used to be two declarations — the union in `models.ts` and an array in `vendors.ts` that
+`vendorsFrom` validated against — and `local` was added to the first and not the second. An unknown
+runtime is deliberately rewritten to `codex` (it is the one that takes a base URL, so a name from a
+newer extension still leaves a row that launches something), which meant every saved local reviewer
+came back as a CODEX reviewer: the row kept the name `local`, listed codex's models, offered codex's
+buttons, and a round would have gone through the Codex CLI.
+
+The comment beside that check already said the two lists had to be kept in step, which is why the
+fix is not a better comment: with one declaration there is nothing to keep in step. Tests walk every
+runtime and every `VENDOR_PRESETS` entry through a save and a read, with `gemini` named as the one
+deliberate exception — it is MIGRATED to `antigravity` because Google retired Code Assist, and
+separating a migration from a defect is exactly what the test does.
+
 ### The settings mirror is not the panel's (2026-09-02)
 
 `serverSettingsSync.ts` owns the one job of getting `coai.*` into the file the server reads, and it

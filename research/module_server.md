@@ -79,6 +79,37 @@ first one's live round dead.
   and the six-launch fan-out with three distinct role prompts, all observed.
 - Stdout purity is a test: verbose logging on, every stdout line must parse as JSON.
 
+## `call_human` stops the review (2026-09-02)
+
+The round budget used to decide only what a finished round was CALLED. `BeginPlanRound` and
+`BeginCodeRound` refused an unresolved previous round and a wrong stage, and asked nothing about how
+many rounds had been spent; the budget was read in `CompleteRound`, to choose between `revise` and
+`call_human`. And `Resolve` cleared `HumanGate` unconditionally — so the AI reopened the gate it had
+just been stopped by simply by doing the next thing the protocol asks of it.
+
+The loop that produced: round, `call_human`, resolve, round, `call_human`… A stage on a three-round
+budget reached round **ten** on a colleague's machine, every round after the third a full panel of
+reviewers. Its own summary is the argument: rounds 1–3 real, 4–9 "progressively narrower crash
+windows", round 10 introduced a bug.
+
+Three changes, all small, none of them new vocabulary:
+
+- `BeginPlanRound` / `BeginCodeRound` refuse while `HumanGate` is set, with a sentence naming every
+  way out — a refusal with no door is a stall.
+- `Resolve` clears `HumanGate` only for `humanSaysProceed`.
+- `RoundMachine.ApplyHumanDecision` is what a person's answer does to the state, and
+  `PanelService.ApplyAnyHumanDecision` reads it from the escalation file immediately before a round
+  would begin. Reading it at the last moment means the person can answer during the wait and the
+  next attempt simply works — no restart, no polling.
+
+`HumanDecision` moved from `Server` to `Core.Rounds` for this: the state machine acts on it now, so
+it is part of the machine rather than a label the server puts on an answer file. The three answers
+are unchanged and were always described this way to the person — `continue` and `fix` grant a FRESH
+set of rounds, `discuss` advances nothing.
+
+Only the `human` policy raises the gate. `continue_anyway` and `good_enough` advance on resolve, and
+a gate over them would break a configuration whose whole point is not to stop; a test pins that.
+
 ## Prompts are a catalog, resolved per round
 
 `PromptCatalog` (in the core) holds twenty-five prompts — a universal one and five narrow lenses for

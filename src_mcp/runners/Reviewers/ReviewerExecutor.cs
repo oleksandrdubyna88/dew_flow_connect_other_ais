@@ -225,7 +225,15 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
         ProcessResult result;
         try
         {
-            result = await launcher.RunAsync(invocation.Request, ct);
+            // Labelled HERE rather than in each vendor adapter: every reviewer launch passes
+            // through this one line, and a label added per adapter is a label the next adapter
+            // forgets. Only reviewers are tracked — the git commands around them finish in
+            // milliseconds and are never the thing left running for ten hours.
+            var request = invocation.Request with
+            {
+                TrackAs = $"{invocation.Provider}/{invocation.Role}",
+            };
+            result = await launcher.RunAsync(request, ct);
         }
         catch (System.ComponentModel.Win32Exception e)
         {

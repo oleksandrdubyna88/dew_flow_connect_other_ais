@@ -32,10 +32,10 @@
  * carry no marker and report `unversioned`; if anybody ever hand-marks one, v1 is the honest number
  * for it.</p>
  */
-export const SNIPPET_VERSION = 3;
+export const SNIPPET_VERSION = 4;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = '6932909d18f69712';
+export const SNIPPET_BODY_SHA = '4a1462b30ac32ca7';
 
 /** What a workspace's pasted copy is, relative to what this build hands out. */
 export type SnippetStatus =
@@ -161,6 +161,20 @@ has reached \`proceed\`.**
 6. Verdict \`call_human\` → surface the open findings to the person and stop.
    **Do not proceed on your own judgement.** Verdict \`escalated\` → apply the named step and run
    a fresh round.
+
+   **The server will not take another round until a person answers, and this is enforced.** After
+   \`call_human\`, \`review_plan\` and \`review_code\` REFUSE — running the review again is not one
+   of your options, and neither is resolving your way past it: recording decisions no longer
+   reopens the gate. Call \`ask_human\`. Their answer decides: *keep going* and *stop and act on the
+   findings* each grant a fresh set of rounds, *stop and talk to me* advances nothing, and if they
+   would rather ship with the findings open they say so and you pass
+   \`humanDecision: "proceed"\` to \`resolve\`.
+
+   This is enforced because it was not, and the cost is measured: on a three-round budget a stage
+   reached round TEN, every round after the third a full panel of reviewers. The AI running it
+   judged rounds 1–3 to have found real defects, 4–9 to have chased "progressively narrower crash
+   windows", and round 10 to have INTRODUCED a bug. A gate that asks for a person and then lets you
+   carry on is not a gate.
 
    "Stop" here means stop SHIPPING over open findings — it does not end the task. Your own review,
    your summary, and anything else your workflow does still run: this gate decides whether the

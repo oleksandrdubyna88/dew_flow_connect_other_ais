@@ -207,7 +207,13 @@ internal static class Program
                 SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable),
                 Environment.GetEnvironmentVariable);
             var settings = PanelSettings.FromEnvironment(configuration);
-            var launcher = new ProcessLauncher();
+            // The tracker is what lets a LATER server collect reviewers this one leaves behind if
+            // it dies: the timeout kill is performed by the parent, so it cannot run when the
+            // parent is what went away.
+            var tracking = new Runners.Processes.ProcessTracking(
+                settings.DataDir,
+                message => log.Warning("process tracking: {Detail}", message));
+            var launcher = new ProcessLauncher(tracking);
             var keys = await new KeyVault(launcher).ReadAsync(Environment.GetEnvironmentVariable(KeyVault.KeyVariable));
             var vaultReadUtc = keys.Available ? DateTime.UtcNow : default;
             log.Information("starting: {Providers} enabled, vault: {Vault}",

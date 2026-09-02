@@ -17,7 +17,19 @@ export interface ModelChoice {
 }
 
 /** The shape of a vendor's CLI — what argv to build, not who the vendor is. */
-export type Runtime = 'codex' | 'gemini' | 'claude' | 'antigravity' | 'local';
+/**
+ * Every reviewer runtime this build knows, as a VALUE — and the type is derived from it.
+ *
+ * <p>One declaration, deliberately. There used to be two: this union, and a `RUNTIMES` array in
+ * `vendors.ts` that `vendorsFrom` validated against. Adding `local` to the type and not to the
+ * array made every saved local reviewer come back as a CODEX one — the row kept its name, listed
+ * codex's models, offered codex's buttons, and a round would have gone through the Codex CLI:
+ * the one thing the local runtime exists to avoid. The comment beside that check already said the
+ * two had to be kept in step, which is the argument for there being only one of them.</p>
+ */
+export const RUNTIMES = ['codex', 'gemini', 'claude', 'antigravity', 'local'] as const;
+
+export type Runtime = (typeof RUNTIMES)[number];
 
 /** `~/.codex/models_cache.json` → the slugs it lists. A missing or broken cache is simply none. */
 export function parseCodexModels(text: string): ModelChoice[] {

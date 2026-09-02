@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.25.0 — 2026-09-02
+
+**A local reviewer was silently running as a codex one.** The `Runtime` type gained `'local'` and
+the list `vendorsFrom` validates against did not — and an unknown runtime is deliberately rewritten
+to `codex`, because that is the one that takes a base URL. So every saved local reviewer came back
+as codex: the row kept the name `local`, listed GPT-5.6 in its model dropdown, offered codex's run
+and install buttons, and a round would have gone through the Codex CLI — the one thing the local
+runtime exists to avoid, and the thing measured as spending 21k tokens of someone else's system
+prompt before any review content.
+
+The comment beside that check already said the two lists had to be kept in step. That is the
+argument against fixing it with a longer comment: the type is now DERIVED from the list, so there
+is nothing left to keep in step, and a test walks every runtime and every preset through a save and
+a read.
+
+**`call_human` now stops the review, which it did not.** A round budget was never a budget: nothing
+asked how many rounds had been spent before opening one — the number was read only at the END, to
+choose between `revise` and `call_human` — and recording decisions cleared the human gate
+unconditionally. So the loop after exhaustion was: run a full round, be told to ask a person,
+resolve, run a full round, be told to ask a person, forever.
+
+It is not hypothetical. On a three-round budget a stage reached round **ten**, and the AI running it
+judged its own work: rounds 1–3 found real defects, 4–9 chased "progressively narrower crash
+windows", and round 10 **introduced a bug**. Now `review_plan` and `review_code` refuse after
+`call_human` until a person answers, and the answers are the ones the panel already offered — *keep
+going* and *stop and act on the findings* grant a fresh set of rounds, *stop and talk to me*
+advances nothing, and shipping with the findings open is still `humanDecision: "proceed"`. The
+snippet says so too (v4), so a pasted copy that predates this reports itself as behind.
+
+**Reviewers left running by a server that died are collected.** The timeout kill is performed by the
+parent, so when `coai-mcp` goes away — which is what happens every time an MCP client restarts —
+its in-flight reviewers keep running with nothing left to stop them. Reported from a macOS checkout:
+an Antigravity child started at 00:03 was still alive at 10:00, its vendor removed from the
+configuration, its server long gone.
+
+Every reviewer launch is now recorded with the process that owns it, and a later server collects the
+orphans at startup. The care is all in the refusals, because the vendor CLIs are programs a person
+also runs by hand: a process is killed only when this product recorded starting it, its recorded
+start time still matches so the PID cannot have been reused, and the owning server is provably gone.
+A live second server's reviewers are never touched.
+
+**Pasting into `~/.claude.json` says which entry wins.** Claude Code reads that file at two levels,
+and a per-project `projects["…"].mcpServers` entry silently outranks the top-level one. Somebody who
+pastes at the top level and restarts gets no signal at all that their paste was read and overruled.
+
 ## 0.24.0 — 2026-09-02
 
 **Settings reach the server even if you never open the panel.** This one came from a colleague on

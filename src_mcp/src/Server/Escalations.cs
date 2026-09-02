@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CoaiMcp.Core.Findings;
+using CoaiMcp.Core.Rounds;
 
 namespace CoaiMcp.Server;
 
@@ -23,32 +24,6 @@ public sealed record EscalationQuestion(
     string TranslationNote,
     IReadOnlyList<Finding> OpenFindings,
     string AskedUtc);
-
-/// <summary>
-/// What a person chose when the gate ran out of rounds and asked them.
-/// </summary>
-/// <remarks>
-/// <para>Three answers, because those are the three things that can actually happen next — and
-/// notably none of them is "ship it with the findings open". A gate whose human override is
-/// "ignore all this" is a gate with an off switch; these three all keep the findings alive.</para>
-/// <para>It was asked with a free-text input box, which is the control for a question an AI wrote
-/// in words, and this is not that. <see cref="None"/> is what prose means: still their answer,
-/// carried to the AI, but never a decision on its own.</para>
-/// </remarks>
-public enum HumanDecision
-{
-    None,
-
-    /// <summary>Keep going: another set of rounds, nothing changed first.</summary>
-    /// <remarks>For when the person thinks the reviewers are wrong, or wants another opinion.</remarks>
-    Continue,
-
-    /// <summary>Stop reviewing and act on what was found, then review again.</summary>
-    Fix,
-
-    /// <summary>Stop and talk to the person before doing anything else.</summary>
-    Discuss,
-}
 
 /// <summary>What a person wrote back, and — when they pressed a button — what they chose.</summary>
 public sealed record EscalationAnswer(string Id, string Answer, string AnsweredUtc)

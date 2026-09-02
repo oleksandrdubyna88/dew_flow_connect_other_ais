@@ -1,7 +1,6 @@
-import { Runtime } from './models';
+import { Runtime, RUNTIMES } from './models';
 
 /** Every CLI shape this build can drive. Kept beside the parser that has to recognise them. */
-const RUNTIMES: readonly Runtime[] = ['codex', 'gemini', 'claude', 'antigravity'];
 
 /**
  * The reviewers, as an editable LIST rather than a fixed three.
@@ -181,11 +180,16 @@ export function vendorsFrom(value: unknown): Vendor[] {
     .filter((v): v is Record<string, unknown> => typeof v === 'object' && v !== null)
     .map((v) => ({
       id: typeof v['id'] === 'string' ? v['id'].trim().toLowerCase() : '',
-      // An unknown runtime becomes `codex` because that is the one that takes a base URL — but
-      // every runtime this build KNOWS must be listed in RUNTIMES. A missing name silently runs
-      // the wrong vendor's model and reports the answer under the right vendor's name, which is
-      // exactly the defect the server side had until a reviewer named it.
-      runtime: RUNTIMES.includes(v['runtime'] as Runtime) ? (v['runtime'] as Runtime) : ('codex' as const),
+      // An unknown runtime becomes `codex` because that is the one that takes a base URL, so a
+      // name written by a NEWER extension still leaves a row that launches something.
+      //
+      // The list is imported rather than repeated, and that is not tidiness. It WAS repeated,
+      // `local` was added to the type and not to the copy here, and every saved local reviewer
+      // came back as a codex one — silently, under its own name. The comment that used to sit
+      // here said the two must be kept in step; they are now one declaration instead.
+      runtime: (RUNTIMES as readonly string[]).includes(v['runtime'] as string)
+        ? (v['runtime'] as Runtime)
+        : ('codex' as const),
       model: typeof v['model'] === 'string' ? v['model'].trim() : '',
       enabled: v['enabled'] !== false,
       baseUrl: typeof v['baseUrl'] === 'string' ? v['baseUrl'].trim() : '',

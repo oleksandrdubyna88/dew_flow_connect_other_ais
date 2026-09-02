@@ -24,6 +24,16 @@ public sealed record ProcessRequest(
     public string StdIn { get; init; } = string.Empty;
 
     public TimeSpan Timeout { get; init; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// A name to record this child under while it runs, or empty to track nothing.
+    /// </summary>
+    /// <remarks>
+    /// Opt-in per request rather than for everything, because most processes here are git commands
+    /// that finish in milliseconds and would only add write traffic. The ones worth tracking are
+    /// the reviewers: minutes long, expensive, and the ones that get orphaned.
+    /// </remarks>
+    public string TrackAs { get; init; } = string.Empty;
 }
 
 /// <summary>What a run produced. <see cref="TimedOut"/> true means the tree was killed.</summary>
@@ -40,8 +50,15 @@ public interface IProcessLauncher
 /// The real launcher. On timeout the WHOLE process tree is killed — a reviewer CLI spawns its own
 /// children, and an orphaned child that keeps running is a reviewer that never really failed.
 /// </summary>
-public sealed class ProcessLauncher : IProcessLauncher
+/// <param name="tracker">
+/// Where a long-running child is written down while it runs, so a later server can collect it if
+/// this one dies. Defaults to recording nothing, which is what every test and every git command
+/// wants.
+/// </param>
+public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessLauncher
 {
+    private readonly IProcessTracker _tracker = tracker ?? NoProcessTracking.Instance;
+
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
     {
         // Resolved here, at the one place a process is started, so every caller — reviewers, git,
@@ -87,6 +104,37 @@ public sealed class ProcessLauncher : IProcessLauncher
         process.Start();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
+
+        // Recorded as soon as it exists and forgotten however this method leaves — returned,
+        // timed out, cancelled or thrown. The record is what a LATER server reads: the kill below
+        // is performed by this process, so it cannot happen if this process is the one that dies,
+        // which is exactly how a reviewer ends up outliving its round by ten hours.
+        var tracked = request.TrackAs.Length > 0;
+        if (tracked)
+        {
+            _tracker.Record(process.Id, process.StartTime.ToUniversalTime(), request.TrackAs);
+        }
+
+        try
+        {
+            return await RunToCompletionAsync(process, request, stdout, stderr, ct);
+        }
+        finally
+        {
+            if (tracked)
+            {
+                _tracker.Forget(process.Id);
+            }
+        }
+    }
+
+    private static async Task<ProcessResult> RunToCompletionAsync(
+        Process process,
+        ProcessRequest request,
+        StringBuilder stdout,
+        StringBuilder stderr,
+        CancellationToken ct)
+    {
         await WriteStdInAsync(process, request.StdIn);
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);

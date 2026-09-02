@@ -8,12 +8,32 @@
  * bad path.</p>
  */
 
-/** Where the block goes, in the form a person would type it. */
-export const CLIENT_TARGETS: readonly { label: string; path: string }[] = [
-  { label: 'Claude Code (this machine)', path: '~/.claude.json' },
-  { label: 'Claude Code (one project)', path: '<project>/.mcp.json' },
-  { label: 'VS Code', path: '.vscode/mcp.json' },
+/**
+ * Where the block goes, in the form a person would type it, and what can quietly overrule it.
+ *
+ * <p><b>`note` exists because of a real hour lost.</b> Claude Code reads `~/.claude.json` at two
+ * levels: a top-level `mcpServers` object (user scope) and a per-project one under
+ * `projects["…"].mcpServers` (local scope). The project entry WINS, silently — so somebody who
+ * pastes at the top level, restarts, and finds nothing changed has no way to tell from the file
+ * that their paste was read and outranked. Naming it costs one sentence.</p>
+ */
+export const CLIENT_TARGETS: readonly { label: string; path: string; note: string }[] = [
+  {
+    label: 'Claude Code (this machine)',
+    path: '~/.claude.json',
+    note: 'at the top level. An entry under projects["<your repo>"].mcpServers.coai in the same file '
+      + 'takes precedence over it — check there first, and edit that one if it exists.',
+  },
+  { label: 'Claude Code (one project)', path: '<project>/.mcp.json', note: '' },
+  { label: 'VS Code', path: '.vscode/mcp.json', note: '' },
 ];
+
+/** The targets as one line for a notification, each carrying its caveat when it has one. */
+export function clientTargetsLine(targets: readonly { label: string; path: string; note: string }[]): string {
+  return targets
+    .map((t) => (t.note.length === 0 ? `${t.label} (${t.path})` : `${t.label} (${t.path}) — ${t.note}`))
+    .join('; ');
+}
 
 /**
  * The `mcpServers` block for the `coai` server id — the id that namespaces every tool as

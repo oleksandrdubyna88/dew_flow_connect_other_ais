@@ -220,6 +220,32 @@ machine returns 1.1.23 and the same probe on Windows had reported 1.1.23 for it.
 resolved the wrong executable or the reading was wrong; it has not been reproduced and is not yet a
 bug report.
 
+### Reviewers outlive their server unless something collects them (2026-09-02)
+
+`ProcessLauncher` kills an overrunning reviewer with its whole tree — but the kill is performed by
+the PARENT, so it cannot happen when the parent is what went away. An MCP client restarting is the
+ordinary case, not the rare one, and every reviewer in flight is then orphaned with nothing left to
+stop it. Reported from a macOS checkout: an Antigravity child started at 00:03 was still running at
+10:00, hours after its round, its vendor removed from the configuration, its server long gone.
+
+Worktrees already had this shape — written on the way in, swept on the next `open` — and processes
+did not, although a leaked reviewer costs more than a leaked directory: it holds a vendor's rate
+limit, a GPU, or a paid token budget. So `ProcessTracking` writes one small file per reviewer under
+`<dataDir>/running/`, and `PanelService` sweeps at startup beside the existing orphaned-round sweep.
+
+**The design is shaped entirely by what must NOT be killed.** The vendor CLIs are programs a person
+also runs by hand, so "kill every codex" would be a product that terminates its user's terminal
+session. `OrphanSweep` is pure and kills only when all three hold: this product recorded starting the
+process, its recorded start time still matches (so the PID cannot have been reused by a stranger),
+and the owning server is provably gone. A record whose child has exited is forgotten rather than
+acted on; a child of a DIFFERENT live server is left alone, because two servers over one data
+directory is ordinary; a child of the sweeping process itself is never touched, since the sweep runs
+while rounds are in flight.
+
+Both guards were checked by removing them: without the start-time comparison the sweep kills a
+stranger holding a reused PID, and without the sweep the orphan survives — each named by the test
+that fails.
+
 ### A local model is a direct call, not a CLI (2026-09-02)
 
 `LocalRuntime` is the fifth vendor adapter and the only one whose "CLI" is this binary:

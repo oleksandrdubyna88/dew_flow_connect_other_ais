@@ -66,17 +66,37 @@ public static class RoundMachine
     private static readonly ImmutableArray<EscalationStep> Ladder =
         [EscalationStep.ReviewerEffortUp, EscalationStep.ReviewerModelUp, EscalationStep.ArbiterModelUp];
 
+    /// <summary>
+    /// What a round is refused with once the rounds are spent and a person has not answered.
+    /// </summary>
+    /// <remarks>
+    /// It names every way out, because a refusal with no door is a stall. The AI can fetch the
+    /// person (<c>ask_human</c>), the person can end the stage (<c>resolve</c> with
+    /// <c>humanDecision: proceed</c>), or they can grant more rounds from the panel.
+    /// </remarks>
+    internal const string GateHeld =
+        "the rounds for this stage are spent and the verdict was call_human — a person has to decide " +
+        "before another round runs. Ask them with ask_human: 'Keep going — more rounds' or 'Stop and " +
+        "act on the findings' each grant a fresh set of rounds, and 'Stop and talk to me' advances " +
+        "nothing. If they would rather ship with the findings open, they say so and you pass " +
+        "humanDecision: \"proceed\" to resolve. Running the review again is not one of your options.";
+
     public static Transition BeginPlanRound(SessionState s) => s switch
     {
         { AwaitingResolve: true } => new Transition.Refused(
             "the previous round's findings have not been resolved — record accept/reject decisions first (resolve)"),
         { Stage: not Stage.PlanReview } => new Transition.Refused(
             $"the plan stage is over for this session (stage: {s.Stage}); open a new session for a new plan"),
+        // The budget was never enforced HERE, and that was the defect: it was read only at
+        // completion, to choose a verdict. So `call_human` was advice, and a stage on a three-round
+        // budget reached round ten.
+        { HumanGate: true } => new Transition.Refused(GateHeld),
         _ => new Transition.Moved(s),
     };
 
     public static Transition BeginCodeRound(SessionState s) => s switch
     {
+        { HumanGate: true } => new Transition.Refused(GateHeld),
         { PlanProceeded: false } => new Transition.Refused(
             "no plan round has reached 'proceed' in this session — the plan gate comes first (review_plan)"),
         { AwaitingResolve: true } => new Transition.Refused(
@@ -145,6 +165,25 @@ public static class RoundMachine
             : named.Max(r => s.Config.For(r).MaxRounds);
     }
 
+    /// <summary>
+    /// The person's answer, applied to the state — the only thing that reopens a held gate.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>Continue</c> and <c>Fix</c> both grant a FRESH set of rounds, because that is what
+    /// the panel already tells the person they mean: "the stage gets a fresh set of rounds and the
+    /// review runs again". One more round would be a different promise.</para>
+    /// <para><c>Discuss</c> deliberately changes nothing. It says "stop and talk to me", and a
+    /// state that advanced would be the opposite of stopping.</para>
+    /// <para><c>None</c> is prose with no button pressed. It reaches the AI as their words, and it
+    /// is not a decision: the gate holds.</para>
+    /// </remarks>
+    public static SessionState ApplyHumanDecision(SessionState s, HumanDecision decision) => decision switch
+    {
+        HumanDecision.Continue or HumanDecision.Fix =>
+            s with { HumanGate = false, RoundsRunThisStage = 0 },
+        _ => s,
+    };
+
     private static Transition Exhausted(SessionState s, GateResult gate, ReviewerSummary reviewers, int roundsRun) =>
         s.Config.OnExhausted switch
         {
@@ -208,7 +247,16 @@ public static class RoundMachine
         var rejections = s.Rejections.AddRange(
             decisions.OfType<Decision.Rejected>().Select(d => new PriorRejection(d.Finding, d.Reason)));
 
-        var next = s with { AwaitingResolve = false, Rejections = rejections, HumanGate = false };
+        // The gate is NOT cleared by recording decisions. It used to be, unconditionally, which
+        // meant the AI reopened the gate it had just been stopped by simply by doing the next
+        // thing the protocol asks of it. Only a person clears it: `humanSaysProceed` here, or a
+        // decision through ApplyHumanDecision.
+        var next = s with
+        {
+            AwaitingResolve = false,
+            Rejections = rejections,
+            HumanGate = s.HumanGate && !humanSaysProceed,
+        };
         if (s.AdvanceOnResolve || humanSaysProceed)
         {
             next = next with

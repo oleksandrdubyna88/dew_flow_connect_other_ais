@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { installFailureHint, ridFor, SingleFlight } from './coaiInstall';
 import { claudeSnippet } from './claudeSnippet';
-import { CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
+import { clientTargetsLine, CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
 import { binaryPath, installLatest, installedVersion, updateIsAvailable } from './installer';
 import { EscalationWatcher } from './escalationWatcher';
 import { PanelProvider } from './panelProvider';
@@ -160,7 +160,7 @@ async function install(context: vscode.ExtensionContext): Promise<void> {
       () => installLatest(context.globalStorageUri, context.globalState),
     );
     await vscode.env.clipboard.writeText(mcpServerBlock(target.fsPath, envBlock(settings())));
-    const targets = CLIENT_TARGETS.map((t) => `${t.label} (${t.path})`).join(', ');
+    const targets = clientTargetsLine(CLIENT_TARGETS);
     void vscode.window.showInformationMessage(`${installedMessage(target.fsPath)} Paste it into: ${targets}`);
   } catch (error) {
     const raw = message(error);

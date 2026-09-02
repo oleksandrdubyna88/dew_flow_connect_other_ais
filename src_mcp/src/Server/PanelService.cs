@@ -31,6 +31,7 @@ public sealed class PanelService
     private readonly RolePrompts _prompts;
     private readonly Escalations _escalations;
     private readonly UsageLedger _ledger;
+    private readonly Runners.Processes.ProcessTracking _tracking;
 
     public PanelService(PanelSettings settings, VaultKeys keys, DateTime vaultReadUtc, IProcessLauncher launcher, Serilog.ILogger log)
     {
@@ -58,6 +59,25 @@ public sealed class PanelService
         if (swept > 0)
         {
             _log.Warning("swept {Count} round(s) abandoned by a dead process", swept);
+        }
+
+        // And the reviewers those rounds left RUNNING, which is the more expensive half of the
+        // same failure. The timeout kill is performed by the parent, so a server that dies takes
+        // no reviewers with it: reported from a macOS checkout, an Antigravity child started at
+        // 00:03 was still alive at 10:00, hours after its round, its vendor removed from the
+        // configuration, and its server long gone. A leaked directory costs disk; a leaked
+        // reviewer holds a rate limit, a GPU, or a paid token budget.
+        //
+        // Startup is the right moment: a previous server's orphans are lying around exactly then,
+        // and this process has no children of its own yet, so there is nothing of ours to get
+        // wrong. What protects a SECOND live server's reviewers is `OrphanSweep`, not the timing.
+        _tracking = new Runners.Processes.ProcessTracking(
+            settings.DataDir,
+            message => _log.Warning("process tracking: {Detail}", message));
+        var killed = _tracking.Sweep();
+        if (killed > 0)
+        {
+            _log.Warning("killed {Count} reviewer(s) left running by a server that is gone", killed);
         }
     }
 
@@ -384,6 +404,40 @@ public sealed class PanelService
         return (int)(hash & 0x7FFFFFFF);
     }
 
+    /// <summary>
+    /// A held gate, opened by the answer a person actually gave — read at the last moment.
+    /// </summary>
+    /// <remarks>
+    /// <para>The decision lives in the escalation answer file, keyed by session, because that is
+    /// where the panel and the phone both write it. Reading it HERE, immediately before a round
+    /// would begin, means the person can answer at any point during the wait and the next attempt
+    /// simply works — no restart, no re-open, nothing to poll.</para>
+    /// <para><c>Continue</c> and <c>Fix</c> grant a fresh set of rounds; <c>Discuss</c> and a typed
+    /// answer with no button pressed leave the gate held, which is what both of them mean.</para>
+    /// </remarks>
+    private PersistedSession ApplyAnyHumanDecision(PersistedSession session)
+    {
+        if (!session.State.HumanGate)
+        {
+            return session;
+        }
+
+        var decision = _escalations.DecisionFor(session.State.SessionId);
+        var opened = RoundMachine.ApplyHumanDecision(session.State, decision);
+        if (ReferenceEquals(opened, session.State) || opened.HumanGate)
+        {
+            return session;
+        }
+
+        _log.Information(
+            "a person chose {Decision}: the {Stage} stage gets a fresh set of rounds",
+            decision,
+            session.State.Stage);
+        var next = session with { State = opened };
+        _store.Save(next);
+        return next;
+    }
+
     /// <summary>What the caller sent, or what the plan stage already agreed — in that order.</summary>
     private string Scope(string repoPath, string branch, string planText) =>
         planText.Trim().Length > 0 ? planText : _store.Load(repoPath, branch)?.PlanText ?? string.Empty;
@@ -411,6 +465,8 @@ public sealed class PanelService
         {
             return Error("no session for this repo+branch — call open first");
         }
+
+        session = ApplyAnyHumanDecision(session);
 
         if (begin(session.State) is Transition.Refused refused)
         {
@@ -931,9 +987,9 @@ public sealed class PanelService
     {
         HumanDecision = _escalations.DecisionFor(session.State.SessionId) switch
         {
-            Server.HumanDecision.Continue => "continue",
-            Server.HumanDecision.Fix => "fix",
-            Server.HumanDecision.Discuss => "discuss",
+            HumanDecision.Continue => "continue",
+            HumanDecision.Fix => "fix",
+            HumanDecision.Discuss => "discuss",
             _ => string.Empty,
         },
         HumanAnswer = _escalations.AnswerTextFor(session.State.SessionId),
