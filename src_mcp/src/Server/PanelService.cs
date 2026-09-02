@@ -194,11 +194,31 @@ public sealed class PanelService
     }
 
     private (string Auth, string Note) AuthFor(ProviderSettings provider) =>
-        _keys.Keys.ContainsKey(provider.Provider)
+        AuthOf(provider, _keys.Keys.ContainsKey(provider.Provider));
+
+    /// <summary>
+    /// How a vendor authenticates — and therefore whether it can run at all.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>An "unavailable" answer removes the vendor from the round</b> (`BuildWork` keeps
+    /// only what can run), so this is not a label for the panel. It decides who reviews.</para>
+    /// <para><b>Local is answered through <see cref="RuntimeNameOf"/>, not by re-reading the base
+    /// URL.</b> That is the fix for a real defect: a local vendor IS a vendor with a base URL, and
+    /// this was the one of three readers of those fields that had never been told. It concluded a
+    /// local engine needed a vault key, answered unavailable, and every round opened with zero
+    /// reviewers — while `providers`, which has its own local arm, went on reporting the vendor as
+    /// fine. Three copies of one decision is what allowed two of them to be right.</para>
+    /// <para>Pure and internal so the decision is a unit test rather than a live round: the round
+    /// that would have caught it needs a model, a machine and four minutes.</para>
+    /// </remarks>
+    internal static (string Auth, string Note) AuthOf(ProviderSettings provider, bool hasVaultKey) =>
+        hasVaultKey
             ? ("vault key", "")
-            : provider.BaseUrl.Length > 0 || provider.Provider is "deepseek"
-                ? ("unavailable", $"needs a key under '{provider.Provider}' and the vault holds none — see the creds config entry")
-                : ("own auth", "the CLI's own sign-in is used");
+            : RuntimeNameOf(provider) == "local"
+                ? ("own auth", "a local engine needs no key — it is reached over HTTP on this machine")
+                : provider.BaseUrl.Length > 0 || provider.Provider is "deepseek"
+                    ? ("unavailable", $"needs a key under '{provider.Provider}' and the vault holds none — see the creds config entry")
+                    : ("own auth", "the CLI's own sign-in is used");
 
     /// <summary>
     /// The runtime for one configured reviewer: a built-in by name, or — when the operator gave it
@@ -214,10 +234,10 @@ public sealed class PanelService
         : provider.Provider;
 
     private static IReviewerRuntime? RuntimeFor(ProviderSettings provider) =>
-        // BEFORE the base-url arm, and that order is the point: a local vendor is a vendor WITH a
-        // base url, so without this line it would ride the Codex CLI — whose own system prompt is
-        // 21k tokens before any review content, measured, and which the operator ruled out.
-        provider.Runtime == "local"
+        // Through RuntimeNameOf, which is the ONE place that answers "what is this vendor". It used
+        // to ask `provider.Runtime == "local"` here as well, and a third copy of the same question
+        // in AuthFor was never updated — so a local reviewer was silently dropped from every round.
+        RuntimeNameOf(provider) == "local"
             ? new LocalRuntime(provider.Provider, provider.BaseUrl)
             : provider.BaseUrl.Length > 0
             ? new CustomCodexRuntime(provider.Provider, provider.BaseUrl)

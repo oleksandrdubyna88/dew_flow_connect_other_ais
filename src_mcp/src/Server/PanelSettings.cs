@@ -273,18 +273,26 @@ public sealed record PanelSettings
     /// <c>my-claude</c> and watched codex start. A reviewer that runs the wrong vendor's model is
     /// worse than one that refuses: the panel reports an answer from a model nobody chose.
     /// </remarks>
-    private static string RuntimeOf(string? runtime) => runtime?.Trim().ToLowerInvariant() switch
+    private static string RuntimeOf(string? runtime)
     {
         // Unset stays unset, and that is the whole distinction: the id then decides, so a vendor
         // called `gemini` with no runtime field is still a gemini.
-        null or "" => string.Empty,
-        "gemini" => "gemini",
-        "claude" => "claude",
-        "antigravity" => "antigravity",
-        // An unknown runtime is a custom vendor riding the Codex CLI against its own base URL —
-        // a deliberate decision kept from the vendor-settings tests, not a fallthrough.
-        _ => "codex",
-    };
+        var name = runtime?.Trim().ToLowerInvariant() ?? string.Empty;
+        if (name.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        // Membership, not a hand-written list. This WAS a hand-written list — gemini, claude,
+        // antigravity, else codex — and `local` never got added to it, so a local vendor became a
+        // codex vendor with a base URL, failed the key check that base URLs imply, and was dropped
+        // from every round. The panel showed a configured reviewer; the round opened with zero.
+        // The extension had the identical defect in its own copy of this set, days earlier.
+        //
+        // An unknown runtime is still a custom vendor riding the Codex CLI against its own base
+        // URL — a deliberate decision kept from the vendor-settings tests, not a fallthrough.
+        return Runners.Reviewers.ReviewerRuntimeSelector.RuntimeNames.Contains(name) ? name : "codex";
+    }
 
     /// <summary>
     /// Every role's gate, read widest-first: the role's own keys, its stage's, then the legacy pair.

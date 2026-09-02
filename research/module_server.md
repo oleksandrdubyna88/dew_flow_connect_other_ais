@@ -79,6 +79,28 @@ first one's live round dead.
   and the six-launch fan-out with three distinct role prompts, all observed.
 - Stdout purity is a test: verbose logging on, every stdout line must parse as JSON.
 
+## One list of runtime names, because two hand-written ones both forgot the same entry (2026-09-02)
+
+`ReviewerRuntimeSelector.RuntimeNames` is the set a configured vendor's `runtime` is validated
+against, and it lives beside the runtime classes because that is where a vendor is actually added.
+
+It exists because the set was written out by hand twice and both copies omitted `local`. The
+extension's copy (`RUNTIMES` in `vendors.ts`) made every saved local reviewer come back as a codex
+one. The server's copy (`PanelSettings.RuntimeOf`) did the same thing one layer deeper, and it was
+worse: a local vendor parsed as `codex` still carries its base URL, which is the shape that means
+"custom OpenAI endpoint, needs a vault key". `AuthOf` answered `unavailable`, `BuildWork` drops
+unavailable vendors, and the round opened with **zero reviewers** — while `providers`, which has its
+own local arm, reported the vendor as healthy.
+
+That combination is the worst available: a panel saying the reviewer is configured and fine, and
+every round quietly running without it. Neither copy was reported by anything; both were found by
+running a local model against the hosted models' baseline.
+
+`AuthOf` is now pure, internal and asks `RuntimeNameOf` rather than re-reading the base URL — the
+third reader of those two fields became the third caller of one answer. Pure because the round that
+would have caught it needs a model, a machine and seventeen minutes, and a decision that expensive to
+observe has to be observable another way.
+
 ## `call_human` stops the review (2026-09-02)
 
 The round budget used to decide only what a finished round was CALLED. `BeginPlanRound` and

@@ -241,6 +241,25 @@ public sealed class ReviewerRuntimeSelector(IEnumerable<IReviewerRuntime> runtim
     public static ReviewerRuntimeSelector Default { get; } =
         new([new CodexRuntime(), new GeminiRuntime(), new ClaudeRuntime(), new AntigravityRuntime(), new DeepseekRuntime()]);
 
+    /// <summary>
+    /// Every runtime NAME a configured vendor may name. The one list; nobody writes a second.
+    /// </summary>
+    /// <remarks>
+    /// <para>It exists because two hand-written copies of this set both forgot the same entry. The
+    /// extension had one that `vendorsFrom` validated against, and adding `local` to the type and
+    /// not to it made every saved local reviewer come back as a codex one. The server had another
+    /// in <c>PanelSettings.RuntimeOf</c>, and the same omission there turned a local vendor into a
+    /// codex vendor with a base URL — which then failed the key check and was dropped from every
+    /// round, so the panel showed a configured reviewer and the round opened with zero.</para>
+    /// <para>Both were found by running a local model, days apart, and neither was reported by
+    /// anything. A set that must be repeated is a set that will be repeated wrongly.</para>
+    /// </remarks>
+    public static readonly IReadOnlySet<string> RuntimeNames =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "codex", "gemini", "claude", "antigravity", "local",
+        };
+
     public IReadOnlyCollection<string> Providers => _byProvider.Keys;
 
     public IReviewerRuntime? Find(string provider) => _byProvider.GetValueOrDefault(provider);

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.25.1 — 2026-09-02 (server 0.11.1)
+
+**A configured local reviewer never ran, and nothing said so.** Found by running a local model
+against the same baseline the thirteen hosted models were measured on: the round opened with
+`0 reviewer(s)`, answered `call_human` with *"no reviewer answered — nothing was reviewed"*, and took
+0.0 seconds. Meanwhile `providers` reported the same vendor as perfectly healthy, because it has its
+own local arm — the panel said the reviewer was fine while every round silently ran without it.
+
+Two copies of one mistake, both of them a hand-written list of "the runtimes this build knows":
+
+- **The parser.** `RuntimeOf` mapped gemini, claude and antigravity to themselves and everything else
+  to `codex`. A local vendor therefore arrived as a CODEX vendor carrying a base URL — which is the
+  shape that means "a custom OpenAI endpoint needing a vault key". No key exists for a local engine,
+  so the auth check answered `unavailable`, and unavailable vendors are dropped from the round.
+- **The auth check itself.** Three methods decide what a vendor is from the same two fields, and two
+  had already been taught that a local vendor is not a codex one — each with a comment saying "a
+  local vendor IS a vendor with a base url". The third was never updated.
+
+The 0.25.0 release fixed the extension's own copy of exactly this list, three hours earlier. The
+server had the same one and nobody looked. Both sides now derive the set from where a vendor is
+actually added, and a test fails if a fourth copy appears.
+
 ## 0.25.0 — 2026-09-02
 
 **A local reviewer was silently running as a codex one.** The `Runtime` type gained `'local'` and
