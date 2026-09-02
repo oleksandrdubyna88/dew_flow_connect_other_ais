@@ -27,3 +27,7 @@ Documentation of shipped behaviour: [architecture.md](architecture.md) is the en
 | [PLAN_cli_update_button.md](PLAN_cli_update_button.md) | IMPLEMENTED 2026-09-01 — an update button per reviewer CLI that says by its colour whether there is anything to update, and colour on every collapsible header |
 | [PLAN_snippet_version.md](PLAN_snippet_version.md) | IMPLEMENTED 2026-09-01 — the pasted CLAUDE.md snippet carries a version, the panel reads it back, and a hash guard makes forgetting to bump it a red build |
 | [PLAN_local_models.md](PLAN_local_models.md) | IMPLEMENTED 2026-09-02 — a model on this machine as a third reviewer: engine discovery, the direct call that is not the Codex CLI, real tokens and a null cost |
+| [RESULTS_prompt_measurement.md](RESULTS_prompt_measurement.md) | The universal role prompts, measured against planted defects — what the wording is worth |
+| [RESULTS_model_comparison.md](RESULTS_model_comparison.md) | Sixteen model/effort combinations on plan review against planted defects, twice each: which models to pick and what they cost |
+| [RESULTS_model_comparison_code.md](RESULTS_model_comparison_code.md) | The same models on CODE review — throughput measured, judgement not, and the three cells an exhausted quota took |
+| [RESULTS_focused_prompts.md](RESULTS_focused_prompts.md) | Twelve narrow lenses × three prompt SHAPES × two runs: a task to enact repeats itself half again as often as a question list, and five of twelve picks are decided rather than noise |

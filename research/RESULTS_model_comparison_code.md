@@ -1,7 +1,8 @@
 # RESULTS — which MODEL to review CODE with: one real commit, three roles per model
 
-> Status: **partial, 2026-09-01.** Eleven of fourteen cells completed; three were lost to an
-> exhausted vendor quota and are named below rather than omitted.
+> Status: **partial, 2026-09-01; the native-Claude cells added 2026-09-02.** Thirteen cells on the
+> primary subject, three on a second one, and three still missing to an exhausted vendor quota — all
+> named below rather than omitted.
 >
 > The plan half, which carries the method and the variance discussion, is
 > [RESULTS_model_comparison.md](RESULTS_model_comparison.md).
@@ -45,13 +46,31 @@ the harness is now a file rather than a heredoc.
 | GPT-5.4 | 7 | 208 s | 207k / 12k | $0.70 |
 | GPT-5.4-Mini | 7 | **478 s** | 206k / 21k | $0.25 |
 | Gemini 3.7 Flash (Low) | 6 | 65 s | 275k / 8k | $0.24 |
+| **Claude Opus 4.6** *(run natively)* | **12** | 859 s | 2.01 M / 79k | $6.84 |
+| **Claude Haiku 4.5** *(run natively)* | 8 | 862 s | 4.38 M / 90k | — |
 | Claude Sonnet 4.6 | 3 | 630 s | — | — |
+
+**The two Claude rows were run NATIVELY**, through the `claude` CLI signed in on this machine — never
+through codex or antigravity, which is both the operator's standing instruction and the only way the
+numbers mean anything: routing a Claude model through another vendor's CLI measures that CLI.
+
+**Opus tops the table, and the token column says why it should be read carefully.** Twelve findings is
+the highest count here, and it cost 2 M input tokens against the GPT family's 205–215k — an order of
+magnitude, because the Claude CLI explores the checkout rather than reading the diff it was handed.
+Whether that exploration is what found the extra findings, or merely what it does, this campaign
+cannot separate. Its severity mix is also the softest in the set: 3 Major, 6 Minor, 3 Nit, against
+Haiku's 1 Blocking and 5 Major from eight findings. **More findings, less gating weight.**
+
+**Haiku is the surprise.** Eight findings including a Blocking one, level with GPT-5.6 and Gemini
+Flash — from the cheapest model in the Claude family, at 4.4 M input tokens, more than Opus spent.
+Token count here measures how much the CLI chose to read, not the model's size.
 
 **Claude Sonnet 4.6's row is not a score.** One of its three reviewers answered; the other two were
 rate limited. Three findings from one reviewer is not comparable with eleven from three, and it is
-left in only so the row is not silently missing.
+left in only so the row is not silently missing. Its re-run is in the second table below, against a
+different commit, so this table still has no Sonnet row.
 
-**Lost with no row at all:** Claude Opus 4.6, GPT-OSS 120B, and Sonnet's second run.
+**Lost with no row at all:** GPT-OSS 120B and Sonnet's second run on this subject.
 
 They were retried after a cooldown and failed identically, in 33 seconds each. The log says why, and
 it is not the transient throttle this first read as: `Individual quota reached` — the antigravity
@@ -79,6 +98,30 @@ outage produced a stop and an explanation rather than a green review of nothing.
   the price column swing 30× while the token column barely moves.
 - **Gemini 3.7 Flash at LOW effort is the cheap fast option here too**: 6 findings in 65 seconds,
   four times faster than the same model at HIGH for roughly half the findings.
+
+## The second subject: three re-runs that are not comparable, and are reported anyway
+
+The three native-Claude second runs were executed against a **different commit** — `2b7d3ab`, the
+local-model feature — which was discovered by reading the files their findings name
+(`LocalRuntime.cs`, `PLAN_local_models.md`) rather than being intended. They are therefore not a
+variance measurement of the table above, and merging them into it would have been the easy mistake:
+two subjects in one column look like model spread.
+
+| model | subject | findings | severity mix | wall | tokens in |
+|---|---|---|---|---|---|
+| Claude Sonnet 4.6 | `2b7d3ab` | 9 | 1 Blocking, 7 Major, 1 Minor | 941 s | 7.63 M |
+| Claude Haiku 4.5 | `2b7d3ab` | 9 | 1 Blocking, 6 Major, 2 Minor | 1032 s | 4.64 M |
+| Claude Opus 4.6 | `2b7d3ab` | 8 | 2 Blocking, 2 Major, 4 Minor | 1252 s | 1.95 M |
+
+What they DO show, and it is the same shape as the first table: the three models land within one
+finding of each other on the same change, and **Sonnet spends four times Opus's tokens to get there**
+— 7.6 M against 1.95 M. The consistent Claude-family fact across both subjects is that input token
+count is a property of how much the CLI reads, not of the model, and it does not predict the result.
+
+One cell failed outright: `claude-sonnet-code` on the primary subject died in cleanup with
+`git worktree remove: fatal: … is not a working tree` after 976 seconds, having produced nothing. The
+worktree had already gone — a leftover from a previous killed run in the same directory, pruned on the
+next `open`. The reviewers never ran, so there is no partial result to report.
 
 ## Recommendation, held loosely
 
