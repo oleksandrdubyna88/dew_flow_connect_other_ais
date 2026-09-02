@@ -16,19 +16,39 @@ public sealed class PromptCatalogTests
         [PromptCatalog.PlanRole, PromptCatalog.ArchitectureRole, PromptCatalog.SecurityRole, PromptCatalog.UxDxRole];
 
     [Fact]
-    public void EveryRole_HasExactlyOneUniversalPrompt_AndTwoNarrowOnes()
+    public void EveryRole_HasExactlyOneUniversalPrompt_AndFiveNarrowOnes()
     {
         foreach (var role in Roles)
         {
             var choices = PromptCatalog.For(role).ToList();
-            // A universal prompt and two lenses, plus — for the three CODE roles — the conventions
+            // A universal prompt and five lenses, plus — for the three CODE roles — the conventions
             // pass, which is not a lens: it asks a different question (does this obey the written
             // rules) and it owns round 1 rather than taking a turn in the rotation.
-            var expected = role == PromptCatalog.PlanRole ? 3 : 4;
-            choices.Should().HaveCount(expected, $"{role} should offer a universal prompt and two lenses");
+            //
+            // Six choices per section is the number a person was asked to be given, and the count is
+            // pinned here rather than left to grow: a section with eleven options is a section
+            // nobody reads, and every lens past the first three had to earn its place in a
+            // measurement (research/RESULTS_focused_prompts.md).
+            var expected = role == PromptCatalog.PlanRole ? 6 : 7;
+            choices.Should().HaveCount(expected, $"{role} should offer a universal prompt and five lenses");
             choices.Count(c => c.Universal).Should().Be(1, $"{role} needs exactly one default");
             choices.Count(c => c.Id == PromptCatalog.ConventionsId)
                 .Should().Be(role == PromptCatalog.PlanRole ? 0 : 1, "a plan is not judged against code conventions");
+        }
+    }
+
+    [Fact]
+    public void EveryPromptIdIsUniqueWithinItsRole_AndEveryLabelIsDistinct()
+    {
+        // Two entries sharing an id would make the panel's picker ambiguous and `ById` arbitrary;
+        // two sharing a label would make it ambiguous to the person, which is the same defect one
+        // layer up. Twelve entries were added at once, which is exactly when this stops being
+        // obvious by inspection.
+        foreach (var role in Roles)
+        {
+            var choices = PromptCatalog.For(role).ToList();
+            choices.Select(c => c.Id).Should().OnlyHaveUniqueItems($"{role} has a duplicate prompt id");
+            choices.Select(c => c.Label).Should().OnlyHaveUniqueItems($"{role} has two lenses with one name");
         }
     }
 
