@@ -90,6 +90,13 @@ jobs:
       # Rosetta answers "Bad CPU type in executable"). That is the ONE failure allowed to skip
       # the smoke, and it is matched by its message: any other failure still fails the job,
       # because "it would not run" is exactly what this step exists to catch.
+      #
+      # OBSERVED on mcp-v0.10.0: the skip did NOT fire. Rosetta is present on macos-latest, so
+      # the x64 binary ran and the contract tests — an arm64 runner pointed at COAI_CONTRACT_EXE
+      # — exercised it over real stdio. The published x64 asset is therefore smoke-tested, not
+      # merely built. Keep the branch anyway: it is the difference between a release that
+      # degrades when Rosetta goes away and one that fails at the last step for a reason nobody
+      # will recognise.
       - name: Smoke the published binary
         shell: bash
         env:
