@@ -1,0 +1,50 @@
+{
+  "_method": "Findings clustered BY READING, one cluster per defect, because the title matcher scored 0-5% agreement on prose titles that plainly describe the same thing. Each entry is a defect and the models that raised it, keyed by the finding's leading words so the assignment can be audited against the raw cells. A model appears in a cluster at most once even when it split the defect across two findings.",
+  "update-button": {
+    "cache invalidation leaves the button green after a successful update": ["gemma", "flash", "sonnet"],
+    "grey means both confirmed-current and could-not-check": ["qwen", "luna", "sonnet"],
+    "version parsing is fragile to non-semver or multi-line output": ["qwen", "gemma"],
+    "the deleted mode:'update' leaves the update command unverified": ["qwen", "flash", "luna", "sonnet"],
+    "the antigravity manifest endpoint is undocumented and can 404": ["flash", "sonnet"],
+    "no feedback when an update command fails or is slow": ["qwen", "gemma"],
+    "_unshared": { "flash": 1, "luna": 2, "sonnet": 2 }
+  },
+  "local-models": {
+    "a non-loopback endpoint is only labelled, not gated, so code still leaves": ["qwen", "luna", "sonnet"],
+    "a remote or secured endpoint has no authentication path": ["flash", "luna", "sonnet"],
+    "probing on every repaint causes connection storms and UI stutter": ["gemma", "flash"],
+    "a stale model selection can still be submitted and 404s": ["qwen", "sonnet"],
+    "killing the shim leaves the generation running on the daemon": ["flash", "gemma"],
+    "the probe URL and the OpenAI /v1 base are different URLs": ["flash", "qwen"],
+    "token and cost integration is claimed with no verification": ["flash", "luna"],
+    "_unshared": { "qwen": 1, "gemma": 1, "luna": 2, "sonnet": 3 }
+  },
+  "snippet-version": {
+    "an unadopted instruction file cannot be told apart from an unversioned copy": ["qwen", "flash", "luna", "sonnet"],
+    "several instruction files disagreeing has no aggregation rule": ["gemma", "flash", "luna", "sonnet"],
+    "the ahead state is identified but never handled or tested": ["gemma", "luna"],
+    "the hash guard does not define the canonical text it hashes": ["gemma", "luna", "sonnet"],
+    "the version number is hand-maintained and can go stale": ["qwen"],
+    "_unshared": { "qwen": 2, "flash": 1, "luna": 1, "sonnet": 1 }
+  },
+  "conventions-pass": {
+    "the rule budget truncates silently and creates false compliance": ["qwen", "gemma", "sonnet"],
+    "a directory walk or unreadable file can abort the review": ["qwen", "luna", "sonnet"],
+    "legacy and new stage/role settings have unspecified precedence": ["gemma", "luna", "sonnet"],
+    "an empty rule set is treated as compliant": ["qwen", "flash"],
+    "rules are not discovered on fresh clones with submodules": ["qwen", "gemma"],
+    "pinning round 1 to conventions drops the role's own lens": ["gemma", "flash"],
+    "nothing verifies the discovered rules reach the reviewer": ["qwen", "luna"],
+    "_unshared": { "qwen": 1, "flash": 2, "luna": 2, "sonnet": 3 }
+  },
+  "per-role-gate": {
+    "a seed alone does not make the assignment reproducible": ["qwen", "gemma", "flash", "luna", "sonnet"],
+    "dealing drops cross-vendor agreement with no failure path for an assigned vendor": ["qwen", "gemma", "luna", "sonnet"],
+    "the role stamped on a finding is untrusted and can bypass a role gate": ["qwen", "gemma", "flash"],
+    "per-role and per-stage settings have ambiguous precedence or no migration": ["luna", "sonnet"],
+    "the prompt pool can be exhausted or silently unused against MaxRounds": ["flash", "sonnet"],
+    "dealing is described as unconditional but shipped opt-in": ["luna", "sonnet"],
+    "round completion can exit early or loop": ["gemma", "qwen"],
+    "_unshared": { "flash": 2, "luna": 2, "sonnet": 3 }
+  }
+}
