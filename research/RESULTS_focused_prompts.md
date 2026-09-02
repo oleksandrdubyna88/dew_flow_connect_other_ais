@@ -5,8 +5,10 @@
 > wall clock, **0 failed cells**. Raw output: `~/coai-select/*.json` (findings, cost, seconds) and the
 > matching `.log`; scores in `_scores.json`.
 >
-> Phase B — the winners against the universal prompt, per section, on a real plan and a real PR — is
-> **not run yet**; the section at the end says exactly what it is and why it is worth running.
+> Phase B — the winners against the universal prompt, per section, on a real plan and a real PR —
+> has since RUN: [RESULTS_focused_vs_universal.md](RESULTS_focused_vs_universal.md). Its short
+> answer is that per round the universal prompt is not behind, and that the two arms overlap by one
+> to three findings out of twenty or thirty — they are not two ways of asking one question.
 >
 > Companion measurements: [RESULTS_model_comparison.md](RESULTS_model_comparison.md) (which model),
 > [RESULTS_prompt_measurement.md](RESULTS_prompt_measurement.md) (the universal prompts),
@@ -187,7 +189,7 @@ of the seven already are B.
   `repeated` by 20–50 points, and six of the nine plan cells scored 0 % on it. Its section row in the
   shape table should be read as "no signal", not as "questions win here".
 
-## Phase B — designed, not yet run
+## Phase B — run; the answer is in [RESULTS_focused_vs_universal.md](RESULTS_focused_vs_universal.md)
 
 The question phase A cannot answer: **does a focused lens find anything the section's universal prompt
 does not?** Everything above compares lenses to each other.
