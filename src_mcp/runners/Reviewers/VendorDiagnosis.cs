@@ -78,8 +78,11 @@ public static class VendorDiagnosis
     /// </remarks>
     private static string? UnreachableLocalEngine(string text, bool wsl)
     {
-        const string opening = "the local engine at ";
-        const string closing = " could not be reached";
+        // The shim's own constants, not a second copy of its wording: the message is written there
+        // and matched here, and two literals that must agree are one rewording away from silently
+        // losing the cure. Raised in the code round, 2026-09-03.
+        const string opening = LocalAsk.UnreachableOpening;
+        const string closing = LocalAsk.UnreachableClosing;
         var start = text.IndexOf(opening, StringComparison.OrdinalIgnoreCase);
         var end = text.IndexOf(closing, StringComparison.OrdinalIgnoreCase);
         if (start < 0 || end <= start)

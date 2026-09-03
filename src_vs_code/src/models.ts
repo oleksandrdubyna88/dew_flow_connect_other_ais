@@ -139,7 +139,7 @@ export function modelsProvenance(
   if (runtime === 'local') {
     // The engine's own note carries the reason when nothing answered, which is the case this line
     // exists for: an empty dropdown with no explanation reads as "you have no models".
-    return localEngine === undefined ? 'no engine probed yet.' : engineNote(localEngine, hostPlatform());
+    return localEngine === undefined ? 'no engine probed yet.' : engineNote(localEngine);
   }
   if (runtime === 'gemini') {
     return 'a curated list — the Gemini CLI publishes none. Any other model can be typed in.';
@@ -155,12 +155,7 @@ export function modelsProvenance(
     : 'the Codex CLI has cached no model list yet — type a model, or run codex once.';
 }
 
-/**
- * The platform this extension host runs on, for the one message that depends on it.
- *
- * <p>`process.platform` rather than anything about the machine: in a window attached to WSL the
- * host IS linux, and that is exactly the case whose message differs.</p>
- */
-function hostPlatform(): 'win32' | 'darwin' | 'linux' {
-  return process.platform === 'win32' ? 'win32' : process.platform === 'darwin' ? 'darwin' : 'linux';
-}
+// `hostPlatform` lived here for exactly one message — the WSL advice in `engineNote` — and it was
+// the wrong question: `process.platform` is 'linux' both in a WSL distro and on a native Linux box,
+// and only one of them has a `.wslconfig` to edit. The engine now carries whether the probe ran
+// under WSL, which is the fact the message actually needed.

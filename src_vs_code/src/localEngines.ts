@@ -1,4 +1,3 @@
-import { Platform } from './vendorTerminal';
 import { runningUnderWsl, windowsSideEngine } from './wslNetwork';
 
 /**
@@ -56,6 +55,16 @@ export interface LocalEngine {
    * is one hop away, and here is the hop".</p>
    */
   readonly elsewhere?: string;
+  /**
+   * Whether the probe ran inside a WSL distro.
+   *
+   * <p>Carried on the engine because the advice depends on it and "the extension host is Linux" is
+   * not the same question: a native Linux box told to edit `%USERPROFILE%\.wslconfig` and restart a
+   * subsystem it does not have has been handed instructions for a machine it is not. The note used
+   * `platform === 'linux'` and did exactly that — found by Gemini 3.7 Flash in the code round, in
+   * the half of the change whose server-side twin had already been fixed for the same reason.</p>
+   */
+  readonly wsl?: boolean;
 }
 
 /** Ollama's own default, and the only port it is ever on unless somebody moved it. */
@@ -207,7 +216,7 @@ export function noEngine(status: string): LocalEngine {
  * from a VS Code attached to WSL the gateway times out and the local loopback refuses. An empty
  * list there does not mean "you have no models".</p>
  */
-export function engineNote(engine: LocalEngine, platform: Platform): string {
+export function engineNote(engine: LocalEngine): string {
   if (engine.reachable) {
     return `${engine.kind} ${engine.status} · ${engine.models.length} models on this machine`;
   }
@@ -223,7 +232,7 @@ export function engineNote(engine: LocalEngine, platform: Platform): string {
       + ' Windows host address below.';
   }
   const wsl =
-    platform === 'linux'
+    (engine.wsl ?? false)
       ? ' If your engine runs on the Windows side, TWO things are in the way and fixing one is not'
         + ' enough: it is bound to 127.0.0.1, so start it with OLLAMA_HOST=0.0.0.0 — and this side\'s'
         + ' 127.0.0.1 is WSL\'s own loopback, not the Windows host, so the endpoint below must point'
@@ -289,7 +298,8 @@ export async function probeEngine(probeUrl: string, timeoutMs = 4000): Promise<L
 export async function discoverEngine(
   candidates: readonly string[] = PROBE_CANDIDATES,
   timeoutMs = 4000,
-  elsewhere: () => Promise<string> = windowsSideWhenWsl,
+  elsewhere: () => Promise<string> = windowsSideEngine,
+  underWsl: () => Promise<boolean> = runningUnderWsl,
 ): Promise<LocalEngine> {
   // Each candidate's reason is KEPT. It used to be computed, carried through `probeEngine`, and
   // then thrown away by a hard-coded 'connection refused' on this line — so a firewall swallowing
@@ -304,15 +314,13 @@ export async function discoverEngine(
     }
     reasons.push(`${hostOf(candidate)}: ${engine.status}`);
   }
-  const seen = await elsewhere();
-  const none = noEngine(reasons.length > 0 ? reasons.join('; ') : 'nowhere to look');
+  // The kind of machine decides both the question and the advice: only a WSL distro has a Windows
+  // side to ask about, and only a WSL distro can act on the answer.
+  const wsl = await underWsl();
+  const seen = wsl ? await elsewhere() : '';
+  const none = { ...noEngine(reasons.length > 0 ? reasons.join('; ') : 'nowhere to look'), wsl };
 
   return seen.length > 0 ? { ...none, elsewhere: seen } : none;
-}
-
-/** The Windows side of this machine, asked only from a WSL distro. Empty everywhere else. */
-async function windowsSideWhenWsl(): Promise<string> {
-  return (await runningUnderWsl()) ? windowsSideEngine() : '';
 }
 
 /**

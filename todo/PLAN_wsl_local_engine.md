@@ -122,8 +122,11 @@ Its legitimate half — a bounded deadline — is accepted separately.
 - **Bounded, always.** The interop probe gets its own deadline, the child is killed when it expires,
   and every failure mode — timeout, non-zero exit, missing binary — resolves to the same empty
   answer rather than to a hang.
-- Purity, per the module's own note: everything except the interop call and the file write is a pure
-  function over text, so the tests are shapes rather than a machine with Ollama on it.
+- Purity, per the module's own note: everything except **three** effects is a pure function over
+  text, so the tests are shapes rather than a machine with Ollama on it. The three are the interop
+  call, the file write, and the **platform read** — `/proc/version`, which is how "is this WSL" is
+  answered at all. The first draft of this constraint listed two and was then violated by its own
+  requirement four lines above it; naming the third is the correction (codex, code round).
 - No new dependency. `/proc/version`, `cmd.exe` and `curl.exe` through interop are all that is used.
 
 ## Build order
@@ -163,6 +166,45 @@ Server (`./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe`):
   adds the mirrored route, when WSL is the platform.
 - The same sentence on native Linux yields advice with no `.wslconfig` in it.
 - A vendor CLI's unrelated stderr still yields no cure — the marker must not widen into a catch-all.
+
+## What the gate changed about the CODE (round 1, 2026-09-03)
+
+Nine reviewers, fourteen findings, eleven accepted. Three of them were defects the implementation had
+and the plan did not anticipate:
+
+- **The panel had the Linux bug the server had just been fixed for.** `engineNote` gated its WSL
+  advice on `platform === 'linux'`, which is true on a native Linux box as well — the exact mistake
+  the plan calls out for `VendorDiagnosis` and then repeated in the other half (gemini). The engine
+  now carries whether the probe ran under WSL, and `hostPlatform()` in `models.ts` is gone: it
+  existed for this one message and was answering the wrong question.
+- **A successful write could be reported as a failure.** The rename is atomic; the read-back after
+  it is not. A read-back that failed, or that saw a concurrent edit, returned an error for a file
+  that HAD been replaced — and the next press would then read `mirrored` from disk and offer to undo
+  it. Found independently by codex and by the local model. `writeWslconfig` now answers *written* and
+  *what could not be confirmed* separately.
+- **The second press was a trap.** Writing mirrored changes nothing until WSL restarts, so the
+  button and its note stayed exactly as they were — and pressing again, which is what a person does
+  when nothing appears to have happened, silently reverted the fix (gemini). It now explains the
+  restart and makes reverting a separate, deliberate button.
+
+Also taken: the confirmation shows the WHOLE merged file rather than the two added lines, because
+"do my other settings survive this" is the question it exists to answer (codex); the Windows-side
+question is asked once per render pass instead of once per local row (codex) and its two candidates
+run concurrently on a 2 s deadline instead of sequentially on 8 s (gemini, local); a failed cleanup
+of the temporary file is named rather than swallowed (local); and the shim's sentence and the cure
+that matches it now share two constants, so a rewording moves both or neither (local).
+
+Rejected, with reasons recorded in the session: a retry-and-cache around the probe (contradicts the
+deliberate no-cache-on-failure decision); "command injection via the Windows profile path" (there is
+no shell — `spawn` is called without `shell: true`, so argv is not a command line, and the value
+never reaches another process anyway); and "reprobe does not trigger a full discovery" (it clears
+`localCheckedAt`, which is exactly what makes the next render re-run `discoverEngine`).
+
+**Open tail** — one accepted-as-true finding deliberately not built here: the panel has no *probing*
+state, so a render waits on discovery with nothing on screen saying so. That predates this change
+(two HTTP probes at 4 s each have always been awaited the same way) and fixing it means changing how
+every probe reports, which is a different scope. What this change owed it — bounding its own added
+cost — is done: ~1.05 s, once per pass.
 
 ## Definition of Done
 

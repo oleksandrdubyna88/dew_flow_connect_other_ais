@@ -45,6 +45,24 @@ public static class LocalAsk
         return Math.Max(5, whole - marginSeconds);
     }
 
+    /// <summary>What the shim says when the endpoint refused the connection.</summary>
+    /// <remarks>
+    /// <para>A formatter rather than an interpolated string at the call site, because
+    /// <see cref="VendorDiagnosis"/> reads this sentence back to turn it into a cure — and a message
+    /// that is WRITTEN in one file and MATCHED in another by two copies of the same literal is one
+    /// rewording away from silently losing the cure. Raised in the code round: "if the server changes
+    /// its error message format, the diagnosis will silently fail to match". Now the writer and the
+    /// reader share the two constants, so a rename moves both or neither.</para>
+    /// </remarks>
+    public const string UnreachableOpening = "the local engine at ";
+
+    /// <inheritdoc cref="UnreachableOpening"/>
+    public const string UnreachableClosing = " could not be reached";
+
+    /// <inheritdoc cref="UnreachableOpening"/>
+    public static string UnreachableMessage(string endpoint, string detail) =>
+        $"{UnreachableOpening}{endpoint}{UnreachableClosing}: {detail}";
+
     /// <summary>The sampling seed for a prompt: the same prompt is the same request, in any process.</summary>
     /// <remarks>
     /// <para>FNV-1a over the UTF-8 bytes, and the choice of algorithm is not the point — being a

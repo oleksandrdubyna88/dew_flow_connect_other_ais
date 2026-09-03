@@ -113,6 +113,22 @@ export function mirroredLines(mode: NetworkingMode): string {
   return `${SECTION}\n${KEY}=${mode}`;
 }
 
+/**
+ * A file as a confirmation dialog can show it: whole when it is small, honestly cut when it is not.
+ *
+ * <p>The dialog used to show only the two lines being added, which cannot answer the question
+ * somebody actually has before approving a change to a file every distro reads — do my other
+ * settings survive this. So it shows the merged file. The bound is there because a modal is not a
+ * text editor, and a cut that says it was cut is better than one that does not.</p>
+ */
+export function previewOf(text: string, maxLines = 40): string {
+  const lines = text.replace(/\r\n/g, '\n').replace(/\n+$/, '').split('\n');
+
+  return lines.length <= maxLines
+    ? lines.join('\n')
+    : `${lines.slice(0, maxLines).join('\n')}\n… ${lines.length - maxLines} more lines, unchanged`;
+}
+
 // ---------- the four that touch the world ----------
 
 /** Whether the process is running under WSL. False on anything that cannot answer. */
@@ -136,20 +152,28 @@ export async function runningUnderWsl(): Promise<boolean> {
  * lead to the same panel sentence, and a hang leads to neither — the child is killed on the
  * deadline.</p>
  */
-export async function windowsSideEngine(timeoutMs = 4000): Promise<string> {
+export async function windowsSideEngine(timeoutMs = 2000): Promise<string> {
+  // Both at once, and on a short deadline. Asked one after the other on a 4s budget this was up to
+  // eight seconds of a frozen panel on a machine where nothing answers — which is exactly the
+  // machine that reaches this code. Two loopback requests on the same box need none of it.
+  //
+  // Measured through real interop on 2026-09-03: launching `curl.exe` from a distro costs ~80ms,
+  // the answering engine replies in ~100ms, and the DEAD candidate is what sets the pace — under
+  // mirrored networking a port with nothing on it is dropped rather than refused, so that leg runs
+  // to curl's own `-m 1` and the pair completes in ~1.05s. The deadline is 2s so that a loaded
+  // machine has room: expiring here would report "nothing on the Windows side" and hide the very
+  // button this exists to show.
   const asked = [
     { url: 'http://127.0.0.1:11434/api/version', engine: 'ollama' },
     { url: 'http://127.0.0.1:8000/v1/models', engine: 'vllm' },
   ];
-  for (const candidate of asked) {
-    const answer = await interop('curl.exe', ['-s', '-m', '3', candidate.url], timeoutMs);
-    const version = versionIn(answer);
-    if (version.length > 0) {
-      return `${candidate.engine} ${version}`.trim();
-    }
-  }
+  const answers = await Promise.all(asked.map(async (candidate) => {
+    const version = versionIn(await interop('curl.exe', ['-s', '-m', '1', candidate.url], timeoutMs));
 
-  return '';
+    return version.length > 0 ? `${candidate.engine} ${version}`.trim() : '';
+  }));
+
+  return answers.find((answer) => answer.length > 0) ?? '';
 }
 
 /** Where `.wslconfig` lives, as a path this side can open, or nothing when interop cannot say. */
@@ -162,6 +186,14 @@ export async function windowsWslconfigPath(timeoutMs = 4000): Promise<string> {
   return mounted.length > 0 ? `${mounted}/.wslconfig` : '';
 }
 
+/** What a write did — which is not the same question as whether it went perfectly. */
+export interface WriteOutcome {
+  /** Whether the file on disk was REPLACED. The rename is the moment this becomes true. */
+  readonly written: boolean;
+  /** Empty when there is nothing to tell the person. */
+  readonly message: string;
+}
+
 /**
  * Writes the file, or says why it did not. Never leaves a half-written one behind.
  *
@@ -169,28 +201,69 @@ export async function windowsWslconfigPath(timeoutMs = 4000): Promise<string> {
  * `.wslconfig` is global to every distro, and a truncated one is a machine that may not start its
  * containers. Telling somebody to restart WSL on the strength of a write that failed is the
  * specific outcome this guards — raised by two of the three plan reviewers independently.</p>
+ *
+ * <p><b>`written` and "went perfectly" are separate answers, and conflating them was a real defect.</b>
+ * The rename is atomic; the read-back that follows it is not part of it. A read-back that fails, or
+ * that sees somebody else's concurrent edit, used to be reported as a failed write — so a person
+ * whose file HAD been replaced was told it had not, and pressing the button again would then read
+ * `mirrored` from disk and offer to undo it. Both code reviewers found this independently. After the
+ * rename the answer is "written, and here is what could not be confirmed".</p>
  */
-export async function writeWslconfig(path: string, text: string): Promise<string> {
+export async function writeWslconfig(path: string, text: string): Promise<WriteOutcome> {
   const temporary = `${path}.coai-${process.pid}.tmp`;
   try {
     await writeFile(temporary, text, 'utf8');
+  } catch (error) {
+    return { written: false, message: `${path} could not be written: ${reason(error)}${await sweep(temporary)}` };
+  }
+
+  try {
     await rename(temporary, path);
   } catch (error) {
-    await unlink(temporary).catch(() => undefined);
-
-    return `${path} could not be written: ${(error as Error).message}`;
+    return {
+      written: false,
+      message: `${path} could not be replaced, so nothing was changed: ${reason(error)}${await sweep(temporary)}`,
+    };
   }
 
   try {
     return (await readFile(path, 'utf8')) === text
-      ? ''
-      : `${path} was written but does not match what was sent — nothing was changed for you`;
+      ? { written: true, message: '' }
+      : {
+        written: true,
+        message: `${path} was replaced, but reading it back shows something else — check it before `
+          + 'restarting WSL; another editor may have written it in the same moment.',
+      };
   } catch (error) {
-    return `${path} could not be read back: ${(error as Error).message}`;
+    return {
+      written: true,
+      message: `${path} was replaced, but could not be read back to confirm it: ${reason(error)}`,
+    };
   }
 }
 
 // ---------- pure helpers ----------
+
+function reason(error: unknown): string {
+  return (error as Error).message;
+}
+
+/**
+ * Removes the temporary file, and says so when it could not be.
+ *
+ * <p>Swallowed, this hides the one thing worth knowing about a failed write on Windows: a file left
+ * behind because an antivirus or a permission held it. Named rather than logged, because the panel
+ * is where the person already is.</p>
+ */
+async function sweep(temporary: string): Promise<string> {
+  try {
+    await unlink(temporary);
+
+    return '';
+  } catch (error) {
+    return ` (and ${temporary} could not be cleaned up: ${reason(error)})`;
+  }
+}
 
 function unreadable(existing: string): string {
   return existing.includes('\u0000') || existing.includes('\uFFFD')

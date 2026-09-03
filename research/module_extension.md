@@ -435,6 +435,16 @@ empty one still resolves to `127.0.0.1` and still fails; and "the gateway is ins
 is not a test for "this is the Windows host", it is a test that names the office router on a
 corporate network in that range. Nothing in `wslNetwork.ts` opens a socket to any address.
 
+**The advice is gated on WSL, not on Linux.** `engineNote` took a `Platform` and treated
+`linux` as WSL — true in a distro and equally true on a native Linux box, which has no `.wslconfig`
+to edit and no subsystem to restart. It now reads `LocalEngine.wsl`, set by `discoverEngine` from
+`/proc/version`, and `hostPlatform()` in `models.ts` is gone: it existed for this one message and was
+answering the wrong question. The probe is asked **once per render pass** rather than once per local
+row, and its two candidates run concurrently on a 2 s deadline — measured through real interop,
+`curl.exe` costs ~80 ms to launch, the engine answers in ~100 ms, and the pace is set by the dead
+candidate, which under mirrored networking is *dropped* rather than refused and so runs to curl's own
+`-m 1`: ~1.05 s for the pair.
+
 **`⇄` writes `networkingMode=mirrored`, and is the only thing here that writes.** It appears only
 when `elsewhere` is set. It merges into the existing `.wslconfig` rather than replacing it — the key
 goes INSIDE `[wsl2]` (appended after a following `[experimental]` it would be ignored and the restart
@@ -447,6 +457,14 @@ way back is not a cure — and it never runs `wsl --shutdown`, which would termi
 extension host lives in. A source-level test holds the writer to exactly one caller, because a
 regression that called it during activation would change a global networking file with nobody's
 consent and every other test here would still pass.
+
+**A write that landed is reported as landed, whatever went wrong afterwards.** The rename is atomic
+and the read-back that follows it is not, so a read-back that fails — or that sees a concurrent
+edit — used to be reported as a failed write for a file that had already been replaced, and the next
+press would offer to undo it. `writeWslconfig` answers `written` and `message` separately. The second
+press is no longer a blind toggle either: mirrored takes effect only after `wsl --shutdown`, so
+pressing again while the note still says the same thing used to revert the fix somebody had just
+applied. It now explains the restart, with reverting as its own button.
 
 **The trust line is not decoration.** The endpoint field is advertised for "a box on the network", so
 a URL can be pasted — or arrive in workspace settings from a cloned repository — and every review

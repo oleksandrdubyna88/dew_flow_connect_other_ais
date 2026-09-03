@@ -36,7 +36,10 @@ import {
 import { roleRecordUpdate, SettingMessage, settingsFrom, settingWrite } from './settingsShape';
 import {
   mirroredLines,
+  NetworkingMode,
   networkingModeOf,
+  previewOf,
+  windowsSideEngine,
   windowsWslconfigPath,
   writeWslconfig,
   wslconfigWith,
@@ -197,6 +200,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * where it is, and looking elsewhere would be second-guessing them.</p>
    */
   private async probeLocalEngines(vendors: readonly Vendor[]): Promise<Record<string, LocalEngine>> {
+    // One Windows-side question per PASS, shared by every local row. It used to be asked once per
+    // row: ten local reviewers on a machine where nothing answers meant ten interop launches, all
+    // asking the same box the same thing. Held for the pass and dropped at the end of it, because
+    // caching a failed answer is what the row-level cache deliberately does not do either.
+    this.windowsSideThisPass = undefined;
     const probed: Record<string, LocalEngine> = {};
     for (const vendor of vendors.filter((v) => v.runtime === 'local')) {
       const engine = await this.probeLocalEngine(vendor);
@@ -204,8 +212,18 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         probed[vendor.id] = engine;
       }
     }
+    this.windowsSideThisPass = undefined;
 
     return probed;
+  }
+
+  /** The Windows-side answer for THIS pass, asked at most once and never kept beyond it. */
+  private windowsSideThisPass: Promise<string> | undefined = undefined;
+
+  private windowsSideOnce(): Promise<string> {
+    this.windowsSideThisPass ??= windowsSideEngine();
+
+    return this.windowsSideThisPass;
   }
 
   private async probeLocalEngine(vendor: Vendor): Promise<LocalEngine | undefined> {
@@ -224,7 +242,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
     this.localCheckedAt[vendor.id] = Date.now();
     this.localProbedEndpoints[vendor.id] = wanted;
-    const engine = wanted.length > 0 ? await probeEngine(wanted) : await discoverEngine();
+    const engine = wanted.length > 0
+      ? await probeEngine(wanted)
+      : await discoverEngine(undefined, undefined, () => this.windowsSideOnce());
     // The endpoint may have changed WHILE this probe was in flight; the answer then belongs to a
     // configuration nobody is looking at any more, and showing it would be worse than showing
     // nothing. The next repaint probes the current one.
@@ -713,7 +733,49 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
 
     const existing = await readFile(path, 'utf8').catch(() => '');
-    const mode = networkingModeOf(existing) === 'mirrored' ? 'nat' : 'mirrored';
+    if (networkingModeOf(existing) === 'mirrored') {
+      await this.mirroredIsAlreadyWritten(path, existing);
+
+      return;
+    }
+
+    await this.setNetworkingMode(path, existing, 'mirrored');
+  }
+
+  /**
+   * The second press, when the file already says what the first press wrote.
+   *
+   * <p>It used to be a blind toggle, and that was a trap: writing mirrored does not make the engine
+   * reachable until WSL restarts, so the button and its note stayed exactly as they were — and
+   * pressing again, which is what a person does when nothing appears to have happened, silently
+   * undid the fix. Found by Gemini 3.7 Flash in the code round. Now the second press explains the
+   * restart, and reverting is a deliberate choice with its own button.</p>
+   */
+  private async mirroredIsAlreadyWritten(path: string, existing: string): Promise<void> {
+    const restart = 'Copy `wsl --shutdown`';
+    const revert = 'Put it back to nat';
+    const choice = await vscode.window.showInformationMessage(
+      `${path} already says networkingMode=mirrored.`,
+      {
+        modal: true,
+        detail:
+          'It takes effect when WSL next starts cold: run `wsl --shutdown` from Windows, then reopen '
+          + 'this window. Nothing here can run it — it would terminate the distro this window is '
+          + 'attached to, mid-call.',
+      },
+      restart,
+      revert,
+    );
+    if (choice === restart) {
+      await vscode.env.clipboard.writeText('wsl --shutdown');
+    }
+    if (choice === revert) {
+      await this.setNetworkingMode(path, existing, 'nat');
+    }
+  }
+
+  /** Shows the whole merged file, writes it when they say so, and reports what actually happened. */
+  private async setNetworkingMode(path: string, existing: string, mode: NetworkingMode): Promise<void> {
     const merged = wslconfigWith(existing, mode);
     if (merged.refused.length > 0) {
       void vscode.window.showWarningMessage(
@@ -733,10 +795,13 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       `Set networkingMode=${mode} in ${path}?`,
       {
         modal: true,
+        // The WHOLE file, not the two lines this adds: the question a person needs answered before
+        // approving a global change is whether their other settings survive it, and a preview that
+        // shows only the addition cannot answer it.
         detail:
-          `${mirroredLines(mode)}\n\nThis file is global: every WSL distro on this machine reads it, `
-          + 'docker-desktop included. Nothing changes until WSL is restarted, which this cannot do '
-          + 'for you — it would terminate the distro this window is attached to.',
+          `${previewOf(merged.text)}\n\nThis file is global: every WSL distro on this machine reads `
+          + 'it, docker-desktop included. Nothing changes until WSL is restarted, which this cannot '
+          + 'do for you — it would terminate the distro this window is attached to.',
       },
       write,
     );
@@ -744,11 +809,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    const failure = await writeWslconfig(path, merged.text);
-    if (failure.length > 0) {
-      void vscode.window.showErrorMessage(failure);
+    const outcome = await writeWslconfig(path, merged.text);
+    if (!outcome.written) {
+      void vscode.window.showErrorMessage(outcome.message);
 
       return;
+    }
+    if (outcome.message.length > 0) {
+      // Written, but something about confirming it did not go to plan. Saying "it failed" here
+      // would be a lie about a file that HAS changed, and the next press would offer to undo it.
+      void vscode.window.showWarningMessage(outcome.message);
     }
 
     const copy = 'Copy the command';

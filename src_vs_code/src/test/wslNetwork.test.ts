@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import {
   isWsl,
   mountPathOf,
   networkingModeOf,
+  previewOf,
+  writeWslconfig,
   wslconfigWith,
 } from '../wslNetwork';
 
@@ -138,6 +141,59 @@ test('anything that is not a drive path yields nothing rather than a guess', () 
   assert.equal(mountPathOf(''), '');
   assert.equal(mountPathOf('\\\\server\\share'), '');
   assert.equal(mountPathOf('/home/jinx'), '');
+});
+
+// ---------- what the confirmation shows before anything is written ----------
+
+test('the preview is the whole merged file, so other settings can be seen surviving', () => {
+  // Showing only the two lines being added cannot answer the question somebody has before approving
+  // a change to a file every distro reads. Found by GPT-5.6-Luna in the code round.
+  const merged = wslconfigWith('[wsl2]\r\nmemory=16GB\r\nprocessors=8\r\n', 'mirrored');
+
+  const shown = previewOf(merged.text);
+  assert.match(shown, /memory=16GB/);
+  assert.match(shown, /processors=8/);
+  assert.match(shown, /networkingMode=mirrored/);
+  assert.ok(!shown.includes('\r'), 'a dialog is not a text editor; the endings are normalised for it');
+});
+
+test('a long file is cut, and the cut says so', () => {
+  const long = `[wsl2]\n${Array.from({ length: 60 }, (_, i) => `key${i}=${i}`).join('\n')}\n`;
+
+  const shown = previewOf(long, 10);
+  assert.equal(shown.split('\n').length, 11, 'ten lines and the sentence that admits the rest');
+  assert.match(shown, /51 more lines, unchanged/);
+});
+
+// ---------- what a write reports ----------
+
+test('a write that could not even start says nothing was changed', async () => {
+  // A directory that does not exist: the temporary file cannot be created, so the target was never
+  // touched and the person must be told exactly that.
+  const outcome = await writeWslconfig(
+    join(__dirname, 'no-such-directory-here', '.wslconfig'),
+    '[wsl2]\nnetworkingMode=mirrored\n',
+  );
+
+  assert.equal(outcome.written, false);
+  assert.match(outcome.message, /nothing was changed|could not be written/);
+});
+
+test('a write that landed reports success, and reports it as WRITTEN either way', async () => {
+  // The defect both code reviewers found independently: the rename is atomic, the read-back after
+  // it is not, so a read-back that fails used to be reported as a FAILED write — for a file that
+  // had already been replaced. The person would then press the button again and undo it.
+  const path = join(tmpdir(), `coai-wslconfig-${process.pid}.test`);
+  const text = '[wsl2]\nnetworkingMode=mirrored\n';
+  try {
+    const outcome = await writeWslconfig(path, text);
+
+    assert.equal(outcome.written, true);
+    assert.equal(outcome.message, '', 'a clean write has nothing to say');
+    assert.equal(readFileSync(path, 'utf8'), text);
+  } finally {
+    rmSync(path, { force: true });
+  }
 });
 
 // ---------- the guarantee that nothing is written on its own ----------

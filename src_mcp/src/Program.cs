@@ -185,7 +185,7 @@ internal static class Program
             // while being killed by the executor says nothing at all.
             Note(ex is TaskCanceledException
                 ? $"the local engine at {endpoint} did not answer within the round's deadline: {ex.Message}"
-                : $"the local engine at {endpoint} could not be reached: {ex.Message}");
+                : Runners.Reviewers.LocalAsk.UnreachableMessage(endpoint, ex.Message));
 
             return 69; // EX_UNAVAILABLE
         }

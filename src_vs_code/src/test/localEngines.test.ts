@@ -100,8 +100,8 @@ test('an engine that answered says what it is and how many models', () => {
     models: mergeModels(parseOpenAiModels(V1_MODELS), parseOllamaTags(TAGS)),
   };
 
-  assert.match(engineNote(engine, 'win32'), /ollama v0\.15\.2/);
-  assert.match(engineNote(engine, 'win32'), /3 models/);
+  assert.match(engineNote(engine), /ollama v0\.15\.2/);
+  assert.match(engineNote(engine), /3 models/);
 });
 
 test('nothing listening is a reason, never an empty dropdown', () => {
@@ -110,23 +110,38 @@ test('nothing listening is a reason, never an empty dropdown', () => {
     status: 'connection refused', models: [],
   };
 
-  const note = engineNote(nothing, 'win32');
+  const note = engineNote(nothing);
   assert.match(note, /No local engine answered/);
   assert.match(note, /11434/, 'the note must say where it looked');
   assert.match(note, /paste an endpoint/i, 'and what to do instead');
 });
 
-test('on Linux the reason names the WSL case, because that is the likely one', () => {
+test('in WSL the reason names the WSL case, because that is the likely one', () => {
   // Measured: Windows Ollama binds 127.0.0.1 only, so from a VS Code attached to WSL the gateway
   // times out and the local loopback refuses. An empty list there is not "you have no models".
   const nothing: LocalEngine = {
     kind: 'none', probeUrl: OLLAMA_PROBE, apiBaseUrl: '', reachable: false,
-    status: 'connection refused', models: [],
+    status: 'connection refused', models: [], wsl: true,
   };
 
-  const note = engineNote(nothing, 'linux');
+  const note = engineNote(nothing);
   assert.match(note, /OLLAMA_HOST=0\.0\.0\.0/);
   assert.match(note, /WSL/);
+});
+
+test('native Linux is not handed instructions for a machine it is not', () => {
+  // The same defect the server side had, in the other half: `process.platform` is 'linux' both in a
+  // WSL distro and on a real Linux box, and only one of them has a .wslconfig to edit or a WSL to
+  // restart. Found by Gemini 3.7 Flash in the code round.
+  const nothing: LocalEngine = {
+    kind: 'none', probeUrl: OLLAMA_PROBE, apiBaseUrl: '', reachable: false,
+    status: 'connection refused', models: [], wsl: false,
+  };
+
+  const note = engineNote(nothing);
+  assert.doesNotMatch(note, /wslconfig/i);
+  assert.doesNotMatch(note, /OLLAMA_HOST/);
+  assert.match(note, /paste an endpoint/i, 'what is left is the advice that applies anywhere');
 });
 
 test('an engine seen on the Windows side is named, and the cure that reaches it is offered', () => {
@@ -137,7 +152,7 @@ test('an engine seen on the Windows side is named, and the cure that reaches it 
     status: 'connection refused', models: [], elsewhere: 'ollama 0.33.2',
   };
 
-  const note = engineNote(nothing, 'linux');
+  const note = engineNote(nothing);
   assert.match(note, /Windows side/i, 'the sighting is the news');
   assert.match(note, /ollama 0\.33\.2/, 'and naming it is what proves it is not a guess');
   assert.match(note, /mirrored/, 'the cure that needs no firewall and no address that drifts');
@@ -151,7 +166,7 @@ test('with nothing seen anywhere the note does not invent a Windows engine', () 
 
   // The Linux note names the Windows case as a POSSIBILITY either way; what it must never do is
   // claim something was actually seen there, which is a different sentence and a different action.
-  assert.doesNotMatch(engineNote(nothing, 'linux'), /answering on the Windows side/i);
+  assert.doesNotMatch(engineNote(nothing), /answering on the Windows side/i);
 });
 
 test('the Windows side is asked only after every candidate has refused', async () => {
@@ -162,11 +177,27 @@ test('the Windows side is asked only after every candidate has refused', async (
     return 'ollama 0.33.2';
   };
 
-  const found = await discoverEngine(['http://127.0.0.1:1'], 500, probe);
+  const found = await discoverEngine(['http://127.0.0.1:1'], 500, probe, async () => true);
 
   assert.equal(asked, 1, 'nothing answered, so the other side is worth asking');
   assert.equal(found.elsewhere, 'ollama 0.33.2');
-  assert.match(engineNote(found, 'linux'), /ollama 0\.33\.2/);
+  assert.equal(found.wsl, true);
+  assert.match(engineNote(found), /ollama 0\.33\.2/);
+});
+
+test('a machine that is not WSL has no Windows side to ask about', async () => {
+  let asked = 0;
+  const probe = async (): Promise<string> => {
+    asked += 1;
+
+    return 'ollama 0.33.2';
+  };
+
+  const found = await discoverEngine(['http://127.0.0.1:1'], 500, probe, async () => false);
+
+  assert.equal(asked, 0, 'launching an interop process on a native Linux box is pure cost');
+  assert.equal(found.elsewhere, undefined);
+  assert.equal(found.wsl, false);
 });
 
 test('an engine that answered here is not followed by a question about over there', async () => {

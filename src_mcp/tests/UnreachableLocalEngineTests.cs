@@ -74,6 +74,19 @@ public sealed class UnreachableLocalEngineTests
     }
 
     [Fact]
+    public void TheSentenceTheShimActuallyWrites_IsTheSentenceTheCureMatches()
+    {
+        // The loop the code round asked for: the message is composed by the shim and parsed by the
+        // diagnosis, so a reworded message would otherwise lose the cure with nothing going red.
+        // Both now share LocalAsk's constants, and this holds the composition to the parse.
+        var written = LocalAsk.UnreachableMessage(
+            "http://127.0.0.1:11434/v1", "Connection refused (127.0.0.1:11434)");
+
+        VendorDiagnosis.For(written, wsl: true).Should().Contain("mirrored");
+        VendorDiagnosis.For(written, wsl: false).Should().Contain("http://127.0.0.1:11434/v1");
+    }
+
+    [Fact]
     public void AKernelThatSaysMicrosoft_IsWsl_AndAPlainOneIsNot()
     {
         var wsl = "Linux version 6.18.33.2-2 (root@build) #1 SMP PREEMPT_DYNAMIC "
