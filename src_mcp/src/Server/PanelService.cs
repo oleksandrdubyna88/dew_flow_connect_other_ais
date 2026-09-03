@@ -690,7 +690,8 @@ public sealed class PanelService
     /// written out in <see cref="PromptDeal"/>.</para>
     /// <para>With ONE vendor the deal is the identity, and this is exactly what it always was.</para>
     /// </remarks>
-    private IReadOnlyList<ReviewerWork> BuildWork(
+    /// <remarks>Internal so a test can read the working directory a reviewer is actually given.</remarks>
+    internal IReadOnlyList<ReviewerWork> BuildWork(
         IReadOnlyList<ReviewRole> roles,
         string worktreePath,
         string context,
@@ -711,6 +712,15 @@ public sealed class PanelService
         // agentic CLI handed a checkout goes exploring instead. That is the same lesson the plan
         // stage learned the hard way, applied to the one launch whose whole job is to be brief.
         var repairDir = Directory.CreateTempSubdirectory("coai-repair-").FullName;
+
+        // And the REVIEW launch can be given the same treatment on request. The prompt is identical
+        // either way — the diff came from the repository and the rules from the worktree, both
+        // above — so `none` removes only the exploring. It exists because the exploring is what
+        // makes a hosted CLI cost 200k input tokens where a local reviewer costs 25k, which is a
+        // difference in the QUESTION rather than in the models being compared.
+        var launchDir = _settings.CodeWorkspace == "none" && planPrompts is null or { Count: 0 }
+            ? Directory.CreateTempSubdirectory("coai-noworkspace-").FullName
+            : worktreePath;
 
         // Only what can actually run: a vendor whose CLI is missing or whose key is absent is
         // reported by `providers` and left out of the deal rather than dealt work it cannot do.
@@ -776,7 +786,7 @@ public sealed class PanelService
             var repairPrompt = prompt +
                 "\n\nYOUR PREVIOUS ANSWER WAS NOT VALID JSON. Return ONLY the JSON object for the schema — no fences, no prose.";
             work.Add(new ReviewerWork(
-                runtime.Build(role, prompt, worktreePath, schemaFile, outputDir, settings),
+                runtime.Build(role, prompt, launchDir, schemaFile, outputDir, settings),
                 runtime.Build(role, repairPrompt, repairDir, schemaFile, outputDir, settings),
                 choice.Id));
         }

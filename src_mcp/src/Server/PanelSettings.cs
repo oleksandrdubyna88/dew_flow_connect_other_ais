@@ -108,6 +108,21 @@ public sealed record PanelSettings
     public string LocalReasoningEffort { get; init; } = "none";
 
     /// <summary>
+    /// What a CODE reviewer is launched in: <c>worktree</c> (the default) or <c>none</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>A hosted CLI is agentic: handed a checkout it explores it, and the measurements put
+    /// the cost at roughly 200 000 input tokens for one code round against about 25 000 for a local
+    /// reviewer, which receives one composed prompt and has nowhere to go. That is not a fair
+    /// comparison of models, it is a comparison of two different questions.</para>
+    /// <para><c>none</c> launches the reviewers in an empty directory. The PROMPT does not change —
+    /// the diff is assembled from the repository and the written rules are still read from the
+    /// worktree, both by this server — so the only thing removed is the ability to go looking for
+    /// more. The repair launch has always worked this way, and the plan stage too.</para>
+    /// </remarks>
+    public string CodeWorkspace { get; init; } = "worktree";
+
+    /// <summary>
     /// Settings whose VALUE this build does not understand, each as a sentence for a person.
     /// </summary>
     /// <remarks>
@@ -147,10 +162,22 @@ public sealed record PanelSettings
         LocalReasoningEffort = env("COAI_LOCAL_REASONING_EFFORT") is { Length: > 0 } effort
             ? effort.Trim().ToLowerInvariant()
             : "none",
+        CodeWorkspace = WorkspaceOf(env("COAI_CODE_WORKSPACE")),
         DealPlanLenses = Flag(env, "COAI_DEAL_PLAN") || Flag(env, "COAI_ROTATE_PROMPTS"),
         DealCodeLenses = Flag(env, "COAI_DEAL_CODE") || Flag(env, "COAI_ROTATE_PROMPTS"),
         PromptsPerRound = ParsePromptRounds(env("COAI_PROMPTS_PER_ROUND")),
     }.WithProvidersFrom(env);
+
+    /// <summary>Where a code reviewer runs, or the checkout when this build does not know the name.</summary>
+    /// <remarks>
+    /// The checkout is the fallback because it is the behaviour that loses nothing: a reviewer given
+    /// MORE than it needs still answers the question.
+    /// </remarks>
+    private static string WorkspaceOf(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "none" => "none",
+        _ => "worktree",
+    };
 
     /// <summary>What a policy name means, or Human when this build does not know the name.</summary>
     /// <remarks>
@@ -184,6 +211,16 @@ public sealed record PanelSettings
                 $"COAI_ON_EXHAUSTED is '{policy}', which this server does not know — it is asking a "
                 + "person instead. The panel is probably newer than this server: update it in the "
                 + "panel's Server section.");
+        }
+
+        if (env("COAI_CODE_WORKSPACE") is { Length: > 0 } workspace
+            && WorkspaceOf(workspace) == "worktree"
+            && !string.Equals(workspace.Trim(), "worktree", StringComparison.OrdinalIgnoreCase))
+        {
+            unknown.Add(
+                $"COAI_CODE_WORKSPACE is '{workspace}', which this server does not know — code "
+                + "reviewers are getting the checkout, as they do by default. The values are "
+                + "'worktree' and 'none'.");
         }
 
         return unknown;
