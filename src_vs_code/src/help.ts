@@ -31,6 +31,9 @@ export const HELP = {
   reprobeLocal:
     'Ask the engine again what it has. A successful probe is cached for a minute so the panel is not listing models on every repaint — which means a model you just pulled, or an engine you just started, is not there yet. This is the button for that. It was left out of the first version as "a CLI’s button", and the gate reviewing this feature pointed out that a cache with no way to clear it is a stale list with no way out.',
 
+  fixWslNetwork:
+    'An engine is answering on the Windows side of this machine and this WSL distro cannot reach it — a distro\'s own 127.0.0.1 is not the Windows host\'s. This writes networkingMode=mirrored into the Windows .wslconfig, after showing you exactly what it will write; then WSL shares the host\'s interfaces and 127.0.0.1 is the right address with nothing else configured. It cannot restart WSL for you — that is `wsl --shutdown` from Windows, and it would terminate the distro this extension is running in. Press it again afterwards to put the setting back: it is global to every distro, docker-desktop included, and some VPN clients dislike it.',
+
   localEndpoint:
     'The OpenAI-compatible base of a local engine, ending in /v1. Leave it empty to use whatever the probe found on this machine — Ollama on 11434, a vLLM on 8000. Fill it in for anything else: a vLLM on another port, a model server on the network, or an engine the probe cannot see. The probe URL and this base are NOT the same address: Ollama serves its own API at the root and its OpenAI-compatible surface under /v1, and a base without it fails at the first review with a 404 that reads like a model problem.',
 

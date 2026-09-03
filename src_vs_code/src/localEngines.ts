@@ -1,4 +1,5 @@
 import { Platform } from './vendorTerminal';
+import { runningUnderWsl, windowsSideEngine } from './wslNetwork';
 
 /**
  * What model engine is running on this machine, and which models it can review with.
@@ -45,6 +46,16 @@ export interface LocalEngine {
   /** Its version when it answered, the reason when it did not. */
   readonly status: string;
   readonly models: readonly LocalModel[];
+  /**
+   * What answers on the WINDOWS side of this machine, when nothing answered here.
+   *
+   * <p>Only ever set in WSL, and only after every candidate refused. It is a DIAGNOSIS, never an
+   * endpoint: no review is sent through it, because a panel-side discovery cannot change the
+   * address the server dials — that is the whole reason the network-probing version of this was
+   * refused by the gate. What it changes is the sentence, from "you have no engine" to "your engine
+   * is one hop away, and here is the hop".</p>
+   */
+  readonly elsewhere?: string;
 }
 
 /** Ollama's own default, and the only port it is ever on unless somebody moved it. */
@@ -201,12 +212,23 @@ export function engineNote(engine: LocalEngine, platform: Platform): string {
     return `${engine.kind} ${engine.status} · ${engine.models.length} models on this machine`;
   }
   const where = `No local engine answered on ${portsOf(PROBE_CANDIDATES)} (${engine.status}).`;
+  const seen = engine.elsewhere ?? '';
+  if (seen.length > 0) {
+    // The state the whole WSL change exists for. Measured 2026-09-03: fifteen models one hop away,
+    // ten rounds refused in zero seconds, and a panel saying what it says to a machine with no
+    // engine at all.
+    return `${where} One IS answering on the Windows side of this machine (${seen}) — a WSL distro's`
+      + ' own 127.0.0.1 is not the Windows host\'s. ⇄ switches WSL to mirrored networking, which makes'
+      + ' this very address the right one; or start the engine with OLLAMA_HOST=0.0.0.0 and paste the'
+      + ' Windows host address below.';
+  }
   const wsl =
     platform === 'linux'
       ? ' If your engine runs on the Windows side, TWO things are in the way and fixing one is not'
         + ' enough: it is bound to 127.0.0.1, so start it with OLLAMA_HOST=0.0.0.0 — and this side\'s'
         + ' 127.0.0.1 is WSL\'s own loopback, not the Windows host, so the endpoint below must point'
-        + ' at the Windows host address (the default gateway in `ip route`).'
+        + ' at the Windows host address (the default gateway in `ip route`). Mirrored networking'
+        + ' (`[wsl2] networkingMode=mirrored`) removes both at once.'
       : '';
 
   return `${where}${wsl} Start one, or paste an endpoint below.`;
@@ -256,10 +278,18 @@ export async function probeEngine(probeUrl: string, timeoutMs = 4000): Promise<L
   };
 }
 
-/** The first candidate that answers, or a `none` engine carrying why not. */
+/**
+ * The first candidate that answers, or a `none` engine carrying why not — and, in WSL, what is
+ * answering on the other side of the machine.
+ *
+ * <p>The Windows question is asked LAST and only when everything here refused, because it costs a
+ * process launch and answers nothing a working engine leaves open. It is injected so the tests can
+ * drive both orders without a machine.</p>
+ */
 export async function discoverEngine(
   candidates: readonly string[] = PROBE_CANDIDATES,
   timeoutMs = 4000,
+  elsewhere: () => Promise<string> = windowsSideWhenWsl,
 ): Promise<LocalEngine> {
   // Each candidate's reason is KEPT. It used to be computed, carried through `probeEngine`, and
   // then thrown away by a hard-coded 'connection refused' on this line — so a firewall swallowing
@@ -274,8 +304,15 @@ export async function discoverEngine(
     }
     reasons.push(`${hostOf(candidate)}: ${engine.status}`);
   }
+  const seen = await elsewhere();
+  const none = noEngine(reasons.length > 0 ? reasons.join('; ') : 'nowhere to look');
 
-  return noEngine(reasons.length > 0 ? reasons.join('; ') : 'nowhere to look');
+  return seen.length > 0 ? { ...none, elsewhere: seen } : none;
+}
+
+/** The Windows side of this machine, asked only from a WSL distro. Empty everywhere else. */
+async function windowsSideWhenWsl(): Promise<string> {
+  return (await runningUnderWsl()) ? windowsSideEngine() : '';
 }
 
 /**

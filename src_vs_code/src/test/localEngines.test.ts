@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  discoverEngine,
   engineNote,
   LocalEngine,
   mergeModels,
@@ -126,6 +127,61 @@ test('on Linux the reason names the WSL case, because that is the likely one', (
   const note = engineNote(nothing, 'linux');
   assert.match(note, /OLLAMA_HOST=0\.0\.0\.0/);
   assert.match(note, /WSL/);
+});
+
+test('an engine seen on the Windows side is named, and the cure that reaches it is offered', () => {
+  // The state this whole change exists for: fifteen models, one hop away, and a panel that said
+  // exactly what it says to a machine with no engine at all. Measured 2026-09-03.
+  const nothing: LocalEngine = {
+    kind: 'none', probeUrl: OLLAMA_PROBE, apiBaseUrl: '', reachable: false,
+    status: 'connection refused', models: [], elsewhere: 'ollama 0.33.2',
+  };
+
+  const note = engineNote(nothing, 'linux');
+  assert.match(note, /Windows side/i, 'the sighting is the news');
+  assert.match(note, /ollama 0\.33\.2/, 'and naming it is what proves it is not a guess');
+  assert.match(note, /mirrored/, 'the cure that needs no firewall and no address that drifts');
+});
+
+test('with nothing seen anywhere the note does not invent a Windows engine', () => {
+  const nothing: LocalEngine = {
+    kind: 'none', probeUrl: OLLAMA_PROBE, apiBaseUrl: '', reachable: false,
+    status: 'connection refused', models: [],
+  };
+
+  // The Linux note names the Windows case as a POSSIBILITY either way; what it must never do is
+  // claim something was actually seen there, which is a different sentence and a different action.
+  assert.doesNotMatch(engineNote(nothing, 'linux'), /answering on the Windows side/i);
+});
+
+test('the Windows side is asked only after every candidate has refused', async () => {
+  let asked = 0;
+  const probe = async (): Promise<string> => {
+    asked += 1;
+
+    return 'ollama 0.33.2';
+  };
+
+  const found = await discoverEngine(['http://127.0.0.1:1'], 500, probe);
+
+  assert.equal(asked, 1, 'nothing answered, so the other side is worth asking');
+  assert.equal(found.elsewhere, 'ollama 0.33.2');
+  assert.match(engineNote(found, 'linux'), /ollama 0\.33\.2/);
+});
+
+test('an engine that answered here is not followed by a question about over there', async () => {
+  let asked = 0;
+  const probe = async (): Promise<string> => {
+    asked += 1;
+
+    return 'ollama 0.33.2';
+  };
+
+  const found = await discoverEngine([OLLAMA_PROBE], 4000, probe);
+  if (!found.reachable) {
+    return; // nothing running on this machine right now; the refused case above covers the shape
+  }
+  assert.equal(asked, 0, 'a working engine makes the interop question pure cost');
 });
 
 test('junk from an endpoint produces no models rather than a crash', () => {

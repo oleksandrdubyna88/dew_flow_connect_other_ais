@@ -51,10 +51,80 @@ public static class VendorDiagnosis
     /// <summary>
     /// A cure for what the vendor said, or nothing when this is not a failure we recognise.
     /// </summary>
-    public static string? For(string text) =>
+    /// <param name="wsl">
+    /// Whether this machine is a WSL distro, for the one cure that differs. Defaults to asking the
+    /// kernel; the tests pass it, because a cure must be checkable on a machine that is not the one
+    /// it is about.
+    /// </param>
+    public static string? For(string text, bool? wsl = null) =>
         string.IsNullOrWhiteSpace(text)
             ? null
-            : Known.FirstOrDefault(k => text.Contains(k.Marker, StringComparison.OrdinalIgnoreCase)).Sentence;
+            : UnreachableLocalEngine(text, wsl ?? UnderWsl.Value)
+              ?? Known.FirstOrDefault(k => text.Contains(k.Marker, StringComparison.OrdinalIgnoreCase)).Sentence;
+
+    /// <summary>
+    /// The local engine refused the connection — what to do about it, on this kind of machine.
+    /// </summary>
+    /// <remarks>
+    /// <para>Keyed on this product's OWN sentence rather than on the word "refused", which appears
+    /// in every vendor's stack traces: a marker that fires on anything is a cure nobody can trust.
+    /// The address is carried through into the cure, because it was the useful half of the original
+    /// message and <c>Because</c> replaces the message with whatever comes back from here.</para>
+    /// <para>Measured 2026-09-03 on one machine with coai 12.1 on both sides: from Windows the local
+    /// reviewer answered, from WSL ten rounds in a row died in zero seconds against a Windows Ollama
+    /// with fifteen models on it. Two barriers, and a person needs to be told about both — the
+    /// engine binds <c>127.0.0.1</c>, and a distro's <c>127.0.0.1</c> is not the Windows host's.
+    /// Mirrored networking removes both at once, which is why it is named first.</para>
+    /// </remarks>
+    private static string? UnreachableLocalEngine(string text, bool wsl)
+    {
+        const string opening = "the local engine at ";
+        const string closing = " could not be reached";
+        var start = text.IndexOf(opening, StringComparison.OrdinalIgnoreCase);
+        var end = text.IndexOf(closing, StringComparison.OrdinalIgnoreCase);
+        if (start < 0 || end <= start)
+        {
+            return null;
+        }
+
+        var endpoint = text[(start + opening.Length)..end].Trim();
+
+        return wsl
+            ? $"nothing is listening at {endpoint} on THIS side: a WSL distro's own 127.0.0.1 is not the "
+              + "Windows host's, and a Windows engine binds loopback only. Switch WSL to mirrored "
+              + "networking ([wsl2] networkingMode=mirrored in %USERPROFILE%\\.wslconfig, then "
+              + "`wsl --shutdown`), or start the engine with OLLAMA_HOST=0.0.0.0 and set this vendor's "
+              + "endpoint to the Windows host."
+            : $"nothing is listening at {endpoint} — start the local engine, or set this vendor's "
+              + "endpoint to where it actually runs.";
+    }
+
+    /// <summary>Whether this kernel is WSL, asked once.</summary>
+    private static readonly Lazy<bool> UnderWsl = new(() =>
+    {
+        try
+        {
+            return OperatingSystem.IsLinux()
+                   && File.Exists("/proc/version")
+                   && NamesWsl(File.ReadAllText("/proc/version"));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    });
+
+    /// <summary>
+    /// Whether a <c>/proc/version</c> banner is WSL's.
+    /// </summary>
+    /// <remarks>
+    /// The distinction is not "am I on Linux", and getting that wrong was a finding on the plan: a
+    /// native Linux box told to edit <c>%USERPROFILE%\.wslconfig</c> and run <c>wsl --shutdown</c>
+    /// has been handed instructions for a machine it is not.
+    /// </remarks>
+    internal static bool NamesWsl(string procVersion) =>
+        procVersion.Contains("microsoft", StringComparison.OrdinalIgnoreCase)
+        || procVersion.Contains("WSL", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// A runtime this product knows is CLOSED, whatever its binary says when asked its version.

@@ -12,6 +12,7 @@ Convention: `.claude/rules/shared/common/planning-docs.md`.
 | [PLAN_local_trust_and_vllm.md](PLAN_local_trust_and_vllm.md) | The local reviewer assumes a trusted Ollama on this machine. Acknowledging a non-loopback host, a key path for a served vLLM, and whether cancellation works on anything else. |
 | [PLAN_provider_liveness.md](PLAN_provider_liveness.md) | `providers` still calls a vendor healthy on the strength of `--version`, which never reaches the vendor. Three states instead of two, established by a real round trip and cached. |
 | [PLAN_rule_formatting.md](PLAN_rule_formatting.md) | Every reviewer in an eight-cell measurement missed the one rule written as a table row. Whether rule FORMATTING changes what a reviewer can apply, measured. |
+| [PLAN_wsl_local_engine.md](PLAN_wsl_local_engine.md) | From WSL the local reviewer fails ten rounds in a row against a machine with fifteen models on it, one hop away. Seeing the engine on the Windows side, a button for the mirrored-network cure, and a round that says what to do rather than only what happened. |
 
 Everything else planned so far shipped — the master plan, all six epics, the conventions pass, the
 per-role gate with dealt prompts, and the escalation tail are

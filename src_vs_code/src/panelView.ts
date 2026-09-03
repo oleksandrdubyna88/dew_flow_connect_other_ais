@@ -307,7 +307,9 @@ ${local ? remoteNotice(vendor.baseUrl) : ''}
     <input type="checkbox" id="v-${id}" data-setting="enabled" data-vendor="${id}"${vendor.enabled ? ' checked' : ''}
            title="${escapeHtml(HELP.vendorEnabled)}">
     <label class="name" for="v-${id}">${id}</label>
-    ${local ? `<button class="run upd" data-command="reprobeLocal" data-id="${id}"
+    ${local ? `${(localEngine?.elsewhere ?? '').length > 0 ? `<button class="run get" data-command="fixWslNetwork" data-id="${id}"
+            title="${escapeHtml(HELP.fixWslNetwork)}"
+            aria-label="Switch WSL to mirrored networking">⇄</button>` : ''}<button class="run upd" data-command="reprobeLocal" data-id="${id}"
             title="${escapeHtml(HELP.reprobeLocal)}"
             aria-label="Look for local models again">⟳</button>` : `<button class="run" data-command="runVendor" data-id="${id}" title="${escapeHtml(HELP.runVendor)}"
             aria-label="Open ${id} in a terminal">▶</button>
@@ -1014,6 +1016,9 @@ export const PANEL_COMMANDS = [
   'updateVendorCli',
   'forgetUsage',
   'reprobeLocal',
+  // Only rendered when the probe SAW an engine on the Windows side that this WSL distro cannot
+  // reach; on every other machine the button does not exist, because there is nothing to fix.
+  'fixWslNetwork',
   // Posted by the model picker rather than by a button: "another model…" is a request to type one.
   'customModel',
 ] as const;

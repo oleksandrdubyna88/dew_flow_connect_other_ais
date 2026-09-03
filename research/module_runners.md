@@ -276,6 +276,38 @@ it without a `--version` probe, there being no binary to version. `DefaultExecut
 dotnet-host case: `Environment.ProcessPath` is the app in a Native AOT release and `dotnet.exe` when
 the same code runs framework-dependent, so the invocation carries the dll ahead of its own flags.
 
+### An unreachable local engine is told what to do about it (2026-09-03)
+
+`VendorDiagnosis.For` now answers for this product's OWN failure sentence, not only for vendor CLIs.
+The observation: one machine, coai 12.1 on both sides, settings byte-identical, and from WSL ten
+consecutive local rounds of zero seconds —
+
+```
+exit 69: [coai-mcp] the local engine at http://127.0.0.1:11434/v1 could not be reached:
+ Connection refused (127.0.0.1:11434)
+```
+
+— against a Windows Ollama holding fifteen models. Every word true, none of it actionable. The panel
+had the cure since 2026-09-02; the ROUND, which is the surface somebody actually watches during a
+review, had nothing.
+
+- **The marker is our own sentence**, `the local engine at … could not be reached`, never the word
+  "refused" — which appears in every vendor's stack traces. The endpoint is carried through into the
+  cure, because `BoundedScheduler.Because` REPLACES the message with what comes back from here and
+  the address was the useful half.
+- **WSL, not Linux.** `NamesWsl` reads `/proc/version` once. A native Linux box told to edit
+  `%USERPROFILE%\.wslconfig` and run `wsl --shutdown` has been handed instructions for a machine it
+  is not — raised by Gemini 3.7 Flash on the plan, before the code existed.
+- **A timeout is not a refusal.** The shim already distinguishes them, and one cure for both would
+  send somebody to reconfigure a network because their model is slow. `UnreachableLocalEngineTests`
+  holds all four cases; the two that matter were watched fail with *"Expected cure not to be null"*.
+
+The cure names mirrored networking first (`[wsl2] networkingMode=mirrored`, then `wsl --shutdown`)
+and `OLLAMA_HOST=0.0.0.0` second: the first needs no firewall rule and no address that WSL
+re-allocates on the next boot. Verified end to end on 2026-09-03 — after mirrored,
+`coai-mcp --ask-local` from Ubuntu against the Windows engine returned `exit 0`, 249/142 tokens and
+a valid findings object in 31 s. Plan: [PLAN_wsl_local_engine.md](../todo/PLAN_wsl_local_engine.md).
+
 ### A setting value this build cannot read is said out loud (2026-09-02)
 
 `PanelSettings.Unrecognised` carries a sentence per setting whose VALUE this build does not

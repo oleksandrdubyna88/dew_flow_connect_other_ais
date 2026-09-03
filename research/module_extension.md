@@ -419,6 +419,35 @@ noticed on the next repaint rather than after a TTL. `⟳` on the row clears it 
 out of the first version as "a CLI's button" until the gate pointed out that a cache with no way to
 clear it is a stale list with no way out.
 
+### The engine one hop away, and the button that reaches it (2026-09-03)
+
+In WSL, "no local engine answered" was printed identically to a machine with no engine and to one
+whose engine is on the Windows side of the same box — measured, fifteen models and ten refused rounds
+(`module_runners.md`, *An unreachable local engine*). `discoverEngine` now asks one more question
+after every candidate has refused: `wslNetwork.windowsSideEngine` runs `curl.exe` through interop, so
+a WINDOWS process asks `127.0.0.1` and reaches the loopback this side cannot. The answer lands in
+`LocalEngine.elsewhere` and turns the note into a diagnosis that names the engine.
+
+**It is a diagnosis, never an endpoint.** The first draft probed WSL's default gateway for the engine
+and offered the address; three gate reviewers refused it, all correctly. A panel-side discovery
+cannot change the address the SERVER dials — `coai-mcp` reads `baseUrl` from the settings file, so an
+empty one still resolves to `127.0.0.1` and still fails; and "the gateway is inside `172.16.0.0/12`"
+is not a test for "this is the Windows host", it is a test that names the office router on a
+corporate network in that range. Nothing in `wslNetwork.ts` opens a socket to any address.
+
+**`⇄` writes `networkingMode=mirrored`, and is the only thing here that writes.** It appears only
+when `elsewhere` is set. It merges into the existing `.wslconfig` rather than replacing it — the key
+goes INSIDE `[wsl2]` (appended after a following `[experimental]` it would be ignored and the restart
+wasted), the file's own line endings are used, and a file that did not arrive as UTF-8 is refused
+with the two lines to paste instead, because PowerShell's redirection still writes UTF-16 and
+"merging" that writes back rubbish. The write is a temporary file plus a rename plus a read-back;
+`.wslconfig` is global to every distro and telling somebody to restart WSL on the strength of a
+failed write is the specific outcome that guards against. It **toggles** — a global switch with no
+way back is not a cure — and it never runs `wsl --shutdown`, which would terminate the distro this
+extension host lives in. A source-level test holds the writer to exactly one caller, because a
+regression that called it during activation would change a global networking file with nobody's
+consent and every other test here would still pass.
+
 **The trust line is not decoration.** The endpoint field is advertised for "a box on the network", so
 a URL can be pasted — or arrive in workspace settings from a cloned repository — and every review
 POSTs the plan, the diffs and the file contents around them to it. `isLoopback` parses the host, so

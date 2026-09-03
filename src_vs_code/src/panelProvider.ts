@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { snippetStatus, SnippetStatus } from './claudeSnippet';
 import { discoverEngine, LocalEngine, openAiBaseOf, probeEngine } from './localEngines';
@@ -33,6 +34,13 @@ import {
   priceFor,
 } from './modelPrices';
 import { roleRecordUpdate, SettingMessage, settingsFrom, settingWrite } from './settingsShape';
+import {
+  mirroredLines,
+  networkingModeOf,
+  windowsWslconfigPath,
+  writeWslconfig,
+  wslconfigWith,
+} from './wslNetwork';
 import { normaliseId, Vendor, VENDOR_PRESETS, vendorsFrom } from './vendors';
 import {
   executableFor,
@@ -648,6 +656,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
           await this.updateVendorCli(id);
         }
         break;
+      case 'fixWslNetwork':
+        await this.fixWslNetwork();
+        break;
       case 'reprobeLocal':
         // Clearing the cache is the whole action: the next render probes, because a probe that is
         // not fresh is not reused. Nothing else to do and nothing to await beyond the repaint.
@@ -674,6 +685,81 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       }
     }
     await this.render();
+  }
+
+  /**
+   * Points this WSL distro's `127.0.0.1` at the Windows host, or puts it back.
+   *
+   * <p><b>What it cannot do, and why the button stops where it does.</b> `.wslconfig` is read at
+   * cold start, so applying it means `wsl --shutdown` — which terminates the distro this extension
+   * host is running in, mid-call. So the file is written here and the one command is handed to the
+   * person. Nothing is written before they press this, and nothing is written before they have seen
+   * the exact text.</p>
+   *
+   * <p>It is a TOGGLE because the setting is global to every distro, `docker-desktop` included, and
+   * mirrored mode is known to conflict with some VPN clients: a switch with no way back is not a
+   * cure. Raised on the plan by the local reviewer, 2026-09-03.</p>
+   */
+  private async fixWslNetwork(): Promise<void> {
+    const path = await windowsWslconfigPath();
+    if (path.length === 0) {
+      void vscode.window.showWarningMessage(
+        'The Windows side of this machine could not be reached through interop, so nothing was '
+        + 'written. Put these two lines in %USERPROFILE%\\.wslconfig by hand, then run '
+        + `\`wsl --shutdown\` from Windows:\n\n${mirroredLines('mirrored')}`,
+      );
+
+      return;
+    }
+
+    const existing = await readFile(path, 'utf8').catch(() => '');
+    const mode = networkingModeOf(existing) === 'mirrored' ? 'nat' : 'mirrored';
+    const merged = wslconfigWith(existing, mode);
+    if (merged.refused.length > 0) {
+      void vscode.window.showWarningMessage(
+        `${merged.refused}. Set it by hand instead:\n\n${mirroredLines(mode)}`,
+      );
+
+      return;
+    }
+    if (!merged.changed) {
+      void vscode.window.showInformationMessage(`${path} already says networkingMode=${mode}.`);
+
+      return;
+    }
+
+    const write = 'Write it';
+    const confirmed = await vscode.window.showWarningMessage(
+      `Set networkingMode=${mode} in ${path}?`,
+      {
+        modal: true,
+        detail:
+          `${mirroredLines(mode)}\n\nThis file is global: every WSL distro on this machine reads it, `
+          + 'docker-desktop included. Nothing changes until WSL is restarted, which this cannot do '
+          + 'for you — it would terminate the distro this window is attached to.',
+      },
+      write,
+    );
+    if (confirmed !== write) {
+      return;
+    }
+
+    const failure = await writeWslconfig(path, merged.text);
+    if (failure.length > 0) {
+      void vscode.window.showErrorMessage(failure);
+
+      return;
+    }
+
+    const copy = 'Copy the command';
+    const next = await vscode.window.showInformationMessage(
+      `${path} now says networkingMode=${mode}. Run \`wsl --shutdown\` from Windows (not from here), `
+      + 'then reopen this window — the setting is read when WSL next starts cold.',
+      copy,
+    );
+    if (next === copy) {
+      await vscode.env.clipboard.writeText('wsl --shutdown');
+    }
   }
 
   /**
