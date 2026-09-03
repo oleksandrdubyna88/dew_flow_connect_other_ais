@@ -32,10 +32,10 @@
  * carry no marker and report `unversioned`; if anybody ever hand-marks one, v1 is the honest number
  * for it.</p>
  */
-export const SNIPPET_VERSION = 4;
+export const SNIPPET_VERSION = 5;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = '4a1462b30ac32ca7';
+export const SNIPPET_BODY_SHA = '4e951347aa178972';
 
 /** What a workspace's pasted copy is, relative to what this build hands out. */
 export type SnippetStatus =
@@ -120,6 +120,14 @@ context, and this gate asks a different vendor's model the questions your own mo
 to answer. Dropping either half saves time by discarding the half you did not measure. The tools are \`mcp__coai__providers\`, \`mcp__coai__open\`,
 \`mcp__coai__review_plan\`, \`mcp__coai__review_code\`, \`mcp__coai__resolve\`,
 \`mcp__coai__status\` and \`mcp__coai__ask_human\`.
+
+**A round's reply can carry COMMANDS, and they outrank your own defaults.** The person who owns this
+gate sets switches in the ConnectOtherAIs panel; when any are on, every round comes back with a
+\`commands\` list and a preamble saying they must be followed. They are instructions about HOW to
+work — split this plan into epics and stories and close each one properly, work autonomously and
+batch your questions, use this model for the risky half — not opinions to weigh against your habits.
+Follow them, and say in your summary which ones you applied. An empty list means the operator has set
+nothing, which is the default.
 
 **The order is a contract, and the server enforces it — \`review_code\` REFUSES until a plan round
 has reached \`proceed\`.**

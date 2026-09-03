@@ -10,6 +10,12 @@
  * a compile error rather than a blank tooltip.</p>
  */
 export const HELP = {
+  autonomous:
+    'The gate tells the assistant to work without interrupting you: a question that does not block it is written down and asked at the END, all of them together; a question that does block it is asked at once — but only after it has re-read what it has written and gathered every other blocking question, so you are interrupted once with all of them instead of five times with one each.',
+  splitPlan:
+    'After a plan passes, the gate tells the assistant to break it into 2-4 epics and each epic into 2-4 logically complete stories, and to close every story properly: review the diff through this gate, fix what it accepts, update the documentation and the tests, commit — then start the next one. The gate measures the plan you sent (length, build steps, files, subsystems) and says whether it needs epics, stories or nothing; that is a heuristic, and the assistant is told it may disagree in writing.',
+  splitWithFable:
+    'When a Fable reviewer is configured here, the split itself is done by Fable at its highest version — deciding what the epics and stories ARE is the judgement that shapes everything after it — and the risky stories go back to it: payments, money, authentication, security, architecture, data migration. The ordinary ones run on Opus. Nothing is said about Fable when no Fable vendor is configured: an instruction to switch to a model you have not got is an instruction that stops the work.',
   vendorEnabled:
     'Whether this reviewer takes part. Switching one off keeps its settings — the next round simply runs without it.',
   vendorModel:

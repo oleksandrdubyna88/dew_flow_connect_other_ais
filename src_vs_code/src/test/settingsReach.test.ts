@@ -25,6 +25,9 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   promptsPerRound: { SecurityReliability: ['sec-attack'] },
   dealCodeLenses: true,
   codeWorkspace: 'worktree',
+  autonomous: true,
+  splitPlan: true,
+  splitWithFable: true,
 };
 
 test('every setting, changed on its own, reaches the server file', () => {

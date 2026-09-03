@@ -544,3 +544,48 @@ estimate of neither — the gate's finding, and the reason `ReviewerInvocation` 
 The note reaches the panel through `ReviewerProgress.Note` → `ReviewerState.Note`, and the round card
 renders it for a queued reviewer exactly as it does for a failed one:
 `local/Architecture — queued (2 ahead on this engine, about 4 min)`.
+
+### The gate can give ORDERS, and three switches decide which (2026-09-03)
+
+The gate answers one question — are these findings gating, may you proceed — and the AI that called
+it decides everything else: whether to split the work, when to interrupt the person, which model to
+use for what. Three of those are the OPERATOR's decisions, and the panel is where the operator sits.
+So a round's reply can now carry **commands**: short imperative instructions, with a preamble saying
+they come from a person and outrank the caller's own defaults.
+
+| switch | what the command says |
+|---|---|
+| Work autonomously | a question that does not block is written down and asked at the END, all together; one that does block is asked at once — but only after gathering every other blocking question, so the person is interrupted once |
+| Split the plan | 2-4 epics, each 2-4 logically complete stories, and after EVERY story: `review_code`, resolve, fix, document, test, commit — then the next |
+| Split with Fable | the split itself on Fable at its highest version; ordinary stories on Opus; payments, security, architecture and data migration back on Fable |
+
+Everything is off by default, and an empty command list is exactly the behaviour of every release
+before this one.
+
+**Three rules the commands keep, each because a review round found the case:**
+
+- **The split command belongs to the PLAN stage only.** A code round has a diff and no plan, so a
+  split verdict computed there would be a number invented from source. Raised twice.
+- **Fable is never named when Fable is not there.** An instruction to switch to a model this machine
+  has not got is an instruction that stops the work, so the command is issued only when an ENABLED
+  provider names it.
+- **The autonomy command does not tell you to re-read epics that do not exist.** With the split
+  switch off it says "re-read the whole plan" instead.
+
+**Whether to split is measured, and says so.** `PlanShapeReader` counts the plan's lines, the
+numbered items under its build-order heading, the distinct files it names and the top-level
+directories it touches; `PlanShape.Verdict` is two-axis — epics when big AND broad
+(`lines > 300 && (steps ≥ 6 || areas ≥ 4)`, or 14+ files), stories when `steps ≥ 4 || lines > 100`,
+otherwise as it is. The command carries those numbers with the verdict and says out loud that it is a
+heuristic the AI may disagree with in writing.
+
+The rule was fitted to this repository's own 23 plans (median 120 lines, 4 steps, 6 files, 2 areas;
+max 554 / 9 / 28 / 5) and to the one case the corpus can answer for: the master plan that actually
+became six epics is 440 lines across 5 areas with **no build order at all**, so a step count alone
+misses it, while a 230-line plan with 9 steps shipped whole in a day. Size alone was refuted by the
+data before the rule was written.
+
+**The switches are live.** `PanelServiceHost` already rebuilt the service when the settings file's
+write time or length changed; `SettingsAreLiveTests` now states it as a requirement rather than a
+convenience — a switch ticked a second before a call governs that call, in both directions, and
+creating a file where there was none counts as a change.

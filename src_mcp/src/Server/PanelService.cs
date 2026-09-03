@@ -546,7 +546,21 @@ public sealed class PanelService
 
             var answer = AnswerFor(completed.Verdict, gate, summary, merged, reviews, StageGate(session).Threshold);
             var record = live.Finish(answer.Verdict, gate.GatingCount, summary.Sentence, results);
-            answer = answer with { Cost = new RoundCost(record.TokensIn, record.TokensOut, record.CostUsd) };
+            // The operator's own switches, read for THIS call: the settings file is stamped and
+            // reloaded per tool call, so a box ticked a second ago governs this round.
+            var commands = Core.Commands.GateCommands.For(new Core.Commands.CommandContext(
+                Autonomous: _settings.Autonomous,
+                SplitPlan: _settings.SplitPlan,
+                SplitWithFable: _settings.SplitWithFable,
+                FableAvailable: FableIsUsable(),
+                PlanText: session.PlanText,
+                PlanStage: session.State.Stage == Stage.PlanReview));
+            answer = answer with
+            {
+                Cost = new RoundCost(record.TokensIn, record.TokensOut, record.CostUsd),
+                Commands = commands.Count == 0 ? null : commands,
+                CommandsPreamble = commands.Count == 0 ? null : Core.Commands.GateCommands.Preamble,
+            };
             _store.Save(session with
             {
                 State = completed.State,
@@ -810,6 +824,21 @@ public sealed class PanelService
                 choice.Id));
         }
     }
+
+    /// <summary>
+    /// Whether a Fable reviewer is here AND usable — never merely configured.
+    /// </summary>
+    /// <remarks>
+    /// An instruction to switch to a model this machine has not got is an instruction that stops the
+    /// work. A vendor that is disabled, or whose CLI the health probe cannot find, is not available,
+    /// which is the distinction this change's plan round asked for by name.
+    /// </remarks>
+    private bool FableIsUsable() =>
+        _settings.Providers.Any(p =>
+            p.Enabled
+            && (p.Provider.Contains("fable", StringComparison.OrdinalIgnoreCase)
+                || p.Model.Contains("fable", StringComparison.OrdinalIgnoreCase)
+                || p.Runtime.Contains("fable", StringComparison.OrdinalIgnoreCase)));
 
     private string ComposePrompt(PromptChoice choice, string context) =>
         $"{_prompts.ForChoice(choice)}\n\n## The finding contract\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{FindingSchema.Json}\n\n{context}";

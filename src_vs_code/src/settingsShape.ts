@@ -76,6 +76,18 @@ export interface CoaiSettings {
   readonly dealPlanLenses: boolean;
   readonly dealCodeLenses: boolean;
   /**
+   * Work without interrupting the person until there is no other way.
+   *
+   * <p>These three are ORDERS the gate hands back to whichever AI called it, not changes to what the
+   * gate decides. They are the operator's decisions — how the work is broken up, when a person is
+   * interrupted, which model does the expensive half — and the panel is where the operator sits.</p>
+   */
+  readonly autonomous: boolean;
+  /** Break an accepted plan into epics and stories, and close each story properly. */
+  readonly splitPlan: boolean;
+  /** Do the split, and the stories where being wrong is expensive, with Fable. */
+  readonly splitWithFable: boolean;
+  /**
    * What a code reviewer is launched in: `none` (Fast — the diff alone) or `worktree` (Full).
    *
    * <p>Fast is the default because it was measured, not preferred: without a checkout every hosted
@@ -154,6 +166,9 @@ export const DEFAULTS: CoaiSettings = {
   promptsPerRound: {},
   dealPlanLenses: false,
   dealCodeLenses: false,
+  autonomous: false,
+  splitPlan: false,
+  splitWithFable: false,
   codeWorkspace: 'none',
 };
 
@@ -175,6 +190,9 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     promptsPerRound: asPromptRounds(read('promptsPerRound')),
     dealPlanLenses: read('dealPlanLenses') === true,
     dealCodeLenses: read('dealCodeLenses') === true,
+    autonomous: read('autonomous') === true,
+    splitPlan: read('splitPlan') === true,
+    splitWithFable: read('splitWithFable') === true,
     codeWorkspace: read('codeWorkspace') === 'worktree' ? 'worktree' : 'none',
   };
 }
@@ -206,6 +224,17 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
   }
   if (settings.codeWorkspace !== DEFAULTS.codeWorkspace) {
     env['COAI_CODE_WORKSPACE'] = settings.codeWorkspace;
+  }
+  // The three that make the gate give orders. Written only when ON, like every other switch here:
+  // a file that carries only what differs from the defaults is one a person can read.
+  if (settings.autonomous) {
+    env['COAI_AUTONOMOUS'] = 'true';
+  }
+  if (settings.splitPlan) {
+    env['COAI_SPLIT_PLAN'] = 'true';
+  }
+  if (settings.splitWithFable) {
+    env['COAI_SPLIT_WITH_FABLE'] = 'true';
   }
 
   for (const [role, threshold] of Object.entries(settings.thresholds)) {

@@ -370,6 +370,14 @@ function gateBody(s: CoaiSettings): string {
     <option value="good_enough"${s.onExhausted === 'good_enough' ? ' selected' : ''}>Good enough \u2014 take what\u2019s true and move on</option>
     <option value="escalate"${s.onExhausted === 'escalate' ? ' selected' : ''}>Climb the ladder</option>
   </select>
+</div>
+<div class="field">
+  <div class="hint">These three do not change what the gate DECIDES. They are orders it hands back to
+  whichever AI called it — how the work is broken up, when you are interrupted, which model does the
+  expensive half. All three are off unless you turn them on.</div>
+  <label class="check"><input type="checkbox" data-setting="autonomous"${s.autonomous ? ' checked' : ''}> Work autonomously${help('autonomous')}</label>
+  <label class="check"><input type="checkbox" data-setting="splitPlan"${s.splitPlan ? ' checked' : ''}> Split the plan into epics and stories${help('splitPlan')}</label>
+  <label class="check"><input type="checkbox" data-setting="splitWithFable"${s.splitWithFable ? ' checked' : ''}> Split with Fable, and give it the risky stories${help('splitWithFable')}</label>
 </div>`;
 }
 

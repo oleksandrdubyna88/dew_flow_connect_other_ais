@@ -135,6 +135,22 @@ public sealed record PanelSettings
     public int LocalMaxTokens { get; init; } = 8192;
 
     /// <summary>
+    /// Work without interrupting the person until there is no other way.
+    /// </summary>
+    /// <remarks>
+    /// Off by default, like the two below: a gate that starts issuing orders nobody asked for is one
+    /// people turn off entirely. What it produces is a COMMAND in the round's reply, not a change to
+    /// what the gate decides.
+    /// </remarks>
+    public bool Autonomous { get; init; }
+
+    /// <summary>Break an accepted plan into epics and stories, and close each one properly.</summary>
+    public bool SplitPlan { get; init; }
+
+    /// <summary>Do the splitting — and the expensive-to-get-wrong stories — with Fable.</summary>
+    public bool SplitWithFable { get; init; }
+
+    /// <summary>
     /// What a CODE reviewer is launched in: <c>none</c> (the default) or <c>worktree</c>.
     /// </summary>
     /// <remarks>
@@ -194,6 +210,9 @@ public sealed record PanelSettings
             : TimeSpan.FromMinutes(IntVar(env, "COAI_ESCALATION_MINUTES", 30)),
         DataDir = env("COAI_DATA_DIR") is { Length: > 0 } dir ? dir : DefaultDataDir,
         LocalMaxTokens = IntVar(env, "COAI_LOCAL_MAX_TOKENS", 8192),
+        Autonomous = Flag(env, "COAI_AUTONOMOUS"),
+        SplitPlan = Flag(env, "COAI_SPLIT_PLAN"),
+        SplitWithFable = Flag(env, "COAI_SPLIT_WITH_FABLE"),
         LocalReasoningEffort = env("COAI_LOCAL_REASONING_EFFORT") is { Length: > 0 } effort
             ? effort.Trim().ToLowerInvariant()
             : "none",

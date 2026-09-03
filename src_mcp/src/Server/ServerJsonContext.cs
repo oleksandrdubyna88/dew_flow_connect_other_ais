@@ -66,7 +66,13 @@ public sealed record ReviewAnswer(
     IReadOnlyList<Finding> Discounted,
     IReadOnlyList<string> RejectedEntries,
     string Instruction,
-    RoundCost? Cost = null);
+    RoundCost? Cost = null,
+    /// <summary>
+    /// What the operator's switches tell the caller to do, and the sentence that says they must be
+    /// followed. Empty when no switch is on, which is every release before this one.
+    /// </summary>
+    IReadOnlyList<string>? Commands = null,
+    string? CommandsPreamble = null);
 
 /// <summary>
 /// One round's consumption. Tokens come from every vendor that reports them; <paramref name="Usd"/>

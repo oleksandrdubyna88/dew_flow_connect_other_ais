@@ -601,3 +601,18 @@ A round from a server older than `seconds` shows its reviewers with no duration 
 absent is unknown, and printing a zero would be a measurement nobody made. The list is also twice as
 tall (640px) — a sidebar is usually far taller than 320px, and five rounds filled it with room to
 spare.
+
+### Three switches that give the gate orders (2026-09-03)
+
+*The gate* section gained three checkboxes — **Work autonomously**, **Split the plan into epics and
+stories**, **Split with Fable** — and they are unlike every other setting in the panel: they do not
+change what the gate decides, they change what it TELLS the assistant to do. Each turns into one
+command in every round's reply ([module_server.md](module_server.md)), and each is off by default.
+
+The CLAUDE.md snippet (v5) gained the paragraph that makes them work at all: a target repository's AI
+is told that a reply may carry `commands`, that they come from the person who owns the gate, that
+they outrank its own defaults, and that its summary should say which ones it applied. An instruction
+nobody knows to look for is not an instruction.
+
+The help article for the gate describes all three in every language the help ships, because a switch
+whose only explanation is its label is a switch people leave alone.
