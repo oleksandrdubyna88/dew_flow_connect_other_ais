@@ -1,12 +1,32 @@
 # PLAN — one GPU serves one reviewer, and a 404 is not a rate limit
 
-> Status: **plan only, nothing implemented yet, 2026-09-03.** Scope:
-> `src_mcp/runners/Reviewers/BoundedScheduler.cs`, `src_mcp/runners/Reviewers/ReviewerExecutor.cs`
-> (`RateLimit`), `src_mcp/src/Server/PanelSettings.cs`, `src_mcp/src/Server/PanelService.cs`, and the
-> panel's Limits section.
+> Status: **IMPLEMENTED, 2026-09-03**, in the server. Six of the plan's statements shipped; the
+> panel's Limits line and the field re-run are the tail below.
 >
-> Related docs: [module_server.md](../research/module_server.md), [module_runners.md](../research/module_runners.md),
-> [PLAN_local_models.md](../research/PLAN_local_models.md).
+> **Deviations, largest first.** The plan proposed keying the cap on the provider name and the gate
+> refuted it twice over: two vendor ids can name one card (so the key is the canonicalised ENDPOINT),
+> and the limiters were being built inside `RunAllAsync` — which made every cap per ROUND, so two
+> rounds in one server allowed twice what the setting said. The implementation's own first lock
+> ORDER was then wrong in the opposite direction: taking the engine before the machine slot let a
+> local reviewer hold an idle card while queued behind hosted vendors. It is widest-first now.
+>
+> The plan also proposed a new `ReviewerOutcome.VendorError`. It was not built: `NonZeroExit` already
+> carries the vendor's own line and is already not retried, so the 404 needed the classifier fixed
+> and nothing else — a new outcome type would have been a second name for a state that exists.
+>
+> **What the tests found that no reviewer did:** a reviewer cancelled while RUNNING threw out of the
+> fan-out exactly as a queued one did, so `Task.WhenAll` faulted and a round cancelled with five
+> reviewers finished reported none of them. The accepted finding was about the queue; the defect was
+> about both.
+>
+> **The open tail:** the panel's Limits section still does not say that `maxPerProvider` has no
+> authority over a local engine — `src_vs_code` was being edited by another session in this shared
+> checkout when this landed, and one line of UI is not worth committing over somebody's uncommitted
+> work. The field re-run (three local roles in one round, answering one after another on the machine
+> that produced the symptom) needs the released binary and is owed with it.
+>
+> Related docs: [module_server.md](module_server.md), [module_runners.md](module_runners.md),
+> [PLAN_local_models.md](PLAN_local_models.md).
 
 ## The symptom, measured 2026-09-03
 
@@ -37,7 +57,7 @@ half a minute — measured twice (30.6 s in this round, 29.9 s in the plan round
 
 **And the sentence it fails with names the wrong thing.** "The local engine did not answer within the
 round's deadline" describes an engine that is down or unreachable — the diagnosis the WSL work built
-for exactly that case ([PLAN_wsl_local_engine.md](../research/PLAN_wsl_local_engine.md)). Here the
+for exactly that case ([PLAN_wsl_local_engine.md](PLAN_wsl_local_engine.md)). Here the
 engine was up, loaded, and answering; it was answering to two other reviewers of the same round. A
 person reading that line goes to check `127.0.0.1:11434`, finds it healthy, and learns nothing.
 

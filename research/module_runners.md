@@ -324,3 +324,18 @@ it immediately.
 The fallback stays, because refusing to start over a value from a future panel would be worse. What
 changed is that it is audible, and that the message names the likely cure — the panel and the server
 version separately, so "the panel is newer than this server" is the first thing to check.
+
+### The local runtime declares the card it needs (2026-09-03)
+
+`LocalRuntime.Build` sets `ReviewerInvocation.SharedResource` to `EngineKey(endpoint)`, and that is
+the whole of this half: the runtime knows which engine it is about to call, and the scheduler knows
+how many reviewers one engine may have. `EngineKey` lower-cases the scheme, host and port and trims
+the path, so one card cannot end up with two keys through two spellings of its address.
+
+Nothing here opens a socket to decide it. A key is an identity, not a health check — the same
+distinction the WSL work drew when it refused to probe for an engine
+([PLAN_wsl_local_engine.md](PLAN_wsl_local_engine.md)).
+
+Why it is measured rather than argued: three reviewers on one Ollama, one answered in 30.6 s and two
+were cancelled at 590 s. See *One local engine serves one reviewer* in
+[module_server.md](module_server.md).

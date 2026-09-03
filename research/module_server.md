@@ -439,3 +439,52 @@ the original lie back one release later, where nobody would look for it.
 
 Verified on a real Native AOT binary (the attribute survives ILC): `--version` → `coai-mcp 0.12.3`,
 exit 0, while a near-miss like `--ver` still exits 64 with the usage line on stderr.
+
+### One local engine serves one reviewer, and a code is matched as a code (2026-09-03)
+
+**Two rounds reported fewer reviewers than they asked for, and both sentences pointed at the wrong
+thing.** Measured from this server's own log.
+
+*The card.* A code round started `local/Architecture` at 16:04:26 and it answered in **30.6 s**; it
+started `local/SecurityReliability` at 16:04:33 and `local/UxDxPerformance` at 16:04:35, and both were
+cancelled at **590 s** having produced nothing. The engine was up, loaded and answering — to three
+requests of one round at once, because `COAI_MAX_PER_PROVIDER=3` is a reasonable number for a hosted
+vendor's fleet and the wrong number for one GPU. Each got a third of the card.
+
+So the cap that matters is keyed by the **engine**, not the vendor: `ReviewerInvocation.SharedResource`
+carries it, `LocalRuntime` sets it to `EngineKey(endpoint)` — canonicalised, because
+`…/v1` and `…/v1/` are one card — and `COAI_LOCAL_CONCURRENCY` (default **1**) is its cap. Two vendors
+pointed at one Ollama share it; two engines on two ports do not; a hosted vendor holds none.
+
+Three things the gate corrected in it, each of which was a defect in its own right:
+
+| what | why it mattered |
+|---|---|
+| The limiters now live as long as the **scheduler** | they were built inside `RunAllAsync`, so two rounds in one server built two sets and a cap of three allowed six on the machine the docstring says it bounds |
+| Widest lock first — machine, vendor, **engine last** | taking the engine first let a local reviewer hold the card while blocked on a machine slot filled by hosted vendors: the GPU idle and locked, every other local reviewer waiting for it |
+| A cancelled wait is **reported**, not thrown | `WaitAsync(ct)` threw out of the fan-out, `Task.WhenAll` propagated it, and a round cancelled with five reviewers finished reported none of them. The test for that found the same hole on the RUNNING path |
+
+The deadline sentence changed with it. It used to read *"did not answer within the round's deadline:
+The request was canceled due to the configured HttpClient.Timeout"* — which describes an engine that
+is down, and sent readers to check a healthy port. It now says how long it waited of what it was
+given, that the engine is up and slower than the deadline, and the cures in the order worth trying;
+and a cancellation is only called *too slow* when the deadline is what expired, never when the round
+was abandoned.
+
+*The 404.* A codex reviewer was reported as **"rate limited (after one retry)"** when the vendor had
+answered `unexpected status 404 Not Found … cf-ray: a3…`. `429` and `503` were in
+`RateLimit.Phrases` as bare substrings of stdout and stderr — and a Cloudflare ray id is hexadecimal,
+a token count is a number, a duration in milliseconds is a number. The person was told to wait for a
+quota that was never hit, and the reviewer was retried against a route that answers 404.
+
+A status code is now matched as a code, in the four shapes vendors actually print — `HTTP 429`,
+`status: 503`, `429 Too Many Requests`, `503 (Service) Unavailable` — and in no other, because the
+first attempt at this regex also accepted `code`, `status_code`, `error` and a bare `rate`, which is
+the same class of guess it was replacing. `cf-ray: a3f4291e…`, `prompt_tokens: 429` and `4290ms` are
+not rate limits. The 404 comes back as what it is: a non-zero exit carrying the vendor's own line,
+once, unretried.
+
+**Out of scope, and stated rather than implied:** this is a guarantee per SERVER PROCESS. Two MCP
+clients each running a `coai-mcp`, or another program on the same card, are not serialised by it — for
+that, the family's `gpu-lease` rule is the mechanism, and it lives outside this product because a
+marketplace extension cannot depend on another repository's daemon.
