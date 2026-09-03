@@ -36,6 +36,47 @@ findings, Gemma 34, against Sonnet's 28. On the subject where every finding was 
 produced the most findings and the fewest correct ones. Counting findings measures how much a model
 says; only reading measures how much of it is true.
 
+## The hosted models, in both modes
+
+The five rows above give every model one input shape: the hosted three explored the checkout, the
+local two were handed a prompt. That is not a comparison of models, so the hosted three were run
+again on the same commit with `COAI_CODE_WORKSPACE=none` — the identical prompt, in an empty
+directory, which is what a local reviewer has always had.
+
+| model | mode | findings | wall | tokens in |
+|---|---|---|---|---|
+| Gemini 3.7 Flash | with checkout | 5 | 233 s | 610k |
+| Gemini 3.7 Flash | **diff only** | **10** | **189 s** | **266k** |
+| GPT-5.6-Luna | with checkout | 7 | 115 s | 515k |
+| GPT-5.6-Luna | **diff only** | **11** | 124 s | **300k** |
+| Claude Sonnet 5 | with checkout | 7 | 441 s | 1 952k |
+| Claude Sonnet 5 | **diff only** | **8** | 522 s | **579k** |
+| Qwen3.5 35B local | diff only, always | 10 | 144 s | 117k |
+| Gemma4 26B local | diff only, always | 6 | 112 s | 130k |
+
+**Taking the repository away made every hosted model find MORE, at a third to a quarter of the
+tokens.** Flash doubled its findings on 56 % fewer tokens; Luna went from seven to eleven; Sonnet
+gained one while spending 1.37 million fewer tokens. Nothing about the prompt changed — the diff and
+the project's rules are assembled by the server either way — so the only thing removed was the
+wandering.
+
+**And the wandering was costing findings, not buying them.** Both defects that Flash missed with a
+checkout — the `{}` schema fallback and the randomised seed — it found without one. A reviewer given
+a repository spends its attention deciding where to look; a reviewer given a diff reads the diff.
+
+Two findings appeared only in diff-only mode and only from one model each, and both are real:
+
+- **A second local vendor shows the first one's models.** `probeLocalEngine` looks up
+  `vendors.find(v => v.runtime === 'local')` and hands that one `state.localEngine` to every card,
+  so two local reviewers on different engines display one list (**sonnet**, `panelView.ts:238`).
+- **Every local invocation leaves its prompt file behind** — the full prompt, with source and diffs,
+  under a GUID name with no cleanup on success, failure or timeout (**luna**, `LocalRuntime.cs:91`).
+
+**What this does not settle.** Three commits' worth of the fair run were still outstanding when it
+was stopped, so this is one subject deeply rather than five broadly, and the finding counts above
+were judged for correctness only on the with-checkout mode. The direction is large and consistent
+across all three models; the size of it is one commit's worth of evidence.
+
 ## Five real defects nobody knew about
 
 Every one of these was verified in the file it names, and none was in the four already-known
