@@ -1,4 +1,4 @@
-import { money } from './usage';
+import { round4, spendPhrase } from './usage';
 /**
  * Reading the server's own session files, so the rounds view shows what actually happened rather
  * than what the extension guessed. Pure apart from the read: the shapes and the rendering are
@@ -12,6 +12,19 @@ export interface ReviewerState {
   readonly status: string;
   readonly findings: number;
   readonly note: string;
+  /**
+   * What THIS reviewer consumed. Absent in files written by a server older than this field.
+   *
+   * <p>Per reviewer rather than only per round, and that is the whole point: a round runs several
+   * vendors at once, each on its own rate, so a round's summed tokens cannot be priced by any one
+   * of them. Pricing 220k mixed tokens at codex's rate would be the invented number this
+   * repository refuses everywhere else (`UsageParserTests`: "inventing a price is worse than
+   * none"). Split by reviewer, each half is priced by the rate that actually applies to it.</p>
+   */
+  readonly tokensIn?: number;
+  readonly tokensOut?: number;
+  /** Only vendors that price their own runs report this; absent is "unknown", never "free". */
+  readonly costUsd?: number | null;
 }
 
 export interface RoundRecord {
@@ -61,15 +74,50 @@ export function isRunning(round: RoundRecord): boolean {
  * run. "no cost reported" is deliberate wording: the alternative — printing $0.00 — would claim
  * the round was free, and a silent vendor is unknown, not free.</p>
  */
-export function costPhrase(round: RoundRecord): string {
+export function costPhrase(round: RoundRecord, rate: RateLookup = () => undefined): string {
   const inTokens = round.tokensIn ?? 0;
   const outTokens = round.tokensOut ?? 0;
+  const spent = spendPhrase(round.costUsd ?? null, estimateOf(round.reviewerStates ?? [], rate));
   if (inTokens === 0 && outTokens === 0) {
-    return round.costUsd == null ? 'no usage reported' : money(round.costUsd);
+    return spent ?? 'no usage reported';
   }
   const tokens = `${thousands(inTokens)} in / ${thousands(outTokens)} out`;
-  return round.costUsd == null ? `${tokens} · no cost reported` : `${tokens} · ${money(round.costUsd)}`;
+  return `${tokens} · ${spent ?? 'no cost reported'}`;
 }
+
+/**
+ * What the reviewers that billed nothing would have cost at the rates the person entered.
+ *
+ * <p><b>Per reviewer, and this is the whole reason the server records usage per reviewer.</b> A
+ * round fans out to several vendors at once, each on its own rate; the round's summed tokens
+ * therefore have no single rate that could price them. Applying one vendor's rate to the sum is
+ * the invented number this repository refuses everywhere else, and it would be invisibly wrong —
+ * a plausible figure, off by whatever the other vendor charges.</p>
+ *
+ * <p>Three ways to contribute nothing, all of them meaning "unknown" rather than "free": a
+ * reviewer that priced its own run (its money is already in the round's `costUsd`, and an estimate
+ * beside a bill is noise), a vendor with no rate behind it, and a round from a server old enough
+ * not to have written per-reviewer usage at all.</p>
+ */
+function estimateOf(states: readonly ReviewerState[], rate: RateLookup): number | null {
+  const guesses = states.filter((state) => state.costUsd == null).flatMap((state) => {
+    const price = rate(state.provider);
+    const inTokens = state.tokensIn ?? 0;
+    const outTokens = state.tokensOut ?? 0;
+    return price === undefined || (inTokens === 0 && outTokens === 0)
+      ? []
+      : [(inTokens / 1_000_000) * price.in + (outTokens / 1_000_000) * price.out];
+  });
+  return guesses.length === 0 ? null : round4(guesses.reduce((total, one) => total + one, 0));
+}
+
+/**
+ * What one vendor charges per million tokens, or nothing when nobody has said.
+ *
+ * <p>A function rather than the vendor list itself, so this module stays free of the settings
+ * shape: the panel composes it from `priceOf`, and a test answers for one provider in a line.</p>
+ */
+export type RateLookup = (provider: string) => { readonly in: number; readonly out: number } | undefined;
 
 
 function thousands(count: number): string {
@@ -115,8 +163,20 @@ export function reviewerLines(round: RoundRecord): readonly string[] {
   });
 }
 
-/** One session as a markdown section — what the rounds view renders. */
-export function renderSession(session: SessionFile, nowMs: number = Date.now()): string {
+/**
+ * One session as a markdown section — what the rounds view renders.
+ *
+ * <p>`rate` is what prices the round. The panel resolves it from the vendor list AND the published
+ * price tables it fetches; this view has no fetch behind it, so it prices from the rates the person
+ * typed. The two therefore agree wherever a rate was typed, and this one stays silent where only a
+ * published list price exists — silent rather than different, which is the failure mode that
+ * matters for two renderers of one file.</p>
+ */
+export function renderSession(
+  session: SessionFile,
+  nowMs: number = Date.now(),
+  rate: RateLookup = () => undefined,
+): string {
   const head =
     `## ${session.state.branch} — ${session.state.stage}\n\n` +
     `\`${session.state.repoPath}\` · session \`${session.state.sessionId}\`` +
@@ -141,7 +201,7 @@ export function renderSession(session: SessionFile, nowMs: number = Date.now()):
         `\`${r.verdict}\``,
         String(r.gatingCount),
         elapsed(r, nowMs),
-        costPhrase(r),
+        costPhrase(r, rate),
         r.reviewers,
       ]),
     )
@@ -228,7 +288,11 @@ function statusCell(round: RoundRecord): string {
 }
 
 /** The whole view: every session, newest activity first, or an honest empty state. */
-export function renderRounds(sessions: readonly SessionFile[], nowMs: number = Date.now()): string {
+export function renderRounds(
+  sessions: readonly SessionFile[],
+  nowMs: number = Date.now(),
+  rate: RateLookup = () => undefined,
+): string {
   if (sessions.length === 0) {
     return (
       '# ConnectOtherAIs — review rounds\n\n' +
@@ -236,13 +300,17 @@ export function renderRounds(sessions: readonly SessionFile[], nowMs: number = D
     );
   }
   const ordered = [...sessions].sort((a, b) => lastAt(b).localeCompare(lastAt(a)));
+  // The reviewer states of every round come along, because that is what the estimate is computed
+  // from: each one priced by ITS OWN vendor's rate and only then added. Summing the tokens first
+  // and pricing the sum would need a rate for "all vendors at once", which does not exist.
   const total = ordered.flatMap((s) => s.rounds).reduce(
     (sum, r) => ({
       tokensIn: sum.tokensIn + (r.tokensIn ?? 0),
       tokensOut: sum.tokensOut + (r.tokensOut ?? 0),
       costUsd: r.costUsd == null ? sum.costUsd : (sum.costUsd ?? 0) + r.costUsd,
+      reviewerStates: [...sum.reviewerStates, ...(r.reviewerStates ?? [])],
     }),
-    { tokensIn: 0, tokensOut: 0, costUsd: null as number | null },
+    { tokensIn: 0, tokensOut: 0, costUsd: null as number | null, reviewerStates: [] as ReviewerState[] },
   );
   const footer =
     `\n---\n\nAcross every round here: ${costPhrase({
@@ -253,9 +321,10 @@ export function renderRounds(sessions: readonly SessionFile[], nowMs: number = D
       reviewers: '',
       completedUtc: '',
       ...total,
-    })}. Money is only counted for vendors that price their own runs.\n` +
+    }, rate)}. A figure with a tilde is worked out from the rates you entered; anything else is what
+the vendor itself billed.\n` +
     `\n_Written by the ConnectOtherAIs extension; it rewrites this file as rounds advance._\n`;
-  return `# ConnectOtherAIs — review rounds\n\n${ordered.map((s) => renderSession(s, nowMs)).join('\n')}${footer}`;
+  return `# ConnectOtherAIs — review rounds\n\n${ordered.map((s) => renderSession(s, nowMs, rate)).join('\n')}${footer}`;
 }
 
 function lastAt(session: SessionFile): string {

@@ -5,7 +5,15 @@ using CoaiMcp.Core.Rounds;
 namespace CoaiMcp.Server;
 
 /// <summary>Where one reviewer has got to. The panel shows these while the round is still open.</summary>
-public sealed record ReviewerState(string Provider, string Role, string Status, int Findings = 0, string Note = "")
+public sealed record ReviewerState(
+    string Provider,
+    string Role,
+    string Status,
+    int Findings = 0,
+    string Note = "",
+    long TokensIn = 0,
+    long TokensOut = 0,
+    double? CostUsd = null)
 {
     public const string Queued = "queued";
     public const string Running = "running";

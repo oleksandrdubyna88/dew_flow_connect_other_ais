@@ -229,7 +229,29 @@ export function estimated(usd: number): string {
   return `~${money(usd)}`;
 }
 
+/**
+ * What something cost, saying which half was billed and which was worked out — or nothing at all.
+ *
+ * <p>The two halves are kept APART to the very last character. A total that adds what a vendor
+ * charged to what we derived from a rate somebody typed is a number nobody can check: it cannot be
+ * reconciled against an invoice, and it cannot be corrected when the rate turns out to be wrong.
+ * So a mixed round reads `$0.50 + ~$0.32`, which is longer and is the only honest form.</p>
+ *
+ * <p>`undefined` — not a dash, and never `$0.00` — when neither half is known. The CALLER decides
+ * what silence looks like: the spending row shows a dash, the round line says "no cost reported".
+ * Both are the same fact worded for their own surface.</p>
+ */
+export function spendPhrase(billed: number | null, guessed: number | null): string | undefined {
+  if (billed === null && guessed === null) {
+    return undefined;
+  }
+  if (guessed === null) {
+    return money(billed);
+  }
+  return billed === null ? estimated(guessed) : `${money(billed)} + ${estimated(guessed)}`;
+}
+
 /** Four decimals, so a fraction of a cent does not become zero on the way through. */
-function round4(usd: number): number {
+export function round4(usd: number): number {
   return Math.round(usd * 10_000) / 10_000;
 }

@@ -8,6 +8,7 @@ import {
   renderRounds,
   renderSession,
   reviewerLines,
+  ReviewerState,
   RoundRecord,
   SessionFile,
 } from '../rounds';
@@ -235,4 +236,139 @@ test('a table row never contains a newline, because one row is one line', () => 
   }
   // A reviewer sentence with a newline in it would end the table mid-row.
   assert.ok(!markdown.includes('exit 1\nand a second line'), 'the newline must be flattened');
+});
+
+/**
+ * The round line's own money, for the vendors that report none.
+ *
+ * <p>`pricing.test.ts` says why the estimate exists at all: *"every row in the spending section
+ * read `—` and every round read `no cost reported`. That is TRUE, and it is also useless."* The
+ * rows were fixed and the ROUND was not, so a round of codex and gemini — both with rates typed
+ * into the panel — still read "no cost reported" beside 220k tokens.</p>
+ *
+ * <p>Why the rate is applied per REVIEWER and never to the round's total: a round runs several
+ * vendors at once on different rates, so there is no single rate the sum is priceable by. That is
+ * the same refusal as `UsageParserTests`' "inventing a price is worse than none".</p>
+ */
+const rates: Record<string, { in: number; out: number }> = {
+  codex: { in: 0.2, out: 1.2 },
+  gemini: { in: 0.75, out: 3.75 },
+};
+const rate = (provider: string): { in: number; out: number } | undefined => rates[provider];
+
+const reviewer = (over: Partial<ReviewerState> = {}): ReviewerState => ({
+  provider: 'codex',
+  role: 'Architecture',
+  status: 'done',
+  findings: 0,
+  note: '',
+  ...over,
+});
+
+test('a round of vendors that bill nothing is priced from the rates the person typed', () => {
+  const view = costPhrase(
+    round({
+      tokensIn: 1_000_000,
+      tokensOut: 100_000,
+      costUsd: null,
+      reviewerStates: [
+        reviewer({ tokensIn: 1_000_000, tokensOut: 100_000, costUsd: null }),
+      ],
+    }),
+    rate,
+  );
+
+  // 1M in at 0.20 + 0.1M out at 1.20 = 0.20 + 0.12
+  assert.ok(view.includes('~$0.32'), `expected an estimate priced from the rates, got: ${view}`);
+  assert.ok(!view.includes('no cost reported'), 'a round with a rate behind it is not unknown');
+  assert.ok(view.includes('1000k in / 100k out'), 'and the tokens are still there');
+});
+
+test('two vendors on different rates are priced apart and then added', () => {
+  const view = costPhrase(
+    round({
+      tokensIn: 2_000_000,
+      tokensOut: 200_000,
+      costUsd: null,
+      reviewerStates: [
+        reviewer({ provider: 'codex', tokensIn: 1_000_000, tokensOut: 100_000 }),
+        reviewer({ provider: 'gemini', tokensIn: 1_000_000, tokensOut: 100_000 }),
+      ],
+    }),
+    rate,
+  );
+
+  // codex 0.20 + 0.12, gemini 0.75 + 0.375 => 1.445, shown to the cent because `money` only spends
+  // four decimals below a dollar, where a round really does cost fractions of a cent.
+  assert.ok(view.includes('~$1.45'), `expected each vendor priced by its own rate, got: ${view}`);
+});
+
+test('a reported cost is never replaced by an estimate, and the two are never mixed into one number', () => {
+  const view = costPhrase(
+    round({
+      tokensIn: 2_000_000,
+      tokensOut: 200_000,
+      costUsd: 0.5,
+      reviewerStates: [
+        reviewer({ provider: 'claude', tokensIn: 1_000_000, tokensOut: 100_000, costUsd: 0.5 }),
+        reviewer({ provider: 'codex', tokensIn: 1_000_000, tokensOut: 100_000, costUsd: null }),
+      ],
+    }),
+    rate,
+  );
+
+  assert.ok(view.includes('$0.50'), 'what was billed is stated as billed');
+  assert.ok(view.includes('~$0.32'), 'what was worked out is marked as worked out');
+  assert.ok(!view.includes('$0.82'), 'a bill and a guess added into one number is a number nobody can check');
+});
+
+test('a round from an older server, with no per-reviewer usage, stays honestly unpriced', () => {
+  const view = costPhrase(round({ tokensIn: 5300, tokensOut: 260, costUsd: null }), rate);
+
+  assert.ok(view.includes('no cost reported'), 'a summed total over unknown vendors is not priceable');
+  assert.ok(!view.includes('~$'), 'and it must not be guessed at by applying one rate to all of it');
+});
+
+test('a vendor with no rate contributes nothing rather than zero', () => {
+  const view = costPhrase(
+    round({
+      tokensIn: 1_000_000,
+      tokensOut: 100_000,
+      costUsd: null,
+      reviewerStates: [reviewer({ provider: 'local', tokensIn: 1_000_000, tokensOut: 100_000 })],
+    }),
+    rate,
+  );
+
+  assert.ok(view.includes('no cost reported'), 'nobody priced it and nobody can');
+  assert.ok(!view.includes('$0.00'), 'free and unknown must not read the same');
+});
+
+test('the grand total across every round is priced the same way, per vendor and never on the sum', () => {
+  const markdown = renderRounds(
+    [
+      session({ sessionId: 's1' }, [
+        round({
+          tokensIn: 1_000_000,
+          tokensOut: 100_000,
+          costUsd: null,
+          reviewerStates: [reviewer({ provider: 'codex', tokensIn: 1_000_000, tokensOut: 100_000 })],
+        }),
+      ]),
+      session({ sessionId: 's2' }, [
+        round({
+          tokensIn: 1_000_000,
+          tokensOut: 100_000,
+          costUsd: null,
+          reviewerStates: [reviewer({ provider: 'gemini', tokensIn: 1_000_000, tokensOut: 100_000 })],
+        }),
+      ]),
+    ],
+    Date.parse('2026-09-03T12:00:00Z'),
+    rate,
+  );
+
+  // codex 0.32 + gemini 1.125 — added only AFTER each is priced by its own rate.
+  assert.ok(markdown.includes('~$1.45'), `expected the footer to price both vendors, got: ${markdown}`);
+  assert.ok(!markdown.includes('Money is only counted'), 'the footer explains the tilde now');
 });

@@ -104,6 +104,58 @@ public sealed class LiveRoundTests
     }
 
     [Fact]
+    public void TheFinishedRecord_SplitsTheSpendPerReviewer_SoAMixedRoundCanBePriced()
+    {
+        // The panel read "no cost reported" beside 220k tokens for every round of vendors that do
+        // not price their own runs — codex and gemini both report tokens and no money. The rates
+        // were in the panel all along; what was missing was WHOSE tokens they were. A round's
+        // summed tokens cannot be priced by any one vendor's rate, so the split is the fix.
+        var store = new SessionStore(_dir);
+        var session = Session();
+        store.Save(session);
+        var work = new[] { Work("codex", ReviewRole.Architecture), Work("gemini", ReviewRole.Architecture) };
+        var live = new LiveRound(store, session, work);
+
+        var record = live.Finish("revise", 4, "all 2 reviewers answered",
+        [
+            (work[0].Invocation, new ReviewerOutcome.Ok(Review(2), false, new Usage(5300, 260, null))),
+            (work[1].Invocation, new ReviewerOutcome.Ok(Review(2), false, new Usage(24064, 44, null))),
+        ]);
+
+        var codex = record.ReviewerStates.Single(s => s.Provider == "codex");
+        var gemini = record.ReviewerStates.Single(s => s.Provider == "gemini");
+        codex.TokensIn.Should().Be(5300);
+        codex.TokensOut.Should().Be(260);
+        gemini.TokensIn.Should().Be(24064);
+        gemini.TokensOut.Should().Be(44);
+        codex.CostUsd.Should().BeNull("codex prices nothing, and unknown must not become zero");
+        record.TokensIn.Should().Be(29364, "the round's total is still the fold of the parts");
+    }
+
+    [Fact]
+    public void ARepairedReviewersTwoLaunches_AreAddedTogether_NotOverwritten()
+    {
+        // A reviewer that is relaunched appears TWICE in the results for the same provider and
+        // role. Taking the last entry would report half of what that reviewer actually consumed —
+        // and half of what it is about to be priced at.
+        var store = new SessionStore(_dir);
+        var session = Session();
+        store.Save(session);
+        var work = new[] { Work("codex", ReviewRole.Architecture) };
+        var live = new LiveRound(store, session, work);
+
+        var record = live.Finish("revise", 1, "1 of 1 reviewers answered",
+        [
+            (work[0].Invocation, new ReviewerOutcome.Unparseable("torn", new Usage(1000, 10, null))),
+            (work[0].Invocation, new ReviewerOutcome.Ok(Review(1), false, new Usage(2000, 20, null))),
+        ]);
+
+        var codex = record.ReviewerStates.Single();
+        codex.TokensIn.Should().Be(3000, "both launches burned tokens");
+        codex.TokensOut.Should().Be(30);
+    }
+
+    [Fact]
     public void ARoundAbandonedByADeadProcess_IsSwept_NeverLeftRunningForever()
     {
         var store = new SessionStore(_dir);

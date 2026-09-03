@@ -3,8 +3,8 @@ import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { ModelChoice, modelsFor, modelsProvenance } from './models';
 import { ROLES, promptsFor, selectedFor } from './prompts';
-import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, WINDOWS, within } from './usage';
-import { costPhrase, elapsed, isRunning, reviewerLines, RoundRecord, SessionFile, stageName } from './rounds';
+import { barWidth, estimated, money, priceOf, shortDuration, shortNumber, spendPhrase, totalsByVendor, UsageEntry, Window, WINDOWS, within } from './usage';
+import { costPhrase, elapsed, isRunning, RateLookup, reviewerLines, RoundRecord, SessionFile, stageName } from './rounds';
 import { CliStatus, cliStatusNote, updateAvailable, UNKNOWN_CLI } from './cliVersions';
 import { SnippetStatus, snippetNote } from './claudeSnippet';
 import { LocalEngine, remoteWarning } from './localEngines';
@@ -111,7 +111,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     section('keys', 'Vendor keys', open, keysBody(state)),
     section('server', 'Server', open, serverBody(state)),
     section('usage', 'What each AI has used', open, usageBody(state)),
-    section('rounds', 'Recent rounds', open, `<div id="live-rounds">${roundsBody(state.sessions, nowMs)}</div>`),
+    section('rounds', 'Recent rounds', open, `<div id="live-rounds">${roundsBody(state.sessions, ratesOf(state), nowMs)}</div>`),
   ].join('\n');
 
   return `<!DOCTYPE html>
@@ -643,16 +643,14 @@ function spend(row: { costUsd: number | null; estimatedUsd: number | null }): st
       : '—';
 }
 
-/** The total, saying which half is billed and which is worked out. */
-function total(billed: number | null, guessed: number | null): string {
-  if (billed === null && guessed === null) {
-    return '—';
-  }
-  if (guessed === null) {
-    return money(billed);
-  }
-
-  return billed === null ? estimated(guessed) : `${money(billed)} + ${estimated(guessed)}`;
+/**
+ * The rates this panel knows, as the lookup a round is priced through.
+ *
+ * <p>The same resolution the spending rows use — a rate the person typed beats a published list
+ * price — so the two sections can never disagree about what a vendor costs.</p>
+ */
+function ratesOf(state: PanelState): RateLookup {
+  return (provider) => priceOf(provider, state.vendors, (modelId) => state.modelPrices[modelId]);
 }
 
 function usageRows(state: PanelState): string {
@@ -695,7 +693,7 @@ function usageRows(state: PanelState): string {
   );
 
   return `${cards}
-<div class="hint total">All vendors: ${shortNumber(all.tokens)} tokens · ${total(all.cost, all.guess)} · ${shortDuration(all.seconds)}</div>`;
+<div class="hint total">All vendors: ${shortNumber(all.tokens)} tokens · ${spendPhrase(all.cost, all.guess) ?? '—'} · ${shortDuration(all.seconds)}</div>`;
 }
 
 /** How far back this section looks. A window a person can hold in their head: three days. */
@@ -712,7 +710,7 @@ const RECENT_HOURS = 72;
  * <p>A round still RUNNING is always shown. It has no completion time to compare, and it is the one
  * row somebody is actually waiting on.</p>
  */
-function roundsBody(sessions: readonly SessionFile[], nowMs: number = Date.now()): string {
+function roundsBody(sessions: readonly SessionFile[], rate: RateLookup, nowMs: number = Date.now()): string {
   const all = sessions.flatMap((s) => s.rounds.map((r) => ({ branch: s.state.branch, ...r })));
   const since = new Date(nowMs - RECENT_HOURS * 60 * 60 * 1000).toISOString();
   const rounds = all
@@ -727,10 +725,10 @@ function roundsBody(sessions: readonly SessionFile[], nowMs: number = Date.now()
       : `<div class="empty">Nothing in the last ${RECENT_HOURS} hours. Older rounds are in <b>Show review rounds</b>.</div>`;
   }
 
-  return rounds.map((r) => roundCard(r, nowMs)).join('\n');
+  return rounds.map((r) => roundCard(r, rate, nowMs)).join('\n');
 }
 
-function roundCard(round: RoundRecord & { branch: string }, nowMs: number): string {
+function roundCard(round: RoundRecord & { branch: string }, rate: RateLookup, nowMs: number): string {
   const verdict = isRunning(round)
     ? '<span class="badge running">running</span>'
     : round.status === 'interrupted'
@@ -749,7 +747,7 @@ function roundCard(round: RoundRecord & { branch: string }, nowMs: number): stri
     ? `<div class="subject">${escapeHtml(round.subject!)}</div>`
     : '';
   return `${subject}<div class="verdict">${escapeHtml(stageName(round.stage))} ${round.number} · ${escapeHtml(round.branch)} · ${verdict} · ${round.gatingCount} gating</div>
-<div class="usage">${took.length > 0 ? `${escapeHtml(took)} · ` : ''}${escapeHtml(costPhrase(round))}</div>
+<div class="usage">${took.length > 0 ? `${escapeHtml(took)} · ` : ''}${escapeHtml(costPhrase(round, rate))}</div>
 ${reviewers}`;
 }
 
@@ -760,7 +758,7 @@ ${reviewers}`;
  */
 export function liveRegions(state: PanelState, nowMs: number = Date.now()): { questions: string; rounds: string; usage: string } {
   return {
-    usage: usageRows(state), questions: questionsSection(state.questions), rounds: roundsBody(state.sessions, nowMs) };
+    usage: usageRows(state), questions: questionsSection(state.questions), rounds: roundsBody(state.sessions, ratesOf(state), nowMs) };
 }
 
 /**

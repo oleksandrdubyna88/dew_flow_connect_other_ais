@@ -7,9 +7,10 @@ import { EscalationWatcher } from './escalationWatcher';
 import { PanelProvider } from './panelProvider';
 import { renderEscalations } from './escalations';
 import { showHelp } from './helpPanel';
-import { parseSession, renderRounds, roundsViewIsOpen, SessionFile } from './rounds';
+import { parseSession, RateLookup, renderRounds, roundsViewIsOpen, SessionFile } from './rounds';
 import { envBlock, settingsFrom } from './settingsShape';
 import { ServerSettingsSync } from './serverSettingsSync';
+import { priceOf } from './usage';
 import { vendorsFrom } from './vendors';
 
 /**
@@ -227,11 +228,24 @@ async function showRounds(watcher: EscalationWatcher): Promise<void> {
   await vscode.window.showTextDocument(document, { preview: false });
 }
 
+/**
+ * The rates the person typed into the panel, as the lookup a round is priced through.
+ *
+ * <p>Only the typed ones. The panel also knows the published list prices, but it FETCHES them and
+ * caches them per day on its own instance; a file written from here has no network behind it and
+ * must not grow one. Where a rate was typed — which is the case this exists for — the two surfaces
+ * say the same thing.</p>
+ */
+function typedRates(): RateLookup {
+  const vendors = vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors'));
+  return (provider) => priceOf(provider, vendors);
+}
+
 /** Renders the view to its file. Returns the path, or undefined when the disk refused. */
 async function writeRoundsFile(watcher: EscalationWatcher): Promise<vscode.Uri | undefined> {
   const sessions = await readSessions();
   // Open questions first: a blocked round is more urgent than the history of finished ones.
-  const markdown = renderEscalations(watcher.openQuestions) + renderRounds(sessions);
+  const markdown = renderEscalations(watcher.openQuestions) + renderRounds(sessions, Date.now(), typedRates());
   const file = roundsFile();
   try {
     await vscode.workspace.fs.createDirectory(dataDir());
