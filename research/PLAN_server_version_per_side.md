@@ -1,10 +1,44 @@
 # PLAN — the Server section states what is on THIS side's disk, not what somebody installed anywhere
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/{installer,coaiInstall,panelProvider,panelView,extension}.ts`,
-> `src_mcp/src/Program.cs` (a `--version` mode), `src_mcp/src/CoaiMcp.csproj` and the `mcp-binaries`
-> job of `.github/workflows/release.yml` (stamping and asserting that version).
+> Status: **IMPLEMENTED, 2026-09-03.** All seven "must be true" statements shipped on
+> `fix/server-version-per-side`; the extension and server releases that carry them to a machine are
+> the open tail below.
 >
-> Related docs: [module_extension.md](../research/module_extension.md), [module_server.md](../research/module_server.md).
+> **Deviations, largest first.** The plan's own gate round told it to key the record on
+> `vscode.env.remoteAuthority`; that property is **not in the public VS Code API**, so it could not
+> be used. Keying on the storage path instead was written, and then refuted during implementation by
+> the very case the finding named: two WSL distros of one user mount the same
+> `/home/<user>/.vscode-server/…`. `installedKey` therefore folds three things the API does expose —
+> the remote kind (`vscode.env.remoteName`), the distro (`WSL_DISTRO_NAME`, or `os.hostname()` for a
+> remote that has none) and the storage path — and a local window uses the path alone, so renaming
+> the machine does not discard what is installed on it. The code round then refuted the *encoding*
+> of that key too: a slug collapsed `Ubuntu-Dev` and `Ubuntu Dev` onto one record, which is this
+> plan's own defect one layer down, so each component is percent-escaped.
+>
+> Two more, from the code round: `unknown` offers an update only when a published version was
+> actually read (offline it announced one on the strength of nothing), and the sentence for `unknown`
+> no longer says *"press Update"* — with no published version there is no button under it. The probe
+> cache became a Map with in-flight coalescing rather than one slot.
+>
+> **Found by measurement while verifying, and pre-existing:**
+> `spawn('codex.cmd', …, { shell: false })` throws `EINVAL` synchronously on current node, so the
+> vendor-CLI version probe never reported "could not be read" for a `.cmd` shim — it rejected out of
+> `render`, which has no catch on that path. `askVersion` now honours its own contract. Reading a
+> shim's version at all needs a shell and its quoting decisions: **not taken here**, and it is why
+> the panel shows no version for codex and gemini on Windows.
+>
+> **The open tail:** the fix reaches a machine only through a release — extension and `coai-mcp` —
+> and the field verification in the test plan below (the WSL panel offering Install, the press
+> landing a linux-x64 binary in `~/.vscode-server/…`) is waiting on that. The missing *probing*
+> state, raised again by this plan's code round, stays with
+> [PLAN_panel_probing_state.md](../todo/PLAN_panel_probing_state.md), which now also records that the
+> await sits inside `render`.
+>
+> Scope: `src_vs_code/src/{installer,coaiInstall,panelProvider,panelView,extension,versionProbe}.ts`,
+> `src_mcp/src/Program.cs`, `src_mcp/src/CoaiMcp.csproj`, the `mcp-binaries` job of
+> `.github/workflows/release.yml`.
+>
+> Related docs: [module_extension.md](module_extension.md), [module_server.md](module_server.md).
 
 ## The symptom, measured 2026-09-03 on the machine it was reported from
 
@@ -46,7 +80,7 @@ that record ([panelProvider.ts:155-156](../src_vs_code/src/panelProvider.ts#L155
    config block* ([extension.ts:174-188](../src_vs_code/src/extension.ts#L174-L188)) hands out a path
    that does not exist. What comes back then is an MCP client that cannot start its server.
 3. **Nothing in the panel says which side it is talking about**, on a product whose own docs
-   ([module_extension.md](../research/module_extension.md), the WSL section) are about a machine with
+   ([module_extension.md](module_extension.md), the WSL section) are about a machine with
    two sides.
 
 This is not a regression in 0.26.2: the key has been side-blind since `df25020` (epic 05). It became
@@ -75,7 +109,7 @@ Rejected, with reasons recorded in the session: a retry and a taxonomy of probe 
 user-visible action differs between "timed out" and "printed rubbish", and an install re-downloads
 the published asset under its own checksum, so pressing Update on an already-current binary rewrites
 the same bytes); a spinner for this one probe (that is
-[PLAN_panel_probing_state.md](PLAN_panel_probing_state.md), which owns it for every probe in the
+[PLAN_panel_probing_state.md](../todo/PLAN_panel_probing_state.md), which owns it for every probe in the
 panel, and double presses are already joined by `SingleFlight`); and a content hash instead of
 `mtime`+`size` (a same-size, same-timestamp replacement by a different version is not a state the
 product can produce, and hashing 15 MB on a schedule to defend it is worse than the risk).

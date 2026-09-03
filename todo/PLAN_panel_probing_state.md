@@ -26,7 +26,7 @@ work is happening; if the probe fails, only the delayed final state appears."*
 ## A second probe joined this in the Server section (2026-09-03)
 
 The gate's code round on
-[PLAN_server_version_per_side.md](PLAN_server_version_per_side.md) raised the same finding against
+[PLAN_server_version_per_side.md](../research/PLAN_server_version_per_side.md) raised the same finding against
 the server's new `--version` probe, and it was rejected there for the reason above — this plan owns
 it for every probe rather than one. It did name something this plan had not:
 
