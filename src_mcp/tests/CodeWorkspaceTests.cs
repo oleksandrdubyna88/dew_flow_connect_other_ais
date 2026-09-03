@@ -28,29 +28,29 @@ namespace CoaiMcp.Tests;
 public class CodeWorkspaceTests
 {
     [Fact]
-    public void TheCheckoutIsTheDefault_BecauseExploringIsUsuallyWorthIt()
+    public void TheDiffAloneIsTheDefault_BecauseItWasMeasuredToFindMore()
     {
-        PanelSettings.FromEnvironment(_ => null).CodeWorkspace.Should().Be("worktree");
+        // Not a preference. Three hosted models each found MORE useful defects without a checkout,
+        // at a fraction of the tokens, and three real defects appeared that no run with one reached.
+        PanelSettings.FromEnvironment(_ => null).CodeWorkspace.Should().Be("none");
     }
 
     [Theory]
-    [InlineData("none")]
-    [InlineData("NONE")]
-    [InlineData("  none  ")]
-    public void ItCanBeTurnedOff(string value)
+    [InlineData("worktree")]
+    [InlineData("WORKTREE")]
+    [InlineData("  worktree  ")]
+    public void TheCheckoutCanBeAskedFor(string value)
     {
         PanelSettings.FromEnvironment(n => n == "COAI_CODE_WORKSPACE" ? value : null)
-            .CodeWorkspace.Should().Be("none");
+            .CodeWorkspace.Should().Be("worktree");
     }
 
     [Fact]
-    public void AValueThisBuildDoesNotKnowKeepsTheCheckoutAndSaysSo()
+    public void AValueThisBuildDoesNotKnowKeepsTheDefaultAndSaysSo()
     {
-        // The same rule as every other setting here: fall back to the conservative behaviour, and
-        // be audible about it rather than quietly doing something else.
         var settings = PanelSettings.FromEnvironment(n => n == "COAI_CODE_WORKSPACE" ? "sandbox" : null);
 
-        settings.CodeWorkspace.Should().Be("worktree");
+        settings.CodeWorkspace.Should().Be("none");
         settings.Unrecognised.Should().ContainSingle()
             .Which.Should().Contain("COAI_CODE_WORKSPACE").And.Contain("sandbox");
     }

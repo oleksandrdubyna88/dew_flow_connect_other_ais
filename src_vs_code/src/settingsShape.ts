@@ -75,6 +75,14 @@ export interface CoaiSettings {
    */
   readonly dealPlanLenses: boolean;
   readonly dealCodeLenses: boolean;
+  /**
+   * What a code reviewer is launched in: `none` (Fast — the diff alone) or `worktree` (Full).
+   *
+   * <p>Fast is the default because it was measured, not preferred: without a checkout every hosted
+   * model found MORE useful defects at a fraction of the tokens, and three real defects surfaced
+   * that no run with one reached. See `RESULTS_findings_that_are_worth_something.md`.</p>
+   */
+  readonly codeWorkspace: string;
 }
 
 /** The defaults, matching the master plan's configuration table — pinned by tests. */
@@ -146,6 +154,7 @@ export const DEFAULTS: CoaiSettings = {
   promptsPerRound: {},
   dealPlanLenses: false,
   dealCodeLenses: false,
+  codeWorkspace: 'none',
 };
 
 /** A raw configuration reader: `get(section)` returns whatever the host stored, if anything. */
@@ -166,6 +175,7 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     promptsPerRound: asPromptRounds(read('promptsPerRound')),
     dealPlanLenses: read('dealPlanLenses') === true,
     dealCodeLenses: read('dealCodeLenses') === true,
+    codeWorkspace: read('codeWorkspace') === 'worktree' ? 'worktree' : 'none',
   };
 }
 
@@ -193,6 +203,9 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
   }
   if (settings.dealCodeLenses !== DEFAULTS.dealCodeLenses) {
     env['COAI_DEAL_CODE'] = 'true';
+  }
+  if (settings.codeWorkspace !== DEFAULTS.codeWorkspace) {
+    env['COAI_CODE_WORKSPACE'] = settings.codeWorkspace;
   }
 
   for (const [role, threshold] of Object.entries(settings.thresholds)) {

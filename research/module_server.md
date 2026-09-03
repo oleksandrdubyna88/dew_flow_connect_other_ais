@@ -25,6 +25,22 @@ worktree lease → build work (schema file, role prompt + contract + context; re
 `instruction` sentence for the main AI. The lease disposes in `finally` — a thrown stage leaves no
 worktree.
 
+**And the sweep had to learn the other two prefixes.** `PruneOldScratchDirs` (was
+`PruneOldAnswerDirs`) ran on the way IN over `coai-answers-*` only, because that was the leak an
+audit had found — 1384 of them. A round takes two more empty directories: `coai-repair-*` always,
+and `coai-noworkspace-*` now on the DEFAULT path. Three per round, one swept. It sweeps all three
+now, and `ScratchDirsTests` was watched fail with *"coai-repair-old is a round's leftover"* before
+the prefix list was widened.
+
+**The worktree is leased either way; what varies is the LAUNCH directory.** `BuildWork` decides it:
+`CodeWorkspace == "none"` (the default, `COAI_CODE_WORKSPACE`) launches every code reviewer in a
+fresh temp directory, so an agentic CLI has nothing to wander into; `"worktree"` launches them in
+the checkout. The server still reads the diff and the written rules from the lease in both cases,
+which is why the conventions pass works with no checkout. Plan reviewers have always launched in an
+empty directory and take no switch. Measured on one commit, Fast found MORE from all three hosted
+models at a fraction of the tokens —
+[RESULTS_findings_that_are_worth_something.md](RESULTS_findings_that_are_worth_something.md).
+
 ## Escalation — reaching a person without a port
 
 `ask_human` writes `escalations/<id>.json` into the data directory the extension already reads for

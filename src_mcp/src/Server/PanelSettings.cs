@@ -108,7 +108,7 @@ public sealed record PanelSettings
     public string LocalReasoningEffort { get; init; } = "none";
 
     /// <summary>
-    /// What a CODE reviewer is launched in: <c>worktree</c> (the default) or <c>none</c>.
+    /// What a CODE reviewer is launched in: <c>none</c> (the default) or <c>worktree</c>.
     /// </summary>
     /// <remarks>
     /// <para>A hosted CLI is agentic: handed a checkout it explores it, and the measurements put
@@ -119,8 +119,14 @@ public sealed record PanelSettings
     /// the diff is assembled from the repository and the written rules are still read from the
     /// worktree, both by this server — so the only thing removed is the ability to go looking for
     /// more. The repair launch has always worked this way, and the plan stage too.</para>
+    /// <para><b>It is the default because it was measured.</b> On one commit across three hosted
+    /// models, taking the checkout away made every one of them find MORE useful defects — 4→8,
+    /// 6→10, 6→7 — at a half to a third of the input tokens, with no wrong finding from any of
+    /// them, and three real defects surfaced that NO run with a checkout had reached
+    /// (<c>RESULTS_findings_that_are_worth_something.md</c>). <c>worktree</c> remains for a review
+    /// that genuinely needs the surrounding code.</para>
     /// </remarks>
-    public string CodeWorkspace { get; init; } = "worktree";
+    public string CodeWorkspace { get; init; } = "none";
 
     /// <summary>
     /// Settings whose VALUE this build does not understand, each as a sentence for a person.
@@ -175,8 +181,8 @@ public sealed record PanelSettings
     /// </remarks>
     private static string WorkspaceOf(string? value) => value?.Trim().ToLowerInvariant() switch
     {
-        "none" => "none",
-        _ => "worktree",
+        "worktree" => "worktree",
+        _ => "none",
     };
 
     /// <summary>What a policy name means, or Human when this build does not know the name.</summary>
@@ -214,13 +220,13 @@ public sealed record PanelSettings
         }
 
         if (env("COAI_CODE_WORKSPACE") is { Length: > 0 } workspace
-            && WorkspaceOf(workspace) == "worktree"
+            && !string.Equals(workspace.Trim(), "none", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(workspace.Trim(), "worktree", StringComparison.OrdinalIgnoreCase))
         {
             unknown.Add(
                 $"COAI_CODE_WORKSPACE is '{workspace}', which this server does not know — code "
-                + "reviewers are getting the checkout, as they do by default. The values are "
-                + "'worktree' and 'none'.");
+                + "reviewers are getting the diff alone, as they do by default. The values are "
+                + "'none' and 'worktree'.");
         }
 
         return unknown;

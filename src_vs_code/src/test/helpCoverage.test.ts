@@ -70,6 +70,7 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.thresholds': 'passes at or under',
   'coai.dealPlanLenses': 'deal the lenses across vendors',
   'coai.dealCodeLenses': 'deal the lenses across vendors',
+  'coai.codeWorkspace': 'what a reviewer gets',
   'coai.credsKey': 'credsfordevs config key',
   'coai.promptsPerRound': 'one picker per round per role',
   'coai.uiScale': 'text size',

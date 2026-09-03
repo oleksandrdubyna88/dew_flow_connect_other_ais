@@ -593,12 +593,27 @@ public sealed class PanelService
     /// leaked. Pruned on the way IN rather than in a finally, so a killed round is cleaned up by
     /// the next one instead of never.
     /// </remarks>
-    private static void PruneOldAnswerDirs()
+    /// <summary>
+    /// Every temp directory a round creates, so the sweep cannot know one of them and miss two.
+    /// </summary>
+    /// <remarks>
+    /// The answers directory was the one that leaked visibly (1384 of them on this machine) and so
+    /// the only one the sweep knew. A round takes two more empty ones: the repair launch always,
+    /// and — since Fast became the default — the review launch as well, which is now every code
+    /// round rather than an opt-in. Empty directories are cheap; an unbounded count of them is not.
+    /// </remarks>
+    private static readonly string[] ScratchPrefixes =
+        ["coai-answers-*", "coai-repair-*", "coai-noworkspace-*"];
+
+    private static void PruneOldAnswerDirs() =>
+        PruneOldScratchDirs(Path.GetTempPath(), DateTime.UtcNow.AddHours(-6));
+
+    /// <summary>Removes this product's leftover scratch directories created before <paramref name="cutoff"/>.</summary>
+    internal static void PruneOldScratchDirs(string tempRoot, DateTime cutoff)
     {
-        var cutoff = DateTime.UtcNow.AddHours(-6);
         try
         {
-            foreach (var dir in Directory.EnumerateDirectories(Path.GetTempPath(), "coai-answers-*"))
+            foreach (var dir in ScratchPrefixes.SelectMany(p => Directory.EnumerateDirectories(tempRoot, p)))
             {
                 try
                 {

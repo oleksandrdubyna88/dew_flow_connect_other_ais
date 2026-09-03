@@ -56,6 +56,27 @@ test('both deal switches are offered, and off is the default', () => {
   assert.ok(!html.includes('data-setting="dealPlanLenses" checked'), 'dealing gives up cross-vendor agreement');
 });
 
+test('the code stage offers Fast and Full, and Fast is the lit one', () => {
+  // Fast is not a preference. Measured on one commit, taking the checkout away made every hosted
+  // model find MORE useful defects — 4→8, 6→10, 6→7 — at a half to a third of the input tokens,
+  // and three real defects appeared that no run with a checkout had reached. The switch exists so
+  // a review that genuinely needs the surrounding code can still ask for it.
+  const html = panelHtml(state(), 'n0nce');
+
+  assert.ok(html.includes('data-setting="codeWorkspace" value="none"'), 'no Fast position');
+  assert.ok(html.includes('data-setting="codeWorkspace" value="worktree"'), 'no Full position');
+  assert.match(html, /class="on"[^>]*><input type="radio" name="codeWorkspace" data-setting="codeWorkspace" value="none"/,
+    'Fast is the default and must be the lit half');
+});
+
+test('choosing Full lights the right half, and only that half', () => {
+  const html = panelHtml(state({ settings: { ...DEFAULTS, codeWorkspace: 'worktree' } }), 'n0nce');
+
+  assert.match(html, /class="on"[^>]*><input type="radio" name="codeWorkspace" data-setting="codeWorkspace" value="worktree"/);
+  assert.match(html, /class=""[^>]*><input type="radio" name="codeWorkspace" data-setting="codeWorkspace" value="none"/,
+    'both halves lit reads as neither');
+});
+
 test('the questions are English, so there is no language to choose', () => {
   // The escalation is three buttons; there is no prose left to translate, and a subprocess per
   // escalation that can time out or answer in the wrong language earned nothing.

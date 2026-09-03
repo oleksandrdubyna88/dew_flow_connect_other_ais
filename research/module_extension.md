@@ -344,6 +344,28 @@ A source-shape test asserts the listener and the write are NOT in `panelProvider
 `extension.ts`. It is a blunt instrument, and it is the only one available: a behavioural test would
 have to drive VS Code's lazy view resolution, which is the exact thing that cannot be done here.
 
+### Fast or Full, and why the default is the cheap half (2026-09-03)
+
+`coai.codeWorkspace` is a two-position switch in the Code stage section — **Fast** (`none`, the
+default) and **Full** (`worktree`) — rendered as a `.seg` radio group rather than a checkbox,
+because neither position is an absence of the other and a checkbox would have to name one of them.
+It travels as `COAI_CODE_WORKSPACE`, and `BuildWork` on the server side decides the launch directory
+from it.
+
+**The default is a measurement, not a preference.** Three hosted models reviewed the same commit
+twice, once with the checkout and once without: Gemini 3.7 Flash went 4→8 useful findings,
+GPT-5.6-Luna 6→10, Claude Sonnet 5 6→7, each at a half to a third of the input tokens, with
+no wrong finding from any of them — and three real defects appeared that no run WITH a checkout
+had reached ([RESULTS_findings_that_are_worth_something.md](RESULTS_findings_that_are_worth_something.md)).
+The prompt is identical in both positions; the server assembles the diff and the written rules from
+the lease either way. The only thing Full adds is somewhere to wander.
+
+Two tests hold the switch, both watched fail: `panelView.test.ts` asserts the Fast half is the lit
+one by default (it went red with *"Fast is the default and must be the lit half"* when the default
+was flipped), and `settingsReach.test.ts` — which iterates `Object.keys(DEFAULTS)` — went red
+with *"changing codeWorkspace produced an identical env block"*, which is the defect class it exists
+for.
+
 ### Discovering an engine on this machine (2026-09-02)
 
 `localEngines.ts` probes for a local model engine and `PanelProvider` calls it only when a local

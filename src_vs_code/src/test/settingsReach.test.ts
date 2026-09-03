@@ -24,6 +24,7 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   escalationMinutes: 45,
   promptsPerRound: { SecurityReliability: ['sec-attack'] },
   dealCodeLenses: true,
+  codeWorkspace: 'worktree',
 };
 
 test('every setting, changed on its own, reaches the server file', () => {
@@ -55,6 +56,7 @@ test('the file the panel writes is the shape the server parses', () => {
   }
   assert.equal(written['COAI_DEAL_PLAN'], 'true');
   assert.equal(written['COAI_DEAL_CODE'], 'true');
+  assert.equal(written['COAI_CODE_WORKSPACE'], 'worktree');
   assert.deepEqual(JSON.parse(written['COAI_PROMPTS_PER_ROUND']!), { SecurityReliability: ['sec-attack'] });
 });
 

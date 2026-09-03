@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "Your AI writes the code; other vendors' models review it — the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.25.2",
+  "version": "0.26.0",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -204,6 +204,19 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "Deal the three code roles across the vendors, one vendor each, instead of asking every role of every vendor."
+        },
+        "coai.codeWorkspace": {
+          "type": "string",
+          "enum": [
+            "none",
+            "worktree"
+          ],
+          "enumDescriptions": [
+            "Fast — the reviewer gets the diff, the plan and the project's rules, in an empty directory.",
+            "Full — the reviewer also gets the checkout of the commit under review."
+          ],
+          "default": "none",
+          "markdownDescription": "What a code reviewer is given. **Fast** (default) sends the composed prompt with nothing to explore; measured, every hosted model found more useful defects that way at a fraction of the input tokens. **Full** also hands it the checkout of the commit under review."
         },
         "coai.uiScale": {
           "type": "number",

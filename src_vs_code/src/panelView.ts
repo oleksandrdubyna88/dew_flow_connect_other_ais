@@ -532,6 +532,22 @@ ${plan}
     <label class="check"><input type="checkbox" data-setting="dealCodeLenses"${s.dealCodeLenses ? ' checked' : ''}> Deal the roles across vendors</label>
     <div class="hint">Off: each of the three roles is asked of every vendor. On: the three roles are dealt out, one vendor each.</div>
   </div>
+  <div class="field">
+    ${labelled('codeWorkspace', 'What a reviewer gets', 'codeWorkspace')}
+    <div class="seg" role="radiogroup" aria-label="What a reviewer gets">
+      <label class="${s.codeWorkspace === 'none' ? 'on' : ''}"><input type="radio" name="codeWorkspace" data-setting="codeWorkspace" value="none"${s.codeWorkspace === 'none' ? ' checked' : ''}> Fast — diffs only</label>
+      <label class="${s.codeWorkspace === 'worktree' ? 'on' : ''}"><input type="radio" name="codeWorkspace" data-setting="codeWorkspace" value="worktree"${s.codeWorkspace === 'worktree' ? ' checked' : ''}> Full — with the code</label>
+    </div>
+    <div class="hint">Fast sends the diff, the plan and this project’s rules — and nothing to explore. Measured on one commit: every hosted model found MORE that way, at a half to a third of the tokens. Full also hands them the checkout, for a review that needs the surrounding code.</div>
+  </div>
+  <div class="field">
+    ${labelled('codeWorkspace', 'What a reviewer gets', 'codeWorkspace')}
+    <div class="seg" role="radiogroup" aria-label="What a reviewer gets">
+      <label class="${s.codeWorkspace === 'none' ? 'on' : ''}"><input type="radio" name="codeWorkspace" data-setting="codeWorkspace" value="none"${s.codeWorkspace === 'none' ? ' checked' : ''}> Fast — diffs only</label>
+      <label class="${s.codeWorkspace === 'worktree' ? 'on' : ''}"><input type="radio" name="codeWorkspace" data-setting="codeWorkspace" value="worktree"${s.codeWorkspace === 'worktree' ? ' checked' : ''}> Full — with the code</label>
+    </div>
+    <div class="hint">Fast sends the diff, the plan and this project’s rules — and nothing to explore. Measured on one commit: every hosted model found MORE that way, at a half to a third of the tokens. Full also hands them the checkout, for a review that needs the surrounding code.</div>
+  </div>
   <div class="hint">Round 1 defaults to <b>Conventions</b>: it judges the diff against the rules this project has written down \u2014 <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>GEMINI.md</code>, <code>.claude/rules</code> \u2014 and nothing else. Pick something else for round 1 and that wins.</div>
 ${code}
 </div>`;
@@ -792,6 +808,12 @@ const CSS = `
   .field { margin: 8px 0; }
   .field > label { display: block; margin-bottom: 3px; }
   .inline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  /* A two-position switch: Fast on the left, Full on the right, the chosen half lit. */
+  .seg { display: flex; border: 1px solid var(--vscode-widget-border, #3c3c3c); border-radius: 4px; overflow: hidden; }
+  .seg label { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+               padding: 4px 8px; cursor: pointer; font-size: 12px; }
+  .seg label.on { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+  .seg input { margin: 0; }
   .inline > label { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
   .inline > input[type="number"] { flex: 0 0 64px; width: 64px; }
   .hint { opacity: .65; font-size: 11px; margin: 3px 0 0; line-height: 1.45; }

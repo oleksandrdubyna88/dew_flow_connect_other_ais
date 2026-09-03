@@ -110,11 +110,28 @@ Three things worth knowing before using one:
   null rather than 0, because free and unpriced are different facts: what a local run costs is
   electricity and a busy card, and this product can see neither.
 
-## Reviewers are read-only, and share one tree
+## Fast or Full: what a reviewer is given
 
-Each round creates **one** detached `git worktree` pinned to a resolved SHA, outside your
-repository, shared by every reviewer in that round: the main AI keeps editing while a review runs,
-and six checkouts of a moving branch would be six different inputs to one comparison. Codex runs
+Every reviewer runs in an **empty directory** by default — plan stage and code stage alike. The
+diff, the plan and this project's written rules are assembled **by the server** and handed over in
+the prompt; what changes between the two positions is only whether there is a repository to explore.
+
+| | what the reviewer gets | when |
+|---|---|---|
+| **Fast** *(default)* | the composed prompt, in an empty directory | almost always |
+| **Full** | the same prompt, plus one read-only checkout of the commit | when the meaning of a change depends on callers the diff does not show |
+
+**Fast is the default because it was measured, not preferred.** On one commit, taking the checkout
+away made every hosted model find MORE useful defects — Gemini 3.7 Flash 4→8, GPT-5.6-Luna
+6→10, Claude Sonnet 5 6→7 — at a half to a third of the input tokens, with no wrong
+finding from any of the three. Three real defects surfaced that no run WITH a checkout had reached.
+A reviewer given a repository spends its attention deciding where to look; a reviewer given a diff
+reads the diff. The evidence is in
+[RESULTS_findings_that_are_worth_something.md](research/RESULTS_findings_that_are_worth_something.md).
+
+Full creates **one** detached `git worktree` pinned to a resolved SHA, outside your repository,
+shared by every reviewer in that round: the main AI keeps editing while a review runs, and six
+checkouts of a moving branch would be six different inputs to one comparison. Codex runs
 `-s read-only --ephemeral`, Gemini `--approval-mode plan`. The tree is removed in a `finally`, and
 an orphan from a killed session is pruned by the next `open`.
 
@@ -144,7 +161,8 @@ prompt each ROUND uses.
 
 **Round 1 of every code role is the conventions pass**: it judges the diff against the rules this
 project has written down — `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.claude/rules`, read from the
-worktree of the commit under review — and nothing else. A finding there must quote the sentence it
+commit under review **by the server** and put in the prompt, so the pass works in Fast too — and
+nothing else. A finding there must quote the sentence it
 breaks; a convention the reviewer believes in but the project never wrote is not a finding. Pick
 something else for round 1 and that wins.
 

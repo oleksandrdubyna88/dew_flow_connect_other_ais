@@ -328,13 +328,13 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'Under the hood: where a reviewer actually runs',
       whatItIs:
-        'The code stage gives each round ONE git worktree, pinned to the branch\'s commit, read-only. The plan stage gives each reviewer an EMPTY directory instead.',
+        'Every reviewer runs in an empty directory by default, the plan stage and the code stage alike. The code stage\'s switch — what a reviewer gets — has two positions: Fast hands it the composed prompt and nothing to explore; Full also gives it ONE git worktree, pinned to the branch\'s commit, read-only.',
       why:
-        'Given a repository and a plan that mentions files, an agentic CLI goes and reads them. Measured: eight minutes and still running, for a fifteen-kilobyte document. The role there is to judge the DOCUMENT; the repository is what the code stage is for.',
+        'Fast is the default because it was measured rather than preferred. On one commit, taking the checkout away made every hosted model find MORE useful defects — four to eight, six to ten, six to seven — at a half to a third of the input tokens, with no wrong finding from any of them, and three real defects surfaced that no run WITH a checkout had reached. A reviewer given a repository spends its attention deciding where to look; a reviewer given a diff reads the diff. On the plan stage the effect was cruder still: eight minutes and still running, for a fifteen-kilobyte document.',
       setup:
-        'Nothing to set up. Worktrees live under the server\'s data directory and are pruned when a session opens, so a killed round leaves nothing behind.',
+        'Nothing to set up. Worktrees live under the server\'s data directory and are pruned when a session opens, so a killed round leaves nothing behind. Full costs a checkout per round; Fast costs none.',
       usage:
-        'The cost of the empty directory, said plainly: a plan reviewer cannot check that a `file.cs:line` reference in the plan is real. That verification was never in the plan prompt, and buying it back at an order of magnitude in wall-clock is the wrong trade for a gate anybody sits through.',
+        'What the prompt contains does not change between the two: the diff and this project\'s written rules are assembled by the server either way, so the only difference is whether there is a repository to wander into. Choose Full when the meaning of a change depends on callers the diff does not show — and know that on the commit measured, it found less. The plan stage has no switch, and its cost stated plainly: a plan reviewer cannot check that a `file.cs:line` reference in the plan is real.',
       whatCanGoWrong:
         'The one retry a reviewer gets also runs in an empty directory, for the same reason: a repair asks for the answer in the schema, not for more exploration. Handing it the checkout again was what made one code round in three lose a reviewer.',
     },
