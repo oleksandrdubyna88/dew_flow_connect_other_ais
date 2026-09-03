@@ -16,12 +16,26 @@ import { parseCliVersion } from './cliVersions';
  * same "could not tell" every other failure here does. Nothing throws: an absent binary is an
  * ordinary state of a machine, not an error to show somebody.</p>
  *
- * <p><b>Only stdout is read.</b> A binary that refuses the argument writes to stderr and exits
- * non-zero — every `coai-mcp` up to 0.12.2 does — and that refusal must not parse as a version.</p>
+ * <p><b>Only stdout is read, and only on exit 0.</b> A binary that refuses the argument writes to
+ * stderr and exits non-zero — every `coai-mcp` up to 0.12.2 does — and that refusal must not parse
+ * as a version. The exit code is part of it because a damaged or substituted executable can print a
+ * plausible banner AND fail: taking the banner would let the panel report a version for a binary
+ * that does not work, and suppress the update that would replace it. (codex, this change's gate.)</p>
  */
 export function askVersion(executable: string): Promise<string> {
   return new Promise((resolve) => {
-    const child = spawn(executable, ['--version'], { shell: false });
+    // `spawn` can THROW rather than emit `error`, and it does so for a real case on this platform:
+    // node refuses a `.cmd` / `.bat` without a shell (the 2024 argument-injection fix) with a
+    // synchronous EINVAL — measured here with node 24 on `codex.cmd`. The docstring above promises
+    // this function never throws, and an exception out of a repaint is not a version that could
+    // not be read: it is a panel that stops repainting.
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(executable, ['--version'], { shell: false });
+    } catch {
+      resolve('');
+      return;
+    }
     const timer = setTimeout(() => {
       child.kill();
       resolve('');
@@ -34,9 +48,9 @@ export function askVersion(executable: string): Promise<string> {
       clearTimeout(timer);
       resolve('');
     });
-    child.on('close', () => {
+    child.on('close', (code) => {
       clearTimeout(timer);
-      resolve(parseCliVersion(output));
+      resolve(code === 0 ? parseCliVersion(output) : '');
     });
   });
 }

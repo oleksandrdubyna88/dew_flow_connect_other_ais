@@ -415,7 +415,10 @@ export function serverSentence(server: ServerStatus, side: string): string {
     return `coai-mcp is not installed${here.length === 0 ? ' yet' : here}.`;
   }
   if (server.kind === 'unknown') {
-    return `A coai-mcp is installed${here} but it cannot report its version — press Update.`;
+    // It says what IS, and leaves the action to the button. It used to end "— press Update", which
+    // was a promise the section could not keep offline: with no published version there is no
+    // button, and a sentence naming an action nobody can take is worse than a plain statement.
+    return `A coai-mcp is installed${here}, but it cannot report its version.`;
   }
 
   return server.remembered
@@ -435,6 +438,10 @@ function serverBody(state: PanelState): string {
   const installed = `<div class="status">${escapeHtml(serverSentence(state.server, state.side))}</div>`;
   const present = state.server.kind !== 'absent';
 
+  // Three states, and the button appears in exactly one of them: something newer is published over
+  // what is here, or nothing is here at all. `updateOffered` is false whenever the published version
+  // could not be read, so no sentence in this section promises an action the section cannot offer —
+  // which is what the "press Update" wording did offline, with no button under it.
   const published = state.latestServerVersion.length === 0
     ? '<div class="hint">The published version could not be read from GitHub just now.</div>'
     : present && !state.server.updateOffered

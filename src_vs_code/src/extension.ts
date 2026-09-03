@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet } from './claudeSnippet';
 import { clientTargetsLine, CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
-import { installLatest, latestServerVersion, serverOnThisSide, serverPath } from './installer';
+import { installLatest, latestServerVersion, serverExists, serverOnThisSide, serverPath } from './installer';
 import { EscalationWatcher } from './escalationWatcher';
 import { PanelProvider } from './panelProvider';
 import { renderEscalations } from './escalations';
@@ -179,9 +179,9 @@ async function copyConfigBlock(context: vscode.ExtensionContext): Promise<void> 
   }
   // Whether it is there is a question about THIS side's disk. It used to be a question about a
   // remembered version shared by every window of the profile, so a WSL window handed out a path
-  // that did not exist and called it installed.
-  const server = await serverOnThisSide(context.globalStorageUri, context.globalState, '');
-  const installed = server.kind !== 'absent';
+  // that did not exist and called it installed. `stat` answers it; asking for the full status would
+  // launch a `--version` process to learn something the stat already knew.
+  const installed = await serverExists(context.globalStorageUri);
   await vscode.env.clipboard.writeText(mcpServerBlock(path.fsPath, envBlock(settings())));
   void vscode.window.showInformationMessage(
     installed

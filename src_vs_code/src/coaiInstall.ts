@@ -4,8 +4,10 @@
  *
  * - Into the extension's own storage, never onto the `PATH`: uninstall is a file delete, and the
  *   full path is what the config block hands out anyway.
- * - The installed version is REMEMBERED, because the binary cannot be asked (`coai-mcp` answers
- *   `--help`, not `--version`) — what is on disk is paired with what we recorded putting it there.
+ * - The installed version is ASKED OF THE BINARY (`coai-mcp --version`, since 0.12.3), because a
+ *   remembered one belongs to whichever side pressed the button last: `globalState` is shared by a
+ *   local and a remote window, the binary is not. The record survives only as a per-side fallback
+ *   for a file the OS refuses to spawn — see {@link installedKey} and {@link serverStatus}.
  * - A platform the matrix does not build is refused BY NAME rather than guessed at: a nearby RID
  *   downloads a binary that cannot execute and then reports a network problem instead.
  *
@@ -200,17 +202,26 @@ export function installedKey(side: Side): string {
   const remote = (side.remoteName ?? '').trim();
   const target = ((side.distro ?? '').trim().length > 0 ? side.distro : side.hostname) ?? '';
   const parts = remote.length === 0 ? ['local', side.storagePath] : [remote, target, side.storagePath];
-  const slug = slugify(parts.join('|'));
 
-  return `coai.installedVersion@${slug.length === 0 ? 'unknown-side' : slug}`;
+  return `coai.installedVersion@${parts.map(escapeComponent).join('|')}`;
 }
 
-function slugify(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+/**
+ * One identity component, escaped so that no two different components can produce one key.
+ *
+ * <p>The first attempt folded everything to a slug — lowercased, non-alphanumerics collapsed to a
+ * hyphen — and codex's reviewer took it apart with two pairs that would have shared a record:
+ * `Ubuntu-Dev` against `Ubuntu Dev`, and `/x/a-b` against `/x/a/b`. A lossy identity is the same
+ * defect this whole change is about, one layer down.</p>
+ *
+ * <p>Percent-encoding is the cheapest injective escape: `%` itself goes first, then the separator
+ * and anything outside a small readable set. The key stays legible in a state inspector, which
+ * matters the next time somebody has to work out which side a record belongs to.</p>
+ */
+function escapeComponent(value: string): string {
+  return value.replace(/[^A-Za-z0-9._~/\:+-]/g, (c) =>
+    [...c].map((ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`).join(''),
+  );
 }
 
 /**
@@ -286,7 +297,11 @@ export function serverStatus(facts: ServerFacts): ServerStatus {
 
   const version = facts.reported.length > 0 ? facts.reported : facts.remembered;
   if (version.length === 0) {
-    return { kind: 'unknown', version: '', remembered: false, updateOffered: true };
+    // A file that cannot say what it is IS a candidate for replacing — but only when there is
+    // something to replace it with. Offline, `offerUpdate` would otherwise announce "a newer
+    // coai-mcp is published" on the strength of nothing, and the install it offers would fail on
+    // the same dead network. (gemini, this change's gate.)
+    return { kind: 'unknown', version: '', remembered: false, updateOffered: facts.published.length > 0 };
   }
 
   return {

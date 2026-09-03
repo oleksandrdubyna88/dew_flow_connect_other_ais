@@ -23,6 +23,29 @@ The finding, verbatim (GPT-5.6-Luna, code round 2026-09-03): *"During the potent
 probe the initial panel is blank, or after Reprobe the old diagnosis remains with no indication that
 work is happening; if the probe fails, only the delayed final state appears."*
 
+## A second probe joined this in the Server section (2026-09-03)
+
+The gate's code round on
+[PLAN_server_version_per_side.md](PLAN_server_version_per_side.md) raised the same finding against
+the server's new `--version` probe, and it was rejected there for the reason above — this plan owns
+it for every probe rather than one. It did name something this plan had not:
+
+> *"On a file that hangs or is blocked by the OS, `serverOnThisSide` awaits the shared 8-second
+> `askVersion` timeout before the panel can post its next state. During that interval a person
+> changing settings sees the previous panel and no indication that the Server section is being
+> checked."* (codex, `UxDxPerformance`)
+
+So the cost is not only a missing label: **the await sits inside `render`**, which means a hanging
+binary delays the whole repaint — including the settings the person is typing — by up to the probe's
+timeout. That makes the fix here structural rather than cosmetic: the probing state must be published
+BEFORE the wait, not merely rendered differently during it, and the same applies to the local-engine
+probe this plan was extracted for. Whatever shape it takes must cover both, plus the vendor CLI
+versions and the GitHub check.
+
+Mitigated but not fixed in that change: concurrent renders now join one in-flight probe instead of
+starting a process each, and a probe's outcome — failure included — is cached against the file's
+`mtime` and `size`, so the wait is paid once per binary rather than per repaint.
+
 ## What must be true when this is done
 
 1. A render that is waiting on a probe publishes a *probing* state first, and replaces it with the

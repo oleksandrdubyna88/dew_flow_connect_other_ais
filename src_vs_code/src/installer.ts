@@ -106,19 +106,59 @@ export async function serverOnThisSide(
   });
 }
 
-/** The one probe result this side can have: one binary, one path, one answer at a time. */
-let probed: { path: string; mtime: number; size: number; version: string } | undefined;
+/**
+ * What the probe answered for a file, keyed by path — and what it is answering right now.
+ *
+ * <p>Both halves came out of this change's gate. A single slot was clobbered by any second path
+ * (a test, or a host that asks about more than one), and without the in-flight promise every render
+ * started during the 8-second timeout of a HANGING binary launched a process of its own: ten
+ * keystrokes, ten waits. Callers now join the one probe in flight.</p>
+ */
+const probed = new Map<string, { mtime: number; size: number; version: string }>();
+const probing = new Map<string, Promise<string>>();
 
 async function reportedVersion(target: vscode.Uri, stat: vscode.FileStat): Promise<string> {
   const path = target.fsPath;
-  if (probed?.path === path && probed.mtime === stat.mtime && probed.size === stat.size) {
-    return probed.version;
+  const cached = probed.get(path);
+  if (cached?.mtime === stat.mtime && cached.size === stat.size) {
+    return cached.version;
   }
 
-  const version = await askVersion(path);
-  probed = { path, mtime: stat.mtime, size: stat.size, version };
+  const running = probing.get(path);
+  if (running !== undefined) {
+    return running;
+  }
 
-  return version;
+  const attempt = askVersion(path)
+    .then((version) => {
+      // The FAILURE is stored too: a pre-0.12.3 binary must be asked once, not on every tick.
+      probed.set(path, { mtime: stat.mtime, size: stat.size, version });
+      return version;
+    })
+    .finally(() => probing.delete(path));
+  probing.set(path, attempt);
+
+  return attempt;
+}
+
+/**
+ * Whether this side has the binary at all — the disk, and nothing else.
+ *
+ * <p>Separate from {@link serverOnThisSide} because the config block only needs to know whether the
+ * path it hands out exists, and going through the full status would launch a `--version` process to
+ * answer a question `stat` had already answered. (gemini, this change's gate.)</p>
+ */
+export async function serverExists(storage: vscode.Uri): Promise<boolean> {
+  const target = serverPath(storage);
+  if (target === undefined) {
+    return false;
+  }
+  try {
+    await vscode.workspace.fs.stat(target);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function installLatest(
@@ -160,7 +200,7 @@ export async function installLatest(
     await state.update(installedKey(thisSide(storage)), version);
     // The new file has a new mtime, so the cache would miss anyway — but saying so beats relying on
     // a filesystem's timestamp resolution for correctness.
-    probed = undefined;
+    probed.delete(target.fsPath);
     return target;
   } finally {
     await vscode.workspace.fs.delete(scratch, { recursive: true, useTrash: false });

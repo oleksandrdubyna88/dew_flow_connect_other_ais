@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { installedKey, serverStatus, sideLabel } from '../coaiInstall';
+import { serverSentence } from '../panelView';
 import { parseCliVersion } from '../cliVersions';
 
 /**
@@ -51,6 +52,21 @@ test('an up-to-date binary offers nothing', () => {
   });
 
   assert.equal(status.kind, 'known');
+  assert.equal(status.updateOffered, false);
+});
+
+test('an unknown version offers nothing while the published one cannot be read', () => {
+  // Offline. `offerUpdate` runs at activation and would otherwise announce "a newer coai-mcp is
+  // published" on the strength of nothing, and the install it offers would fail on the same
+  // network. (gemini, the code round.)
+  const status = serverStatus({
+    fileExists: true,
+    reported: '',
+    remembered: '',
+    published: '',
+  });
+
+  assert.equal(status.kind, 'unknown');
   assert.equal(status.updateOffered, false);
 });
 
@@ -192,6 +208,71 @@ test('the side is named the way the remote indicator names it', () => {
     'attached-container',
     'a remote kind this build does not know is printed as it is, never prettified into a guess',
   );
+});
+
+test('the sentence never names an action the section cannot offer', () => {
+  // It used to end "— press Update"; offline there is no button under it, and a sentence naming an
+  // action nobody can take is worse than a plain statement of what is there. (codex + gemini.)
+  const unknown = serverSentence(
+    { kind: 'unknown', version: '', remembered: false, updateOffered: false },
+    'WSL: Ubuntu',
+  );
+
+  assert.ok(unknown.includes('cannot report its version'));
+  assert.ok(!/press Update/i.test(unknown));
+});
+
+test('the sentence names the side, and says when the number is only remembered', () => {
+  assert.equal(
+    serverSentence({ kind: 'known', version: '0.12.1', remembered: false, updateOffered: true }, 'WSL: Ubuntu'),
+    'coai-mcp 0.12.1 is installed in WSL: Ubuntu.',
+  );
+  assert.equal(
+    serverSentence({ kind: 'absent', version: '', remembered: false, updateOffered: false }, 'WSL: Ubuntu'),
+    'coai-mcp is not installed in WSL: Ubuntu.',
+  );
+  assert.equal(
+    serverSentence({ kind: 'absent', version: '', remembered: false, updateOffered: false }, ''),
+    'coai-mcp is not installed yet.',
+    'a local window has one side and no need for a word for it',
+  );
+  assert.ok(
+    serverSentence({ kind: 'known', version: '0.12.3', remembered: true, updateOffered: false }, '').includes(
+      "this side's own record",
+    ),
+    'a number that came from the record must not read as the binary having answered',
+  );
+});
+
+test('two identities that differ only in punctuation are two records', () => {
+  // The first attempt slugified, so these pairs shared a key and one side could adopt the other's
+  // remembered version as its fallback. Found by codex on the implementation, not on the plan.
+  const path = '/home/j/.vscode-server/data/User/globalStorage/remsoftdev.connect-other-ais';
+  assert.notEqual(
+    installedKey({ remoteName: 'wsl', distro: 'Ubuntu-Dev', hostname: 'j', storagePath: path }),
+    installedKey({ remoteName: 'wsl', distro: 'Ubuntu Dev', hostname: 'j', storagePath: path }),
+  );
+  assert.notEqual(
+    installedKey({ remoteName: 'wsl', distro: 'U', hostname: 'j', storagePath: '/x/a-b' }),
+    installedKey({ remoteName: 'wsl', distro: 'U', hostname: 'j', storagePath: '/x/a/b' }),
+  );
+  assert.notEqual(
+    installedKey({ remoteName: 'wsl', distro: 'a|b', hostname: 'j', storagePath: '/x' }),
+    installedKey({ remoteName: 'wsl', distro: 'a', hostname: 'j', storagePath: 'b|/x' }),
+    'the separator itself cannot be smuggled into a component',
+  );
+});
+
+test('a key stays legible for whoever has to read the state later', () => {
+  const key = installedKey({
+    remoteName: 'wsl',
+    distro: 'Ubuntu',
+    hostname: 'jinx',
+    storagePath: '/home/jinx/.vscode-server/data/User/globalStorage/remsoftdev.connect-other-ais',
+  });
+
+  assert.ok(key.startsWith('coai.installedVersion@wsl|Ubuntu|'), key);
+  assert.ok(key.includes('.vscode-server'), 'the path a person would recognise survives the escape');
 });
 
 test('the version banner the server will print parses', () => {

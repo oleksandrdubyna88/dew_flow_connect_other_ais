@@ -41,7 +41,8 @@ node .claude/rules/shared/tools/pin-check.mjs
 ## Non-negotiables inherited from the design
 
 - **stdout carries JSON-RPC.** The server's console logging goes to stderr; one stray stdout line is
-  a protocol corruption that looks like a protocol bug. The one sanctioned stdout write is `--help`.
+  a protocol corruption that looks like a protocol bug. The sanctioned stdout writes are `--help`
+  and `--version` — a person at a terminal, never the protocol path.
 - **Reviewers are read-only, in a worktree pinned to a SHA** — one worktree per round, outside the
   repository, pruned on `open`, removed in `finally`.
 - **No secret ever reaches argv or a log line.** Vendor keys come from one CredsForDevs `config`
