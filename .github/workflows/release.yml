@@ -129,9 +129,9 @@ jobs:
           # between a local and a WSL window, which is how a 0.12.1 in WSL was reported as 0.12.2),
           # so a stamping step that silently stops working would put that lie back — one release
           # later, in a place nobody would look. It fails HERE instead.
-          # `tr -d ''`: WriteLine ends a line with CRLF on Windows, and a comparison against a
+          # `tr -d CR`: WriteLine ends a line with CRLF on Windows, and a comparison against a
           # value from the environment would fail on the two Windows RIDs and nowhere else.
-          REPORTED=$("$EXE" --version | tr -d '')
+          REPORTED=$("$EXE" --version | tr -d '\r')
           if [ "$REPORTED" != "coai-mcp $VERSION" ]; then
             echo "the published binary reports '$REPORTED' but this release is 'coai-mcp $VERSION'"
             exit 1

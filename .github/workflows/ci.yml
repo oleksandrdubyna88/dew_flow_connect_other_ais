@@ -47,6 +47,29 @@ jobs:
       - name: Pin check
         run: node .claude/rules/shared/tools/pin-check.mjs
 
+      # A workflow file that does not PARSE fails at startup, in zero seconds, with no job, no log
+      # and no annotation — and the run that discovers it is the release you just tagged. Measured
+      # 2026-09-03: a single stray carriage return inside a quoted `tr -d '\r'` reads as a line
+      # break in a YAML block scalar, so `mcp-v0.12.3` and `extension-v0.27.0` both had to be
+      # burned and re-cut. Parsing them here costs a second and turns that into a red PR.
+      - name: Workflows parse
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys, yaml
+          bad = []
+          for path in sorted(pathlib.Path('.github/workflows').glob('*.yml')):
+              raw = path.read_bytes()
+              stray = raw.count(b'\r') - raw.count(b'\r\n')
+              if stray:
+                  bad.append(f'{path}: {stray} bare carriage return(s) — a line break to YAML')
+              try:
+                  yaml.safe_load(raw.decode('utf-8'))
+              except Exception as error:
+                  bad.append(f'{path}: {error}')
+          print('\n'.join(bad) if bad else 'workflows parse')
+          sys.exit(1 if bad else 0)
+          PY
+
   extension:
     name: extension · typecheck · test · package
     runs-on: ubuntu-latest
