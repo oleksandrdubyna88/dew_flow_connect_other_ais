@@ -13,7 +13,8 @@ public sealed record ReviewerState(
     string Note = "",
     long TokensIn = 0,
     long TokensOut = 0,
-    double? CostUsd = null)
+    double? CostUsd = null,
+    bool PartlyBilled = false)
 {
     public const string Queued = "queued";
     public const string Running = "running";

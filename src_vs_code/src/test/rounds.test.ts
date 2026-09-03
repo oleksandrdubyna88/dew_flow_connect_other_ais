@@ -372,3 +372,57 @@ test('the grand total across every round is priced the same way, per vendor and 
   assert.ok(markdown.includes('~$1.45'), `expected the footer to price both vendors, got: ${markdown}`);
   assert.ok(!markdown.includes('Money is only counted'), 'the footer explains the tilde now');
 });
+
+/**
+ * A partial estimate must not read as a total — the review round's finding, and one that will fire
+ * on this very machine: the local engine burns tokens and has no rates behind it.
+ */
+test('a round with an unpriced vendor says the figure is not all of it', () => {
+  const view = costPhrase(
+    round({
+      tokensIn: 2_000_000,
+      tokensOut: 200_000,
+      costUsd: null,
+      reviewerStates: [
+        reviewer({ provider: 'codex', tokensIn: 1_000_000, tokensOut: 100_000 }),
+        reviewer({ provider: 'local', tokensIn: 1_000_000, tokensOut: 100_000 }),
+      ],
+    }),
+    rate,
+  );
+
+  assert.ok(view.includes('~$0.32'), 'what could be priced, is');
+  assert.ok(view.includes('+ unpriced'), 'and it says out loud that the rest could not be');
+});
+
+test('a repaired reviewer whose launches disagree marks the estimate partial too', () => {
+  // One launch billed, another reported tokens and no money. Merged, the two cannot be separated,
+  // so the tokens the bill does not cover would otherwise be silently counted as billed.
+  const view = costPhrase(
+    round({
+      tokensIn: 1_000_000,
+      tokensOut: 100_000,
+      costUsd: null,
+      reviewerStates: [
+        reviewer({ provider: 'codex', tokensIn: 1_000_000, tokensOut: 100_000, partlyBilled: true }),
+      ],
+    }),
+    rate,
+  );
+
+  assert.ok(view.includes('+ unpriced'));
+});
+
+test('a round where everything could be priced says nothing extra', () => {
+  const view = costPhrase(
+    round({
+      tokensIn: 1_000_000,
+      tokensOut: 100_000,
+      costUsd: null,
+      reviewerStates: [reviewer({ provider: 'codex', tokensIn: 1_000_000, tokensOut: 100_000 })],
+    }),
+    rate,
+  );
+
+  assert.ok(!view.includes('unpriced'), 'the marker is for the case that needs it, not decoration');
+});

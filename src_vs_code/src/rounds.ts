@@ -25,6 +25,15 @@ export interface ReviewerState {
   readonly tokensOut?: number;
   /** Only vendors that price their own runs report this; absent is "unknown", never "free". */
   readonly costUsd?: number | null;
+  /**
+   * This reviewer was repaired, and its launches disagree: one billed, another reported tokens and
+   * no money.
+   *
+   * <p>Merged into one state the two cannot be separated, so the tokens the reported cost does not
+   * cover would be silently counted as billed. The fact is recorded instead, and an estimate that
+   * includes such a reviewer is shown as PARTIAL rather than as the round's cost.</p>
+   */
+  readonly partlyBilled?: boolean;
 }
 
 export interface RoundRecord {
@@ -77,12 +86,39 @@ export function isRunning(round: RoundRecord): boolean {
 export function costPhrase(round: RoundRecord, rate: RateLookup = () => undefined): string {
   const inTokens = round.tokensIn ?? 0;
   const outTokens = round.tokensOut ?? 0;
-  const spent = spendPhrase(round.costUsd ?? null, estimateOf(round.reviewerStates ?? [], rate));
+  const states = round.reviewerStates ?? [];
+  const estimate = estimateOf(states, rate);
+  const spent = spendPhrase(round.costUsd ?? null, estimate);
+  // Said out loud when some of the round's tokens could not be priced at all. Without it, a round
+  // of a priced vendor and an unpriced one shows a figure that reads as the WHOLE round's cost and
+  // is quietly short by everything the second one burned. (Review finding, accepted.)
+  const said = spent === undefined ? undefined : `${spent}${partly(states, rate, estimate)}`;
   if (inTokens === 0 && outTokens === 0) {
-    return spent ?? 'no usage reported';
+    return said ?? 'no usage reported';
   }
   const tokens = `${thousands(inTokens)} in / ${thousands(outTokens)} out`;
-  return `${tokens} · ${spent ?? 'no cost reported'}`;
+  return `${tokens} · ${said ?? 'no cost reported'}`;
+}
+
+/**
+ * The words that keep a partial estimate from reading as a total.
+ *
+ * <p>Two ways a figure can be short of the whole round: a vendor that burned tokens and has no rate
+ * behind it, and a repaired reviewer whose launches disagree about whether they were billed. Both
+ * mean the same thing to a reader — this is not all of it — so they say the same thing.</p>
+ */
+function partly(states: readonly ReviewerState[], rate: RateLookup, estimate: number | null): string {
+  if (estimate === null) {
+    return '';
+  }
+  const missed = states.some((state) => unpriced(state, rate) || state.partlyBilled === true);
+  return missed ? ' + unpriced' : '';
+}
+
+/** A reviewer that burned tokens, billed nothing, and has no rate to price it by. */
+function unpriced(state: ReviewerState, rate: RateLookup): boolean {
+  const tokens = (state.tokensIn ?? 0) + (state.tokensOut ?? 0);
+  return tokens > 0 && state.costUsd == null && rate(state.provider) === undefined;
 }
 
 /**

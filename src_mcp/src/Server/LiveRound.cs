@@ -75,13 +75,13 @@ public sealed class LiveRound
         // Grouped rather than assigned per result, because a REPAIRED reviewer appears twice — the
         // relaunch is a second entry for the same provider and role, and taking the last one would
         // report half of what that reviewer really consumed.
-        var perReviewer = results
+        var perLaunch = results
             .GroupBy(r => Key(r.Invocation.Provider, r.Invocation.Role.ToString()))
-            .ToDictionary(
-                group => group.Key,
-                group => group
-                    .Select(r => UsageOf(r.Outcome))
-                    .Aggregate(Core.Findings.Usage.None, (total, one) => total.Add(one)));
+            .ToDictionary(group => group.Key, group => group.Select(r => UsageOf(r.Outcome)).ToList());
+
+        var perReviewer = perLaunch.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.Aggregate(Core.Findings.Usage.None, (total, one) => total.Add(one)));
 
         var usage = perReviewer.Values.Aggregate(Core.Findings.Usage.None, (total, one) => total.Add(one));
 
@@ -96,6 +96,7 @@ public sealed class LiveRound
                         TokensIn = spent.TokensIn,
                         TokensOut = spent.TokensOut,
                         CostUsd = spent.CostUsd,
+                        PartlyBilled = PartlyBilled(perLaunch[key]),
                     };
                 }
             }
@@ -115,6 +116,21 @@ public sealed class LiveRound
     /// answer is a completed run whose usage the vendor reported, and counting only <c>Ok</c> made
     /// a round with two fallen reviewers report roughly half of what it actually cost.
     /// </summary>
+    /// <summary>
+    /// Whether this reviewer's launches are MIXED — one billed, another reporting tokens and no
+    /// money.
+    /// </summary>
+    /// <remarks>
+    /// <para>A repaired reviewer runs twice. Merged into one state, a launch that reported tokens
+    /// but no cost hides inside a total that carries a cost: the panel takes the reported figure as
+    /// the answer and never estimates the rest, which undercounts the round with no sign that it
+    /// did. It cannot be separated after the merge, so the fact that it happened is recorded and
+    /// the panel says the estimate is partial.</para>
+    /// </remarks>
+    private static bool PartlyBilled(IReadOnlyList<Core.Findings.Usage> launches) =>
+        launches.Any(one => one.CostUsd is not null)
+        && launches.Any(one => one.CostUsd is null && one.TokensIn + one.TokensOut > 0);
+
     private static Core.Findings.Usage UsageOf(ReviewerOutcome outcome) => outcome switch
     {
         ReviewerOutcome.Ok ok => ok.Usage,
