@@ -83,9 +83,18 @@ public static class RateLimit
     /// `code 429` — or when the reason phrase follows it, which is how the CLIs actually print one:
     /// `429 Too Many Requests`, `503 UNAVAILABLE`, `503 Service Unavailable`.</para>
     /// </remarks>
+    /// <remarks>
+    /// <para>The alternatives are exactly the shapes in the table below and nothing else. The first
+    /// version of this regex also took <c>code</c>, <c>status_code</c> and <c>error</c> as labels
+    /// and a bare <c>rate</c> as a reason — none of them observed from a vendor, and the same class
+    /// of guess as the bare <c>429</c> it replaced. Raised in this change's own code round: a rule
+    /// that says every code is observed is not kept by a pattern that accepts four more.</para>
+    /// </remarks>
     private static readonly System.Text.RegularExpressions.Regex StatusCode = new(
-        @"(?:\b(?:http|https|status|statuscode|status_code|code|error)\b\W{0,4}(?:429|503)\b)"
-            + @"|(?:\b(?:429|503)\b\s*[:\-]?\s*(?:too\s+many|service\s+unavailable|unavailable|rate))",
+        @"(?:\bhttps?\s*[:/]?\s*(?:429|503)\b)"
+            + @"|(?:\bstatus\b\W{0,4}(?:429|503)\b)"
+            + @"|(?:\b429\b\s*[:\-]?\s*too\s+many)"
+            + @"|(?:\b503\b\s*[:\-]?\s*(?:service\s+)?unavailable)",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase
             | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 

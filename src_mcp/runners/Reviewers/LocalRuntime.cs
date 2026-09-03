@@ -87,6 +87,26 @@ public sealed class LocalRuntime(string id, string baseUrl) : IReviewerRuntime
         return trimmed.EndsWith("/v1", StringComparison.Ordinal) ? trimmed : $"{trimmed}/v1";
     }
 
+    /// <summary>
+    /// One engine, one key — whatever spelling reached the settings.
+    /// </summary>
+    /// <remarks>
+    /// The concurrency cap is only as good as the identity it is keyed by, and
+    /// <c>http://127.0.0.1:11434/v1</c> against <c>http://127.0.0.1:11434/v1/</c> — or a capitalised
+    /// host — are one card. Two keys would let both requests onto it and recreate the very timeout
+    /// this cap exists to prevent; raised in this change's code round. The scheme, host and port are
+    /// lower-cased and the path is trimmed; nothing is resolved over the network, because a key is an
+    /// identity and not a health check.
+    /// </remarks>
+    public static string EngineKey(string endpoint)
+    {
+        var normalised = OpenAiBaseOf(endpoint).Trim();
+
+        return Uri.TryCreate(normalised, UriKind.Absolute, out var uri)
+            ? $"{uri.Scheme.ToLowerInvariant()}://{uri.Host.ToLowerInvariant()}:{uri.Port}{uri.AbsolutePath.TrimEnd('/')}"
+            : normalised.ToLowerInvariant();
+    }
+
     public ReviewerInvocation Build(
         ReviewRole role,
         string prompt,
@@ -138,8 +158,9 @@ public sealed class LocalRuntime(string id, string baseUrl) : IReviewerRuntime
             this,
             // The endpoint is the resource: one engine serves one reviewer at a time, however many
             // vendors are pointed at it and however many rounds are in flight. Two engines on two
-            // ports are two resources and are not serialised against each other.
-            SharedResource: endpoint);
+            // ports are two resources and are not serialised against each other — and two SPELLINGS
+            // of one endpoint are one resource, which is why the key is canonicalised.
+            SharedResource: EngineKey(endpoint));
     }
 
     /// <summary>

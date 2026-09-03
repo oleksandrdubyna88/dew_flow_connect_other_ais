@@ -207,9 +207,20 @@ internal static class Program
             // A TaskCanceledException here is this shim's own deadline, and saying so is the
             // whole reason it has one: "no answer in 290s" is a sentence about the model being slow,
             // while being killed by the executor says nothing at all.
-            Note(ex is TaskCanceledException
-                ? Runners.Reviewers.LocalAsk.TooSlowMessage(endpoint, waited.Elapsed, deadline)
-                : Runners.Reviewers.LocalAsk.UnreachableMessage(endpoint, ex.Message));
+            // A cancellation is only "too slow" when the deadline is what expired. The same
+            // exception arrives when the round is abandoned or the client goes away, and claiming
+            // the engine missed a deadline it never reached would be a confident lie — raised in
+            // this change's code round.
+            Note(ex switch
+            {
+                TaskCanceledException when waited.Elapsed >= deadline - TimeSpan.FromSeconds(1) =>
+                    Runners.Reviewers.LocalAsk.TooSlowMessage(endpoint, waited.Elapsed, deadline),
+                TaskCanceledException =>
+                    $"this reviewer was cancelled after {waited.Elapsed.TotalSeconds:F0}s of the "
+                        + $"{deadline.TotalSeconds:F0}s it was given — the round ended, or the client "
+                        + "went away. The engine at " + endpoint + " was not asked to stop by us.",
+                _ => Runners.Reviewers.LocalAsk.UnreachableMessage(endpoint, ex.Message),
+            });
 
             return 69; // EX_UNAVAILABLE
         }

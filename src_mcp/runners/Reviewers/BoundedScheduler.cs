@@ -88,7 +88,7 @@ public sealed class BoundedScheduler(
     /// machine the docstring says it bounds. Found by codex reviewing the plan for the engine cap —
     /// the same defect one layer above the one being fixed.
     /// </remarks>
-    private readonly SemaphoreSlim _global = new(globalCap);
+    private readonly SemaphoreSlim _global = new(Math.Max(1, globalCap));
     private readonly Dictionary<string, SemaphoreSlim> _perProvider = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, SemaphoreSlim> _perResource = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _limiters = new();
@@ -147,36 +147,88 @@ public sealed class BoundedScheduler(
             {
                 var name = w.Invocation.Provider;
                 var provider = perProvider[name];
-                // The ENGINE first, and outside everything else. A reviewer holding the card is
-                // what the other reviewers of every round are waiting for, so it is taken before
-                // the provider and the machine slots and released after them — the ordering that
-                // cannot deadlock, because it is the same for every reviewer.
                 var engine = w.Invocation.SharedResource;
-                var resource = engine.Length == 0 ? null : Limiter(_perResource, engine, sharedResourceCap);
-                if (resource is not null)
+                var queued = System.Diagnostics.Stopwatch.StartNew();
+                // Widest first, narrowest last: the machine, then the vendor, then the ENGINE.
+                // The first version took the engine first, and gemini's reviewer named the cost —
+                // a local reviewer would hold the card while still blocked on a machine slot filled
+                // by hosted vendors, so the GPU sat idle and locked and every other local reviewer
+                // waited on a card nobody was using. Same order for every reviewer, so nothing can
+                // deadlock; released in reverse.
+                try
                 {
-                    await resource.WaitAsync(ct);
-                    EnteredResource(engine);
+                    await global.WaitAsync(ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    // A round that ends while a reviewer is still queued is that reviewer's
+                    // failure, not the round's exception: `Task.WhenAll` would otherwise fault and
+                    // every sibling's result would be lost with it.
+                    return Abandoned(onProgress, w.Invocation, queued.Elapsed);
                 }
                 try
                 {
-                    await provider.WaitAsync(ct);
                     try
                     {
-                        await global.WaitAsync(ct);
-                        Entered(name, runningPerProvider);
-                        Report(onProgress, w.Invocation, "running");
-                        var watch = System.Diagnostics.Stopwatch.StartNew();
+                        await provider.WaitAsync(ct);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return Abandoned(onProgress, w.Invocation, queued.Elapsed);
+                    }
+                    try
+                    {
+                        var resource = engine.Length == 0
+                            ? null
+                            : Limiter(_perResource, engine, sharedResourceCap);
+                        if (resource is not null)
+                        {
+                            try
+                            {
+                                await resource.WaitAsync(ct);
+                            }
+                            catch (OperationCanceledException)
+                            {
+                                return Abandoned(onProgress, w.Invocation, queued.Elapsed);
+                            }
+
+                            EnteredResource(engine);
+                        }
                         try
                         {
-                            var outcome = await RunWithOneRetryAsync(w, executor, ct);
-                            Report(onProgress, w.Invocation, outcome is ReviewerOutcome.Ok ? "done" : "failed", outcome, watch.Elapsed);
-                            return (w.Invocation, outcome);
+                            Entered(name, runningPerProvider);
+                            Report(onProgress, w.Invocation, "running");
+                            var watch = System.Diagnostics.Stopwatch.StartNew();
+                            try
+                            {
+                                var outcome = await RunWithOneRetryAsync(w, executor, ct);
+                                Report(onProgress, w.Invocation, outcome is ReviewerOutcome.Ok ? "done" : "failed", outcome, watch.Elapsed);
+                                return (w.Invocation, outcome);
+                            }
+                            catch (OperationCanceledException)
+                            {
+                                // The same defect as the queued case, one step further in — and it
+                                // was the test for THAT which found this: a reviewer cancelled
+                                // while RUNNING threw out of the fan-out, so `Task.WhenAll` faulted
+                                // and the round reported none of its finished reviewers either.
+                                return Abandoned(
+                                    onProgress,
+                                    w.Invocation,
+                                    watch.Elapsed,
+                                    "was cancelled while it was running");
+                            }
+                            finally
+                            {
+                                Left(name, runningPerProvider);
+                            }
                         }
                         finally
                         {
-                            Left(name, runningPerProvider);
-                            global.Release();
+                            if (resource is not null)
+                            {
+                                LeftResource(engine);
+                                resource.Release();
+                            }
                         }
                     }
                     finally
@@ -186,11 +238,7 @@ public sealed class BoundedScheduler(
                 }
                 finally
                 {
-                    if (resource is not null)
-                    {
-                        LeftResource(engine);
-                        resource.Release();
-                    }
+                    global.Release();
                 }
             });
             return await Task.WhenAll(tasks);
@@ -202,13 +250,26 @@ public sealed class BoundedScheduler(
         }
     }
 
-    /// <summary>Who is on this engine right now, for the sentence a timeout has to say.</summary>
-    public int RunningOn(string resource)
+    /// <summary>
+    /// A reviewer the round ended under while it was still waiting for a slot.
+    /// </summary>
+    /// <remarks>
+    /// It is REPORTED rather than thrown. A cancellation escaping one of these tasks faults
+    /// <c>Task.WhenAll</c>, which discards every sibling's result along with it — so a round
+    /// cancelled with five reviewers finished would have reported none of them. Raised twice in this
+    /// change's code round, against two of the three waits.
+    /// </remarks>
+    private static (ReviewerInvocation, ReviewerOutcome) Abandoned(
+        Action<ReviewerProgress>? onProgress,
+        ReviewerInvocation invocation,
+        TimeSpan elapsed,
+        string what = "was still queued")
     {
-        lock (_limiters)
-        {
-            return _runningPerResource.GetValueOrDefault(resource);
-        }
+        var outcome = new ReviewerOutcome.NotStarted(
+            $"the round ended while this reviewer {what}, after {elapsed.TotalSeconds:F0}s");
+        Report(onProgress, invocation, "failed", outcome, elapsed);
+
+        return (invocation, outcome);
     }
 
     private void EnteredResource(string resource)

@@ -146,6 +146,51 @@ public sealed class SharedEngineTests
         (await run).Should().HaveCount(1);
     }
 
+    [Theory]
+    [InlineData("http://127.0.0.1:11434/v1", "http://127.0.0.1:11434/v1/")]
+    [InlineData("http://127.0.0.1:11434", "http://127.0.0.1:11434/v1")]
+    [InlineData("http://LOCALHOST:11434/v1", "http://localhost:11434/v1")]
+    public void OneEngineHasOneKey_WhateverItWasTypedAs(string a, string b) =>
+        LocalRuntime.EngineKey(a).Should().Be(
+            LocalRuntime.EngineKey(b),
+            "two keys would put both requests on one card, which is the timeout this cap prevents");
+
+    [Theory]
+    [InlineData("http://127.0.0.1:11434/v1", "http://127.0.0.1:8000/v1")]
+    [InlineData("http://127.0.0.1:11434/v1", "http://192.168.1.9:11434/v1")]
+    public void TwoEnginesKeepTwoKeys(string a, string b) =>
+        LocalRuntime.EngineKey(a).Should().NotBe(LocalRuntime.EngineKey(b));
+
+    [Fact]
+    public async Task ARoundCancelledWhileAReviewerWaits_StillReportsThatReviewer()
+    {
+        // A cancellation escaping one of the fan-out's tasks faults `Task.WhenAll`, which discards
+        // every sibling's result with it — so a round cancelled with five reviewers finished would
+        // have reported none of them. Raised twice in this change's code round.
+        using var cancel = new CancellationTokenSource();
+        var scheduler = new BoundedScheduler(globalCap: 1, perProviderCap: 1, sharedResourceCap: 1);
+        var work = new[]
+        {
+            OnEngine("local", ReviewRole.Architecture, "http://127.0.0.1:11434/v1"),
+            OnEngine("local", ReviewRole.SecurityReliability, "http://127.0.0.1:11434/v1"),
+        };
+
+        var run = scheduler.RunAllAsync(work, Executor(400), cancel.Token);
+        await Task.Delay(80, TestContext.Current.CancellationToken);
+        await cancel.CancelAsync();
+
+        var outcomes = await run;
+        outcomes.Should().HaveCount(2, "every reviewer of the round gets an outcome, cancelled or not");
+        outcomes.Should().Contain(o => o.Outcome is ReviewerOutcome.NotStarted);
+        outcomes
+            .Select(o => o.Outcome)
+            .OfType<ReviewerOutcome.NotStarted>()
+            .Should()
+            .OnlyContain(
+                o => o.Reason.Contains("still queued") || o.Reason.Contains("while it was running"),
+                "the sentence says what happened to it");
+    }
+
     private static ReviewerWork OnEngine(string provider, ReviewRole role, string engine) =>
         new(new ReviewerInvocation(
             provider,
