@@ -161,7 +161,7 @@ ${body}
   // (No backticks in this block: it lives inside a template literal, and one would end the page.)
   document.addEventListener('toggle', (event) => {
     const el = event.target;
-    if (el instanceof HTMLDetailsElement && el.dataset.round !== undefined) {
+    if (el instanceof HTMLDetailsElement && (el.dataset.round ?? '') !== '') {
       vscode.postMessage({ type: 'round', id: el.dataset.round, open: el.open });
     }
   }, true);
@@ -784,11 +784,17 @@ function roundCard(
     : round.status === 'interrupted'
       ? '<span class="badge stopped">interrupted</span>'
       : `<b>${escapeHtml(round.verdict)}</b>`;
-  // Always rendered, for a finished round too. What a round DID is the question people come back
-  // to, and the card used to throw it away the moment the round ended.
-  const reviewers = reviewerLines(round)
-    .map((line) => `<div class="reviewer">${escapeHtml(line)}</div>`)
-    .join('\n');
+  const key = roundKey(round);
+  const open = openRounds.includes(key);
+  // Built only for a card that is OPEN. A finished round keeps its reviewers — that is the whole
+  // change — but rendering nine of them for every round in the list on every five-second tick is
+  // work nobody sees. The provider repaints the moment a card is toggled, so the body is there by
+  // the time it becomes visible. (codex, this change's code round.)
+  // A round IN FLIGHT always carries its body, whether or not the open set mentions it: "the
+  // reviewers of a running round are visible" is a promise of this renderer, not something a
+  // provider can be trusted to arrange, and it is one round rather than a list.
+  const lines = open || isRunning(round) ? reviewerLines(round) : [];
+  const reviewers = lines.map((line) => `<div class="reviewer">${escapeHtml(line)}</div>`).join('\n');
   const took = elapsed(round, nowMs);
   // WHAT was reviewed leads the line; the branch and the round number follow it. A list of rounds
   // identified only by stage and number is a column of numbers — a person scanning it is looking
@@ -796,12 +802,11 @@ function roundCard(
   const subject = (round.subject ?? '').length > 0
     ? `<div class="subject">${escapeHtml(round.subject!)}</div>`
     : '';
-  const key = roundKey(round);
 
-  return `<details class="round" data-round="${escapeHtml(key)}"${openRounds.includes(key) ? ' open' : ''}>
+  return `<details class="round" data-round="${escapeHtml(key)}"${open ? ' open' : ''}>
 <summary>${subject}<div class="verdict">${escapeHtml(stageName(round.stage))} ${round.number} · ${escapeHtml(round.branch)} · ${verdict} · ${round.gatingCount} gating</div>
 <div class="usage">${took.length > 0 ? `${escapeHtml(took)} · ` : ''}${escapeHtml(costPhrase(round))}</div></summary>
-${reviewers.length > 0 ? reviewers : '<div class="reviewer">This round recorded no reviewer detail.</div>'}
+${lines.length > 0 ? reviewers : open ? '<div class="reviewer">This round recorded no reviewer detail.</div>' : ''}
 </details>`;
 }
 

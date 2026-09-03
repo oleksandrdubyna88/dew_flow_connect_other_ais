@@ -64,11 +64,22 @@ function state(rounds: readonly RoundRecord[], openRounds: readonly string[] = [
 const NOW = Date.parse('2026-09-03T16:20:00.000Z');
 
 test('a finished round keeps its reviewers instead of throwing them away', () => {
-  const html = panelHtml(state([round()]), 'n', NOW);
+  const key = roundKey({ ...round(), branch: 'main' });
+  const html = panelHtml(state([round()], [key]), 'n', NOW);
 
   assert.ok(html.includes('<details class="round"'), 'the card is a disclosure');
   assert.ok(html.includes('codex/Architecture — done'), 'the reviewers of a FINISHED round are there');
   assert.ok(html.includes('local/SecurityReliability — failed'));
+});
+
+test('a closed card carries no reviewer rows at all', () => {
+  // Not cosmetic: this list is rebuilt every five seconds, and nine rows per round for every round
+  // in a 72-hour window is work nobody can see. The provider repaints on the toggle, so the body is
+  // there by the time the card is open. (codex, this change's code round.)
+  const html = panelHtml(state([round()]), 'n', NOW);
+
+  assert.ok(html.includes('<details class="round"'));
+  assert.ok(!html.includes('codex/Architecture'), 'a closed card builds nothing');
 });
 
 test('the closed summary is the line it has always been', () => {
@@ -90,6 +101,18 @@ test('each reviewer says how long it took and what it read', () => {
   assert.equal(lines[0], 'codex/Architecture — done (0 findings, 39 s, 46k in / 1.6k out)');
   assert.ok(lines[1]!.includes('9.8 min'), lines[1]);
   assert.ok(lines[1]!.includes('the engine did not finish in time'), 'a failure still says why');
+});
+
+test('a duration that is not a number is no duration', () => {
+  // A session file is JSON somebody else wrote. "NaN s" reads as a broken panel rather than as a
+  // missing measurement.
+  const broken = round({
+    reviewerStates: [
+      { provider: 'codex', role: 'Architecture', status: 'done', findings: 1, note: '', seconds: Number.NaN },
+    ],
+  });
+
+  assert.equal(reviewerLines(broken)[0], 'codex/Architecture — done (1 finding)');
 });
 
 test('a round from an older server says nothing about time or tokens', () => {
@@ -138,7 +161,7 @@ test('the rounds list is twice as tall as it was', () => {
 
 test('a round that recorded no reviewers still opens into a sentence', () => {
   const bare = round({ reviewerStates: [] });
-  const html = panelHtml(state([bare]), 'n', NOW);
+  const html = panelHtml(state([bare], [roundKey({ ...bare, branch: 'main' })]), 'n', NOW);
 
   assert.ok(html.includes('recorded no reviewer detail'), 'an empty disclosure would read as broken');
 });

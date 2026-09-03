@@ -133,6 +133,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
           this.openRounds = m.open === true
             ? [...new Set([...this.openRounds, m.id])]
             : this.openRounds.filter((r) => r !== m.id);
+          // Repainted at once, because a card's body is only BUILT when it is open: without this
+          // an opened round would show nothing until the next five-second tick. The sections need
+          // no such thing — their content is in the page whether they are open or not.
+          void this.render();
         } else if (m.type === 'section' && m.id !== undefined) {
           this.openSections = m.open === true
             ? [...new Set([...this.openSections, m.id])]
@@ -164,15 +168,20 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * snatches the reviewers away the moment it ends.</p>
    */
   private expanded(sessions: readonly SessionFile[]): readonly string[] {
-    const running = sessions
-      .flatMap((s) => s.rounds.map((r) => ({ branch: s.state.branch, ...r })))
+    const cards = sessions.flatMap((s) => s.rounds.map((r) => ({ branch: s.state.branch, ...r })));
+    const running = cards
       .filter(isRunning)
       .map(roundKey)
       .filter((key) => !this.autoOpened.has(key));
     for (const key of running) {
       this.autoOpened.add(key);
     }
-    this.openRounds = [...new Set([...this.openRounds, ...running])];
+    // Both sets are pruned to rounds that still EXIST. Neither is large in a day's work, but both
+    // would otherwise grow for the life of the extension host — a key for every round anybody ever
+    // opened, scanned on every five-second tick long after that round left the list. (codex.)
+    const alive = new Set(cards.map(roundKey));
+    this.openRounds = [...new Set([...this.openRounds, ...running])].filter((key) => alive.has(key));
+    this.autoOpened = new Set([...this.autoOpened].filter((key) => alive.has(key)));
 
     return this.openRounds;
   }

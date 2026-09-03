@@ -139,8 +139,9 @@ export function reviewerLines(round: RoundRecord): readonly string[] {
  */
 function reviewerTime(state: ReviewerState): string {
   const seconds = state.seconds ?? 0;
-
-  return seconds <= 0 ? '' : shortDuration(seconds);
+  // A session file is JSON somebody else wrote: NaN or Infinity would render as "NaN s", which
+  // reads as a broken panel rather than as a missing measurement. Not a number is not a duration.
+  return !Number.isFinite(seconds) || seconds <= 0 ? '' : shortDuration(seconds);
 }
 
 /** What one reviewer read and wrote, when the server recorded it. */
