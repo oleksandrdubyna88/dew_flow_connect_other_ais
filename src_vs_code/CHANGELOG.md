@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.27.0 — 2026-09-03 (server 0.12.3)
+
+**The Server section said "0.12.2 is installed — you are up to date" on a side where 0.12.1 was
+running, and hid the only button that could have fixed it.** One machine, one profile, a Windows
+window and a `WSL: Ubuntu` window. `globalState` — where the version was remembered — is the
+CLIENT's storage and is shared by both; `globalStorageUri`, where the binary actually goes, is a
+path on the extension host that is running. One record, two disks: a WSL install wrote 0.12.1 into
+the Windows-side database and a Windows press overwrote it with 0.12.2. The panel never looked at
+either disk, and since the Update button only appears when the published version differs from the
+remembered one, there was no way left, from inside the product, to update the server WSL was
+running.
+
+- **"Installed" is now the disk, and the version is the binary's own answer.** `coai-mcp --version`
+  is new in server 0.12.3; the panel asks the file it is about to describe. A file that cannot
+  answer — every release up to 0.12.2 — reads *"A coai-mcp is installed in WSL: Ubuntu, but it
+  cannot report its version"* and offers the update, instead of claiming currency.
+- **The Server section names the side** whenever there is one, because a machine with two of them
+  had one sentence describing whichever pressed the button last. A local window is unchanged.
+- **The record is per side**, folding the remote kind, the distro and the storage path — and it is
+  only a fallback now, for a binary the OS refuses to spawn. The old shared key is never read: its
+  value cannot be attributed to a side, which was the defect.
+- **A release that misreports its own version fails.** The workflow stamps the tag into the binary
+  and the smoke step compares the two.
+- **Vendor CLI versions are readable again on Windows, and were worse than missing.** Every npm
+  global is a `.cmd` shim, node refuses to launch one without a shell, and it refuses with a
+  synchronous throw — which left `render` and stopped the panel repainting rather than showing the
+  grey "could not be read" state. codex now reports 0.152.0 and gemini 0.57.0 where both showed
+  nothing. A shim is the one case that gets a shell, on Windows only, resolved on the PATH first,
+  with its path refused rather than escaped if it could break the quoting.
+- A path pasted from Explorer's *Copy as Path* (wrapped in quotes) is accepted.
+
 ## 0.26.2 — 2026-09-03 (server 0.12.2)
 
 **A local reviewer in WSL failed ten rounds in a row against an engine one hop away, and nothing said
