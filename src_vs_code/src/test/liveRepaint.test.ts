@@ -25,6 +25,7 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   settings: DEFAULTS,
   vendors: DEFAULT_VENDORS,
   codexModels: [],
+  localEngines: {},
   serverInstalled: true,
   serverVersion: '0.6.0',
   latestServerVersion: '0.6.0',

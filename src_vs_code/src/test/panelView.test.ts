@@ -12,6 +12,7 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
     { id: 'gpt-5.6-sol', label: 'GPT-5.6-Sol' },
     { id: 'gpt-5.4-mini', label: 'GPT-5.4-Mini' },
   ],
+  localEngines: {},
   serverInstalled: false,
   serverVersion: '',
   questions: [],

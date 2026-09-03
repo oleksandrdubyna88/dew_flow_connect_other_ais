@@ -34,6 +34,7 @@ function html(vendors: readonly Vendor[], cliStatus: Record<string, CliStatus>):
     settings: DEFAULTS,
     vendors,
     codexModels: [],
+    localEngines: {},
     serverInstalled: false,
     serverVersion: '',
     latestServerVersion: '',

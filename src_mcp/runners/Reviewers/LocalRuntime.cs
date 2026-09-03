@@ -72,6 +72,21 @@ public sealed class LocalRuntime(string id, string baseUrl) : IReviewerRuntime
         return (process, [dll]);
     }
 
+    /// <summary>An endpoint as the OpenAI-compatible base: trailing slashes gone, <c>/v1</c> present.</summary>
+    /// <remarks>
+    /// The panel normalised for the PROBE and nothing normalised for the REVIEW, so an endpoint
+    /// typed without <c>/v1</c> listed its models happily and then 404'd on every round — a
+    /// configuration that looks healthy and cannot work. Found by Gemini 3.7 Flash, 2026-09-02.
+    /// The extension's <c>openAiBaseOf</c> is the same rule on the other side of the wire; both
+    /// exist because neither process can call the other's.
+    /// </remarks>
+    public static string OpenAiBaseOf(string endpoint)
+    {
+        var trimmed = endpoint.TrimEnd('/');
+
+        return trimmed.EndsWith("/v1", StringComparison.Ordinal) ? trimmed : $"{trimmed}/v1";
+    }
+
     public ReviewerInvocation Build(
         ReviewRole role,
         string prompt,
@@ -85,7 +100,7 @@ public sealed class LocalRuntime(string id, string baseUrl) : IReviewerRuntime
         var answerFile = Path.Combine(outputDir, $"local-{role}-{Guid.NewGuid():N}.json");
         File.WriteAllText(promptFile, prompt);
 
-        var endpoint = baseUrl.Length > 0 ? baseUrl : DefaultEndpoint;
+        var endpoint = OpenAiBaseOf(baseUrl.Length > 0 ? baseUrl : DefaultEndpoint);
         var (self, prefix) = SelfInvocation();
         var executable = settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : self;
         // A path somebody set is taken as the whole answer: they named an executable, not a host to

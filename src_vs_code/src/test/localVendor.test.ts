@@ -37,7 +37,7 @@ function html(vendors: readonly Vendor[], engine: LocalEngine): string {
     settings: DEFAULTS,
     vendors,
     codexModels: [],
-    localEngine: engine,
+    localEngines: Object.fromEntries(vendors.filter((v) => v.runtime === 'local').map((v) => [v.id, engine])),
     serverInstalled: false,
     serverVersion: '',
     latestServerVersion: '',

@@ -97,7 +97,35 @@ Two findings appeared only in diff-only mode and only from one model each, and b
   under a GUID name with no cleanup on success, failure or timeout (**luna**, `LocalRuntime.cs:91`).
 
 **Eight real defects, not five.** The five below were found with a checkout; the three named above
-appeared only without one. All eight are open.
+appeared only without one.
+
+**All eight are fixed, 2026-09-03** (server 0.12.1, extension 0.26.1), plus a ninth of the same
+class that arrived from CI the next morning. Every fix was watched fail first, with the defect's own
+words; the failure messages are recorded in the tests
+(`src_mcp/tests/FoundByTheGateTests.cs`, `src_vs_code/src/test/foundByTheGate.test.ts`).
+
+| # | defect | found by | what changed |
+|---|---|---|---|
+| 1 | `staticKey` omits `localEngines`, so a reprobe never repaints | flash alone | the map is in the key |
+| 2 | the local seed is `GetHashCode`, randomised per process | qwen, luna, sonnet | `LocalAsk.SeedFor` {EM} FNV-1a over the UTF-8 bytes, pinned in a test against an independent implementation of the algorithm |
+| 3 | a missing schema file still substitutes `{}` | luna alone | `--ask-local` exits 65 before any request |
+| 4 | discovery reports `connection refused` whatever happened | luna alone | each candidate's own reason is kept and joined |
+| 5 | the endpoint field is hidden for the preset that ships without one | gemma alone | only the four shipped vendors that know their own endpoint are not asked for one |
+| 6 | `ReadResponse` throws on a valid non-object answer | flash and luna | the root's `ValueKind` is checked before `TryGetProperty` |
+| 7 | the endpoint is never normalised to `/v1` for the REVIEW | flash | `LocalRuntime.OpenAiBaseOf`, applied in the runtime and in the shim |
+| 8 | one `localEngine` is handed to every vendor card | sonnet alone | probed and kept per vendor id |
+| 9 | `Task.Delay` with a negative budget throws out of `call_human` | the linux-x64 release runner | `Escalations.NextWait` floors at zero |
+
+The prompt-file leftover (luna) needed no code: the file lands in the round's answers directory, and
+the temp sweep {EM} widened the same day to know `coai-repair-*` and `coai-noworkspace-*` as well as
+`coai-answers-*` {EM} removes it with the rest.
+
+**What fixing them taught.** Three of the nine were ONE decision written in two places: the `{}`
+schema fallback removed from the callee and left in the caller, the `/v1` normalisation done for the
+probe and not for the review, and a runtime list the type knew and the parser did not (fixed the day
+before). That is the same shape as the duplicate-reviewer-key crash and the auth arm that did not
+know `local`. It is this codebase's characteristic defect, and it is what a second reviewer is
+unusually good at seeing: a model reading a diff has no memory of where the first copy was.
 
 **What this does not settle.** Three commits' worth of the fair run were still outstanding when it
 was stopped, so this is one subject deeply rather than five broadly, and the finding counts above

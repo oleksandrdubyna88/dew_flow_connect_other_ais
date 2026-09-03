@@ -48,10 +48,15 @@ export interface PanelState {
    * The local model engine on this machine, probed at repaint.
    *
    * <p>A local reviewer's model list is the only one that cannot be shipped: what is installed is a
-   * fact about the machine the panel is running on. Undefined means nothing has been probed yet,
-   * which is a different sentence from "nothing answered".</p>
+   * fact about the machine the panel is running on. A vendor missing from this map has not been
+   * probed yet, which is a different sentence from "nothing answered".</p>
+   *
+   * <p><b>Keyed by VENDOR id, not one for the panel.</b> It was a single engine, probed from
+   * `vendors.find(v => v.runtime === 'local')` and handed to every card, so a second local reviewer
+   * on another port displayed the first one's models and picking one sent a model that engine does
+   * not have. Found by Claude Sonnet 5, 2026-09-02.</p>
    */
-  readonly localEngine?: LocalEngine | undefined;
+  readonly localEngines: Readonly<Record<string, LocalEngine>>;
   /**
    * What the CLAUDE.md snippet pasted into this workspace is, next to what this build hands out.
    *
@@ -233,9 +238,19 @@ function updateLabel(id: string, cli: CliStatus): string {
 }
 
 function reviewersBody(state: PanelState): string {
-  return `${state.vendors.map((v) => vendorCard(v, state.codexModels, state.cliStatus[v.id] ?? UNKNOWN_CLI, state.modelPrices[v.model], state.localEngine)).join('\n')}
+  return `${state.vendors.map((v) => vendorCard(v, state.codexModels, state.cliStatus[v.id] ?? UNKNOWN_CLI, state.modelPrices[v.model], state.localEngines[v.id])).join('\n')}
 <button class="add" data-command="addVendor" title="${escapeHtml(HELP.addVendor)}">＋&nbsp; Add a reviewer</button>`;
 }
+
+/**
+ * The shipped vendors that reach their own service and need no base URL.
+ *
+ * <p>By ID rather than by runtime: `deepseek` and `openrouter` are `codex` too, and a vendor
+ * somebody named themselves is `codex` by default — those all need the field. A vendor that is not
+ * on this list is asked for an endpoint, which is the safe direction: an unnecessary empty box is
+ * a smaller defect than a reviewer that cannot be configured.</p>
+ */
+const KNOWS_ITS_OWN_ENDPOINT: ReadonlySet<string> = new Set(['codex', 'claude', 'gemini', 'antigravity']);
 
 function vendorCard(
   vendor: Vendor,
@@ -247,12 +262,13 @@ function vendorCard(
   const id = escapeHtml(vendor.id);
   const local = vendor.runtime === 'local';
   const models = modelsFor(vendor.runtime, codexModels, vendor.model, localEngine);
-  // A local vendor ALWAYS shows the endpoint field, where every other vendor shows it only once one
-  // is set. This is the case where somebody needs to type one — a vLLM on another port, a box on the
-  // network, an engine the probe cannot see — and a field that appears only after it is filled
-  // cannot be filled.
+  // Who is asked for an endpoint: everybody except the shipped vendors that already know where
+  // they go. It used to be "everybody with a baseUrl already set, plus local" — which hid the field
+  // from the one preset whose entire purpose is to be given a base URL ("Another OpenAI-compatible
+  // endpoint" ships with an empty one), so it could never be filled in. Found by Gemma4 26B,
+  // 2026-09-02, and it is the only defect in that campaign no hosted model found.
   const endpoint =
-    vendor.baseUrl.length === 0 && !local
+    KNOWS_ITS_OWN_ENDPOINT.has(vendor.id) && vendor.baseUrl.length === 0
       ? ''
       : `
   <div class="field">
@@ -1025,6 +1041,10 @@ export function staticKey(state: PanelState): string {
     state.settings,
     state.vendors,
     state.codexModels,
+    // The local model list belongs here for the same reason every other list does: it CHANGES —
+    // somebody starts Ollama, pulls a model, presses the reprobe button. Left out, the picker was
+    // frozen for the life of the panel while the probe underneath it worked perfectly.
+    state.localEngines,
     state.serverInstalled,
     state.serverVersion,
     // Rare, and both are a person's doing or an answer they asked for.

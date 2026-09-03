@@ -93,10 +93,11 @@ internal static class Program
     /// <para>Exit 0 with no answer file is not possible: a failure exits non-zero AND says why on
     /// stderr, so the round reports the reason rather than "the vendor returned an empty answer".</para>
     /// </remarks>
-    private static async Task<int> AskLocalAsync(string[] args)
+    internal static async Task<int> AskLocalAsync(string[] args)
     {
         var flags = Flags(args);
-        var endpoint = flags.GetValueOrDefault("--endpoint", Runners.Reviewers.LocalRuntime.DefaultEndpoint);
+        var endpoint = Runners.Reviewers.LocalRuntime.OpenAiBaseOf(
+            flags.GetValueOrDefault("--endpoint", Runners.Reviewers.LocalRuntime.DefaultEndpoint));
         var model = flags.GetValueOrDefault("--model", string.Empty);
         var promptFile = flags.GetValueOrDefault("--prompt-file", string.Empty);
         var schemaFile = flags.GetValueOrDefault("--schema-file", string.Empty);
@@ -112,12 +113,25 @@ internal static class Program
         try
         {
             var prompt = await File.ReadAllTextAsync(promptFile);
-            var schema = schemaFile.Length > 0 && File.Exists(schemaFile)
-                ? await File.ReadAllTextAsync(schemaFile)
-                : "{}";
-            // Seeded from the prompt, not from the clock: the same round asked twice is the same
-            // request, which is what makes a local reviewer reproducible at all.
-            var seed = Math.Abs(prompt.GetHashCode(StringComparison.Ordinal)) % 100_000;
+            // A missing schema is refused, not substituted. `{}` was the fallback here — the same
+            // unconstrained request that `LocalAsk.RequestBody` was corrected to refuse, left
+            // behind in the caller when it was removed from the callee. One decision in two places
+            // is how it survived; GPT-5.6-Luna found it on 2026-09-02, and it was the finding this
+            // record's author wrongly judged already-fixed from memory.
+            if (schemaFile.Length == 0 || !File.Exists(schemaFile))
+            {
+                Note($"--ask-local needs a finding schema and none was at '{schemaFile}', so no "
+                     + "request was sent: an unconstrained request is answered with an invented "
+                     + "shape after a full generation has been paid for.");
+
+                return 65; // EX_DATAERR
+            }
+
+            var schema = await File.ReadAllTextAsync(schemaFile);
+            // Seeded from the prompt BYTES, not from the clock and not from a per-process hash: the
+            // same round asked twice is the same request, which is what makes a local reviewer
+            // reproducible at all.
+            var seed = Runners.Reviewers.LocalAsk.SeedFor(prompt);
             string body;
             try
             {

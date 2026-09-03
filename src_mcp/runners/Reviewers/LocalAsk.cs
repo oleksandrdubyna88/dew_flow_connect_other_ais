@@ -45,6 +45,28 @@ public static class LocalAsk
         return Math.Max(5, whole - marginSeconds);
     }
 
+    /// <summary>The sampling seed for a prompt: the same prompt is the same request, in any process.</summary>
+    /// <remarks>
+    /// <para>FNV-1a over the UTF-8 bytes, and the choice of algorithm is not the point — being a
+    /// function of the BYTES is. This was <c>prompt.GetHashCode()</c>, which .NET randomises per
+    /// process, so the seed changed on every run underneath a comment promising that it did not.
+    /// Three of the five models in the 2026-09-02 campaign named it.</para>
+    /// <para>Unsigned arithmetic throughout, so there is no <c>Math.Abs(int.MinValue)</c> to throw
+    /// and no negative seed for an engine to refuse.</para>
+    /// </remarks>
+    public static int SeedFor(string prompt)
+    {
+        const uint offsetBasis = 2166136261;
+        const uint prime = 16777619;
+        var hash = offsetBasis;
+        foreach (var b in Encoding.UTF8.GetBytes(prompt))
+        {
+            hash = (hash ^ b) * prime;
+        }
+
+        return (int)(hash % 100_000u);
+    }
+
     /// <summary>The completion request, as the wire wants it.</summary>
     /// <param name="model">Empty is legal — the endpoint picks, which is what "whatever the engine
     /// answers with" means in the panel.</param>
@@ -118,6 +140,15 @@ public static class LocalAsk
         {
             using var parsed = JsonDocument.Parse(response);
             var root = parsed.RootElement;
+            // Valid JSON is not the same as an answer. `[]`, `42`, `null` and a bare string all
+            // parse, and `TryGetProperty` on a root that is not an object THROWS
+            // `InvalidOperationException` — which the `catch` below, written for `JsonException`,
+            // does not catch. An engine answering an array took the round down with it.
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return (null, new Usage(0, 0, null));
+            }
+
             var usage = ReadUsage(root);
 
             if (!root.TryGetProperty("choices", out var choices)

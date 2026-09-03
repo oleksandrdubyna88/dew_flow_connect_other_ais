@@ -99,6 +99,19 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
         }
     }
 
+    /// <summary>How long to sleep before looking again: never longer than what is left, never negative.</summary>
+    /// <remarks>
+    /// The floor is the fix. The loop tests <c>UtcNow &lt; deadline</c> and then reads the clock
+    /// AGAIN to size the wait; between the two reads the budget can go negative, and
+    /// <c>Task.Delay</c> throws <c>ArgumentOutOfRangeException</c> for that — so a <c>call_human</c>
+    /// that had merely run out of time came back as a crash. Seen on the linux-x64 release runner,
+    /// where a 400 ms budget and a slow file read were enough.
+    /// </remarks>
+    internal static TimeSpan NextWait(TimeSpan remaining, TimeSpan poll) =>
+        remaining < TimeSpan.Zero ? TimeSpan.Zero
+        : remaining < poll ? remaining
+        : poll;
+
     public async Task<EscalationOutcome> AskAsync(
         EscalationQuestion question,
         TimeSpan budget,
@@ -115,8 +128,7 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
                 return new EscalationOutcome.Answered(answer.Answer);
             }
 
-            var remaining = deadline - DateTime.UtcNow;
-            await Task.Delay(remaining < _poll ? remaining : _poll, ct);
+            await Task.Delay(NextWait(deadline - DateTime.UtcNow, _poll), ct);
         }
 
         // One last look: an answer written during the final wait must not be missed.

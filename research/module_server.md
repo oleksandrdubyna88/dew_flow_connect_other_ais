@@ -41,6 +41,33 @@ empty directory and take no switch. Measured on one commit, Fast found MORE from
 models at a fraction of the tokens —
 [RESULTS_findings_that_are_worth_something.md](RESULTS_findings_that_are_worth_something.md).
 
+### What the gate found in this half (2026-09-03)
+
+Four of the nine defects from the 2026-09-02 campaign are server-side, and all four are the same
+kind of thing: a decision written correctly in one place and wrongly in another, or a value taken on
+trust.
+
+- **`LocalAsk.SeedFor`** replaced `prompt.GetHashCode()`, which .NET randomises per process — the
+  seed changed on every run underneath a comment promising it did not. FNV-1a over the UTF-8 bytes,
+  in unsigned arithmetic so there is no `Math.Abs(int.MinValue)` to throw. Pinned by a test that
+  computes the same hash from the ALGORITHM rather than from the code, because the property —
+  "the same in another process" — cannot be observed from inside one.
+- **`LocalAsk.ReadResponse`** checks the root's `ValueKind`. `JsonDocument.Parse` succeeds for `[]`,
+  `42`, `null` and a bare string, and `TryGetProperty` on a non-object root throws
+  `InvalidOperationException`, which the `catch (JsonException)` under it does not catch: an engine
+  answering an array took the round down instead of being reported unparseable.
+- **`LocalRuntime.OpenAiBaseOf`** normalises the endpoint for the REVIEW, not only for the panel's
+  probe. An endpoint typed without `/v1` listed its models happily and 404'd on every round.
+- **`Program.AskLocalAsync`** refuses a missing schema file with exit 65 instead of substituting
+  `{}`. The unconstrained request had been removed from `LocalAsk.RequestBody` and left in its
+  caller.
+
+And one from CI rather than from a model: **`Escalations.NextWait`** floors the poll at zero. The
+loop tested `UtcNow < deadline` and then read the clock again to size the wait; between the two
+reads the budget can go negative, and `Task.Delay` throws for that — so a `call_human` that had
+merely run out of time came back as an `ArgumentOutOfRangeException`. Seen on the linux-x64 release
+runner, which is the machine slow enough to lose the race.
+
 ## Escalation — reaching a person without a port
 
 `ask_human` writes `escalations/<id>.json` into the data directory the extension already reads for

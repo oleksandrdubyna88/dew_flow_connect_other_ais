@@ -344,6 +344,35 @@ A source-shape test asserts the listener and the write are NOT in `panelProvider
 `extension.ts`. It is a blunt instrument, and it is the only one available: a behavioural test would
 have to drive VS Code's lazy view resolution, which is the exact thing that cannot be done here.
 
+### What the gate found in this half (2026-09-03)
+
+Four of the nine defects from the 2026-09-02 campaign are on this side, one from each of four
+different models, and no model found more than two of them.
+
+- **`staticKey` now carries `localEngines`** (flash). It decides repaint-or-patch, and anything
+  missing from it is a control that can never change: pressing ⟳ probed the engine, got a new list,
+  and the picker kept showing the old one for the life of the panel. The exact defect class
+  `liveRepaint.test.ts` exists for, in the one field added after it was written.
+- **`PanelState.localEngines` is a map keyed by VENDOR id** (sonnet). It was one engine, probed from
+  `vendors.find(v => v.runtime === 'local')` and handed to every card, so a second local reviewer on
+  another port displayed the first one's models — and picking one sent a model that engine does
+  not have. `probeLocalEngines` now probes each local vendor, and the cache (endpoint + timestamp)
+  is per vendor too.
+- **`discoverEngine` keeps each candidate's own reason** (luna). Every reason was computed, carried
+  through `probeEngine`, and thrown away by a hard-coded `'connection refused'` on the last line: a
+  firewall swallowing the connection, an engine wedged mid-answer and a port with nothing on it all
+  reached a person as one sentence, and three different actions had one prompt.
+- **`KNOWS_ITS_OWN_ENDPOINT`** decides who is asked for a base URL (gemma). The rule was "everybody
+  with one already set, plus local", which hid the field from the *Another OpenAI-compatible
+  endpoint* preset — the one whose entire purpose is to be given a base URL, shipped with an empty
+  one. A field that appears only after it is filled cannot be filled. The list is by ID rather than
+  by runtime, because `deepseek`, `openrouter` and anything a person names themselves are all
+  `codex` and all need the field.
+
+**The one a local model found alone.** Gemma4 26B, running on this machine for nothing, is the only
+reviewer that saw the hidden endpoint field. That is the argument for a second reviewer stated as a
+fact rather than as a principle.
+
 ### Fast or Full, and why the default is the cheap half (2026-09-03)
 
 `coai.codeWorkspace` is a two-position switch in the Code stage section — **Fast** (`none`, the

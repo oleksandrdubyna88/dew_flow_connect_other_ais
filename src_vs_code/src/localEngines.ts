@@ -212,6 +212,11 @@ export function engineNote(engine: LocalEngine, platform: Platform): string {
   return `${where}${wsl} Start one, or paste an endpoint below.`;
 }
 
+/** `127.0.0.1:11434` out of a probe URL — enough to tell two candidates apart, short enough to read. */
+function hostOf(candidate: string): string {
+  return candidate.replace(/^[a-z]+:\/\//, '').replace(/\/.*$/, '');
+}
+
 function portsOf(candidates: readonly string[]): string {
   return candidates
     .map((c) => /:(\d+)/.exec(c)?.[1] ?? c)
@@ -256,14 +261,21 @@ export async function discoverEngine(
   candidates: readonly string[] = PROBE_CANDIDATES,
   timeoutMs = 4000,
 ): Promise<LocalEngine> {
+  // Each candidate's reason is KEPT. It used to be computed, carried through `probeEngine`, and
+  // then thrown away by a hard-coded 'connection refused' on this line — so a firewall swallowing
+  // the connection, an engine wedged mid-answer and a port with nothing on it all reached a person
+  // as the same sentence, and three different actions had one prompt. Found by GPT-5.6-Luna,
+  // 2026-09-02.
+  const reasons: string[] = [];
   for (const candidate of candidates) {
     const engine = await probeEngine(candidate, timeoutMs);
     if (engine.reachable) {
       return engine;
     }
+    reasons.push(`${hostOf(candidate)}: ${engine.status}`);
   }
 
-  return noEngine('connection refused');
+  return noEngine(reasons.length > 0 ? reasons.join('; ') : 'nowhere to look');
 }
 
 /**

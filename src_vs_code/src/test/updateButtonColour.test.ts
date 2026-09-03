@@ -27,6 +27,7 @@ function css(): string {
     settings: DEFAULTS,
     vendors: DEFAULT_VENDORS,
     codexModels: [],
+    localEngines: {},
     serverInstalled: false,
     serverVersion: '',
     latestServerVersion: '',

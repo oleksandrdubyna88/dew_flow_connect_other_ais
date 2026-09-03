@@ -67,6 +67,7 @@ function html(over: {
     settings: DEFAULTS,
     vendors: DEFAULT_VENDORS,
     codexModels: [],
+    localEngines: {},
     serverInstalled: false,
     serverVersion: '',
     latestServerVersion: '',

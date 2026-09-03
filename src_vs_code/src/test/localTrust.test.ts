@@ -27,7 +27,7 @@ const LOCAL: LocalEngine = {
 
 function html(vendor: Vendor): string {
   return panelHtml({
-    settings: DEFAULTS, vendors: [vendor], codexModels: [], localEngine: LOCAL,
+    settings: DEFAULTS, vendors: [vendor], codexModels: [], localEngines: { [vendor.id]: LOCAL },
     serverInstalled: false, serverVersion: '', latestServerVersion: '', questions: [], sessions: [],
     openSections: ['reviewers'], usage: [], usageWindow: 'week', cliStatus: {}, modelPrices: {},
     snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
