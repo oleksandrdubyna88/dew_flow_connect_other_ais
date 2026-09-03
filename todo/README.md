@@ -12,8 +12,14 @@ Convention: `.claude/rules/shared/common/planning-docs.md`.
 | [PLAN_local_trust_and_vllm.md](PLAN_local_trust_and_vllm.md) | The local reviewer assumes a trusted Ollama on this machine. Acknowledging a non-loopback host, a key path for a served vLLM, and whether cancellation works on anything else. |
 | [PLAN_provider_liveness.md](PLAN_provider_liveness.md) | `providers` still calls a vendor healthy on the strength of `--version`, which never reaches the vendor. Three states instead of two, established by a real round trip and cached. |
 | [PLAN_rule_formatting.md](PLAN_rule_formatting.md) | Every reviewer in an eight-cell measurement missed the one rule written as a table row. Whether rule FORMATTING changes what a reviewer can apply, measured. |
-| [PLAN_wsl_local_engine.md](PLAN_wsl_local_engine.md) | From WSL the local reviewer fails ten rounds in a row against a machine with fifteen models on it, one hop away. Seeing the engine on the Windows side, a button for the mirrored-network cure, and a round that says what to do rather than only what happened. |
+| [PLAN_panel_probing_state.md](PLAN_panel_probing_state.md) | A render waits on its probes with nothing on screen saying so: press ⟳ where nothing answers and the old sentence sits unchanged for seconds. Extracted from the WSL plan's code round, where it was accepted as true and left as a tail. |
 
 Everything else planned so far shipped — the master plan, all six epics, the conventions pass, the
 per-role gate with dealt prompts, and the escalation tail are
 in [../research/](../research/) with `IMPLEMENTED` status, beside the record of the first real run.
+
+## Promoted
+
+| Date | Plan | What it delivered |
+|---|---|---|
+| 2026-09-03 | [PLAN_wsl_local_engine.md](../research/PLAN_wsl_local_engine.md) | A local reviewer that works from WSL, or says exactly why it cannot: the round carries a cure instead of only a refusal, the panel names an engine answering on the Windows side, and `⇄` writes and unwrites `networkingMode=mirrored`. Its own gate removed the gateway probe the first draft had, and found two defects in the implementation. |

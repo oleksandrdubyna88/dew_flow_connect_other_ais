@@ -306,7 +306,7 @@ The cure names mirrored networking first (`[wsl2] networkingMode=mirrored`, then
 and `OLLAMA_HOST=0.0.0.0` second: the first needs no firewall rule and no address that WSL
 re-allocates on the next boot. Verified end to end on 2026-09-03 — after mirrored,
 `coai-mcp --ask-local` from Ubuntu against the Windows engine returned `exit 0`, 249/142 tokens and
-a valid findings object in 31 s. Plan: [PLAN_wsl_local_engine.md](../todo/PLAN_wsl_local_engine.md).
+a valid findings object in 31 s. Plan: [PLAN_wsl_local_engine.md](PLAN_wsl_local_engine.md).
 
 ### A setting value this build cannot read is said out loud (2026-09-02)
 

@@ -1,15 +1,32 @@
 # PLAN — a local reviewer that works from WSL, or says exactly why it cannot
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/localEngines.ts`,
-> `panelProvider.ts`, `panelView.ts`, a new `src_vs_code/src/wslNetwork.ts`, and
-> `src_mcp/runners/Reviewers/VendorDiagnosis.cs`.
+> Status: **IMPLEMENTED, 2026-09-03.** All five "must be true" statements shipped in mcp 0.12.2 /
+> extension 0.26.2: the round carries a cure, the panel names an engine seen on the Windows side, and
+> `⇄` writes — and unwrites — `networkingMode=mirrored`. Verified end to end on the machine the
+> symptom was measured on.
 >
-> Sibling of [PLAN_local_trust_and_vllm.md](PLAN_local_trust_and_vllm.md), which covers the other
-> half of the local reviewer — trust, keys, streaming, truncation. Nothing here overlaps it: this
-> plan is only about an engine the machine HAS and this side cannot reach.
+> **Deviations, in the order they cost something.** The largest is a REMOVAL: the first draft probed
+> WSL's default gateway for the engine, and the plan round took it apart from three directions at
+> once — a panel-side discovery cannot change the address the SERVER dials, and "the gateway is
+> inside `172.16.0.0/12`" is not a test for "this is the Windows host" but one that names the office
+> router on a corporate network in that range. What replaced it touches no network address at all.
+> The purity constraint as first written listed two effects and was violated by its own requirement
+> four lines above it; it names three now. Two defects the plan did not anticipate were found by its
+> own code round in the implementation: the panel repeated the *Linux ≠ WSL* mistake the plan calls
+> out for the server, and a successful `.wslconfig` write could be reported as a failure — after
+> which the next press would have offered to undo it.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [module_runners.md](../research/module_runners.md), [PLAN_local_models.md](../research/PLAN_local_models.md).
+> **The tail, extracted rather than left here:** the panel has no *probing* state while discovery is
+> awaited — accepted as true in the code round and deliberately not built, because it predates this
+> change and belongs to how every probe reports. It is
+> [PLAN_panel_probing_state.md](../todo/PLAN_panel_probing_state.md).
+>
+> Sibling of [PLAN_local_trust_and_vllm.md](../todo/PLAN_local_trust_and_vllm.md), which covers the
+> other half of the local reviewer — trust, keys, streaming, truncation. Nothing here overlaps it:
+> this plan is only about an engine the machine HAS and this side cannot reach.
+>
+> Related docs: [module_extension.md](module_extension.md), [module_runners.md](module_runners.md),
+> [PLAN_local_models.md](PLAN_local_models.md).
 
 ## The symptom, measured 2026-09-03
 

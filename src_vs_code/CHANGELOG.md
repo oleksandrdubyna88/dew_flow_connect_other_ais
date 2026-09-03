@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.26.2 — 2026-09-03 (server 0.12.2)
+
+**A local reviewer in WSL failed ten rounds in a row against an engine one hop away, and nothing said
+so.** One machine, the same version installed on both sides, the two settings files byte-identical:
+from Windows the local reviewer answered; from a VS Code attached to WSL every round died in zero
+seconds with *"the local engine at http://127.0.0.1:11434/v1 could not be reached: Connection
+refused"* — while a Windows Ollama sat there holding fifteen models. Two barriers, and fixing one is
+not enough: a Windows engine binds `127.0.0.1` only, and a WSL distro's own `127.0.0.1` is not the
+Windows host's.
+
+- **The round carries a cure, not only a reason.** The panel had this sentence since 0.25.x; the
+  round — the surface somebody actually watches during a review — had nothing. The diagnosis now
+  answers for the server's own failure message, keeps the address that was already useful, and asks
+  `/proc/version` rather than assuming Linux means WSL: a native Linux box was being handed
+  instructions for a machine it is not.
+- **The panel tells "you have no engine" apart from "your engine is one hop away".** When every
+  candidate refuses, a WSL distro asks the Windows side of the same machine through interop — a
+  Windows process asking `127.0.0.1` reaches the loopback this side cannot — and the note names what
+  answered instead of showing an empty list.
+- **`⇄` fixes it, and takes it back.** It merges `networkingMode=mirrored` into the Windows
+  `.wslconfig`: inside `[wsl2]`, in the file's own line endings, keeping every other key, refusing a
+  file that is not UTF-8 rather than corrupting one, and showing the whole merged file before writing
+  it. The write is atomic and read back. It cannot restart WSL — that would terminate the distro the
+  extension runs in — so it hands you `wsl --shutdown`, and pressing it again explains the restart
+  instead of silently undoing the fix.
+
+Measured after the change, from the distro against the Windows engine: `exit 0`, 249/142 tokens, a
+valid findings object, 31 s. What this product's own gate removed from the plan before any of it was
+written: probing WSL's default gateway for the engine — three reviewers, three separate reasons, all
+correct.
+
 ## 0.25.2 — 2026-09-02 (server 0.11.2)
 
 **Two rows on one runtime no longer kill the round.** The built-in runtimes hard-coded the name they
