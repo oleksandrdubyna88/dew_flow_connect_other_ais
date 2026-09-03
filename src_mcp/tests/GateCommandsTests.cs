@@ -157,6 +157,30 @@ public sealed class GateCommandsTests
     }
 
     [Fact]
+    public void FilesAreCountedByPath_NotByName()
+    {
+        // `src/a.cs` and `tests/a.cs` are two files. Collapsing them by base name made a plan that
+        // names fourteen look like one naming seven — and fourteen is the threshold the epics
+        // verdict turns on. (codex, this change's code round.)
+        var text = "# PLAN\n\n" + string.Join(
+            "\n",
+            Enumerable.Range(0, 7).SelectMany(i => new[] { $"- `src/a{i}.cs`", $"- `tests/a{i}.cs`" }));
+
+        PlanShapeReader.Of(text).Files.Should().Be(14);
+    }
+
+    [Fact]
+    public void AChecklistIsNotABuildOrder()
+    {
+        // With no build-order heading only the longest CONTIGUOUS run counts: four acceptance
+        // criteria in one place and a numbered example in another are not six build steps.
+        var text = "# PLAN\n\n## What must be true\n\n1. a\n2. b\n3. c\n4. d\n\n"
+            + "Prose that breaks the run.\n\n## An example\n\n1. x\n2. y\n";
+
+        PlanShapeReader.Of(text).Steps.Should().Be(4, "the longest run, not the sum of every list");
+    }
+
+    [Fact]
     public void TheCommandsSayTheyMustBeFollowed() =>
         GateCommands.Preamble.Should().Contain("outrank").And.Contain("operator");
 }

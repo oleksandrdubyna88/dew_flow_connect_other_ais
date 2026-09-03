@@ -554,7 +554,10 @@ public sealed class PanelService
                 SplitWithFable: _settings.SplitWithFable,
                 FableAvailable: FableIsUsable(),
                 PlanText: session.PlanText,
-                PlanStage: session.State.Stage == Stage.PlanReview));
+                // A plan that did NOT pass is not a plan to go and build: with the switch on, a
+                // `revise` or a `call_human` verdict was still telling the caller to split it into
+                // stories and start committing. The order to build follows permission to build.
+                PlanStage: session.State.Stage == Stage.PlanReview && MayProceed(completed.Verdict)));
             answer = answer with
             {
                 Cost = new RoundCost(record.TokensIn, record.TokensOut, record.CostUsd),
@@ -834,11 +837,34 @@ public sealed class PanelService
     /// which is the distinction this change's plan round asked for by name.
     /// </remarks>
     private bool FableIsUsable() =>
-        _settings.Providers.Any(p =>
-            p.Enabled
-            && (p.Provider.Contains("fable", StringComparison.OrdinalIgnoreCase)
-                || p.Model.Contains("fable", StringComparison.OrdinalIgnoreCase)
-                || p.Runtime.Contains("fable", StringComparison.OrdinalIgnoreCase)));
+        _settings.Providers.Any(p => p.Enabled && NamesFable(p));
+
+    /// <summary>
+    /// Whether this provider IS Fable, rather than merely mentioning it.
+    /// </summary>
+    /// <remarks>
+    /// A substring match called any vendor whose model happened to contain the word "fable" a Fable
+    /// reviewer, and the command would then have sent the risky half of the work to a model nobody
+    /// configured. The identity is the provider id or the model FAMILY — `fable`, or something
+    /// beginning `fable-` / `claude-fable` — never a word inside a longer name. A field that is null
+    /// in a hand-edited settings file is empty here, not a crash mid-round.
+    /// </remarks>
+    private static bool NamesFable(ProviderSettings provider)
+    {
+        static bool IsFable(string? value)
+        {
+            var text = (value ?? string.Empty).Trim().ToLowerInvariant();
+
+            return text == "fable" || text.StartsWith("fable-", StringComparison.Ordinal)
+                || text.Contains("claude-fable", StringComparison.Ordinal);
+        }
+
+        return IsFable(provider.Provider) || IsFable(provider.Model) || IsFable(provider.Runtime);
+    }
+
+    /// <summary>Whether the caller may go and build: an order to split follows permission.</summary>
+    private static bool MayProceed(RoundVerdict verdict) =>
+        verdict is RoundVerdict.Proceed or RoundVerdict.GoodEnough or RoundVerdict.ContinueAnyway;
 
     private string ComposePrompt(PromptChoice choice, string context) =>
         $"{_prompts.ForChoice(choice)}\n\n## The finding contract\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{FindingSchema.Json}\n\n{context}";

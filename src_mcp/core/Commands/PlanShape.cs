@@ -72,8 +72,11 @@ public static class PlanShapeReader
     {
         var text = planText ?? string.Empty;
         var lines = text.Length == 0 ? 0 : text.Split('\n').Length;
+        // By PATH, not by base name: `src/a.cs` and `tests/a.cs` are two files, and collapsing them
+        // made a plan naming fourteen of them look like a plan naming nine — which is the threshold
+        // the epics verdict turns on. (codex, this change's code round.)
         var files = FilePath.Matches(text)
-            .Select(m => Path.GetFileName(m.Value.Replace('\\', '/')))
+            .Select(m => m.Value.Replace('\\', '/').TrimStart('.', '/'))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Count();
         var areas = Area.Matches(text)
@@ -93,11 +96,41 @@ public static class PlanShapeReader
         var heading = BuildHeading.Match(text);
         if (!heading.Success)
         {
-            return NumberedItem.Matches(text).Count >= 4 ? NumberedItem.Matches(text).Count : 0;
+            // The longest CONTIGUOUS run, which is what the docstring above promises and what the
+            // first version did not do: counting every numbered line anywhere turned four
+            // acceptance criteria, a numbered example and a checklist into "nine build steps".
+            return LongestRun(text);
         }
         var after = text[(heading.Index + heading.Length)..];
         var next = NextHeading.Match(after);
 
         return NumberedItem.Matches(next.Success ? after[..next.Index] : after).Count;
+    }
+
+    /// <summary>The longest unbroken sequence of numbered lines — a build order without a heading.</summary>
+    /// <remarks>
+    /// Blank lines and indented continuations do not break a run: a numbered step in this repository
+    /// is routinely three wrapped lines with a blank one after it. What breaks a run is prose that
+    /// starts a new line without a number, which is exactly what separates a build order from a
+    /// checklist somewhere else in the document.
+    /// </remarks>
+    private static int LongestRun(string text)
+    {
+        var longest = 0;
+        var current = 0;
+        foreach (var line in text.Split('\n'))
+        {
+            if (NumberedItem.IsMatch(line))
+            {
+                current += 1;
+                longest = Math.Max(longest, current);
+            }
+            else if (line.Trim().Length > 0 && !line.StartsWith("   ", StringComparison.Ordinal))
+            {
+                current = 0;
+            }
+        }
+
+        return longest;
     }
 }
