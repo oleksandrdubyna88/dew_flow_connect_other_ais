@@ -43,22 +43,46 @@ local two were handed a prompt. That is not a comparison of models, so the hoste
 again on the same commit with `COAI_CODE_WORKSPACE=none` — the identical prompt, in an empty
 directory, which is what a local reviewer has always had.
 
-| model | mode | findings | wall | tokens in |
-|---|---|---|---|---|
-| Gemini 3.7 Flash | with checkout | 5 | 233 s | 610k |
-| Gemini 3.7 Flash | **diff only** | **10** | **189 s** | **266k** |
-| GPT-5.6-Luna | with checkout | 7 | 115 s | 515k |
-| GPT-5.6-Luna | **diff only** | **11** | 124 s | **300k** |
-| Claude Sonnet 5 | with checkout | 7 | 441 s | 1 952k |
-| Claude Sonnet 5 | **diff only** | **8** | 522 s | **579k** |
-| Qwen3.5 35B local | diff only, always | 10 | 144 s | 117k |
-| Gemma4 26B local | diff only, always | 6 | 112 s | 130k |
+Every finding in both modes was then judged the same way — by opening the file it cites.
+
+| model | mode | findings | **true & useful** | rule-only | dup | **wrong** | precision | tokens in |
+|---|---|---|---|---|---|---|---|---|
+| Gemini 3.7 Flash | with checkout | 5 | 4 | 1 | 0 | 0 | 100 % | 610k |
+| Gemini 3.7 Flash | **diff only** | 10 | **8** | 1 | 1 | 0 | 100 % | **266k** |
+| GPT-5.6-Luna | with checkout | 7 | 6 | 1 | 0 | 0 | 100 % | 515k |
+| GPT-5.6-Luna | **diff only** | 11 | **10** | 1 | 0 | 0 | 100 % | **300k** |
+| Claude Sonnet 5 | with checkout | 7 | 6 | 1 | 0 | 0 | 100 % | 1 952k |
+| Claude Sonnet 5 | **diff only** | 8 | **7** | 1 | 0 | 0 | 100 % | **579k** |
+| Qwen3.5 35B local | diff only, always | 10 | 4 | 1 | 1 | **4** | 50 % | 117k |
+| Gemma4 26B local | diff only, always | 6 | 4 | 0 | 1 | **1** | 67 % | 130k |
+
+**Useful findings roughly double, and nothing is lost.** Flash goes from four to eight, Luna from
+six to ten, Sonnet from six to seven — while every hosted model stays at 100 % precision and spends
+between a half and a third of the tokens. Not one wrong finding appeared in diff-only mode from any
+of the three.
+
+**The three defects that only appeared without a checkout**, each verified in the file it cites:
+
+- **`ReadResponse` throws on a valid but non-object response.** `JsonDocument.Parse` succeeds for
+  `[]`, `42` or a bare string, and `RootElement.TryGetProperty` then throws
+  `InvalidOperationException` rather than returning a classified failure — `LocalAsk.cs`, no
+  `ValueKind` check on the root. Found by **flash and luna**.
+- **The endpoint is never normalised to `/v1`.** `LocalRuntime.cs:88` takes `baseUrl` exactly as
+  typed, while the extension normalises only for the PROBE — so an endpoint that answered discovery
+  at the server root 404s at review time. Found by **flash**.
+- **One `state.localEngine` is handed to every vendor card.** `panelProvider.ts:188` looks up
+  `vendors.find(v => v.runtime === 'local')` and `panelView.ts:236` passes that single value to
+  every card, so a second local reviewer on a different engine displays the first one's models.
+  Found by **sonnet**.
+
+Plus one that is real but smaller than it reads: **every local invocation leaves its prompt file
+behind** (luna, `LocalRuntime.cs:84`). There is no cleanup on any of the round's own paths — true —
+but the file lands in the answers directory, which `PruneOldAnswerDirs` sweeps on a later round, so
+it is untidy rather than unbounded.
 
 **Taking the repository away made every hosted model find MORE, at a third to a quarter of the
-tokens.** Flash doubled its findings on 56 % fewer tokens; Luna went from seven to eleven; Sonnet
-gained one while spending 1.37 million fewer tokens. Nothing about the prompt changed — the diff and
-the project's rules are assembled by the server either way — so the only thing removed was the
-wandering.
+tokens.** Nothing about the prompt changed — the diff and the project's rules are assembled by the
+server either way — so the only thing removed was the wandering.
 
 **And the wandering was costing findings, not buying them.** Both defects that Flash missed with a
 checkout — the `{}` schema fallback and the randomised seed — it found without one. A reviewer given
@@ -71,6 +95,9 @@ Two findings appeared only in diff-only mode and only from one model each, and b
   so two local reviewers on different engines display one list (**sonnet**, `panelView.ts:238`).
 - **Every local invocation leaves its prompt file behind** — the full prompt, with source and diffs,
   under a GUID name with no cleanup on success, failure or timeout (**luna**, `LocalRuntime.cs:91`).
+
+**Eight real defects, not five.** The five below were found with a checkout; the three named above
+appeared only without one. All eight are open.
 
 **What this does not settle.** Three commits' worth of the fair run were still outstanding when it
 was stopped, so this is one subject deeply rather than five broadly, and the finding counts above
