@@ -177,6 +177,26 @@ test('the panel says whether the server is installed, and which version', () => 
   assert.ok(installed.includes('coai-mcp 0.4.0 is installed'));
 });
 
+test('every setting appears once, so two controls cannot disagree about it', () => {
+  // Reported from the panel: "What a reviewer gets" was rendered TWICE, and the two looked
+  // different — one filled, one hollow. That is not a rendering artefact but what a browser does
+  // with two radio groups sharing a `name`: it treats them as ONE group, so selecting in the first
+  // clears the second. The blocks were byte-identical copy-paste.
+  const html = panelHtml(state(), 'n');
+  const groups = [...html.matchAll(/role="radiogroup" aria-label="([^"]+)"/g)].map((m) => m[1]!);
+  const seen = new Set<string>();
+  for (const label of groups) {
+    assert.ok(!seen.has(label), `"${label}" is rendered as ${groups.filter((g) => g === label).length} radio groups`);
+    seen.add(label);
+  }
+
+  const named = [...html.matchAll(/<input type="radio" name="([^"]+)"/g)].map((m) => m[1]!);
+  for (const name of new Set(named)) {
+    const values = named.filter((n) => n === name).length;
+    assert.ok(values <= 2, `radio name "${name}" appears ${values} times — more than one group shares it`);
+  }
+});
+
 test('with no question waiting there is no waiting section at all', () => {
   assert.ok(!panelHtml(state(), 'n').includes('waiting on you'));
 });
