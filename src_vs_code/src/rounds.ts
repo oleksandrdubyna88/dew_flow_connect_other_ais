@@ -118,7 +118,9 @@ export function reviewerLines(round: RoundRecord): readonly string[] {
   return (round.reviewerStates ?? []).map((s) => {
     const detail = [
       s.status === 'done' ? `${s.findings} finding${s.findings === 1 ? '' : 's'}` : '',
-      s.status === 'failed' ? s.note : '',
+      // A queued reviewer's note says what it is waiting for — "2 ahead on this engine, about
+      // 4 min". "queued" alone cannot tell ten seconds from ten minutes, and the server knows.
+      s.status === 'failed' || s.status === 'queued' ? s.note : '',
       // Each part is present only when the server recorded it. A round from an older server says
       // nothing about time or tokens rather than saying zero — which would be a measurement.
       reviewerTime(s),

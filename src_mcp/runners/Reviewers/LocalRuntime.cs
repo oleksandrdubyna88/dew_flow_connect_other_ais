@@ -160,7 +160,11 @@ public sealed class LocalRuntime(string id, string baseUrl) : IReviewerRuntime
             // vendors are pointed at it and however many rounds are in flight. Two engines on two
             // ports are two resources and are not serialised against each other — and two SPELLINGS
             // of one endpoint are one resource, which is why the key is canonicalised.
-            SharedResource: EngineKey(endpoint));
+            SharedResource: EngineKey(endpoint),
+            // Carried so a queued reviewer can be told what the WAIT is likely to be: the history
+            // is kept per engine AND model, because one average over a ten-second check and a
+            // five-hundred-second analysis is an estimate of neither.
+            Model: settings.Model);
     }
 
     /// <summary>

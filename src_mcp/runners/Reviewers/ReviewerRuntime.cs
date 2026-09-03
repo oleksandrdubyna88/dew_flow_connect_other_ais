@@ -55,7 +55,8 @@ public sealed record ReviewerInvocation(
     ProcessRequest Request,
     string OutputFile = "",
     IReviewerRuntime? Adapter = null,
-    string SharedResource = "");
+    string SharedResource = "",
+    string Model = "");
 
 /// <summary>
 /// THE vendor adapter: everything one AI vendor needs to plug into the panel, in one interface —

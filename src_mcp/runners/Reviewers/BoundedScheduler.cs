@@ -22,12 +22,17 @@ public sealed record ReviewerWork(
 /// rather than a poll: the scheduler already knows, and nothing else has to guess.
 /// </remarks>
 /// <param name="Elapsed">How long the reviewer actually ran — zero until it finishes.</param>
+/// <param name="Note">
+/// A sentence for the person watching, when the status alone does not say enough — today, what a
+/// queued reviewer is waiting for and roughly how long.
+/// </param>
 public sealed record ReviewerProgress(
     string Provider,
     ReviewRole Role,
     string Status,
     ReviewerOutcome? Outcome = null,
-    TimeSpan Elapsed = default);
+    TimeSpan Elapsed = default,
+    string Note = "");
 
 /// <summary>
 /// The fan-out stays logically parallel; the queue is what keeps it survivable. Two providers ×
@@ -140,7 +145,11 @@ public sealed class BoundedScheduler(
         {
             foreach (var w in work)
             {
-                Report(onProgress, w.Invocation, "queued");
+                // A queued reviewer on a shared engine says what it is waiting for. "queued" alone
+                // cannot tell ten seconds from ten minutes, and the machine knows: the lease counts
+                // who is on the card — other processes included — and the history says how long
+                // that model's runs take.
+                Report(onProgress, w.Invocation, "queued", note: QueueNote(w.Invocation));
             }
 
             var tasks = work.Select(async w =>
@@ -292,16 +301,32 @@ public sealed class BoundedScheduler(
 
     /// <summary>A progress handler is a courtesy, never a dependency: its failure cannot fail a
     /// reviewer, because a panel that cannot repaint is not a review that did not happen.</summary>
+    /// <summary>
+    /// What a reviewer queued on a shared engine is waiting for, or nothing when it waits for
+    /// nothing.
+    /// </summary>
+    /// <remarks>
+    /// Read from the LEASE rather than from this scheduler's own queue, because the card is shared
+    /// with every other server on the machine and "two ahead" that counted only our own round would
+    /// be the comfortable half of the truth.
+    /// </remarks>
+    private static string QueueNote(ReviewerInvocation invocation) =>
+        invocation.SharedResource.Length == 0
+            ? string.Empty
+            : EngineLease.WaitNote(invocation.SharedResource, invocation.Model);
+
     private static void Report(
         Action<ReviewerProgress>? onProgress,
         ReviewerInvocation invocation,
         string status,
         ReviewerOutcome? outcome = null,
-        TimeSpan elapsed = default)
+        TimeSpan elapsed = default,
+        string note = "")
     {
         try
         {
-            onProgress?.Invoke(new ReviewerProgress(invocation.Provider, invocation.Role, status, outcome, elapsed));
+            onProgress?.Invoke(
+                new ReviewerProgress(invocation.Provider, invocation.Role, status, outcome, elapsed, note));
         }
         catch (Exception)
         {

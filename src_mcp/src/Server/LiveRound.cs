@@ -50,7 +50,12 @@ public sealed class LiveRound
                 Findings = progress.Outcome is ReviewerOutcome.Ok ok ? ok.Review.Findings.Count() : previous.Findings,
                 Note = progress.Outcome is { } outcome and not ReviewerOutcome.Ok
                     ? ReviewerSummaryFactory.Describe(outcome)
-                    : previous.Note,
+                    // A progress line may carry its own sentence — a queued reviewer saying what it
+                    // is waiting for — and it is only ever an ADDITION: an empty one never wipes
+                    // the reason a failed reviewer already recorded.
+                    : progress.Note.Length > 0
+                        ? progress.Note
+                        : previous.Note,
                 // Only a FINISHED reviewer has a duration; a "running" report carries zero, and
                 // taking it would erase the number of one that had already finished.
                 Seconds = progress.Elapsed > TimeSpan.Zero

@@ -35,9 +35,12 @@ public class LocalRuntimeTests
             "/tmp/schema.json", "/tmp/out", Settings());
 
         invocation.Request.Arguments.Should().Contain("--ask-local");
-        invocation.Request.Executable.Should().NotContain("codex")
-            .And.NotContain("agy")
-            .And.NotContain("claude");
+        // The FILE NAME, not the whole path. Asserting a substring of the path made this fail in a
+        // checkout that happened to live under a directory called `claude` — a test reporting where
+        // the repository is rather than what the code does.
+        Path.GetFileNameWithoutExtension(invocation.Request.Executable).Should().NotBe("codex")
+            .And.NotBe("agy")
+            .And.NotBe("claude");
     }
 
     [Fact]

@@ -175,12 +175,40 @@ internal static class Program
                 return 65; // EX_DATAERR
             }
 
-            // The deadline came from the runtime, which derived it from the reviewer timeout the
-            // executor enforces. A fixed thirty minutes here was longer than any round, so the only
-            // real deadline was being killed — raised by the gate and accepted.
-            using var http = new HttpClient { Timeout = deadline };
+            // ONE CALLER AT A TIME on this engine, across every process on this machine. The
+            // scheduler serialises the reviewers of one server, and this machine runs several MCP
+            // clients at once, each with a server of its own — three requests on one card is what
+            // turned a 30-second reviewer into two cancelled at 590 s.
+            //
+            // The wait is bounded by the SAME deadline the work has, so a queue cannot quietly eat a
+            // reviewer's budget and then be reported as a slow engine. They are different problems
+            // with different cures, and the messages say which one happened.
+            var untilUtc = DateTime.UtcNow + deadline;
+            var engineKey = Runners.Reviewers.LocalRuntime.EngineKey(endpoint);
+            using var lease = await Runners.Reviewers.EngineLease.AcquireAsync(
+                engineKey,
+                untilUtc,
+                (soFar, ahead) => Note(
+                    $"waiting for the local engine at {endpoint}: {ahead} ahead, {soFar.TotalSeconds:F0}s so far "
+                        + $"(model {model}, pid {Environment.ProcessId})"));
+
+            if (lease is null)
+            {
+                Note(Runners.Reviewers.LocalAsk.QueuedOutMessage(endpoint, deadline));
+
+                return 69; // EX_UNAVAILABLE
+            }
+
+            // What is LEFT of the deadline, never the whole of it again: the wait was part of it.
+            var remaining = untilUtc - DateTime.UtcNow;
+            var thinking = System.Diagnostics.Stopwatch.StartNew();
+            using var http = new HttpClient
+            {
+                Timeout = remaining > TimeSpan.FromSeconds(5) ? remaining : TimeSpan.FromSeconds(5),
+            };
             using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
             using var response = await http.PostAsync($"{endpoint.TrimEnd('/')}/chat/completions", content);
+            lease.Record(engineKey, model, thinking.Elapsed);
             var text = await response.Content.ReadAsStringAsync();
             if (!response.IsSuccessStatusCode)
             {

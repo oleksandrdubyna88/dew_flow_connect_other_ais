@@ -85,6 +85,22 @@ public static class LocalAsk
             + "model — and check nothing else is on the card: reviewers of one round are serialised "
             + "per engine, other programs are not.";
 
+    /// <summary>
+    /// The deadline went entirely on the QUEUE: this reviewer never reached the engine.
+    /// </summary>
+    /// <remarks>
+    /// A different sentence from "the engine did not finish in time" on purpose, because it is a
+    /// different problem with a different cure: the card was busy with somebody else's round for
+    /// longer than this reviewer was allowed to wait. Reporting it as a slow engine would send the
+    /// reader to shrink a prompt that was never sent.
+    /// </remarks>
+    public static string QueuedOutMessage(string endpoint, TimeSpan deadline) =>
+        $"the local engine at {endpoint} was busy for the whole {deadline.TotalSeconds:F0}s this "
+            + "reviewer was given, so its question was never asked. One caller uses the card at a "
+            + "time, across every window on this machine. Give the reviewers more time "
+            + "(COAI_REVIEWER_TIMEOUT_MINUTES), run fewer local roles per round, or point this "
+            + "vendor at a second engine.";
+
     /// <inheritdoc cref="TooSlowMessage"/>
     public const string TooSlowOpening = "the local engine at ";
 

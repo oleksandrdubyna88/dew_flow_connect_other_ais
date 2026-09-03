@@ -504,3 +504,43 @@ still read.
 
 The panel renders it per reviewer inside the round's disclosure
 ([module_extension.md](module_extension.md)).
+
+### The card is leased across processes, and a queued reviewer says how long (2026-09-03)
+
+`mcp-v0.12.4` serialised the reviewers of ONE server against one engine and said in its own record
+what it did not cover: two MCP clients, each with a `coai-mcp` of its own. That is the normal state of
+this machine — several Claude windows at once — so the second half is `EngineLease`, taken by the
+`--ask-local` shim, which is the one place every local reviewer of every server passes through.
+
+**The lock is the operating system's, not a protocol of ours.** A lock file held with
+`FileShare.None` is exclusive between .NET processes on Windows and on Unix, and the kernel releases
+it when the holder dies — kill, crash or power cut. The first design was a pid, a heartbeat and rules
+for stealing a stale lease; this change's own gate took it apart, and it was right to:
+
+| what the gate named | why it cannot happen now |
+|---|---|
+| a reused pid makes a dead holder look alive | no pid is recorded or consulted |
+| a partial write leaves unreadable metadata on the kill path | nothing is written to be read back |
+| two waiters race the same delete | there is no delete to race; the kernel releases the handle |
+| a hung-but-alive holder is indistinguishable from a slow one | it is the same thing, and both end when the waiter's deadline does |
+
+**Waiting is counted with the same mechanism.** A waiter holds its own file while it queues, so
+"how many are ahead" is "how many of these files are locked"; a waiter that was killed leaves a file
+nobody holds, which is deleted rather than counted. One liveness rule in the class, not two.
+
+**The wait is inside the reviewer's deadline, not beside it.** The shim computes an absolute
+`untilUtc`, waits for the card against it, and gives the HTTP call only what is LEFT. A queue that
+quietly ate a reviewer's budget and then reported a slow engine would be a lie about which half was
+slow, so there are two sentences: the engine was busy for the whole deadline and the question was
+never asked, or the engine had the question and did not finish.
+
+**The estimate.** Each holder appends `model<TAB>seconds` to a history file while it still holds the
+lease — the same exclusion that protects the engine protects its history — and a queued reviewer's
+note is built from the count of callers ahead and the average of the last twenty runs of THAT model.
+Three samples before it says a time at all: two runs is not a rate, and the count alone is always
+true. Per model, because one average over a ten-second check and a five-hundred-second analysis is an
+estimate of neither — the gate's finding, and the reason `ReviewerInvocation` now carries the model.
+
+The note reaches the panel through `ReviewerProgress.Note` → `ReviewerState.Note`, and the round card
+renders it for a queued reviewer exactly as it does for a failed one:
+`local/Architecture — queued (2 ahead on this engine, about 4 min)`.

@@ -115,6 +115,28 @@ switch (args0)
         File.WriteAllText(Path.Combine(dir, $"{id}.end"), DateTime.UtcNow.Ticks.ToString());
         return 0;
 
+    // Takes the REAL EngineLease in its own process, holds it, and prints the window it held it
+    // for. Five of these are how the cross-process claim is measured rather than asserted: two
+    // objects in one process would prove nothing about two servers on one machine.
+    case ["lease", var leaseDir, var holdMs, var _]:
+        CoaiMcp.Runners.Reviewers.EngineLease.Directory = leaseDir;
+        using (var lease = CoaiMcp.Runners.Reviewers.EngineLease
+            .AcquireAsync("http://127.0.0.1:11434/v1", DateTime.UtcNow.AddSeconds(60))
+            .GetAwaiter()
+            .GetResult())
+        {
+            if (lease is null)
+            {
+                Console.Error.WriteLine("fake-cli: the card never came free");
+                return 69;
+            }
+            var start = DateTime.UtcNow;
+            Thread.Sleep(int.Parse(holdMs));
+            Console.Out.WriteLine($"{start:O} {DateTime.UtcNow:O}");
+        }
+
+        return 0;
+
     case ["flip", var flag, var firstStderr, var firstExit, var thenStdout]:
         if (!File.Exists(flag))
         {

@@ -115,6 +115,21 @@ test('a duration that is not a number is no duration', () => {
   assert.equal(reviewerLines(broken)[0], 'codex/Architecture — done (1 finding)');
 });
 
+test('a queued reviewer says what it is waiting for', () => {
+  // The card is shared with every other window on this machine, so "queued" alone cannot tell ten
+  // seconds from ten minutes. The server counts who is on the engine and how long its runs take.
+  const waiting = round({
+    reviewerStates: [
+      { provider: 'local', role: 'Architecture', status: 'queued', findings: 0, note: '2 ahead on this engine, about 4 min' },
+    ],
+  });
+
+  assert.equal(
+    reviewerLines(waiting)[0],
+    'local/Architecture — queued (2 ahead on this engine, about 4 min)',
+  );
+});
+
 test('a round from an older server says nothing about time or tokens', () => {
   // Absent is not zero: a server that never recorded these wrote no number, and printing "0s"
   // would be a measurement nobody made.

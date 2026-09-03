@@ -7,4 +7,11 @@
          process-level suite touches no vendor and needs no network. -->
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- The `lease` verb takes the product's OWN EngineLease, in a real second process. Five of
+         these are how the cross-process claim is measured; a reimplementation here would be a test
+         of the test. -->
+    <ProjectReference Include="../runners/CoaiMcp.Runners.csproj" />
+  </ItemGroup>
+
 </Project>
