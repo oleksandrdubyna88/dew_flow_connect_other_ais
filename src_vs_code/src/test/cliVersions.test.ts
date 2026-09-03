@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { needsShell, parseCliVersion, shimCommandLine, updateAvailable, versionSourceFor } from '../cliVersions';
+import {
+  needsShell,
+  parseCliVersion,
+  shimCommandLine,
+  unquoted,
+  updateAvailable,
+  versionSourceFor,
+} from '../cliVersions';
 
 /**
  * Knowing whether a reviewer's CLI has an update, from what the CLI says and what its vendor
@@ -115,13 +122,35 @@ test('every source is a host the vendor itself publishes from', () => {
  * `gemini.cmd` 0.57.0.</p>
  */
 
-test('only a shim gets a shell', () => {
-  assert.equal(needsShell('codex.cmd'), true);
-  assert.equal(needsShell('C:\\npm\\gemini.CMD'), true, 'the extension is matched case-insensitively');
-  assert.equal(needsShell('run.bat'), true);
-  assert.equal(needsShell('claude.exe'), false, 'a binary that answers without a shell must not get one');
-  assert.equal(needsShell('coai-mcp'), false);
-  assert.equal(needsShell('/usr/local/bin/codex'), false, 'nothing on linux or macOS is a shim');
+test('only a Windows shim gets a shell', () => {
+  assert.equal(needsShell('codex.cmd', 'win32'), true);
+  assert.equal(needsShell('C:\\npm\\gemini.CMD', 'win32'), true, 'the extension is matched case-insensitively');
+  assert.equal(needsShell('run.bat', 'win32'), true);
+  assert.equal(needsShell('claude.exe', 'win32'), false, 'a binary that answers without a shell must not get one');
+  assert.equal(needsShell('coai-mcp', 'win32'), false);
+});
+
+test('nothing on POSIX gets a shell, whatever it is called', () => {
+  // Two reviewers caught this independently, one as Blocking: `/bin/sh` would be handed a path
+  // whose metacharacters this file does not filter — `$(whoami)` and backticks mean nothing to
+  // cmd.exe and are not in the refusal list, so a `.cmd` on Linux would have been an injection.
+  for (const platform of ['linux', 'darwin'] as const) {
+    assert.equal(needsShell('/opt/tools/report.cmd', platform), false, platform);
+    assert.equal(needsShell('codex$(whoami).cmd', platform), false, platform);
+    assert.equal(needsShell('run.bat', platform), false, platform);
+  }
+});
+
+test('a path pasted with Explorer quotes is unwrapped, not refused', () => {
+  assert.equal(unquoted('"C:\\Program Files\\npm\\codex.cmd"'), 'C:\\Program Files\\npm\\codex.cmd');
+  assert.equal(unquoted('  C:\\npm\\codex.cmd  '), 'C:\\npm\\codex.cmd');
+  assert.equal(unquoted('codex.cmd'), 'codex.cmd');
+  assert.equal(unquoted('"'), '"', 'one character cannot be a balanced pair');
+  assert.equal(
+    unquoted('"C:\\npm\\codex.cmd'),
+    '"C:\\npm\\codex.cmd',
+    'an unbalanced quote is left alone, so the refusal below still sees it',
+  );
 });
 
 test('a real Windows path survives the quoting', () => {

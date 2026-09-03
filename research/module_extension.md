@@ -546,5 +546,28 @@ interprets, and it is a refusal rather than an escape:
 | newline, control chars | a newline ends the command line | refused |
 
 A refused path is reported exactly like an unreadable version: the button goes grey and says so. The
-ARGUMENT is a literal in the source and never composed from anything typed. Verified with a hostile
-path (`codex.cmd" & echo PWNED & rem .cmd`): empty command line, empty version, and no file written.
+ARGUMENT is a literal in the source and never composed from anything typed.
+
+**Three narrowings its own gate round added**, and each closed a real hole in the first version:
+
+- **The shell is gated on Windows.** `needsShell` matched `.cmd` on any platform, so a POSIX file
+  called `report.cmd` would have gone through `/bin/sh` — whose metacharacters this refusal list does
+  not cover, because `$(…)` and backticks mean nothing to `cmd.exe`. Caught independently by two
+  reviewers, one as Blocking.
+- **A bare name is resolved on the PATH first.** `cmd.exe` searches its working directory before the
+  PATH, so handing it `codex.cmd` would run a file of that name from an opened workspace. The name is
+  resolved here and the shell only ever receives a path; the shell branch also runs in the OS temp
+  directory rather than inheriting one.
+- **The timeout kills the tree.** `child.kill()` reaches `cmd.exe` and not what the shim started
+  under it, so a probe that timed out left the grandchild running — every eight seconds, for as long
+  as the panel repainted. `taskkill /t /f` on the shell branch.
+
+Plus one usability case: a path pasted from Explorer's *Copy as Path* arrives wrapped in quotes, and
+both branches would have failed on it. `unquoted` removes a BALANCED pair only, so a single stray
+quote is still refused rather than repaired into something else.
+
+**What the round claimed and measurement refuted:** that `&`, `^&` or `|` inside the quotes could
+still be parsed as a separator. Run for real against a marker file on this machine, all three stayed
+literal — `cmd.exe` looked for a program with that whole name, failed, and wrote nothing. The
+proposed alternative (arguments passed separately alongside `shell: true`) would change nothing
+either: node joins command and arguments into one line in shell mode.

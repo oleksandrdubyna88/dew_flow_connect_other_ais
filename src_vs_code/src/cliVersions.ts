@@ -174,8 +174,31 @@ export function versionProbeCandidates(executable: string, platform: Platform): 
  * `claude.exe` would buy nothing and put a command interpreter between us and a binary that answers
  * perfectly without it.</p>
  */
-export function needsShell(executable: string): boolean {
-  return /\.(cmd|bat)$/i.test(executable);
+export function needsShell(executable: string, platform: Platform): boolean {
+  // **Gated on Windows, and that gate is the whole safety of it.** A file called `report.cmd` on
+  // Linux or macOS is an ordinary executable, and routing it through `/bin/sh` would hand a path to
+  // a shell whose metacharacters this file does not filter — `$(…)` and backticks are not in the
+  // refusal list below, because they mean nothing to cmd.exe. Two reviewers of this change caught it
+  // independently, one of them as Blocking; the plan had promised POSIX paths keep `shell: false`
+  // and the code had not implemented that promise.
+  return platform === 'win32' && /\.(cmd|bat)$/i.test(executable);
+}
+
+/**
+ * A path with its enclosing quotes removed — what Explorer's *Copy as Path* puts on the clipboard.
+ *
+ * <p>`"C:\Program Files\npm\codex.cmd"` is what a person pastes into the executable setting, and
+ * every consumer here would then fail: the shell branch refuses it for containing a quote, and the
+ * plain branch asks the OS for a file whose name starts with one. Only a BALANCED pair is removed,
+ * so a path with one stray quote is still refused rather than silently repaired into something
+ * else. (gemini, this change's round.)</p>
+ */
+export function unquoted(executable: string): string {
+  const trimmed = executable.trim();
+
+  return trimmed.length > 1 && trimmed.startsWith('"') && trimmed.endsWith('"')
+    ? trimmed.slice(1, -1)
+    : trimmed;
 }
 
 /**
