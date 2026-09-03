@@ -9,7 +9,7 @@ their own clocks, to two different places, and every failure below is one of the
 
 Target: the released **extension** version — `--target 0.27.0`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-09-03 · extension 0.26.2 / mcp 0.12.2 · both automated items PASS — `mcp-v0.12.2` carries all six RID assets, and the marketplace serves 0.26.2. Item 3 passed by hand on the release machine: `providers` listed codex (codex-cli 0.152.0), gemini (1.1.25) and local, each saying what it authenticates as. Item 4 is still owed — it needs the updated extension to have fetched the new binary.
+Last verified: 2026-09-03 · extension 0.27.0 / mcp 0.12.4 · both automated items PASS — `mcp-v0.12.4` carries all six RID assets, and the marketplace serves 0.27.0. Item 3 is owed on the machine the reviewer failures were measured on: two rounds that day reported 6 and 7 of 9 reviewers, and the local ones failed for a reason the panel could not show — three of them on one GPU, which 0.12.4 serialises. Item 4 is owed with it: the panel now asks the binary its version (`coai-mcp --version`, 0.12.3), so a stale one no longer reports as current.
 
 **The marketplace takes minutes, and item 2 is not a failure before it does.** Measured on this release: `vsce` reported *"Published remsoftdev.connect-other-ais v0.26.2"* while the gallery query kept answering `0.26.1` for a further four and a half minutes, then flipped. Read the publish step's own log before treating a red item 2 as a bad release — the two answers disagree by design for a while.
 
