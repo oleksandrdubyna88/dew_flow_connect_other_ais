@@ -1,12 +1,44 @@
 # PLAN — the card is leased across processes, and a queued reviewer says how long it will wait
 
-> Status: **plan only, nothing implemented yet, 2026-09-03.** Scope:
-> `src_mcp/runners/Reviewers/EngineLease.cs` (new), `src_mcp/src/Program.cs` (`--ask-local`),
-> `src_mcp/runners/Reviewers/{LocalAsk,LocalRuntime,BoundedScheduler}.cs`,
-> `src_mcp/src/Server/{PanelService,LiveRound}.cs`, `src_vs_code/src/rounds.ts`.
+> Status: **IMPLEMENTED, 2026-09-03**, and measured. Five parallel processes against the real engine:
+> **5 of 5 answered, exit 0, at 0.9 / 1.7 / 2.4 / 3.4 / 4.3 seconds** — the staircase of a queue —
+> 4.3 s of wall clock, no failures.
 >
-> Related docs: [module_server.md](../research/module_server.md),
-> [PLAN_one_gpu_one_reviewer.md](../research/PLAN_one_gpu_one_reviewer.md).
+> **The design changed completely between the plan and the code, and its own gate is why.** The plan
+> proposed a lock file carrying a pid, a heartbeat and rules for stealing a stale lease. All three
+> plan reviewers attacked it and were right: a reused pid makes a dead holder look alive; a partial
+> write leaves unreadable metadata on exactly the kill path the mechanism exists for; two waiters race
+> one delete; a hung-but-alive holder cannot be told from a slow one. Twelve of the thirteen findings
+> were answered by REPLACING the protocol with the operating system's own lock — a file held open with
+> `FileShare.None`, exclusive between .NET processes on both platforms, released by the kernel when
+> the holder dies. Nothing is written down, so nothing can be read back wrong.
+>
+> The code round then found ten more, five of them the SAME leak: the timeout path returned without
+> releasing the waiter file, so every expired deadline left a phantom in the queue for ever.
+>
+> **What no review found, the measurement did.** The first five-process run had the lease working
+> perfectly and only one reviewer answering. A single process alone failed identically, which
+> exonerated the queue and accused the engine; asked directly, it answered a twenty-token version of
+> the same question in 8.5 s and did not finish the uncapped one in 90 s — with the schema and without
+> it. **The request carried no token ceiling at all**, so a reasoning model spent every budget it was
+> given inside its `reasoning` field and returned empty content. `max_tokens` is now sent
+> (`COAI_LOCAL_MAX_TOKENS`, default 8192), and the switch that actually stops the loop —
+> `reasoning_effort: none` — is one the product already sent and the harness did not, which is why the
+> first table looked like a product failure and was a measurement failure.
+>
+> Quality was checked rather than assumed: the same real plan reviewed at the 8192 ceiling and at
+> 100 000 produced the same six findings, the same severities and the same 1024 output tokens.
+>
+> **The open tail:** the shim reports its wait on stderr every thirty seconds, and the panel sees that
+> only when the reviewer ends. Carrying a live wait through to the round card needs a channel from the
+> shim to the session that does not exist yet.
+>
+> Scope: `src_mcp/runners/Reviewers/EngineLease.cs`, `src_mcp/src/Program.cs` (`--ask-local`),
+> `src_mcp/runners/Reviewers/{LocalAsk,LocalRuntime,BoundedScheduler,ReviewerRuntime}.cs`,
+> `src_mcp/src/Server/{PanelService,PanelSettings,LiveRound}.cs`, `src_vs_code/src/rounds.ts`.
+>
+> Related docs: [module_server.md](module_server.md),
+> [PLAN_one_gpu_one_reviewer.md](PLAN_one_gpu_one_reviewer.md).
 
 ## The symptom this is the second half of
 

@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.28.0 — 2026-09-03 (server 0.13.0)
+
+**A round is no longer a single line you cannot ask anything of, and one GPU is no longer shared by
+every window you have open.**
+
+- **Every round opens.** Click one and it lists the reviewers it ran: vendor and role, what it did,
+  how many findings it filed, **how long it took** and what it read. A round is as slow as its
+  slowest reviewer, so "11m 2s" across nine of them could not say which one cost the eleven minutes;
+  now each says for itself. A round in flight opens itself once so you can watch it, and stays as you
+  leave it afterwards — including when it finishes, which is the moment its reviewers are most worth
+  reading. The list of rounds is twice as tall.
+- **One caller on a local engine, across every process on the machine.** The previous release
+  serialised the reviewers of one server; this machine runs several windows at once, each with a
+  server of its own, and three requests on one card is what turned a 30-second reviewer into two
+  cancelled at 590 s. The lease is now held by the process that talks to the engine, and the lock is
+  the operating system's — released by the kernel even when a process is killed. Measured with five
+  parallel processes: **5 of 5 answered, in 0.9 / 1.7 / 2.4 / 3.4 / 4.3 seconds**, no failures.
+- **A queued reviewer says what it is waiting for**: how many callers are ahead on that engine and,
+  once there are three runs of that model to average, roughly how long. Never a time it cannot
+  support — the count alone is always true.
+- **A local request now carries a token ceiling** (`COAI_LOCAL_MAX_TOKENS`, default 8192). Measured
+  while testing the queue: with no ceiling this engine did not finish a one-line question in 90
+  seconds and returned empty content with a full `reasoning` field — a reasoning model spending every
+  budget it is given on thinking. The same review at the ceiling and at twelve times the ceiling
+  produces the same six findings.
+- **Two failures that used to read the same now read differently**: the engine was busy for your
+  whole deadline and your question was never asked, or the engine had it and did not finish. They
+  need different cures, and both carry their numbers.
+- **"What a reviewer gets" was rendered twice**, and the two copies disagreed — two radio groups
+  sharing a name are one group to a browser, so selecting in the first cleared the second.
+
 ## 0.27.0 — 2026-09-03 (server 0.12.3)
 
 **The Server section said "0.12.2 is installed — you are up to date" on a side where 0.12.1 was

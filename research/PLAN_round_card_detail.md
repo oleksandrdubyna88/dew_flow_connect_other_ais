@@ -1,10 +1,29 @@
 # PLAN — a finished round can be opened, and it says which model spent the eleven minutes
 
-> Status: **plan only, one server-side field written ahead of it, 2026-09-03.** Scope:
-> `src_mcp/src/Server/{SessionStore,LiveRound}.cs`, `src_mcp/tests/LiveRoundTests.cs`,
-> `src_vs_code/src/{rounds,panelView,help}.ts` and their tests.
+> Status: **IMPLEMENTED, 2026-09-03.**
 >
-> Related docs: [module_extension.md](../research/module_extension.md), [module_server.md](../research/module_server.md).
+> **The deviation is the whole design, and the gate is why.** The plan proposed a plain `<details>`
+> that carries `open` while the round is running. Both halves were refused, one as Blocking: this
+> list is patched into the page every five seconds, so a disclosure holding its state in the DOM
+> closes under the person mid-read; and a card open only BECAUSE the round is running snatches the
+> reviewers away at the moment it finishes, which is when they are most worth reading. The open set
+> now lives in `PanelState` exactly as the sections do — the webview posts a `round` message on
+> toggle, the provider keeps the set, the render carries `open` — with the `toggle` listener on
+> `document` in the CAPTURE phase, because `toggle` does not bubble and the elements are replaced by
+> every patch. A running round opens itself ONCE, recorded, so closing it sticks.
+>
+> The code round added: a closed card builds no reviewer rows at all (this list is rebuilt every five
+> seconds), both view-state sets are pruned to rounds that still exist, an empty `data-round` posts
+> nothing, and a duration that is not a finite number reads as no duration.
+>
+> Not built, and stated rather than implied: the plan's line about rendering per-reviewer TOKENS
+> "without owning them" — the fields are rendered when present, and the work that writes them was in
+> flight in another session's checkout at the time.
+>
+> Scope: `src_mcp/src/Server/{SessionStore,LiveRound}.cs`, `src_mcp/tests/LiveRoundTests.cs`,
+> `src_vs_code/src/{rounds,panelView,panelProvider,helpContent,helpRu,helpUk,helpDe,helpEs}.ts`.
+>
+> Related docs: [module_extension.md](module_extension.md), [module_server.md](module_server.md).
 
 ## The symptom
 
