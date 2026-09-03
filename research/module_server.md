@@ -413,3 +413,29 @@ Removing it cost nothing measurable: rotation was measured WORSE than asking the
 twice — 17 distinct findings against 25 over two code rounds, for less money
 ([RESULTS_prompt_measurement.md](RESULTS_prompt_measurement.md) §3). Two different lenses on one
 change are still available by picking them on two rounds.
+
+### `--version`, and why a server needed one (2026-09-03)
+
+`Classify` has a fourth mode: `--version` / `-v` / `version` prints one line — `coai-mcp 0.12.3` —
+on **stdout** and exits 0. Stdout is sanctioned here for the same reason as `--help`: this mode
+never speaks the protocol, so the stream belongs to a person's terminal.
+
+It exists because the EXTENSION could not tell what it had installed. Its panel remembered the
+number it had downloaded in `globalState`, which VS Code shares between a local window and a remote
+one while the binary itself is per side — so a WSL side running 0.12.1 was told by its own panel that
+0.12.2 was installed and that there was nothing to update
+([module_extension.md](module_extension.md), *The Server section is about one SIDE of a machine*).
+A binary that can state its own version ends that class of question: the panel asks the file it is
+about to describe.
+
+**Where the number comes from.** The assembly's informational version, cut at the FIRST `+` —
+whatever a build server stamps after it is build metadata, not something anyone can compare.
+`<Version>` is pinned to `0.0.0` in `CoaiMcp.csproj` so an unstamped local build reads as OLDER than
+every release; the SDK's default `1.0.0` would have read as newer than every published version and
+suppressed the extension's update button for ever. The release passes the tag's version over it
+(`dotnet publish -p:Version=$VERSION`), and the smoke step **fails the release** when the published
+binary's `--version` disagrees with its tag — a stamping step that silently stops working would put
+the original lie back one release later, where nobody would look for it.
+
+Verified on a real Native AOT binary (the attribute survives ILC): `--version` → `coai-mcp 0.12.3`,
+exit 0, while a near-miss like `--ver` still exits 64 with the usage line on stderr.

@@ -159,6 +159,144 @@ function onTheBinary(message: string): boolean {
   return message.includes(binaryNameFor('win-x64')) || message.includes(BINARY);
 }
 
+/** What an extension host knows about the side of a machine it is running on. */
+export interface Side {
+  /** `vscode.env.remoteName` — `wsl`, `ssh-remote`, … or nothing in a local window. */
+  readonly remoteName?: string | undefined;
+  /** `WSL_DISTRO_NAME`, which the subsystem sets inside every distro. */
+  readonly distro?: string | undefined;
+  /** `os.hostname()` — the discriminator for remotes that are not WSL. */
+  readonly hostname?: string | undefined;
+  /** `context.globalStorageUri.fsPath`: the directory the binary is actually written to. */
+  readonly storagePath: string;
+}
+
+/**
+ * Which SIDE of a machine a remembered version belongs to.
+ *
+ * <p><b>This is the whole defect this key shape exists to fix.</b> `globalState` is the CLIENT's
+ * storage — one database, shared by every window of a profile, remote windows included — while
+ * `globalStorageUri`, where the binary is written, is a path on the extension host that is running.
+ * So on a machine with a Windows window and a WSL window there is one record and two disks:
+ * measured 2026-09-03, the WSL side ran 0.12.1 while the panel there read the record a Windows
+ * press had left at 0.12.2, said "you are up to date", and hid the only button that could have
+ * fixed it.</p>
+ *
+ * <p><b>Three ingredients, and each is here because the ones before it are not enough.</b> The
+ * plan's round said to key this on `vscode.env.remoteAuthority` — right about the collision it was
+ * worried about, wrong about the cure, because that property is not in the public API. The storage
+ * path alone is not enough either: two WSL distros with the same user name mount the same
+ * `/home/<user>/.vscode-server/…`, which is exactly the two-distro collision the finding named. So
+ * the remote KIND, the distro (or the hostname, for remotes that have no distro) and the storage
+ * path are folded together.</p>
+ *
+ * <p>A local window uses the storage path alone: it is this machine, and folding a hostname in
+ * would discard the record every time the machine is renamed.</p>
+ *
+ * <p>Case and separators are folded, so one directory cannot produce two keys on a filesystem that
+ * reports either.</p>
+ */
+export function installedKey(side: Side): string {
+  const remote = (side.remoteName ?? '').trim();
+  const target = ((side.distro ?? '').trim().length > 0 ? side.distro : side.hostname) ?? '';
+  const parts = remote.length === 0 ? ['local', side.storagePath] : [remote, target, side.storagePath];
+  const slug = slugify(parts.join('|'));
+
+  return `coai.installedVersion@${slug.length === 0 ? 'unknown-side' : slug}`;
+}
+
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * The side, named the way VS Code's own remote indicator names it — empty for a local window.
+ *
+ * <p>Empty is deliberate: somebody on a plain Windows machine has one side and does not need to
+ * read the word for it. A remote kind this build does not recognise is printed VERBATIM rather than
+ * prettified into something that might be wrong.</p>
+ *
+ * <p>The distro comes from `WSL_DISTRO_NAME`, which the subsystem sets inside every distro — the
+ * one cheap way to say `WSL: Ubuntu` rather than `WSL`, since `remoteName` is only ever `wsl`.</p>
+ */
+export function sideLabel(remoteName: string | undefined, distro: string | undefined = ''): string {
+  const kind = (remoteName ?? '').trim();
+  const target = (distro ?? '').trim();
+  if (kind.length === 0) {
+    return '';
+  }
+  if (kind === 'wsl') {
+    return target.length === 0 ? 'WSL' : `WSL: ${target}`;
+  }
+
+  return kind === 'ssh-remote' ? 'SSH' : kind;
+}
+
+/** What the panel can say about the server binary on the side it is running on. */
+export type ServerStatusKind =
+  /** No file at the path this side installs to. Whatever any record says. */
+  | 'absent'
+  /** A file, and a version for it. */
+  | 'known'
+  /** A file that cannot state its version — every release up to 0.12.2 exits 64 on `--version`. */
+  | 'unknown';
+
+export interface ServerStatus {
+  readonly kind: ServerStatusKind;
+  /** Empty unless `kind` is `known`. */
+  readonly version: string;
+  /** The version came from the RECORD rather than from the binary. */
+  readonly remembered: boolean;
+  /** Whether there is something newer to install over what is there. */
+  readonly updateOffered: boolean;
+}
+
+export interface ServerFacts {
+  /** `stat` said there is a file at this side's install path. */
+  readonly fileExists: boolean;
+  /** What `coai-mcp --version` printed, or empty when it could not be asked. */
+  readonly reported: string;
+  /** What this SIDE's record says, or empty. A fallback, never the truth. */
+  readonly remembered: string;
+  /** The newest published version, or empty when GitHub could not be read. */
+  readonly published: string;
+}
+
+/**
+ * What the Server section states, from what is actually on this side's disk.
+ *
+ * <p><b>Ordering, and why it is this way round.</b> The binary's own answer wins, because it is the
+ * only source that cannot belong to another machine. The record is consulted ONLY when the file is
+ * there but could not be asked — a binary the OS refuses to spawn, which Smart App Control does to
+ * a freshly written executable — and it is marked as remembered when it is used. A file with no
+ * answer and no record is `unknown`, which offers an update rather than claiming currency.</p>
+ *
+ * <p><b>`absent` never offers an update</b>, and that is not cosmetic: `offerUpdate` runs at
+ * activation, so a fresh machine would otherwise be told to "update" something it does not have.
+ * Installing is the panel's button, not a notification. (Gemini, plan round 1.)</p>
+ */
+export function serverStatus(facts: ServerFacts): ServerStatus {
+  if (!facts.fileExists) {
+    return { kind: 'absent', version: '', remembered: false, updateOffered: false };
+  }
+
+  const version = facts.reported.length > 0 ? facts.reported : facts.remembered;
+  if (version.length === 0) {
+    return { kind: 'unknown', version: '', remembered: false, updateOffered: true };
+  }
+
+  return {
+    kind: 'known',
+    version,
+    remembered: facts.reported.length === 0,
+    updateOffered: facts.published.length > 0 && compareVersions(facts.published, version) > 0,
+  };
+}
+
 /**
  * One run at a time, however many callers ask.
  *

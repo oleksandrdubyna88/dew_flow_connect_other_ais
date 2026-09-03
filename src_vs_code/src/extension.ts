@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
-import { installFailureHint, ridFor, SingleFlight } from './coaiInstall';
+import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet } from './claudeSnippet';
 import { clientTargetsLine, CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
-import { binaryPath, installLatest, installedVersion, updateIsAvailable } from './installer';
+import { installLatest, latestServerVersion, serverOnThisSide, serverPath } from './installer';
 import { EscalationWatcher } from './escalationWatcher';
 import { PanelProvider } from './panelProvider';
 import { renderEscalations } from './escalations';
@@ -172,13 +172,16 @@ async function install(context: vscode.ExtensionContext): Promise<void> {
 }
 
 async function copyConfigBlock(context: vscode.ExtensionContext): Promise<void> {
-  const rid = ridFor(process.platform, process.arch);
-  if (rid === undefined) {
+  const path = serverPath(context.globalStorageUri);
+  if (path === undefined) {
     void vscode.window.showErrorMessage('There is no published coai-mcp build for this platform yet.');
     return;
   }
-  const path = binaryPath(context.globalStorageUri, rid);
-  const installed = installedVersion(context.globalState) !== undefined;
+  // Whether it is there is a question about THIS side's disk. It used to be a question about a
+  // remembered version shared by every window of the profile, so a WSL window handed out a path
+  // that did not exist and called it installed.
+  const server = await serverOnThisSide(context.globalStorageUri, context.globalState, '');
+  const installed = server.kind !== 'absent';
   await vscode.env.clipboard.writeText(mcpServerBlock(path.fsPath, envBlock(settings())));
   void vscode.window.showInformationMessage(
     installed
@@ -295,7 +298,14 @@ async function readSessions(): Promise<SessionFile[]> {
 }
 
 async function offerUpdate(context: vscode.ExtensionContext): Promise<void> {
-  if (installedVersion(context.globalState) === undefined || !(await updateIsAvailable(context.globalState))) {
+  const server = await serverOnThisSide(
+    context.globalStorageUri,
+    context.globalState,
+    (await latestServerVersion()) ?? '',
+  );
+  // `absent` never offers: an install is not an update, and this runs at activation — a machine
+  // with nothing on this side would otherwise be told to update something it does not have.
+  if (!server.updateOffered) {
     return;
   }
   const answer = await vscode.window.showInformationMessage(

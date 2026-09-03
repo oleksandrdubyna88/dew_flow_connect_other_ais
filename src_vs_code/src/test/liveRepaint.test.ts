@@ -26,8 +26,8 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   vendors: DEFAULT_VENDORS,
   codexModels: [],
   localEngines: {},
-  serverInstalled: true,
-  serverVersion: '0.6.0',
+  server: { kind: 'known', version: '0.6.0', remembered: false, updateOffered: true },
+  side: '',
   latestServerVersion: '0.6.0',
   questions: [],
   openSections: ['usage'],
@@ -95,7 +95,7 @@ test('another file is never mistaken for the rounds view', () => {
  * nothing for a day.</p>
  */
 test('every button in the panel posts a command the panel declares', () => {
-  const html = panelHtml(state({ serverInstalled: true, latestServerVersion: '9.9.9' }), 'n0nce');
+  const html = panelHtml(state({ latestServerVersion: '9.9.9' }), 'n0nce');
   const posted = [...html.matchAll(/data-command="([a-zA-Z]+)"/g)].map((m) => m[1]!);
 
   assert.ok(posted.includes('installServer'), 'the Update button is the one this test exists for');

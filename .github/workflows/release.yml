@@ -80,8 +80,19 @@ jobs:
             ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests${{ runner.os == 'Windows' && '.exe' || '' }}
           fi
 
+      # The version is derived ONCE, before the publish, because the binary is stamped with it and
+      # the smoke step then asserts the binary says the same thing. It used to be computed inside
+      # the packaging step only, which named the asset correctly while the binary inside it still
+      # reported the SDK's default — the extension had no way to ask a file what it was.
+      - name: The version this release stamps
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/mcp-v* ]]; then VERSION="${GITHUB_REF_NAME#mcp-v}"; else VERSION="0.0.0-manual"; fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
       - name: Publish
-        run: dotnet publish src_mcp/src/CoaiMcp.csproj -c Release -r ${{ matrix.rid }} -o out
+        shell: bash
+        run: dotnet publish src_mcp/src/CoaiMcp.csproj -c Release -r ${{ matrix.rid }} -p:Version=$VERSION -o out
 
       # The release smoke the epic demands: the PUBLISHED binary answers a real initialize /
       # tools/list exchange — the contract tests, pointed at it. AOT failures often surface only
@@ -112,12 +123,25 @@ jobs:
             exit 1
           fi
           printf '%s' "$OUT" | grep -q 'coai-mcp'
+
+          # The binary must report the version this release is stamping. The extension's panel asks
+          # a file what it is instead of remembering what it downloaded (a record VS Code shares
+          # between a local and a WSL window, which is how a 0.12.1 in WSL was reported as 0.12.2),
+          # so a stamping step that silently stops working would put that lie back — one release
+          # later, in a place nobody would look. It fails HERE instead.
+          # `tr -d ''`: WriteLine ends a line with CRLF on Windows, and a comparison against a
+          # value from the environment would fail on the two Windows RIDs and nowhere else.
+          REPORTED=$("$EXE" --version | tr -d '')
+          if [ "$REPORTED" != "coai-mcp $VERSION" ]; then
+            echo "the published binary reports '$REPORTED' but this release is 'coai-mcp $VERSION'"
+            exit 1
+          fi
+
           ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests${{ runner.os == 'Windows' && '.exe' || '' }} --filter-class "*McpContractTests"
 
       - name: Package
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/mcp-v* ]]; then VERSION="${GITHUB_REF_NAME#mcp-v}"; else VERSION="0.0.0-manual"; fi
           NAME="coai-mcp-$VERSION-${{ matrix.rid }}"
           mkdir "$NAME"
           if [[ "${{ matrix.rid }}" == win-* ]]; then

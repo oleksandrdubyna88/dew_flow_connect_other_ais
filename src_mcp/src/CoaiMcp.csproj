@@ -4,6 +4,11 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>coai-mcp</AssemblyName>
     <RootNamespace>CoaiMcp</RootNamespace>
+    <!-- The version flag answers with this, and the release overrides it from the tag
+         (dotnet publish -p:Version=…). Pinned to 0.0.0 rather than left to the SDK's 1.0.0:
+         the panel compares what the binary reports against the newest published tag, so a local
+         build claiming 1.0.0 would read as newer than every release and hide the update button. -->
+    <Version>0.0.0</Version>
     <!-- Native AOT, the same choice as creds-mcp and for the same reason: an MCP client starts
          this process and waits for the handshake before it can list a single tool, so start-up
          is the user-visible cost. The trim/AOT analyzers then run on every ordinary build. -->

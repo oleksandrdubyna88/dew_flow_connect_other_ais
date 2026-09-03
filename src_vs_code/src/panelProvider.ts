@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { snippetStatus, SnippetStatus } from './claudeSnippet';
@@ -18,11 +17,12 @@ import { parseUsage, UsageEntry, Window } from './usage';
 import {
   CliStatus,
   latestCliVersion,
-  parseCliVersion,
   versionProbeCandidates,
   versionSourceFor,
 } from './cliVersions';
-import { latestServerVersion } from './installer';
+import { askVersion } from './versionProbe';
+import { latestServerVersion, serverOnThisSide } from './installer';
+import { sideLabel } from './coaiInstall';
 import {
   fetchTable,
   LITELLM_PRICES,
@@ -148,18 +148,21 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const settings = settingsFrom((section) => config.get(section));
     const vendors = vendorsFrom(config.get('vendors'));
     this.codexModels = await this.readCodexModels();
+    // The published version is read FIRST because the server's status is stated against it — and
+    // both belong to the side this extension host is running on, never to "the machine".
+    const published = await this.publishedVersion();
     const state = {
       settings,
       vendors,
       codexModels: this.codexModels,
-      serverInstalled: this.context.globalState.get<string>('coai.installedVersion') !== undefined,
-      serverVersion: this.context.globalState.get<string>('coai.installedVersion') ?? '',
+      server: await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published),
+      side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),
       questions: this.watcher.openQuestions,
       openSections: this.openSections,
       sessions: await this.readSessions(),
       usage: this.remembered(await this.readUsage()),
       usageWindow: this.usageWindow,
-      latestServerVersion: await this.publishedVersion(),
+      latestServerVersion: published,
       cliStatus: await this.vendorCliStatus(vendors),
       modelPrices: await this.modelPrices(vendors),
       snippetStatus: await this.pastedSnippet(),
@@ -1001,35 +1004,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 function nonce(): string {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   return Array.from({ length: 32 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
-}
-
-/**
- * One `--version` call, answered with the version or with nothing.
- *
- * <p>A CLI that hangs must not hold up a repaint, so the wait is short and a timeout produces the
- * same "could not tell" every other failure here does. Nothing throws: an absent binary is an
- * ordinary state of a machine, not an error to show somebody.</p>
- */
-function askVersion(executable: string): Promise<string> {
-  return new Promise((resolve) => {
-    const child = spawn(executable, ['--version'], { shell: false });
-    const timer = setTimeout(() => {
-      child.kill();
-      resolve('');
-    }, 8000);
-    let output = '';
-    child.stdout?.on('data', (chunk: Buffer) => {
-      output += chunk.toString();
-    });
-    child.on('error', () => {
-      clearTimeout(timer);
-      resolve('');
-    });
-    child.on('close', () => {
-      clearTimeout(timer);
-      resolve(parseCliVersion(output));
-    });
-  });
 }
 
 /** The extension host's platform, narrowed to the three the buttons can answer for. */

@@ -7,7 +7,7 @@
 
 | Command | Does |
 |---|---|
-| `coai.installServer` | Downloads the latest `mcp-v*` asset for this RID into the extension's storage, verifies its `.sha256`, extracts with `tar`, remembers the version, and puts the `mcpServers` block on the clipboard |
+| `coai.installServer` | Downloads the latest `mcp-v*` asset for this RID into the extension's storage **on the side this extension host is running on**, verifies its `.sha256`, extracts with `tar`, records the version under that side's own key, and puts the `mcpServers` block on the clipboard |
 | `coai.copyConfigBlock` | Regenerates that block from current settings — the way changed settings reach the server |
 | `coai.copyClaudeSnippet` | The CLAUDE.md text teaching a target repo's main AI the tool order |
 | `coai.showRounds` | Writes `<dataDir>/rounds.md` from the server's own session files and opens it — a REAL file, so closing it never asks to save, and it is rewritten in place while a round runs |
@@ -48,8 +48,9 @@ flowchart LR
 | Module | Role |
 |---|---|
 | `settingsShape.ts` | config → validated `CoaiSettings`; `envBlock`; the defaults pinned to the master plan's table |
-| `coaiInstall.ts` | pure install decisions: RID (macOS honestly absent), asset/entry names, version compare, update-available |
-| `installer.ts` | the impure half: fetch, sha256, `tar`, chmod, remembered version |
+| `coaiInstall.ts` | pure install decisions: RID (macOS honestly absent), asset/entry names, version compare, the per-side state key (`installedKey`), the side's label, and `serverStatus` — what the Server section states |
+| `installer.ts` | the impure half: fetch, sha256, `tar`, chmod, and `serverOnThisSide` — `stat` every call, the `--version` probe cached against `mtime`+`size` |
+| `versionProbe.ts` | one `askVersion`, 8-second cap, stdout only — used for the vendor CLIs and for the server binary |
 | `mcpBlock.ts` | the `mcpServers` block (server id `coai`), client targets, install message |
 | `claudeSnippet.ts` | the paste for a target repo's CLAUDE.md |
 | `rounds.ts` | parse the server's session files; render the view (status, elapsed, tokens, cost, the reviewers in flight); a torn file is skipped; a file from an older server with no status still renders |
@@ -471,3 +472,52 @@ a URL can be pasted — or arrive in workspace settings from a cloned repository
 POSTs the plan, the diffs and the file contents around them to it. `isLoopback` parses the host, so
 `http://127.0.0.1.evil.test` is somebody else's machine and the whole 127.0.0.0/8 block is this one,
 and anything else puts a visible line in the row naming the host and what leaves with it.
+
+### The Server section is about one SIDE of a machine (2026-09-03)
+
+**The symptom, measured.** One machine, one profile, a Windows window and a `WSL: Ubuntu` window.
+The WSL panel said *"coai-mcp 0.12.2 is installed. 0.12.2 is the newest published — you are up to
+date"* and showed no button. On that side's disk was a `coai-mcp` byte-identical to the published
+**0.12.1** (both tarballs downloaded and hashed), and it was the binary WSL's own Claude Code
+launched (`~/.claude.json`). Nobody had ever installed 0.12.2 there.
+
+**The cause is a scope split.** `globalState` is the CLIENT's storage — one database per profile,
+shared by local and remote windows alike — while `globalStorageUri`, where the binary is written, is
+a path on the extension host that is running (`~/.vscode-server/…` under WSL). The record was
+side-blind since epic 05, so a WSL install at 10:55 wrote 0.12.1 into the Windows-side database and a
+Windows press at 11:52 overwrote it with 0.12.2. One record, two disks. The panel then read that
+record and never looked at either disk, so the button — which renders only when published ≠
+remembered — was unreachable on the side that needed it.
+
+**What it does now.** Three states, in this order:
+
+| on this side's disk | what it says | button |
+|---|---|---|
+| no file | `coai-mcp is not installed in WSL: Ubuntu.` | Install |
+| a file that answers `--version` | `coai-mcp 0.12.1 is installed in WSL: Ubuntu.` | Update when something newer is published |
+| a file that cannot answer | `A coai-mcp is installed in WSL: Ubuntu but it cannot report its version — press Update.` | Update |
+
+The binary's own answer wins because it is the only source that cannot belong to another machine; the
+per-side record is consulted **only** when the file is there and could not be spawned (Smart App
+Control refuses a freshly written executable), and the sentence then says the number is remembered.
+`stat` runs on every call — a cached one would keep claiming a file somebody deleted — while the
+probe result, **including a failure**, is cached against `mtime`+`size`, so a pre-0.12.3 binary is
+asked once instead of on every five-second tick. The legacy `coai.installedVersion` key is never
+read: its value cannot be attributed to a side, which is the whole defect.
+
+**The side identity is three ingredients, and each earns its place.** The plan's own gate round said
+to key this on `vscode.env.remoteAuthority` — right about the collision it feared, wrong about the
+cure, because that property is not in the public API. The storage path alone is not enough either:
+two WSL distros with the same user name mount the same `/home/<user>/.vscode-server/…`, which is
+exactly the two-distro collision the finding named. So `installedKey` folds the remote KIND
+(`vscode.env.remoteName`), the distro (`WSL_DISTRO_NAME`, or the hostname for remotes that have
+none) and the storage path. A local window uses the path alone — renaming the machine must not throw
+away what is installed on it.
+
+**Verified on the machine the symptom came from**: the real installed 0.12.2 answers the probe with
+nothing (it exits 64 on `--version`), so it reads as *installed, version unknown* and offers the
+update; a freshly stamped Native AOT build answers `coai-mcp 0.12.3`; a missing file answers nothing.
+
+**Not fixed by code, and separate:** that machine's WSL side runs extension 0.25.2 while Windows has
+0.26.2, because a remote extension host installs its own copy. That is a VS Code *Install in WSL*
+press.

@@ -13,8 +13,8 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
     { id: 'gpt-5.4-mini', label: 'GPT-5.4-Mini' },
   ],
   localEngines: {},
-  serverInstalled: false,
-  serverVersion: '',
+  server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
+  side: '',
   questions: [],
   sessions: [],
   openSections: ['reviewers', 'language', 'prompts', 'gate', 'limits', 'keys', 'server', 'usage', 'rounds'],
@@ -173,7 +173,7 @@ test('colours come from the theme, never from us', () => {
 
 test('the panel says whether the server is installed, and which version', () => {
   assert.ok(panelHtml(state(), 'n').includes('not installed yet'));
-  const installed = panelHtml(state({ serverInstalled: true, serverVersion: '0.4.0' }), 'n');
+  const installed = panelHtml(state({ server: { kind: 'known', version: '0.4.0', remembered: false, updateOffered: false } }), 'n');
   assert.ok(installed.includes('coai-mcp 0.4.0 is installed'));
 });
 

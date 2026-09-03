@@ -1,18 +1,23 @@
 import * as vscode from 'vscode';
 import { execFile } from 'node:child_process';
 import * as crypto from 'node:crypto';
+import { hostname } from 'node:os';
 import {
   COAI_RIDS,
   CoaiRid,
   RELEASES_REPO,
+  ServerStatus,
+  Side,
   assetNameFor,
   binaryNameFor,
   entryPathIn,
+  installedKey,
   ridFor,
   newestServerTag,
-  updateAvailable,
+  serverStatus,
   versionFromTag,
 } from './coaiInstall';
+import { askVersion } from './versionProbe';
 
 /**
  * Putting the published `coai-mcp` on this machine. The decisions are next door in
@@ -27,14 +32,93 @@ import {
  * alternative was hand-writing a zip reader to save one process launch that happens once.</p>
  */
 
-const STATE_KEY = 'coai.installedVersion';
-
 export function binaryPath(storage: vscode.Uri, rid: CoaiRid): vscode.Uri {
   return vscode.Uri.joinPath(storage, binaryNameFor(rid));
 }
 
-export function installedVersion(state: vscode.Memento): string | undefined {
-  return state.get<string>(STATE_KEY);
+/**
+ * The binary this SIDE of the machine installs to, or nothing when the matrix has no build for it.
+ *
+ * <p>`globalStorageUri` is a path on the extension host that is running — the Windows profile
+ * directory in a local window, `~/.vscode-server/…` in a WSL one. That is why every question here
+ * is a question about one side and never about "this machine".</p>
+ */
+export function serverPath(storage: vscode.Uri): vscode.Uri | undefined {
+  const rid = ridFor(process.platform, process.arch);
+
+  return rid === undefined ? undefined : binaryPath(storage, rid);
+}
+
+/**
+ * This side of the machine, as the running extension host can describe it.
+ *
+ * <p>`remoteAuthority` would have been one field instead of three, and it is not public API — so
+ * the three that ARE public are folded together. See {@link installedKey}.</p>
+ */
+function thisSide(storage: vscode.Uri): Side {
+  return {
+    remoteName: vscode.env.remoteName,
+    distro: process.env['WSL_DISTRO_NAME'],
+    hostname: hostname(),
+    storagePath: storage.fsPath,
+  };
+}
+
+/** What this side's record says it installed, or nothing. A fallback — never the truth. */
+export function installedVersion(state: vscode.Memento, storage: vscode.Uri): string | undefined {
+  return state.get<string>(installedKey(thisSide(storage)));
+}
+
+/**
+ * What is on this side's disk, asked of the disk and then of the binary.
+ *
+ * <p><b>`stat` runs every time; only the PROBE is cached.</b> A cached `stat` would keep claiming a
+ * file somebody deleted, and the probe is the expensive half — a process launch, which a panel that
+ * repaints on every keystroke must not do per render.</p>
+ *
+ * <p><b>The cache stores failures too.</b> Every release up to 0.12.2 exits 64 on `--version`, so
+ * caching only successes would re-spawn a doomed process on every five-second watcher tick for
+ * exactly the binaries that need updating. Raised by Gemini in this plan's round.</p>
+ */
+export async function serverOnThisSide(
+  storage: vscode.Uri,
+  state: vscode.Memento,
+  published: string,
+): Promise<ServerStatus> {
+  const remembered = installedVersion(state, storage) ?? '';
+  const target = serverPath(storage);
+  if (target === undefined) {
+    return serverStatus({ fileExists: false, reported: '', remembered, published });
+  }
+
+  let stat: vscode.FileStat;
+  try {
+    stat = await vscode.workspace.fs.stat(target);
+  } catch {
+    return serverStatus({ fileExists: false, reported: '', remembered, published });
+  }
+
+  return serverStatus({
+    fileExists: true,
+    reported: await reportedVersion(target, stat),
+    remembered,
+    published,
+  });
+}
+
+/** The one probe result this side can have: one binary, one path, one answer at a time. */
+let probed: { path: string; mtime: number; size: number; version: string } | undefined;
+
+async function reportedVersion(target: vscode.Uri, stat: vscode.FileStat): Promise<string> {
+  const path = target.fsPath;
+  if (probed?.path === path && probed.mtime === stat.mtime && probed.size === stat.size) {
+    return probed.version;
+  }
+
+  const version = await askVersion(path);
+  probed = { path, mtime: stat.mtime, size: stat.size, version };
+
+  return version;
 }
 
 export async function installLatest(
@@ -73,18 +157,13 @@ export async function installLatest(
     const target = binaryPath(storage, rid);
     await vscode.workspace.fs.copy(extracted, target, { overwrite: true });
     await makeExecutable(target);
-    await state.update(STATE_KEY, version);
+    await state.update(installedKey(thisSide(storage)), version);
+    // The new file has a new mtime, so the cache would miss anyway — but saying so beats relying on
+    // a filesystem's timestamp resolution for correctness.
+    probed = undefined;
     return target;
   } finally {
     await vscode.workspace.fs.delete(scratch, { recursive: true, useTrash: false });
-  }
-}
-
-export async function updateIsAvailable(state: vscode.Memento): Promise<boolean> {
-  try {
-    return updateAvailable(installedVersion(state), await latestTag());
-  } catch {
-    return false; // an offline machine is not an update prompt
   }
 }
 

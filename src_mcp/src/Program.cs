@@ -1,3 +1,4 @@
+using System.Reflection;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Server;
 using ModelContextProtocol.Protocol;
@@ -32,6 +33,17 @@ internal static class Program
         /// <summary>Print the help and leave.</summary>
         Help,
 
+        /// <summary>Print the version and leave.</summary>
+        /// <remarks>
+        /// It exists because the EXTENSION could not tell what it had installed. The panel used to
+        /// remember the number it downloaded, in `globalState` — which VS Code shares between a
+        /// local window and a remote one while the binary itself is per side. Measured 2026-09-03:
+        /// a WSL side running 0.12.1 was told by its own panel that 0.12.2 was installed and that
+        /// there was nothing to update. A binary that can state its own version ends that class of
+        /// question: the panel asks the file it is about to describe.
+        /// </remarks>
+        Version,
+
         /// <summary>An argument this binary does not take.</summary>
         Usage,
 
@@ -55,6 +67,7 @@ internal static class Program
         args.Length == 0
             ? Startup.Serve
             : args[0] is "--help" or "-h" or "help" ? Startup.Help
+            : args[0] is "--version" or "-v" or "version" ? Startup.Version
             : args[0] == "--ask-local" ? Startup.AskLocal
             : Startup.Usage;
 
@@ -65,6 +78,12 @@ internal static class Program
             case Startup.Help:
                 // `--help` on stdout: a person running this by hand is not speaking the protocol.
                 Console.Out.WriteLine(HelpText);
+                return 0;
+
+            case Startup.Version:
+                // Same sanction as `--help`, and for the same reason: this mode never speaks the
+                // protocol, so stdout is a person's terminal. One line, parseable by a machine.
+                Console.Out.WriteLine($"{AppName} {VersionText}");
                 return 0;
 
             case Startup.Usage:
@@ -291,10 +310,42 @@ internal static class Program
         as; `status` re-orients a resumed conversation; `ask_human` escalates to the person.
         """;
 
+    /// <summary>
+    /// The version stamped into this binary, or <c>0.0.0</c> when nothing stamped it.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Never a default 1.0.0.</b> An unstamped build must read as OLDER than every
+    /// published release, because the panel compares this number against the newest tag: a 1.0.0
+    /// would have suppressed the update button for ever. <c>Version</c> is therefore pinned to
+    /// <c>0.0.0</c> in the csproj and the release passes the tag's version over it.</para>
+    /// <para>The release smoke step asserts this equals the tag, so a stamping step that stops
+    /// working fails the release rather than shipping a binary that misreports itself.</para>
+    /// </remarks>
+    internal static string VersionText =>
+        VersionFrom(typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
+
+    /// <summary>
+    /// The version out of an informational version string — pure, so it is a table in the tests.
+    /// </summary>
+    /// <remarks>
+    /// Everything from the FIRST <c>+</c> is dropped, not a <c>+sha</c> suffix specifically: source
+    /// link stamps a commit there, and a build server is free to stamp something else. Whatever it
+    /// is, it is build metadata and not a version anyone can compare.
+    /// </remarks>
+    internal static string VersionFrom(string? informational)
+    {
+        var text = (informational ?? string.Empty).Trim();
+        var plus = text.IndexOf('+', StringComparison.Ordinal);
+        var version = (plus < 0 ? text : text[..plus]).Trim();
+
+        return version.Length == 0 ? "0.0.0" : version;
+    }
+
     internal const string HelpText = """
         coai-mcp — the ConnectOtherAIs review-gate MCP server.
 
         Takes no arguments; an MCP client starts it and speaks JSON-RPC over stdio.
+        `--version` prints the version this binary was stamped with, and nothing else.
         Configure it in your client as:
 
           { "mcpServers": { "coai": { "command": "<full path to coai-mcp>" } } }

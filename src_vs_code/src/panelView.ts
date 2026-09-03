@@ -8,6 +8,7 @@ import { costPhrase, elapsed, isRunning, reviewerLines, RoundRecord, SessionFile
 import { CliStatus, cliStatusNote, updateAvailable, UNKNOWN_CLI } from './cliVersions';
 import { SnippetStatus, snippetNote } from './claudeSnippet';
 import { LocalEngine, remoteWarning } from './localEngines';
+import { ServerStatus } from './coaiInstall';
 import { ModelPrice } from './modelPrices';
 import { Vendor } from './vendors';
 
@@ -32,8 +33,16 @@ export interface PanelState {
   readonly settings: CoaiSettings;
   readonly vendors: readonly Vendor[];
   readonly codexModels: readonly ModelChoice[];
-  readonly serverInstalled: boolean;
-  readonly serverVersion: string;
+  /**
+   * The server binary on the side this panel is running on — the disk, then the binary's own
+   * `--version`, then this side's record. Never a record made on another side.
+   */
+  readonly server: ServerStatus;
+  /**
+   * Which side that is, as VS Code's remote indicator names it (`WSL: Ubuntu`), or empty for a
+   * local window — where there is one side and no need for a word for it.
+   */
+  readonly side: string;
   readonly questions: readonly Escalation[];
   readonly sessions: readonly SessionFile[];
   /** Which collapsible sections are open. Empty falls back to {@link OPEN_BY_DEFAULT}. */
@@ -391,6 +400,30 @@ ${field}`;
 }
 
 /**
+ * The one sentence at the top of the Server section, for the side this panel is running on.
+ *
+ * <p><b>It names the side whenever there is one</b>, because a machine with a Windows window and a
+ * WSL window has two servers and used to be described by one sentence that belonged to whichever
+ * side pressed the button last. A local window says nothing about sides: there is only one.</p>
+ *
+ * <p>The `unknown` case is the pre-0.12.3 binaries, which answer `--version` with a refusal on
+ * stderr. Saying so is the honest sentence — the alternative was calling them up to date.</p>
+ */
+export function serverSentence(server: ServerStatus, side: string): string {
+  const here = side.length === 0 ? '' : ` in ${side}`;
+  if (server.kind === 'absent') {
+    return `coai-mcp is not installed${here.length === 0 ? ' yet' : here}.`;
+  }
+  if (server.kind === 'unknown') {
+    return `A coai-mcp is installed${here} but it cannot report its version — press Update.`;
+  }
+
+  return server.remembered
+    ? `coai-mcp ${server.version} is installed${here} (from this side's own record — the binary could not be asked).`
+    : `coai-mcp ${server.version} is installed${here}.`;
+}
+
+/**
  * What is installed, what is published, and a button when those differ.
  *
  * <p>The published version is shown even when it MATCHES, because "you are up to date" and "the
@@ -399,16 +432,15 @@ ${field}`;
  * an extension tag.</p>
  */
 function serverBody(state: PanelState): string {
-  const installed = state.serverInstalled
-    ? `coai-mcp ${escapeHtml(state.serverVersion)} is installed.`
-    : 'coai-mcp is not installed yet.';
+  const installed = `<div class="status">${escapeHtml(serverSentence(state.server, state.side))}</div>`;
+  const present = state.server.kind !== 'absent';
 
   const published = state.latestServerVersion.length === 0
     ? '<div class="hint">The published version could not be read from GitHub just now.</div>'
-    : state.serverInstalled && state.latestServerVersion === state.serverVersion
+    : present && !state.server.updateOffered
       ? `<div class="hint">${escapeHtml(state.latestServerVersion)} is the newest published — you are up to date.</div>`
       : `<div class="hint">${escapeHtml(state.latestServerVersion)} is published.</div>
-<button class="add" data-command="installServer">⬇&nbsp; ${state.serverInstalled ? 'Update' : 'Install'} coai-mcp ${escapeHtml(state.latestServerVersion)}</button>`;
+<button class="add" data-command="installServer">⬇&nbsp; ${present ? 'Update' : 'Install'} coai-mcp ${escapeHtml(state.latestServerVersion)}</button>`;
 
   // The pasted snippet is the other half of this section: the server is installed here, and
   // the instruction that makes an AI USE it lives in somebody's CLAUDE.md, where it goes stale
@@ -416,7 +448,7 @@ function serverBody(state: PanelState): string {
   const snippet = snippetNote(state.snippetStatus);
   const stale = snippet.length === 0 ? '' : `<div class="stale">${escapeHtml(snippet)}</div>`;
 
-  return `<div class="status">${installed}</div>${stale}
+  return `${installed}${stale}
 ${published}
 <div class="hint">Changes here are saved for the server straight away; it reads them when your MCP client next starts it. The config block in the ⋯ menu is pasted once, when you first set it up.</div>
 <button class="link" data-command="checkForUpdate">Check again</button>`;
@@ -1050,8 +1082,8 @@ export function staticKey(state: PanelState): string {
     // somebody starts Ollama, pulls a model, presses the reprobe button. Left out, the picker was
     // frozen for the life of the panel while the probe underneath it worked perfectly.
     state.localEngines,
-    state.serverInstalled,
-    state.serverVersion,
+    state.server,
+    state.side,
     // Rare, and both are a person's doing or an answer they asked for.
     state.latestServerVersion,
     state.usageWindow,
