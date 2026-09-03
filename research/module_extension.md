@@ -521,3 +521,30 @@ update; a freshly stamped Native AOT build answers `coai-mcp 0.12.3`; a missing 
 **Not fixed by code, and separate:** that machine's WSL side runs extension 0.25.2 while Windows has
 0.26.2, because a remote extension host installs its own copy. That is a VS Code *Install in WSL*
 press.
+
+### A `.cmd` shim needs a shell, and that is a boundary (2026-09-03)
+
+Found by measurement while verifying the change above, and older than it. `askVersion` spawned every
+candidate with `shell: false`, and **node refuses to launch a `.cmd` or `.bat` without a shell** since
+the 2024 argument-injection fix — with a synchronous `EINVAL`, not an `error` event. Nothing on that
+path catches, so asking codex or gemini its version did not return "could not be read": it rejected
+out of `render`, and the repaint died with it. Every npm global on Windows is a `.cmd` shim, so this
+was every Windows machine.
+
+Measured before: `codex` and `gemini` reported no version at all. Measured after: `codex.cmd` answers
+**0.152.0**, `gemini.cmd` **0.57.0**, `claude.exe` 2.1.258 without a shell as before.
+
+**A shim is the ONE case that gets a shell**, and the executable can be a path somebody typed into
+the settings — so `shimCommandLine` is the boundary where a string would become something `cmd.exe`
+interprets, and it is a refusal rather than an escape:
+
+| in the path | why | result |
+|---|---|---|
+| spaces, `&`, `\|`, `(`, `)`, `^` | literal inside double quotes — `C:\Program Files (x86)\…` must work | quoted, allowed |
+| `"` | would close the quoting; no Windows path can hold one | refused |
+| `%`, `!` | expanded even inside double quotes | refused |
+| newline, control chars | a newline ends the command line | refused |
+
+A refused path is reported exactly like an unreadable version: the button goes grey and says so. The
+ARGUMENT is a literal in the source and never composed from anything typed. Verified with a hostile
+path (`codex.cmd" & echo PWNED & rem .cmd`): empty command line, empty version, and no file written.

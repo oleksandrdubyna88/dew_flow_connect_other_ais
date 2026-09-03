@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseCliVersion, updateAvailable, versionSourceFor } from '../cliVersions';
+import { needsShell, parseCliVersion, shimCommandLine, updateAvailable, versionSourceFor } from '../cliVersions';
 
 /**
  * Knowing whether a reviewer's CLI has an update, from what the CLI says and what its vendor
@@ -103,4 +103,44 @@ test('every source is a host the vendor itself publishes from', () => {
       );
     }
   }
+});
+
+/**
+ * Asking a `.cmd` shim its version — the one case that needs a shell, and the boundary where a
+ * typed path would become something `cmd.exe` interprets.
+ *
+ * <p>Measured 2026-09-03 on this machine: without a shell, `spawn('codex.cmd', …)` throws EINVAL
+ * synchronously (node's 2024 argument-injection fix), which took the panel's repaint down with it
+ * and left codex and gemini with no version at all. With it, `codex.cmd` answers 0.152.0 and
+ * `gemini.cmd` 0.57.0.</p>
+ */
+
+test('only a shim gets a shell', () => {
+  assert.equal(needsShell('codex.cmd'), true);
+  assert.equal(needsShell('C:\\npm\\gemini.CMD'), true, 'the extension is matched case-insensitively');
+  assert.equal(needsShell('run.bat'), true);
+  assert.equal(needsShell('claude.exe'), false, 'a binary that answers without a shell must not get one');
+  assert.equal(needsShell('coai-mcp'), false);
+  assert.equal(needsShell('/usr/local/bin/codex'), false, 'nothing on linux or macOS is a shim');
+});
+
+test('a real Windows path survives the quoting', () => {
+  assert.equal(
+    shimCommandLine('C:\\Program Files (x86)\\npm\\codex.cmd'),
+    '"C:\\Program Files (x86)\\npm\\codex.cmd" --version',
+    'spaces and parens are what the quotes are FOR — this is where most npm globals live',
+  );
+});
+
+test('a path a shell must not be given yields no command at all', () => {
+  // The executable can be typed into the settings, so this is a real boundary and not a formality.
+  assert.equal(shimCommandLine('codex.cmd" & echo PWNED & rem .cmd'), '', 'a quote would close the quoting');
+  assert.equal(shimCommandLine('C:\\a%PATH%\\codex.cmd'), '', '% expands INSIDE double quotes');
+  assert.equal(shimCommandLine('C:\\a!x!\\codex.cmd'), '', 'so does ! under delayed expansion');
+  assert.equal(shimCommandLine('codex.cmd\nnotepad'), '', 'a newline ends the command line');
+  assert.equal(
+    shimCommandLine('C:\\a&b^(c)\\codex.cmd'),
+    '"C:\\a&b^(c)\\codex.cmd" --version',
+    'these are literal inside quotes, so a legitimate path with them is not refused',
+  );
 });

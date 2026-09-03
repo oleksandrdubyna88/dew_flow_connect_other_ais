@@ -162,6 +162,46 @@ export function versionProbeCandidates(executable: string, platform: Platform): 
   return [`${executable}.cmd`, `${executable}.exe`, executable];
 }
 
+/**
+ * Whether asking this executable for its version needs a shell.
+ *
+ * <p><b>Measured, node 24 on this machine:</b> `spawn('codex.cmd', ['--version'], { shell: false })`
+ * throws `EINVAL` — synchronously, not as an `error` event. Node refuses to launch a `.cmd` or
+ * `.bat` without a shell since the 2024 argument-injection fix (CVE-2024-27980), because the shim is
+ * interpreted by `cmd.exe` and node cannot make its argument escaping safe there.</p>
+ *
+ * <p>So a shim is the ONE case that gets a shell, and everything else must not have one: a shell for
+ * `claude.exe` would buy nothing and put a command interpreter between us and a binary that answers
+ * perfectly without it.</p>
+ */
+export function needsShell(executable: string): boolean {
+  return /\.(cmd|bat)$/i.test(executable);
+}
+
+/**
+ * The command line for a shim, or EMPTY when this path must not be handed to a shell at all.
+ *
+ * <p>The executable can be a path somebody TYPED into the settings, so this is the boundary where a
+ * string becomes something `cmd.exe` interprets — the exact hazard node's refusal exists to prevent.
+ * The rules, each for a reason cmd.exe gives it:</p>
+ * <ul>
+ *   <li>The path is wrapped in double quotes, which makes `&`, `|`, `(`, `)` and `^` literal — that
+ *       is what lets `C:\Program Files (x86)\…` work at all.</li>
+ *   <li>A path containing `"` is refused: it would close the quoting and the rest would be a
+ *       command. No Windows path can contain one, so nothing legitimate is lost.</li>
+ *   <li>`%` and `!` are refused: they are still expanded INSIDE double quotes (`%PATH%`, and `!x!`
+ *       under delayed expansion), so a quoted path is not enough to make them inert.</li>
+ *   <li>Newlines and control characters are refused: a newline ends the command line.</li>
+ * </ul>
+ *
+ * <p>The ARGUMENT is a literal in this file and never composed from anything a person typed, which
+ * is the other half of why this is safe: the only variable part is the path, and it is quoted.</p>
+ */
+export function shimCommandLine(executable: string): string {
+  // eslint-disable-next-line no-control-regex
+  return /["%!]|[\u0000-\u001f]/.test(executable) ? '' : `"${executable}" --version`;
+}
+
 /** What the panel shows for one vendor's CLI. Both empty means "could not tell", which is grey. */
 export interface CliStatus {
   readonly installed: string;

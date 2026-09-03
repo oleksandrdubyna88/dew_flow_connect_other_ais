@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { parseCliVersion } from './cliVersions';
+import { needsShell, parseCliVersion, shimCommandLine } from './cliVersions';
 
 /**
  * Asking a binary what version it is, for anything on this machine that answers `--version`.
@@ -24,14 +24,24 @@ import { parseCliVersion } from './cliVersions';
  */
 export function askVersion(executable: string): Promise<string> {
   return new Promise((resolve) => {
-    // `spawn` can THROW rather than emit `error`, and it does so for a real case on this platform:
-    // node refuses a `.cmd` / `.bat` without a shell (the 2024 argument-injection fix) with a
-    // synchronous EINVAL — measured here with node 24 on `codex.cmd`. The docstring above promises
-    // this function never throws, and an exception out of a repaint is not a version that could
-    // not be read: it is a panel that stops repainting.
+    // A `.cmd` / `.bat` shim is launched THROUGH a shell, because node refuses to launch one
+    // without (the 2024 argument-injection fix), with a synchronous EINVAL rather than an `error`
+    // event — measured here on `codex.cmd`, where it took the panel's whole repaint down with it.
+    // Everything else keeps `shell: false`: a shim is the exception, not the rule.
+    const line = needsShell(executable) ? shimCommandLine(executable) : '';
+    if (needsShell(executable) && line.length === 0) {
+      resolve(''); // a path a shell must not be given is a version we cannot read
+      return;
+    }
+
+    // `spawn` can still throw rather than emit `error`, and the docstring above promises this
+    // function never does: an exception out of a repaint is not "a version that could not be read",
+    // it is a panel that stops repainting.
     let child: ReturnType<typeof spawn>;
     try {
-      child = spawn(executable, ['--version'], { shell: false });
+      child = line.length > 0
+        ? spawn(line, [], { shell: true, windowsHide: true })
+        : spawn(executable, ['--version'], { shell: false });
     } catch {
       resolve('');
       return;
