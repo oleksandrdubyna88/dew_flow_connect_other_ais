@@ -7,9 +7,11 @@ over stdio and the extension speaks to it as a subprocess. Neither is a request 
 down — which the contracts rule says in as many words. What it does have is two artefacts that ship on
 their own clocks, to two different places, and every failure below is one of them arriving wrong.
 
-Target: the released **extension** version — `--target 0.26.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
+Target: the released **extension** version — `--target 0.26.2`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-09-03 · extension 0.26.1 / mcp 0.12.1 · both automated items PASS — `mcp-v0.12.1` carries all six RID assets, and the marketplace serves 0.26.1. Items 3 and 4 are a person's.
+Last verified: 2026-09-03 · extension 0.26.2 / mcp 0.12.2 · both automated items PASS — `mcp-v0.12.2` carries all six RID assets, and the marketplace serves 0.26.2. Item 3 passed by hand on the release machine: `providers` listed codex (codex-cli 0.152.0), gemini (1.1.25) and local, each saying what it authenticates as. Item 4 is still owed — it needs the updated extension to have fetched the new binary.
+
+**The marketplace takes minutes, and item 2 is not a failure before it does.** Measured on this release: `vsce` reported *"Published remsoftdev.connect-other-ais v0.26.2"* while the gallery query kept answering `0.26.1` for a further four and a half minutes, then flipped. Read the publish step's own log before treating a red item 2 as a bad release — the two answers disagree by design for a while.
 
 | # | What a person loses if this is broken | Check | Auto |
 |---|---|---|---|
