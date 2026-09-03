@@ -40,7 +40,11 @@ public sealed record ReviewerProgress(
 /// is per vendor and a global cap alone would happily put all of its slots on one provider. A
 /// rate-limited reviewer is retried exactly once after a backoff, and only then reported.
 /// </remarks>
-public sealed class BoundedScheduler(int globalCap = 3, int perProviderCap = 2, TimeSpan? rateLimitBackoff = null)
+public sealed class BoundedScheduler(
+    int globalCap = 3,
+    int perProviderCap = 2,
+    TimeSpan? rateLimitBackoff = null,
+    int sharedResourceCap = 1)
 {
     private readonly TimeSpan _backoff = rateLimitBackoff ?? TimeSpan.FromSeconds(15);
 
@@ -63,6 +67,51 @@ public sealed class BoundedScheduler(int globalCap = 3, int perProviderCap = 2, 
 
     private readonly Dictionary<string, int> _peakPerProvider = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The same, per SHARED RESOURCE — a local engine, keyed by the endpoint it answers on.
+    /// </summary>
+    /// <remarks>
+    /// <b>Not reset per run</b>, unlike the two above: the whole point of this cap is that it holds
+    /// across rounds, so a high-water mark that started again with every round could not show it.
+    /// </remarks>
+    public IReadOnlyDictionary<string, int> PeakPerResource => _peakPerResource;
+
+    private readonly Dictionary<string, int> _peakPerResource = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _runningPerResource = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The caps, held for the life of the SCHEDULER.
+    /// </summary>
+    /// <remarks>
+    /// They used to be created inside <see cref="RunAllAsync"/>, which made every one of them a cap
+    /// per ROUND: two rounds in one server built two sets, so a cap of three allowed six on the
+    /// machine the docstring says it bounds. Found by codex reviewing the plan for the engine cap —
+    /// the same defect one layer above the one being fixed.
+    /// </remarks>
+    private readonly SemaphoreSlim _global = new(globalCap);
+    private readonly Dictionary<string, SemaphoreSlim> _perProvider = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, SemaphoreSlim> _perResource = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _limiters = new();
+
+    /// <summary>
+    /// The limiter for one key, created once and shared by every run afterwards.
+    /// </summary>
+    private SemaphoreSlim Limiter(Dictionary<string, SemaphoreSlim> map, string key, int cap)
+    {
+        lock (_limiters)
+        {
+            if (!map.TryGetValue(key, out var limiter))
+            {
+                // A cap below one would make every holder wait for ever, so a configured zero is a
+                // configured mistake and not a way to switch reviewers off.
+                limiter = new SemaphoreSlim(Math.Max(1, cap));
+                map[key] = limiter;
+            }
+
+            return limiter;
+        }
+    }
+
     /// <param name="onProgress">
     /// Called as each reviewer is queued, starts and ends. Invoked from the fan-out's threads, so
     /// the handler must be thread-safe and quick — a slow one delays the reviewer it reports on.
@@ -78,11 +127,15 @@ public sealed class BoundedScheduler(int globalCap = 3, int perProviderCap = 2, 
         _running = 0;
         var runningPerProvider = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-        using var global = new SemaphoreSlim(globalCap);
+        // These live as long as the SCHEDULER, not as long as one run. They were built inside this
+        // method until 2026-09-03, which made every cap per ROUND: two rounds in one server each got
+        // their own set, so a cap of three allowed six. Found by codex reviewing the plan for the
+        // engine cap below — the same defect one layer up from the one being fixed.
+        var global = _global;
         var perProvider = work
             .Select(w => w.Invocation.Provider)
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(p => p, _ => new SemaphoreSlim(perProviderCap), StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(p => p, p => Limiter(_perProvider, p, perProviderCap), StringComparer.OrdinalIgnoreCase);
         try
         {
             foreach (var w in work)
@@ -94,38 +147,85 @@ public sealed class BoundedScheduler(int globalCap = 3, int perProviderCap = 2, 
             {
                 var name = w.Invocation.Provider;
                 var provider = perProvider[name];
-                await provider.WaitAsync(ct);
+                // The ENGINE first, and outside everything else. A reviewer holding the card is
+                // what the other reviewers of every round are waiting for, so it is taken before
+                // the provider and the machine slots and released after them — the ordering that
+                // cannot deadlock, because it is the same for every reviewer.
+                var engine = w.Invocation.SharedResource;
+                var resource = engine.Length == 0 ? null : Limiter(_perResource, engine, sharedResourceCap);
+                if (resource is not null)
+                {
+                    await resource.WaitAsync(ct);
+                    EnteredResource(engine);
+                }
                 try
                 {
-                    await global.WaitAsync(ct);
-                    Entered(name, runningPerProvider);
-                    Report(onProgress, w.Invocation, "running");
-                    var watch = System.Diagnostics.Stopwatch.StartNew();
+                    await provider.WaitAsync(ct);
                     try
                     {
-                        var outcome = await RunWithOneRetryAsync(w, executor, ct);
-                        Report(onProgress, w.Invocation, outcome is ReviewerOutcome.Ok ? "done" : "failed", outcome, watch.Elapsed);
-                        return (w.Invocation, outcome);
+                        await global.WaitAsync(ct);
+                        Entered(name, runningPerProvider);
+                        Report(onProgress, w.Invocation, "running");
+                        var watch = System.Diagnostics.Stopwatch.StartNew();
+                        try
+                        {
+                            var outcome = await RunWithOneRetryAsync(w, executor, ct);
+                            Report(onProgress, w.Invocation, outcome is ReviewerOutcome.Ok ? "done" : "failed", outcome, watch.Elapsed);
+                            return (w.Invocation, outcome);
+                        }
+                        finally
+                        {
+                            Left(name, runningPerProvider);
+                            global.Release();
+                        }
                     }
                     finally
                     {
-                        Left(name, runningPerProvider);
-                        global.Release();
+                        provider.Release();
                     }
                 }
                 finally
                 {
-                    provider.Release();
+                    if (resource is not null)
+                    {
+                        LeftResource(engine);
+                        resource.Release();
+                    }
                 }
             });
             return await Task.WhenAll(tasks);
         }
         finally
         {
-            foreach (var semaphore in perProvider.Values)
-            {
-                semaphore.Dispose();
-            }
+            // Nothing is disposed here any more: the limiters outlive the run on purpose, and a
+            // `Dispose` in this block is what made them per-round in the first place.
+        }
+    }
+
+    /// <summary>Who is on this engine right now, for the sentence a timeout has to say.</summary>
+    public int RunningOn(string resource)
+    {
+        lock (_limiters)
+        {
+            return _runningPerResource.GetValueOrDefault(resource);
+        }
+    }
+
+    private void EnteredResource(string resource)
+    {
+        lock (_limiters)
+        {
+            var now = _runningPerResource.GetValueOrDefault(resource) + 1;
+            _runningPerResource[resource] = now;
+            _peakPerResource[resource] = Math.Max(_peakPerResource.GetValueOrDefault(resource), now);
+        }
+    }
+
+    private void LeftResource(string resource)
+    {
+        lock (_limiters)
+        {
+            _runningPerResource[resource] = Math.Max(0, _runningPerResource.GetValueOrDefault(resource) - 1);
         }
     }
 

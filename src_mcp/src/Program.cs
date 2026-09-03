@@ -129,6 +129,14 @@ internal static class Program
             return 64;
         }
 
+        // Hoisted out of the try because the CATCH has to name them: how long this waited and what
+        // it was waiting for is the whole difference between "your engine is down" and "your engine
+        // is slower than the deadline you gave it".
+        var deadline = int.TryParse(flags.GetValueOrDefault("--timeout-seconds", ""), out var seconds)
+            ? TimeSpan.FromSeconds(seconds)
+            : TimeSpan.FromMinutes(10);
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+
         try
         {
             var prompt = await File.ReadAllTextAsync(promptFile);
@@ -167,12 +175,9 @@ internal static class Program
                 return 65; // EX_DATAERR
             }
 
-            // The deadline comes from the runtime, which derived it from the reviewer timeout the
+            // The deadline came from the runtime, which derived it from the reviewer timeout the
             // executor enforces. A fixed thirty minutes here was longer than any round, so the only
             // real deadline was being killed — raised by the gate and accepted.
-            var deadline = int.TryParse(flags.GetValueOrDefault("--timeout-seconds", ""), out var seconds)
-                ? TimeSpan.FromSeconds(seconds)
-                : TimeSpan.FromMinutes(10);
             using var http = new HttpClient { Timeout = deadline };
             using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
             using var response = await http.PostAsync($"{endpoint.TrimEnd('/')}/chat/completions", content);
@@ -203,7 +208,7 @@ internal static class Program
             // whole reason it has one: "no answer in 290s" is a sentence about the model being slow,
             // while being killed by the executor says nothing at all.
             Note(ex is TaskCanceledException
-                ? $"the local engine at {endpoint} did not answer within the round's deadline: {ex.Message}"
+                ? Runners.Reviewers.LocalAsk.TooSlowMessage(endpoint, waited.Elapsed, deadline)
                 : Runners.Reviewers.LocalAsk.UnreachableMessage(endpoint, ex.Message));
 
             return 69; // EX_UNAVAILABLE
@@ -352,7 +357,8 @@ internal static class Program
 
         Optional environment: COAI_PROVIDERS, COAI_MODEL_<PROVIDER>, COAI_EXE_<PROVIDER>,
         COAI_MAX_ROUNDS, COAI_GATE_THRESHOLD, COAI_ON_EXHAUSTED (continue|human|escalate),
-        COAI_MAX_CONCURRENCY, COAI_MAX_PER_PROVIDER, COAI_REVIEWER_TIMEOUT_MINUTES,
+        COAI_MAX_CONCURRENCY, COAI_MAX_PER_PROVIDER, COAI_LOCAL_CONCURRENCY,
+        COAI_REVIEWER_TIMEOUT_MINUTES,
         COAI_DATA_DIR, COAI_RATE_LIMIT_BACKOFF_SECONDS, COAI_ESCALATION_MINUTES
         (or COAI_ESCALATION_SECONDS, which wins),
         COAI_CREDS_KEY (the CredsForDevs config-entry key holding vendor keys),

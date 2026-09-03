@@ -132,8 +132,65 @@ public sealed class ReviewerExecutorTests
     [InlineData(1, "", "quota exceeded for this project", true)]
     [InlineData(1, "", "some other failure", false)]
     [InlineData(0, "", "429 in ordinary output of a fine run", false)]
+    // A code is a code, not three digits. Measured 2026-09-03: this exact line was reported to a
+    // person as "rate limited (after one retry)" — the digits were somewhere in a Cloudflare ray id
+    // or the rest of the payload, and the vendor had answered 404. They were told to wait for a
+    // quota that was never the problem, on a route no retry can fix.
+    [InlineData(
+        1,
+        "",
+        "{\"type\":\"error\",\"message\":\"Reconnecting... 2/5 (unexpected status 404 Not Found: "
+            + "Unknown error, url: https://chatgpt.com/backend-api/codex/responses, "
+            + "cf-ray: a3f4291e8b2c7d01-FRA)\"}",
+        false)]
+    [InlineData(1, "", "cf-ray: 9d5031aa77c0-AMS", false)]
+    [InlineData(1, "", "prompt_tokens: 429, completion_tokens: 503", false)]
+    [InlineData(1, "", "finished in 4290ms", false)]
+    // And the shapes a vendor actually prints a code in, which must all still be caught.
+    [InlineData(1, "", "HTTP 429", true)]
+    [InlineData(1, "", "status: 503", true)]
+    [InlineData(1, "", "503 UNAVAILABLE: This model is currently experiencing high demand", true)]
+    [InlineData(1, "", "503 Service Unavailable", true)]
     public void RateLimit_Detection_IsATable(int exitCode, string stdout, string stderr, bool hit) =>
         RateLimit.Hit(new ProcessResult(exitCode, stdout, stderr, TimedOut: false)).Should().Be(hit);
+
+    /// <summary>
+    /// What the person is told when the vendor's own CLI fails for a reason no retry clears: the
+    /// vendor's words, once, and no wording about a limit that was never hit.
+    /// </summary>
+    [Fact]
+    public async Task ATransientVendorFailure_IsReportedAsItselfAndNotRetried()
+    {
+        var codex404 = "{\"type\":\"error\",\"message\":\"Reconnecting... 2/5 (unexpected status 404 "
+            + "Not Found: Unknown error, url: https://chatgpt.com/backend-api/codex/responses, "
+            + "cf-ray: a3f4291e8b2c7d01-FRA)\"}";
+        var result = new ProcessResult(1, string.Empty, codex404, TimedOut: false);
+
+        RateLimit.Hit(result).Should().BeFalse("a 404 is not a rate limit");
+
+        var scheduler = new BoundedScheduler(globalCap: 1, perProviderCap: 1);
+        var launcher = new CountingLauncher(result);
+        var outcomes = await scheduler.RunAllAsync(
+            [new ReviewerWork(FakeCliInvocations.Invoke("codex", ["noop"]))],
+            new ReviewerExecutor(launcher),
+            TestContext.Current.CancellationToken);
+
+        launcher.Calls.Should().Be(1, "the route answered 404; a second attempt asks the same route");
+        var outcome = outcomes[0].Outcome;
+        outcome.Should().BeOfType<ReviewerOutcome.NonZeroExit>();
+        ((ReviewerOutcome.NonZeroExit)outcome).StdErrTail.Should().Contain("404 Not Found");
+    }
+
+    private sealed class CountingLauncher(ProcessResult answer) : IProcessLauncher
+    {
+        public int Calls { get; private set; }
+
+        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            Calls++;
+            return Task.FromResult(answer);
+        }
+    }
 }
 
 /// <summary>

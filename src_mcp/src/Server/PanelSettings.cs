@@ -42,6 +42,21 @@ public sealed record PanelSettings
 
     public int PerProviderConcurrency { get; init; } = 2;
 
+    /// <summary>
+    /// How many reviewers may use ONE local engine at a time. One, and it is not the same knob as
+    /// <see cref="PerProviderConcurrency"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>Measured 2026-09-03 on the machine that reported it: `COAI_MAX_PER_PROVIDER=3` is a
+    /// reasonable setting for a hosted vendor — three HTTP calls into somebody else's fleet — and it
+    /// put three reviewers on one card. The one that got there first answered in 30.6 s; the other
+    /// two were cancelled at 590 s having produced nothing, because all three were sharing the same
+    /// GPU and each got a third of it.</para>
+    /// <para><see cref="IntVar"/> refuses a value below one, so a configured zero falls back here
+    /// rather than making every local reviewer wait for ever.</para>
+    /// </remarks>
+    public int LocalConcurrency { get; init; } = 1;
+
     public TimeSpan ReviewerTimeout { get; init; } = TimeSpan.FromMinutes(10);
 
     /// <summary>How long a rate-limited reviewer waits before its one retry.</summary>
@@ -156,6 +171,7 @@ public sealed record PanelSettings
         Unrecognised = UnknownValues(env),
         GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),
         PerProviderConcurrency = IntVar(env, "COAI_MAX_PER_PROVIDER", 2),
+        LocalConcurrency = IntVar(env, "COAI_LOCAL_CONCURRENCY", 1),
         ReviewerTimeout = TimeSpan.FromMinutes(IntVar(env, "COAI_REVIEWER_TIMEOUT_MINUTES", 10)),
         RateLimitBackoff = TimeSpan.FromSeconds(IntVar(env, "COAI_RATE_LIMIT_BACKOFF_SECONDS", 15)),
         // Seconds win when set: minutes are the setting a person configures, seconds are for a

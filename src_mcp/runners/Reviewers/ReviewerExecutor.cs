@@ -67,11 +67,33 @@ public static class RateLimit
     /// </list>
     /// </summary>
     private static readonly string[] Phrases =
-        ["429", "rate limit", "usage limit", "quota", "503", "unavailable", "high demand"];
+        ["rate limit", "usage limit", "quota", "unavailable", "high demand"];
+
+    /// <summary>
+    /// The status codes, matched as CODES rather than as three digits anywhere in the output.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>`429` and `503` used to be in the phrase list above</b>, matched as bare substrings
+    /// of stdout and stderr — and a Cloudflare ray id is hexadecimal, a token count is a number, and
+    /// a duration in milliseconds is a number. Measured 2026-09-03: a codex reviewer handed
+    /// <c>unexpected status 404 Not Found ... cf-ray: a3…</c> was reported to the person as
+    /// <i>"rate limited (after one retry)"</i>, so they were told to wait for a quota that was never
+    /// the problem, and the reviewer was retried against a route that answers 404.</para>
+    /// <para>A code counts when something says it IS a status — `HTTP 429`, `status: 503`,
+    /// `code 429` — or when the reason phrase follows it, which is how the CLIs actually print one:
+    /// `429 Too Many Requests`, `503 UNAVAILABLE`, `503 Service Unavailable`.</para>
+    /// </remarks>
+    private static readonly System.Text.RegularExpressions.Regex StatusCode = new(
+        @"(?:\b(?:http|https|status|statuscode|status_code|code|error)\b\W{0,4}(?:429|503)\b)"
+            + @"|(?:\b(?:429|503)\b\s*[:\-]?\s*(?:too\s+many|service\s+unavailable|unavailable|rate))",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     public static bool Hit(ProcessResult result) =>
-        result.ExitCode != 0 &&
-        Phrases.Any(p => Contains(result.StdErr, p) || Contains(result.StdOut, p));
+        result.ExitCode != 0 && (Marked(result.StdErr) || Marked(result.StdOut));
+
+    private static bool Marked(string text) =>
+        Phrases.Any(p => Contains(text, p)) || StatusCode.IsMatch(text);
 
     /// <summary>
     /// Whether waiting is pointless: a DAILY allowance, not a per-minute throttle.
@@ -94,7 +116,7 @@ public static class RateLimit
     {
         var lines = (result.StdErr + '\n' + result.StdOut)
             .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        return lines.FirstOrDefault(l => Phrases.Any(p => Contains(l, p))) ?? string.Empty;
+        return lines.FirstOrDefault(Marked) ?? string.Empty;
     }
 
     private static bool Contains(string text, string needle) =>

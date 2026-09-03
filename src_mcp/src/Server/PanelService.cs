@@ -44,7 +44,10 @@ public sealed class PanelService
         _worktrees = new WorktreeManager(launcher, Path.Combine(settings.DataDir, "worktrees"));
         _context = new ContextAssembler(launcher);
         _scheduler = new BoundedScheduler(
-            settings.GlobalConcurrency, settings.PerProviderConcurrency, settings.RateLimitBackoff);
+            settings.GlobalConcurrency,
+            settings.PerProviderConcurrency,
+            settings.RateLimitBackoff,
+            settings.LocalConcurrency);
         // Unparseable answers are kept beside the sessions, so "it would not parse" can be read
         // rather than guessed at.
         _executor = new ReviewerExecutor(launcher, Path.Combine(settings.DataDir, "unparseable"));

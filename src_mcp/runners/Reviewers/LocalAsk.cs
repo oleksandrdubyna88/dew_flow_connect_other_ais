@@ -63,6 +63,34 @@ public static class LocalAsk
     public static string UnreachableMessage(string endpoint, string detail) =>
         $"{UnreachableOpening}{endpoint}{UnreachableClosing}: {detail}";
 
+    /// <summary>
+    /// An engine that IS there and did not finish in time — a different sentence, and a different
+    /// cure, from one that could not be reached.
+    /// </summary>
+    /// <remarks>
+    /// <para>What it replaced said "did not answer within the round's deadline: The request was
+    /// canceled due to the configured HttpClient.Timeout", which reads as a broken engine and sent
+    /// the reader to check a port that was healthy. Measured 2026-09-03: two reviewers were reported
+    /// that way while the engine was up, loaded and answering — to three requests of the same round
+    /// at once, on one card.</para>
+    /// <para>So it says the two numbers that matter, how long it waited and what it was allowed, and
+    /// then the cures in the order they are worth trying. It names the .NET exception no more: that
+    /// text was the one part of the old sentence nobody could act on.</para>
+    /// </remarks>
+    public static string TooSlowMessage(string endpoint, TimeSpan waited, TimeSpan deadline) =>
+        $"{TooSlowOpening}{endpoint}{TooSlowClosing} — it was still working after "
+            + $"{waited.TotalSeconds:F0}s of the {deadline.TotalSeconds:F0}s this reviewer was given. "
+            + "The engine is up; it is slower than the deadline. Give it more time "
+            + "(COAI_REVIEWER_TIMEOUT_MINUTES), a smaller prompt (the Fast context), or a smaller "
+            + "model — and check nothing else is on the card: reviewers of one round are serialised "
+            + "per engine, other programs are not.";
+
+    /// <inheritdoc cref="TooSlowMessage"/>
+    public const string TooSlowOpening = "the local engine at ";
+
+    /// <inheritdoc cref="TooSlowMessage"/>
+    public const string TooSlowClosing = " did not finish in time";
+
     /// <summary>The sampling seed for a prompt: the same prompt is the same request, in any process.</summary>
     /// <remarks>
     /// <para>FNV-1a over the UTF-8 bytes, and the choice of algorithm is not the point — being a

@@ -41,12 +41,21 @@ public sealed record ReviewerSettings(string Provider)
 /// The vendor adapter that built this launch, so reading the answer and the usage stays with the
 /// vendor that knows their shape instead of becoming a switch in the executor.
 /// </param>
+/// <param name="SharedResource">
+/// Something on THIS machine that only one reviewer may use at a time, keyed by what identifies it —
+/// for a local engine, the endpoint it answers on. Empty for a hosted vendor, whose fleet is
+/// somebody else's and is bounded by a rate limit instead.
+/// <para>Measured 2026-09-03: three reviewers of one round on one Ollama, and two of them were
+/// cancelled at 590 s having produced nothing while the third answered in 30.6 s. The cap that
+/// prevents it cannot be per VENDOR — two vendor ids can name one card — so it is per endpoint.</para>
+/// </param>
 public sealed record ReviewerInvocation(
     string Provider,
     ReviewRole Role,
     ProcessRequest Request,
     string OutputFile = "",
-    IReviewerRuntime? Adapter = null);
+    IReviewerRuntime? Adapter = null,
+    string SharedResource = "");
 
 /// <summary>
 /// THE vendor adapter: everything one AI vendor needs to plug into the panel, in one interface —

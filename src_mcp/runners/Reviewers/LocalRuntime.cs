@@ -135,7 +135,11 @@ public sealed class LocalRuntime(string id, string baseUrl) : IReviewerRuntime
                 Timeout = settings.Timeout,
             },
             answerFile,
-            this);
+            this,
+            // The endpoint is the resource: one engine serves one reviewer at a time, however many
+            // vendors are pointed at it and however many rounds are in flight. Two engines on two
+            // ports are two resources and are not serialised against each other.
+            SharedResource: endpoint);
     }
 
     /// <summary>
