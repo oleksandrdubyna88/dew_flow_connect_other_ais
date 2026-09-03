@@ -7,7 +7,7 @@ over stdio and the extension speaks to it as a subprocess. Neither is a request 
 down — which the contracts rule says in as many words. What it does have is two artefacts that ship on
 their own clocks, to two different places, and every failure below is one of them arriving wrong.
 
-Target: the released **extension** version — `--target 0.28.0`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
+Target: the released **extension** version — `--target 0.29.0`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
 Last verified: 2026-09-03 · extension 0.27.0 / mcp 0.12.4 · both automated items PASS — `mcp-v0.12.4` carries all six RID assets, and the marketplace serves 0.27.0. Item 3 is owed on the machine the reviewer failures were measured on: two rounds that day reported 6 and 7 of 9 reviewers, and the local ones failed for a reason the panel could not show — three of them on one GPU, which 0.12.4 serialises. Item 4 is owed with it: the panel now asks the binary its version (`coai-mcp --version`, 0.12.3), so a stale one no longer reports as current.
 

@@ -1,12 +1,30 @@
 # PLAN — the gate can give ORDERS, and three switches decide which
 
-> Status: **plan only, nothing implemented yet, 2026-09-03.** Scope:
-> `src_mcp/src/Server/{PanelSettings,PanelService}.cs`, `src_mcp/core/…/Commands.cs` (new),
-> `src_mcp/src/Tools.cs`, `src_vs_code/src/{settingsShape,panelView,claudeSnippet,help*}.ts`, and the
-> tests for each.
+> Status: **IMPLEMENTED, 2026-09-03.**
 >
-> Related docs: [module_server.md](../research/module_server.md),
-> [module_extension.md](../research/module_extension.md).
+> **What the two rounds changed.** The plan round tightened the contract: the split command belongs to
+> the PLAN stage only (a code round has a diff and no plan, so a verdict computed there would be a
+> number invented from source — raised independently by two reviewers); Fable is named only when an
+> ENABLED provider is Fable; the autonomy command does not tell anybody to re-read epics that do not
+> exist; and the extraction grammar is written down with a stated fallback.
+>
+> **The code round found two defects that had already shipped into the branch**, and one was visible
+> to a reader: the script that added the switch paragraph to the help spliced it into the middle of
+> *"Ask a human"* in three languages. The other was the important one — a plan that did NOT pass still
+> carried the order to split it and start committing, because permission to build and the order to
+> build had come apart. Also: Fable was matched by substring; files were counted by base name, so
+> `src/a.cs` and `tests/a.cs` were one file against a threshold of fourteen; and the no-heading step
+> count summed every numbered list in the document.
+>
+> **What was refused, and why it is worth saying:** reconciling a checkbox with a settings write that
+> failed. True, and true of all twenty settings this panel has — it belongs to the mirror as a whole,
+> not to the three switches that happened to arrive last.
+>
+> Scope: `src_mcp/core/Commands/{GateCommands,PlanShape}.cs`,
+> `src_mcp/src/Server/{PanelSettings,PanelService,ServerJsonContext}.cs`,
+> `src_vs_code/src/{settingsShape,panelView,help,claudeSnippet,helpContent,helpRu,helpUk,helpDe,helpEs}.ts`.
+>
+> Related docs: [module_server.md](module_server.md), [module_extension.md](module_extension.md).
 
 ## The goal
 

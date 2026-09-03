@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.29.0 — 2026-09-03 (server 0.14.0)
+
+**The gate can now give orders.** It has always answered one question — are these findings gating,
+may you proceed — and left everything else to the assistant: how the work is broken up, when you are
+interrupted, which model does the expensive half. Those are your decisions, and the panel is where
+you are. Three switches in *The gate*, all off until you turn them on:
+
+- **Work autonomously.** A question that does not block is written down and asked at the END, all
+  together; one that does block is asked at once — but only after the assistant has gathered every
+  other blocking question it can foresee, so you are interrupted once instead of five times.
+- **Split the plan into epics and stories.** After a plan passes, the assistant is told to break it
+  into 2-4 epics and each into 2-4 logically complete stories, and to close every story properly:
+  review its diff through this gate, fix what it accepts, update the documentation and the tests,
+  commit — then start the next. A plan that did NOT pass is never told to go and build.
+- **Split with Fable.** When a Fable reviewer is configured here, the split itself goes to Fable at
+  its highest version — deciding what the epics and stories ARE is the judgement that shapes
+  everything after it — and so do the stories where being wrong is expensive: payments, money,
+  authentication, security, architecture, migrations. The ordinary ones go to Opus. Nothing is said
+  about Fable when no Fable vendor is configured.
+
+**Whether a plan needs splitting is measured, and the numbers come back with the verdict.** The gate
+counts the plan's length, its build steps, the files it names and the subsystems it touches, and says
+epics, stories or nothing — while saying out loud that this is a heuristic the assistant may argue
+with. The rule was fitted to the 23 plans in this product's own repository, and to the one case they
+can answer for: the plan that actually became six epics has no build order at all, so a rule that
+only counted steps would have missed it.
+
+**The commands reach your assistant because the CLAUDE.md snippet now tells it they exist** — that a
+reply may carry them, that they come from the person who owns the gate, and that they outrank its own
+habits. Copy the snippet again from the ⋯ menu; the panel already tells you when the copy in a
+repository is older than this one.
+
+**Every switch takes effect on the next call.** A box ticked one second before your assistant calls
+the gate governs that call — in both directions, and the tests say so rather than assuming it.
+
 ## 0.28.0 — 2026-09-03 (server 0.13.0)
 
 **A round is no longer a single line you cannot ask anything of, and one GPU is no longer shared by
