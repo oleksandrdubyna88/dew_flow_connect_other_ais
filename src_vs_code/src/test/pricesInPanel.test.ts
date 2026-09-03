@@ -29,7 +29,7 @@ function vendor(over: Partial<Vendor> = {}): Vendor {
 function html(v: Vendor, prices: Record<string, ModelPrice>): string {
   return panelHtml({
     settings: DEFAULTS, vendors: [v], codexModels: [], localEngines: {}, server: { kind: 'absent', version: '', remembered: false, updateOffered: false }, side: '',
-    latestServerVersion: '', questions: [], sessions: [], openSections: [], usage: [],
+    latestServerVersion: '', questions: [], sessions: [], openSections: [], openRounds: [], usage: [],
     usageWindow: 'week', cliStatus: {}, modelPrices: prices,
     snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   }, 'nonce');

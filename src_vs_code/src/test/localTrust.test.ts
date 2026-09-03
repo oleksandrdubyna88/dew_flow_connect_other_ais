@@ -30,7 +30,8 @@ function html(vendor: Vendor): string {
     settings: DEFAULTS, vendors: [vendor], codexModels: [], localEngines: { [vendor.id]: LOCAL },
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
     side: '', latestServerVersion: '', questions: [], sessions: [],
-    openSections: ['reviewers'], usage: [], usageWindow: 'week', cliStatus: {}, modelPrices: {},
+    openSections: ['reviewers'],
+    openRounds: [], usage: [], usageWindow: 'week', cliStatus: {}, modelPrices: {},
     snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   }, 'nonce');
 }

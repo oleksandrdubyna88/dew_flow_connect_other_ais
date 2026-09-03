@@ -9,10 +9,11 @@ import {
   liveRegions,
   OPEN_BY_DEFAULT,
   panelHtml,
+  roundKey,
   staticKey,
   VSCODE_COMMAND_FOR,
 } from './panelView';
-import { parseSession, SessionFile } from './rounds';
+import { isRunning, parseSession, SessionFile } from './rounds';
 import { parseUsage, UsageEntry, Window } from './usage';
 import {
   CliStatus,
@@ -78,6 +79,17 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   /** Which sections the person has open — kept HERE because the panel repaints on every
       change, and a section that snapped shut mid-edit would be worse than none. */
   private openSections: string[] = [...OPEN_BY_DEFAULT];
+  /**
+   * Which round cards are expanded, and which running rounds have already been opened once.
+   *
+   * <p>The person's own choice, kept HERE for the same reason the sections are — the rounds list is
+   * patched into the page every five seconds, and a disclosure holding its state only in the DOM
+   * would close under somebody mid-read. A round that starts running opens itself ONCE, recorded in
+   * the second set so that closing it is not undone by the next tick; when it finishes it stays as
+   * they left it, which is the moment its reviewers are worth reading.</p>
+   */
+  private openRounds: string[] = [];
+  private autoOpened = new Set<string>();
   /** Which window the spending chart shows. A view preference, so it lives here, not in config. */
   private usageWindow: Window = 'week';
   /** The newest published server version, and when GitHub last answered. */
@@ -117,7 +129,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     view.webview.options = { enableScripts: true };
     view.webview.onDidReceiveMessage(
       (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string; open?: boolean; role?: string; round?: number }) => {
-        if (m.type === 'section' && m.id !== undefined) {
+        if (m.type === 'round' && m.id !== undefined) {
+          this.openRounds = m.open === true
+            ? [...new Set([...this.openRounds, m.id])]
+            : this.openRounds.filter((r) => r !== m.id);
+        } else if (m.type === 'section' && m.id !== undefined) {
           this.openSections = m.open === true
             ? [...new Set([...this.openSections, m.id])]
             : this.openSections.filter((s) => s !== m.id);
@@ -139,6 +155,28 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     void this.render();
   }
 
+  /**
+   * The rounds to render expanded: the person's own, plus a running round the first time it is seen.
+   *
+   * <p>Once, and recorded — so closing a running round is not undone by the next five-second tick,
+   * and a round they left open stays open when it finishes. "Open because it is running" was the
+   * first design and it fails both halves: it fights the person while the round runs, and it
+   * snatches the reviewers away the moment it ends.</p>
+   */
+  private expanded(sessions: readonly SessionFile[]): readonly string[] {
+    const running = sessions
+      .flatMap((s) => s.rounds.map((r) => ({ branch: s.state.branch, ...r })))
+      .filter(isRunning)
+      .map(roundKey)
+      .filter((key) => !this.autoOpened.has(key));
+    for (const key of running) {
+      this.autoOpened.add(key);
+    }
+    this.openRounds = [...new Set([...this.openRounds, ...running])];
+
+    return this.openRounds;
+  }
+
   /** Re-read everything and repaint. Cheap: a few small files and one configuration read. */
   async render(): Promise<void> {
     if (this.view === undefined) {
@@ -151,6 +189,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // The published version is read FIRST because the server's status is stated against it — and
     // both belong to the side this extension host is running on, never to "the machine".
     const published = await this.publishedVersion();
+    const sessions = await this.readSessions();
     const state = {
       settings,
       vendors,
@@ -159,7 +198,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),
       questions: this.watcher.openQuestions,
       openSections: this.openSections,
-      sessions: await this.readSessions(),
+      openRounds: this.expanded(sessions),
+      sessions,
       usage: this.remembered(await this.readUsage()),
       usageWindow: this.usageWindow,
       latestServerVersion: published,

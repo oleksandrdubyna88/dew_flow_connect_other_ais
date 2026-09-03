@@ -488,3 +488,19 @@ once, unretried.
 clients each running a `coai-mcp`, or another program on the same card, are not serialised by it — for
 that, the family's `gpu-lease` rule is the mechanism, and it lives outside this product because a
 marketplace extension cannot depend on another repository's daemon.
+
+### Each reviewer's own duration is recorded (2026-09-03)
+
+`ReviewerState.Seconds`, filled in `LiveRound.Report` from `ReviewerProgress.Elapsed` — which the
+scheduler has always measured with a stopwatch around the run and which this boundary was throwing
+away. A round's own total cannot answer "which of the nine": measured the same day, a code round took
+11m 2s across nine reviewers, and the two that spent 590 s each were indistinguishable in that number
+from the seven that took under a minute.
+
+Written only when the elapsed time is greater than zero, so a later progress line — a "running"
+report, which carries none — cannot erase the number of a reviewer that has already finished. The
+field defaults to zero, because a session file written by an older server has no such field and must
+still read.
+
+The panel renders it per reviewer inside the round's disclosure
+([module_extension.md](module_extension.md)).

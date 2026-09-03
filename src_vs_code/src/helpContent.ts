@@ -233,7 +233,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       setup:
         'Nothing to set up. The server writes a round to disk the moment it starts and updates it as each reviewer moves, so the story survives a reload, a restarted extension, and a killed server.',
       usage:
-        'A running round lists its reviewers and what each is doing. **Show review rounds** in the ⋯ menu opens the same thing as a file you can keep open beside your work — it rewrites itself as rounds advance.',
+        'Every round opens. Click one and it shows the reviewers it ran: each vendor and role, what it did, how many findings it filed, how long IT took and what it read — which is the question a round total cannot answer, since a round is as slow as its slowest reviewer. A round in flight opens itself once so you can watch it, and stays as you leave it afterwards. **Show review rounds** in the ⋯ menu opens the same thing as a file you can keep open beside your work — it rewrites itself as rounds advance.',
       whatCanGoWrong:
         'A round abandoned by a crashed server reads as *interrupted* rather than running forever. Rounds written by an older server may show no usage and no subject — those numbers were not recorded then, and inventing them afterwards would be a guess.',
     },

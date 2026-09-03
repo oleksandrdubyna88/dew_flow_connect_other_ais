@@ -28,7 +28,8 @@ function html(vendors: readonly Vendor[]): string {
     localEngines: Object.fromEntries(vendors.filter((v) => v.runtime === 'local').map((v) => [v.id, ENGINE])),
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
     side: '', latestServerVersion: '', questions: [], sessions: [],
-    openSections: ['reviewers'], usage: [], usageWindow: 'week', cliStatus: {}, modelPrices: {},
+    openSections: ['reviewers'],
+    openRounds: [], usage: [], usageWindow: 'week', cliStatus: {}, modelPrices: {},
     snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   }, 'nonce');
 }

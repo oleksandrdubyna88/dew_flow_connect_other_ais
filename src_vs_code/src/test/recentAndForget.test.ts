@@ -74,6 +74,7 @@ function html(over: {
     questions: [],
     sessions: over.sessions ?? [],
     openSections: [],
+    openRounds: [],
     usage: over.usage ?? [],
     usageWindow: 'week',
     cliStatus: over.cliStatus ?? {},

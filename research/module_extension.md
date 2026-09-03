@@ -571,3 +571,33 @@ still be parsed as a separator. Run for real against a marker file on this machi
 literal — `cmd.exe` looked for a program with that whole name, failed, and wrote nothing. The
 proposed alternative (arguments passed separately alongside `shell: true`) would change nothing
 either: node joins command and arguments into one line in shell mode.
+
+### A round opens, and each reviewer says what it cost (2026-09-03)
+
+Two complaints with one shape: **the round was the only unit anything was reported in**. The card
+showed `11m 2s · 220k in / 9.4k out` for a code round of nine reviewers — and a round is as slow as
+its slowest one, so that number could not say which of the nine spent the eleven minutes. Worse, the
+reviewers were rendered **only while the round ran**: the view was richest about what you could still
+watch and emptiest about what you came back to understand.
+
+Now every round is a `<details>`. Closed, it is the line it always was. Open, it lists each reviewer:
+vendor and role, what it did, how many findings it filed, **how long it took**, and what it read.
+`ReviewerState.seconds` is the new half — the scheduler timed every reviewer already
+([module_server.md](module_server.md)) and the number was being dropped at the session boundary.
+
+**The open state lives in `PanelState`, not in the DOM**, and that is the whole design rather than a
+detail. This list is patched into the page every five seconds while a round runs, so a disclosure
+holding its state in the element would close under the person mid-read — raised as Blocking by this
+change's own gate. It works exactly as the sections do: the webview posts a `round` message on
+toggle, the provider keeps the set, and the next render carries `open`. The `toggle` listener is on
+`document`, in the CAPTURE phase, because `toggle` does not bubble and the elements it would
+otherwise be bound to are replaced by every patch.
+
+**A running round opens itself once**, recorded, so that closing it is not undone by the next tick —
+and a round the person left open **stays open when it finishes**, which is the moment its reviewers
+are most worth reading. "Open because it is running" was the first design and it failed both halves.
+
+A round from a server older than `seconds` shows its reviewers with no duration rather than `0s`:
+absent is unknown, and printing a zero would be a measurement nobody made. The list is also twice as
+tall (640px) — a sidebar is usually far taller than 320px, and five rounds filled it with room to
+spare.

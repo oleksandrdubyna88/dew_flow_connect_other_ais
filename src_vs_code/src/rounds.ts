@@ -1,4 +1,4 @@
-import { money } from './usage';
+import { money, shortDuration } from './usage';
 /**
  * Reading the server's own session files, so the rounds view shows what actually happened rather
  * than what the extension guessed. Pure apart from the read: the shapes and the rendering are
@@ -12,6 +12,17 @@ export interface ReviewerState {
   readonly status: string;
   readonly findings: number;
   readonly note: string;
+  /**
+   * How long THIS reviewer ran. Absent in files written by a server older than the field.
+   *
+   * <p>A round is as slow as its slowest reviewer, so the round's own "11m 2s" says nothing about
+   * which of nine cost the eleven minutes. The scheduler times each one anyway; this is that number
+   * arriving instead of being dropped at the session boundary.</p>
+   */
+  readonly seconds?: number;
+  /** What this reviewer read and wrote, when the server recorded it per reviewer. */
+  readonly tokensIn?: number;
+  readonly tokensOut?: number;
 }
 
 export interface RoundRecord {
@@ -105,14 +116,41 @@ export function stageName(stage: string): string {
 /** The reviewers of a running round, as "codex/Architecture running" lines. */
 export function reviewerLines(round: RoundRecord): readonly string[] {
   return (round.reviewerStates ?? []).map((s) => {
-    const detail =
-      s.status === 'done'
-        ? `${s.findings} finding${s.findings === 1 ? '' : 's'}`
-        : s.status === 'failed'
-          ? s.note
-          : '';
-    return `${s.provider}/${s.role} — ${s.status}${detail.length > 0 ? ` (${detail})` : ''}`;
+    const detail = [
+      s.status === 'done' ? `${s.findings} finding${s.findings === 1 ? '' : 's'}` : '',
+      s.status === 'failed' ? s.note : '',
+      // Each part is present only when the server recorded it. A round from an older server says
+      // nothing about time or tokens rather than saying zero — which would be a measurement.
+      reviewerTime(s),
+      reviewerTokens(s),
+    ].filter((part) => part.length > 0);
+
+    return `${s.provider}/${s.role} — ${s.status}${detail.length > 0 ? ` (${detail.join(', ')})` : ''}`;
   });
+}
+
+/**
+ * One reviewer's own duration, in the same words the spending view uses for a run.
+ *
+ * <p>`shortDuration` takes SECONDS — it reads "38 s", "9.8 min", "1.2 h" — which is the vocabulary
+ * a person already sees per vendor in *What each AI has used*. The round's own total is formatted
+ * differently (`11m 2s`) because it is a stopwatch over the whole fan-out; using one for the other
+ * would be a third spelling of time in one card.</p>
+ */
+function reviewerTime(state: ReviewerState): string {
+  const seconds = state.seconds ?? 0;
+
+  return seconds <= 0 ? '' : shortDuration(seconds);
+}
+
+/** What one reviewer read and wrote, when the server recorded it. */
+function reviewerTokens(state: ReviewerState): string {
+  const inTokens = state.tokensIn ?? 0;
+  const outTokens = state.tokensOut ?? 0;
+
+  return inTokens === 0 && outTokens === 0
+    ? ''
+    : `${thousands(inTokens)} in / ${thousands(outTokens)} out`;
 }
 
 /** One session as a markdown section — what the rounds view renders. */

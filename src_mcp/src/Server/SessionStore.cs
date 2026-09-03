@@ -5,7 +5,22 @@ using CoaiMcp.Core.Rounds;
 namespace CoaiMcp.Server;
 
 /// <summary>Where one reviewer has got to. The panel shows these while the round is still open.</summary>
-public sealed record ReviewerState(string Provider, string Role, string Status, int Findings = 0, string Note = "")
+/// <param name="Seconds">
+/// How long this reviewer actually ran, once it has finished — zero while it is queued or running.
+/// </param>
+/// <remarks>
+/// The round already recorded its own elapsed time, and a round is as slow as its slowest reviewer:
+/// "11m 2s" for nine of them says nothing about which one cost the eleven minutes. The scheduler
+/// measures each reviewer anyway (<c>ReviewerProgress.Elapsed</c>) and was throwing the number away
+/// at this boundary.
+/// </remarks>
+public sealed record ReviewerState(
+    string Provider,
+    string Role,
+    string Status,
+    int Findings = 0,
+    string Note = "",
+    double Seconds = 0)
 {
     public const string Queued = "queued";
     public const string Running = "running";

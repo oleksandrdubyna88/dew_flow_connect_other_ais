@@ -67,6 +67,52 @@ public sealed class LiveRoundTests
         done.Findings.Should().Be(3, "the count is what makes a finished reviewer worth reading");
     }
 
+    /// <summary>
+    /// Each reviewer's own duration, because the round's total cannot answer "which of the nine".
+    /// </summary>
+    /// <remarks>
+    /// Measured 2026-09-03: a code round took 11m 2s across nine reviewers, and the two that spent
+    /// 590 s each were indistinguishable in that number from the seven that took under a minute.
+    /// The scheduler times every reviewer already — this is the number arriving instead of being
+    /// dropped at the session boundary.
+    /// </remarks>
+    [Fact]
+    public void AFinishedReviewer_KeepsItsOwnDuration()
+    {
+        var store = new SessionStore(_dir);
+        var session = Session();
+        store.Save(session);
+        var live = new LiveRound(store, session, [Work("codex", ReviewRole.Architecture)]);
+
+        live.Report(new ReviewerProgress("codex", ReviewRole.Architecture, "running"));
+        StateOf(store, "codex").Seconds.Should().Be(0, "a running reviewer has no duration yet");
+
+        live.Report(new ReviewerProgress(
+            "codex",
+            ReviewRole.Architecture,
+            "done",
+            new ReviewerOutcome.Ok(Review(3), Repaired: false, new Usage(1000, 100, 0.02)),
+            TimeSpan.FromSeconds(38.7)));
+
+        StateOf(store, "codex").Seconds.Should().Be(38.7);
+    }
+
+    [Fact]
+    public void ALaterReportWithoutADuration_DoesNotEraseTheOneRecorded()
+    {
+        // A "running" report carries no elapsed time, and taking it would zero the number of a
+        // reviewer that had already finished — a retry, a repaint, or any later progress line.
+        var store = new SessionStore(_dir);
+        var session = Session();
+        store.Save(session);
+        var live = new LiveRound(store, session, [Work("gemini", ReviewRole.Architecture)]);
+
+        live.Report(new ReviewerProgress("gemini", ReviewRole.Architecture, "done", null, TimeSpan.FromSeconds(12.5)));
+        live.Report(new ReviewerProgress("gemini", ReviewRole.Architecture, "running"));
+
+        StateOf(store, "gemini").Seconds.Should().Be(12.5);
+    }
+
     [Fact]
     public void AFailedReviewer_SaysWhy_WhileTheRoundIsStillOpen()
     {

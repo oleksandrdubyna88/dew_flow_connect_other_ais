@@ -44,6 +44,7 @@ function html(vendors: readonly Vendor[], engine: LocalEngine): string {
     questions: [],
     sessions: [],
     openSections: ['reviewers'],
+    openRounds: [],
     usage: [],
     usageWindow: 'week',
     cliStatus: {},

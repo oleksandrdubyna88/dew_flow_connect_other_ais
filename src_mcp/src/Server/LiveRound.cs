@@ -51,6 +51,11 @@ public sealed class LiveRound
                 Note = progress.Outcome is { } outcome and not ReviewerOutcome.Ok
                     ? ReviewerSummaryFactory.Describe(outcome)
                     : previous.Note,
+                // Only a FINISHED reviewer has a duration; a "running" report carries zero, and
+                // taking it would erase the number of one that had already finished.
+                Seconds = progress.Elapsed > TimeSpan.Zero
+                    ? Math.Round(progress.Elapsed.TotalSeconds, 1)
+                    : previous.Seconds,
             };
             Persist();
         }

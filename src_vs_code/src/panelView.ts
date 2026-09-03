@@ -47,6 +47,15 @@ export interface PanelState {
   readonly sessions: readonly SessionFile[];
   /** Which collapsible sections are open. Empty falls back to {@link OPEN_BY_DEFAULT}. */
   readonly openSections: readonly string[];
+  /**
+   * Which ROUNDS are expanded, by {@link roundKey}.
+   *
+   * <p>Carried in the state for the same reason the sections are: this list is patched into the
+   * page every five seconds while a round runs, and a `<details>` whose open state lived only in
+   * the DOM would snap shut under the person mid-read. Raised as Blocking by this change's own
+   * gate, which is the failure it would have shipped with.</p>
+   */
+  readonly openRounds: readonly string[];
   /** Every reviewer run the server has recorded, newest last. */
   readonly usage: readonly UsageEntry[];
   /** Which window the spending chart is showing. */
@@ -111,7 +120,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     section('keys', 'Vendor keys', open, keysBody(state)),
     section('server', 'Server', open, serverBody(state)),
     section('usage', 'What each AI has used', open, usageBody(state)),
-    section('rounds', 'Recent rounds', open, `<div id="live-rounds">${roundsBody(state.sessions, nowMs)}</div>`),
+    section('rounds', 'Recent rounds', open, `<div id="live-rounds">${roundsBody(state.sessions, state.openRounds, nowMs)}</div>`),
   ].join('\n');
 
   return `<!DOCTYPE html>
@@ -146,6 +155,16 @@ ${body}
     el.addEventListener('toggle', () =>
       vscode.postMessage({ type: 'section', id: el.dataset.section, open: el.open }));
   }
+  // A round's disclosure, in the CAPTURE phase and on the document: the toggle event does not
+  // bubble, and the rounds list is REPLACED wholesale by the live patch every five seconds — a
+  // listener bound to the elements themselves would be gone with the elements that had it.
+  // (No backticks in this block: it lives inside a template literal, and one would end the page.)
+  document.addEventListener('toggle', (event) => {
+    const el = event.target;
+    if (el instanceof HTMLDetailsElement && el.dataset.round !== undefined) {
+      vscode.postMessage({ type: 'round', id: el.dataset.round, open: el.open });
+    }
+  }, true);
   for (const el of document.querySelectorAll('[data-command]')) {
     el.addEventListener('click', () =>
       vscode.postMessage({ type: 'command', command: el.dataset.command, id: el.dataset.id }));
@@ -712,7 +731,11 @@ const RECENT_HOURS = 72;
  * <p>A round still RUNNING is always shown. It has no completion time to compare, and it is the one
  * row somebody is actually waiting on.</p>
  */
-function roundsBody(sessions: readonly SessionFile[], nowMs: number = Date.now()): string {
+function roundsBody(
+  sessions: readonly SessionFile[],
+  openRounds: readonly string[],
+  nowMs: number = Date.now(),
+): string {
   const all = sessions.flatMap((s) => s.rounds.map((r) => ({ branch: s.state.branch, ...r })));
   const since = new Date(nowMs - RECENT_HOURS * 60 * 60 * 1000).toISOString();
   const rounds = all
@@ -727,20 +750,45 @@ function roundsBody(sessions: readonly SessionFile[], nowMs: number = Date.now()
       : `<div class="empty">Nothing in the last ${RECENT_HOURS} hours. Older rounds are in <b>Show review rounds</b>.</div>`;
   }
 
-  return rounds.map((r) => roundCard(r, nowMs)).join('\n');
+  return rounds.map((r) => roundCard(r, openRounds, nowMs)).join('\n');
 }
 
-function roundCard(round: RoundRecord & { branch: string }, nowMs: number): string {
+/**
+ * A round's identity across repaints — branch, stage, number and the instant it started.
+ *
+ * <p>Four fields rather than the round number, because this has to survive the five-second patch
+ * AND tell two rounds of the same number on two branches apart. The start time is what makes a
+ * re-run a new card instead of one inheriting the previous open state.</p>
+ */
+export function roundKey(round: RoundRecord & { branch: string }): string {
+  return `${round.branch}|${round.stage}|${round.number}|${round.startedUtc}`;
+}
+
+/**
+ * One round: closed to a line, open to its reviewers.
+ *
+ * <p><b>A `<details>` whose open set lives in the state</b>, exactly as the sections do — not
+ * scripted state, and not "open because it is running". This list is patched into the page every
+ * five seconds, so a disclosure keeping its state only in the DOM would snap shut under the person
+ * mid-read; and a card opened only because the round was running would snatch the reviewers away at
+ * the moment it finished, which is when somebody most wants to read them. Both were raised against
+ * the plan for this change, one of them as Blocking.</p>
+ */
+function roundCard(
+  round: RoundRecord & { branch: string },
+  openRounds: readonly string[],
+  nowMs: number,
+): string {
   const verdict = isRunning(round)
     ? '<span class="badge running">running</span>'
     : round.status === 'interrupted'
       ? '<span class="badge stopped">interrupted</span>'
       : `<b>${escapeHtml(round.verdict)}</b>`;
-  const reviewers = isRunning(round)
-    ? reviewerLines(round)
-        .map((line) => `<div class="reviewer">${escapeHtml(line)}</div>`)
-        .join('\n')
-    : '';
+  // Always rendered, for a finished round too. What a round DID is the question people come back
+  // to, and the card used to throw it away the moment the round ended.
+  const reviewers = reviewerLines(round)
+    .map((line) => `<div class="reviewer">${escapeHtml(line)}</div>`)
+    .join('\n');
   const took = elapsed(round, nowMs);
   // WHAT was reviewed leads the line; the branch and the round number follow it. A list of rounds
   // identified only by stage and number is a column of numbers — a person scanning it is looking
@@ -748,9 +796,13 @@ function roundCard(round: RoundRecord & { branch: string }, nowMs: number): stri
   const subject = (round.subject ?? '').length > 0
     ? `<div class="subject">${escapeHtml(round.subject!)}</div>`
     : '';
-  return `${subject}<div class="verdict">${escapeHtml(stageName(round.stage))} ${round.number} · ${escapeHtml(round.branch)} · ${verdict} · ${round.gatingCount} gating</div>
-<div class="usage">${took.length > 0 ? `${escapeHtml(took)} · ` : ''}${escapeHtml(costPhrase(round))}</div>
-${reviewers}`;
+  const key = roundKey(round);
+
+  return `<details class="round" data-round="${escapeHtml(key)}"${openRounds.includes(key) ? ' open' : ''}>
+<summary>${subject}<div class="verdict">${escapeHtml(stageName(round.stage))} ${round.number} · ${escapeHtml(round.branch)} · ${verdict} · ${round.gatingCount} gating</div>
+<div class="usage">${took.length > 0 ? `${escapeHtml(took)} · ` : ''}${escapeHtml(costPhrase(round))}</div></summary>
+${reviewers.length > 0 ? reviewers : '<div class="reviewer">This round recorded no reviewer detail.</div>'}
+</details>`;
 }
 
 /**
@@ -760,7 +812,7 @@ ${reviewers}`;
  */
 export function liveRegions(state: PanelState, nowMs: number = Date.now()): { questions: string; rounds: string; usage: string } {
   return {
-    usage: usageRows(state), questions: questionsSection(state.questions), rounds: roundsBody(state.sessions, nowMs) };
+    usage: usageRows(state), questions: questionsSection(state.questions), rounds: roundsBody(state.sessions, state.openRounds, nowMs) };
 }
 
 /**
@@ -939,7 +991,12 @@ const CSS = `
   .usage { font-size: 11px; opacity: .7; margin: 0 0 4px; }
   /* Three days of rounds is a list of unknown length inside a sidebar section, so it scrolls in
      place rather than pushing every section below it off the bottom of the panel. */
-  #live-rounds { max-height: 320px; overflow-y: auto; }
+  /* Twice what it was. A sidebar is usually far taller than 320px, so five rounds filled the list
+     and everything else sat behind a scrollbar in a panel with room to spare. */
+  #live-rounds { max-height: 640px; overflow-y: auto; }
+  details.round { margin: 0 0 4px; }
+  details.round > summary { list-style: none; cursor: pointer; }
+  details.round > summary::-webkit-details-marker { display: none; }
   .reviewer { font-size: 11px; opacity: .85; margin: 1px 0 1px 8px; }
   .badge { padding: 0 5px; border-radius: 8px; font-size: 10px; font-weight: 600; }
   .badge.running { background: var(--vscode-charts-green); color: var(--vscode-editor-background); }

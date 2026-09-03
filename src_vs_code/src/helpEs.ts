@@ -85,7 +85,7 @@ export const ES: Readonly<Record<string, HelpBody>> = {
     whatItIs: "Las últimas rondas, las recientes arriba, y la que está en curso siempre primera. En la fila: qué se revisó, la etapa, el veredicto, el número de hallazgos bloqueantes, el tiempo y el gasto.",
     why: "Una revisión tarda minutos. Sin esto, el panel no distinguiría «seis revisores trabajando» de «aquí no se ha ejecutado nunca nada», y habría que bajar al log.",
     setup: "Nada que configurar. El servidor escribe la ronda en disco en el momento de arrancarla y la actualiza a medida que avanzan los revisores, así que la imagen sobrevive a recargar la ventana, reiniciar la extensión y matar el servidor.",
-    usage: "La ronda en curso muestra sus revisores y qué hace cada uno. **Show review rounds** en el menú ⋯ abre lo mismo como fichero, que puede dejar abierto junto al trabajo: se reescribe según avanzan las rondas.",
+    usage: "Cualquier ronda se despliega. Pulse una y verá sus revisores: proveedor y rol, qué hizo, cuántos hallazgos presentó, cuánto tardó ÉL y cuánto leyó — la pregunta que el total de la ronda no puede responder, porque una ronda es tan lenta como su revisor más lento. Una ronda en curso se despliega sola una vez para poder seguirla, y después queda como usted la deje. **Show review rounds** en el menú ⋯ abre lo mismo como fichero, que puede dejar abierto junto al trabajo: se reescribe según avanzan las rondas.",
     whatCanGoWrong: "Una ronda abandonada por un servidor caído se lee como *interrupted*, no como «lleva ejecutándose para siempre». Las rondas escritas por un servidor antiguo pueden no tener gasto ni tema: entonces no se guardaban, y rellenarlo a posteriori sería inventarlo.",
   },
   "what-each-ai-has-used": {
