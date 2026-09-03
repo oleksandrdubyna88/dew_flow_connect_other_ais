@@ -650,7 +650,15 @@ function spend(row: { costUsd: number | null; estimatedUsd: number | null }): st
  * price — so the two sections can never disagree about what a vendor costs.</p>
  */
 function ratesOf(state: PanelState): RateLookup {
-  return (provider) => priceOf(provider, state.vendors, (modelId) => state.modelPrices[modelId]);
+  // Indexed ONCE per render. The vendor list does not change while a panel is being painted, and
+  // `priceOf` scans it — which the round cards then ask for per reviewer, per round.
+  const found = new Map<string, { readonly in: number; readonly out: number } | undefined>();
+  return (provider) => {
+    if (!found.has(provider)) {
+      found.set(provider, priceOf(provider, state.vendors, (modelId) => state.modelPrices[modelId]));
+    }
+    return found.get(provider);
+  };
 }
 
 function usageRows(state: PanelState): string {

@@ -92,7 +92,10 @@ export function costPhrase(round: RoundRecord, rate: RateLookup = () => undefine
   // Said out loud when some of the round's tokens could not be priced at all. Without it, a round
   // of a priced vendor and an unpriced one shows a figure that reads as the WHOLE round's cost and
   // is quietly short by everything the second one burned. (Review finding, accepted.)
-  const said = spent === undefined ? undefined : `${spent}${partly(states, rate, estimate)}`;
+  // Independent of whether an estimate EXISTS. A round of one billed reviewer and one unpriced
+  // one has no estimate at all, and showing the billed figure alone would state a total that is
+  // short by everything the other burned. (Two reviewers, one finding.)
+  const said = spent === undefined ? undefined : `${spent}${partly(states, rate)}`;
   if (inTokens === 0 && outTokens === 0) {
     return said ?? 'no usage reported';
   }
@@ -107,10 +110,7 @@ export function costPhrase(round: RoundRecord, rate: RateLookup = () => undefine
  * behind it, and a repaired reviewer whose launches disagree about whether they were billed. Both
  * mean the same thing to a reader — this is not all of it — so they say the same thing.</p>
  */
-function partly(states: readonly ReviewerState[], rate: RateLookup, estimate: number | null): string {
-  if (estimate === null) {
-    return '';
-  }
+function partly(states: readonly ReviewerState[], rate: RateLookup): string {
   const missed = states.some((state) => unpriced(state, rate) || state.partlyBilled === true);
   return missed ? ' + unpriced' : '';
 }
@@ -155,6 +155,12 @@ function estimateOf(states: readonly ReviewerState[], rate: RateLookup): number 
  */
 export type RateLookup = (provider: string) => { readonly in: number; readonly out: number } | undefined;
 
+
+/** Append in place. The accumulator is local to one render and is never shared. */
+function pushed(into: ReviewerState[], more: readonly ReviewerState[] | undefined): ReviewerState[] {
+  into.push(...(more ?? []));
+  return into;
+}
 
 function thousands(count: number): string {
   return count >= 1000 ? `${(count / 1000).toFixed(count >= 10000 ? 0 : 1)}k` : String(count);
@@ -344,7 +350,9 @@ export function renderRounds(
       tokensIn: sum.tokensIn + (r.tokensIn ?? 0),
       tokensOut: sum.tokensOut + (r.tokensOut ?? 0),
       costUsd: r.costUsd == null ? sum.costUsd : (sum.costUsd ?? 0) + r.costUsd,
-      reviewerStates: [...sum.reviewerStates, ...(r.reviewerStates ?? [])],
+      // Pushed rather than spread: `[...sum, ...next]` inside a reducer copies the whole history
+      // on every round, which is quadratic in a file that only ever grows.
+      reviewerStates: pushed(sum.reviewerStates, r.reviewerStates),
     }),
     { tokensIn: 0, tokensOut: 0, costUsd: null as number | null, reviewerStates: [] as ReviewerState[] },
   );

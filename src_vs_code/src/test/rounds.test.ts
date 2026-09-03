@@ -426,3 +426,24 @@ test('a round where everything could be priced says nothing extra', () => {
 
   assert.ok(!view.includes('unpriced'), 'the marker is for the case that needs it, not decoration');
 });
+
+test('a billed reviewer beside an unpriced one is not shown as the round total', () => {
+  // The hole in the first fix, found by two reviewers: the marker was gated on there BEING an
+  // estimate, and this round has none — the billed reviewer is excluded from estimating and the
+  // other has no rate. The billed figure alone would read as the whole round.
+  const view = costPhrase(
+    round({
+      tokensIn: 2_000_000,
+      tokensOut: 200_000,
+      costUsd: 0.5,
+      reviewerStates: [
+        reviewer({ provider: 'claude', tokensIn: 1_000_000, tokensOut: 100_000, costUsd: 0.5 }),
+        reviewer({ provider: 'local', tokensIn: 1_000_000, tokensOut: 100_000 }),
+      ],
+    }),
+    rate,
+  );
+
+  assert.ok(view.includes('$0.50'), 'what was billed is stated');
+  assert.ok(view.includes('+ unpriced'), 'and it is not stated as the whole of it');
+});

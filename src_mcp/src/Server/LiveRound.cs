@@ -112,11 +112,6 @@ public sealed class LiveRound
     }
 
     /// <summary>
-    /// What one reviewer's run consumed. Failures that still burned tokens count: an unparseable
-    /// answer is a completed run whose usage the vendor reported, and counting only <c>Ok</c> made
-    /// a round with two fallen reviewers report roughly half of what it actually cost.
-    /// </summary>
-    /// <summary>
     /// Whether this reviewer's launches are MIXED — one billed, another reporting tokens and no
     /// money.
     /// </summary>
@@ -131,6 +126,11 @@ public sealed class LiveRound
         launches.Any(one => one.CostUsd is not null)
         && launches.Any(one => one.CostUsd is null && one.TokensIn + one.TokensOut > 0);
 
+    /// <summary>
+    /// What one reviewer's run consumed. Failures that still burned tokens count: an unparseable
+    /// answer is a completed run whose usage the vendor reported, and counting only <c>Ok</c> made
+    /// a round with two fallen reviewers report roughly half of what it actually cost.
+    /// </summary>
     private static Core.Findings.Usage UsageOf(ReviewerOutcome outcome) => outcome switch
     {
         ReviewerOutcome.Ok ok => ok.Usage,
