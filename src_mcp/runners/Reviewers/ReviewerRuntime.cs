@@ -33,6 +33,19 @@ public sealed record ReviewerSettings(string Provider)
     public string ApiKey { get; init; } = string.Empty;
 
     public TimeSpan Timeout { get; init; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// For a local engine only: the most tokens one answer may be.
+    /// </summary>
+    /// <remarks>
+    /// Measured 2026-09-03, and it is why this exists at all. The request carried no ceiling, so a
+    /// reasoning model asked for one finding kept generating: the engine answered a capped
+    /// twenty-token version of the same question in 8.5 s and did not finish the uncapped one in
+    /// 90 s — with the schema and without it, so the schema was not the cause. Five reviewers of one
+    /// round then spent their whole deadline each, and the panel reported an engine that was up and
+    /// answering as "slower than the deadline", which was true and useless.
+    /// </remarks>
+    public int MaxTokens { get; init; } = 8192;
 }
 
 /// <summary>One reviewer launch, fully described: the process, and where its answer lands.</summary>

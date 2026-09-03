@@ -122,6 +122,9 @@ internal static class Program
         var schemaFile = flags.GetValueOrDefault("--schema-file", string.Empty);
         var outFile = flags.GetValueOrDefault("--out", string.Empty);
         var reasoningEffort = flags.GetValueOrDefault("--reasoning-effort", string.Empty);
+        var maxTokens = int.TryParse(flags.GetValueOrDefault("--max-tokens", ""), out var cap) && cap > 0
+            ? cap
+            : 8192;
 
         if (promptFile.Length == 0 || outFile.Length == 0)
         {
@@ -162,7 +165,7 @@ internal static class Program
             string body;
             try
             {
-                body = Runners.Reviewers.LocalAsk.RequestBody(model, prompt, schema, seed, reasoningEffort);
+                body = Runners.Reviewers.LocalAsk.RequestBody(model, prompt, schema, seed, reasoningEffort, maxTokens);
             }
             catch (System.Text.Json.JsonException ex)
             {
@@ -200,21 +203,32 @@ internal static class Program
             }
 
             // What is LEFT of the deadline, never the whole of it again: the wait was part of it.
+            // And when nothing is left, the question is not asked at all — a five-second floor here
+            // would run the reviewer PAST the deadline its executor is enforcing, which is the one
+            // way this could report work nobody was waiting for any more. (codex, code round.)
             var remaining = untilUtc - DateTime.UtcNow;
-            var thinking = System.Diagnostics.Stopwatch.StartNew();
-            using var http = new HttpClient
+            if (remaining <= TimeSpan.Zero)
             {
-                Timeout = remaining > TimeSpan.FromSeconds(5) ? remaining : TimeSpan.FromSeconds(5),
-            };
+                Note(Runners.Reviewers.LocalAsk.QueuedOutMessage(endpoint, deadline));
+
+                return 69; // EX_UNAVAILABLE
+            }
+
+            var thinking = System.Diagnostics.Stopwatch.StartNew();
+            using var http = new HttpClient { Timeout = remaining };
             using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
             using var response = await http.PostAsync($"{endpoint.TrimEnd('/')}/chat/completions", content);
-            lease.Record(engineKey, model, thinking.Elapsed);
             var text = await response.Content.ReadAsStringAsync();
             if (!response.IsSuccessStatusCode)
             {
                 Note($"the local engine answered {(int)response.StatusCode}: {Trim(text)}");
                 return 70;
             }
+
+            // Recorded only for a run that WORKED. An endpoint answering 404 in three milliseconds is
+            // not a three-millisecond run, and averaging it in would tell the next person queued that
+            // their wait is nearly over. (gemini, code round.)
+            lease.Record(engineKey, model, thinking.Elapsed);
 
             var (answer, usage) = Runners.Reviewers.LocalAsk.ReadResponse(text);
             if (answer is null)

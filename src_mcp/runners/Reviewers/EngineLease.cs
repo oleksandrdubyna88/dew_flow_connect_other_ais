@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace CoaiMcp.Runners.Reviewers;
 
@@ -28,16 +30,15 @@ namespace CoaiMcp.Runners.Reviewers;
 /// </remarks>
 public sealed class EngineLease : IDisposable
 {
-    private readonly FileStream _held;
-    private readonly FileStream? _waiter;
-    private readonly string _waiterPath;
+    /// <summary>How many samples the history keeps per engine before it starts dropping the oldest.</summary>
+    private const int HistoryCap = 200;
 
-    private EngineLease(FileStream held, FileStream? waiter, string waiterPath)
-    {
-        _held = held;
-        _waiter = waiter;
-        _waiterPath = waiterPath;
-    }
+    /// <summary>How many of those an estimate averages.</summary>
+    private const int SampleWindow = 20;
+
+    private readonly FileStream _held;
+
+    private EngineLease(FileStream held) => _held = held;
 
     /// <summary>How long this lease waited before it got the card.</summary>
     public TimeSpan Waited { get; private init; }
@@ -53,9 +54,13 @@ public sealed class EngineLease : IDisposable
     /// </summary>
     /// <returns>The lease, or <c>null</c> when the deadline passed before the card was free.</returns>
     /// <remarks>
-    /// The wait is bounded by the SAME deadline the reviewer has, because a wait that silently ate a
-    /// reviewer's whole budget and then reported the engine as slow would be a lie about which part
-    /// was slow. The caller is told what it waited for, and what is left.
+    /// <para>The wait is bounded by the SAME deadline the reviewer has, because a wait that silently
+    /// ate a reviewer's whole budget and then reported the engine as slow would be a lie about which
+    /// part was slow. The caller is told what it waited for, and what is left.</para>
+    /// <para>The waiter file is cleaned up on EVERY exit — acquired, timed out, cancelled or thrown.
+    /// Five reviewers of this change's code round found the same leak on the timeout path, one of
+    /// them Blocking: an orphaned wait file is counted as a live waiter for ever, so the queue a
+    /// person is shown grows by one every time somebody's deadline expires.</para>
     /// </remarks>
     public static async Task<EngineLease?> AcquireAsync(
         string engineKey,
@@ -77,12 +82,7 @@ public sealed class EngineLease : IDisposable
                 var held = TryOpen(LockPath(engineKey));
                 if (held is not null)
                 {
-                    // Stop being a waiter the moment you are the holder, or you are counted twice:
-                    // once by the lock you hold and once by the queue you have left.
-                    waiter?.Dispose();
-                    Forget(waiterPath);
-
-                    return new EngineLease(held, null, waiterPath) { Waited = DateTime.UtcNow - started };
+                    return new EngineLease(held) { Waited = DateTime.UtcNow - started };
                 }
 
                 var waited = DateTime.UtcNow - started;
@@ -93,30 +93,34 @@ public sealed class EngineLease : IDisposable
                 if (onWaiting is not null && waited - announced >= TimeSpan.FromSeconds(30))
                 {
                     announced = waited;
-                    onWaiting(waited, Ahead(engineKey));
+                    // Ahead of THIS caller: its own wait file is not somebody it is waiting for.
+                    onWaiting(waited, Ahead(engineKey, waiterPath));
                 }
 
                 // Jittered, so two waiters released together do not retry in lockstep for ever.
                 await Task.Delay(TimeSpan.FromMilliseconds(200 + Random.Shared.Next(200)), ct);
             }
         }
-        catch
+        finally
         {
             waiter?.Dispose();
             Forget(waiterPath);
-            throw;
         }
     }
 
     /// <summary>
     /// How many callers are on this engine right now — the holder, plus everyone queued behind it.
     /// </summary>
+    /// <param name="exceptWaiter">
+    /// A wait file to leave out: the caller's own. Counting yourself as somebody you are waiting for
+    /// says "2 ahead" when one reviewer is ahead, and multiplies the estimate by one whole run.
+    /// </param>
     /// <remarks>
     /// Counted by trying to OPEN each file: a live waiter holds its own, and a waiter that was killed
-    /// leaves one nobody holds, which is deleted here rather than counted. That is the same
-    /// mechanism as the lease itself, so there is one liveness rule in this class and not two.
+    /// leaves one nobody holds, which is deleted here rather than counted. That is the same mechanism
+    /// as the lease itself, so there is one liveness rule in this class and not two.
     /// </remarks>
-    public static int Ahead(string engineKey)
+    public static int Ahead(string engineKey, string exceptWaiter = "")
     {
         var count = Busy(LockPath(engineKey)) ? 1 : 0;
         var dir = WaiterDirectory(engineKey);
@@ -126,6 +130,10 @@ public sealed class EngineLease : IDisposable
         }
         foreach (var file in System.IO.Directory.EnumerateFiles(dir, "*.wait"))
         {
+            if (string.Equals(file, exceptWaiter, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
             if (Busy(file))
             {
                 count += 1;
@@ -157,9 +165,9 @@ public sealed class EngineLease : IDisposable
     }
 
     /// <summary>What a person waiting is told: how many are ahead, and how long that usually takes.</summary>
-    public static string WaitNote(string engineKey, string model)
+    public static string WaitNote(string engineKey, string model, string exceptWaiter = "")
     {
-        var ahead = Ahead(engineKey);
+        var ahead = Ahead(engineKey, exceptWaiter);
         if (ahead == 0)
         {
             return string.Empty;
@@ -169,35 +177,41 @@ public sealed class EngineLease : IDisposable
 
         return typical is null
             ? queue
-            : $"{queue}, about {Minutes(TimeSpan.FromSeconds(typical.Value.TotalSeconds * ahead))}";
+            : $"{queue}, about {Rough(TimeSpan.FromSeconds(typical.Value.TotalSeconds * ahead))}";
     }
 
     /// <summary>Record what this run took, for the estimate the next one is given.</summary>
     /// <remarks>
-    /// Written while the lease is still HELD, so two processes cannot interleave lines in it — the
-    /// same exclusion that protects the engine protects its history, and nothing else has to.
+    /// <para>Written while the lease is still HELD, so two processes cannot interleave lines in it —
+    /// the same exclusion that protects the engine protects its history, and nothing else has to.</para>
+    /// <para>Called only for a run that SUCCEEDED. An endpoint that answers 404 in three milliseconds
+    /// is not a three-millisecond run, and averaging it in would tell the next person their wait is
+    /// nearly over. Raised in this change's code round.</para>
     /// </remarks>
     public void Record(string engineKey, string model, TimeSpan took)
     {
         try
         {
-            var line = string.Create(
-                CultureInfo.InvariantCulture,
-                $"{model.Replace('\t', ' ')}\t{took.TotalSeconds:F1}\n");
-            File.AppendAllText(HistoryPath(engineKey), line);
+            var clean = model.Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' ');
+            var line = string.Create(CultureInfo.InvariantCulture, $"{clean}\t{took.TotalSeconds:F1}");
+            var path = HistoryPath(engineKey);
+            var kept = File.Exists(path)
+                ? File.ReadAllLines(path).TakeLast(HistoryCap - 1).Append(line)
+                : [line];
+            // Rewritten rather than appended for ever: the file is read by every queued reviewer,
+            // and an unbounded one turns an estimate into a scan of a year of history.
+            File.WriteAllLines(path, kept);
         }
         catch (IOException)
         {
             // An estimate nobody can write is not a reason to fail a review.
         }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
-    public void Dispose()
-    {
-        _held.Dispose();
-        _waiter?.Dispose();
-        Forget(_waiterPath);
-    }
+    public void Dispose() => _held.Dispose();
 
     private static IReadOnlyList<double> History(string engineKey, string model)
     {
@@ -208,7 +222,7 @@ public sealed class EngineLease : IDisposable
                 .Where(parts => parts.Length == 2 && string.Equals(parts[0], model, StringComparison.OrdinalIgnoreCase))
                 .Select(parts => double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var s) ? s : -1)
                 .Where(s => s > 0)
-                .TakeLast(20)
+                .TakeLast(SampleWindow)
                 .ToList();
         }
         catch (IOException)
@@ -261,11 +275,22 @@ public sealed class EngineLease : IDisposable
         }
     }
 
+    /// <summary>
+    /// A file name for one engine: readable, and unique.
+    /// </summary>
+    /// <remarks>
+    /// The readable half alone was not enough — folding every non-alphanumeric character to a hyphen
+    /// maps <c>http://host/a</c> and <c>http://host-a</c> onto one file, so two different engines
+    /// would have shared a lock and a history. Found in this change's code round. The hash of the
+    /// exact key is what makes it injective; the prefix is what makes the directory readable when
+    /// somebody looks.
+    /// </remarks>
     private static string Slug(string engineKey)
     {
-        var chars = engineKey.Select(c => char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-');
+        var readable = new string(engineKey.Take(48).Select(c => char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-').ToArray());
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(engineKey)))[..12].ToLowerInvariant();
 
-        return new string(chars.ToArray());
+        return $"{readable}-{hash}";
     }
 
     private static string LockPath(string engineKey) =>
@@ -277,7 +302,7 @@ public sealed class EngineLease : IDisposable
     private static string WaiterDirectory(string engineKey) =>
         Path.Combine(Directory, $"{Slug(engineKey)}.waiting");
 
-    private static string Minutes(TimeSpan span) =>
+    private static string Rough(TimeSpan span) =>
         span.TotalSeconds < 90
             ? $"{span.TotalSeconds:F0}s"
             : $"{span.TotalMinutes:F0} min";

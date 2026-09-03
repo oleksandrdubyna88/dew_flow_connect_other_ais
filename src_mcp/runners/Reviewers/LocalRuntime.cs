@@ -144,6 +144,8 @@ public sealed class LocalRuntime(string id, string baseUrl) : IReviewerRuntime
                     // exits with a reason, while being killed leaves the round guessing.
                     "--timeout-seconds",
                     LocalAsk.ShimDeadlineSeconds(settings.Timeout).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    "--max-tokens",
+                    settings.MaxTokens.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     // Only when set: the shim omits the field for an empty value, and an absent flag is
                     // the same thing said one layer up.
                     ..(settings.ReasoningEffort.Length > 0

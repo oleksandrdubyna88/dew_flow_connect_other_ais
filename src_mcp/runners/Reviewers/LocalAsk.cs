@@ -144,7 +144,7 @@ public static class LocalAsk
     /// gate's own reviewers caught the contradiction. A schema that cannot be parsed is a bug on
     /// this side, and failing before the request costs nothing and says so.
     /// </exception>
-    public static string RequestBody(string model, string prompt, string schemaJson, int seed, string reasoningEffort = "")
+    public static string RequestBody(string model, string prompt, string schemaJson, int seed, string reasoningEffort = "", int maxTokens = 8192)
     {
         using var validate = JsonDocument.Parse(schemaJson);
 
@@ -156,6 +156,15 @@ public static class LocalAsk
             json.WriteBoolean("stream", false);
             json.WriteNumber("temperature", 0);
             json.WriteNumber("seed", seed);
+            // The ceiling that was missing. Measured 2026-09-03: uncapped, this engine did not
+            // finish a one-line question in 90 seconds, and the same question capped at twenty
+            // tokens came back in 8.5 — the model does not stop, and nothing else here bounds it.
+            // Every local reviewer of a round therefore spent its whole deadline and was reported as
+            // a slow engine, which was true and useless.
+            if (maxTokens > 0)
+            {
+                json.WriteNumber("max_tokens", maxTokens);
+            }
 
             // Only when somebody said something. `engine` is the explicit way to send nothing: the
             // field is ABSENT rather than set to a value this build guessed would be neutral, so the

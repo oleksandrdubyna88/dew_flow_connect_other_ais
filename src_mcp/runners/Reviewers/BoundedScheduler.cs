@@ -192,6 +192,11 @@ public sealed class BoundedScheduler(
                             : Limiter(_perResource, engine, sharedResourceCap);
                         if (resource is not null)
                         {
+                            // The note is computed HERE and not when the round was laid out. At
+                            // lay-out nothing held the card yet, so the queue was always empty and
+                            // the sentence was always blank — the estimate would have shipped
+                            // never saying anything. (gemini, this change's code round.)
+                            Report(onProgress, w.Invocation, "queued", note: QueueNote(w.Invocation));
                             try
                             {
                                 await resource.WaitAsync(ct);

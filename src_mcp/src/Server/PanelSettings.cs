@@ -123,6 +123,18 @@ public sealed record PanelSettings
     public string LocalReasoningEffort { get; init; } = "none";
 
     /// <summary>
+    /// The most tokens a local answer may be. Eight thousand — generous for findings, far below a
+    /// model that does not stop.
+    /// </summary>
+    /// <remarks>
+    /// A review answer measured here is one to two thousand tokens. The ceiling exists for the
+    /// failure that has no other bound: an uncapped reasoning model generating until the deadline,
+    /// which is what made every local reviewer of a round report a timeout while the engine was
+    /// healthy and fast for a capped request.
+    /// </remarks>
+    public int LocalMaxTokens { get; init; } = 8192;
+
+    /// <summary>
     /// What a CODE reviewer is launched in: <c>none</c> (the default) or <c>worktree</c>.
     /// </summary>
     /// <remarks>
@@ -181,6 +193,7 @@ public sealed record PanelSettings
             ? TimeSpan.FromSeconds(IntVar(env, "COAI_ESCALATION_SECONDS", 30))
             : TimeSpan.FromMinutes(IntVar(env, "COAI_ESCALATION_MINUTES", 30)),
         DataDir = env("COAI_DATA_DIR") is { Length: > 0 } dir ? dir : DefaultDataDir,
+        LocalMaxTokens = IntVar(env, "COAI_LOCAL_MAX_TOKENS", 8192),
         LocalReasoningEffort = env("COAI_LOCAL_REASONING_EFFORT") is { Length: > 0 } effort
             ? effort.Trim().ToLowerInvariant()
             : "none",

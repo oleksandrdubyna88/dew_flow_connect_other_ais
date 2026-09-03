@@ -113,6 +113,57 @@ public sealed class EngineLeaseTests : IDisposable
     }
 
     [Fact]
+    public async Task ADeadlineThatExpiredWhileWaiting_LeavesNobodyInTheQueue()
+    {
+        // Five reviewers of this change's code round found the same leak, one as Blocking: the
+        // timeout path returned without releasing the waiter file, so every expired deadline added
+        // a phantom to the queue that every later reviewer was told to wait behind.
+        const string engine = "http://127.0.0.1:11434/v1";
+        using var holder = await EngineLease.AcquireAsync(engine, In(10));
+
+        var expired = await EngineLease.AcquireAsync(engine, In(1));
+
+        expired.Should().BeNull();
+        EngineLease.Ahead(engine).Should().Be(1, "the holder, and nobody else");
+    }
+
+    [Fact]
+    public async Task AWaiterIsNotAheadOfItself()
+    {
+        const string engine = "http://127.0.0.1:11434/v1";
+        using var holder = await EngineLease.AcquireAsync(engine, In(10));
+        using var cancel = new CancellationTokenSource();
+        var seen = new List<int>();
+        var queued = EngineLease.AcquireAsync(engine, In(20), (_, ahead) => seen.Add(ahead), cancel.Token);
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+
+        EngineLease.Ahead(engine).Should().Be(2, "the holder and one waiter are both on the card");
+
+        await cancel.CancelAsync();
+        try
+        {
+            await queued;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        EngineLease.Ahead(engine).Should().Be(1, "a cancelled waiter is not still in the queue");
+    }
+
+    [Fact]
+    public async Task TwoEnginesWhoseNamesFoldTogether_AreStillTwoEngines()
+    {
+        // `http://host/a` and `http://host-a` both slugged to `http---host-a` before the code round
+        // caught it: two different engines sharing one lock and one history.
+        using var one = await EngineLease.AcquireAsync("http://host/a", In(5));
+        using var two = await EngineLease.AcquireAsync("http://host-a", In(2));
+
+        one.Should().NotBeNull();
+        two.Should().NotBeNull("one engine's queue is not another engine's");
+    }
+
+    [Fact]
     public async Task AnEstimate_NeedsMoreThanTwoRunsBeforeItSaysAnything()
     {
         const string engine = "http://127.0.0.1:11434/v1";

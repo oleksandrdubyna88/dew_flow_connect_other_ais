@@ -799,6 +799,7 @@ public sealed class PanelService
                 ApiKey = _keys.Keys.GetValueOrDefault(provider.Provider, string.Empty),
                 Timeout = _settings.ReviewerTimeout,
                 ReasoningEffort = _settings.LocalReasoningEffort,
+                MaxTokens = _settings.LocalMaxTokens,
             };
             var prompt = ComposePrompt(choice, context);
             var repairPrompt = prompt +
