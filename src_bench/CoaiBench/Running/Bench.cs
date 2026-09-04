@@ -21,6 +21,7 @@ public sealed class Bench(
     Options options,
     IReadOnlyList<Case> corpus,
     IReadOnlyList<VendorConfig> configured,
+    IReadOnlyDictionary<string, string> settings,
     Action<string> say)
 {
     public IReadOnlyList<Cell> Cells() =>
@@ -66,7 +67,10 @@ public sealed class Bench(
             return new RunRecord(cell.Case, cell.Arm, cell.Repeat, lane) { HarnessError = refusal };
         }
 
-        var env = new Dictionary<string, string>(options.Settings, StringComparer.Ordinal)
+        // The operator's WHOLE configuration, then this arm's vendors, then this run's
+        // overrides. Taking only the vendors left thresholds, rounds per role, prompts and the
+        // exhausted-policy at the server's defaults, so every number described a machine nobody runs.
+        var env = new Dictionary<string, string>(settings, StringComparer.Ordinal)
         {
             ["COAI_PROVIDERS"] = string.Join(",", vendors.Select(v => v.Id)),
             ["COAI_VENDORS"] = Vendors.AsSetting(vendors),

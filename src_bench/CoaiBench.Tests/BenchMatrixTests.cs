@@ -22,8 +22,11 @@ public sealed class BenchMatrixTests
         new("local", "local", "Qwen3.5-35B-A3B-Q5_vk128:latest"),
     ];
 
+    private static readonly IReadOnlyDictionary<string, string> NoSettings =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
     private static Bench BenchOf(Options options, params Case[] corpus) =>
-        new(options, corpus, Configured, _ => { });
+        new(options, corpus, Configured, NoSettings, _ => { });
 
     [Fact]
     public void EveryCaseTimesEveryArmTimesEveryRepeat()

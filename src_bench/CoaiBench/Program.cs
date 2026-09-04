@@ -22,6 +22,10 @@ public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        // Flushed per line. A campaign runs for an hour and .NET buffers a redirected stdout, so
+        // every line arrived at the end — which for a long measurement means watching nothing happen
+        // and being unable to tell a slow round from a hung one.
+        Console.SetOut(new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true });
         var (options, refusal) = OptionsParser.Parse(args);
         if (options is null)
         {
@@ -77,12 +81,23 @@ public static class Program
                 + "the settings file the panel writes, or configure a reviewer in the panel first");
         }
 
+        // Every setting the operator has, then this run's overrides — and both are PRINTED and kept
+        // with the run. A campaign has to be able to say what it was measuring months later, without
+        // anybody remembering; and taking only the vendors left thresholds, rounds per role, prompts
+        // and the exhausted-policy at the server's defaults, describing a machine nobody runs.
+        var settings = PanelSettingsFile.Effective(PanelSettingsFile.Read(vendorsFile), options.Settings);
         Console.WriteLine(
             $"vendors from {vendorsFile}: "
             + string.Join(", ", configured.Select(v => $"{v.Id} ({v.Runtime}/{v.Model})")));
+        Console.WriteLine($"settings in force:\n{PanelSettingsFile.Describe(settings)}\n");
         var outDir = OutDir(options);
-        var runs = await new Bench(options with { OutDir = outDir }, corpus, configured, Console.WriteLine)
+        var runs = await new Bench(options with { OutDir = outDir }, corpus, configured, settings, Console.WriteLine)
             .RunAsync(ct);
+        await File.WriteAllTextAsync(
+            Path.Combine(outDir, "settings.md"),
+            $"# The settings this campaign ran under\n\nFrom `{vendorsFile}`, with `--set` on top.\n\n"
+                + $"```\n{PanelSettingsFile.Describe(settings)}\n```\n",
+            ct);
         var file = Path.Combine(outDir, "runs.json");
         await RunStore.SaveAsync(file, runs, ct);
         Report(runs, outDir);

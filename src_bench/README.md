@@ -42,6 +42,17 @@ $BENCH run … --set COAI_MAX_CONCURRENCY=9 --set COAI_SPLIT_PLAN=true
 three vendors fanning out inside it; three separate `--arm` flags are three rounds compared against
 each other. They are different measurements and the flag says which you meant.
 
+**An id is not a vendor — the runtime and the model are.** An arm names IDS, and every one of them
+is looked up in the settings file the panel writes (`--vendors-from` points elsewhere). The runtime,
+the model, the base url and the executable come from there. An id nobody configured is refused by
+name, with the list of what there is to choose from.
+
+This is not a nicety. The first campaign passed bare ids, and the server did exactly as told: it
+built a vendor called `gemini` on the RETIRED Gemini CLI — while the operator had configured that
+same vendor to run `antigravity` days earlier — and a local vendor with no model at all. Six of nine
+reviewers failed and the report blamed the release. A bench that rebuilds vendors from names is
+measuring a machine nobody has.
+
 **Nothing runs that was not named.** There is no default vendor and no default model, because a
 default spends somebody's quota on a guess.
 
