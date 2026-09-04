@@ -9,7 +9,7 @@ their own clocks, to two different places, and every failure below is one of the
 
 Target: the released **extension** version — `--target 0.29.3`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-09-04 · extension 0.29.5 / mcp 0.16.0 · item 1 PASS on the SECOND tag — the first mcp-v0.16.0 shipped five RIDs and no win-x64, because a new test starved a two-core runner and a real reviewer subprocess died beside it; the tag was burned and re-cut. Item 2 PASS. Item 4 done by hand: the binary beside the installed extension was replaced from the release asset after its checksum was verified, and answers .
+Last verified: 2026-09-04 · extension 0.29.5 / mcp 0.16.0 · item 1 PASS on the SECOND tag — the first mcp-v0.16.0 shipped five RIDs and no win-x64, because a new test starved a two-core runner and a real reviewer subprocess died beside it; the tag was burned and re-cut. Item 2 PASS. Item 4 done by hand: the binary beside the installed extension was replaced from the release asset after its checksum was verified, and answers `coai-mcp 0.16.0`.
 
 **A slow `npm ci` is not a hung release, and cancelling one costs a re-run.** Measured here on
 extension-v0.29.2: the step sat at seven minutes against a whole-job history of 2m33s, was cancelled
