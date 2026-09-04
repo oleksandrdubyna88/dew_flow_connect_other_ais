@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { installFailureHint, SingleFlight } from './coaiInstall';
-import { claudeSnippet } from './claudeSnippet';
+import { claudeSnippet, copiedMessage } from './claudeSnippet';
+import { pastedSnippetStatus } from './snippetInWorkspace';
 import { clientTargetsLine, CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
 import { installLatest, latestServerVersion, serverExists, serverOnThisSide, serverPath } from './installer';
 import { EscalationWatcher } from './escalationWatcher';
@@ -194,9 +195,9 @@ async function copyClaudeSnippet(): Promise<void> {
   // The snippet names no repository: it is pasted into whichever one you are adopting it for, and
   // the AI reading it is already in a checkout it can name for itself.
   await vscode.env.clipboard.writeText(claudeSnippet());
-  void vscode.window.showInformationMessage(
-    "The CLAUDE.md snippet is on your clipboard — paste it into the CLAUDE.md of the repository you want reviewed.",
-  );
+  // What was taken, and what this repository already has. The version is in the menu item too, but
+  // a menu is read BEFORE the click; this is the sentence that says whether the click mattered.
+  void vscode.window.showInformationMessage(copiedMessage(await pastedSnippetStatus()));
 }
 
 /** Where the rounds view lives on disk. One file, rewritten — never a new tab per look. */

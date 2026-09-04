@@ -104,6 +104,34 @@ export function snippetNote(status: SnippetStatus): string {
   }
 }
 
+/**
+ * What to say the moment somebody copies it: the version they took, and what this repository has.
+ *
+ * <p>The menu item names the version too, but a menu is read BEFORE the click and this is read
+ * after it — and "v5" means nothing to a person whose repository is on v4 unless somebody says so.
+ * Asked by the operator, about a version only the source code knew: "how does a person find out?"</p>
+ */
+export function copiedMessage(status: SnippetStatus): string {
+  const took = `The CLAUDE.md snippet (v${status.current}) is on your clipboard`;
+  switch (status.kind) {
+    case 'older':
+      return `${took}. This repository has v${status.found} — replace the block between the markers.`;
+    case 'unversioned':
+      return `${took}. This repository has a copy from before the version marker existed — replace it.`;
+    case 'ahead':
+      return `${took}, and this repository already has v${status.found}, which is NEWER than this build. Keep what you have.`;
+    case 'current':
+      return `${took}, and this repository is already on it — nothing to replace.`;
+    case 'absent':
+      return `${took} — paste it into the CLAUDE.md of the repository you want reviewed.`;
+    default: {
+      const unhandled: never = status;
+
+      return unhandled;
+    }
+  }
+}
+
 export function claudeSnippet(): string {
   return `<!-- coai-snippet v${SNIPPET_VERSION} -->
 ## Multi-model review gate (ConnectOtherAIs)

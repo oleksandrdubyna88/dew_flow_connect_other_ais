@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
-import { snippetStatus, SnippetStatus } from './claudeSnippet';
+import { pastedSnippetStatus } from './snippetInWorkspace';
 import { discoverEngine, LocalEngine, openAiBaseOf, probeEngine } from './localEngines';
 import { EscalationWatcher } from './escalationWatcher';
 import { ModelChoice, parseCodexModels } from './models';
@@ -214,7 +214,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       latestServerVersion: published,
       cliStatus: await this.vendorCliStatus(vendors),
       modelPrices: await this.modelPrices(vendors),
-      snippetStatus: await this.pastedSnippet(),
+      snippetStatus: await pastedSnippetStatus(),
       localEngines: await this.probeLocalEngines(vendors),
     };
 
@@ -324,31 +324,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * <p>Only the workspace ROOT, and only files that exist. Walking a repository for a pasted block
    * would be a filesystem crawl on every repaint to answer a question about one paragraph.</p>
    */
-  private async pastedSnippet(): Promise<SnippetStatus> {
-    const root = vscode.workspace.workspaceFolders?.[0]?.uri;
-    if (root === undefined) {
-      return snippetStatus(undefined);
-    }
 
-    for (const name of ['CLAUDE.md', 'AGENTS.md', 'GEMINI.md', '.github/copilot-instructions.md']) {
-      const text = await this.readIfPresent(vscode.Uri.joinPath(root, name));
-      // The FIRST file that carries it wins. A repository with the block in two files has a
-      // problem this panel cannot fix, and reporting the older of the two would be arbitrary.
-      if (text.includes('Multi-model review gate (ConnectOtherAIs)')) {
-        return snippetStatus(text);
-      }
-    }
-
-    return snippetStatus(undefined);
-  }
-
-  private async readIfPresent(uri: vscode.Uri): Promise<string> {
-    try {
-      return new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
-    } catch {
-      return ''; // an absent instruction file is the normal case, not a failure
-    }
-  }
 
   /**
    * The published list price of every model the vendors are currently set to.

@@ -616,3 +616,23 @@ nobody knows to look for is not an instruction.
 
 The help article for the gate describes all three in every language the help ships, because a switch
 whose only explanation is its label is a switch people leave alone.
+
+### A version only the code knows is a version nobody has (2026-09-03)
+
+The snippet has been versioned since v2 and the panel has reported a stale copy since then — but the
+⋯ menu said *Copy the CLAUDE.md snippet* and nothing else, so a person carrying v4 had no reason to
+click it. Asked by the operator in exactly those terms: "how does a person find out?"
+
+Two places say it now, and they answer different questions:
+
+- **The menu item** — `Copy the CLAUDE.md snippet (v5)` — is read BEFORE the click, and is what makes
+  a stale copy worth a second look. It is a static string in the manifest, so a test asserts it
+  carries `(v${SNIPPET_VERSION})`: the version cannot drift out of the menu without a red suite.
+- **The message after the click** is the only one that can compare. It names what went on the
+  clipboard and what this repository already had: *"…is on your clipboard. This repository has v4 —
+  replace the block between the markers."* A repository that is AHEAD is told to keep what it has,
+  which is the one case where copying is the wrong move.
+
+The finder that answers "what is in this workspace" moved out of `PanelProvider` into
+`snippetInWorkspace.ts`, because the copy command needed the same answer and two readers of the same
+four files would drift the moment somebody added a fifth.
