@@ -154,6 +154,18 @@ public sealed class PanelService
         if (RuntimeNameOf(provider) == "local")
         {
             var endpoint = provider.BaseUrl.Length > 0 ? provider.BaseUrl : LocalRuntime.DefaultEndpoint;
+            // An endpoint cannot know which model nobody named, so the probe has to read the
+            // configuration as well. Without this the vendor reported "own auth" and every reviewer
+            // it ran answered `400 model is required` — three of nine in a code round, gone, with the
+            // health probe saying the vendor was fine. The same blind spot the retired-Gemini
+            // diagnosis exists for: a vendor that answers a probe and cannot answer a round. Found
+            // by this repository's own bench on its first real campaign.
+            if (provider.Model.Length == 0)
+            {
+                return new ProviderStatus(provider.Provider, provider.Enabled, true, "", "unavailable",
+                    $"a local engine at {endpoint} with no model — name one in this vendor's Model "
+                        + "field, or the engine answers 400 to every reviewer");
+            }
 
             return new ProviderStatus(provider.Provider, provider.Enabled, true, "", "own auth",
                 $"a local engine at {endpoint} — no CLI, no key, no bill");

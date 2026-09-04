@@ -85,4 +85,14 @@ public sealed record RunRecord(Case Case, string Arm, int Repeat, int Lane)
 
     /// <summary>The last of the server's own stderr, for when nothing else explains it.</summary>
     public string ServerSaid { get; init; } = string.Empty;
+
+    /// <summary>
+    /// What the session file said afterwards — checked, never assumed.
+    /// </summary>
+    /// <remarks>
+    /// An answer and the state behind it are different things, and believing the first was the whole
+    /// of an afternoon's defect: findings came back numbered while the round on disk still said
+    /// `running` with nothing pending, so every index pointed into a list nobody had written.
+    /// </remarks>
+    public Running.SessionOnDisk? OnDisk { get; init; }
 }

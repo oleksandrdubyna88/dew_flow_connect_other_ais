@@ -16,6 +16,19 @@ namespace CoaiBench.Running;
 /// </remarks>
 public sealed class RoundRunner(GateClient client, string repo, TimeSpan timeout)
 {
+    /// <summary>
+    /// How many times the plan stage may be asked before the bench gives up on reaching the code one.
+    /// </summary>
+    /// <remarks>
+    /// The SERVER's own budget is what actually stops it — this is only a ceiling so a bench cannot
+    /// loop forever against a gate configured to allow it.
+    /// </remarks>
+    private const int MaxPlanRounds = 4;
+
+    /// <summary>The verdicts that open the code stage — the same three the server acts on.</summary>
+    internal static bool Passed(string verdict) =>
+        verdict is "proceed" or "good_enough" or "continue_anyway";
+
     public async Task<RunRecord> RunAsync(Case work, string arm, int repeat, int lane, Stages stages)
     {
         var record = new RunRecord(work, arm, repeat, lane);
@@ -28,13 +41,28 @@ public sealed class RoundRunner(GateClient client, string repo, TimeSpan timeout
             await client.CallAsync("open", Args(("repoPath", repo), ("branch", branch)), deadline.Token);
 
             var planText = await File.ReadAllTextAsync(Path.Combine(repo, work.PlanFile), deadline.Token);
+            var planPassed = stages == Stages.Diffs;
             if (stages is Stages.Plans or Stages.Both)
             {
-                stageResults.Add(await StageAsync("plan", "review_plan",
-                    Args(("repoPath", repo), ("branch", branch), ("planText", planText)), branch, deadline.Token));
+                // The plan stage REPEATS until it passes or the rounds run out, which is what a real
+                // caller does and what the protocol is built around. The first version ran it once
+                // and went straight to the code gate, and three of four code rounds were refused
+                // with "no plan round has reached 'proceed'" — the product being right and the bench
+                // measuring its own mistake.
+                for (var round = 1; round <= MaxPlanRounds && !planPassed; round++)
+                {
+                    var plan = await StageAsync($"plan-{round}", "review_plan",
+                        Args(("repoPath", repo), ("branch", branch), ("planText", planText)), branch, deadline.Token);
+                    stageResults.Add(plan);
+                    planPassed = Passed(plan.Verdict);
+                    if (plan.Verdict.Length == 0)
+                    {
+                        break; // the round did not run at all; another attempt measures nothing
+                    }
+                }
             }
 
-            if (stages is Stages.Diffs or Stages.Both && work.Commit.Length > 0)
+            if (stages is Stages.Diffs or Stages.Both && work.Commit.Length > 0 && planPassed)
             {
                 stageResults.Add(await StageAsync("code", "review_code",
                     Args(("repoPath", repo), ("branch", branch), ("baseRef", work.BaseRef), ("planText", planText)),

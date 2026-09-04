@@ -62,10 +62,13 @@ public sealed class Bench(Options options, IReadOnlyList<Case> corpus, Action<st
             env[$"COAI_MODEL_{vendor.ToUpperInvariant()}"] = model;
         }
 
-        await using var client = new GateClient(options.Executable, DataDirFor(cell, lane), env);
-
-        return await new RoundRunner(client, options.Repo, options.Timeout)
+        var dataDir = DataDirFor(cell, lane);
+        await using var client = new GateClient(options.Executable, dataDir, env);
+        var run = await new RoundRunner(client, options.Repo, options.Timeout)
             .RunAsync(cell.Case, cell.Arm, cell.Repeat, lane, options.Stages);
+
+        // The disk, not the answer. They came apart once and nothing said so.
+        return run with { OnDisk = OnDisk.Read(dataDir) };
     }
 
     /// <summary>
@@ -89,6 +92,17 @@ public sealed class Bench(Options options, IReadOnlyList<Case> corpus, Action<st
                 $"{s.Stage}: {(s.Verdict.Length > 0 ? s.Verdict : "ERROR " + s.Error)} "
                 + $"{s.Findings.Count}f {s.Seconds}s {s.TokensIn}/{s.TokensOut}"));
 
-        return $"{run.Arm,-22} {run.Case.Name,-34} #{run.Repeat} {stages}";
+        // The disk is printed beside the answer, because "12 findings" and "none of them can be
+        // resolved" have looked identical from the answer alone.
+        var disk = run.OnDisk is null || run.Stages.Count == 0
+            ? string.Empty
+            : run.OnDisk.Resolvable
+                ? "  [resolvable]"
+                : $"  [NOT RESOLVABLE: {run.OnDisk.StillRunning} still running, "
+                    + $"{run.OnDisk.Pending} pending{Note(run.OnDisk.Note)}]";
+
+        return $"{run.Arm,-22} {run.Case.Name,-34} #{run.Repeat} {stages}{disk}";
     }
+
+    private static string Note(string note) => note.Length == 0 ? string.Empty : $", {note}";
 }
