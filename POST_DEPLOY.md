@@ -7,7 +7,7 @@ over stdio and the extension speaks to it as a subprocess. Neither is a request 
 down — which the contracts rule says in as many words. What it does have is two artefacts that ship on
 their own clocks, to two different places, and every failure below is one of them arriving wrong.
 
-Target: the released **extension** version — `--target 0.29.0`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
+Target: the released **extension** version — `--target 0.29.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
 Last verified: 2026-09-03 · extension 0.29.0 / mcp 0.14.0 · item 1 PASS — mcp-v0.14.0 carries all six RID assets. Item 2 was RED at the moment of checking and that is the documented lag, not a bad release: the publish step logged "Published remsoftdev.connect-other-ais v0.29.0" while the gallery still answered 0.28.0, exactly as measured on 0.26.2 (four and a half minutes). Items 3 and 4 are owed on the machine: read `providers` in the panel, and check the packaged binary's version from inside the installed extension — which can now be asked of the binary itself, since `coai-mcp --version` exists as of 0.12.3.
 
