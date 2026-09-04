@@ -95,8 +95,33 @@ public static class RuleFiles
     /// </remarks>
     private static readonly string[] MountHousekeepingDirs = ["todo", "settings", "tools"];
 
-    /// <summary>A rules repository's front matter, at ITS root — about the repo, not a rule.</summary>
-    private static readonly string[] MountHousekeepingFiles = ["README.md", "ROLLOUT.md", "POST_DEPLOY.md"];
+    /// <summary>
+    /// A rules repository's front matter, at ITS root — about that repository, not a rule here.
+    /// </summary>
+    /// <remarks>
+    /// The instruction files are on this list for the same reason as the README, and it is the less
+    /// obvious half: a mounted repository's own <c>CLAUDE.md</c> tells an AI how to work on THAT
+    /// repository. Collected as a rule it would sit in the prompt beside the consumer's own
+    /// <c>CLAUDE.md</c>, under a name a reviewer cannot tell apart from it, saying different things.
+    /// </remarks>
+    private static readonly string[] MountHousekeepingFiles =
+        ["README.md", "ROLLOUT.md", "POST_DEPLOY.md", "CLAUDE.md", "AGENTS.md", "GEMINI.md"];
+
+    /// <summary>
+    /// How the rule folders are walked: a reparse point is never followed.
+    /// </summary>
+    /// <remarks>
+    /// A mounted rules repository is somebody else's content, and a committed symlink in it — or a
+    /// junction under it — would be read by <see cref="Read"/> and put verbatim into a prompt that
+    /// leaves this machine. Hidden and system files stay skipped, which is what the default
+    /// enumeration did before this option existed here.
+    /// </remarks>
+    private static readonly EnumerationOptions RuleWalk = new()
+    {
+        RecurseSubdirectories = true,
+        IgnoreInaccessible = true,
+        AttributesToSkip = FileAttributes.ReparsePoint | FileAttributes.Hidden | FileAttributes.System,
+    };
 
     public static RuleBundle Collect(string repoPath, int budgetBytes = DefaultBudgetBytes)
     {
@@ -198,7 +223,8 @@ public static class RuleFiles
     private static IReadOnlyList<string> EmptyRuleMounts(string repoPath, IReadOnlyList<SubmoduleMount> mounts) =>
         [.. mounts
             .Where(m => IsRulesMount(m.Path) && IsEmptyDirectory(Path.Combine(repoPath, m.Path.Replace('/', Path.DirectorySeparatorChar))))
-            .Select(m => m.Path)];
+            .Select(m => m.Path)
+            .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)];
 
     private static bool IsRulesMount(string path) =>
         RuleFolders.Any(f => path.StartsWith(f.Dir + "/", StringComparison.OrdinalIgnoreCase));
@@ -219,7 +245,7 @@ public static class RuleFiles
     {
         try
         {
-            return Directory.EnumerateFiles(root, pattern, SearchOption.AllDirectories);
+            return Directory.EnumerateFiles(root, pattern, RuleWalk);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

@@ -221,6 +221,40 @@ public sealed class RuleFilesTests : IDisposable
         RuleFiles.Collect(_repo).MissingMounts.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// The mounted repository's OWN instruction files are about that repository. Collected as
+    /// rules they would sit beside the consumer's, under a name nothing distinguishes, saying
+    /// something else.
+    /// </summary>
+    [Fact]
+    public void TheMountsOwnInstructionFiles_AreNotCollectedAsRulesHere()
+    {
+        WriteMount(".claude/rules/shared");
+        Write(".claude/rules/shared/CLAUDE.md", "how to work on the rules repository itself");
+        Write(".claude/rules/shared/AGENTS.md", "the same, for another CLI");
+        Write(".claude/rules/shared/common/git-workflow.md", "a real shared rule");
+        Write("CLAUDE.md", "ours");
+
+        var paths = RuleFiles.Collect(_repo).Files.Select(f => f.Path).ToList();
+
+        paths.Should().Contain([".claude/rules/shared/common/git-workflow.md", "CLAUDE.md"]);
+        paths.Should().NotContain([".claude/rules/shared/CLAUDE.md", ".claude/rules/shared/AGENTS.md"]);
+    }
+
+    /// <summary>Two missing mounts read the same way whatever order the file listed them in.</summary>
+    [Fact]
+    public void MissingMounts_AreNamedInAStableOrder()
+    {
+        Write(".gitmodules",
+            "[submodule \".claude/rules/zzz\"]\n\tpath = .claude/rules/zzz\n"
+            + "[submodule \".claude/rules/aaa\"]\n\tpath = .claude/rules/aaa\n");
+        Directory.CreateDirectory(Path.Combine(_repo, ".claude", "rules", "zzz"));
+        Directory.CreateDirectory(Path.Combine(_repo, ".claude", "rules", "aaa"));
+        Write("CLAUDE.md", "ours");
+
+        RuleFiles.Collect(_repo).MissingMounts.Should().Equal([".claude/rules/aaa", ".claude/rules/zzz"]);
+    }
+
     /// <summary>A submodule that is not a rules mount is somebody else's code, and not our business.</summary>
     [Fact]
     public void ACodeSubmodule_IsNotReportedAsMissingRules()

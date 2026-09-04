@@ -58,7 +58,19 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
         // A linked worktree gets no submodules from git, and in this family the project's own
         // written rules are exactly that — see SubmodulePopulator for what the reviewers were
         // being handed instead.
-        await _submodules.PopulateAsync(repoPath, path);
+        //
+        // The tree exists from here on but the LEASE does not, so nothing would run the finally
+        // that removes it: an exception escaping population would leave an orphan behind, and the
+        // next round at the same name would be blocked by it.
+        try
+        {
+            await _submodules.PopulateAsync(repoPath, path);
+        }
+        catch
+        {
+            await RemoveAsync(repoPath, path);
+            throw;
+        }
 
         return new WorktreeLease(this, repoPath, path, sha);
     }
