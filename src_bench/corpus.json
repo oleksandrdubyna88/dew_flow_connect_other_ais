@@ -1,0 +1,26 @@
+[
+  {
+    "name": "rounds-collapse",
+    "planFile": "todo/PLAN_rounds_collapse_and_vendor_colour.md",
+    "commit": "267e07a",
+    "baseRef": "afe7fc7"
+  },
+  {
+    "name": "split-once",
+    "planFile": "artifacts/bench/plan-B.md",
+    "commit": "7133c2f",
+    "baseRef": "4a27a17"
+  },
+  {
+    "name": "engine-lease",
+    "planFile": "research/PLAN_engine_lease.md",
+    "commit": "",
+    "baseRef": ""
+  },
+  {
+    "name": "commands-and-autonomy",
+    "planFile": "research/PLAN_commands_and_autonomy.md",
+    "commit": "",
+    "baseRef": ""
+  }
+]

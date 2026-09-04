@@ -1,0 +1,94 @@
+using CoaiBench.Cli;
+using CoaiBench.Model;
+
+namespace CoaiBench.Running;
+
+/// <summary>One cell of the matrix: a case, an arm, and which repetition this is.</summary>
+public sealed record Cell(Case Case, string Arm, int Repeat);
+
+/// <summary>
+/// The matrix, run.
+/// </summary>
+/// <remarks>
+/// <para>Every cell is independent, so they overlap: comparing three vendors is three arms with
+/// nothing to say to each other, and running them in series triples the evening for no reason. The
+/// lane count defaults to the number of ARMS and is a plain number when the five-window case is what
+/// is wanted.</para>
+/// <para>Each cell gets a server of its own. That is not tidiness — a session is per repo+branch and
+/// a data directory is shared, and both of those are things this bench is often measuring.</para>
+/// </remarks>
+public sealed class Bench(Options options, IReadOnlyList<Case> corpus, Action<string> say)
+{
+    public IReadOnlyList<Cell> Cells() =>
+    [
+        .. from work in corpus
+           from arm in options.Arms
+           from repeat in Enumerable.Range(1, options.Repeat)
+           select new Cell(work, arm, repeat),
+    ];
+
+    /// <summary>Lanes: as many as there are arms unless a number was given.</summary>
+    public int Lanes() => options.Parallel > 0 ? options.Parallel : Math.Max(1, options.Arms.Count);
+
+    public async Task<IReadOnlyList<RunRecord>> RunAsync(CancellationToken ct)
+    {
+        var cells = Cells();
+        var done = new RunRecord[cells.Count];
+        var next = -1;
+        var lanes = Math.Min(Lanes(), cells.Count);
+        say($"{cells.Count} run(s) over {options.Arms.Count} arm(s), {lanes} in flight");
+
+        await Task.WhenAll(Enumerable.Range(1, lanes).Select(lane => Task.Run(async () =>
+        {
+            for (var at = Interlocked.Increment(ref next); at < cells.Count;
+                 at = Interlocked.Increment(ref next))
+            {
+                done[at] = await OneAsync(cells[at], lane, ct);
+                say(Line(done[at]));
+            }
+        }, ct)));
+
+        return done;
+    }
+
+    private async Task<RunRecord> OneAsync(Cell cell, int lane, CancellationToken ct)
+    {
+        var env = new Dictionary<string, string>(options.Settings, StringComparer.Ordinal)
+        {
+            ["COAI_PROVIDERS"] = cell.Arm,
+        };
+        foreach (var (vendor, model) in options.Models)
+        {
+            env[$"COAI_MODEL_{vendor.ToUpperInvariant()}"] = model;
+        }
+
+        await using var client = new GateClient(options.Executable, DataDirFor(cell, lane), env);
+
+        return await new RoundRunner(client, options.Repo, options.Timeout)
+            .RunAsync(cell.Case, cell.Arm, cell.Repeat, lane, options.Stages);
+    }
+
+    /// <summary>
+    /// A data directory per RUN by default, and one SHARED when the windows case is being measured.
+    /// </summary>
+    /// <remarks>
+    /// The distinction is the measurement. Comparing two models wants them not to interfere; asking
+    /// what five windows do to each other wants exactly the interference, and that lives in the
+    /// shared directory — the sessions, the engine lease, the caller memory.
+    /// </remarks>
+    private string DataDirFor(Cell cell, int lane) =>
+        options.Parallel > 0
+            ? Path.Combine(options.OutDir, "data-shared")
+            : Path.Combine(options.OutDir, "data", $"{cell.Arm}-{cell.Case.Name}-{cell.Repeat}-{lane}");
+
+    private static string Line(RunRecord run)
+    {
+        var stages = run.Stages.Count == 0
+            ? $"NOTHING RAN {run.HarnessError} {run.ServerSaid}"
+            : string.Join("  |  ", run.Stages.Select(s =>
+                $"{s.Stage}: {(s.Verdict.Length > 0 ? s.Verdict : "ERROR " + s.Error)} "
+                + $"{s.Findings.Count}f {s.Seconds}s {s.TokensIn}/{s.TokensOut}"));
+
+        return $"{run.Arm,-22} {run.Case.Name,-34} #{run.Repeat} {stages}";
+    }
+}

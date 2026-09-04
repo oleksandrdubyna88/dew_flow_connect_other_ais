@@ -43,6 +43,7 @@ C4Container
 | Reviewer runners (worktrees, scheduler, vendors) | [module_runners.md](module_runners.md) | **shipped 2026-08-31** |
 | `coai-mcp` server | [module_server.md](module_server.md) | **shipped 2026-08-31** |
 | VS Code extension | [module_extension.md](module_extension.md) | **shipped 2026-08-31** (escalation loopback deferred) |
+| Measurement bench (`coai-bench`) | [../src_bench/README.md](../src_bench/README.md) | **shipped 2026-09-04** — drives the published server over stdio, records whole, judges separately |
 
 ## Cross-cutting decisions already in force
 

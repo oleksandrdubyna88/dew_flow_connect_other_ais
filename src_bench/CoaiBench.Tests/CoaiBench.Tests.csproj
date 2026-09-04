@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>CoaiBench.Tests</RootNamespace>
+    <!-- xUnit v3 on Microsoft Testing Platform, as everywhere here: this builds into a runner.
+         Run the executable; `dotnet test` has no VSTest host in this repository and aborts. -->
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="FluentAssertions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CoaiBench\CoaiBench.csproj" />
+  </ItemGroup>
+
+</Project>

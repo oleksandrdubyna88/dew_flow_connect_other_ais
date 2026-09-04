@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>CoaiBench</RootNamespace>
+    <AssemblyName>coai-bench</AssemblyName>
+    <!-- The measuring instrument, not a shipped artefact: it is in the solution and it is built by
+         CI, and no release asset is made from it. It drives the PUBLISHED server over stdio rather
+         than referencing it, because five windows is five processes and a harness that pretends
+         otherwise measures something nobody runs. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CoaiBench.Tests" />
+  </ItemGroup>
+
+</Project>
