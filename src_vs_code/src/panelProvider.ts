@@ -620,28 +620,43 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         const vendors = vendorsFrom(config.get('vendors')).map((v) =>
           v.id === write.vendor ? { ...v, [write.key]: write.value } : v,
         );
-        await config.update('vendors', vendors, vscode.ConfigurationTarget.Global);
+        await this.save(config, 'vendors', vendors);
         return;
       }
       case 'role': {
         // A record, merged rather than replaced: writing one role's number must not drop the other
         // three, and the stored object is what every other role reads on the next repaint.
         const current = config.get<Record<string, unknown>>(write.key) ?? {};
-        await config.update(
-          write.key,
-          roleRecordUpdate(current, write.role, write.value),
-          vscode.ConfigurationTarget.Global,
-        );
+        await this.save(config, write.key, roleRecordUpdate(current, write.role, write.value));
         return;
       }
       case 'plain':
-        await config.update(write.key, write.value, vscode.ConfigurationTarget.Global);
+        await this.save(config, write.key, write.value);
         return;
       default: {
         // Every kind is handled, and the compiler is what says so.
         const unhandled: never = write;
         return unhandled;
       }
+    }
+  }
+
+  /**
+   * Writes one setting, and SAYS SO when VS Code refuses.
+   *
+   * <p>Every write used to be a bare `await config.update(...)` reached through `void this.write(…)`,
+   * so a rejection went nowhere at all. That is half of the bug the operator reported as "the
+   * checkboxes come unticked": the three gate switches were never declared in
+   * `contributes.configuration`, VS Code will not persist a key it does not know, and the refusal
+   * was swallowed — the box lit up, nothing was saved, and nothing said a word. The declaration is
+   * the fix; this is what makes the NEXT one loud instead of silent.</p>
+   */
+  private async save(config: vscode.WorkspaceConfiguration, key: string, value: unknown): Promise<void> {
+    try {
+      await config.update(key, value, vscode.ConfigurationTarget.Global);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      void vscode.window.showErrorMessage(`ConnectOtherAIs could not save "coai.${key}": ${detail}`);
     }
   }
 

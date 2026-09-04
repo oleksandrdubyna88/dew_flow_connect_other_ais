@@ -111,9 +111,13 @@ public sealed class LiveRound
             var running = Record("running", 0, RunningSentence(), RoundRecord.Running);
             _store.Save(_session with { Rounds = [.. _session.Rounds, running] });
         }
-        catch (IOException)
+        catch (SessionStoreException)
         {
-            // A missed repaint is not a failed review; the next progress event writes again.
+            // A missed repaint is not a failed review; the next progress event writes again. This
+            // is the ONE save allowed to be lost, and it is why the store throws something NAMED:
+            // this catch used to read `catch (IOException)` while the failure arrived as
+            // UnauthorizedAccessException — not an IOException — so it walked straight past and
+            // killed six code rounds, one of them with every reviewer already answered.
         }
     }
 

@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.29.5 — 2026-09-04 (server 0.16.0)
+
+**The three switches in *The gate* now stay ticked.** They were never registered as settings, and VS
+Code refuses to save a key no extension has declared — so the box lit up, nothing was written, and
+the next honest read of your configuration found nothing there. The refusal was swallowed on top of
+that, which is why it looked like the boxes were falling off by themselves rather than failing. They
+are declared now, they default to off, and a setting that cannot be saved says so instead of going
+quiet.
+
+**A round no longer dies with "Access to the path is denied" — properly this time.** Six code rounds
+were killed by it, one of them on the final save with every reviewer already answered: the findings
+were in memory and were thrown away because a file could not be renamed. Two causes, and the first
+is the one nobody looks for. Reading a session file *forbade writing it*, and five copies of the
+server were running — one per window — each polling that directory. And the failure arrived as an
+exception that the one catch written for exactly this case did not match, so it walked straight past
+and took the round down.
+
+Readers and writers now take turns through a lock the operating system releases even if a process is
+killed. A missed repaint is dropped, the record of a finished round is best-effort, and the answer
+comes back either way — a file that will not rename is not worth a review that has already happened.
+
 ## 0.29.4 — 2026-09-04 (server 0.16.0)
 
 **A round that has finished closes itself again.** Rounds open while they run, which is what you want

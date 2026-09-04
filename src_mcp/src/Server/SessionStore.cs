@@ -113,6 +113,61 @@ public sealed record PersistedSession(SessionState State, List<RoundRecord> Roun
 /// One JSON file per session key under the data dir. Writes are whole-file and atomic-ish
 /// (temp + move): a torn session file would refuse every later call on that repo+branch.
 /// </remarks>
+/// <summary>
+/// A session could not be written, and the caller decides what that means.
+/// </summary>
+/// <remarks>
+/// Named on purpose. The failure used to arrive as <see cref="UnauthorizedAccessException"/> from
+/// <c>File.Move</c> — which is NOT an <see cref="IOException"/>, so the one <c>catch (IOException)</c>
+/// written for exactly this case walked past it and took the round down with it. Six code rounds
+/// died that way, one of them on the FINAL save with every reviewer already answered: the findings
+/// were in memory and were thrown away for the sake of a file name nobody was told.
+/// </remarks>
+public sealed class SessionStoreException(string message, Exception inner) : Exception(message, inner);
+
+/// <summary>
+/// Readers and writers of one session file take turns, across every process on this machine.
+/// </summary>
+/// <remarks>
+/// <para>Sharing alone was not enough, and the measurement is what said so: with the reader opening
+/// the file <c>ReadWrite | Delete</c> and the rename retried ten times over half a second, four
+/// readers in a hot loop still starved the writer in two runs of three. Retrying harder is not a
+/// mechanism — it is a hope with a bigger budget. A turn is a mechanism.</para>
+/// <para>The same shape as <c>EngineLease</c>, which serialises one GPU across every process here:
+/// an OS lock file, released by the kernel even when a process is killed. It is NOT named
+/// <c>session-*.json</c>, so the orphan sweep's own enumeration cannot pick it up.</para>
+/// <para>A turn that cannot be taken is not fatal on its own: the reader answers "no session" as it
+/// always did for an unreadable file, and the writer goes on to fail loudly at the move. Blocking a
+/// round on a lock file would be a worse failure than the one being fixed.</para>
+/// </remarks>
+internal sealed class SessionTurn : IDisposable
+{
+    private readonly FileStream? _held;
+
+    private SessionTurn(FileStream? held) => _held = held;
+
+    public static SessionTurn Take(string sessionFile)
+    {
+        var lockFile = Path.ChangeExtension(sessionFile, null) + ".turn";
+        for (var attempt = 0; attempt < 40; attempt++)
+        {
+            try
+            {
+                return new SessionTurn(new FileStream(
+                    lockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                Thread.Sleep(Random.Shared.Next(2, 8));
+            }
+        }
+
+        return new SessionTurn(null);
+    }
+
+    public void Dispose() => _held?.Dispose();
+}
+
 public sealed class SessionStore(string dataDir)
 {
     private string SessionsDir => Path.Combine(dataDir, "sessions");
@@ -127,15 +182,53 @@ public sealed class SessionStore(string dataDir)
 
         try
         {
-            return JsonSerializer.Deserialize(File.ReadAllText(file), ServerJsonContext.Default.PersistedSession);
+            return JsonSerializer.Deserialize(ReadShared(file), ServerJsonContext.Default.PersistedSession);
         }
-        catch (JsonException)
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
         {
-            return null; // a torn file is a fresh session, not a locked repo
+            return null; // a torn or momentarily busy file is a fresh session, not a locked repo
         }
     }
 
+    /// <summary>
+    /// Reads a session file WITHOUT forbidding anyone else to write it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The cause nobody looks for, and the one that actually killed six rounds:
+    /// <c>File.ReadAllText</c> opens with <see cref="FileShare.Read"/>, so a READER forbids writing.
+    /// Five <c>coai-mcp</c> processes were alive on this machine — one per VS Code window — each
+    /// polling this directory, so a writer's <c>File.Move</c> landed on a file somebody was merely
+    /// looking at and failed with <c>Access to the path is denied</c>.</para>
+    /// <para><see cref="FileShare.Delete"/> is in the set as well as <c>ReadWrite</c>: on Windows a
+    /// rename over an open file is a delete of that file, and a reader that permits writing but not
+    /// deleting still blocks the move.</para>
+    /// </remarks>
+    private static string ReadShared(string file)
+    {
+        using var turn = SessionTurn.Take(file);
+        using var stream = new FileStream(
+            file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+
+        return reader.ReadToEnd();
+    }
+
     public void Save(PersistedSession session)
+    {
+        try
+        {
+            Write(session);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // As ITSELF, so a caller can decide. A repaint may lose one; the answer to a finished
+            // round may not be thrown away over it.
+            throw new SessionStoreException(
+                $"the session for '{session.State.Branch}' could not be written: {e.Message}", e);
+        }
+    }
+
+    private void Write(PersistedSession session)
     {
         Directory.CreateDirectory(SessionsDir);
         var file = FileFor(session.State.RepoPath, session.State.Branch);
@@ -149,6 +242,9 @@ public sealed class SessionStore(string dataDir)
         File.WriteAllText(temp, JsonSerializer.Serialize(session, ServerJsonContext.Default.PersistedSession));
         try
         {
+            // The turn is held only for the rename, not for serialising: a writer that held it
+            // while formatting JSON would keep every reader waiting on work they do not need.
+            using var turn = SessionTurn.Take(file);
             MoveOverExisting(temp, file);
         }
         finally
@@ -168,7 +264,14 @@ public sealed class SessionStore(string dataDir)
     /// </remarks>
     private static void MoveOverExisting(string temp, string file)
     {
-        const int attempts = 5;
+        // Ten attempts with a jittered back-off — about half a second of patience in the worst case.
+        // The first version allowed five and a fixed 20 ms step, and a test with four readers in a
+        // hot loop spent the whole budget and failed: on Windows a rename over an open file needs
+        // that file's handle to permit deletion, and while a reader now permits it, the two still
+        // have to miss each other. Real readers poll every few seconds rather than continuously, so
+        // this budget is generous there and merely sufficient under the test's deliberate hostility.
+        // The jitter matters because several writers backing off in lock-step retry in lock-step.
+        const int attempts = 10;
         for (var attempt = 1; attempt <= attempts; attempt++)
         {
             try
@@ -178,7 +281,7 @@ public sealed class SessionStore(string dataDir)
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException && attempt < attempts)
             {
-                Thread.Sleep(20 * attempt);
+                Thread.Sleep(Random.Shared.Next(5, 15) * attempt);
             }
         }
     }
@@ -212,9 +315,9 @@ public sealed class SessionStore(string dataDir)
             PersistedSession? session;
             try
             {
-                session = JsonSerializer.Deserialize(File.ReadAllText(file), ServerJsonContext.Default.PersistedSession);
+                session = JsonSerializer.Deserialize(ReadShared(file), ServerJsonContext.Default.PersistedSession);
             }
-            catch (Exception e) when (e is JsonException or IOException)
+            catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
             {
                 continue;
             }

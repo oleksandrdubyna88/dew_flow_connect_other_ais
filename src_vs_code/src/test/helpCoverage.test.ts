@@ -75,6 +75,11 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.promptsPerRound': 'one picker per round per role',
   'coai.uiScale': 'text size',
   'coai.helpLanguage': 'language switch',
+  // The three gate switches. They shipped undeclared, so this guard never saw them: a setting that
+  // VS Code does not know about is a setting nothing checks the help for either.
+  'coai.autonomous': 'work autonomously',
+  'coai.splitPlan': 'split the plan into epics and stories',
+  'coai.splitWithFable': 'split with fable',
 };
 
 test('every command is described in the help, or declared self-evident with a reason', () => {
