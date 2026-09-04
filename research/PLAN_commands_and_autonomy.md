@@ -166,3 +166,24 @@ directly and only the server had it wrong.
 
 Measured rather than asserted: 66 calls, 11 real plans, three arms, two models —
 [`RESULTS_commands_campaign.md`](RESULTS_commands_campaign.md).
+
+### What the guard's own two rounds found
+
+The floor went through this gate like anything else, and both rounds paid for themselves.
+
+**Plan round** (`good_enough`, 12 gating, 3 reviewers). Two were taken. codex: the memory was a read
+followed by a write, and two servers sharing one data directory — one per MCP client on this machine,
+which is the ordinary case — could both see an unclaimed caller and both issue the order. gemini, as
+Blocking: the fallback for a client exporting no session id was OUR session id, which is repo+branch,
+so every epic arriving on its own branch looked like a fresh caller and was ordered to split again —
+the loop surviving exactly where the guard was meant to be. Nine were declined with reasons, chiefly a
+durable delivery-and-acknowledgement protocol for a sentence of English, and three variations on
+"pass a root-task id explicitly", which is the model bookkeeping this design exists to avoid.
+
+**Code round** (`proceed`, 9 reviewers). The first fix was `CreateNew` with an expired claim deleted
+first, and **three reviewers from three vendors independently found the same hole in it**: two
+processes can both pass the existence check, and the second one's delete removes the claim the first
+has just written. No ordering of delete-then-create closes that. The claim now holds the file
+`FileShare.None` for the whole read-decide-write, and the test that says so failed at 8 of 8 against
+the old shape. Also taken: `ReadStamp` swallowed only `IOException`, the file name used 64 bits of a
+SHA-256, and an empty caller id would have been one shared bucket for every anonymous client.

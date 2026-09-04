@@ -585,11 +585,15 @@ back as a **different session, on its own branch** — invisible to anything our
 What crosses those sessions is the AI itself, and Claude Code hands us its identity for free:
 `CLAUDE_CODE_SESSION_ID` is exported to every child it spawns, and an MCP server on stdio is one of
 those children. `CallerIdentity` reads it, with `COAI_CALLER_SESSION` as an override for a client that
-has no id of its own. `CallerSessions` then **claims** that caller's one order — `FileMode.CreateNew`
-under the data directory, so when two servers share it (one per MCP client on this machine, the
-ordinary case) exactly one of them is told it got there first. A read followed by a write would let
-both issue the order; raised by codex in this change's plan round and measured red at 8 of 8 before
-the fix. The claim **fails open**: a store that cannot be written gives the order and logs a warning,
+has no id of its own. `CallerSessions` then **claims** that caller's one order: one file under the
+data directory, opened `FileShare.None`, with the stamp read, the decision taken and the replacement
+written **without the handle ever being released**. Two servers share that directory as a matter of
+course — one per MCP client on this machine — and a read followed by a write lets both of them issue
+the order (codex, plan round; 8 of 8 claimed it before the fix). The first fix used `CreateNew` and
+deleted an expired claim first, and three reviewers in the code round independently found the hole in
+that: the second process's delete removes the claim the first has just written, and both return true.
+No ordering of delete-then-create closes it; holding the file does. The claim **fails open**: a store
+that cannot be written gives the order and logs a warning,
 because failing closed would silently disable the feature and a duplicate costs one repeated
 instruction while silence costs every instruction.
 

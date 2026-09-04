@@ -89,8 +89,14 @@ public sealed class CallerSessions(string dataDir)
     /// <para>A claim rather than a read followed by a write, because two servers share this data
     /// directory as a matter of course — one per MCP client on this machine — and a read-then-write
     /// pair lets both of them see an unclaimed caller and both issue the order. Raised by codex in
-    /// this change's plan round; the atomic half is <see cref="FileMode.CreateNew"/>, which is the
-    /// operating system telling exactly one caller it got there first.</para>
+    /// this change's plan round.</para>
+    /// <para><b>The whole decision happens while the file is held.</b> The first fix used
+    /// <c>CreateNew</c> and deleted an EXPIRED claim first — and three reviewers, independently,
+    /// found the same hole in it: two processes can both pass the existence check, and the second
+    /// one's delete removes the claim the first has just written, so both return true. There is no
+    /// ordering of delete-then-create that closes that. <c>FileShare.None</c> does: one process
+    /// holds the handle, reads the stamp, decides and writes without ever letting go, and every
+    /// other process is refused at the door rather than racing it.</para>
     /// <para><b>It fails OPEN.</b> If the claim cannot be written at all — an unwritable data
     /// directory, a full disk — the order is given rather than withheld, and a warning is the only
     /// signal. Failing closed would silently turn the whole feature off, which is worse than the
@@ -99,29 +105,31 @@ public sealed class CallerSessions(string dataDir)
     /// </remarks>
     public bool TryClaimSplitOrder(string caller, DateTime nowUtc, Action<string>? warn = null)
     {
+        // An empty caller would be one shared bucket for everybody who has no identity, which is the
+        // opposite of what the key is for. Unreachable from the server — `CallerFor` always
+        // substitutes the checkout — so a contract violation rather than a runtime condition.
+        ArgumentException.ThrowIfNullOrWhiteSpace(caller);
         var file = FileFor(caller);
-        if (StillRemembered(ReadStamp(caller), nowUtc))
-        {
-            return false;
-        }
-
         try
         {
             Directory.CreateDirectory(Dir);
-            // An expired claim is cleared first, so the CreateNew below is the only race there is.
-            if (File.Exists(file))
+            using var stream = new FileStream(file, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            using var reader = new StreamReader(stream, leaveOpen: true);
+            if (StillRemembered(StampIn(reader.ReadToEnd()), nowUtc))
             {
-                File.Delete(file);
+                return false;
             }
 
-            using var stream = new FileStream(file, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            // Truncated and rewritten in place: an expired claim is REPLACED without the file ever
+            // ceasing to exist, which is what makes the delete race impossible rather than unlikely.
+            stream.SetLength(0);
             using var writer = new StreamWriter(stream);
             writer.Write($"{nowUtc.ToString("o", CultureInfo.InvariantCulture)}\t{caller}\n");
             return true;
         }
         catch (IOException) when (File.Exists(file))
         {
-            return false; // somebody else claimed it between the check and the create
+            return false; // another process is holding it — which is another process claiming it
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -142,21 +150,27 @@ public sealed class CallerSessions(string dataDir)
 
         try
         {
-            var stamp = File.ReadAllText(file).Split('\t')[0].Trim();
-            return DateTime.TryParse(
-                stamp, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
-                ? parsed.ToUniversalTime()
-                : null;
+            return StampIn(File.ReadAllText(file));
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
+            // Including the case where a claim is being written right now: FileShare.None refuses
+            // this read, and "nobody has claimed it" is the only honest answer a reader can give.
             return null;
         }
     }
 
+    /// <summary>The stamp a claim file carries, or null for an empty, torn or unparseable one.</summary>
+    private static DateTime? StampIn(string content) =>
+        DateTime.TryParse(
+            content.Split('\t')[0].Trim(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
+            ? parsed.ToUniversalTime()
+            : null;
+
     // A session id is somebody else's string: it can hold slashes, colons, anything. Hashed rather
     // than escaped, because the file name is never read by a person and the id is kept INSIDE the
-    // file for when one has to be.
+    // file for when one has to be. The digest is used WHOLE — sixteen hex characters is 64 bits, and
+    // a caller silently inheriting another's claim is not a failure worth saving 48 characters for.
     private string FileFor(string caller) =>
-        Path.Combine(Dir, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(caller)))[..16] + ".txt");
+        Path.Combine(Dir, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(caller))) + ".txt");
 }

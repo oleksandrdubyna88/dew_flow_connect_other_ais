@@ -58,6 +58,37 @@ public sealed class CallerSessionsTests
     }
 
     [Fact]
+    public void ReplacingAnEXPIRED_ClaimIsAlsoAtomic()
+    {
+        // The hole three reviewers found in the first fix, independently: with an old claim present,
+        // delete-then-create lets the second process remove the file the first has just written, and
+        // both return true. This is the same test as the one above with a stale file in place — it
+        // failed at 4 of 8 against the delete-then-create shape.
+        var dir = Path.Combine(Path.GetTempPath(), "coai-callers-" + Guid.NewGuid().ToString("N")[..8]);
+        var now = DateTime.UtcNow;
+        new CallerSessions(dir).TryClaimSplitOrder("session-a", now - CallerSessions.Remembers - TimeSpan.FromHours(1));
+        var servers = Enumerable.Range(0, 8).Select(_ => new CallerSessions(dir)).ToList();
+
+        var claims = new bool[servers.Count];
+        Parallel.For(0, servers.Count, i => claims[i] = servers[i].TryClaimSplitOrder("session-a", now));
+
+        claims.Count(c => c).Should().Be(1, "an expired claim is replaced by exactly one successor");
+    }
+
+    [Fact]
+    public void ACallerWithNoName_IsARefusal_NotOneSharedBucketForEverybody()
+    {
+        // An empty id would hash to one file that every anonymous client claims and suppresses for
+        // each other. Unreachable from the server, which substitutes the checkout — so this holds
+        // the contract for whoever calls it next.
+        var callers = InATempDir(out _);
+
+        var act = () => callers.TryClaimSplitOrder("  ", DateTime.UtcNow);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
     public void ADifferentCaller_IsNotTheSameTask()
     {
         var callers = InATempDir(out _);
