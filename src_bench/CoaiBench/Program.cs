@@ -89,6 +89,9 @@ public static class Program
         Console.WriteLine(
             $"vendors from {vendorsFile}: "
             + string.Join(", ", configured.Select(v => $"{v.Id} ({v.Runtime}/{v.Model})")));
+        // Part of the environment, not a detail: a checkout carrying v4 and one carrying v5 are two
+        // different machines, because the snippet is how a repository's AI learns the orders exist.
+        Console.WriteLine($"CLAUDE.md snippet: {Snippet.VersionIn(options.Repo)}");
         Console.WriteLine($"settings in force:\n{PanelSettingsFile.Describe(settings)}\n");
         var outDir = OutDir(options);
         var file = Path.Combine(outDir, "runs.json");
@@ -117,6 +120,8 @@ public static class Program
         await File.WriteAllTextAsync(
             Path.Combine(outDir, "settings.md"),
             $"# The settings this campaign ran under\n\nFrom `{vendorsFile}`, with `--set` on top.\n\n"
+                + $"Server: `{WhichServer(options)}`\n\n"
+                + $"CLAUDE.md snippet in the checkout: **{Snippet.VersionIn(options.Repo)}**\n\n"
                 + $"```\n{PanelSettingsFile.Describe(settings)}\n```\n",
             ct);
         await RunStore.SaveAsync(file, runs, CancellationToken.None);
