@@ -577,7 +577,39 @@ before this one.
 - **The autonomy command does not tell you to re-read epics that do not exist.** With the split
   switch off it says "re-read the whole plan" instead.
 
-**A session is saved under its own scratch name, and the move is retried (2026-09-04).** The store wrote `<session>.json.tmp` — one FIXED path — and this machine runs several MCP clients at once, each with a server of its own, sharing a data directory; a nine-reviewer round saves on every reviewer transition. Two writers therefore wrote the same scratch file and both tried to move it, and the loser died with `UnauthorizedAccessException: Access to the path is denied` out of `LiveRound.Persist` — twice in one morning's log, and it is what refused a plan round while this very change was being reviewed. The scratch name is now per write, the move is retried briefly for the case a unique name cannot fix (a reader or a scanner holding the destination), and the last attempt is allowed to throw so a save that never lands is not silent.
+**A reader could kill a round, and the catch written for it looked past the exception (2026-09-04).**
+Six code rounds died with `Access to the path is denied`. One died on the FINAL save, with every
+reviewer answered and the verdict decided: the findings were in memory and all of it was thrown away
+because a file could not be renamed. Three separate faults, found in this order.
+
+1. **The scratch name was fixed.** `Save` wrote `<session>.json.tmp` — one path — and
+   `LiveRound.Persist` is called from the progress callback of every reviewer, so a nine-reviewer
+   round had nine writers racing for one temporary file. It is now named per write.
+2. **A reader forbade writing.** This is the cause nobody looks for and the one that mattered most:
+   `File.ReadAllText` opens with `FileShare.Read`, and five `coai-mcp` processes were alive on this
+   machine — one per VS Code window — each polling the sessions directory. A writer's `File.Move`
+   therefore landed on a file somebody was merely LOOKING at. Reads now open
+   `ReadWrite | Delete`; `Delete` belongs in the set because on Windows a rename over an open file is
+   a delete of that file, and a reader permitting writes but not deletes still blocks the move.
+3. **It failed as `UnauthorizedAccessException`, which is not an `IOException`** — so
+   `LiveRound.Persist`'s `catch (IOException)`, written for exactly this case, walked straight past
+   it and took the round down. The store now throws a named `SessionStoreException` and every caller
+   states its own policy: **a repaint may be lost** (the next progress event writes again), **the
+   record of a finished round is best-effort** and the answer goes back regardless, and **every other
+   save still throws**, because those are the state the protocol runs on.
+
+**Sharing was not enough, and the measurement is what said so.** With the reader sharing and the
+rename retried ten times over half a second, four readers in a hot loop still starved the writer in
+two runs of three. Retrying harder is a hope with a bigger budget, not a mechanism. Readers and
+writers now take **turns** — `SessionTurn`, an OS lock file per session, the same shape as
+`EngineLease`, released by the kernel even when a process is killed. The turn is held only for the
+rename, never for serialising JSON: a writer that held it while formatting would keep every reader
+waiting on work they do not need. A turn that cannot be taken is not fatal on its own — the reader
+answers "no session" as it always did for an unreadable file, and the writer goes on to fail loudly
+at the move; blocking a round on a lock file would be a worse failure than the one being fixed.
+
+The lock file is deliberately NOT named `session-*.json`, so the orphan sweep's own enumeration
+cannot pick it up.
 
 **The order to split is given ONCE, and it is keyed by the CALLER (2026-09-04).** Raised by the
 operator before it could happen: a plan is split into epics, each epic comes back for its own plan

@@ -21,6 +21,15 @@ namespace CoaiMcp.Tests;
 /// <c>IOException</c> — so <c>LiveRound.Persist</c>'s <c>catch (IOException)</c>, written for exactly
 /// this case, walked straight past it and took the round down.</para>
 /// </remarks>
+/// <remarks>
+/// <para>In the <c>fakecli-env</c> collection so it never runs BESIDE the end-to-end fan-out. Its
+/// first version spun four reader threads for three seconds; on a two-core CI runner that starved
+/// the tests spawning real reviewer processes next door, and one of them died in a
+/// <c>FileStream</c> constructor. The release failed on win-x64 for a fault that had nothing to do
+/// with the change — a test that can only pass when it has the machine to itself is a test that
+/// makes other tests lie.</para>
+/// </remarks>
+[Collection("fakecli-env")]
 public sealed class SessionSaveSurvivesReadersTests : IDisposable
 {
     private readonly string _dir = Directory.CreateTempSubdirectory("coai-readers-").FullName;
@@ -51,15 +60,19 @@ public sealed class SessionSaveSurvivesReadersTests : IDisposable
         var repo = Path.Combine(_dir, "repo");
         store.Save(SessionFor(repo, 1));
         var failures = new System.Collections.Concurrent.ConcurrentBag<Exception>();
-        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(20));
 
+        // Bounded, and each reader yields between reads. A three-second spin on four threads proved
+        // the point and starved a two-core CI runner at the same time; this interleaves just as hard
+        // without owning the machine.
         var readers = Enumerable.Range(0, 4).Select(_ => Task.Run(() =>
         {
-            while (!stop.IsCancellationRequested)
+            for (var read = 0; read < 200 && !stop.IsCancellationRequested; read++)
             {
                 try
                 {
                     store.Load(repo, "main");
+                    Thread.Yield();
                 }
                 catch (Exception e)
                 {
@@ -68,7 +81,7 @@ public sealed class SessionSaveSurvivesReadersTests : IDisposable
             }
         })).ToArray();
 
-        for (var write = 0; write < 60 && !stop.IsCancellationRequested; write++)
+        for (var write = 0; write < 40 && !stop.IsCancellationRequested; write++)
         {
             try
             {
@@ -80,8 +93,8 @@ public sealed class SessionSaveSurvivesReadersTests : IDisposable
             }
         }
 
-        await stop.CancelAsync();
         await Task.WhenAll(readers);
+        await stop.CancelAsync();
         failures.Should().BeEmpty("a window that is merely LOOKING at the rounds must not end a round");
     }
 

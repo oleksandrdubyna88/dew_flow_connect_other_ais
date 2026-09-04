@@ -24,6 +24,9 @@ namespace CoaiMcp.Tests;
 /// collision; the retry covers the remaining case, a reader or a scanner holding the destination
 /// for a moment, which Windows also reports as access denied.</para>
 /// </remarks>
+// Beside the end-to-end fan-out this is eight threads of pure disk contention on a two-core
+// runner, which is how it made a test that spawns real processes fail in a FileStream.
+[Collection("fakecli-env")]
 public sealed class SessionStoreConcurrencyTests : IDisposable
 {
     private readonly string _dir = Directory.CreateTempSubdirectory("coai-sessions-").FullName;
