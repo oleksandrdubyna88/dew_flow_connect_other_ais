@@ -584,10 +584,24 @@ back as a **different session, on its own branch** — invisible to anything our
 
 What crosses those sessions is the AI itself, and Claude Code hands us its identity for free:
 `CLAUDE_CODE_SESSION_ID` is exported to every child it spawns, and an MCP server on stdio is one of
-those children. `CallerIdentity` reads it (`COAI_CALLER_SESSION` overrides, for a client that has no
-id of its own; our own session id is the fallback for a client that identifies itself in no way), and
-`CallerSessions` writes one small file per caller when a split is actually ordered. A caller that has
-one is a caller already inside a split, and is told so:
+those children. `CallerIdentity` reads it, with `COAI_CALLER_SESSION` as an override for a client that
+has no id of its own. `CallerSessions` then **claims** that caller's one order — `FileMode.CreateNew`
+under the data directory, so when two servers share it (one per MCP client on this machine, the
+ordinary case) exactly one of them is told it got there first. A read followed by a write would let
+both issue the order; raised by codex in this change's plan round and measured red at 8 of 8 before
+the fix. The claim **fails open**: a store that cannot be written gives the order and logs a warning,
+because failing closed would silently disable the feature and a duplicate costs one repeated
+instruction while silence costs every instruction.
+
+A client that names no session at all falls back to the **checkout**, not to our session. Our session
+is repo+branch and an epic arrives on its own branch, so a session-keyed fallback would call every
+epic a fresh caller and re-order the split on each of them — the exact loop this exists to stop
+(gemini, Blocking, same round; the test reproduces it word for word before the fix). The price is
+stated rather than hidden: an anonymous client starting a second, unrelated task in the same checkout
+within a day is told it is a piece, which is the cheaper of the two errors and one the piece's own
+order invites it to contradict.
+
+A caller that already holds a claim is a caller already inside a split, and is told so:
 
 > This plan is a PIECE of a split that is already under way, so do NOT split it again: build it as
 > one unit, review its diff through this gate, fix, document, test and commit. If it is genuinely too

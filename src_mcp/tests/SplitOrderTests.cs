@@ -204,6 +204,32 @@ public sealed class SplitOrderTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AClientThatNamesNoSession_IsStillFollowedOntoTheEpicBranch()
+    {
+        // The fallback used to be OUR session id, which is repo+branch — so every epic, arriving on
+        // its own branch, looked like a brand new caller and was ordered to split again. The loop
+        // survived exactly where the guard was supposed to be. Raised as Blocking by gemini in this
+        // change's plan round; the fallback is the CHECKOUT, which is what the epics share.
+        var claude = Environment.GetEnvironmentVariable("CLAUDE_CODE_SESSION_ID");
+        Environment.SetEnvironmentVariable("COAI_CALLER_SESSION", null);
+        Environment.SetEnvironmentVariable("CLAUDE_CODE_SESSION_ID", null);
+        try
+        {
+            var service = Service(splitPlan: true);
+            CommandsOf(await PlanRound(service, "feature", BigPlan))[0].Should().Contain("EPICS");
+
+            var epic = await PlanRound(service, "epic-1", BigPlan);
+
+            CommandsOf(epic)[0].Should().Contain("do NOT split it again");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CLAUDE_CODE_SESSION_ID", claude);
+            Environment.SetEnvironmentVariable("COAI_CALLER_SESSION", _caller);
+        }
+    }
+
+    [Fact]
     public async Task ADifferentClaude_IsOwedItsOwnSplitOrder()
     {
         // Two people working in one repository at once is the ordinary case, and the second one's

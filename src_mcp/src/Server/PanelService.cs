@@ -551,7 +551,7 @@ public sealed class PanelService
             // The operator's own switches, read for THIS call: the settings file is stamped and
             // reloaded per tool call, so a box ticked a second ago governs this round.
             var caller = CallerFor(session);
-            var context = new Core.Commands.CommandContext(
+            var provisional = new Core.Commands.CommandContext(
                 Autonomous: _settings.Autonomous,
                 SplitPlan: _settings.SplitPlan,
                 SplitWithFable: _settings.SplitWithFable,
@@ -570,11 +570,21 @@ public sealed class PanelService
                 // Once per CALLER, not once per session: the epics a split produces come back as
                 // their own sessions on their own branches, so a per-session memory would order
                 // every one of them to split again — epics of epics, with no floor.
-                FirstPlanRound: !_callers.SplitAlreadyOrdered(caller, DateTime.UtcNow));
+                FirstPlanRound: true);
+            // The caller's one order is CLAIMED, and only on a round that would actually give it —
+            // a claim taken on a code round would spend it on a round that issues nothing. The
+            // product's own predicate asks the question, so the condition cannot drift from what
+            // `For` then does with it.
+            var context = Core.Commands.GateCommands.OrdersSplit(provisional)
+                ? provisional with
+                {
+                    FirstPlanRound = _callers.TryClaimSplitOrder(
+                        caller, DateTime.UtcNow, message => _log.Warning("{Message}", message)),
+                }
+                : provisional;
             var commands = Core.Commands.GateCommands.For(context);
             if (Core.Commands.GateCommands.OrdersSplit(context))
             {
-                _callers.RecordSplitOrder(caller, DateTime.UtcNow);
                 _log.Information("split ordered to caller {Caller}", caller);
             }
             answer = answer with
@@ -889,14 +899,19 @@ public sealed class PanelService
     /// Whom the split order is remembered against.
     /// </summary>
     /// <remarks>
-    /// The calling AI's own session when it exports one — Claude Code does, to every child it
-    /// spawns, so nothing has to be passed or remembered by the model. A client that identifies
-    /// itself in no way at all falls back to OUR session, which still stops the same plan being
-    /// ordered to split twice; it cannot follow that caller onto the epic branches, and a client
-    /// with no session id is a client we cannot follow anywhere.
+    /// <para>The calling AI's own session when it exports one — Claude Code does, to every child it
+    /// spawns, so nothing has to be passed or remembered by the model.</para>
+    /// <para>A client that identifies itself in no way at all falls back to the CHECKOUT, not to our
+    /// session. Our session is repo+branch, and an epic arrives on its own branch: a session-keyed
+    /// fallback would call every epic a fresh caller and re-order the split on each of them, which
+    /// is the exact loop this exists to stop — raised as Blocking by gemini in this change's plan
+    /// round. The checkout follows a caller across its branches, which is where the epics are. The
+    /// price is stated rather than hidden: an anonymous client starting a SECOND, unrelated task in
+    /// the same checkout within a day is told it is a piece. That is the cheaper error, and the
+    /// piece's own order tells it to say so if it disagrees.</para>
     /// </remarks>
     private static string CallerFor(PersistedSession session) =>
-        CallerIdentity.Current() is { Length: > 0 } id ? id : $"session:{session.State.SessionId}";
+        CallerIdentity.Current() is { Length: > 0 } id ? id : $"repo:{session.State.RepoPath}";
 
     private string ComposePrompt(PromptChoice choice, string context) =>
         $"{_prompts.ForChoice(choice)}\n\n## The finding contract\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{FindingSchema.Json}\n\n{context}";

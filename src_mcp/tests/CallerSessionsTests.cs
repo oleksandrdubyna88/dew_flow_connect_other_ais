@@ -34,20 +34,54 @@ public sealed class CallerSessionsTests
         var callers = InATempDir(out _);
         var now = DateTime.UtcNow;
 
-        callers.RecordSplitOrder("session-a", now);
+        callers.TryClaimSplitOrder("session-a", now).Should().BeTrue();
 
         callers.SplitAlreadyOrdered("session-a", now.AddMinutes(20)).Should().BeTrue(
             "this is the epic asking for its own plan review, and it is already a piece of a split");
+        callers.TryClaimSplitOrder("session-a", now.AddMinutes(20)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TheClaimIsATOMIC_SoTwoServersCannotBothGiveTheOrder()
+    {
+        // Two MCP clients on this machine means two servers sharing one data directory — the
+        // ordinary case, not an exotic one. A read followed by a write lets both of them see an
+        // unclaimed caller and both issue the order. Raised by codex in this change's plan round.
+        var dir = Path.Combine(Path.GetTempPath(), "coai-callers-" + Guid.NewGuid().ToString("N")[..8]);
+        var now = DateTime.UtcNow;
+        var servers = Enumerable.Range(0, 8).Select(_ => new CallerSessions(dir)).ToList();
+
+        var claims = new bool[servers.Count];
+        Parallel.For(0, servers.Count, i => claims[i] = servers[i].TryClaimSplitOrder("session-a", now));
+
+        claims.Count(c => c).Should().Be(1, "exactly one caller can be the first");
     }
 
     [Fact]
     public void ADifferentCaller_IsNotTheSameTask()
     {
         var callers = InATempDir(out _);
-        callers.RecordSplitOrder("session-a", DateTime.UtcNow);
+        callers.TryClaimSplitOrder("session-a", DateTime.UtcNow).Should().BeTrue();
 
-        callers.SplitAlreadyOrdered("session-b", DateTime.UtcNow).Should().BeFalse(
+        callers.TryClaimSplitOrder("session-b", DateTime.UtcNow).Should().BeTrue(
             "a second Claude working on something else is owed its own split order");
+    }
+
+    [Fact]
+    public void AnUnwritableStore_GivesTheOrderRatherThanSwallowingIt()
+    {
+        // Fail OPEN, and say so. Failing closed would silently turn the whole feature off — a
+        // duplicate costs one repeated instruction, the silence costs every instruction.
+        var file = Path.Combine(Path.GetTempPath(), "coai-callers-file-" + Guid.NewGuid().ToString("N")[..8]);
+        File.WriteAllText(file, "not a directory");
+        var warnings = new List<string>();
+
+        // A data dir that is a FILE: the `callers` directory under it can never be created.
+        var claimed = new CallerSessions(file).TryClaimSplitOrder("session-a", DateTime.UtcNow, warnings.Add);
+
+        claimed.Should().BeTrue();
+        warnings.Should().ContainSingle().Which.Should().Contain("may be given again");
+        File.Delete(file);
     }
 
     [Fact]
@@ -56,7 +90,7 @@ public sealed class CallerSessionsTests
         // The server restarts between rounds — an MCP client reconnecting respawns it — so a memory
         // held in a field would forget exactly when the epics start coming back.
         var dir = Path.Combine(Path.GetTempPath(), "coai-callers-" + Guid.NewGuid().ToString("N")[..8]);
-        new CallerSessions(dir).RecordSplitOrder("session-a", DateTime.UtcNow);
+        new CallerSessions(dir).TryClaimSplitOrder("session-a", DateTime.UtcNow).Should().BeTrue();
 
         new CallerSessions(dir).SplitAlreadyOrdered("session-a", DateTime.UtcNow).Should().BeTrue();
     }
@@ -67,10 +101,12 @@ public sealed class CallerSessionsTests
         var callers = InATempDir(out _);
         var yesterday = DateTime.UtcNow - CallerSessions.Remembers - TimeSpan.FromMinutes(1);
 
-        callers.RecordSplitOrder("session-a", yesterday);
+        callers.TryClaimSplitOrder("session-a", yesterday).Should().BeTrue();
 
         callers.SplitAlreadyOrdered("session-a", DateTime.UtcNow).Should().BeFalse(
             "a session long enough to span a day is a session doing more than one thing");
+        callers.TryClaimSplitOrder("session-a", DateTime.UtcNow).Should().BeTrue(
+            "and the expired claim is replaced rather than refusing every later one");
     }
 
     [Fact]
@@ -82,7 +118,7 @@ public sealed class CallerSessionsTests
         var callers = InATempDir(out _);
         var awkward = "claude/2026-09-04T10:11:12Z?x=1";
 
-        callers.RecordSplitOrder(awkward, DateTime.UtcNow);
+        callers.TryClaimSplitOrder(awkward, DateTime.UtcNow).Should().BeTrue();
 
         callers.SplitAlreadyOrdered(awkward, DateTime.UtcNow).Should().BeTrue();
         callers.SplitAlreadyOrdered("claude/2026-09-04T10:11:12Z?x=2", DateTime.UtcNow).Should().BeFalse();
@@ -127,6 +163,6 @@ public sealed class CallerSessionsTests
     }
 
     [Fact]
-    public void AClientThatSaysNothing_IsEmpty_AndTheServerFallsBackToItsOwnSession() =>
+    public void AClientThatSaysNothing_IsEmpty_AndTheServerFallsBackToTheCheckout() =>
         CallerIdentity.From(_ => null).Should().BeEmpty();
 }

@@ -78,25 +78,57 @@ public sealed class CallerSessions(string dataDir)
     public static bool StillRemembered(DateTime? orderedUtc, DateTime nowUtc) =>
         orderedUtc is { } t && nowUtc - t < Remembers && nowUtc >= t;
 
-    /// <summary>Has this caller already been ordered to split something?</summary>
+    /// <summary>Has this caller already been ordered to split something? A pure question.</summary>
     public bool SplitAlreadyOrdered(string caller, DateTime nowUtc) =>
         StillRemembered(ReadStamp(caller), nowUtc);
 
-    public void RecordSplitOrder(string caller, DateTime nowUtc)
+    /// <summary>
+    /// Take this caller's ONE split order, atomically. True means it is yours to give.
+    /// </summary>
+    /// <remarks>
+    /// <para>A claim rather than a read followed by a write, because two servers share this data
+    /// directory as a matter of course — one per MCP client on this machine — and a read-then-write
+    /// pair lets both of them see an unclaimed caller and both issue the order. Raised by codex in
+    /// this change's plan round; the atomic half is <see cref="FileMode.CreateNew"/>, which is the
+    /// operating system telling exactly one caller it got there first.</para>
+    /// <para><b>It fails OPEN.</b> If the claim cannot be written at all — an unwritable data
+    /// directory, a full disk — the order is given rather than withheld, and a warning is the only
+    /// signal. Failing closed would silently turn the whole feature off, which is worse than the
+    /// duplicate it prevents: the duplicate costs one repeated instruction, the silence costs every
+    /// instruction.</para>
+    /// </remarks>
+    public bool TryClaimSplitOrder(string caller, DateTime nowUtc, Action<string>? warn = null)
     {
+        var file = FileFor(caller);
+        if (StillRemembered(ReadStamp(caller), nowUtc))
+        {
+            return false;
+        }
+
         try
         {
             Directory.CreateDirectory(Dir);
-            File.WriteAllText(
-                FileFor(caller),
-                $"{nowUtc.ToString("o", CultureInfo.InvariantCulture)}\t{caller}\n");
+            // An expired claim is cleared first, so the CreateNew below is the only race there is.
+            if (File.Exists(file))
+            {
+                File.Delete(file);
+            }
+
+            using var stream = new FileStream(file, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            using var writer = new StreamWriter(stream);
+            writer.Write($"{nowUtc.ToString("o", CultureInfo.InvariantCulture)}\t{caller}\n");
+            return true;
         }
-        catch (IOException)
+        catch (IOException) when (File.Exists(file))
         {
-            // A memory we could not write is a split order given twice — noisy, not dangerous.
+            return false; // somebody else claimed it between the check and the create
         }
-        catch (UnauthorizedAccessException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
+            warn?.Invoke($"the split-order memory at {Dir} could not be written ({e.Message}) — "
+                + "the order is being given, and may be given again");
+
+            return true;
         }
     }
 
