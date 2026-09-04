@@ -39,6 +39,12 @@ jobs:
       - name: Test
         run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests
 
+      # The bench is BUILT by the solution and is deliberately not a release asset, so this step is
+      # the only thing that would ever notice it breaking. An instrument nobody checks reports
+      # whatever it last happened to compile to.
+      - name: Test the bench
+        run: ./src_bench/CoaiBench.Tests/bin/Release/net10.0/CoaiBench.Tests
+
       # The rules that check themselves: a misfiled plan and a stale pin are red builds,
       # not discoveries.
       - name: Plan lifecycle

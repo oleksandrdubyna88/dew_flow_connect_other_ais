@@ -8,6 +8,7 @@ Convention: `.claude/rules/shared/common/planning-docs.md`.
 
 | Plan | What it is for |
 |---|---|
+| [PLAN_bench_campaign_after_the_store_fix.md](PLAN_bench_campaign_after_the_store_fix.md) | Six code rounds died today and every fix has a test but none has carried a real round. Two cases sequentially against the recorded 0.15.0 numbers, then five windows on one data directory, then Fable judging what was worth having. |
 | [PLAN_multi_repo_and_uncommitted.md](PLAN_multi_repo_and_uncommitted.md) | A change that spans several repositories is reviewed as one round with one verdict, and work that is not committed yet can be reviewed at all — the working tree snapshotted into a real commit object so nothing downstream changes. |
 | [PLAN_local_trust_and_vllm.md](PLAN_local_trust_and_vllm.md) | The local reviewer assumes a trusted Ollama on this machine. Acknowledging a non-loopback host, a key path for a served vLLM, and whether cancellation works on anything else. |
 | [PLAN_provider_liveness.md](PLAN_provider_liveness.md) | `providers` still calls a vendor healthy on the strength of `--version`, which never reaches the vendor. Three states instead of two, established by a real round trip and cached. |
