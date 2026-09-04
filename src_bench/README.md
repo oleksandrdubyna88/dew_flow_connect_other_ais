@@ -53,14 +53,14 @@ same vendor to run `antigravity` days earlier — and a local vendor with no mod
 reviewers failed and the report blamed the release. A bench that rebuilds vendors from names is
 measuring a machine nobody has.
 
-**It runs against the INSTALLED server and writes to the REAL data directory.** 
-defaults to the binary the panel spawns, and the rounds appear in the panel's *Recent rounds* while
-they happen — which is where a person watches a campaign, and what a window actually does. 
-gives each run a directory of its own, for comparing two configurations that must not see each other.
+**It runs against the INSTALLED server and writes to the REAL data directory.** `--exe` defaults to
+the binary the panel spawns, and the rounds appear in the panel's *Recent rounds* while they happen —
+which is where a person watches a campaign, and what a window actually does. `--isolate` gives each
+run a directory of its own, for comparing two configurations that must not see each other.
 
 **Every setting comes from the panel too** — thresholds, rounds per role, prompts, the exhausted
-policy — with  on top, and the effective set is printed before the first round and saved as
- beside the runs.
+policy — with `--set` on top, and the effective set is printed before the first round and saved as
+`settings.md` beside the runs.
 
 **Nothing runs that was not named.** There is no default vendor and no default model, because a
 default spends somebody's quota on a guess.
