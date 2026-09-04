@@ -1,3 +1,5 @@
+using CoaiMcp.Runners.Git;
+
 namespace CoaiMcp.Runners.Context;
 
 /// <summary>One rule document as the reviewers will see it.</summary>
@@ -11,7 +13,19 @@ public sealed record RuleBundle(IReadOnlyList<RuleFile> Files, IReadOnlyList<str
 {
     public static readonly RuleBundle None = new([], [], 0);
 
-    public bool HasRules => Files.Count > 0;
+    /// <summary>
+    /// Rule mounts the repository DECLARES and this tree does not have — a submodule that was not
+    /// populated.
+    /// </summary>
+    /// <remarks>
+    /// A different absence from <see cref="Omitted"/>, and the more dangerous one: an omitted file
+    /// was seen and dropped, while these were never on disk to be counted. Without this the bundle
+    /// would report zero files, zero omissions and no problem, which is precisely how a reviewer
+    /// comes to certify compliance with rules nobody showed it.
+    /// </remarks>
+    public IReadOnlyList<string> MissingMounts { get; init; } = [];
+
+    public bool HasRules => Files.Count > 0 || MissingMounts.Count > 0;
 
     /// <summary>
     /// The block that goes into a prompt: each file named, then its text verbatim.
@@ -23,20 +37,22 @@ public sealed record RuleBundle(IReadOnlyList<RuleFile> Files, IReadOnlyList<str
     /// compliance with rules it never saw, which turns an absence of evidence into a clean bill of
     /// health.
     /// </remarks>
-    public string Render()
-    {
-        if (!HasRules)
-        {
-            return string.Empty;
-        }
+    public string Render() => HasRules ? Body() + OmittedNote() + MissingNote() : string.Empty;
 
-        var parts = Files.Select(f => $"### {f.Path}\n\n{f.Text.TrimEnd()}\n");
-        var omitted = Omitted.Count == 0
+    private string Body() => string.Join("\n", Files.Select(f => $"### {f.Path}\n\n{f.Text.TrimEnd()}\n"));
+
+    private string OmittedNote() =>
+        Omitted.Count == 0
             ? string.Empty
             : $"\n> {Omitted.Count} further rule file(s) omitted for length: {string.Join(", ", Omitted)}.\n" +
               "> A rule you were not shown is not a rule this change complies with — say so if it matters.\n";
-        return string.Join("\n", parts) + omitted;
-    }
+
+    private string MissingNote() =>
+        MissingMounts.Count == 0
+            ? string.Empty
+            : $"\n> This project keeps rules at {string.Join(", ", MissingMounts)}, and they are NOT in " +
+              "the tree you were given — a submodule this round could not populate.\n" +
+              "> Those rules were not shown to you. Do not read their absence as compliance.\n";
 }
 
 /// <summary>
@@ -68,6 +84,20 @@ public static class RuleFiles
     private static readonly string[] NotOurs =
         ["node_modules", "bin", "obj", ".git", "dist", "out", "artifacts", "vendor", "packages"];
 
+    /// <summary>
+    /// What a mounted rules REPOSITORY carries that is not a rule: its own open plans, its settings
+    /// reference copy, its tooling and fixtures.
+    /// </summary>
+    /// <remarks>
+    /// Scoped to inside a mount, never matched by name alone. A repository is perfectly entitled to
+    /// its own <c>.claude/rules/todo/</c>, and filtering by the word would throw away one of its own
+    /// rules to tidy up somebody else's repository.
+    /// </remarks>
+    private static readonly string[] MountHousekeepingDirs = ["todo", "settings", "tools"];
+
+    /// <summary>A rules repository's front matter, at ITS root — about the repo, not a rule.</summary>
+    private static readonly string[] MountHousekeepingFiles = ["README.md", "ROLLOUT.md", "POST_DEPLOY.md"];
+
     public static RuleBundle Collect(string repoPath, int budgetBytes = DefaultBudgetBytes)
     {
         if (!Directory.Exists(repoPath))
@@ -75,11 +105,12 @@ public static class RuleFiles
             return RuleBundle.None;
         }
 
+        var mounts = GitModules.In(repoPath);
         var kept = new List<RuleFile>();
         var omitted = new List<string>();
         var used = 0;
 
-        foreach (var relative in Candidates(repoPath))
+        foreach (var relative in Candidates(repoPath, mounts))
         {
             var full = Path.Combine(repoPath, relative.Replace('/', Path.DirectorySeparatorChar));
             if (Read(full) is not { } text)
@@ -99,33 +130,88 @@ public static class RuleFiles
             used += text.Length;
         }
 
-        return new RuleBundle(kept, omitted, used);
+        return new RuleBundle(kept, omitted, used) { MissingMounts = EmptyRuleMounts(repoPath, mounts) };
     }
 
-    /// <summary>Every rule path, instruction files first, then folders in a stable order.</summary>
-    private static IEnumerable<string> Candidates(string repoPath)
+    /// <summary>
+    /// Every rule path: instruction files, then the repository's OWN rule folders, then the mounts.
+    /// </summary>
+    /// <remarks>
+    /// The last two used to be one alphabetical list, which decided the budget race by directory
+    /// name — a local <c>.claude/rules/workflows/</c> sorts after <c>shared/</c>, so 208 KB of family
+    /// rules would be read first and the repository's own rule dropped. The rules a diff in THIS
+    /// repository can break come first; the family's are the same in six checkouts.
+    /// </remarks>
+    private static IEnumerable<string> Candidates(string repoPath, IReadOnlyList<SubmoduleMount> mounts)
     {
         foreach (var file in InstructionFiles)
         {
             yield return file;
         }
 
-        foreach (var (dir, pattern) in RuleFolders)
+        var folders = FolderFiles(repoPath, mounts);
+        foreach (var path in folders.Where(p => !UnderAnyMount(p, mounts)))
         {
-            var root = Path.Combine(repoPath, dir.Replace('/', Path.DirectorySeparatorChar));
-            if (!Directory.Exists(root))
-            {
-                continue;
-            }
+            yield return path;
+        }
 
-            var found = Enumerate(root, pattern)
-                .Select(p => Relative(repoPath, p))
-                .Where(p => !Excluded(p))
-                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase);
-            foreach (var path in found)
-            {
-                yield return path;
-            }
+        foreach (var path in folders.Where(p => UnderAnyMount(p, mounts)))
+        {
+            yield return path;
+        }
+    }
+
+    /// <summary>Every rule file under the rule folders, de-duplicated and in a stable order.</summary>
+    private static IReadOnlyList<string> FolderFiles(string repoPath, IReadOnlyList<SubmoduleMount> mounts) =>
+        [.. RuleFolders
+            .SelectMany(f => Enumerate(Path.Combine(repoPath, f.Dir.Replace('/', Path.DirectorySeparatorChar)), f.Pattern))
+            .Select(p => Relative(repoPath, p))
+            .Where(p => !Excluded(p) && !Housekeeping(p, mounts))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)];
+
+    private static bool UnderAnyMount(string relative, IReadOnlyList<SubmoduleMount> mounts) =>
+        mounts.Any(m => relative.StartsWith(m.Path + "/", StringComparison.OrdinalIgnoreCase));
+
+    private static bool Housekeeping(string relative, IReadOnlyList<SubmoduleMount> mounts) =>
+        mounts.Any(m => HousekeepingIn(m.Path, relative));
+
+    private static bool HousekeepingIn(string mount, string relative)
+    {
+        var prefix = mount + "/";
+        if (!relative.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var rest = relative[prefix.Length..];
+        var first = rest.Split('/')[0];
+
+        return rest.Contains('/')
+            ? MountHousekeepingDirs.Contains(first, StringComparer.OrdinalIgnoreCase)
+            : MountHousekeepingFiles.Contains(first, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Rule mounts this repository declares that are not actually here — the reviewer is told.
+    /// </summary>
+    private static IReadOnlyList<string> EmptyRuleMounts(string repoPath, IReadOnlyList<SubmoduleMount> mounts) =>
+        [.. mounts
+            .Where(m => IsRulesMount(m.Path) && IsEmptyDirectory(Path.Combine(repoPath, m.Path.Replace('/', Path.DirectorySeparatorChar))))
+            .Select(m => m.Path)];
+
+    private static bool IsRulesMount(string path) =>
+        RuleFolders.Any(f => path.StartsWith(f.Dir + "/", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsEmptyDirectory(string path)
+    {
+        try
+        {
+            return !Directory.Exists(path) || !Directory.EnumerateFileSystemEntries(path).Any();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 

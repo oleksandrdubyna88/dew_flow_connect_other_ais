@@ -35,6 +35,8 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
 {
     private const string Prefix = "coai-wt-";
 
+    private readonly SubmodulePopulator _submodules = new(launcher);
+
     public async Task<string> ResolveShaAsync(string repoPath, string branch)
     {
         var result = await Git(repoPath, "rev-parse", "--verify", $"{branch}^{{commit}}");
@@ -48,9 +50,17 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
         Directory.CreateDirectory(storageRoot);
         var path = Path.Combine(storageRoot, $"{Prefix}{sessionId}-r{round}");
         var result = await Git(repoPath, "worktree", "add", "--detach", path, sha);
-        return result.ExitCode == 0
-            ? new WorktreeLease(this, repoPath, path, sha)
-            : throw new WorktreeException("worktree add", result.StdErr.Trim());
+        if (result.ExitCode != 0)
+        {
+            throw new WorktreeException("worktree add", result.StdErr.Trim());
+        }
+
+        // A linked worktree gets no submodules from git, and in this family the project's own
+        // written rules are exactly that — see SubmodulePopulator for what the reviewers were
+        // being handed instead.
+        await _submodules.PopulateAsync(repoPath, path);
+
+        return new WorktreeLease(this, repoPath, path, sha);
     }
 
     public async Task RemoveAsync(string repoPath, string path)

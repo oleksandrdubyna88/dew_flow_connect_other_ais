@@ -134,4 +134,105 @@ public sealed class RuleFilesTests : IDisposable
 
         RuleFiles.Collect(_repo).Files.Should().ContainSingle().Which.Path.Should().Be("CLAUDE.md");
     }
+
+    // ---------- a rules repository mounted as a submodule ----------
+
+    /// <summary>The family's shared rules arrive as a whole repository, and a repository has
+    /// housekeeping: its own plans, its settings reference copy, its tooling. None of that is a
+    /// rule the reviewed diff can break, and all of it competes for the same budget.</summary>
+    [Fact]
+    public void AMountedRulesRepository_ContributesItsRules_NotItsHousekeeping()
+    {
+        WriteMount(".claude/rules/shared");
+        Write(".claude/rules/shared/common/git-workflow.md", "conventional commits");
+        Write(".claude/rules/shared/csharp/doctrine.md", "records for DTOs");
+        Write(".claude/rules/shared/todo/PLAN_something.md", "not a rule, an open task");
+        Write(".claude/rules/shared/settings/settings.json.md", "a reference copy");
+        Write(".claude/rules/shared/tools/fixtures/repo/POST_DEPLOY.md", "a test fixture");
+        Write(".claude/rules/shared/README.md", "what this repository is");
+        Write("CLAUDE.md", "the entry point");
+
+        var paths = RuleFiles.Collect(_repo).Files.Select(f => f.Path).ToList();
+
+        paths.Should().Contain([".claude/rules/shared/common/git-workflow.md", ".claude/rules/shared/csharp/doctrine.md"]);
+        paths.Should().NotContain([
+            ".claude/rules/shared/todo/PLAN_something.md",
+            ".claude/rules/shared/settings/settings.json.md",
+            ".claude/rules/shared/tools/fixtures/repo/POST_DEPLOY.md",
+            ".claude/rules/shared/README.md",
+        ]);
+    }
+
+    /// <summary>The exclusion belongs to the MOUNT, not to the words. A repository is entitled to
+    /// its own <c>.claude/rules/todo/</c>, and it would be its own rule being thrown away.</summary>
+    [Fact]
+    public void TheRepositorysOwnDirectories_AreNotFilteredByTheMountsNames()
+    {
+        WriteMount(".claude/rules/shared");
+        Write(".claude/rules/todo/security.md", "a rule of ours that happens to live in todo");
+        Write("CLAUDE.md", "the entry point");
+
+        RuleFiles.Collect(_repo).Files.Select(f => f.Path).Should().Contain(".claude/rules/todo/security.md");
+    }
+
+    /// <summary>Ordering used to be whatever the alphabet gave: a local directory sorting after
+    /// <c>shared/</c> lost the budget race to 208 KB of family rules.</summary>
+    [Fact]
+    public void TheRepositorysOwnRulesOutrankTheMount_EvenWhenTheySortAfterIt()
+    {
+        WriteMount(".claude/rules/shared");
+        Write(".claude/rules/shared/common/a-shared.md", Filler("shared", 3_000));
+        Write(".claude/rules/zz-workflows/ours.md", Filler("ours", 1_500));
+        Write("CLAUDE.md", "the entry point");
+
+        var bundle = RuleFiles.Collect(_repo, budgetBytes: 4_000);
+
+        bundle.Files.Select(f => f.Path).Should().Contain(".claude/rules/zz-workflows/ours.md",
+            "the rules this diff can break come before the family's");
+        bundle.Omitted.Should().Contain(".claude/rules/shared/common/a-shared.md");
+    }
+
+    /// <summary>
+    /// The dangerous absence. An omitted file was seen and dropped; a mount that never materialised
+    /// leaves zero files, zero omissions, and a bundle that looks like a repository with no rules.
+    /// </summary>
+    [Fact]
+    public void ADeclaredRulesMountThatIsNotHere_IsNamedToTheReviewer()
+    {
+        WriteMount(".claude/rules/shared");
+        Directory.CreateDirectory(Path.Combine(_repo, ".claude", "rules", "shared"));
+        Write("CLAUDE.md", "the entry point");
+
+        var bundle = RuleFiles.Collect(_repo);
+
+        bundle.MissingMounts.Should().Equal([".claude/rules/shared"]);
+        bundle.Render().Should().Contain(".claude/rules/shared")
+            .And.Contain("Do not read their absence as compliance");
+    }
+
+    /// <summary>Once it is populated there is nothing to warn about.</summary>
+    [Fact]
+    public void APopulatedMount_IsNotReportedAsMissing()
+    {
+        WriteMount(".claude/rules/shared");
+        Write(".claude/rules/shared/common/git-workflow.md", "conventional commits");
+        Write("CLAUDE.md", "the entry point");
+
+        RuleFiles.Collect(_repo).MissingMounts.Should().BeEmpty();
+    }
+
+    /// <summary>A submodule that is not a rules mount is somebody else's code, and not our business.</summary>
+    [Fact]
+    public void ACodeSubmodule_IsNotReportedAsMissingRules()
+    {
+        Write(".gitmodules", "[submodule \"external/dew_flow_mcp\"]\n\tpath = external/dew_flow_mcp\n");
+        Directory.CreateDirectory(Path.Combine(_repo, "external", "dew_flow_mcp"));
+        Write("CLAUDE.md", "the entry point");
+
+        RuleFiles.Collect(_repo).MissingMounts.Should().BeEmpty();
+    }
+
+    /// <summary>Declares a submodule at <paramref name="path"/>, the way a consumer repository does.</summary>
+    private void WriteMount(string path) =>
+        Write(".gitmodules", $"[submodule \"{path}\"]\n\tpath = {path}\n\turl = https://example.invalid/rules.git\n");
 }

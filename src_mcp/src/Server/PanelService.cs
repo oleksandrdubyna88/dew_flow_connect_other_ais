@@ -374,8 +374,9 @@ public sealed class PanelService
                     $"## The plan this change implements\n\n{bundle.PlanText}\n\n" +
                     RulesSection(rules) +
                     $"## The change ({bundle.Branch} over {bundle.BaseRef}, at {bundle.Sha})\n\n{bundle.Diff.Text}";
-                _log.Information("rules for review: {Count} file(s), {Bytes} bytes, {Omitted} omitted",
-                    rules.Files.Count, rules.Bytes, rules.Omitted.Count);
+                _log.Information(
+                    "rules for review: {Count} file(s), {Bytes} bytes, {Omitted} omitted, {Missing} mount(s) not in the tree",
+                    rules.Files.Count, rules.Bytes, rules.Omitted.Count, rules.MissingMounts.Count);
                 // Only the roles whose OWN budget reaches this round. The stage counts rounds once
                 // and a role stops taking part when its rounds are spent, so architecture can be
                 // worth two passes while performance is worth one.
