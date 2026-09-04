@@ -7,11 +7,17 @@ over stdio and the extension speaks to it as a subprocess. Neither is a request 
 down — which the contracts rule says in as many words. What it does have is two artefacts that ship on
 their own clocks, to two different places, and every failure below is one of them arriving wrong.
 
-Target: the released **extension** version — `--target 0.29.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
+Target: the released **extension** version — `--target 0.29.3`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-09-03 · extension 0.29.0 / mcp 0.14.0 · item 1 PASS — mcp-v0.14.0 carries all six RID assets. Item 2 was RED at the moment of checking and that is the documented lag, not a bad release: the publish step logged "Published remsoftdev.connect-other-ais v0.29.0" while the gallery still answered 0.28.0, exactly as measured on 0.26.2 (four and a half minutes). Items 3 and 4 are owed on the machine: read `providers` in the panel, and check the packaged binary's version from inside the installed extension — which can now be asked of the binary itself, since `coai-mcp --version` exists as of 0.12.3.
+Last verified: 2026-09-04 · extension 0.29.3 / mcp 0.15.0 · item 1 PASS — mcp-v0.15.0 carries all six RID assets. Items 3 and 4 are owed on the machine.
 
-**The marketplace takes minutes, and item 2 is not a failure before it does.** Measured on this release: `vsce` reported *"Published remsoftdev.connect-other-ais v0.26.2"* while the gallery query kept answering `0.26.1` for a further four and a half minutes, then flipped. Read the publish step's own log before treating a red item 2 as a bad release — the two answers disagree by design for a while.
+**A slow `npm ci` is not a hung release, and cancelling one costs a re-run.** Measured here on
+extension-v0.29.2: the step sat at seven minutes against a whole-job history of 2m33s, was cancelled
+as hung, and the re-attempt took 7m26s and published cleanly. The registry is simply slower some
+mornings. Read the step's own elapsed time against the JOB's history before acting, and prefer waiting
+— the only thing a cancel buys is another cold `npm ci`.
+
+**The marketplace takes minutes, and item 2 is not a failure before it does.** Measured on 0.26.2: `vsce` reported *"Published remsoftdev.connect-other-ais v0.26.2"* while the gallery query kept answering `0.26.1` for a further four and a half minutes, then flipped. Read the publish step's own log before treating a red item 2 as a bad release — the two answers disagree by design for a while.
 
 | # | What a person loses if this is broken | Check | Auto |
 |---|---|---|---|
@@ -31,8 +37,8 @@ rebuilt, an artefact never deployed — at least leave something behind that loo
 
 ```bash
 gh auth status                                   # item 1 reads the release through gh
-export MCP_VERSION=0.12.1                        # the binary's own tag: mcp-v<version>
-node .claude/rules/shared/tools/post-deploy-check.mjs --target 0.26.1
+export MCP_VERSION=0.15.0                        # the binary's own tag: mcp-v<version>
+node .claude/rules/shared/tools/post-deploy-check.mjs --target 0.29.3
 ```
 
 `TARGET` here is a **version**, not a URL: what is being checked is what a user receives, and both
