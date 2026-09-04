@@ -9,7 +9,9 @@ import {
   liveRegions,
   OPEN_BY_DEFAULT,
   panelHtml,
+  roundsBody,
   staticKey,
+  usageRegion,
   VSCODE_COMMAND_FOR,
 } from './panelView';
 import { parseSession, SessionFile } from './rounds';
@@ -117,6 +119,13 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private openRouterPrices: PriceTable = {};
   private liteLlmPrices: PriceTable = {};
   private pricesCheckedAt = 0;
+  /**
+   * The prices the last full repaint computed, reused when only the spending WINDOW changes.
+   *
+   * <p>Fetching two public price tables to answer "what did this week cost" is the reason choosing
+   * a window took seconds. A list price does not change because somebody clicked Month.</p>
+   */
+  private lastPrices: Record<string, ModelPrice> = {};
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -134,10 +143,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
           // The card is THEIRS now — open or closed alike — which is the whole of "do not touch
           // what I opened": the auto-collapse only ever closes cards the panel still owns.
           this.rounds = afterToggle(this.rounds, m.id, m.open === true);
-          // Repainted at once, because a card's body is only BUILT when it is open: without this
-          // an opened round would show nothing until the next five-second tick. The sections need
-          // no such thing — their content is in the page whether they are open or not.
-          void this.render();
+          // ONLY the rounds are redrawn. This used to call render(), which reads the configuration,
+          // stats the server binary, probes every vendor CLI for its version, asks GitHub what is
+          // published and fetches two public price tables — so opening a card could sit there for
+          // twenty seconds before its reviewers appeared. None of that can have changed because
+          // somebody clicked a triangle.
+          void this.patchRounds();
         } else if (m.type === 'section' && m.id !== undefined) {
           this.openSections = m.open === true
             ? [...new Set([...this.openSections, m.id])]
@@ -179,7 +190,50 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     return this.rounds.open;
   }
 
-  /** Re-read everything and repaint. Cheap: a few small files and one configuration read. */
+  /**
+   * Redraws the rounds list and NOTHING else.
+   *
+   * <p>What a person is waiting for when they open a card is the reviewers of one round — a few
+   * small files this extension can read in milliseconds. {@link render} would also stat the server
+   * binary, probe every vendor CLI for its version, ask GitHub what is published and fetch two
+   * public price tables, and it was on the click path: opening a card could sit for twenty seconds.
+   * None of those can have changed because somebody clicked a triangle.</p>
+   */
+  private async patchRounds(): Promise<void> {
+    if (this.view === undefined) {
+      return;
+    }
+
+    const sessions = await this.readSessions();
+    void this.view.webview.postMessage({
+      type: 'live',
+      rounds: roundsBody(sessions, this.expanded(sessions)),
+    });
+  }
+
+  /**
+   * Redraws the spending region and NOTHING else.
+   *
+   * <p>Choosing a window is arithmetic over rows already read from the ledger. It used to repaint
+   * the whole panel, which is why switching Today to Week took seconds.</p>
+   */
+  private async patchUsage(): Promise<void> {
+    if (this.view === undefined) {
+      return;
+    }
+
+    const config = vscode.workspace.getConfiguration('coai');
+    void this.view.webview.postMessage({
+      type: 'live',
+      usage: usageRegion(
+        this.remembered(await this.readUsage()),
+        this.usageWindow,
+        vendorsFrom(config.get('vendors')),
+        this.lastPrices),
+    });
+  }
+
+  /** Re-read everything and repaint: the configuration, the sessions, the ledger and the probes. */
   async render(): Promise<void> {
     if (this.view === undefined) {
       return;
@@ -206,7 +260,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       usageWindow: this.usageWindow,
       latestServerVersion: published,
       cliStatus: await this.vendorCliStatus(vendors),
-      modelPrices: await this.modelPrices(vendors),
+      modelPrices: this.lastPrices = await this.modelPrices(vendors),
       snippetStatus: await pastedSnippetStatus(),
       localEngines: await this.probeLocalEngines(vendors),
     };
@@ -740,6 +794,17 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         return;
       }
     }
+
+    // Choosing Today/Week/Month/Year changes ONE region and nothing else, so it patches that region
+    // rather than repainting the panel. It used to fall through to the full render below — which
+    // stats the server binary, probes every vendor CLI, asks GitHub what is published and fetches
+    // two price tables — and switching a window took seconds for an arithmetic change over rows the
+    // extension already had in hand.
+    if (command === 'usageWindow') {
+      await this.patchUsage();
+      return;
+    }
+
     await this.render();
   }
 

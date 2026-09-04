@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.29.7 — 2026-09-04 (server 0.17.1)
+
+**Opening a round no longer takes twenty seconds.** A card's reviewers are only built when it is
+open, so the click had to repaint — and the repaint read the configuration, stat-ed the server
+binary, ran every vendor CLI to ask its version, asked GitHub what was published and fetched two
+public price tables. None of that can have changed because somebody clicked a triangle. The toggle
+now redraws the rounds list alone, off a few small session files, and an opened card that has not
+got its rows yet says *Reading this round…* instead of looking empty.
+
+**Switching Today / Week / Month / Year is arithmetic again.** It was doing the same full repaint,
+including both price fetches, to answer a question about rows the panel already had in hand. It now
+patches the spending region and reuses the prices from the last real repaint — a list price does not
+change because you asked about a different week.
+
+**A card that cannot be opened no longer offers to open.** Rounds recorded before the server kept
+per-reviewer detail have nothing to show and never will; they were disclosures all the same, with
+the hand cursor and the marker, and clicking one opened a card containing a sentence apologising for
+having nothing. They are plain lines now, with the same summary and no pointer. The ones that do
+expand still show the hand.
+
+**A local reviewer can no longer spend the GPU repeating one sentence** *(server 0.17.1)*. Greedy
+decoding has no guard against a loop, and a schema is none either: a sentence repeated inside a
+string value stays schema-valid right up to the token that runs out. Observed on 2026-09-04 — a
+reviewer opened with a good finding, collapsed into *"The client retries again."* for forty
+kilobytes, and spent 6.7 minutes of the one card while every other window queued behind it; the
+round then reported "not the schema's JSON", which was true and nothing like the story. Requests now
+carry a small, deterministic frequency penalty, so `temperature: 0` and the seed still mean what
+they meant.
+
 ## 0.29.6 — 2026-09-04 (server 0.16.0)
 
 **The vendor names in the rounds list are no longer struck through.** They were not struck through:

@@ -156,6 +156,18 @@ public static class LocalAsk
             json.WriteBoolean("stream", false);
             json.WriteNumber("temperature", 0);
             json.WriteNumber("seed", seed);
+            // Greedy decoding loops, and a schema does not save it: a sentence repeated inside a
+            // string value stays schema-valid right up to the token that runs out. Measured here on
+            // 2026-09-04 — a local reviewer opened with a good finding, collapsed into "The client
+            // retries again." for forty kilobytes, and spent 6.7 minutes of the one GPU while every
+            // other window queued behind it. The round then reported "not the schema's JSON", which
+            // was true and nothing like the story.
+            //
+            // Small on purpose. A review repeats words legitimately — the file names it is talking
+            // about — and a large penalty is an opinion about content rather than a guard against a
+            // degenerate loop. Deterministic, so `temperature: 0` and the seed still mean what they
+            // meant: the same prompt is still the same request.
+            json.WriteNumber("frequency_penalty", 0.2);
             // The ceiling that was missing. Measured 2026-09-03: uncapped, this engine did not
             // finish a one-line question in 90 seconds, and the same question capped at twenty
             // tokens came back in 8.5 — the model does not stop, and nothing else here bounds it.

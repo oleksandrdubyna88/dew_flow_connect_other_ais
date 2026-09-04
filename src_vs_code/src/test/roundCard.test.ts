@@ -185,9 +185,14 @@ test('the rounds list is twice as tall as it was', () => {
   assert.ok(html.includes('#live-rounds { max-height: 640px'), 'five rounds used to fill a sidebar with room to spare');
 });
 
-test('a round that recorded no reviewers still opens into a sentence', () => {
+test('a round that recorded no reviewers is not a disclosure at all', () => {
+  // This asserted the opposite until 2026-09-04: such a card opened into a sentence apologising for
+  // itself. Reported from the list — some cards expand and some do not, and both offered a hand.
+  // A control that promises something it has not got is worse than a line that promises nothing.
   const bare = round({ reviewerStates: [] });
   const html = panelHtml(state([bare], [roundKey({ ...bare, branch: 'main' })]), 'n', NOW);
 
-  assert.ok(html.includes('recorded no reviewer detail'), 'an empty disclosure would read as broken');
+  assert.ok(!html.includes('<details class="round"'), 'nothing to open must not look openable');
+  assert.ok(html.includes('<div class="round flat"'));
+  assert.ok(!html.includes('recorded no reviewer detail'), 'and no apology for having nothing');
 });

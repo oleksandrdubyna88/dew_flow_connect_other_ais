@@ -684,11 +684,23 @@ function total(billed: number | null, guessed: number | null): string {
 }
 
 function usageRows(state: PanelState): string {
-  const rows = totalsByVendor(
-    within(state.usage, state.usageWindow, new Date()),
-    state.vendors,
-    (modelId) => state.modelPrices[modelId],
-  );
+  return usageRegion(state.usage, state.usageWindow, state.vendors, state.modelPrices);
+}
+
+/**
+ * The spending region on its own — what the provider patches when the window changes.
+ *
+ * <p>Today/Week/Month/Year is arithmetic over rows the extension already holds. It used to go
+ * through the full repaint — which stats the server binary, probes every vendor CLI, asks GitHub
+ * what is published and fetches two price tables — so choosing a window took seconds for a sum.</p>
+ */
+export function usageRegion(
+  usage: readonly UsageEntry[],
+  window: Window,
+  vendors: readonly Vendor[],
+  prices: Readonly<Record<string, ModelPrice>>,
+): string {
+  const rows = totalsByVendor(within(usage, window, new Date()), vendors, (modelId) => prices[modelId]);
   if (rows.length === 0) {
     return '<div class="empty">Nothing recorded in this window yet.</div>';
   }
@@ -740,7 +752,14 @@ const RECENT_HOURS = 72;
  * <p>A round still RUNNING is always shown. It has no completion time to compare, and it is the one
  * row somebody is actually waiting on.</p>
  */
-function roundsBody(
+/**
+ * The rounds list on its own — what the provider patches when a card is toggled.
+ *
+ * <p>Exported so a toggle costs a few small file reads instead of a full repaint. Opening a card
+ * used to run the whole render: stat the server binary, probe every vendor CLI, ask GitHub what is
+ * published, fetch two price tables — twenty seconds before the reviewers appeared.</p>
+ */
+export function roundsBody(
   sessions: readonly SessionFile[],
   openRounds: readonly string[],
   nowMs: number = Date.now(),
@@ -818,11 +837,37 @@ function roundCard(
     ? `<div class="subject">${escapeHtml(round.subject!)}</div>`
     : '';
 
+  const head = `${subject}<div class="verdict">${escapeHtml(stageName(round.stage))} ${round.number} · `
+    + `${escapeHtml(round.branch)} · ${verdict} · ${round.gatingCount} gating</div>`
+    + `<div class="usage">${took.length > 0 ? `${escapeHtml(took)} · ` : ''}${escapeHtml(costPhrase(round))}</div>`;
+
+  // A round with nothing recorded to show is NOT a disclosure. It used to be one, so it offered a
+  // hand cursor, opened on a click and showed a sentence apologising for itself — a control that
+  // promises something it has not got. Rounds from a server older than `reviewerStates` are the
+  // ordinary case for this, and they are not going to grow any.
+  if (!Expandable(round)) {
+    return `<div class="round flat" data-round="${escapeHtml(key)}">${head}</div>`;
+  }
+
   return `<details class="round" data-round="${escapeHtml(key)}"${open ? ' open' : ''}>
-<summary>${subject}<div class="verdict">${escapeHtml(stageName(round.stage))} ${round.number} · ${escapeHtml(round.branch)} · ${verdict} · ${round.gatingCount} gating</div>
-<div class="usage">${took.length > 0 ? `${escapeHtml(took)} · ` : ''}${escapeHtml(costPhrase(round))}</div></summary>
-${lines.length > 0 ? reviewers : open ? '<div class="reviewer">This round recorded no reviewer detail.</div>' : ''}
+<summary>${head}</summary>
+${lines.length > 0 ? reviewers : '<div class="reviewer loading">Reading this round…</div>'}
 </details>`;
+}
+
+/**
+ * Whether this card has anything to open — the difference between a disclosure and a line.
+ * </summary>
+ * <remarks>
+ * The body is built only when a card is open, so "has reviewers to show" cannot be read off the
+ * rendered body; it is a property of the RECORD, and this is where it is asked.
+ * </remarks>
+ */
+function Expandable(round: RoundRecord): boolean {
+  // A RUNNING round counts even before it has recorded anybody: its reviewers are on their way, and
+  // a card that refuses to open for the ten seconds before the first one reports is worse than one
+  // that opens on nothing.
+  return (round.reviewerStates ?? []).length > 0 || isRunning(round);
 }
 
 /**
@@ -1015,7 +1060,13 @@ const CSS = `
      and everything else sat behind a scrollbar in a panel with room to spare. */
   #live-rounds { max-height: 640px; overflow-y: auto; }
   details.round { margin: 0 0 4px; }
+  /* A hand promises something opens. Only the cards that DO open show one — the flat ones are a
+     line, not a control, and offering a hand over them is the panel telling a small lie. */
+  .round.flat { margin: 0 0 4px; cursor: default; }
   details.round > summary { list-style: none; cursor: pointer; }
+  /* Shown for the moment between the click and the reviewers arriving. The body is built by the
+     provider, so there is always a gap; an empty card during it reads as a card with nothing in it. */
+  .reviewer.loading { opacity: 0.6; font-style: italic; }
   details.round > summary::-webkit-details-marker { display: none; }
   .reviewer { font-size: 11px; opacity: .85; margin: 1px 0 1px 8px; }
   .badge { padding: 0 5px; border-radius: 8px; font-size: 10px; font-weight: 600; }
