@@ -9,7 +9,7 @@ their own clocks, to two different places, and every failure below is one of the
 
 Target: the released **extension** version — `--target 0.29.3`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-09-04 · extension 0.29.3 / mcp 0.15.0 · item 1 PASS — mcp-v0.15.0 carries all six RID assets. Items 3 and 4 are owed on the machine.
+Last verified: 2026-09-04 · extension 0.29.3 / mcp 0.15.0 · item 1 PASS — mcp-v0.15.0 carries all six RID assets. Item 2 PASS — the gallery kept answering `0.29.1` for two and a half minutes after the publish step reported success, then flipped to `0.29.3`: the documented lag, not a bad release. Items 3 and 4 are owed on the machine.
 
 **A slow `npm ci` is not a hung release, and cancelling one costs a re-run.** Measured here on
 extension-v0.29.2: the step sat at seven minutes against a whole-job history of 2m33s, was cancelled
