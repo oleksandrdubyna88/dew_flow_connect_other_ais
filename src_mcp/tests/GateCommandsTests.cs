@@ -85,20 +85,26 @@ public sealed class GateCommandsTests
     }
 
     [Fact]
-    public void Fable_IsNeverNamedWhenItIsNotThere()
+    public void Fable_IsNotNamedWhenTheSwitchIsOff()
     {
         var without = GateCommands.For(new CommandContext(
-            SplitPlan: true, SplitWithFable: true, FableAvailable: false, PlanText: SmallPlan, PlanStage: true));
+            SplitPlan: true, SplitWithFable: false, PlanText: SmallPlan, PlanStage: true));
 
-        without.Should().ContainSingle("the split command, and nothing about a model this machine has not got");
+        without.Should().ContainSingle("the split command, and nothing about which model does what");
         string.Join(' ', without).Should().NotContain("Fable");
     }
 
     [Fact]
-    public void Fable_NamesWhatItIsForWhenItIsThere()
+    public void TheSwitchAloneIssuesTheFableOrder()
     {
+        // There is deliberately no second condition. This once asked whether a Fable REVIEWER was
+        // configured, on the reasoning that a command must never name a model this machine has not
+        // got — sound reasoning, wrong premise: Fable is not a reviewer, it is a model of the AI
+        // that CALLED us. Nobody configures it as a vendor here, so the check was false on every
+        // real machine and the switch was inert. Corrected by the operator; the test that asserted
+        // the old rule was deleted rather than adjusted, because it encoded the mistake.
         var commands = GateCommands.For(new CommandContext(
-            SplitPlan: true, SplitWithFable: true, FableAvailable: true, PlanText: SmallPlan, PlanStage: true));
+            SplitPlan: true, SplitWithFable: true, PlanText: SmallPlan, PlanStage: true));
 
         commands.Should().HaveCount(2);
         commands[1].Should().Contain("Fable").And.Contain("Opus");
@@ -111,7 +117,7 @@ public sealed class GateCommandsTests
         // The order is the order they are carried out in, and it is asserted whole because three
         // per-switch tests can all pass while the sequence is wrong.
         var commands = GateCommands.For(new CommandContext(
-            Autonomous: true, SplitPlan: true, SplitWithFable: true, FableAvailable: true,
+            Autonomous: true, SplitPlan: true, SplitWithFable: true,
             PlanText: PlanOf(lines: 150, steps: 5, files: 3, areas: 2), PlanStage: true));
 
         commands.Should().HaveCount(3);
@@ -219,7 +225,7 @@ public sealed class GateCommandsTests
         // The Fable order is about the SPLIT — "do the splitting with Fable". Handed to a piece
         // that must not be split, it is an instruction with nothing to apply to.
         var again = GateCommands.For(new CommandContext(
-            SplitPlan: true, SplitWithFable: true, FableAvailable: true,
+            SplitPlan: true, SplitWithFable: true,
             PlanText: SmallPlan, PlanStage: true, FirstPlanRound: false));
 
         again.Should().ContainSingle();
@@ -247,7 +253,7 @@ public sealed class GateCommandsTests
         // and not the "you are a piece" order either, which would be a command about a feature
         // nobody switched on.
         GateCommands.For(new CommandContext(
-            SplitPlan: false, SplitWithFable: true, FableAvailable: true,
+            SplitPlan: false, SplitWithFable: true,
             PlanText: SmallPlan, PlanStage: true, FirstPlanRound: firstRound))
             .Should().BeEmpty();
     }

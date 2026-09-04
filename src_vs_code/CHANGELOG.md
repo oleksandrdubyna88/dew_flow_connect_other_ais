@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.29.4 — 2026-09-04 (server 0.16.0)
+
+**A round that has finished closes itself again.** Rounds open while they run, which is what you want
+to watch — and then they stayed open forever, so the list became a wall of expanded cards. Now:
+running is open, finished is closed, and **a card you opened yourself is never touched**. Open one to
+read it and it stays open when the round ends; close a running one and the five-second repaint leaves
+it shut. The rule this replaces kept finished rounds open on the argument that this is the moment
+their reviewers are worth reading — true of one round and wrong of a list.
+
+**Each vendor's name now has its own colour, and it is the same colour everywhere.** `codex` is the
+same blue in the round cards, in the live section and in the spending chart, this window and the
+next, because the colour comes from the NAME rather than from the order rows happen to arrive in.
+Only the vendor word is coloured; the rest of the row reads exactly as before. The colours are the
+editor's own chart palette, so they hold in a light theme too.
+
+**Split with Fable now works at all.** The order was withheld unless a Fable *reviewer* was
+configured in the panel — and Fable is not a reviewer, it is a model of the assistant that calls the
+gate. Nobody configures it as a vendor here and nobody should, so the switch did nothing on every
+real machine, including the one it was built on. The box is the whole decision now: tick it if your
+assistant can run Fable.
+
+**A round no longer dies with "Access to the path is denied".** Two windows means two servers sharing
+one data directory, and a nine-reviewer round saves its progress on every reviewer that moves. Every
+one of those saves used a scratch file with the same fixed name, so two servers wrote the same
+scratch path and both tried to move it — and the loser took its round down with it. Seen twice in one
+morning, and once while this very change was being reviewed. Each save now has a scratch name of its
+own, and the move is retried briefly for the case a unique name cannot fix: something else holding
+the file for a moment.
+
 ## 0.29.3 — 2026-09-04 (server 0.15.0)
 
 **The help now says that the split order is given once.** The tooltip on *Split the plan into epics

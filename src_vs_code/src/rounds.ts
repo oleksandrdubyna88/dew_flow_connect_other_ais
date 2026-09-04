@@ -113,8 +113,25 @@ export function stageName(stage: string): string {
   return stage === 'PlanReview' ? 'plan review' : stage === 'CodeReview' ? 'code review' : stage;
 }
 
-/** The reviewers of a running round, as "codex/Architecture running" lines. */
+/**
+ * One reviewer's row, split at the vendor's name.
+ *
+ * <p>Split rather than composed, because the panel colours the vendor word and the markdown export
+ * must not. Two renderers building the same sentence independently would drift; one builder with a
+ * seam in it cannot.</p>
+ */
+export interface ReviewerRow {
+  readonly provider: string;
+  /** Everything after the vendor's name, starting at the slash. */
+  readonly rest: string;
+}
+
+/** The reviewers of a running round, as "codex/Architecture — running" lines. */
 export function reviewerLines(round: RoundRecord): readonly string[] {
+  return reviewerRows(round).map((row) => `${row.provider}${row.rest}`);
+}
+
+export function reviewerRows(round: RoundRecord): readonly ReviewerRow[] {
   return (round.reviewerStates ?? []).map((s) => {
     const detail = [
       s.status === 'done' ? `${s.findings} finding${s.findings === 1 ? '' : 's'}` : '',
@@ -127,7 +144,10 @@ export function reviewerLines(round: RoundRecord): readonly string[] {
       reviewerTokens(s),
     ].filter((part) => part.length > 0);
 
-    return `${s.provider}/${s.role} — ${s.status}${detail.length > 0 ? ` (${detail.join(', ')})` : ''}`;
+    return {
+      provider: s.provider,
+      rest: `/${s.role} — ${s.status}${detail.length > 0 ? ` (${detail.join(', ')})` : ''}`,
+    };
   });
 }
 

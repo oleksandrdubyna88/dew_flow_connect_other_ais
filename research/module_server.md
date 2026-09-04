@@ -92,8 +92,9 @@ startup; missing binary / no key / 401 / malformed body are named per-vendor una
 ## Persistence
 
 `SessionStore`: one JSON file per session key (SHA-256-prefixed name) under
-`COAI_DATA_DIR/sessions`; temp+move writes; a torn file reads as a fresh session rather than a
-locked repo. Round trail (`RoundRecord`) and pending findings ride in the same file — `status`
+`COAI_DATA_DIR/sessions`; each write goes to a scratch file of its OWN name and is then moved over
+the real one, retried briefly (see *A session is saved under its own scratch name*); a torn file
+reads as a fresh session rather than a locked repo. Round trail (`RoundRecord`) and pending findings ride in the same file — `status`
 survives a server restart, per the durable-status rule.
 
 ### The round is written before it runs, not after (`LiveRound`)
@@ -566,11 +567,17 @@ before this one.
 
 - **The split command belongs to the PLAN stage only.** A code round has a diff and no plan, so a
   split verdict computed there would be a number invented from source. Raised twice.
-- **Fable is never named when Fable is not there.** An instruction to switch to a model this machine
-  has not got is an instruction that stops the work, so the command is issued only when an ENABLED
-  provider names it.
+- **The Fable order is the switch and nothing else (corrected 2026-09-04).** It used to be withheld
+  unless a Fable REVIEWER was configured, on the reasoning that a command must never name a model
+  this machine has not got. Sound reasoning, wrong premise: Fable is not a reviewer here — it is a
+  model of the AI that CALLED us, which already has it. Nobody configures Fable as a vendor in this
+  panel and nobody should, so the check was false on every real machine and the switch was inert.
+  Confirmed on the operator's own: `providers` answers codex, gemini, local. `FableAvailable` and the
+  two helpers behind it are gone rather than left as a flag with one constant caller.
 - **The autonomy command does not tell you to re-read epics that do not exist.** With the split
   switch off it says "re-read the whole plan" instead.
+
+**A session is saved under its own scratch name, and the move is retried (2026-09-04).** The store wrote `<session>.json.tmp` — one FIXED path — and this machine runs several MCP clients at once, each with a server of its own, sharing a data directory; a nine-reviewer round saves on every reviewer transition. Two writers therefore wrote the same scratch file and both tried to move it, and the loser died with `UnauthorizedAccessException: Access to the path is denied` out of `LiveRound.Persist` — twice in one morning's log, and it is what refused a plan round while this very change was being reviewed. The scratch name is now per write, the move is retried briefly for the case a unique name cannot fix (a reader or a scanner holding the destination), and the last attempt is allowed to throw so a save that never lands is not silent.
 
 **The order to split is given ONCE, and it is keyed by the CALLER (2026-09-04).** Raised by the
 operator before it could happen: a plan is split into epics, each epic comes back for its own plan

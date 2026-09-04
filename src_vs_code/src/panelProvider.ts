@@ -9,11 +9,11 @@ import {
   liveRegions,
   OPEN_BY_DEFAULT,
   panelHtml,
-  roundKey,
   staticKey,
   VSCODE_COMMAND_FOR,
 } from './panelView';
-import { isRunning, parseSession, SessionFile } from './rounds';
+import { parseSession, SessionFile } from './rounds';
+import { afterToggle, nextOpenRounds, NOTHING_OPEN, OpenRounds } from './openRounds';
 import { parseUsage, UsageEntry, Window } from './usage';
 import {
   CliStatus,
@@ -84,12 +84,13 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    *
    * <p>The person's own choice, kept HERE for the same reason the sections are — the rounds list is
    * patched into the page every five seconds, and a disclosure holding its state only in the DOM
-   * would close under somebody mid-read. A round that starts running opens itself ONCE, recorded in
-   * the second set so that closing it is not undone by the next tick; when it finishes it stays as
-   * they left it, which is the moment its reviewers are worth reading.</p>
+   * would close under somebody mid-read.</p>
+   * <p>The POLICY — running is open, finished closes again, and what the person opened is never
+   * touched — is next door in `openRounds.ts`, pure and tested. It lived HERE until 2026-09-04 and
+   * was therefore untestable: the rule it enforced shipped on nothing but a comment saying it was
+   * right, and it was not.</p>
    */
-  private openRounds: string[] = [];
-  private autoOpened = new Set<string>();
+  private rounds: OpenRounds = NOTHING_OPEN;
   /** Which window the spending chart shows. A view preference, so it lives here, not in config. */
   private usageWindow: Window = 'week';
   /** The newest published server version, and when GitHub last answered. */
@@ -130,9 +131,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     view.webview.onDidReceiveMessage(
       (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string; open?: boolean; role?: string; round?: number }) => {
         if (m.type === 'round' && m.id !== undefined) {
-          this.openRounds = m.open === true
-            ? [...new Set([...this.openRounds, m.id])]
-            : this.openRounds.filter((r) => r !== m.id);
+          // The card is THEIRS now — open or closed alike — which is the whole of "do not touch
+          // what I opened": the auto-collapse only ever closes cards the panel still owns.
+          this.rounds = afterToggle(this.rounds, m.id, m.open === true);
           // Repainted at once, because a card's body is only BUILT when it is open: without this
           // an opened round would show nothing until the next five-second tick. The sections need
           // no such thing — their content is in the page whether they are open or not.
@@ -160,30 +161,22 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * The rounds to render expanded: the person's own, plus a running round the first time it is seen.
+   * The rounds to render expanded: the person's own, plus whatever is running now.
    *
-   * <p>Once, and recorded — so closing a running round is not undone by the next five-second tick,
-   * and a round they left open stays open when it finishes. "Open because it is running" was the
-   * first design and it fails both halves: it fights the person while the round runs, and it
-   * snatches the reviewers away the moment it ends.</p>
+   * <p><b>Running is open, finished is closed, and what the person opened is never touched.</b> The
+   * panel opens a round when it starts and closes it again when it stops — but only if that card is
+   * still open on the panel's own initiative. The moment somebody clicks it, the key leaves
+   * {@link panelOpened} and the card is theirs: opened by them it survives the round ending, closed
+   * by them it stays shut for the rest of the run.</p>
+   * <p>The previous rule kept a finished round open "because that is the moment its reviewers are
+   * worth reading". True for one round and wrong for a list — every round anybody had watched stayed
+   * expanded, and the list became a wall. Overruled by the person who uses it.</p>
    */
   private expanded(sessions: readonly SessionFile[]): readonly string[] {
     const cards = sessions.flatMap((s) => s.rounds.map((r) => ({ branch: s.state.branch, ...r })));
-    const running = cards
-      .filter(isRunning)
-      .map(roundKey)
-      .filter((key) => !this.autoOpened.has(key));
-    for (const key of running) {
-      this.autoOpened.add(key);
-    }
-    // Both sets are pruned to rounds that still EXIST. Neither is large in a day's work, but both
-    // would otherwise grow for the life of the extension host — a key for every round anybody ever
-    // opened, scanned on every five-second tick long after that round left the list. (codex.)
-    const alive = new Set(cards.map(roundKey));
-    this.openRounds = [...new Set([...this.openRounds, ...running])].filter((key) => alive.has(key));
-    this.autoOpened = new Set([...this.autoOpened].filter((key) => alive.has(key)));
+    this.rounds = nextOpenRounds(this.rounds, cards);
 
-    return this.openRounds;
+    return this.rounds.open;
   }
 
   /** Re-read everything and repaint. Cheap: a few small files and one configuration read. */

@@ -555,7 +555,6 @@ public sealed class PanelService
                 Autonomous: _settings.Autonomous,
                 SplitPlan: _settings.SplitPlan,
                 SplitWithFable: _settings.SplitWithFable,
-                FableAvailable: FableIsUsable(),
                 // The plan THIS round reviewed, not the one the session remembers. `session` was
                 // loaded before the round and its PlanText is the PREVIOUS round's — empty on the
                 // first plan round, which is the ordinary case — so every verdict was computed
@@ -855,40 +854,6 @@ public sealed class PanelService
                 runtime.Build(role, repairPrompt, repairDir, schemaFile, outputDir, settings),
                 choice.Id));
         }
-    }
-
-    /// <summary>
-    /// Whether a Fable reviewer is here AND usable — never merely configured.
-    /// </summary>
-    /// <remarks>
-    /// An instruction to switch to a model this machine has not got is an instruction that stops the
-    /// work. A vendor that is disabled, or whose CLI the health probe cannot find, is not available,
-    /// which is the distinction this change's plan round asked for by name.
-    /// </remarks>
-    private bool FableIsUsable() =>
-        _settings.Providers.Any(p => p.Enabled && NamesFable(p));
-
-    /// <summary>
-    /// Whether this provider IS Fable, rather than merely mentioning it.
-    /// </summary>
-    /// <remarks>
-    /// A substring match called any vendor whose model happened to contain the word "fable" a Fable
-    /// reviewer, and the command would then have sent the risky half of the work to a model nobody
-    /// configured. The identity is the provider id or the model FAMILY — `fable`, or something
-    /// beginning `fable-` / `claude-fable` — never a word inside a longer name. A field that is null
-    /// in a hand-edited settings file is empty here, not a crash mid-round.
-    /// </remarks>
-    private static bool NamesFable(ProviderSettings provider)
-    {
-        static bool IsFable(string? value)
-        {
-            var text = (value ?? string.Empty).Trim().ToLowerInvariant();
-
-            return text == "fable" || text.StartsWith("fable-", StringComparison.Ordinal)
-                || text.Contains("claude-fable", StringComparison.Ordinal);
-        }
-
-        return IsFable(provider.Provider) || IsFable(provider.Model) || IsFable(provider.Runtime);
     }
 
     /// <summary>Whether the caller may go and build: an order to split follows permission.</summary>

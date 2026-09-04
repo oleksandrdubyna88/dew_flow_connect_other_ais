@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { panelHtml, PanelState, roundKey, liveRegions } from '../panelView';
 import { reviewerLines, RoundRecord, SessionFile } from '../rounds';
 import { DEFAULTS } from '../settingsShape';
+import { vendorColour } from '../vendorColour';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 
 /**
@@ -61,6 +62,11 @@ function state(rounds: readonly RoundRecord[], openRounds: readonly string[] = [
   };
 }
 
+/** The markup one vendor name renders as, so a test says what it means rather than repeating it. */
+function vendorSpan(vendor: string): string {
+  return ["<span class=\"vendor\" style=\"color:", vendorColour(vendor), "\">", vendor, "</span>"].join("");
+}
+
 const NOW = Date.parse('2026-09-03T16:20:00.000Z');
 
 test('a finished round keeps its reviewers instead of throwing them away', () => {
@@ -68,8 +74,13 @@ test('a finished round keeps its reviewers instead of throwing them away', () =>
   const html = panelHtml(state([round()], [key]), 'n', NOW);
 
   assert.ok(html.includes('<details class="round"'), 'the card is a disclosure');
-  assert.ok(html.includes('codex/Architecture — done'), 'the reviewers of a FINISHED round are there');
-  assert.ok(html.includes('local/SecurityReliability — failed'));
+  // The vendor's word now carries its own colour, so a row is a span plus the rest of the sentence
+  // rather than one string. Same content; the assertion also says where the colour stops.
+  assert.ok(
+    html.includes(`${vendorSpan('codex')}/Architecture — done`),
+    'the reviewers of a FINISHED round are there',
+  );
+  assert.ok(html.includes(`${vendorSpan('local')}/SecurityReliability — failed`));
 });
 
 test('a closed card carries no reviewer rows at all', () => {
@@ -79,7 +90,7 @@ test('a closed card carries no reviewer rows at all', () => {
   const html = panelHtml(state([round()]), 'n', NOW);
 
   assert.ok(html.includes('<details class="round"'));
-  assert.ok(!html.includes('codex/Architecture'), 'a closed card builds nothing');
+  assert.ok(!html.includes('class="reviewer"'), 'a closed card builds nothing');
 });
 
 test('the closed summary is the line it has always been', () => {

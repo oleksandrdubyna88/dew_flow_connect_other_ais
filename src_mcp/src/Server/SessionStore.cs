@@ -139,9 +139,59 @@ public sealed class SessionStore(string dataDir)
     {
         Directory.CreateDirectory(SessionsDir);
         var file = FileFor(session.State.RepoPath, session.State.Branch);
-        var temp = file + ".tmp";
+        // A scratch name per WRITE, and that is a crash fix rather than a nicety. It used to be
+        // `<session>.json.tmp` — one fixed path — and this machine runs several MCP clients at once,
+        // each with a server of its own, sharing a data directory; a nine-reviewer round saves on
+        // every reviewer transition. Two writers therefore wrote the SAME scratch file and both
+        // tried to move it, and the loser died with `UnauthorizedAccessException: Access to the path
+        // is denied` out of `LiveRound.Persist`. Twice in one morning's log before it was understood.
+        var temp = $"{file}.{Environment.ProcessId}-{Guid.NewGuid().ToString("N")[..8]}.tmp";
         File.WriteAllText(temp, JsonSerializer.Serialize(session, ServerJsonContext.Default.PersistedSession));
-        File.Move(temp, file, overwrite: true);
+        try
+        {
+            MoveOverExisting(temp, file);
+        }
+        finally
+        {
+            // Ours alone, so cleaning up can never take another writer's scratch file with it.
+            TryDelete(temp);
+        }
+    }
+
+    /// <summary>
+    /// The move, retried briefly — for what a unique scratch name cannot fix.
+    /// </summary>
+    /// <remarks>
+    /// A reader, an indexer or a virus scanner holding the DESTINATION for a moment is also reported
+    /// as access denied on Windows. Bounded and short: the last attempt is allowed to throw, because
+    /// a save that never lands is a real problem and must surface as one rather than spin.
+    /// </remarks>
+    private static void MoveOverExisting(string temp, string file)
+    {
+        const int attempts = 5;
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            try
+            {
+                File.Move(temp, file, overwrite: true);
+                return;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException && attempt < attempts)
+            {
+                Thread.Sleep(20 * attempt);
+            }
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     /// <summary>

@@ -45,7 +45,6 @@ public sealed class CommandFixtures
                     Autonomous: true,
                     SplitPlan: true,
                     SplitWithFable: true,
-                    FableAvailable: true,
                     PlanText: text,
                     PlanStage: true);
                 var commands = GateCommands.For(context);

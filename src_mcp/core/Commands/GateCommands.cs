@@ -3,11 +3,14 @@ namespace CoaiMcp.Core.Commands;
 /// <summary>What the operator has switched on, at the moment of this call.</summary>
 /// <param name="Autonomous">Work without interrupting the person until there is no other way.</param>
 /// <param name="SplitPlan">Break an accepted plan into epics and stories before building it.</param>
-/// <param name="SplitWithFable">Do the splitting — and the risky stories — with Fable.</param>
-/// <param name="FableAvailable">
-/// Whether a Fable reviewer is configured AND usable right now. The command must never name a model
-/// this machine does not have: an instruction to switch to something absent is an instruction that
-/// stops the work.
+/// <param name="SplitWithFable">
+/// Do the splitting — and the risky stories — with Fable.
+/// <para>The switch is the WHOLE decision, and there is deliberately no second condition beside it.
+/// It once asked whether a Fable REVIEWER was configured, on the reasoning that a command must never
+/// name a model this machine has not got. The reasoning was sound and the premise was wrong: Fable
+/// is not a reviewer here, it is a model of the AI that CALLED us, which already has it. Nobody
+/// configures Fable as a vendor in this panel and nobody should — so the check was false on every
+/// real machine and the switch was inert. Corrected by the operator.</para>
 /// </param>
 /// <param name="PlanText">The plan under review, for the split verdict. Empty outside a plan round.</param>
 /// <param name="PlanStage">
@@ -24,7 +27,6 @@ public sealed record CommandContext(
     bool Autonomous = false,
     bool SplitPlan = false,
     bool SplitWithFable = false,
-    bool FableAvailable = false,
     string PlanText = "",
     bool PlanStage = false,
     bool FirstPlanRound = true);
@@ -68,7 +70,7 @@ public static class GateCommands
         {
             commands.Add(OrdersSplit(context) ? SplitCommand(context) : AlreadySplitCommand);
         }
-        if (OrdersSplit(context) && context.SplitWithFable && context.FableAvailable)
+        if (OrdersSplit(context) && context.SplitWithFable)
         {
             commands.Add(FableCommand);
         }

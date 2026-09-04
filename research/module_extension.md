@@ -593,9 +593,29 @@ toggle, the provider keeps the set, and the next render carries `open`. The `tog
 `document`, in the CAPTURE phase, because `toggle` does not bubble and the elements it would
 otherwise be bound to are replaced by every patch.
 
-**A running round opens itself once**, recorded, so that closing it is not undone by the next tick —
-and a round the person left open **stays open when it finishes**, which is the moment its reviewers
-are most worth reading. "Open because it is running" was the first design and it failed both halves.
+**Running is open, finished is closed, and what the person opened is never touched (2026-09-04).**
+A round opens itself when it starts and closes itself again when it stops — but only while the card
+is still open on the PANEL's initiative. The moment somebody clicks it the key leaves `panelOpened`
+and the card is theirs: opened by them it survives the round ending, closed by them it stays shut for
+the rest of the run. Three sets, because "open" alone cannot answer the question that decides all of
+it — who opened it.
+
+The rule before this one kept a finished round open "because that is the moment its reviewers are
+worth reading". True of one round and wrong of a list: every round anybody had ever watched stayed
+expanded, and the panel became a wall of open cards. Overruled by the person who uses it.
+
+**The policy is now a pure function** in `openRounds.ts`, and that is the part worth copying
+elsewhere. It lived inside `PanelProvider` beside `vscode`, so it could not be tested at all — which
+is how a rule ships wrong and stays wrong, asserted by nothing but its own comment. Nine tests now
+say what it does.
+
+**A vendor's name carries one colour, everywhere.** `vendorColour` maps a name to the editor's own
+chart palette — anchored for `codex`, `gemini` and `local`, hashed for anything else, so a custom
+vendor is stable too and no colour is a hex value that could vanish on somebody's theme. Derived from
+the NAME rather than handed out in arrival order, because a colour that changes between the rounds
+list, the spending chart and the next restart teaches a mapping that then lies. Only the vendor word
+is coloured; the rest of the row is exactly as it was. The anchors are not decoration: a plain hash
+put the three shipped vendors into two colours out of six, caught by the test on its first run.
 
 A round from a server older than `seconds` shows its reviewers with no duration rather than `0s`:
 absent is unknown, and printing a zero would be a measurement nobody made. The list is also twice as

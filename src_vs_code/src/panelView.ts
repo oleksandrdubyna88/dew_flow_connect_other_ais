@@ -4,7 +4,8 @@ import { HELP, HelpKey } from './help';
 import { ModelChoice, modelsFor, modelsProvenance } from './models';
 import { ROLES, promptsFor, selectedFor } from './prompts';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, WINDOWS, within } from './usage';
-import { costPhrase, elapsed, isRunning, reviewerLines, RoundRecord, SessionFile, stageName } from './rounds';
+import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
+import { vendorColour } from './vendorColour';
 import { CliStatus, cliStatusNote, updateAvailable, UNKNOWN_CLI } from './cliVersions';
 import { SnippetStatus, snippetNote } from './claudeSnippet';
 import { LocalEngine, remoteWarning } from './localEngines';
@@ -698,7 +699,7 @@ function usageRows(state: PanelState): string {
       const total = r.tokensIn + r.tokensOut;
       const failed = r.failed === 0 ? '' : ` · <span class="warn">${r.failed} failed</span>`;
       return `<div class="spend">
-  <div class="head"><span class="name">${escapeHtml(r.provider)}</span><span class="cost">${spend(r)}</span>
+  <div class="head"><span class="name" style="color:${vendorColour(r.provider)}">${escapeHtml(r.provider)}</span><span class="cost">${spend(r)}</span>
     <button class="link forget" data-command="forgetUsage" data-id="${escapeHtml(r.provider)}"
             title="Clear ${escapeHtml(r.provider)}'s recorded runs from this chart. Nothing is deleted from the ledger — the row simply stops counting what is already there, and comes back the next time this vendor runs."
             aria-label="Forget ${escapeHtml(r.provider)}'s recorded spending">✕</button></div>
@@ -801,8 +802,14 @@ function roundCard(
   // A round IN FLIGHT always carries its body, whether or not the open set mentions it: "the
   // reviewers of a running round are visible" is a promise of this renderer, not something a
   // provider can be trusted to arrange, and it is one round rather than a list.
-  const lines = open || isRunning(round) ? reviewerLines(round) : [];
-  const reviewers = lines.map((line) => `<div class="reviewer">${escapeHtml(line)}</div>`).join('\n');
+  const lines = open || isRunning(round) ? reviewerRows(round) : [];
+  // Only the vendor's WORD carries the colour; the rest of the row is exactly as it was. Both
+  // halves come out of a session file somebody else wrote, so both are escaped.
+  const reviewers = lines
+    .map((row) =>
+      `<div class="reviewer"><span class="vendor" style="color:${vendorColour(row.provider)}">`
+      + `${escapeHtml(row.provider)}</span>${escapeHtml(row.rest)}</div>`)
+    .join('\n');
   const took = elapsed(round, nowMs);
   // WHAT was reviewed leads the line; the branch and the round number follow it. A list of rounds
   // identified only by stage and number is a column of numbers — a person scanning it is looking
