@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.29.3 — 2026-09-04 (server 0.15.0)
+
+**The help now says that the split order is given once.** The tooltip on *Split the plan into epics
+and stories*, and the article in all five languages, describe what an epic is told when it comes back
+for its own plan review: that it is a piece of a split already under way, to be built as one unit and
+closed properly, rather than split again. Behaviour that shipped in 0.29.2 with the help still
+describing the version before it.
+
 ## 0.29.2 — 2026-09-04 (server 0.15.0)
 
 **The order to split a plan is now given once, and an epic is told it is an epic.** With *Split the
