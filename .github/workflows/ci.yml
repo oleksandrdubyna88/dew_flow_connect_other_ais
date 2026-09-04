@@ -53,6 +53,11 @@ jobs:
       - name: Pin check
         run: node .claude/rules/shared/tools/pin-check.mjs
 
+      # This product's own gate rule is the shared one now, and this repository is where the text
+      # comes from — so a copy here would be the source disagreeing with itself.
+      - name: Gate snippet
+        run: node .claude/rules/shared/tools/gate-snippet-check.mjs
+
       # A workflow file that does not PARSE fails at startup, in zero seconds, with no job, no log
       # and no annotation — and the run that discovers it is the release you just tagged. Measured
       # 2026-09-03: a single stray carriage return inside a quoted `tr -d '\r'` reads as a line

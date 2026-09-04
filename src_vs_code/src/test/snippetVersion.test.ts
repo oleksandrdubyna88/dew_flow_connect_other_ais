@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { test } from 'node:test';
 import {
   claudeSnippet,
   SNIPPET_BODY_SHA,
+  SNIPPET_LOCATIONS,
   SNIPPET_VERSION,
   snippetNote,
   snippetStatus,
@@ -81,6 +84,67 @@ test('the snippet text and its version number move together', () => {
       + `SNIPPET_BODY_SHA to '${sha}'. Both, together — a version that does not move with the text `
       + 'tells every pasted copy it is current forever, which is the defect this exists to catch.',
   );
+});
+
+/**
+ * The block is now a SHARED RULE, and a rule file is a second copy of this text.
+ *
+ * <p>`dew_flow_conventions/common/coai-review-gate.md` is what six repositories actually load, via
+ * the submodule they already mount — so if it and this function ever disagree, the family is
+ * obeying one text while the ⋯ menu hands out another. That is the same defect the version number
+ * exists to catch, one level out, and it gets the same treatment: a test that fails until both move
+ * together.</p>
+ *
+ * <p>This repository mounts that submodule too, which is the only reason the comparison can be made
+ * here at all. Absent submodule: a SKIP locally (a fresh clone without `--recurse-submodules` is a
+ * setup state, not a defect) and a FAILURE under CI, where the workflow initialises it and an
+ * unchecked drift would merge behind a green tick.</p>
+ */
+test('the mounted shared rule is byte-identical to what the menu hands out', (t) => {
+  const mounted = mountedRuleFile();
+  if (mounted === '') {
+    const message = 'the conventions submodule is not checked out — run '
+      + 'git submodule update --init .claude/rules/shared';
+    if (process.env.CI !== undefined) {
+      assert.fail(`${message} (CI must not skip this: it is the only check that the rule matches the snippet)`);
+    }
+    t.skip(message);
+
+    return;
+  }
+
+  assert.equal(
+    fs.readFileSync(mounted, 'utf8').replace(/\r\n/g, '\n'),
+    claudeSnippet(),
+    `${mounted} has drifted from claudeSnippet(). Regenerate it from the snippet — six repositories `
+      + 'load that file, and the one they load is the one being obeyed.',
+  );
+});
+
+/** The rules mount, found by walking up from this file rather than by trusting a cwd. */
+function mountedRuleFile(): string {
+  const relative = path.join('.claude', 'rules', 'shared', 'common', 'coai-review-gate.md');
+  for (let dir = __dirname, seen = ''; dir !== seen; seen = dir, dir = path.dirname(dir)) {
+    const candidate = path.join(dir, relative);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return '';
+}
+
+test('the instruction files are searched BEFORE the mounted rule', () => {
+  // A stale paste in CLAUDE.md is what the AI here reads. Reporting the mounted rule's version
+  // instead would be a green light over the text actually being obeyed.
+  assert.deepEqual(SNIPPET_LOCATIONS.slice(0, 4), [
+    'CLAUDE.md',
+    'AGENTS.md',
+    'GEMINI.md',
+    '.github/copilot-instructions.md',
+  ]);
+  assert.ok(SNIPPET_LOCATIONS.includes('.claude/rules/shared/common/coai-review-gate.md'));
+  assert.ok(SNIPPET_LOCATIONS.includes('.claude/rules/common/coai-review-gate.md'));
 });
 
 test('the panel says nothing when the paste is current or absent', () => {
