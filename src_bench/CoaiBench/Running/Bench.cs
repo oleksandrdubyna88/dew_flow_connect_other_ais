@@ -17,7 +17,11 @@ public sealed record Cell(Case Case, string Arm, int Repeat);
 /// <para>Each cell gets a server of its own. That is not tidiness — a session is per repo+branch and
 /// a data directory is shared, and both of those are things this bench is often measuring.</para>
 /// </remarks>
-public sealed class Bench(Options options, IReadOnlyList<Case> corpus, Action<string> say)
+public sealed class Bench(
+    Options options,
+    IReadOnlyList<Case> corpus,
+    IReadOnlyList<VendorConfig> configured,
+    Action<string> say)
 {
     public IReadOnlyList<Cell> Cells() =>
     [
@@ -53,14 +57,20 @@ public sealed class Bench(Options options, IReadOnlyList<Case> corpus, Action<st
 
     private async Task<RunRecord> OneAsync(Cell cell, int lane, CancellationToken ct)
     {
+        // The operator's OWN vendors, selected by id — never a list rebuilt from names. Bare ids ran
+        // the retired Gemini CLI under a vendor whose configured runtime is `antigravity`, and a
+        // local vendor with no model at all, and the report blamed the release for both.
+        var (vendors, refusal) = Vendors.For(cell.Arm, configured, options.Models);
+        if (refusal.Length > 0)
+        {
+            return new RunRecord(cell.Case, cell.Arm, cell.Repeat, lane) { HarnessError = refusal };
+        }
+
         var env = new Dictionary<string, string>(options.Settings, StringComparer.Ordinal)
         {
-            ["COAI_PROVIDERS"] = cell.Arm,
+            ["COAI_PROVIDERS"] = string.Join(",", vendors.Select(v => v.Id)),
+            ["COAI_VENDORS"] = Vendors.AsSetting(vendors),
         };
-        foreach (var (vendor, model) in options.Models)
-        {
-            env[$"COAI_MODEL_{vendor.ToUpperInvariant()}"] = model;
-        }
 
         var dataDir = DataDirFor(cell, lane);
         await using var client = new GateClient(options.Executable, dataDir, env);

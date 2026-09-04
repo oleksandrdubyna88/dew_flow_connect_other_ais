@@ -66,8 +66,22 @@ public static class Program
             return Refuse("no cases to run — the corpus is empty or the names matched nothing");
         }
 
+        // The operator's OWN vendors. An id is not a vendor: the runtime and the model are, and a
+        // bench that rebuilds them from names measures a machine nobody has — it ran the retired
+        // Gemini CLI under a vendor configured for antigravity, and a local one with no model.
+        var vendorsFile = options.VendorsFile.Length > 0 ? options.VendorsFile : Vendors.DefaultSettingsFile;
+        var configured = Vendors.Read(vendorsFile);
+        if (configured.Count == 0)
+        {
+            return Refuse($"no vendors are configured in '{vendorsFile}' — point --vendors-from at "
+                + "the settings file the panel writes, or configure a reviewer in the panel first");
+        }
+
+        Console.WriteLine(
+            $"vendors from {vendorsFile}: "
+            + string.Join(", ", configured.Select(v => $"{v.Id} ({v.Runtime}/{v.Model})")));
         var outDir = OutDir(options);
-        var runs = await new Bench(options with { OutDir = outDir }, corpus, Console.WriteLine)
+        var runs = await new Bench(options with { OutDir = outDir }, corpus, configured, Console.WriteLine)
             .RunAsync(ct);
         var file = Path.Combine(outDir, "runs.json");
         await RunStore.SaveAsync(file, runs, ct);

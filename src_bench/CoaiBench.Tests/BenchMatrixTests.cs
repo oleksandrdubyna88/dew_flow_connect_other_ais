@@ -13,8 +13,17 @@ public sealed class BenchMatrixTests
     private static readonly Case Plan = new("plan-a", "todo/PLAN_a.md", "abc123", "abc122");
     private static readonly Case Other = new("plan-b", "todo/PLAN_b.md");
 
+    private static readonly VendorConfig[] Configured =
+    [
+        new("codex", "codex", "gpt-5.6-luna"),
+        // Named `gemini`, running ANTIGRAVITY — the operator's real shape, and the one a bench that
+        // rebuilds vendors from ids gets wrong.
+        new("gemini", "antigravity", "gemini-3.7-flash-low"),
+        new("local", "local", "Qwen3.5-35B-A3B-Q5_vk128:latest"),
+    ];
+
     private static Bench BenchOf(Options options, params Case[] corpus) =>
-        new(options, corpus, _ => { });
+        new(options, corpus, Configured, _ => { });
 
     [Fact]
     public void EveryCaseTimesEveryArmTimesEveryRepeat()

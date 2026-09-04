@@ -26,6 +26,9 @@ public sealed record Options
 
     public string CorpusFile { get; init; } = string.Empty;
 
+    /// <summary>Where the vendors are read from. Default: the panel's own settings file.</summary>
+    public string VendorsFile { get; init; } = string.Empty;
+
     public Stages Stages { get; init; } = Stages.Both;
 
     /// <summary>One arm per vendor set. `codex,gemini,local` is ONE arm of three vendors.</summary>
@@ -135,6 +138,7 @@ public static class OptionsParser
             case "--repo": return options with { Repo = value };
             case "--case": return options with { Cases = [.. options.Cases, .. Split(value)] };
             case "--corpus": return options with { CorpusFile = value };
+            case "--vendors-from": return options with { VendorsFile = value };
             case "--stages": return options with { Stages = StagesFrom(value) };
             case "--arm": return options with { Arms = [.. options.Arms, value] };
             case "--repeat": return options with { Repeat = Number(value, options.Repeat) };
@@ -187,6 +191,9 @@ public static class OptionsParser
           --exe <coai-mcp>          the server to drive (the published one)
           --repo <path>             the checkout the cases live in
           --corpus <file>           plan+commit pairs, JSON
+          --vendors-from <file>     the settings file the vendors come from. Default: the
+                                    panel's own, so an arm names IDS and their runtime and
+                                    model are the ones actually configured
           --case <name[,name]>      only these cases; default is all of them
           --stages plans|diffs|both default both
           --arm <codex,gemini>      one arm per vendor SET; repeatable
