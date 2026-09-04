@@ -36,6 +36,8 @@ sequenceDiagram
 | `IProcessLauncher` / `ProcessLauncher` | `Processes/ProcessLauncher.cs` | the ONE process seam; timeout kills the entire tree; `StdIn` carries every long or multi-line input, BOM-less UTF-8, and a child that exits before reading is not an exception |
 | `ExecutableResolver` | `Processes/ExecutableResolver.cs` | npm Windows shims: the PATHEXT resolution `Process.Start` does not do |
 | `WorktreeManager`, `WorktreeLease` | `Worktrees/WorktreeManager.cs` | one detached tree per round, `coai-wt-` prefix under OUR storage; prune-on-open; disposal = finally; never touches a human's worktree |
+| `SubmodulePopulator` | `Worktrees/SubmodulePopulator.cs` | fills the round tree's submodules from the PARENT checkout, not the remote — git populates none in a linked worktree, and in this family the project's rules ARE one; offline, pinned, never fatal, and refused when the source is reached through a reparse point |
+| `GitModules`, `SubmoduleMount` | `Git/GitModules.cs` | `.gitmodules` as (name, path); a file inside the repository under review, so absolute/traversing paths and names that could spell another config key drop the mount |
 | `DiffExclusions`, `ContextAssembler` | `Context/ContextAssembler.cs` | numstat → per-file diffs with `:(exclude,glob)` pathspecs; binary sizes via `cat-file -s` |
 | `IReviewerRuntime`: `CodexRuntime`, `DeepseekRuntime`, `GeminiRuntime`, `ClaudeRuntime`, `AntigravityRuntime`, `CustomCodexRuntime` | `Reviewers/ReviewerRuntime.cs`, `ClaudeRuntime.cs`, `CustomRuntime.cs` | THE vendor adapter: `Build` (argv, pure) + `ReadAnswer` + `ReadUsage`, the last two with working defaults. Flags verified against codex 0.147.0 / gemini 0.55.1 / claude 2.1.197 / agy 1.1.22; keys ride env, never argv; DeepSeek = Codex config-shifted |
 | `ReviewerRuntimeSelector` | same | unknown provider refuses naming the catalog |
@@ -47,6 +49,17 @@ sequenceDiagram
 
 - **One worktree per round, by SHA** — six read-only reviewers share one tree; six checkouts of a
   moving branch would be six different inputs to one comparison.
+- **A worktree's submodules come from the parent checkout, never from their remote.** `git worktree
+  add` populates none (and has no `--recurse-submodules` in git 2.55), so the project's rules were
+  simply absent from every round in a repository that keeps them in one. The parent's object store
+  already holds every commit the reviewed SHA pins, so cloning from it is offline and faster —
+  measured 1.49 s against 2.45 s — and the source is refused unless it resolves inside the parent
+  with no reparse point on the way, because `protocol.file.allow` is lifted for that call.
+- **Populating is never fatal, and never silent.** A parent that never initialised the submodule
+  leaves the mount empty and the round runs; `RuleBundle.MissingMounts` is what tells the reviewer,
+  in the prompt, that rules it was not shown exist. Failing the round instead would turn an
+  infrastructure hiccup into an outage — a code-round finding that was rejected on exactly that
+  ground, with the visibility half accepted.
 - **Provider cap beside the global cap** — a rate limit is per vendor; a global cap alone puts all
   its slots on one provider.
 - **Antigravity (`agy`) is the closest fit to this product's contract**: `--json-schema` puts the

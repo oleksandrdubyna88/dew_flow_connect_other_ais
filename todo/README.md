@@ -17,6 +17,7 @@ Convention: `.claude/rules/shared/common/planning-docs.md`.
 | [PLAN_provider_liveness.md](PLAN_provider_liveness.md) | `providers` still calls a vendor healthy on the strength of `--version`, which never reaches the vendor. Three states instead of two, established by a real round trip and cached. |
 | [PLAN_rule_formatting.md](PLAN_rule_formatting.md) | Every reviewer in an eight-cell measurement missed the one rule written as a table row. Whether rule FORMATTING changes what a reviewer can apply, measured. |
 | [PLAN_panel_probing_state.md](PLAN_panel_probing_state.md) | A render waits on its probes with nothing on screen saying so: press ⟳ where nothing answers and the old sentence sits unchanged for seconds. Extracted from the WSL plan's code round, where it was accepted as true and left as a tail. |
+| [PLAN_shared_rules_reach_reviewers.md](PLAN_shared_rules_reach_reviewers.md) | The family's rules are a submodule and git puts none in a linked worktree, so every conventions pass judged diffs against an empty directory. Phases 1–2 (the worktree carries them, the budget spends on local rules first) shipped 2026-09-04; phase 3 — the gate snippet becoming a shared rule instead of a paste that goes stale — is open. |
 
 Everything else planned so far shipped — the master plan, all six epics, the conventions pass, the
 per-role gate with dealt prompts, and the escalation tail are
