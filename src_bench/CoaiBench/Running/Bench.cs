@@ -93,10 +93,19 @@ public sealed class Bench(
     /// what five windows do to each other wants exactly the interference, and that lives in the
     /// shared directory — the sessions, the engine lease, the caller memory.
     /// </remarks>
+    internal string DataDirOf(Case work, string arm, int repeat, int lane) =>
+        DataDirFor(new Cell(work, arm, repeat), lane);
+
     private string DataDirFor(Cell cell, int lane) =>
-        options.Parallel > 0
-            ? Path.Combine(options.OutDir, "data-shared")
-            : Path.Combine(options.OutDir, "data", $"{cell.Arm}-{cell.Case.Name}-{cell.Repeat}-{lane}");
+        !options.Isolate
+            ? RealDataDir
+            : options.Parallel > 0
+                ? Path.Combine(options.OutDir, "data-shared")
+                : Path.Combine(options.OutDir, "data", $"{cell.Arm}-{cell.Case.Name}-{cell.Repeat}-{lane}");
+
+    /// <summary>The directory the panel reads — which is why the rounds appear in it.</summary>
+    internal static string RealDataDir => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "coai-mcp");
 
     private static string Line(RunRecord run)
     {

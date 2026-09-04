@@ -15,7 +15,13 @@ public sealed record Options
 {
     public string Verb { get; init; } = "run";
 
-    /// <summary>The `coai-mcp` to drive. The PUBLISHED one unless told otherwise.</summary>
+    /// <summary>
+    /// The `coai-mcp` to drive. Defaults to the INSTALLED one — the binary the panel spawns.
+    /// </summary>
+    /// <remarks>
+    /// Measuring a build nobody has installed is measuring the wrong thing, and remembering the path
+    /// every time is how the wrong one gets measured.
+    /// </remarks>
     public string Executable { get; init; } = string.Empty;
 
     /// <summary>The checkout the cases live in and the rounds review.</summary>
@@ -56,6 +62,17 @@ public sealed record Options
     /// </remarks>
     public int Parallel { get; init; }
 
+    /// <summary>
+    /// Whether each run gets a data directory of its own instead of the real one.
+    /// </summary>
+    /// <remarks>
+    /// OFF by default, and that is deliberate: with the real directory the rounds appear in the
+    /// panel's *Recent rounds* as they happen, which is where a person watches a campaign — and it
+    /// is also what a window actually does. Isolation is for comparing two configurations that must
+    /// not see each other; it is a choice, not the normal case.
+    /// </remarks>
+    public bool Isolate { get; init; }
+
     /// <summary>Settings handed to every server, as `COAI_X=value`.</summary>
     public IReadOnlyDictionary<string, string> Settings { get; init; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
@@ -93,6 +110,14 @@ public static class OptionsParser
         var settings = new Dictionary<string, string>(StringComparer.Ordinal);
         for (var at = 1; at < args.Count; at++)
         {
+            // A switch takes no value, and must not swallow the flag after it — which is what a
+            // parser that demands one for everything does.
+            if (Switches.Contains(args[at]))
+            {
+                options = ApplySwitch(options, args[at]);
+                continue;
+            }
+
             var (name, value) = Flag(args, ref at);
             if (value.Length == 0)
             {
@@ -108,6 +133,12 @@ public static class OptionsParser
 
         return (options with { Models = models, Settings = settings }, string.Empty);
     }
+
+    /// <summary>Flags that are on or off, and therefore take nothing after them.</summary>
+    private static readonly HashSet<string> Switches = new(StringComparer.Ordinal) { "--isolate" };
+
+    private static Options ApplySwitch(Options options, string name) =>
+        name == "--isolate" ? options with { Isolate = true } : options;
 
     private static (string Name, string Value) Flag(IReadOnlyList<string> args, ref int at)
     {

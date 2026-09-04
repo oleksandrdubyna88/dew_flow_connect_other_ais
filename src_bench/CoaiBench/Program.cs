@@ -91,7 +91,9 @@ public static class Program
             + string.Join(", ", configured.Select(v => $"{v.Id} ({v.Runtime}/{v.Model})")));
         Console.WriteLine($"settings in force:\n{PanelSettingsFile.Describe(settings)}\n");
         var outDir = OutDir(options);
-        var runs = await new Bench(options with { OutDir = outDir }, corpus, configured, settings, Console.WriteLine)
+        var runs = await new Bench(
+            options with { OutDir = outDir, Executable = WhichServer(options) },
+            corpus, configured, settings, Console.WriteLine)
             .RunAsync(ct);
         await File.WriteAllTextAsync(
             Path.Combine(outDir, "settings.md"),
@@ -110,9 +112,9 @@ public static class Program
     private static string Missing(Options options)
     {
         var wrong = new List<string>();
-        if (options.Executable.Length == 0 || !File.Exists(options.Executable))
+        if (!File.Exists(WhichServer(options)))
         {
-            wrong.Add($"--exe must name the coai-mcp to drive (got '{options.Executable}')");
+            wrong.Add($"no coai-mcp at '{WhichServer(options)}' — install the extension, or name one with --exe");
         }
 
         if (options.Repo.Length == 0 || !Directory.Exists(options.Repo))
@@ -128,6 +130,21 @@ public static class Program
 
         return string.Join("\n", wrong);
     }
+
+    /// <summary>
+    /// The server to drive: the one named, or the INSTALLED one.
+    /// </summary>
+    /// <remarks>
+    /// Measuring a build nobody has installed is measuring the wrong thing, and having to remember
+    /// the path every time is how the wrong one gets measured.
+    /// </remarks>
+    internal static string WhichServer(Options options) =>
+        options.Executable.Length > 0 ? options.Executable : InstalledServer;
+
+    internal static string InstalledServer => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "Code", "User", "globalStorage", "remsoftdev.connect-other-ais",
+        OperatingSystem.IsWindows() ? "coai-mcp.exe" : "coai-mcp");
 
     private static async Task<IReadOnlyList<Case>> CorpusAsync(Options options, CancellationToken ct)
     {
