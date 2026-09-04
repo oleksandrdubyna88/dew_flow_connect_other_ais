@@ -572,6 +572,35 @@ before this one.
 - **The autonomy command does not tell you to re-read epics that do not exist.** With the split
   switch off it says "re-read the whole plan" instead.
 
+**The order to split is given ONCE, and it is keyed by the CALLER (2026-09-04).** Raised by the
+operator before it could happen: a plan is split into epics, each epic comes back for its own plan
+review — which is the right thing to do — and a gate with no memory tells each one to split into
+epics. Epics of epics, with no floor.
+
+The memory cannot live on our session, and the reason is worth stating because it is not obvious.
+Our session is repo+branch and its plan stage happens exactly once: after a plan proceeds the stage
+advances, and `BeginPlanRound` refuses a second plan round on it outright. So an epic can only come
+back as a **different session, on its own branch** — invisible to anything our session remembers.
+
+What crosses those sessions is the AI itself, and Claude Code hands us its identity for free:
+`CLAUDE_CODE_SESSION_ID` is exported to every child it spawns, and an MCP server on stdio is one of
+those children. `CallerIdentity` reads it (`COAI_CALLER_SESSION` overrides, for a client that has no
+id of its own; our own session id is the fallback for a client that identifies itself in no way), and
+`CallerSessions` writes one small file per caller when a split is actually ordered. A caller that has
+one is a caller already inside a split, and is told so:
+
+> This plan is a PIECE of a split that is already under way, so do NOT split it again: build it as
+> one unit, review its diff through this gate, fix, document, test and commit. If it is genuinely too
+> big for one unit, say so in your summary…
+
+The verdict is not recomputed for a piece, the Fable command — which is about performing the split —
+is not issued with it, and the autonomy command is, because when to interrupt a person has nothing to
+do with splitting. The memory expires after a day: a Claude session long enough to span one is a
+session doing more than one task, and the second task is owed its own split order.
+
+Measured on the real corpus rather than asserted — 66 calls over 11 plans, two models,
+[`research/RESULTS_commands_campaign.md`](RESULTS_commands_campaign.md).
+
 **Whether to split is measured, and says so.** `PlanShapeReader` counts the plan's lines, the
 numbered items under its build-order heading, the distinct files it names and the top-level
 directories it touches; `PlanShape.Verdict` is two-axis — epics when big AND broad

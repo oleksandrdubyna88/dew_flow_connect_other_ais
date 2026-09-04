@@ -31,6 +31,7 @@ public sealed class PanelService
     private readonly RolePrompts _prompts;
     private readonly Escalations _escalations;
     private readonly UsageLedger _ledger;
+    private readonly CallerSessions _callers;
     private readonly Runners.Processes.ProcessTracking _tracking;
 
     public PanelService(PanelSettings settings, VaultKeys keys, DateTime vaultReadUtc, IProcessLauncher launcher, Serilog.ILogger log)
@@ -54,6 +55,7 @@ public sealed class PanelService
         _prompts = new RolePrompts(settings.DataDir);
         _escalations = new Escalations(settings.DataDir);
         _ledger = new UsageLedger(settings.DataDir);
+        _callers = new CallerSessions(settings.DataDir);
 
         // Rounds this server never finished cannot be running any more, whatever their file says.
         // A round left at "running" would sit in the panel forever; sweeping only rounds whose
@@ -548,16 +550,33 @@ public sealed class PanelService
             var record = live.Finish(answer.Verdict, gate.GatingCount, summary.Sentence, results);
             // The operator's own switches, read for THIS call: the settings file is stamped and
             // reloaded per tool call, so a box ticked a second ago governs this round.
-            var commands = Core.Commands.GateCommands.For(new Core.Commands.CommandContext(
+            var caller = CallerFor(session);
+            var context = new Core.Commands.CommandContext(
                 Autonomous: _settings.Autonomous,
                 SplitPlan: _settings.SplitPlan,
                 SplitWithFable: _settings.SplitWithFable,
                 FableAvailable: FableIsUsable(),
-                PlanText: session.PlanText,
+                // The plan THIS round reviewed, not the one the session remembers. `session` was
+                // loaded before the round and its PlanText is the PREVIOUS round's — empty on the
+                // first plan round, which is the ordinary case — so every verdict was computed
+                // from nothing and every plan came back "small enough to build as it stands".
+                // Found end-to-end by SplitOrderTests: "Measured from the plan you sent: 0 lines,
+                // 0 build step(s), 0 file(s) named" for a plan of four hundred.
+                PlanText: planText,
                 // A plan that did NOT pass is not a plan to go and build: with the switch on, a
                 // `revise` or a `call_human` verdict was still telling the caller to split it into
                 // stories and start committing. The order to build follows permission to build.
-                PlanStage: session.State.Stage == Stage.PlanReview && MayProceed(completed.Verdict)));
+                PlanStage: session.State.Stage == Stage.PlanReview && MayProceed(completed.Verdict),
+                // Once per CALLER, not once per session: the epics a split produces come back as
+                // their own sessions on their own branches, so a per-session memory would order
+                // every one of them to split again — epics of epics, with no floor.
+                FirstPlanRound: !_callers.SplitAlreadyOrdered(caller, DateTime.UtcNow));
+            var commands = Core.Commands.GateCommands.For(context);
+            if (Core.Commands.GateCommands.OrdersSplit(context))
+            {
+                _callers.RecordSplitOrder(caller, DateTime.UtcNow);
+                _log.Information("split ordered to caller {Caller}", caller);
+            }
             answer = answer with
             {
                 Cost = new RoundCost(record.TokensIn, record.TokensOut, record.CostUsd),
@@ -865,6 +884,19 @@ public sealed class PanelService
     /// <summary>Whether the caller may go and build: an order to split follows permission.</summary>
     private static bool MayProceed(RoundVerdict verdict) =>
         verdict is RoundVerdict.Proceed or RoundVerdict.GoodEnough or RoundVerdict.ContinueAnyway;
+
+    /// <summary>
+    /// Whom the split order is remembered against.
+    /// </summary>
+    /// <remarks>
+    /// The calling AI's own session when it exports one — Claude Code does, to every child it
+    /// spawns, so nothing has to be passed or remembered by the model. A client that identifies
+    /// itself in no way at all falls back to OUR session, which still stops the same plan being
+    /// ordered to split twice; it cannot follow that caller onto the epic branches, and a client
+    /// with no session id is a client we cannot follow anywhere.
+    /// </remarks>
+    private static string CallerFor(PersistedSession session) =>
+        CallerIdentity.Current() is { Length: > 0 } id ? id : $"session:{session.State.SessionId}";
 
     private string ComposePrompt(PromptChoice choice, string context) =>
         $"{_prompts.ForChoice(choice)}\n\n## The finding contract\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{FindingSchema.Json}\n\n{context}";

@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.29.2 — 2026-09-04 (server 0.15.0)
+
+**The order to split a plan is now given once, and an epic is told it is an epic.** With *Split the
+plan* switched on, the assistant is told to break a plan into epics and stories — and each epic then
+comes back for its own plan review, which is the right thing to do. Until now the gate had no memory
+of the first order and told each epic to split into epics as well. Epics of epics, with no floor.
+Reported by the operator before it could happen.
+
+The gate now remembers which assistant it has already ordered to split, using the session id Claude
+Code hands to the processes it starts, and tells a piece what it is: build it as one unit, review its
+diff through this gate, fix, document, test and commit — and if it really is too big for one unit,
+say so rather than starting a second round of splitting on your own. A different assistant, or the
+same one a day later, is a new task and is owed its own order.
+
+**A plan's split verdict was measured from the wrong plan.** It read the plan of the PREVIOUS round,
+which on a first plan round is nothing at all — so the numbers that came back with the order read
+`0 lines, 0 build step(s), 0 file(s) named` and a four-hundred-line plan was told it was small
+enough to build as it stands. Found by a test that runs a real round rather than the function alone.
+
+**Measured, not asserted.** 66 calls over eleven of this repository's own plans, two local models,
+three arms — no orders, the split order, and the you-are-a-piece order. The full report, including
+what the measurement got wrong about itself, is in `research/RESULTS_commands_campaign.md`.
+
+## 0.29.1 — 2026-09-04 (server 0.14.0)
+
+**The ⋯ menu names the snippet's version.** The snippet had been at v5 for a release while the menu
+item still read *Copy the CLAUDE.md snippet* — so a repository carrying v4 had no way to learn there
+was anything newer, and no reason to click. The item is now *Copy the CLAUDE.md snippet (v5)*, and a
+test holds the manifest title to the version, so it cannot drift back out of the menu without a red
+suite.
+
+**The message after the click says what you have.** It compares the snippet you just took with the
+copy in your repository: an older one is told which block to replace, a current one is told there is
+nothing to replace, and a repository AHEAD of this build is told to keep what it has — the one case
+where pasting is the wrong move.
+
 ## 0.29.0 — 2026-09-03 (server 0.14.0)
 
 **The gate can now give orders.** It has always answered one question — are these findings gating,

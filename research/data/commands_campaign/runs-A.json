@@ -1,0 +1,2428 @@
+[
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_multi_repo_and_uncommitted",
+  "arm": "plain",
+  "verdict": "Epics",
+  "lines": 554,
+  "code": 0,
+  "seconds": 26.1,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 6,
+   "children": 17,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Core Snapshot Engine | Session Persistence Layer | Path Resolution and Deduplication | Diff Budget Allocator | Worktree Orchestration | UI and Gate Logic"
+  },
+  "answerText": {
+   "approach": "I will first isolate and implement the `WorkingTreeSnapshot` mechanism to convert uncommitted, dirty working trees into stable, reachable commit objects using a temporary index and a dedicated ref namespace, ensuring all four repository states (ordinary, unborn, clean, conflicted) are handled correctly. Following this foundation, I will layer the multi-repository orchestration logic, introducing session aliases, qualified path disambiguation, and a deterministic diff-budget allocator to unify the review context across disparate repositories into a single, coherent verdict.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Deep analysis of the git mechanics and edge cases (Part One) will be performed by a specialized reasoning model to ensure the `git` command sequences and race-condition handling are logically flawless; the architectural integration of session stores, diff shapers, and panel services (Part Two) will be handled by a high-context coding model to maintain consistency across the distributed codebase.",
+   "questionPolicy": "I will defer questions until the implementation of the `SessionStore` migration logic or the vendor smoke test reveals a discrepancy between the documented vendor capabilities and the actual runtime behavior of the sandboxed environments.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [
+      "Implement `SnapshotScope` and the `git` command sequence with `GIT_INDEX_FILE` and `GIT_WORK_TREE` environment variables.",
+      "Implement the `HEAD` probing logic (unborn vs. committed) and the double-read stability check with retry logic.",
+      "Implement the `refs/coai/snapshots/` namespace management and the cleanup sweep logic.",
+      "Implement the four-state validation logic (clean, conflicted, unborn, ordinary) with specific refusal messages."
+     ],
+     "kind": "Core Snapshot Engine",
+     "title": "Part One: Working Tree as a Reviewable Thing"
+    },
+    {
+     "children": [
+      "Update `SessionStore` to store the `repos` array and implement the migration logic for legacy sessions.",
+      "Implement the `SessionKey` aliasing mechanism to allow lookups from secondary repositories.",
+      "Implement the repository identity check (common-dir + root commit) to detect path replacement between rounds."
+     ],
+     "kind": "Session Persistence Layer",
+     "title": "Part Two: Session Identity and Multi-Repo State"
+    },
+    {
+     "children": [
+      "Implement the `QualifiedPath` canonical form and the `Split` logic with alias set awareness.",
+      "Update `FindingDedup` to use the new qualified path format for cross-repository deduplication.",
+      "Implement the alias uniqueness algorithm (digest-based, set-wide validation) to prevent collisions."
+     ],
+     "kind": "Path Resolution and Deduplication",
+     "title": "Part Two: Qualified Paths and Deduplication"
+    },
+    {
+     "children": [
+      "Implement the `DiffShaper` floor-and-redistribution algorithm to ensure every repository contributes to the diff budget.",
+      "Implement the round-robin redistribution pass for the remaining budget after the floor is reserved."
+     ],
+     "kind": "Diff Budget Allocator",
+     "title": "Part Two: Diff Budget Management"
+    },
+    {
+     "children": [
+      "Implement the `RoundRoot` builder to create a unified directory structure for all worktrees.",
+      "Implement the vendor smoke test to verify cross-root readability before launching the round.",
+      "Update `WorktreeManager` and `PanelService` to manage a set of leases and handle multi-repo checkout paths."
+     ],
+     "kind": "Worktree Orchestration",
+     "title": "Part Two: Worktree Leases and Round Root"
+    },
+    {
+     "children": [
+      "Update the `PanelService` and UI components to display multi-repo rounds and qualified finding paths.",
+      "Implement the `GateRule` aggregation logic to produce a single verdict from findings across multiple repositories."
+     ],
+     "kind": "UI and Gate Logic",
+     "title": "Part Two: Panel and Gate Aggregation"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_multi_repo_and_uncommitted",
+  "arm": "commands",
+  "verdict": "Epics",
+  "lines": 554,
+  "code": 0,
+  "seconds": 16.2,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 3,
+   "children": 16,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": true,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "Epic | Epic | Epic"
+  },
+  "answerText": {
+   "approach": "I will first isolate the 'Working Tree Snapshot' mechanism into a self-contained epic to validate the core git primitives (unborn HEAD, dirty tree, stability checks) before introducing the multi-repository orchestration layer. Subsequently, I will implement the cross-repository logic, session aliasing, and qualified path resolution, ensuring the 'round root' architecture is validated against vendor constraints before finalizing the panel integration.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Fable (max) will be used for the 'Working Tree Snapshot' epic due to the high cost of git object corruption and the need for precise atomicity in the snapshot logic. Fable (max) will also handle the 'Multi-Repo Orchestration' epic where payments, authentication, and complex data migration (session aliasing, root commit identity) are critical. Opus will handle the 'Panel Integration' and 'Diff Budget' stories where the logic is deterministic and the cost of a minor UI or formatting error is low.",
+   "questionPolicy": "Questions will be deferred until the end of the summary, grouped by dependency. A question is only asked immediately if it blocks the 'Round Root' smoke test or the 'Session Migration' schema, but I will proceed with stated assumptions for the vendor interface contract and the specific git command flags.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [
+      "Epic 1: Working Tree Snapshot & Stability",
+      "Story 1.1: Implement `SnapshotScope` with `GIT_INDEX_FILE` and `GIT_WORK_TREE` isolation for dirty, clean, unborn, and conflicted states.",
+      "Story 1.2: Implement the double `write-tree` stability check with retry logic and `HEAD` movement detection.",
+      "Story 1.3: Implement the `refs/coai/snapshots/` keep-alive ref and the `open` sweep for cleanup.",
+      "Story 1.4: Integration tests for the four-state table and the byte-identical index verification."
+     ],
+     "kind": "Epic",
+     "title": "Epic 1: Working Tree Snapshot & Stability"
+    },
+    {
+     "children": [
+      "Epic 2: Multi-Repo Orchestration & Session Identity",
+      "Story 2.1: Extend `SessionStore` to support `repos` array, alias records, and root-commit identity validation.",
+      "Story 2.2: Implement `QualifiedPath` generation and `Split` logic with session-aware disambiguation.",
+      "Story 2.3: Implement the `DiffShaper` floor-and-redistribution algorithm for multi-repo budgets.",
+      "Story 2.4: Build the `RoundRoot` directory structure and validate vendor read-access across the root.",
+      "Story 2.5: Implement the `FindingDedup` logic to prevent cross-repo collision and ensure single-threshold evaluation."
+     ],
+     "kind": "Epic",
+     "title": "Epic 2: Multi-Repo Orchestration & Session Identity"
+    },
+    {
+     "children": [
+      "Epic 3: Panel Integration & Finalization",
+      "Story 3.1: Update `PanelService` to display multi-repo rounds and qualified finding paths.",
+      "Story 3.2: Implement the `call_human` fallback logic for vendor root-read failures.",
+      "Story 3.3: Final documentation updates for `module_runners.md` and `module_server.md`.",
+      "Story 3.4: End-to-end regression test for the single-repo legacy call signature."
+     ],
+     "kind": "Epic",
+     "title": "Epic 3: Panel Integration & Finalization"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_multi_repo_and_uncommitted",
+  "arm": "epic",
+  "verdict": "Epics",
+  "lines": 554,
+  "code": 0,
+  "seconds": 12.3,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 1,
+   "children": 10,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": false,
+   "commitsEachUnit": false,
+   "mentionsReview": false,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Monolithic Implementation Unit"
+  },
+  "answerText": {
+   "approach": "I will execute the entire multi-repository change as a single, monolithic unit by first implementing the `WorkingTreeSnapshot` mechanism to enable uncommitted review, then layering the multi-repo session identity, qualified pathing, and diff budgeting logic, and finally integrating the panel updates and cross-repository contract tests. This single-pass execution ensures that the complex interdependencies between the snapshot mechanism, session aliasing, and the new round-root worktree layout are validated together before any commit is made.",
+   "commitsEachUnit": false,
+   "modelPolicy": "The primary reasoning and architectural synthesis will be handled by the current high-context model to ensure consistency across the 31 findings and complex state transitions; code generation for the specific C# files (`Tools.cs`, `PanelService.cs`, `SessionStore.cs`, etc.) will be performed by the same model to maintain strict adherence to the `refs/coai/snapshots` namespace and the `QualifiedPath` logic.",
+   "questionPolicy": "Questions are deferred to the end of the summary unless a blocking dependency (e.g., a missing vendor capability or a specific file path that cannot be resolved) prevents the initial snapshot creation; all other assumptions (e.g., the existence of the `dataDir` structure, the availability of the `coai` git identity, and the specific vendor sandbox behaviors) are accepted as stated in the plan.",
+   "reviewsEachUnit": false,
+   "units": [
+    {
+     "children": [
+      "Implement `SnapshotScope` and the `git` command sequence for `WorkingTreeSnapshot` (Part One)",
+      "Implement the four-state logic (Unborn, Clean, Conflicted, Dirty) and the tree stability check",
+      "Implement `SessionStore` aliasing and the `repos` array schema with migration logic",
+      "Implement `QualifiedPath` generation, uniqueness resolution, and `Split` logic",
+      "Implement `DiffShaper` floor allocation and round-robin redistribution",
+      "Implement `WorktreeManager` multi-repo lease set and `roundRoot` construction",
+      "Implement `ContextAssembler` and `PanelService` updates to support multi-repo context",
+      "Implement `FindingDedup` cross-repository merging and `GateRule` single-threshold evaluation",
+      "Implement Panel UI updates for multi-repo display and finding navigation",
+      "Execute the full test suite (integration and unit) against the single commit"
+     ],
+     "kind": "Monolithic Implementation Unit",
+     "title": "Full Multi-Repo Uncommitted Review Implementation"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_connect_other_ais",
+  "arm": "plain",
+  "verdict": "Epics",
+  "lines": 440,
+  "code": 0,
+  "seconds": 17.7,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 6,
+   "children": 22,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Repository Foundation | Core Logic | Orchestration Engine | MCP Server | User Interface | Validation"
+  },
+  "answerText": {
+   "approach": "I will execute the six epics sequentially, treating each as a self-contained architectural unit that validates its own contract before exposing state to the next phase, ensuring the state machine and concurrency primitives are solid before introducing external CLI dependencies. The implementation prioritizes the 'Gemini sanitizer' and 'worktree lifecycle' as critical failure points, verifying them with literal fixtures and process-level mocks before integrating the full MCP server and VS Code extension.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Deep analysis of the 'Gemini sanitizer' and 'deduplication logic' will use a high-context reasoning model (e.g., o3 or equivalent) to ensure edge-case coverage in JSON parsing and semantic matching, while the bulk of the C# AOT server, TypeScript extension, and CLI orchestration will be generated by a high-velocity coding model (e.g., o1-mini or equivalent) to maintain speed without sacrificing structural correctness.",
+   "questionPolicy": "I will ask questions only if a dependency is missing from the environment (e.g., specific CLI versions not found) or if a configuration constraint in the `creds` vault conflicts with the current machine state, otherwise proceeding with the assumption that the documented environment (2026-08-31) is accurate.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [
+      "Mount `dew_flow_conventions` submodule and copy `settings/settings.json` byte-identical.",
+      "Initialize `CLAUDE.md`, `todo/README.md`, and `research/architecture.md` with the checker requirements.",
+      "Configure CI to run `plan-lifecycle.mjs` and `pin-check.mjs` and add `logs/` to `.gitignore`."
+     ],
+     "kind": "Repository Foundation",
+     "title": "Phase 0: Repository Setup"
+    },
+    {
+     "children": [
+      "Define the `Finding` JSON schema and implement the `Gemini` sanitizer (fence stripping, brace balancing, envelope extraction).",
+      "Implement the `Deduplication` algorithm (file+line±5+category+similarity) and the `Counting Rule` (blocking/major only, rejection logic).",
+      "Build the `RoundStateMachine` with strict state transitions and `review_code` refusal logic.",
+      "Implement `DiffShaping` (pathspec exclusions, binary naming, size capping) and write unit tests for all parsing fixtures."
+     ],
+     "kind": "Core Logic",
+     "title": "Phase 1: Contract & State Machine"
+    },
+    {
+     "children": [
+      "Implement `WorktreeManager` with `prune`, `add --detach <sha>`, and `finally remove` lifecycle.",
+      "Create `IReviewerRuntime` interfaces and concrete implementations for `codex`, `gemini`, and `deepseek` (via codex custom provider).",
+      "Build the `BoundedScheduler` with global (3) and per-provider (2) `SemaphoreSlim` and `429` retry logic.",
+      "Write process-level tests using fake CLI executables for timeout, non-zero exit, and malformed output scenarios."
+     ],
+     "kind": "Orchestration Engine",
+     "title": "Phase 2: Reviewer Runners & Concurrency"
+    },
+    {
+     "children": [
+      "Implement the Native AOT `coai-mcp` server with Serilog logging to `stderr` and JSON-RPC over `stdout`.",
+      "Integrate `creds config` startup logic to read vendor keys and apply them to child environments.",
+      "Expose MCP tools: `providers`, `open`, `review_plan`, `review_code`, `resolve`, `status`, `ask_human`.",
+      "Run contract tests against the published binary to verify tool signatures and initialization."
+     ],
+     "kind": "MCP Server",
+     "title": "Phase 3: The MCP Server"
+    },
+    {
+     "children": [
+      "Build the VS Code extension UI: Settings webview, Rounds view, and Escalation modal.",
+      "Implement the 'Install' button logic to copy the binary to extension storage and the config block to the clipboard.",
+      "Create the `CLAUDE.md` snippet generator command.",
+      "Wire the loopback broker for settings persistence and round event streaming."
+     ],
+     "kind": "User Interface",
+     "title": "Phase 4: VS Code Extension"
+    },
+    {
+     "children": [
+      "Execute a scripted end-to-end run on a throwaway feature branch with a deliberately flawed plan.",
+      "Verify the full loop: plan review -> code review -> resolution -> human escalation path.",
+      "Capture and archive the round log as the final proof artifact."
+     ],
+     "kind": "Validation",
+     "title": "Phase 6: End-to-End Proof"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_connect_other_ais",
+  "arm": "commands",
+  "verdict": "Epics",
+  "lines": 440,
+  "code": 0,
+  "seconds": 18.7,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 6,
+   "children": 30,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": true,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "Foundation | Contract | Runtime | Server | Extension | Proof"
+  },
+  "answerText": {
+   "approach": "I will execute the six established epics sequentially, treating each as a self-contained architectural unit that builds upon the previous phase's artifacts, ensuring strict adherence to the 'review, fix, commit' loop before advancing. The implementation will leverage Fable (max) for high-stakes orchestration logic (state machine, concurrency, finding normalization) and Opus for standard infrastructure and UI components, maintaining a stateless, read-only reviewer environment via git worktrees.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Fable (max) will handle the 'Plan Stage' state machine, the 'Finding Contract' (sanitization/dedup), the 'Worktree Manager', and the 'Bounded Scheduler' due to their high cost of failure. Opus will handle the 'Foundation' (conventions/submodules), the 'MCP Server' (C# AOT boilerplate), the 'Extension' (VS Code UI/Settings), and the 'Proof' (CI scripts).",
+   "questionPolicy": "Questions will be deferred until the final summary unless a blocking dependency (e.g., missing CLI version, absent CredsForDevs config entry) prevents the immediate start of the current unit. All blocking questions will be aggregated and presented at once.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [
+      "Initialize submodule `dew_flow_conventions` and copy `settings/settings.json`.",
+      "Create `CLAUDE.md`, `todo/README.md`, `research/architecture.md`, and update `.gitignore`.",
+      "Configure CI to run `plan-lifecycle.mjs` and `pin-check.mjs`.",
+      "Update `dew_flow_conventions/README.md` consumer table."
+     ],
+     "kind": "Foundation",
+     "title": "Epic 01: Foundation & Conventions"
+    },
+    {
+     "children": [
+      "Define and unit-test the Finding Schema and Normalization logic.",
+      "Implement the Gemini Sanitizer (envelope stripping, fence removal, brace balancing).",
+      "Implement the Deduplication algorithm (file+line±5+category+similarity).",
+      "Implement the Counting Rule (blocking/major only, threshold logic, rejected finding exclusion).",
+      "Implement the Round State Machine (open, review_plan, resolve, status, refusal logic).",
+      "Implement Diff Shaping (pathspec exclusions, binary naming, size cap)."
+     ],
+     "kind": "Contract",
+     "title": "Epic 02: Core Contract & State Machine"
+    },
+    {
+     "children": [
+      "Implement `IReviewerRuntime` interface and `CodexRuntime` (read-only, worktree, schema).",
+      "Implement `GeminiRuntime` (approval-mode, worktree, JSON parsing).",
+      "Implement `DeepSeekRuntime` (custom provider, key injection).",
+      "Implement `WorktreeManager` (prune, add-detach, finally-remove, orphan handling).",
+      "Implement `BoundedScheduler` (global semaphore, per-provider cap, 429 retry logic).",
+      "Implement `ContextAssembly` (merging plan, diff, and base ref for reviewers)."
+     ],
+     "kind": "Runtime",
+     "title": "Epic 03: Reviewer Runners & Concurrency"
+    },
+    {
+     "children": [
+      "Implement Native AOT `coai-mcp` server with stdio and Serilog.",
+      "Implement MCP Tools: `providers`, `open`, `review_plan`, `review_code`, `resolve`, `status`, `ask_human`.",
+      "Implement `CredsKeyLoader` (startup read, 401 handling, environment injection).",
+      "Implement Release Asset packaging and CLI entry point.",
+      "Implement Contract Tests (initialize, tools/list)."
+     ],
+     "kind": "Server",
+     "title": "Epic 04: MCP Server & Release"
+    },
+    {
+     "children": [
+      "Implement Settings Webview (provider toggles, thresholds, model selection).",
+      "Implement Rounds View (real-time log, verdict display, history).",
+      "Implement Escalation Modal (loopback broker, human question file).",
+      "Implement Install Button (binary copy to storage, clipboard config block).",
+      "Implement `CLAUDE.md` Snippet Generator."
+     ],
+     "kind": "Extension",
+     "title": "Epic 05: VS Code Extension UI"
+    },
+    {
+     "children": [
+      "Create CI script for end-to-end run (flawed plan -> review -> fix -> pass).",
+      "Execute one real run against a throwaway feature branch.",
+      "Record and commit the round log and results.",
+      "Promote plan to `research/` with `IMPLEMENTED` status and deviation notes."
+     ],
+     "kind": "Proof",
+     "title": "Epic 06: Proof & Promotion"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_connect_other_ais",
+  "arm": "epic",
+  "verdict": "Epics",
+  "lines": 440,
+  "code": 0,
+  "seconds": 13.5,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 6,
+   "children": 0,
+   "inRange": false,
+   "twoLevel": false,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": false,
+   "commitsEachUnit": false,
+   "mentionsReview": false,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Foundation & Conventions | Core Logic & State Machine | Reviewer Runtimes & Concurrency | MCP Server Implementation | VS Code Extension UI | Proof & Documentation"
+  },
+  "answerText": {
+   "approach": "Execute the six epics sequentially as a single monolithic build unit, leveraging the pre-existing `dew_flow_conventions` submodule and the verified CLI capabilities to construct the `coai-mcp` server and VS Code extension without intermediate splitting. Proceed by implementing the foundation, contract, runners, server, extension, and proof phases in strict dependency order, committing the entire logical flow as one atomic change after internal validation.",
+   "commitsEachUnit": false,
+   "modelPolicy": "Use the primary reasoning model for architectural synthesis and code generation across all six epics; utilize a secondary, high-context model for the 'Gemini sanitizer' and 'finding contract' unit tests to ensure edge-case robustness in parsing logic.",
+   "questionPolicy": "Defer all non-blocking questions to the end of the summary; ask immediately only if a required CLI binary (e.g., `codex` or `gemini`) is missing from the environment or if the `creds` config entry is absent and the system requires it for a specific vendor key.",
+   "reviewsEachUnit": false,
+   "units": [
+    {
+     "children": [],
+     "kind": "Foundation & Conventions",
+     "title": "Phase 0: Repository Setup"
+    },
+    {
+     "children": [],
+     "kind": "Core Logic & State Machine",
+     "title": "Phase 1: Contract, Sanitizer, and Counting Rule"
+    },
+    {
+     "children": [],
+     "kind": "Reviewer Runtimes & Concurrency",
+     "title": "Phase 2: Worktree Manager, Vendor Runtimes, and Bounded Scheduler"
+    },
+    {
+     "children": [],
+     "kind": "MCP Server Implementation",
+     "title": "Phase 3: Native AOT Server, Tools, and Logging"
+    },
+    {
+     "children": [],
+     "kind": "VS Code Extension UI",
+     "title": "Phase 4: Settings, Rounds View, Escalation, and Install Button"
+    },
+    {
+     "children": [],
+     "kind": "Proof & Documentation",
+     "title": "Phase 5: CLAUDE.md Snippet & Phase 6: End-to-End Proof Run"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_wsl_local_engine",
+  "arm": "plain",
+  "verdict": "Epics",
+  "lines": 233,
+  "code": 0,
+  "seconds": 11.2,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 4,
+   "children": 12,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": true,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Pure Logic Module | Diagnosis Integration | UI Action Handler | Verification Suite"
+  },
+  "answerText": {
+   "approach": "I will first implement the pure functional logic for WSL detection and `.wslconfig` merging in `wslNetwork.ts` to establish a deterministic foundation, followed by integrating the bounded interop probe and the atomic write button into the extension's panel and MCP server logic. This ensures the core state transformations are isolated and testable before introducing side effects like file I/O and process spawning.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Use `codex` for the pure logic units (`wslNetwork.ts`) to ensure strict adherence to the merging and parsing constraints, and `gemini` for the integration units (probe and button) to handle the complex interop state and UI feedback loops.",
+   "questionPolicy": "Ask only if the `interop.enabled` flag in `/etc/wsl.conf` is missing or if the Windows-side `.wslconfig` path is inaccessible during the initial environment check, otherwise proceed with the assumption that the environment matches the documented constraints.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [
+      "isWsl(procVersion: string): boolean",
+      "networkingModeOf(content: string): 'mirrored' | 'default' | 'unknown'",
+      "wslconfigWith(existing: string, mode: string): { content: string, changed: boolean, refused: boolean }"
+     ],
+     "kind": "Pure Logic Module",
+     "title": "wslNetwork.ts: Detection and Merging"
+    },
+    {
+     "children": [
+      "Update `VendorDiagnosis` to include a WSL-specific cure keyed on the specific error sentence",
+      "Inject `discoverEngine` to run the interop probe only when candidates fail and platform is WSL"
+     ],
+     "kind": "Diagnosis Integration",
+     "title": "VendorDiagnosis & Discovery Logic"
+    },
+    {
+     "children": [
+      "Implement `PanelCommand` for the 'Fix WSL Networking' button",
+      "Add preview logic showing the full merged `.wslconfig` content",
+      "Implement atomic write (temp file + rename) and read-back verification",
+      "Add logic to detect UTF-16 BOM and handle the 'no merge' case"
+     ],
+     "kind": "UI Action Handler",
+     "title": "Panel Command: Atomic Write & Verification"
+    },
+    {
+     "children": [
+      "Write unit tests for `isWsl` and `wslconfigWith` covering edge cases (UTF-16, partial sections)",
+      "Write integration tests for `discoverEngine` with injected probe failures/successes",
+      "Verify `engineNote` output in all three states (reachable, unreachable-Windows, unreachable-none)"
+     ],
+     "kind": "Verification Suite",
+     "title": "Test Plan Execution"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_wsl_local_engine",
+  "arm": "commands",
+  "verdict": "Epics",
+  "lines": 233,
+  "code": 0,
+  "seconds": 15.2,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 5,
+   "children": 16,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": true,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "EPIC | STORY | STORY | STORY | STORY"
+  },
+  "answerText": {
+   "approach": "I will decompose the plan into four autonomous EPICs focusing on the pure logic layer, the diagnostic injection, the interop probe, and the atomic state mutation, ensuring each unit is fully reviewed, tested, and committed before the next begins. This execution strategy leverages Fable (max) for the high-stakes atomic writes and interop logic to guarantee correctness, while Opus handles the structural UI and standard diagnostic flows.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Fable (max) for: `wslNetwork.ts` (atomic merge logic), `VendorDiagnosis` (critical path correction), and `The Button` (state mutation and verification). Opus for: `The Probe` (orchestration and timeout handling) and `The UI Integration` (rendering and command binding).",
+   "questionPolicy": "Questions are deferred until the final summary unless a blocking dependency (e.g., missing binary path or specific WSL version constraint) prevents the first unit's execution; all other queries are batched at the end.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [
+      "Epic 1: Pure Logic & State Management",
+      "Epic 2: Diagnostic Injection & Context",
+      "Epic 3: Interop Probe & Discovery",
+      "Epic 4: Atomic Mutation & UI Command"
+     ],
+     "kind": "EPIC",
+     "title": "Epic 1: Pure Logic & State Management"
+    },
+    {
+     "children": [
+      "Story 1.1: Implement `isWsl` and `networkingModeOf` with unit tests for `/proc/version` parsing.",
+      "Story 1.2: Implement `wslconfigWith` with atomic merge logic, UTF-16 BOM detection, and section preservation.",
+      "Story 1.3: Implement `wslconfigWith` edge cases: empty input, existing `[wsl2]` section, and idempotent writes."
+     ],
+     "kind": "STORY",
+     "title": "Story 1.1: Implement `isWsl` and `networkingModeOf`"
+    },
+    {
+     "children": [
+      "Story 2.1: Extend `VendorDiagnosis` to recognize the specific 'Connection refused' ledger sentence and gate WSL advice on `platform === 'wsl'`.",
+      "Story 2.2: Update `engineNote` to distinguish between 'No engine' and 'Engine on Windows side' with the mirrored cure.",
+      "Story 2.3: Refactor `hostPlatform` usage to ensure WSL-specific logic is isolated from native Linux behavior."
+     ],
+     "kind": "STORY",
+     "title": "Story 2.1: Extend `VendorDiagnosis` for WSL Context"
+    },
+    {
+     "children": [
+      "Story 3.1: Implement `discoverEngine` with a bounded 2-second deadline and concurrent candidate execution.",
+      "Story 3.2: Inject the interop probe dependency to allow testing without a live Windows host.",
+      "Story 3.3: Handle interop failures (timeout, missing binary, unmounted `/mnt/c`) gracefully as 'not asked'."
+     ],
+     "kind": "STORY",
+     "title": "Story 3.1: Implement `discoverEngine` with Bounded Interop"
+    },
+    {
+     "children": [
+      "Story 4.1: Build the `PanelCommand` UI element that previews the merged `.wslconfig` content before writing.",
+      "Story 4.2: Implement atomic write logic: temp file creation, rename, and post-write verification read-back.",
+      "Story 4.3: Implement the 'Way Back' logic: detect current `mirrored` state and offer a revert command with explicit restart instruction."
+     ],
+     "kind": "STORY",
+     "title": "Story 4.1: Build `PanelCommand` with Preview and Atomic Write"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_wsl_local_engine",
+  "arm": "epic",
+  "verdict": "Epics",
+  "lines": 233,
+  "code": 0,
+  "seconds": 9,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 4,
+   "children": 0,
+   "inRange": true,
+   "twoLevel": false,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": false,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Pure Logic Layer | Diagnosis Layer | Interop Probe | UI Command Handler"
+  },
+  "answerText": {
+   "approach": "I will execute the implementation as a single, monolithic unit by sequentially building the pure logic, the diagnosis layer, the interop probe, and the UI command handler, ensuring all dependencies are resolved before the next phase begins. The entire workflow will proceed without intermediate splits, committing the complete, tested, and reviewed solution only after the final unit passes all verification checks against the five 'must be true' constraints.",
+   "commitsEachUnit": false,
+   "modelPolicy": "Primary reasoning and architectural synthesis will be handled by the current high-context reasoning core to ensure strict adherence to the 'no-split' constraint and complex interop logic; code generation for specific modules will utilize the most capable code-specialized model available to ensure syntactic perfection in TypeScript and C#.",
+   "questionPolicy": "Questions are deferred to the end of the summary unless a blocking ambiguity exists; if a question blocks progress, it will be aggregated with all other foreseeable blocking questions to interrupt the operator only once.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [],
+     "kind": "Pure Logic Layer",
+     "title": "wslNetwork.ts: Core State and Merging Logic"
+    },
+    {
+     "children": [],
+     "kind": "Diagnosis Layer",
+     "title": "VendorDiagnosis: WSL-Gated Cure Injection"
+    },
+    {
+     "children": [],
+     "kind": "Interop Probe",
+     "title": "discoverEngine: Bounded Windows-Side Query"
+    },
+    {
+     "children": [],
+     "kind": "UI Command Handler",
+     "title": "PanelCommand: Atomic Write, Preview, and Reversal"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_conventions_pass",
+  "arm": "plain",
+  "verdict": "Epics",
+  "lines": 179,
+  "code": 0,
+  "seconds": 10,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 6,
+   "children": 16,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Core Type Refactoring | Context Injection Layer | Prompt Engineering & Validation | Logic Integration | UI Architecture | Verification Suite"
+  },
+  "answerText": {
+   "approach": "I will first refactor the core configuration and discovery layers to decouple stage-specific logic and inject repository conventions into the execution context, ensuring the worktree is the source of truth. Subsequently, I will deploy the new prompt architecture, integrate the conventions pass into the round machine, and update the UI panel to visualize the split stages and color-coded roles.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Deep analysis and architectural refactoring (Units 1-3) will utilize a high-context reasoning model (e.g., o3 or equivalent) to ensure type safety and logic integrity; implementation and UI integration (Units 4-6) will use a high-velocity coding model (e.g., o4-mini or equivalent) for rapid iteration and syntax precision.",
+   "questionPolicy": "Questions will be deferred until the `RuleFiles` implementation reveals a structural ambiguity in the repository's `.claude/rules` hierarchy or if the `CredsForDevs` palette definitions are missing from the current codebase context.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [],
+     "kind": "Core Type Refactoring",
+     "title": "Split StageGate and Update RoundMachine"
+    },
+    {
+     "children": [
+      "Implement RuleFiles discovery logic",
+      "Implement worktree isolation and budget cap logic",
+      "Implement omission naming logic"
+     ],
+     "kind": "Context Injection Layer",
+     "title": "RuleFiles Discovery and Budgeting"
+    },
+    {
+     "children": [
+      "Draft conventions.md prompt with verbatim rules and prohibition clauses",
+      "Execute A/B/C variant measurement against real diffs",
+      "Write RESULTS_conventions_prompt.md"
+     ],
+     "kind": "Prompt Engineering & Validation",
+     "title": "Conventions Prompt Implementation & Measurement"
+    },
+    {
+     "children": [
+      "Update PromptCatalog resolution logic for Code Round 1",
+      "Ensure explicit user choice overrides default conventions pass",
+      "Verify Plan role remains untouched"
+     ],
+     "kind": "Logic Integration",
+     "title": "Integrate Conventions Pass into Round Machine"
+    },
+    {
+     "children": [
+      "Refactor PanelService to split Plan and Code frames",
+      "Apply CredsForDevs color palette to role headers",
+      "Update Gate section to display per-stage settings"
+     ],
+     "kind": "UI Architecture",
+     "title": "Panel UI Split and Styling"
+    },
+    {
+     "children": [
+      "Write unit tests for StageGate defaults and legacy fallbacks",
+      "Write unit tests for RuleFiles edge cases (submodules, empty repos)",
+      "Write integration tests for PromptCatalog resolution",
+      "Execute full test suite with 'fail-first' assertion strategy"
+     ],
+     "kind": "Verification Suite",
+     "title": "Comprehensive Test Suite Execution"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_conventions_pass",
+  "arm": "commands",
+  "verdict": "Epics",
+  "lines": 179,
+  "code": 0,
+  "seconds": 11.8,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 4,
+   "children": 12,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": true,
+   "epicWord": true,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "EPIC | EPIC | EPIC | EPIC"
+  },
+  "answerText": {
+   "approach": "I will decompose the architectural shift into four distinct EPICs: 1) Core Configuration Split, 2) Rule Discovery Engine, 3) Conventions Prompt & Catalog Integration, and 4) UI Panel & Measurement Suite. Each unit will be implemented with strict adherence to the 'fail-first' testing philosophy, committing only after a full review cycle (code, docs, tests) is complete, utilizing Fable for high-stakes architectural changes and Opus for standard implementation logic.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Fable (max) will be used for `StageGate` record definition, `RuleFiles` discovery logic, and the `conventions.md` prompt architecture due to the high cost of logical errors in configuration and data ingestion. Opus will be used for the `PanelService` UI updates, `PromptCatalog` routing logic, and the bulk of the unit test scaffolding where the logic is deterministic and low-risk.",
+   "questionPolicy": "Questions will be deferred until the final summary unless a blocking dependency exists (e.g., missing `CredsForDevs` hex values or undefined `COAI` environment variable precedence). I will assume the `CredsForDevs` palette is accessible via the existing `entityFormStyles.ts` path and that the `worktree` path is correctly resolved by the existing `RoundMachine` context.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [
+      "Epic 1.1: Define `StageGate` and `PanelConfig` records with legacy fallback logic.",
+      "Epic 1.2: Update `RoundMachine.GateFor` to route to stage-specific gates.",
+      "Epic 1.3: Implement environment variable parsing for `COAI_MAX_ROUNDS_*` and `COAI_THRESHOLD_*`."
+     ],
+     "kind": "EPIC",
+     "title": "Epic 1: Per-Stage Rounds and Threshold Configuration"
+    },
+    {
+     "children": [
+      "Epic 2.1: Implement `RuleFiles` directory walker with `.git` submodule resolution.",
+      "Epic 2.2: Build the 40KB budgeting algorithm with priority ordering (Instruction > Rules > EditorConfig).",
+      "Epic 2.3: Create the `RuleFiles` context injection into the `RoundMachine` state."
+     ],
+     "kind": "EPIC",
+     "title": "Epic 2: Rule Discovery Engine"
+    },
+    {
+     "children": [
+      "Epic 3.1: Author `conventions.md` with verbatim rules, checklist logic, and 'taste' prohibition.",
+      "Epic 3.2: Update `PromptCatalog` to default Code Round 1 to `conventions` when rules exist.",
+      "Epic 3.3: Execute the three-variant prompt measurement (A, B, C) and write `RESULTS_conventions_prompt.md`."
+     ],
+     "kind": "EPIC",
+     "title": "Epic 3: Conventions Prompt & Catalog Integration"
+    },
+    {
+     "children": [
+      "Epic 4.1: Refactor `PanelService` to split Plan and Code frames with CredsForDevs color coding.",
+      "Epic 4.2: Update Gate section UI to display independent Plan/Code settings.",
+      "Epic 4.3: Finalize `research/module_*.md` updates and promote plan."
+     ],
+     "kind": "EPIC",
+     "title": "Epic 4: UI Panel & Measurement Suite"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_conventions_pass",
+  "arm": "epic",
+  "verdict": "Epics",
+  "lines": 179,
+  "code": 0,
+  "seconds": 8.8,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 6,
+   "children": 15,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": false,
+   "namesOpus": true,
+   "kinds": "Schema Refactor | Context Injection | Prompt Definition | Logic Integration | Empirical Validation | UI Implementation"
+  },
+  "answerText": {
+   "approach": "I will execute the architectural split by first refactoring the configuration schema to decouple stage-specific thresholds, then injecting the rule discovery engine into the context pipeline to dynamically populate the conventions prompt. Finally, I will update the prompt catalog logic and panel UI to enforce the new default behaviors and visual separation without breaking legacy environment variable configurations.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Primary reasoning and architectural synthesis: High-context reasoning model (e.g., o3/claude-3.5-opus equivalent) for schema design and logic flow; Code generation and refactoring: High-precision coding model (e.g., claude-3.5-sonnet or gpt-4o) for C# and TypeScript implementation; Prompt engineering and measurement: Specialized instruction-tuned model for prompt variant generation and variance control analysis.",
+   "questionPolicy": "Questions are deferred until the end of the summary unless a blocking dependency (e.g., missing `CredsForDevs` hex values or ambiguous submodule behavior) prevents immediate execution.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [],
+     "kind": "Schema Refactor",
+     "title": "Decouple Stage Configuration"
+    },
+    {
+     "children": [
+      "RuleFiles implementation",
+      "Worktree isolation logic",
+      "Budget enforcement and truncation logging"
+     ],
+     "kind": "Context Injection",
+     "title": "Rule Discovery Engine"
+    },
+    {
+     "children": [
+      "conventions.md creation",
+      "Schema alignment with existing prompts",
+      "Prohibition clause injection"
+     ],
+     "kind": "Prompt Definition",
+     "title": "Conventions Prompt Catalog"
+    },
+    {
+     "children": [
+      "PromptCatalog routing logic update",
+      "Explicit choice override handling",
+      "Plan role isolation"
+     ],
+     "kind": "Logic Integration",
+     "title": "Round 1 Enforcement"
+    },
+    {
+     "children": [
+      "Variant A, B, C generation",
+      "Variance control execution",
+      "Results logging to research folder"
+     ],
+     "kind": "Empirical Validation",
+     "title": "Prompt Measurement"
+    },
+    {
+     "children": [
+      "Panel frame separation (Plan vs Code)",
+      "CredsForDevs color application",
+      "Gate section split and legacy fallback"
+     ],
+     "kind": "UI Implementation",
+     "title": "Panel UI Update"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_epic_01_foundation",
+  "arm": "plain",
+  "verdict": "Epics",
+  "lines": 96,
+  "code": 0,
+  "seconds": 8.9,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 3,
+   "children": 11,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": true,
+   "epicWord": false,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Conventions Seeding | Solution Skeleton | CI Pipeline"
+  },
+  "answerText": {
+   "approach": "I will execute a linear, atomic implementation of the three stories, prioritizing the seeding of the conventions submodule and the byte-identical synchronization of settings before constructing the AOT-optimized .NET skeleton and its specific logging contract. Each unit will be validated against the strict test matrix immediately upon creation to ensure the CI pipeline reflects the local developer experience without deviation.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Primary reasoning and architectural synthesis will be handled by the current high-context reasoning core to ensure strict adherence to the 'dew_flow' family constraints and AOT requirements; code generation for the .NET skeleton and CI workflows will utilize a specialized code-specialist model to guarantee syntax correctness and build compatibility.",
+   "questionPolicy": "Queries will be deferred until the initial submodule initialization or the first AOT publish attempt fails due to the specific `vswhere.exe` path dependency, ensuring the workflow proceeds without interruption unless a hard block is encountered.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [
+      "Initialize `dew_flow_conventions` submodule at `.claude/rules/shared` and verify accessibility.",
+      "Copy `settings/settings.json` byte-identically from the reference to the local root and the submodule path.",
+      "Generate `CLAUDE.md`, `todo/README.md` (with open table), and `research/` skeleton with container diagram.",
+      "Update `dew_flow_conventions/README.md` to register this repository and bump the consumer pin."
+     ],
+     "kind": "Conventions Seeding",
+     "title": "Story 1.1: Conventions mounted, knowledge base seeded"
+    },
+    {
+     "children": [
+      "Create `dew_flow_connect_other_ais.slnx`, `global.json`, and NuGet property files with pinned FluentAssertions 7.2.2.",
+      "Implement `src/CoaiMcp` as an empty AOT-publishable executable.",
+      "Implement `src/ServiceDefaults` with `AddDewFlowLogging` featuring the custom ANSI console sink and UTC file sink logic.",
+      "Create `tests/CoaiMcp.Tests` with xUnit v3 and the specific MTP execution pattern."
+     ],
+     "kind": "Solution Skeleton",
+     "title": "Story 1.2: Solution skeleton with logging that obeys the family rule"
+    },
+    {
+     "children": [
+      "Define GitHub Actions workflow to checkout, initialize the specific submodule, build, and run the test executable.",
+      "Integrate `plan-lifecycle.mjs` and `pin-check.mjs` runners into the CI pipeline.",
+      "Verify the workflow isolates the submodule fetch to `.claude/rules/shared` only."
+     ],
+     "kind": "CI Pipeline",
+     "title": "Story 1.3: CI that runs what a developer runs"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_epic_01_foundation",
+  "arm": "commands",
+  "verdict": "Epics",
+  "lines": 96,
+  "code": 0,
+  "seconds": 8.8,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 3,
+   "children": 5,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": true,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "EPIC | EPIC | EPIC"
+  },
+  "answerText": {
+   "approach": "I will execute the repository foundation by first splitting the provided plan into three distinct EPICs (Conventions, Logging, CI) and then decomposing each into two to four logically complete STORIES, ensuring every story is reviewed, documented, tested, and committed before the next begins. I will leverage Fable (max) for high-stakes architectural decisions and data migrations while using Opus for standard implementation tasks, maintaining full autonomy by deferring non-blocking questions to the final summary.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Fable (max) for Story 1.1 (Conventions/Architecture), Story 1.2 (Logging/Security), and Story 1.3 (CI/Data Migration); Opus for Story 1.1.2 (Documentation updates), Story 1.2.2 (Test implementation), and Story 1.3.2 (Workflow configuration).",
+   "questionPolicy": "Non-blocking questions will be deferred to the end of the summary; blocking questions (e.g., specific branch protection rules or external API keys) will be raised immediately after a full sweep of the current epic and story definitions.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [
+      "Story 1.1.1: Submodule mounting and settings synchronization (Fable max)",
+      "Story 1.1.2: Documentation seeding (CLAUDE.md, todo/README.md, research/)"
+     ],
+     "kind": "EPIC",
+     "title": "Epic 1: Conventions & Knowledge Base"
+    },
+    {
+     "children": [
+      "Story 1.2.1: Solution skeleton and AOT publishable structure (Fable max)",
+      "Story 1.2.2: Logging implementation (Serilog sinks, UTC, path shape)"
+     ],
+     "kind": "EPIC",
+     "title": "Epic 2: Solution Skeleton & Logging"
+    },
+    {
+     "children": [
+      "Story 1.3.1: GitHub Actions workflow definition (Checkout, Submodule, Build, Test)"
+     ],
+     "kind": "EPIC",
+     "title": "Epic 3: CI Pipeline"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_epic_01_foundation",
+  "arm": "epic",
+  "verdict": "Epics",
+  "lines": 96,
+  "code": 0,
+  "seconds": 7.2,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 3,
+   "children": 0,
+   "inRange": true,
+   "twoLevel": false,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": true,
+   "reviewsEachUnit": false,
+   "commitsEachUnit": false,
+   "mentionsReview": false,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Conventions Mount | Solution Skeleton | CI Pipeline"
+  },
+  "answerText": {
+   "approach": "Execute the repository foundation as a single, atomic build cycle by sequentially applying the conventions mount, logging skeleton, and CI workflow, then immediately validating the entire system against the defined test matrix before committing. This ensures the repository transitions from a 'blind' state to a fully verified family member in one continuous operation without intermediate branching or splitting.",
+   "commitsEachUnit": false,
+   "modelPolicy": "Use the primary reasoning core for architectural synthesis and code generation across all units; invoke the code execution engine only for the final validation phase to run the test executable and verify the `plan-lifecycle.mjs` output.",
+   "questionPolicy": "Defer all non-blocking queries to the end of the summary; ask immediately only if the `dew_flow_conventions` submodule remote URL is missing or the `global.json` target framework conflicts with the local SDK version.",
+   "reviewsEachUnit": false,
+   "units": [
+    {
+     "children": [],
+     "kind": "Conventions Mount",
+     "title": "Story 1.1: Conventions mounted, knowledge base seeded"
+    },
+    {
+     "children": [],
+     "kind": "Solution Skeleton",
+     "title": "Story 1.2: Solution skeleton with logging that obeys the family rule"
+    },
+    {
+     "children": [],
+     "kind": "CI Pipeline",
+     "title": "Story 1.3: CI that runs what a developer runs"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_local_models",
+  "arm": "plain",
+  "verdict": "Stories",
+  "lines": 170,
+  "code": 0,
+  "seconds": 12.3,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 5,
+   "children": 15,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Discovery Layer | Configuration & Registry | UI Component | State Management & Logic | Execution Runtime"
+  },
+  "answerText": {
+   "approach": "I will implement the local reviewer engine by first establishing a robust, schema-aware discovery layer that merges Ollama and vLLM endpoints into a unified model registry, ensuring strict failure contracts for unreachable hosts. Subsequently, I will wire this discovery into the UI and the `coai-mcp` shim to create a direct HTTP execution path that bypasses the Codex CLI, enforcing strict JSON schema validation and explicit sampling parameters to guarantee usable findings.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Deep analysis and architectural mapping will be handled by the current reasoning core; code generation and syntax enforcement will be delegated to a high-context coding model (e.g., GPT-4o or equivalent) to ensure strict adherence to the TypeScript interfaces and the specific `json_schema` constraints.",
+   "questionPolicy": "Questions will be deferred until the `localEngines.ts` probe logic reveals a discrepancy between the documented API behaviors and the actual runtime environment, or if the `isLoopback` parsing logic encounters an edge case in the host string normalization that contradicts the 127.0.0.0/8 block definition.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [
+      "Implement `parseV1Models` to fetch and validate `/v1/models` responses.",
+      "Implement `parseApiTags` to fetch and validate `/api/tags` responses for Ollama-specific metadata.",
+      "Implement `mergeEngineData` to prioritize `api/tags` details while falling back to `/v1/models` for portability.",
+      "Implement `probeCandidateBases` to test connectivity and return structured failure reasons instead of exceptions."
+     ],
+     "kind": "Discovery Layer",
+     "title": "localEngines.ts"
+    },
+    {
+     "children": [
+      "Register `local` runtime in `vendors.ts` with the new shim configuration.",
+      "Update `models.ts` to dynamically populate the model list from the `localEngines` discovery rather than a static table."
+     ],
+     "kind": "Configuration & Registry",
+     "title": "vendors.ts & models.ts"
+    },
+    {
+     "children": [
+      "Construct the `local` row in `panelView.ts` with a model dropdown, engine hint, and endpoint input field.",
+      "Hide CLI buttons (▶, ⤓, ⟳) and display model count instead.",
+      "Implement `isLoopback` logic to parse the host and flag non-loopback endpoints with a visible warning."
+     ],
+     "kind": "UI Component",
+     "title": "panelView.ts"
+    },
+    {
+     "children": [
+      "Implement `probeOnRepaint` logic in `panelProvider.ts` to refresh the model list only when a local reviewer exists.",
+      "Manage cache keying by endpoint to prevent stale data and ensure unprobed endpoints are not cached.",
+      "Handle the case where a selected model is no longer listed by marking it as invalid rather than dropping it silently."
+     ],
+     "kind": "State Management & Logic",
+     "title": "panelProvider.ts"
+    },
+    {
+     "children": [
+      "Create `LocalRuntime` and `LocalAsk` in `src_mcp/runners/Reviewers/` to handle the process execution.",
+      "Implement `coai-mcp --ask-local` CLI mode to read prompts, POST to the endpoint with the schema, and output the result.",
+      "Ensure the shim passes `temperature`, `seed`, and `json_schema` explicitly, and handles timeouts with a 10-second buffer."
+     ],
+     "kind": "Execution Runtime",
+     "title": "coai-mcp & LocalRuntime"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_local_models",
+  "arm": "commands",
+  "verdict": "Stories",
+  "lines": 170,
+  "code": 0,
+  "seconds": 7.3,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 4,
+   "children": 0,
+   "inRange": true,
+   "twoLevel": false,
+   "shapeAsOrdered": true,
+   "epicWord": false,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "Story | Story | Story | Story"
+  },
+  "answerText": {
+   "approach": "I will decompose the plan into four autonomous stories, implementing the local model engine discovery, the vendor/runtime integration, the UI row with strict loopback validation, and the CLI shim with schema enforcement, ensuring each unit is reviewed, tested, and committed before proceeding. This approach prioritizes the 'shim' architecture to isolate the local runtime process boundary, guaranteeing hard timeouts and preventing the 21k-token overhead of the Codex CLI while maintaining strict JSON schema adherence for findings.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Story 1 (Engine Discovery) and Story 2 (Vendor/Runtime) will use Fable (max) due to the high cost of architectural missteps in parsing and merging discovery data. Story 3 (UI Row) and Story 4 (CLI Shim) will use Opus for efficient implementation of UI logic and process execution, as the primary risk is functional correctness rather than deep architectural dependency.",
+   "questionPolicy": "Questions will be deferred until the final summary unless a blocking dependency exists (e.g., the specific path of the `dotnet` executable in a non-standard environment or the exact WSL network gateway configuration). If a question blocks the build, I will aggregate all such questions into a single interruption after reviewing all written stories.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [],
+     "kind": "Story",
+     "title": "Local Engine Discovery and Merging Logic"
+    },
+    {
+     "children": [],
+     "kind": "Story",
+     "title": "Vendor Registration and Runtime Integration"
+    },
+    {
+     "children": [],
+     "kind": "Story",
+     "title": "Panel View Row with Loopback Validation"
+    },
+    {
+     "children": [],
+     "kind": "Story",
+     "title": "CLI Shim and Schema Enforcement"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_local_models",
+  "arm": "epic",
+  "verdict": "Stories",
+  "lines": 170,
+  "code": 0,
+  "seconds": 6.9,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 5,
+   "children": 0,
+   "inRange": false,
+   "twoLevel": false,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": false,
+   "commitsEachUnit": false,
+   "mentionsReview": false,
+   "mentionsCommit": false,
+   "batchesQuestions": true,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Core Discovery Engine | Runtime & Model Registry | UI Component | State Management & Probing | CLI Shim & Server Runtime"
+  },
+  "answerText": {
+   "approach": "I will execute the implementation as a single, monolithic unit by sequentially generating the five required source files and the CLI shim, ensuring strict adherence to the architectural constraints of the shim-based process boundary and the specific deviation fixes (e.g., `SelfInvocation` path handling, `json_schema` strictness). The entire workflow will proceed without intermediate blocking questions, relying on the explicit assumptions derived from the plan's measured data and the operator's settled decisions regarding GPU arbitration and cost modeling. ",
+   "commitsEachUnit": false,
+   "modelPolicy": "Primary generation: High-context reasoning model for architectural fidelity and schema strictness; Secondary generation: Standard coding model for boilerplate CLI flag parsing and JSON serialization logic.",
+   "questionPolicy": "Deferred to the end of the summary; only questions that would halt the entire pipeline (e.g., missing `src_mcp` directory structure or conflicting `vendors.ts` exports) are raised, and they are batched into a single list.",
+   "reviewsEachUnit": false,
+   "units": [
+    {
+     "children": [],
+     "kind": "Core Discovery Engine",
+     "title": "localEngines.ts"
+    },
+    {
+     "children": [],
+     "kind": "Runtime & Model Registry",
+     "title": "vendors.ts & models.ts"
+    },
+    {
+     "children": [],
+     "kind": "UI Component",
+     "title": "panelView.ts"
+    },
+    {
+     "children": [],
+     "kind": "State Management & Probing",
+     "title": "panelProvider.ts"
+    },
+    {
+     "children": [],
+     "kind": "CLI Shim & Server Runtime",
+     "title": "coai-mcp --ask-local & LocalRuntime"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_engine_lease",
+  "arm": "plain",
+  "verdict": "Stories",
+  "lines": 128,
+  "code": 0,
+  "seconds": 12.9,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 7,
+   "children": 18,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Test Fixture | Core Abstraction | Shim Integration | Estimation Logic | Frontend Integration | Validation | Documentation"
+  },
+  "answerText": {
+   "approach": "I will first implement the `EngineLease` abstraction using an atomic `CreateNew` file strategy with PID-based liveness checks and heartbeat recovery to replace the fragile lock file, ensuring cross-platform compatibility without daemons. Subsequently, I will integrate this lease into the `--ask-local` shim and the `PanelService` to expose real-time wait metrics and accurate queue estimates, validating the entire stack with a five-process concurrency stress test against the real engine.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Use a high-context, reasoning-heavy model (e.g., o3 or equivalent) for the architectural implementation of `EngineLease` and the race-condition logic in `LocalAsk`, while using a fast, code-specialized model for the boilerplate integration in `PanelService` and the TypeScript `rounds.ts` updates.",
+   "questionPolicy": "Ask only if the `usage.jsonl` schema structure for rolling averages is ambiguous or if the specific OS-level file locking behavior on the target Linux distribution deviates from the `CreateNew` + heartbeat assumption.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [],
+     "kind": "Test Fixture",
+     "title": "RED Test: N Shims vs Fake Engine"
+    },
+    {
+     "children": [
+      "Atomic `CreateNew` logic with PID/Heartbeat metadata",
+      "Stale recovery mechanism (PID check + heartbeat grace period)",
+      "Jittered retry logic for concurrent waiters",
+      "`IAsyncDisposable` implementation for guaranteed release"
+     ],
+     "kind": "Core Abstraction",
+     "title": "EngineLease.cs Implementation"
+    },
+    {
+     "children": [
+      "Wrap HTTP call with `AcquireAsync` in shim",
+      "Implement 30-second stderr heartbeat reporting",
+      "Split failure messages (waited vs. slow engine)"
+     ],
+     "kind": "Shim Integration",
+     "title": "LocalAsk.cs & LocalRuntime.cs Updates"
+    },
+    {
+     "children": [
+      "Implement `Ahead(engineKey)` method with history reading",
+      "Calculate rolling average duration from `usage.jsonl`",
+      "Inject estimate string into `PanelService` queued notes"
+     ],
+     "kind": "Estimation Logic",
+     "title": "PanelService & LiveRound.cs Updates"
+    },
+    {
+     "children": [
+      "Update `rounds.ts` to render queued estimates",
+      "Ensure UI handles empty history states gracefully"
+     ],
+     "kind": "Frontend Integration",
+     "title": "rounds.ts Updates"
+    },
+    {
+     "children": [
+      "Execute 5-process stress test against real Ollama",
+      "Generate and validate concurrency table (start, wait, work, exit)",
+      "Verify no overlaps and zero failures"
+     ],
+     "kind": "Validation",
+     "title": "Five-Process Stress Test"
+    },
+    {
+     "children": [
+      "Update `module_server.md` with new lease protocol",
+      "Promote plan with measurement results",
+      "Finalize help article"
+     ],
+     "kind": "Documentation",
+     "title": "Docs & Plan Promotion"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_engine_lease",
+  "arm": "commands",
+  "verdict": "Stories",
+  "lines": 128,
+  "code": 0,
+  "seconds": 7.9,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 4,
+   "children": 0,
+   "inRange": true,
+   "twoLevel": false,
+   "shapeAsOrdered": true,
+   "epicWord": false,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "Story | Story | Story | Story"
+  },
+  "answerText": {
+   "approach": "I will decompose the plan into four autonomous stories, implementing the `EngineLease` protocol with atomic file operations and PID-based liveness checks on Fable (max) for critical path safety, while using Opus for the UI integration and estimation logic. Each story will be executed, reviewed, documented, tested, and committed sequentially to ensure the queue mechanism is robust before proceeding to the next layer of complexity. ",
+   "commitsEachUnit": true,
+   "modelPolicy": "Story 1 (Lease Protocol Core) and Story 2 (Shim & Heartbeat) will use Fable (max) to ensure atomicity and race-condition handling; Story 3 (Estimation & Failure Messaging) and Story 4 (Integration & Measurement) will use Opus for efficient orchestration and UI rendering.",
+   "questionPolicy": "Questions will be deferred until the end of the summary, grouped by dependency, unless a blocking assumption (e.g., specific OS file locking behavior on a specific platform) is required to proceed immediately.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [],
+     "kind": "Story",
+     "title": "Story 1: Atomic Lease Protocol & Stale Recovery"
+    },
+    {
+     "children": [],
+     "kind": "Story",
+     "title": "Story 2: Shim Integration, Heartbeat & Wait Reporting"
+    },
+    {
+     "children": [],
+     "kind": "Story",
+     "title": "Story 3: Queue Estimation Logic & Failure Sentence Splitting"
+    },
+    {
+     "children": [],
+     "kind": "Story",
+     "title": "Story 4: End-to-End Measurement, Docs & Final Commit"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_engine_lease",
+  "arm": "epic",
+  "verdict": "Stories",
+  "lines": 128,
+  "code": 0,
+  "seconds": 9.7,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 6,
+   "children": 7,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": false,
+   "commitsEachUnit": false,
+   "mentionsReview": false,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Core Protocol Implementation | Shim Integration | Queue Estimation Logic | UI Rendering | Validation Suite | Documentation & Measurement"
+  },
+  "answerText": {
+   "approach": "I will implement the `EngineLease` protocol as a single, self-contained unit that replaces the non-portable OS lock with an atomic `CreateNew` file strategy, integrating pid liveness checks and heartbeat recovery to ensure cross-process safety without daemons. This unit will be immediately wired into the `--ask-local` shim and the `PanelService` to emit real-time wait metrics and honest queue estimates, followed by a comprehensive integration test suite and documentation update before a single atomic commit. ",
+   "commitsEachUnit": false,
+   "modelPolicy": "Primary reasoning and architectural synthesis: High-context model (e.g., o3/o4-mini) for the `EngineLease` logic and race-condition handling; Code generation and test writing: Standard high-speed model (e.g., 4o/claude-3.5) for boilerplate and file I/O; Final verification: Same high-context model to validate the measurement table logic against the constraints.",
+   "questionPolicy": "Questions are deferred to the end of the summary unless a blocking ambiguity exists (e.g., specific path for `usage.jsonl` or exact grace period duration); all other assumptions are made and stated.",
+   "reviewsEachUnit": false,
+   "units": [
+    {
+     "children": [],
+     "kind": "Core Protocol Implementation",
+     "title": "EngineLease.cs: Atomic Lock, Heartbeat, and Stale Recovery"
+    },
+    {
+     "children": [
+      "src_mcp/runners/Reviewers/LocalAsk.cs",
+      "src_mcp/runners/Reviewers/LocalRuntime.cs"
+     ],
+     "kind": "Shim Integration",
+     "title": "Shim Wiring: Acquire Lease, Stderr Heartbeat, and Error Splitting"
+    },
+    {
+     "children": [
+      "src_mcp/src/Server/PanelService.cs",
+      "src_mcp/src/Server/LiveRound.cs"
+     ],
+     "kind": "Queue Estimation Logic",
+     "title": "Estimate Engine: `Ahead` Calculation and Rolling Average from `usage.jsonl`"
+    },
+    {
+     "children": [
+      "src_vs_code/src/rounds.ts"
+     ],
+     "kind": "UI Rendering",
+     "title": "Panel UI: Render 'Waiting' State with Queue Count and Time Estimate"
+    },
+    {
+     "children": [
+      "src_mcp/Tests/EngineLeaseTests.cs",
+      "src_mcp/Tests/Integration/ConcurrentShimTests.cs"
+     ],
+     "kind": "Validation Suite",
+     "title": "Test Suite: Concurrency, Dead Holder Recovery, and Heartbeat Logic"
+    },
+    {
+     "children": [],
+     "kind": "Documentation & Measurement",
+     "title": "Docs & Measurement: Update `module_server.md`, Write Plan Summary, and Commit"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_round_card_detail",
+  "arm": "plain",
+  "verdict": "Stories",
+  "lines": 122,
+  "code": 0,
+  "seconds": 10.7,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 8,
+   "children": 17,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Server Data Persistence Layer | Server Logic Implementation | Client Data Contract | Client Rendering Logic | DOM Structure Refactor | Styling & Layout | Documentation & Help | Validation Suite"
+  },
+  "answerText": {
+   "approach": "I will first synchronize the C# server's `LiveRound` and `SessionStore` to persist per-reviewer elapsed seconds, ensuring backward compatibility for legacy session files. Subsequently, I will refactor the TypeScript rendering layer to utilize native `<details>` elements for state persistence, dynamically binding the `open` attribute to the round's running state while injecting duration metrics into the reviewer summary lines.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Use 'Deep-Reasoning-Model' for the C# architectural changes and legacy data migration logic; use 'High-Velocity-Code-Model' for the TypeScript DOM manipulation and CSS updates.",
+   "questionPolicy": "Ask only if the `ReviewerProgress.Elapsed` structure in `LiveRound.cs` deviates from the assumed stopwatch implementation or if the `SessionStore` serialization format requires a specific migration strategy for the new `Seconds` field.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [],
+     "kind": "Server Data Persistence Layer",
+     "title": "Implement `ReviewerState.Seconds` in C#"
+    },
+    {
+     "children": [
+      "Update `SessionStore.cs` to include `Seconds` property in `ReviewerState`",
+      "Modify `LiveRound.Report` to capture `ReviewerProgress.Elapsed` into `Seconds`",
+      "Add logic to prevent overwriting existing duration with `running` state reports"
+     ],
+     "kind": "Server Logic Implementation",
+     "title": "Server Logic Implementation"
+    },
+    {
+     "children": [
+      "Update `SessionStore` interface to accept optional `seconds`",
+      "Implement deserialization fallback for missing `seconds` fields"
+     ],
+     "kind": "Client Data Contract",
+     "title": "Client Data Contract Update"
+    },
+    {
+     "children": [
+      "Refactor `reviewerLines` function to append duration string when `seconds` > 0",
+      "Ensure `reviewerLines` handles `undefined` or `NaN` gracefully for legacy data"
+     ],
+     "kind": "Client Rendering Logic",
+     "title": "Client Rendering Logic Update"
+    },
+    {
+     "children": [
+      "Wrap `roundCard` content in `<details>` and `<summary>` tags",
+      "Bind `open` attribute to `isRunning(round)` state",
+      "Implement capture-phase `toggle` listener for DOM persistence"
+     ],
+     "kind": "DOM Structure Refactor",
+     "title": "DOM Structure Refactor"
+    },
+    {
+     "children": [
+      "Update `#live-rounds` CSS to `max-height: 640px`",
+      "Optimize closed card rendering to minimize layout thrashing"
+     ],
+     "kind": "Styling & Layout",
+     "title": "Styling & Layout"
+    },
+    {
+     "children": [
+      "Add help text entry for the new disclosure affordance",
+      "Update `module_extension.md` and `module_server.md` with architectural rationale"
+     ],
+     "kind": "Documentation & Help",
+     "title": "Documentation & Help"
+    },
+    {
+     "children": [
+      "Execute `CoaiMcp.Tests.exe` for server-side logic",
+      "Execute `npm test` for client-side rendering assertions",
+      "Manual verification of legacy file rendering and expansion behavior"
+     ],
+     "kind": "Validation Suite",
+     "title": "Validation Suite"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_round_card_detail",
+  "arm": "commands",
+  "verdict": "Stories",
+  "lines": 122,
+  "code": 0,
+  "seconds": 6.2,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 4,
+   "children": 0,
+   "inRange": true,
+   "twoLevel": false,
+   "shapeAsOrdered": true,
+   "epicWord": false,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "Story | Story | Story | Story"
+  },
+  "answerText": {
+   "approach": "I will decompose the architectural shift from ephemeral DOM state to persistent `<details>` disclosure into four atomic stories, prioritizing the server-side data persistence contract before the UI rendering logic to ensure backward compatibility. Each story will be executed autonomously with immediate code review, documentation updates, and committed state before the next unit begins, utilizing Fable for high-stakes data migration and Opus for standard UI refactoring.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Story 1 (Server Data Contract) and Story 2 (Backward Compatibility & Migration) will use Fable (max) to ensure the `ReviewerState.Seconds` logic and session file parsing handle edge cases without data loss. Story 3 (UI Disclosure Architecture) and Story 4 (Visual Expansion & Help) will use Opus for efficient DOM manipulation and CSS updates.",
+   "questionPolicy": "Questions will be deferred until the final summary unless a blocking ambiguity exists in the `ReviewerState` schema or the `LiveRound.Report` timing logic; if a question is asked, it will be a consolidated list of all identified blockers.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [],
+     "kind": "Story",
+     "title": "Server-Side Duration Persistence and Schema Evolution"
+    },
+    {
+     "children": [],
+     "kind": "Story",
+     "title": "Client-Side Rendering Logic and Backward Compatibility"
+    },
+    {
+     "children": [],
+     "kind": "Story",
+     "title": "DOM Disclosure Architecture and State Management"
+    },
+    {
+     "children": [],
+     "kind": "Story",
+     "title": "Visual Expansion, Help Text, and Final Integration"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_round_card_detail",
+  "arm": "epic",
+  "verdict": "Stories",
+  "lines": 122,
+  "code": 0,
+  "seconds": 9.8,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 6,
+   "children": 12,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": false,
+   "commitsEachUnit": false,
+   "mentionsReview": false,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Server State Injection | Server Logic | Extension Schema & Formatting | View State Architecture | Layout Adjustment | Documentation & Release"
+  },
+  "answerText": {
+   "approach": "I will execute the build order sequentially, starting with the server-side `ReviewerState.Seconds` injection in `LiveRound.Report` to persist per-reviewer duration, followed by the extension-side schema updates and rendering logic refactoring to utilize `<details>` for state persistence across DOM patches. The implementation will proceed as a single atomic unit, applying the 640px height constraint and help text updates before committing the entire diff to ensure the split logic remains intact.",
+   "commitsEachUnit": false,
+   "modelPolicy": "Primary reasoning and architectural synthesis: `o3` (or equivalent high-context reasoning model) for the entire sequence to ensure the complex state management of the `<details>` element and the server-side serialization logic are handled cohesively without intermediate context loss.",
+   "questionPolicy": "Questions are deferred until the end of the summary; only a blocking dependency (e.g., a missing schema migration path for the `seconds` field in the existing session file format) would interrupt immediately, but the plan explicitly states the field is additive with a default, so the assumption is that the deserializer handles missing keys gracefully.",
+   "reviewsEachUnit": false,
+   "units": [
+    {
+     "children": [],
+     "kind": "Server State Injection",
+     "title": "Inject `ReviewerState.Seconds` into `LiveRound.Report`"
+    },
+    {
+     "children": [
+      "Update `SessionStore.cs` schema to include `Seconds` property",
+      "Update `LiveRound.cs` to populate `Seconds` from `ReviewerProgress.Elapsed` only if > 0"
+     ],
+     "kind": "Server Logic",
+     "title": "Server-side duration persistence"
+    },
+    {
+     "children": [
+      "Update `ReviewerState` interface in TypeScript to include optional `seconds`",
+      "Update `reviewerLines` function to format duration string when `seconds` exists"
+     ],
+     "kind": "Extension Schema & Formatting",
+     "title": "Extension-side schema and duration formatting"
+    },
+    {
+     "children": [
+      "Refactor `roundCard` to use `<details>`/`<summary>`",
+      "Apply `open` attribute to `<details>` when `isRunning(round)` is true",
+      "Move reviewer rows into `<details>` body for finished rounds"
+     ],
+     "kind": "View State Architecture",
+     "title": "DOM-based state persistence via `<details>`"
+    },
+    {
+     "children": [
+      "Update `#live-rounds` CSS to `max-height: 640px`",
+      "Ensure closed card body has zero layout cost"
+     ],
+     "kind": "Layout Adjustment",
+     "title": "Panel height expansion"
+    },
+    {
+     "children": [
+      "Add help text entry for round expansion",
+      "Update `module_extension.md` and `module_server.md`",
+      "Update manifest and CHANGELOG"
+     ],
+     "kind": "Documentation & Release",
+     "title": "Documentation and release artifacts"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_provider_liveness",
+  "arm": "plain",
+  "verdict": "Stories",
+  "lines": 70,
+  "code": 0,
+  "seconds": 9.2,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 6,
+   "children": 16,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Interface Definition | Implementation | Implementation | Refactoring | Testing | Documentation"
+  },
+  "answerText": {
+   "approach": "I will refactor the `PanelService` and `VendorDiagnosis` modules to decouple binary existence from functional liveness by introducing a strict `LivenessProbe` that executes a minimal semantic round-trip, replacing the brittle `--version` heuristic. This implementation will enforce a three-state taxonomy (`answered`, `installed`, `unavailable`) with a time-bounded cache to ensure the `providers` view remains performant while guaranteeing that only vendors with proven, real-time responses are marked as healthy. ",
+   "commitsEachUnit": true,
+   "modelPolicy": "Deep reasoning and architectural synthesis will be handled by the primary high-context model, while the specific implementation of the `LivenessProbe` logic and the `ReviewerExecutor` integration will be executed by the high-precision coding model to ensure zero-latency token usage and strict adherence to the `reuse-first` constraint.",
+   "questionPolicy": "Questions will be deferred until the `LivenessProbe` interface definition requires clarification on the specific `IReviewerRuntime` implementation details or if the `ReviewerExecutor`'s current process handling lacks the necessary hooks for the new semantic prompt injection.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [],
+     "kind": "Interface Definition",
+     "title": "Define LivenessProbe Contract"
+    },
+    {
+     "children": [
+      "Implement minimal prompt injection logic",
+      "Integrate with existing `ReviewerExecutor` for process reuse",
+      "Parse response for 'OK' token or capture refusal/timeout"
+     ],
+     "kind": "Implementation",
+     "title": "Build LivenessProbe Core"
+    },
+    {
+     "children": [
+      "Implement timestamped file storage for vendor states",
+      "Add logic to skip probes older than 1 hour",
+      "Create `refresh` override mechanism"
+     ],
+     "kind": "Implementation",
+     "title": "Implement State Caching Layer"
+    },
+    {
+     "children": [
+      "Refactor `ProbeAsync` to prioritize diagnosis table, then cache, then probe",
+      "Update `PanelService` to return the new three-state enum",
+      "Remove `--version` as a sole determinant for `answered` state"
+     ],
+     "kind": "Refactoring",
+     "title": "Update ProbeAsync Logic"
+    },
+    {
+     "children": [
+      "Create fake launcher with controlled exit codes and refusal behavior",
+      "Assert `unavailable` state for refused probes",
+      "Assert `installed` state for version-only success",
+      "Verify cache hit counts and `refresh` bypass"
+     ],
+     "kind": "Testing",
+     "title": "Execute Red-First Test Suite"
+    },
+    {
+     "children": [
+      "Update `module_server.md` with state definitions",
+      "Document the rationale for `--version` deprecation",
+      "Finalize `Definition of Done` checklist"
+     ],
+     "kind": "Documentation",
+     "title": "Finalize Documentation"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_provider_liveness",
+  "arm": "commands",
+  "verdict": "Stories",
+  "lines": 70,
+  "code": 0,
+  "seconds": 6.1,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 4,
+   "children": 0,
+   "inRange": true,
+   "twoLevel": false,
+   "shapeAsOrdered": true,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "Core Abstraction | Data Layer | Orchestration | Verification"
+  },
+  "answerText": {
+   "approach": "I will architect a three-state health model (Answered, Installed, Unavailable) by decoupling the lightweight `--version` check from a token-costing liveness probe, ensuring the `providers` view remains fast while accurately reflecting runtime reality. The implementation prioritizes a `LivenessProbe` abstraction that reuses the existing `ReviewerExecutor` to minimize overhead, followed by a time-bounded caching layer and a strict `refresh` mechanism to force real-time validation. ",
+   "commitsEachUnit": true,
+   "modelPolicy": "Fable (max) for the `LivenessProbe` core and `VendorDiagnosis` logic due to the high cost of misinterpreting authentication states; Opus for the `PanelService` orchestration, caching layer, and UI integration where deterministic logic suffices.",
+   "questionPolicy": "Questions are deferred until the final summary, grouped by dependency, unless a missing configuration (e.g., specific timeout constants or cache directory paths) blocks the immediate compilation of the first unit.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [],
+     "kind": "Core Abstraction",
+     "title": "LivenessProbe Implementation"
+    },
+    {
+     "children": [],
+     "kind": "Data Layer",
+     "title": "Cache & State Management"
+    },
+    {
+     "children": [],
+     "kind": "Orchestration",
+     "title": "ProbeAsync & Refresh Logic"
+    },
+    {
+     "children": [],
+     "kind": "Verification",
+     "title": "Test Suite & Documentation"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_provider_liveness",
+  "arm": "epic",
+  "verdict": "Stories",
+  "lines": 70,
+  "code": 0,
+  "seconds": 12,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 5,
+   "children": 9,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Architectural Foundation & State Definition | Core Logic Implementation | Interface & Tooling Update | Test Suite Construction | Documentation & Finalization"
+  },
+  "answerText": {
+   "approach": "I will refactor `PanelService.cs` to implement a three-state health model (`answered`, `installed`, `unavailable`) by introducing a `LivenessProbe` that executes a minimal one-token round trip via the existing `ReviewerExecutor` pipeline, ensuring the `--version` check is decoupled from authentication status. The implementation will integrate a timestamped cache for probes to enforce the one-hour frequency limit and update the `providers` tool to expose a `refresh` argument, all while maintaining the existing `VendorDiagnosis` lookup table as the primary source of truth for known failures.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Primary reasoning and architectural synthesis: `o3-mini` (or equivalent high-reasoning model) for the `LivenessProbe` logic and state machine transitions; `gpt-4o` for rapid code generation of the `PanelService` and `VendorDiagnosis` updates; `claude-3.5-sonnet` for the specific test case construction to ensure the 'RED first' strategy is strictly followed.",
+   "questionPolicy": "Questions are deferred until the end of the summary; only a blocking ambiguity regarding the specific timeout threshold for the `LivenessProbe` (defaulting to 15s if not specified in `module_server.md`) would interrupt immediately, but since the plan implies a generic 'timeout', I will assume a 15s default and log it.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [],
+     "kind": "Architectural Foundation & State Definition",
+     "title": "Define the Three-State Enum and Cache Schema"
+    },
+    {
+     "children": [
+      "Implement `LivenessProbe` method using `ReviewerExecutor`",
+      "Inject `LivenessProbe` into `ProbeAsync` logic flow",
+      "Update `VendorDiagnosis` to prioritize diagnosis table over cache"
+     ],
+     "kind": "Core Logic Implementation",
+     "title": "Implement Liveness Probe and ProbeAsync Refactor"
+    },
+    {
+     "children": [
+      "Add `refresh` parameter to `providers` tool signature",
+      "Update `PanelService` to handle `refresh` flag and bypass cache"
+     ],
+     "kind": "Interface & Tooling Update",
+     "title": "Expose Refresh Mechanism and Update Tool Signatures"
+    },
+    {
+     "children": [
+      "Write RED test: Fake launcher with `--version` 0 and answer refusal",
+      "Write GREEN test: Vendor that answers successfully",
+      "Write CACHE test: Verify no second launch within 1 hour",
+      "Write REFRESH test: Verify cache bypass on explicit request"
+     ],
+     "kind": "Test Suite Construction",
+     "title": "Implement Red-First Test Suite"
+    },
+    {
+     "children": [],
+     "kind": "Documentation & Finalization",
+     "title": "Update `module_server.md` and Commit"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_escalation_loopback",
+  "arm": "plain",
+  "verdict": "AsItIs",
+  "lines": 89,
+  "code": 0,
+  "seconds": 10.9,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 5,
+   "children": 16,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Server Protocol Core | Extension Watcher | UI Interaction Layer | Integration & Verification | UI Verification"
+  },
+  "answerText": {
+   "approach": "Implement the file-based escalation loopback by first establishing the atomic file protocol on the server side to ensure robust question persistence and timeout handling, then extending the VS Code extension to monitor the escalation directory and trigger the UI modal upon detecting new files. This decoupled architecture eliminates network dependencies by relying on the shared filesystem state, ensuring the system reaches the human operator regardless of the editor's active window or network topology.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Use a high-context reasoning model (e.g., o3 or equivalent) for the architectural logic and file protocol implementation to ensure atomicity and race-condition handling, while using a code-specialized model (e.g., o4-mini or similar) for the UI modal logic and extension boilerplate to optimize token usage and generation speed.",
+   "questionPolicy": "Ask only if the target filesystem path for `escalations/` is ambiguous or if the existing `module_server.md` structure conflicts with the new `Tools.cs` static refusal replacement, otherwise proceed autonomously.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [
+      "Define `EscalationFile` struct and `EscalationAnswer` struct with strict schema validation.",
+      "Implement `WriteEscalation` with atomic temp-file-then-rename pattern to prevent partial reads.",
+      "Implement `WaitForAnswer` with configurable timeout logic (minutes/seconds) and `no_answer_yet` return value.",
+      "Implement `IsMalformedAnswer` logic to treat empty files as invalid, ensuring silence is handled correctly."
+     ],
+     "kind": "Server Protocol Core",
+     "title": "Server-side Escalation File Protocol"
+    },
+    {
+     "children": [
+      "Implement `FileSystemWatcher` with 5-second polling fallback for cross-platform reliability.",
+      "Add logic to filter `NewFile` events specifically for `escalations/<id>.json`.",
+      "Implement `CheckAnswerFile` to detect `<id>.answer.json` and trigger the modal.",
+      "Add `PromptOncePerId` logic to prevent re-raising modals for already answered or dismissed escalations."
+     ],
+     "kind": "Extension Watcher",
+     "title": "Extension File System Watcher"
+    },
+    {
+     "children": [
+      "Design and implement the Modal UI component displaying the question and open findings.",
+      "Implement `WriteAnswer` with atomic temp-file-then-rename to ensure the server sees a complete file.",
+      "Add logic to handle `DismissedModal` state without writing an answer file.",
+      "Implement `AlreadyAnswered` check to suppress modal if the answer file exists."
+     ],
+     "kind": "UI Interaction Layer",
+     "title": "Operator Modal and Answer Submission"
+    },
+    {
+     "children": [
+      "Refactor `Tools.cs` to replace the static refusal with the new `ask_human` logic.",
+      "Update `module_server.md` to reflect the file-based protocol and removed port dependency.",
+      "Run the 6 server-side test cases (Write, Answer, Timeout, Malformed, Concurrent, Kill)."
+     ],
+     "kind": "Integration & Verification",
+     "title": "Integration, Documentation, and Server Tests"
+    },
+    {
+     "children": [
+      "Run the 4 extension-side test cases (New File, Atomic Write, Double Answer, Dismiss)."
+     ],
+     "kind": "UI Verification",
+     "title": "Extension Modal and Edge Case Tests"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_escalation_loopback",
+  "arm": "commands",
+  "verdict": "AsItIs",
+  "lines": 89,
+  "code": 0,
+  "seconds": 8.8,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 2,
+   "children": 14,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": true,
+   "epicWord": false,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": true,
+   "namesOpus": false,
+   "kinds": "Server Protocol Implementation | Extension UI & Watcher Implementation"
+  },
+  "answerText": {
+   "approach": "Execute the escalation loopback by implementing the file-based protocol on the server to write questions and wait for answers, while the extension watches the directory to surface a modal and atomically write responses. This decouples the server's blocking wait from the editor's UI lifecycle, ensuring the system reaches the human without requiring a persistent port or token handshake.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Fable (max) for Story 1 (Server protocol, timeout logic, atomic writes) due to high stakes in data integrity and concurrency; Fable (max) for Story 2 (Extension modal, watcher, state management) to ensure the UI state machine handles dismissed modals and concurrent answers flawlessly.",
+   "questionPolicy": "Ask only if a blocking dependency is missing; otherwise, proceed under the assumption that the `escalations` directory exists or is created on first run, and that the `COAI_ESCALATION_MINUTES` and `COAI_ESCALATION_SECONDS` environment variables are available in the runtime context.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [
+      "Implement `AskHuman` tool to write `escalations/<id>.json` with question, session, findings, and timestamp.",
+      "Implement blocking wait loop with configurable timeout (seconds > minutes) and `no_answer_yet` return value.",
+      "Implement atomic read of `<id>.answer.json` with malformed file detection (empty or partial content).",
+      "Implement concurrency isolation using unique IDs to prevent cross-answer leakage.",
+      "Implement graceful exit on server kill to ensure no stale locks remain.",
+      "Write unit tests for all 6 specified test cases.",
+      "Run `review_code` on the diff, fix findings, update `module_server.md`, and commit."
+     ],
+     "kind": "Server Protocol Implementation",
+     "title": "Story 1: The Escalation File Protocol"
+    },
+    {
+     "children": [
+      "Implement `FileSystemWatcher` on the `escalations` directory with a 5-second poll fallback for cross-platform reliability.",
+      "Implement modal UI trigger on new file detection, displaying question and open findings.",
+      "Implement atomic write logic (temp file + rename) for the answer file.",
+      "Implement state check to suppress modal if an answer file already exists for the ID.",
+      "Implement logic to distinguish between 'dismissed' (no file) and 'answered' (file exists) states.",
+      "Write unit tests for all 4 specified test cases.",
+      "Run `review_code` on the diff, fix findings, update documentation, and commit."
+     ],
+     "kind": "Extension UI & Watcher Implementation",
+     "title": "Story 2: The Modal and the Person's Answer"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_escalation_loopback",
+  "arm": "epic",
+  "verdict": "AsItIs",
+  "lines": 89,
+  "code": 0,
+  "seconds": 5.8,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 3,
+   "children": 0,
+   "inRange": true,
+   "twoLevel": false,
+   "shapeAsOrdered": true,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": false,
+   "commitsEachUnit": false,
+   "mentionsReview": false,
+   "mentionsCommit": false,
+   "batchesQuestions": true,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "Server Protocol Implementation | Extension Watcher & UI | Integration & Cleanup"
+  },
+  "answerText": {
+   "approach": "I will execute the implementation as a single, monolithic unit by integrating the server-side file protocol logic, the extension-side file watcher with atomic write semantics, and the modal UI logic into a cohesive build, ensuring the 5-second polling mechanism and 30-minute timeout constraints are hard-coded as per the deviation notes. The entire workflow—from writing the `escalations` directory structure to the `Tools.cs` replacement and documentation updates—will be performed in one continuous pass to maintain state consistency and avoid intermediate splitting artifacts.",
+   "commitsEachUnit": false,
+   "modelPolicy": "Deep-Reasoning-Model for the architectural synthesis of the file watcher and atomic write logic; Standard-Execution-Model for the boilerplate file generation and documentation updates.",
+   "questionPolicy": "Questions are deferred until the final summary; a blocking question is only raised if the `escalations` directory path is not explicitly defined in the repository root or if the `Tools.cs` static refusal location is ambiguous relative to the current codebase structure.",
+   "reviewsEachUnit": false,
+   "units": [
+    {
+     "children": [],
+     "kind": "Server Protocol Implementation",
+     "title": "Server-side `ask_human` logic with file I/O and timeout handling"
+    },
+    {
+     "children": [],
+     "kind": "Extension Watcher & UI",
+     "title": "Extension-side file watcher, modal trigger, and atomic answer writing"
+    },
+    {
+     "children": [],
+     "kind": "Integration & Cleanup",
+     "title": "Replacing static refusal in `Tools.cs`, updating `module_server.md`, and final verification"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_panel_probing_state",
+  "arm": "plain",
+  "verdict": "AsItIs",
+  "lines": 85,
+  "code": 0,
+  "seconds": 7.7,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 5,
+   "children": 8,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "State Schema Definition | Logic Refactoring | View Layer Update | Verification Suite | Documentation"
+  },
+  "answerText": {
+   "approach": "Decouple the synchronous rendering pipeline from the asynchronous probe execution by introducing a transient 'probing' state that triggers an immediate UI patch before the await, ensuring the interface remains responsive during the bounded wait. Implement a strict lifecycle manager within the render cycle to guarantee this state is cleared or resolved in a `finally` block, preventing stale UI artifacts from outliving the probe execution.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Use a high-context reasoning model (e.g., o3-mini or equivalent) for architectural mapping and state machine logic, and a code-specialized model (e.g., o1 or Codex) for the actual TypeScript implementation and test generation.",
+   "questionPolicy": "Ask only if the `staticKey` logic in `liveRegions` requires a specific non-standard serialization format to distinguish 'probing' from 'settled' without triggering a full DOM re-mount, otherwise proceed autonomously.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [],
+     "kind": "State Schema Definition",
+     "title": "Extend `PanelState` with transient probing flags"
+    },
+    {
+     "children": [
+      "Update `render()` to set `probing` state before awaiting `probeLocalEngines`",
+      "Wrap probe execution in `try/finally` to ensure state reset on completion or failure",
+      "Integrate `staticKey` logic to ensure probing state triggers a patch, not a full repaint"
+     ],
+     "kind": "Logic Refactoring",
+     "title": "Decouple Render from Await in `panelProvider.ts`"
+    },
+    {
+     "children": [
+      "Implement UI markup to display 'probing' indicator when state flag is active",
+      "Ensure markup updates immediately upon state change without waiting for probe resolution"
+     ],
+     "kind": "View Layer Update",
+     "title": "Update `panelView.ts` for Real-time Feedback"
+    },
+    {
+     "children": [
+      "Write unit test verifying immediate state publication on `⟳` press",
+      "Write unit test verifying state clearing on probe failure",
+      "Write unit test verifying `staticKey` stability during transition"
+     ],
+     "kind": "Verification Suite",
+     "title": "Implement Test Plan for Probing State"
+    },
+    {
+     "children": [],
+     "kind": "Documentation",
+     "title": "Update `module_extension.md` with State Lifecycle"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_panel_probing_state",
+  "arm": "commands",
+  "verdict": "AsItIs",
+  "lines": 85,
+  "code": 0,
+  "seconds": 5.4,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 3,
+   "children": 0,
+   "inRange": true,
+   "twoLevel": false,
+   "shapeAsOrdered": true,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "State Injection | Lifecycle Refactor | UI & Verification"
+  },
+  "answerText": {
+   "approach": "I will inject a transient 'probing' state into the `PanelState` model that forces an immediate, non-blocking UI patch before the synchronous `await` on `probeLocalEngines` executes, ensuring the UI reflects activity without triggering a full repaint. Subsequently, I will refactor the `render` lifecycle to guarantee this state is cleared in a `finally` block, decoupling the visual feedback from the blocking I/O operations while preserving the existing `staticKey` logic to prevent flicker.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Fable (max) for the architectural shift in `PanelState` and the `render` lifecycle logic due to the high cost of race conditions and state leakage; Opus for the markup updates and unit test implementations.",
+   "questionPolicy": "Questions are deferred until the final summary; I will proceed by assuming the `staticKey` generation logic remains stable across state transitions and that the `liveRegions` implementation supports dynamic text updates without full DOM re-mounts.",
+   "reviewsEachUnit": true,
+   "units": [
+    {
+     "children": [],
+     "kind": "State Injection",
+     "title": "Inject Probing State into PanelState"
+    },
+    {
+     "children": [],
+     "kind": "Lifecycle Refactor",
+     "title": "Refactor render() to Publish Probing State Before Await"
+    },
+    {
+     "children": [],
+     "kind": "UI & Verification",
+     "title": "Update Markup and Implement Probing State Tests"
+    }
+   ]
+  }
+ },
+ {
+  "run": "A",
+  "model": "Qwen3.5-35B-A3B-Q5_vk128:latest",
+  "plan": "PLAN_panel_probing_state",
+  "arm": "epic",
+  "verdict": "AsItIs",
+  "lines": 85,
+  "code": 0,
+  "seconds": 6.6,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 3,
+   "children": 5,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": true,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": false,
+   "commitsEachUnit": true,
+   "mentionsReview": false,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "State Schema Definition | Logic Refactoring | UI & Verification"
+  },
+  "answerText": {
+   "approach": "I will refactor `PanelState` to introduce a transient `probing` flag that triggers a non-repainting patch via the existing `staticKey` mechanism, ensuring the UI updates immediately upon probe initiation. Subsequently, I will restructure `render()` to dispatch this state before awaiting `probeLocalEngines` and enforce a `finally` block to guarantee state clearance regardless of probe success or failure.",
+   "commitsEachUnit": true,
+   "modelPolicy": "Primary reasoning and architectural synthesis: GPT-5.6-Luna (or equivalent high-context reasoning model); Code generation and unit test verification: GPT-4o (or equivalent high-precision coding model).",
+   "questionPolicy": "Questions are deferred until the final summary; a blocking question is only raised if a critical dependency (e.g., the exact signature of `probeLocalEngines` or the specific `staticKey` implementation details) is missing from the provided context.",
+   "reviewsEachUnit": false,
+   "units": [
+    {
+     "children": [],
+     "kind": "State Schema Definition",
+     "title": "Extend `PanelState` with transient probing flag"
+    },
+    {
+     "children": [
+      "Update `render()` to set `probing` state before awaiting `probeLocalEngines`",
+      "Implement `finally` block to clear `probing` state on resolution or rejection",
+      "Ensure `staticKey` remains constant during the probing phase to prevent full repaint flicker"
+     ],
+     "kind": "Logic Refactoring",
+     "title": "Refactor `render()` and `probeLocalEngines` execution flow"
+    },
+    {
+     "children": [
+      "Implement UI markup to display 'probing' indicator when state is active",
+      "Write unit tests verifying immediate state publication, clearing on failure, and `staticKey` stability"
+     ],
+     "kind": "UI & Verification",
+     "title": "Implement UI feedback and comprehensive test suite"
+    }
+   ]
+  }
+ }
+]

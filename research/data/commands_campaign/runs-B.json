@@ -1,0 +1,2590 @@
+[
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_multi_repo_and_uncommitted",
+  "arm": "plain",
+  "verdict": "Epics",
+  "lines": 554,
+  "code": 0,
+  "seconds": 41,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 7,
+   "children": 20,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "architectural_module | refactor | logic_engine | resource_manager | data_layer | orchestrator | presentation"
+  },
+  "answerText": {
+   "approach": "A phased, bottom-up implementation following the 'Build order' specified in the plan, prioritizing the isolation of the snapshot mechanism (Part One) before expanding to multi-repo orchestration (Part Two). Each phase will be validated by the specific 'Test plan' requirements to ensure the complex git-state invariants are met before moving to higher-level abstractions.",
+   "units": [
+    {
+     "title": "Part One: Working Tree Snapshotting",
+     "kind": "architectural_module",
+     "children": [
+      "Implementation of SnapshotScope and Git command sequence (read-tree, write-tree, commit-tree)",
+      "Implementation of the tree-id stability check and retry logic",
+      "Implementation of the Snapshot sweep (index and ref cleanup)",
+      "Integration of the four-state repository handler (Unborn, Clean, Conflicted, Ordinary)"
+     ]
+    },
+    {
+     "title": "Single-Repo Compatibility",
+     "kind": "refactor",
+     "children": [
+      "Update Tools.cs to support 'head' absence via Part One snapshots",
+      "Regression testing of existing single-repo committed-code workflows"
+     ]
+    },
+    {
+     "title": "Path Qualification and Dedup",
+     "kind": "logic_engine",
+     "children": [
+      "Implementation of QualifiedPath.Split with alias-set awareness",
+      "Implementation of unique repo-alias generation (path-digest suffixing)",
+      "Update FindingDedup to use qualified paths"
+     ]
+    },
+    {
+     "title": "Diff Budgeting",
+     "kind": "resource_manager",
+     "children": [
+      "Implementation of the floor-and-redistribute allocation algorithm in DiffShaper",
+      "Validation of the 'not shown' list for starved repositories"
+     ]
+    },
+    {
+     "title": "Multi-Repo Session and Persistence",
+     "kind": "data_layer",
+     "children": [
+      "SessionStore schema migration (repos array and alias records)",
+      "Implementation of the primary-key/alias lookup logic",
+      "Implementation of repository identity verification (common-dir + root-commit)"
+     ]
+    },
+    {
+     "title": "Multi-Repo Orchestration and Reviewer Contract",
+     "kind": "orchestrator",
+     "children": [
+      "Implementation of the built Round Root directory and worktree layout",
+      "Implementation of the per-vendor round-root smoke test",
+      "Implementation of the multi-repo 'repos' argument parsing in PanelService",
+      "Implementation of the SnapshotScope set for multi-repo lease management"
+     ]
+    },
+    {
+     "title": "UI/Panel Integration",
+     "kind": "presentation",
+     "children": [
+      "Update Rounds view to display multiple repositories per round",
+      "Update finding display to include repoAlias"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will be asked only at the boundary of a unit if the implementation of a specific 'Test plan' requirement reveals an ambiguity in the git-state transition or if a vendor-specific smoke test fails in a way not covered by the plan.",
+   "modelPolicy": "GPT-4o for high-level architectural orchestration and complex git-command sequence generation; Claude 3.5 Sonnet for precise implementation of logic-heavy units (DiffShaper, QualifiedPath) and rigorous unit test generation."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_multi_repo_and_uncommitted",
+  "arm": "commands",
+  "verdict": "Epics",
+  "lines": 554,
+  "code": 0,
+  "seconds": 19.6,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 5,
+   "children": 14,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": true,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "epic | epic | epic | epic | epic"
+  },
+  "answerText": {
+   "approach": "A sequential, high-integrity implementation strategy that prioritizes the 'Part One' snapshot mechanism as a standalone, tested unit before expanding into the complex multi-repository orchestration of 'Part Two'. Each unit is treated as a discrete architectural layer, moving from low-level git-index manipulation to high-level session and vendor orchestration.",
+   "units": [
+    {
+     "title": "EPIC 1: Atomic Working Tree Snapshotting (Part One)",
+     "kind": "epic",
+     "children": [
+      "STORY 1.1: Implement `WorkingTreeSnapshot` with temporary index and `GIT_INDEX_FILE` (Fable)",
+      "STORY 1.2: Implement HEAD probing, unborn branch handling, and stability check via double `write-tree` (Fable)",
+      "STORY 1.3: Implement `SnapshotScope` for resource ownership (index, refs, leases) and cleanup (Opus)",
+      "STORY 1.4: Implement the four-state repository handler (Ordinary, Unborn, Clean, Unmerged) (Opus)"
+     ]
+    },
+    {
+     "title": "EPIC 2: Single-Repo Evolution (Part One Bridge)",
+     "kind": "epic",
+     "children": [
+      "STORY 2.1: Integrate `WorkingTreeSnapshot` into existing single-repo `head` absent flow (Opus)",
+      "STORY 2.2: Regression testing: ensure existing committed-only calls remain unchanged (Opus)"
+     ]
+    },
+    {
+     "title": "EPIC 3: Multi-Repo Identity and Pathing (Part Two)",
+     "kind": "epic",
+     "children": [
+      "STORY 3.1: Implement `QualifiedPath` with session-aware alias disambiguation (Fable)",
+      "STORY 3.2: Implement `SessionStore` alias records and repository identity (root commit + common-dir) (Fable)",
+      "STORY 3.3: Implement session migration for legacy single-repo records (Opus)"
+     ]
+    },
+    {
+     "title": "EPIC 4: Multi-Repo Orchestration and Budgeting (Part Two)",
+     "kind": "epic",
+     "children": [
+      "STORY 4.1: Implement `DiffShaper` floor reservation and round-robin redistribution (Fable)",
+      "STORY 4.2: Implement Round Root construction and multi-worktree checkout (Fable)",
+      "STORY 4.3: Implement multi-vendor smoke test and cross-root capability probe (Fable)",
+      "STORY 4.4: Implement the `repos` argument shape and multi-repo `status` reply (Opus)"
+     ]
+    },
+    {
+     "title": "EPIC 5: UI and Final Integration",
+     "kind": "epic",
+     "children": [
+      "STORY 5.1: Update Panel to display multi-repo rounds and `repoAlias` in findings (Opus)"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will be asked only once, after all epics and stories are drafted, containing all blocking questions identified during the planning phase. Non-blocking questions will be appended to the final summary.",
+   "modelPolicy": "Fable (Max) will be used for all stories involving: Git index/tree manipulation, SHA/identity logic, path disambiguation, budget redistribution, and the complex multi-worktree/round-root orchestration. Opus will be used for: standard logic, resource disposal (IAsyncDisposable), UI updates, and regression/integration glue code."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_multi_repo_and_uncommitted",
+  "arm": "epic",
+  "verdict": "Epics",
+  "lines": 554,
+  "code": 0,
+  "seconds": 11.9,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 3,
+   "children": 12,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": false,
+   "namesOpus": true,
+   "kinds": "implementation_unit | implementation_unit | implementation_unit"
+  },
+  "answerText": {
+   "approach": "I will implement the plan as a single, continuous unit to maintain atomic integrity across the multi-repo session logic, performing a full diff review, verification against the test suite, and a final commit. I will use a 'snapshot-first' strategy for Part One to ensure the working tree is stable before any multi-repo orchestration begins.",
+   "units": [
+    {
+     "title": "Part One: Working Tree Snapshotting",
+     "kind": "implementation_unit",
+     "children": [
+      "SnapshotScope and Git command orchestration",
+      "Four-state repository handling (Unborn, Clean, Conflicted, Dirty)",
+      "Tree-ID stability check and retry logic",
+      "Resource ownership (Index, Ref, Lease) and Sweep mechanism"
+     ]
+    },
+    {
+     "title": "Part Two: Multi-Repo Session and Orchestration",
+     "kind": "implementation_unit",
+     "children": [
+      "Session identity, Alias records, and Migration",
+      "Qualified Path dequalification and FindingDedup updates",
+      "DiffShaper budget redistribution (Floor + Round-robin)",
+      "Round Root construction and Worktree lease set",
+      "Multi-vendor capability smoke test and refusal logic"
+     ]
+    },
+    {
+     "title": "Part Three: Panel and Integration",
+     "kind": "implementation_unit",
+     "children": [
+      "Panel UI updates for multi-repo rounds",
+      "Full integration test suite execution",
+      "Documentation updates (module_runners.md, module_server.md)"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "I will only interrupt the operator if a blocking question arises. All non-blocking questions and assumptions will be appended to the final summary.",
+   "modelPolicy": "Claude 3.5 Sonnet for architectural implementation and logic; Claude 3 Opus for deep-trace verification and complex diff analysis; GPT-4o for rapid unit test generation and boilerplate documentation."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_connect_other_ais",
+  "arm": "plain",
+  "verdict": "Epics",
+  "lines": 440,
+  "code": 0,
+  "seconds": 14,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 7,
+   "children": 22,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "setup | core_logic | runtime | transport | ui | delivery | validation"
+  },
+  "answerText": {
+   "approach": "A strictly sequential, phase-based implementation following the six defined epics, moving from pure logic (Phase 1) to hardware/process orchestration (Phase 2/3) and finally UI/Integration (Phase 4/5). Each phase is validated via a 'test-first' methodology where the contract and failure modes are asserted before the implementation is written.",
+   "units": [
+    {
+     "title": "Phase 0: Repository Foundation",
+     "kind": "setup",
+     "children": [
+      "Submodule mount (dew_flow_conventions)",
+      "Settings and CLAUDE.md initialization",
+      "CI pipeline configuration (plan-lifecycle/pin-check)"
+     ]
+    },
+    {
+     "title": "Phase 1: Pure Logic & Contract",
+     "kind": "core_logic",
+     "children": [
+      "Finding schema and normalization logic",
+      "Gemini JSON sanitizer (fixture-driven)",
+      "De-duplication and counting rule engine",
+      "Round state machine (order enforcement)",
+      "Diff shaping (exclusions, binary handling, size caps)"
+     ]
+    },
+    {
+     "title": "Phase 2: Reviewer Runners & Orchestration",
+     "kind": "runtime",
+     "children": [
+      "IReviewerRuntime implementations (Codex, Gemini, DeepSeek)",
+      "Git Worktree Manager (prune, add, lifecycle)",
+      "Bounded Scheduler (Global/Provider semaphores, 429 retry logic)"
+     ]
+    },
+    {
+     "title": "Phase 3: MCP Server Implementation",
+     "kind": "transport",
+     "children": [
+      "Native AOT stdio server skeleton",
+      "Tool implementation (open, review_plan, review_code, resolve, etc.)",
+      "Creds config integration",
+      "Serilog/Stderr logging architecture"
+     ]
+    },
+    {
+     "title": "Phase 4: VS Code Extension",
+     "kind": "ui",
+     "children": [
+      "Settings webview",
+      "Rounds view & Escalation modal",
+      "Binary installer & Clipboard config logic"
+     ]
+    },
+    {
+     "title": "Phase 5: Documentation & Snippets",
+     "kind": "delivery",
+     "children": [
+      "CLAUDE.md snippet generation",
+      "Final plan promotion to research/"
+     ]
+    },
+    {
+     "title": "Phase 6: End-to-End Proof",
+     "kind": "validation",
+     "children": [
+      "Scripted full-loop execution",
+      "Round log recording"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will only be asked at the transition between Epics if a structural deviation is required by environmental constraints, or if a Phase 1 contract ambiguity is detected. No questions will be asked for implementation details within a unit.",
+   "modelPolicy": "Claude 3.5 Sonnet for architectural orchestration and TypeScript (Extension); GPT-4o for C# (MCP Server) and complex logic verification; Gemini 1.5 Pro for testing the Gemini-specific sanitizer and parsing logic."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_connect_other_ais",
+  "arm": "commands",
+  "verdict": "Epics",
+  "lines": 440,
+  "code": 0,
+  "seconds": 13.7,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 6,
+   "children": 16,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": true,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "EPIC | EPIC | EPIC | EPIC | EPIC | EPIC"
+  },
+  "answerText": {
+   "approach": "I will execute a strictly sequential, test-driven implementation following the phase-based build order. Each unit will be isolated, reviewed via `review_code`, and committed only after passing its specific test suite and documentation update.",
+   "units": [
+    {
+     "title": "Epic 0: Repository Foundation",
+     "kind": "EPIC",
+     "children": [
+      "Story: Mount submodules and copy settings",
+      "Story: Initialize research/ and CLAUDE.md",
+      "Story: Setup CI pipeline (plan-lifecycle + pin-check)"
+     ]
+    },
+    {
+     "title": "Epic 1: The Contract (Pure Logic)",
+     "kind": "EPIC",
+     "children": [
+      "Story: Implement Finding Schema and Normalization (Fable)",
+      "Story: Implement Gemini Sanitizer with fixture-based tests (Fable)",
+      "Story: Implement De-duplication and Counting Rules (Fable)",
+      "Story: Implement Round State Machine (Fable)"
+     ]
+    },
+    {
+     "title": "Epic 2: Reviewer Runners (Process Orchestration)",
+     "kind": "EPIC",
+     "children": [
+      "Story: Implement Worktree Manager (prune/add/remove) (Fable)",
+      "Story: Implement Bounded Scheduler (Global/Provider Semaphores) (Fable)",
+      "Story: Implement Vendor Runtimes (Codex/Gemini/DeepSeek) (Opus)"
+     ]
+    },
+    {
+     "title": "Epic 3: MCP Server (Native AOT)",
+     "kind": "EPIC",
+     "children": [
+      "Story: Implement stdio server and Serilog (Opus)",
+      "Story: Implement Tool Handlers (open, review_plan, review_code, etc.) (Fable)",
+      "Story: Implement Creds Key integration (Fable)"
+     ]
+    },
+    {
+     "title": "Epic 4: VS Code Extension",
+     "kind": "EPIC",
+     "children": [
+      "Story: Implement Settings Webview and Install Button (Opus)",
+      "Story: Implement Rounds View and Escalation Modal (Opus)"
+     ]
+    },
+    {
+     "title": "Epic 5: Proof of Concept",
+     "kind": "EPIC",
+     "children": [
+      "Story: Scripted E2E loop execution (Opus)"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "All non-blocking questions will be queued and presented at the end of the final summary. A single batch of blocking questions will be presented immediately after the first unit's analysis if assumptions are insufficient.",
+   "modelPolicy": "Fable (max) will be used for all 'expensive' logic: Schema, Sanitizers, State Machine, Worktree Management, Scheduler, Tool Handlers, and Creds integration. Opus will be used for 'ordinary' implementation: Runtimes, Server boilerplate, Extension UI, and E2E scripts."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_connect_other_ais",
+  "arm": "epic",
+  "verdict": "Epics",
+  "lines": 440,
+  "code": 0,
+  "seconds": 19.6,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 7,
+   "children": 24,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": false,
+   "namesOpus": true,
+   "kinds": "setup | implementation | implementation | implementation | implementation | documentation | verification"
+  },
+  "answerText": {
+   "approach": "I will implement the plan as a single, continuous unit of work, progressing through the six defined epics while maintaining strict adherence to the architectural constraints and the 'one worktree per round' lifecycle. Each phase will be verified against the specific test plan requirements before moving to the next, ensuring the state machine and the reviewer runners are robustly integrated.",
+   "units": [
+    {
+     "title": "Phase 0: Repository Foundation",
+     "kind": "setup",
+     "children": [
+      "Mount dew_flow_conventions submodule",
+      "Copy settings/settings.json",
+      "Initialize CLAUDE.md and todo/README.md",
+      "Configure CI (plan-lifecycle.mjs, pin-check.mjs)",
+      "Setup research/architecture.md and logs/ directory"
+     ]
+    },
+    {
+     "title": "Phase 1: Pure Contract & Logic",
+     "kind": "implementation",
+     "children": [
+      "Implement Finding schema and normalisation",
+      "Implement Gemini sanitizer (fenced/envelope/prose handling)",
+      "Implement de-duplication and counting rules",
+      "Implement Round State Machine",
+      "Implement Diff shaping (exclusions, binaries, size cap)"
+     ]
+    },
+    {
+     "title": "Phase 2: Reviewer Runners & Scheduler",
+     "kind": "implementation",
+     "children": [
+      "Implement IReviewerRuntime (Codex, Gemini, DeepSeek/Codex)",
+      "Implement Worktree Manager (prune, add by SHA, force remove)",
+      "Implement Bounded Scheduler (Global + Per-provider semaphores)",
+      "Implement Error handling (429 retry, timeout, non-zero exit)"
+     ]
+    },
+    {
+     "title": "Phase 3: MCP Server (Native AOT)",
+     "kind": "implementation",
+     "children": [
+      "Implement stdio server with Serilog (stderr for logs)",
+      "Implement MCP tools (providers, open, review_plan, review_code, resolve, status, ask_human)",
+      "Implement Creds config reading and environment injection"
+     ]
+    },
+    {
+     "title": "Phase 4: VS Code Extension",
+     "kind": "implementation",
+     "children": [
+      "Implement Settings webview",
+      "Implement Rounds view and Escalation modal",
+      "Implement Installer (binary to storage + clipboard config)",
+      "Implement Loopback broker"
+     ]
+    },
+    {
+     "title": "Phase 5: CLAUDE.md Snippet",
+     "kind": "documentation",
+     "children": [
+      "Generate tool-calling instructions for Main AI"
+     ]
+    },
+    {
+     "title": "Phase 6: Proof of Concept",
+     "kind": "verification",
+     "children": [
+      "Execute scripted E2E run with flawed plan",
+      "Record and promote round log to research/"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will only be asked if a blocking ambiguity is encountered. All non-blocking questions and assumptions will be listed at the end of the final summary.",
+   "modelPolicy": "A high-reasoning model (e.g., Claude 3.5 Sonnet/Opus) will be used for architectural implementation and complex logic (State Machine, Scheduler, Sanitizer). A faster, cheaper model may be used for boilerplate (Phase 0, Phase 5). The actual 'Reviewer' roles will be executed by the specific CLI vendors (Codex, Gemini) as defined in the plan."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_wsl_local_engine",
+  "arm": "plain",
+  "verdict": "Epics",
+  "lines": 233,
+  "code": 0,
+  "seconds": 10.4,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 4,
+   "children": 15,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": true,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "module | module | module | module"
+  },
+  "answerText": {
+   "approach": "A bottom-up implementation strategy starting with pure logic (text manipulation and platform detection), moving to the diagnostic engine, and concluding with the asynchronous interop probe and UI command integration. Each layer will be strictly validated against the 'must be true' constraints using dependency injection to simulate WSL/Windows environments without requiring physical hardware transitions during testing.",
+   "units": [
+    {
+     "title": "Core Logic: wslNetwork.ts",
+     "kind": "module",
+     "children": [
+      "isWsl platform detection logic",
+      "wslconfigWith text merging engine",
+      "networkingModeOf parser",
+      "Unit tests for UTF-16, existing [wsl2] sections, and atomic merge logic"
+     ]
+    },
+    {
+     "title": "Server-Side: VendorDiagnosis",
+     "kind": "module",
+     "children": [
+      "Implementation of the specific 'Connection refused' marker",
+      "WSL-gated cure injection",
+      "Unit tests for exact ledger sentence matching"
+     ]
+    },
+    {
+     "title": "The Interop Probe",
+     "kind": "module",
+     "children": [
+      "Bounded execution wrapper (2s deadline)",
+      "cmd.exe/curl.exe interop calls",
+      "Error mapping (timeout/non-zero/missing) to 'not asked'",
+      "Integration tests using mocked spawn"
+     ]
+    },
+    {
+     "title": "Extension UI: The Button & Panel",
+     "kind": "module",
+     "children": [
+      "PanelCommand implementation (Preview/Write/Undo)",
+      "Atomic file write with read-back verification",
+      "Integration of the probe into the discovery lifecycle",
+      "End-to-end integration tests"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will only be asked during the 'Build order' phase if a dependency mismatch is detected or if the existing `.wslconfig` structure deviates from the expected INI-like format in a way that threatens atomicity.",
+   "modelPolicy": "Claude 3.5 Sonnet for architectural orchestration and complex text-merging logic; GPT-4o for generating high-coverage edge-case unit tests; local LLM (via the newly implemented engine) for final verification of the 'must be true' statements."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_wsl_local_engine",
+  "arm": "commands",
+  "verdict": "Epics",
+  "lines": 233,
+  "code": 0,
+  "seconds": 8.6,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 3,
+   "children": 6,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": true,
+   "epicWord": true,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "EPIC | EPIC | EPIC"
+  },
+  "answerText": {
+   "approach": "A hierarchical decomposition of the WSL networking fix into logical epics, utilizing Fable for high-stakes architectural and file-system logic and Opus for standard implementation. Each story follows a strict 'Implement -> Review -> Fix -> Document -> Test -> Commit' lifecycle to ensure zero regression.",
+   "units": [
+    {
+     "title": "EPIC 1: Core WSL Logic & Diagnosis (High Stakes)",
+     "kind": "EPIC",
+     "children": [
+      "STORY 1.1: Pure WSL Configuration Logic (wslNetwork.ts)",
+      "STORY 1.2: Vendor Diagnosis & WSL Detection (VendorDiagnosis.cs/models.ts)"
+     ]
+    },
+    {
+     "title": "EPIC 2: Interop Probing & Discovery (High Stakes)",
+     "kind": "EPIC",
+     "children": [
+      "STORY 2.1: Bounded Windows-side Engine Probe (Interop)",
+      "STORY 2.2: Integration of Probe into Engine Discovery"
+     ]
+    },
+    {
+     "title": "EPIC 3: User Interface & Command Execution (Standard)",
+     "kind": "EPIC",
+     "children": [
+      "STORY 3.1: Panel Command & Button UI (Preview/Write/Undo)",
+      "STORY 3.2: Atomic File Writing & Verification Logic"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "All non-blocking questions are queued for the end of the summary. A single batch of blocking questions will be presented only if a decision cannot be made under the current plan assumptions.",
+   "modelPolicy": "Fable (Max) for all stories in EPIC 1 and 2 (Architecture, Data, Security, File-system). Opus for all stories in EPIC 3 (UI, Command routing, standard logic)."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_wsl_local_engine",
+  "arm": "epic",
+  "verdict": "Epics",
+  "lines": 233,
+  "code": 0,
+  "seconds": 9.7,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 4,
+   "children": 17,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "implementation | implementation | implementation | implementation"
+  },
+  "answerText": {
+   "approach": "A bottom-up implementation strategy starting with pure logic for WSL configuration manipulation, followed by the diagnostic layer, the interop probe, and finally the UI command integration. Each layer will be verified via unit tests before the next layer is built to ensure the 'must be true' constraints are met.",
+   "units": [
+    {
+     "title": "Pure Logic: wslNetwork.ts",
+     "kind": "implementation",
+     "children": [
+      "isWsl(procVersion) implementation",
+      "wslconfigWith(existing, mode) merging logic",
+      "networkingModeOf(existing) detection",
+      "Unit tests for all three functions (including UTF-16 and section-merging edge cases)"
+     ]
+    },
+    {
+     "title": "Server-side: VendorDiagnosis",
+     "kind": "implementation",
+     "children": [
+      "Add marker for unreachable local engine",
+      "Implement WSL-gated cure logic",
+      "Unit tests for diagnosis strings (WSL vs Linux vs Windows)"
+     ]
+    },
+    {
+     "title": "The Probe: Windows Interop",
+     "kind": "implementation",
+     "children": [
+      "Bounded interop execution (cmd.exe/curl.exe) with 2s deadline",
+      "Concurrent execution of candidates",
+      "Injected probe for unit testing",
+      "Integration with discoverEngine"
+     ]
+    },
+    {
+     "title": "UI: Panel Command & Button",
+     "kind": "implementation",
+     "children": [
+      "PanelCommand case implementation",
+      "Atomic write with temp file and rename",
+      "Verification via read-back",
+      "Preview of merged file content",
+      "Way-back (revert) logic",
+      "Integration tests for the full button lifecycle"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "All blocking questions will be gathered and presented at once after the initial analysis of the repository structure is complete.",
+   "modelPolicy": "Claude 3.5 Sonnet for architectural reasoning and complex logic (wslNetwork, interop); GPT-4o for high-volume unit test generation and boilerplate (tests, documentation)."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_conventions_pass",
+  "arm": "plain",
+  "verdict": "Epics",
+  "lines": 179,
+  "code": 0,
+  "seconds": 11.2,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 5,
+   "children": 20,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "logic_refactor | feature_implementation | prompt_engineering | research_task | ui_implementation"
+  },
+  "answerText": {
+   "approach": "A bottom-up implementation strategy focusing on data structures and core logic first, followed by the rule discovery engine, prompt engineering, and finally the UI/Panel layer. Each layer will be validated against the specific test plan requirements before proceeding to the next.",
+   "units": [
+    {
+     "title": "Core Data Structures & Configuration",
+     "kind": "logic_refactor",
+     "children": [
+      "Refactor SessionState.cs and PanelConfig to implement StageGate records",
+      "Update RoundMachine.cs to implement GateFor(Stage) logic",
+      "Implement environment variable mapping for new stage-specific settings",
+      "Add unit tests for StageGate logic and legacy fallback"
+     ]
+    },
+    {
+     "title": "Rule Discovery Engine",
+     "kind": "feature_implementation",
+     "children": [
+      "Implement RuleFiles in runners/Context/ with worktree-aware directory walking",
+      "Implement 40KB budget logic and truncation reporting",
+      "Implement submodule support for .claude/rules/shared",
+      "Add unit tests for file discovery, budget capping, and empty-repo handling"
+     ]
+    },
+    {
+     "title": "Conventions Prompt & Catalog Integration",
+     "kind": "prompt_engineering",
+     "children": [
+      "Create src_mcp/src/prompts/conventions.md with strict prohibition clauses",
+      "Update PromptCatalog.ForRound to inject conventions as default for Round 1",
+      "Implement logic to skip conventions if no rules are discovered",
+      "Add byte-for-byte and RolePromptsTests validation"
+     ]
+    },
+    {
+     "title": "Prompt Measurement Experiment",
+     "kind": "research_task",
+     "children": [
+      "Execute Variants A, B, and C against target diffs",
+      "Perform variance control runs (3x) per variant",
+      "Analyze token usage and finding accuracy",
+      "Document results in research/RESULTS_conventions_prompt.md"
+     ]
+    },
+    {
+     "title": "Panel UI Refactor",
+     "kind": "ui_implementation",
+     "children": [
+      "Split Plan and Code review frames in the Panel",
+      "Implement color-coding using CredsForDevs palette and CSS variables",
+      "Update Gate section to display new stage-specific settings",
+      "Verify UI responsiveness and color fallback logic"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will be asked only at the transition between 'units' if architectural ambiguities arise, or if a test failure in a unit reveals a fundamental deviation from the plan.",
+   "modelPolicy": "Claude 3.5 Sonnet for all logic, refactoring, and UI implementation; GPT-4o for the comparative prompt measurement (Variant B/C) to ensure vendor variance analysis."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_conventions_pass",
+  "arm": "commands",
+  "verdict": "Epics",
+  "lines": 179,
+  "code": 0,
+  "seconds": 14.1,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 4,
+   "children": 12,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": true,
+   "epicWord": true,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "EPIC | EPIC | EPIC | EPIC"
+  },
+  "answerText": {
+   "approach": "I will decompose the plan into hierarchical Epics and Stories, utilizing Fable for high-stakes architectural and data-driven tasks and Opus for standard implementation. Each story will follow a strict 'Implement -> Review -> Document -> Test -> Commit' lifecycle to ensure zero regression and absolute compliance.",
+   "units": [
+    {
+     "title": "EPIC 1: Per-Stage Configuration & Round Machine Refactor",
+     "kind": "EPIC",
+     "children": [
+      "STORY 1.1: Refactor PanelConfig and StageGate records (Fable)",
+      "STORY 1.2: Update RoundMachine to select gate by Stage (Opus)",
+      "STORY 1.3: Implement legacy setting compatibility and Env/Settings keys (Fable)"
+     ]
+    },
+    {
+     "title": "EPIC 2: Rule Discovery Engine & Context Injection",
+     "kind": "EPIC",
+     "children": [
+      "STORY 2.1: Implement RuleFiles directory walker and worktree reader (Fable)",
+      "STORY 2.2: Implement rule budget management and omission reporting (Opus)",
+      "STORY 2.3: Integrate RuleFiles into the reviewer context pipeline (Fable)"
+     ]
+    },
+    {
+     "title": "EPIC 3: Conventions Prompt & Catalog Integration",
+     "kind": "EPIC",
+     "children": [
+      "STORY 3.1: Create conventions.md with strict prohibition logic (Fable)",
+      "STORY 3.2: Update PromptCatalog for conditional Round 1 conventions (Opus)",
+      "STORY 3.3: Implement prompt measurement experiment and research logging (Fable)"
+     ]
+    },
+    {
+     "title": "EPIC 4: Panel UI Transformation",
+     "kind": "EPIC",
+     "children": [
+      "STORY 4.1: Refactor Prompts section into Plan and Code frames (Opus)",
+      "STORY 4.2: Implement CredsForDevs color-coding and header logic (Opus)",
+      "STORY 4.3: Update Gate section for per-stage settings (Opus)"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will be aggregated and presented only when a blocking dependency is identified or when an architectural assumption requires validation. Non-blocking questions will be appended to the final summary.",
+   "modelPolicy": "Fable (max) will be used for all stories involving StageGate/PanelConfig (data structure), RuleFiles (file system/budgeting), PromptCatalog/Conventions (logic/security), and the Measurement Experiment (data integrity). Opus will be used for all UI-centric (Panel) and standard logic (RoundMachine/PromptCatalog routing) stories."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_conventions_pass",
+  "arm": "epic",
+  "verdict": "Epics",
+  "lines": 179,
+  "code": 0,
+  "seconds": 11.5,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 5,
+   "children": 19,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "refactor | feature | feature | research | ui"
+  },
+  "answerText": {
+   "approach": "A sequential implementation following the build order, moving from core data structures and logic to the prompt engine, and finally to the UI/Panel layer. Each unit will be verified against its specific test requirements before proceeding to ensure the dependency chain remains intact.",
+   "units": [
+    {
+     "title": "Core Data Structures: StageGate and PanelConfig",
+     "kind": "refactor",
+     "children": [
+      "Update SessionState.cs with StageGate and PanelConfig records",
+      "Refactor RoundMachine.GateFor(Stage) to use per-stage configuration",
+      "Implement legacy fallback logic for COAI_MAX_ROUNDS and COAI_THRESHOLD",
+      "Add unit tests for StageGate logic (RED/GREEN)"
+     ]
+    },
+    {
+     "title": "Rule Discovery Engine: RuleFiles",
+     "kind": "feature",
+     "children": [
+      "Implement directory walking for the six specified rule sources",
+      "Implement worktree-based reading (not live tree)",
+      "Implement 40KB budget logic with explicit omission reporting",
+      "Add unit tests for file discovery, budget truncation, and empty repo handling"
+     ]
+    },
+    {
+     "title": "Conventions Prompt and Catalog Integration",
+     "kind": "feature",
+     "children": [
+      "Create src_mcp/src/prompts/conventions.md with required schema and prohibitions",
+      "Update PromptCatalog.ForRound to inject 'conventions' as default for code round 1",
+      "Ensure explicit user selection overrides the default",
+      "Add unit tests for PromptCatalog logic and conventions.md schema compliance"
+     ]
+    },
+    {
+     "title": "Prompt Measurement Experiment",
+     "kind": "research",
+     "children": [
+      "Implement test harness for Variants A, B, and C",
+      "Execute measurement against two vendors with variance control",
+      "Document results in research/RESULTS_conventions_prompt.md"
+     ]
+    },
+    {
+     "title": "Panel UI Update",
+     "kind": "ui",
+     "children": [
+      "Split Prompts section into Plan and Code frames",
+      "Implement color-coding using CredsForDevs palette (with fallbacks)",
+      "Update Gate section to show four new settings",
+      "Verify UI reflects the 'conventions' pass name in round 1"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "All questions will be gathered and presented in a single block after the implementation is complete, unless a critical blocker is encountered that prevents the definition of the next unit.",
+   "modelPolicy": "GPT-4o for architectural logic and C# implementation; Claude 3.5 Sonnet for prompt engineering and research documentation; specialized UI models for CSS/TS panel styling."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_epic_01_foundation",
+  "arm": "plain",
+  "verdict": "Epics",
+  "lines": 96,
+  "code": 0,
+  "seconds": 7.7,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 3,
+   "children": 11,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": true,
+   "epicWord": false,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "infrastructure_setup | scaffolding | automation"
+  },
+  "answerText": {
+   "approach": "A bottom-up architectural implementation strategy focusing on strict adherence to the `dew_flow_*` family conventions and AOT-compatible .NET 10 scaffolding. Each unit is validated against its specific test matrix before proceeding to ensure the foundation is immutable and the CI pipeline is honest.",
+   "units": [
+    {
+     "title": "Story 1.1: Conventions and Knowledge Base",
+     "kind": "infrastructure_setup",
+     "children": [
+      "Submodule initialization: .claude/rules/shared",
+      "Settings and CLAUDE.md synchronization",
+      "Knowledge base skeleton (research/ and todo/)",
+      "Conventions update (consumer row and pin bump)"
+     ]
+    },
+    {
+     "title": "Story 1.2: Solution Skeleton and Logging Engine",
+     "kind": "scaffolding",
+     "children": [
+      "Solution and Project structure (.slnx, global.json, Directory.Build.props)",
+      "CoaiMcp AOT-ready executable shell",
+      "ServiceDefaults implementation (Serilog, UTC, ANSI, File-per-run)",
+      "MTP Test Project (xUnit v3 executable) and AOT publish verification"
+     ]
+    },
+    {
+     "title": "Story 1.3: CI/CD Pipeline Integration",
+     "kind": "automation",
+     "children": [
+      "GitHub Actions workflow definition",
+      "Submodule shallow fetch optimization",
+      "Test executable and .mjs checker integration"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will only be asked if a deviation from the plan is detected during implementation or if a hardware/environment constraint (like the AOT PATH requirement) cannot be resolved automatically.",
+   "modelPolicy": "GPT-4o for high-level architectural orchestration and CI/CD YAML; Claude 3.5 Sonnet for deep C# AOT-compatible implementation and Serilog sink logic; local execution for real-time test verification."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_epic_01_foundation",
+  "arm": "commands",
+  "verdict": "Epics",
+  "lines": 96,
+  "code": 0,
+  "seconds": 6.1,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 1,
+   "children": 3,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": true,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "epic"
+  },
+  "answerText": {
+   "approach": "I will decompose the repository foundation plan into high-integrity epics, utilizing Fable for architectural and configuration-heavy stories to ensure zero-defect setup, and Opus for standard implementation. Each story will follow a strict 'Implement -> Review -> Test -> Document -> Commit' cycle to ensure no unverified code enters the history.",
+   "units": [
+    {
+     "title": "EPIC 01: Repository Foundation & Conventions",
+     "kind": "epic",
+     "children": [
+      "STORY 1.1: Conventions Mounting & Knowledge Base Seeding (Fable)",
+      "STORY 1.2: Solution Skeleton & Family-Compliant Logging (Fable)",
+      "STORY 1.3: CI/CD Pipeline & Local-to-Remote Parity (Opus)"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will be aggregated and presented only when a decision cannot be made via stated assumptions or the provided plan. I will assume the existence of the `dew_flow_conventions` submodule remote and the specific directory structure defined in the plan.",
+   "modelPolicy": "Fable will be used for STORY 1.1 (Submodule/Settings/Conventions) and STORY 1.2 (AOT/Logging/Architecture) because errors in the foundation are expensive to refactor. Opus will be used for STORY 1.3 (GitHub Actions/CI) as it is a standard orchestration task."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_epic_01_foundation",
+  "arm": "epic",
+  "verdict": "Epics",
+  "lines": 96,
+  "code": 0,
+  "seconds": 8.3,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 3,
+   "children": 12,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "implementation_unit | implementation_unit | implementation_unit"
+  },
+  "answerText": {
+   "approach": "I will execute the implementation as a single, continuous unit to maintain atomic integrity, utilizing a 'test-driven scaffolding' strategy where the CI and MTP test runner are validated immediately after the solution skeleton is established. Each story will be implemented by first setting up the required file structure, then the logic, and finally the verification tests, ensuring the repository moves from a 'blind' state to a 'verified' state.",
+   "units": [
+    {
+     "title": "Story 1.1: Conventions and Knowledge Base",
+     "kind": "implementation_unit",
+     "children": [
+      "Submodule initialization and rule mounting",
+      "Settings and CLAUDE.md seeding",
+      "Knowledge base (research/ and todo/) creation",
+      "Conventions consumer table update"
+     ]
+    },
+    {
+     "title": "Story 1.2: Solution Skeleton and Logging",
+     "kind": "implementation_unit",
+     "children": [
+      "Dotnet solution and project scaffolding (slnx, global.json, props)",
+      "CoaiMcp AOT-ready executable setup",
+      "ServiceDefaults with custom Serilog/DewFlow logging implementation",
+      "MTP xUnit v3 test project setup",
+      "Logging and AOT verification tests"
+     ]
+    },
+    {
+     "title": "Story 1.3: CI/CD Pipeline",
+     "kind": "implementation_unit",
+     "children": [
+      "GitHub Actions workflow definition",
+      "Submodule depth-limited checkout configuration",
+      "Build, MTP execution, and JS-tool verification steps"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will only be asked if a blocking ambiguity is encountered that cannot be resolved via the provided plan or the 'dew_flow' family conventions. All non-blocking questions will be aggregated at the end of the final summary.",
+   "modelPolicy": "A high-reasoning model (e.g., Claude 3.5 Sonnet or O1) will be used for architectural scaffolding and complex C# AOT/Serilog logic; a faster, high-throughput model will be used for repetitive file seeding and boilerplate generation (settings, READMEs, YAML)."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_local_models",
+  "arm": "plain",
+  "verdict": "Stories",
+  "lines": 170,
+  "code": 0,
+  "seconds": 11.1,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 5,
+   "children": 22,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "logic_module | data_definition | ui_component | ui_controller | system_bridge"
+  },
+  "answerText": {
+   "approach": "A bottom-up implementation strategy starting from pure logic (engine discovery) and moving through the UI layer to the CLI shim, ensuring each layer is validated by its specific contract. The architecture follows a 'shim-not-widened-interface' pattern to maintain process isolation and strict timeout control.",
+   "units": [
+    {
+     "title": "Core Engine Discovery",
+     "kind": "logic_module",
+     "children": [
+      "Implement /v1/models parser",
+      "Implement /api/tags parser and merger",
+      "Implement candidate base URL probing logic",
+      "Implement error/reason generation (non-exception)",
+      "Unit tests: payload parsing, merging, and probe failure reasons"
+     ]
+    },
+    {
+     "title": "Vendor and Model Integration",
+     "kind": "data_definition",
+     "children": [
+      "Define 'local' runtime in vendors.ts",
+      "Integrate dynamic model list from localEngines.ts into models.ts",
+      "Unit tests: runtime preset and dynamic model resolution"
+     ]
+    },
+    {
+     "title": "UI: Panel View Implementation",
+     "kind": "ui_component",
+     "children": [
+      "Add local row to panelView.ts",
+      "Implement model dropdown and endpoint input",
+      "Implement engine hint and host-safety warning (isLoopback check)",
+      "Hide CLI-specific buttons (▶, ⤓, ⟳)",
+      "Unit tests: component rendering and visibility logic"
+     ]
+    },
+    {
+     "title": "UI: Panel Provider and Probing",
+     "kind": "ui_controller",
+     "children": [
+      "Implement probe-on-repaint logic",
+      "Implement endpoint-keyed cache (non-caching for empty probes)",
+      "Implement model selection validation (marking stale models)",
+      "Unit tests: cache keying, repaint triggers, and stale model marking"
+     ]
+    },
+    {
+     "title": "CLI Shim and Server Runtime",
+     "kind": "system_bridge",
+     "children": [
+      "Implement coai-mcp --ask-local command",
+      "Implement LocalRuntime (ProcessRequest executor)",
+      "Implement schema/temperature/seed injection in shim",
+      "Implement ShimDeadlineSeconds (10s buffer logic)",
+      "Unit tests: shim request body, timeout handling, and exit codes"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will only be asked at the transition between 'Core Engine Discovery' and 'Vendor Integration' if the discovery API contract deviates from the expected JSON shapes, or if the 'isLoopback' parsing logic encounters ambiguous network topologies.",
+   "modelPolicy": "Claude 3.5 Sonnet for architectural orchestration and UI/TS implementation; GPT-4o for generating complex mock JSON payloads for the engine parser tests; local Llama-3 (via the newly implemented shim) for final verification of the 'local' reviewer's ability to follow the finding schema."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_local_models",
+  "arm": "commands",
+  "verdict": "Stories",
+  "lines": 170,
+  "code": 0,
+  "seconds": 10.1,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 4,
+   "children": 13,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "story | story | story | story"
+  },
+  "answerText": {
+   "approach": "I will implement the local model reviewer by creating a process-isolated shim (`coai-mcp --ask-local`) to ensure hard timeouts and memory isolation, then integrate this via a new `local` runtime and engine discovery logic.",
+   "units": [
+    {
+     "title": "Story 1: Local Engine Discovery and Model Parsing",
+     "kind": "story",
+     "children": [
+      "Implement `localEngines.ts` with `/v1/models` and `api/tags` parsing",
+      "Implement engine probe logic with candidate URL fallback",
+      "Add unit tests for payload parsing and merge logic"
+     ]
+    },
+    {
+     "title": "Story 2: CLI Shim and Server-side Runtime",
+     "kind": "story",
+     "children": [
+      "Implement `coai-mcp --ask-local` command",
+      "Implement `LocalRuntime` in `src_mcp/runners/Reviewers/`",
+      "Add integration tests for the shim's request/response cycle"
+     ]
+    },
+    {
+     "title": "Story 3: Vendor Integration and Model Registry",
+     "kind": "story",
+     "children": [
+      "Add `local` runtime to `vendors.ts`",
+      "Update `models.ts` to support dynamic engine-driven model lists",
+      "Add tests for vendor/model mapping"
+     ]
+    },
+    {
+     "title": "Story 4: UI Integration and Security Guardrails",
+     "kind": "story",
+     "children": [
+      "Update `panelView.ts` with the local row (dropdown, endpoint, engine hint)",
+      "Implement `panelProvider.ts` probe logic and endpoint-keyed cache",
+      "Implement `isLoopback` security check and non-loopback warning",
+      "Add UI tests for row visibility and button hiding"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "All non-blocking questions will be collected and presented at the end of the final summary. A single batch of blocking questions will be asked immediately if encountered.",
+   "modelPolicy": "Fable (max) will be used for Story 1 (Engine/Parsing), Story 2 (Runtime/Shim), and Story 4 (Security/UI/Provider) because these involve critical data integrity, process boundaries, and security (loopback parsing). Opus will be used for Story 3 (Vendor/Model registry) as it is a standard configuration task."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_local_models",
+  "arm": "epic",
+  "verdict": "Stories",
+  "lines": 170,
+  "code": 0,
+  "seconds": 9.8,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 5,
+   "children": 13,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "implementation | implementation | implementation | implementation | testing"
+  },
+  "answerText": {
+   "approach": "I will implement the local model reviewer as a process-based shim using `coai-mcp --ask-local` to maintain the existing `IReviewerRuntime` architecture. This ensures strict timeout control and isolation without widening the core interface, treating the local inference call as a standard external process.",
+   "units": [
+    {
+     "title": "Core Engine Discovery",
+     "kind": "implementation",
+     "children": [
+      "Implement `localEngines.ts` with `/v1/models` and `api/tags` parsing",
+      "Implement engine probe logic with candidate base URL fallback",
+      "Implement error/reason reporting for unreachable hosts"
+     ]
+    },
+    {
+     "title": "Vendor and Model Integration",
+     "kind": "implementation",
+     "children": [
+      "Add `local` runtime to `vendors.ts`",
+      "Integrate dynamic model discovery into `models.ts`"
+     ]
+    },
+    {
+     "title": "UI/Panel Implementation",
+     "kind": "implementation",
+     "children": [
+      "Update `panelView.ts` with model dropdown, engine hint, and endpoint field",
+      "Update `panelProvider.ts` with endpoint-keyed probe cache and repaint logic",
+      "Implement loopback detection and non-loopback host warning"
+     ]
+    },
+    {
+     "title": "CLI Shim and Server Runtime",
+     "kind": "implementation",
+     "children": [
+      "Implement `coai-mcp --ask-local` command",
+      "Implement `LocalRuntime` on the server side to execute the shim"
+     ]
+    },
+    {
+     "title": "Verification and Documentation",
+     "kind": "testing",
+     "children": [
+      "Execute RED test suite (parsing, merging, probe failure, WSL case, UI state)",
+      "Verify shim request body (schema, temperature, seed) and token usage counting",
+      "Update `research/module_runners.md` with shim architectural justification"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "All blocking questions will be gathered and presented in a single batch after the final summary of the implementation phase.",
+   "modelPolicy": "A high-reasoning model (e.g., Claude 3.5 Sonnet or GPT-4o) will be used for architectural implementation and complex logic; a faster, cheaper model may be used for generating unit test boilerplate."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_engine_lease",
+  "arm": "plain",
+  "verdict": "Stories",
+  "lines": 128,
+  "code": 0,
+  "seconds": 10.2,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 5,
+   "children": 16,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "test_suite | logic_module | integration | ui_backend | validation"
+  },
+  "answerText": {
+   "approach": "A test-driven, bottom-up implementation strategy focusing on the atomic lock-file protocol and its recovery mechanisms before integrating into the shim and UI. The process moves from high-fidelity failure reproduction to robust kernel-independent synchronization, ending with observability enhancements.",
+   "units": [
+    {
+     "title": "RED: Failure Reproduction",
+     "kind": "test_suite",
+     "children": [
+      "Implement N-shim concurrency test against mock engine",
+      "Assert overlap and exit code failures"
+     ]
+    },
+    {
+     "title": "EngineLease Core Implementation",
+     "kind": "logic_module",
+     "children": [
+      "Implement atomic CreateNew lock file protocol",
+      "Implement PID + Heartbeat + Timestamp metadata structure",
+      "Implement stale lease recovery (PID liveness + heartbeat check)",
+      "Implement jittered retry logic for waiters",
+      "Implement EngineLease.Ahead() estimation logic"
+     ]
+    },
+    {
+     "title": "Shim Integration & Observability",
+     "kind": "integration",
+     "children": [
+      "Wrap HTTP calls in EngineLease lifecycle",
+      "Implement stderr heartbeat reporting (30s intervals)",
+      "Implement split failure sentences (waited-for-engine vs engine-slow)"
+     ]
+    },
+    {
+     "title": "Server & Panel UI Integration",
+     "kind": "ui_backend",
+     "children": [
+      "Integrate EngineLease.Ahead() into PanelService",
+      "Update PanelSettings for estimate rendering",
+      "Update LiveRound to display queued reviewer notes"
+     ]
+    },
+    {
+     "title": "Verification & Documentation",
+     "kind": "validation",
+     "children": [
+      "Execute 5-process parallel measurement against real engine",
+      "Generate performance/concurrency table",
+      "Update module_server.md and help articles"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will be asked only during the 'RED' phase if the failure mode is non-deterministic, or during 'EngineLease' if the OS-specific PID liveness edge cases (e.g., PID reuse) require architectural pivot.",
+   "modelPolicy": "O1-preview for architectural verification of the lock-file protocol and race condition analysis; GPT-4o for implementation of boilerplate, unit tests, and documentation updates."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_engine_lease",
+  "arm": "commands",
+  "verdict": "Stories",
+  "lines": 128,
+  "code": 0,
+  "seconds": 13,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 5,
+   "children": 11,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "test_suite | feature_set | integration | ui_integration | validation"
+  },
+  "answerText": {
+   "approach": "I will implement a robust, file-based distributed lock mechanism using atomic creation and PID/heartbeat liveness checks to ensure cross-process synchronization. The implementation will follow a strict 'test-driven-recovery' pattern, ensuring that stale leases are reclaimed and all exit paths (including crashes) are accounted for via the next waiter's recovery logic.",
+   "units": [
+    {
+     "title": "RED: Baseline Failure Test",
+     "kind": "test_suite",
+     "children": []
+    },
+    {
+     "title": "EngineLease Core Implementation",
+     "kind": "feature_set",
+     "children": [
+      "Atomic lock file creation with PID and heartbeat",
+      "Stale lease recovery logic (PID liveness + heartbeat check)",
+      "Waiter file mechanism for queueing",
+      "Ahead() estimation logic using history and waiter counts"
+     ]
+    },
+    {
+     "title": "Shim Integration and Observability",
+     "kind": "integration",
+     "children": [
+      "Wrap --ask-local HTTP calls with EngineLease",
+      "Implement 30s stderr heartbeat for wait duration",
+      "Split failure sentences (waited-for-engine vs engine-slow)"
+     ]
+    },
+    {
+     "title": "Panel and Server UI/UX",
+     "kind": "ui_integration",
+     "children": [
+      "PanelService: Inject 'Ahead' estimate into queued reviewer notes",
+      "Frontend: Render estimate/note for queued reviewers"
+     ]
+    },
+    {
+     "title": "Verification and Documentation",
+     "kind": "validation",
+     "children": [
+      "Five-process parallel measurement run",
+      "Update module_server.md and help articles"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "All non-blocking questions will be aggregated at the end. A single blocking question will be asked immediately if encountered, after a full scan of all stories.",
+   "modelPolicy": "Fable (Max) will be used for the 'EngineLease Core Implementation' and 'Shim Integration' due to the high cost of error in concurrency and synchronization. Opus will be used for 'RED Test', 'Panel/Server UI', and 'Verification/Docs'. The 'Split' operation will be performed by Fable (Max)."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_engine_lease",
+  "arm": "epic",
+  "verdict": "Stories",
+  "lines": 128,
+  "code": 0,
+  "seconds": 10.2,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 5,
+   "children": 14,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": false,
+   "namesOpus": true,
+   "kinds": "test | feature | feature | feature | verification"
+  },
+  "answerText": {
+   "approach": "Implement a robust, file-based distributed lock mechanism using atomic creation and PID/heartbeat liveness checks to coordinate multiple MCP processes. The implementation will follow a test-driven sequence, starting with a failure-inducing test and moving through the lease logic, shim integration, and finally the telemetry/estimation layer.",
+   "units": [
+    {
+     "title": "RED: Failure Test Case",
+     "kind": "test",
+     "children": []
+    },
+    {
+     "title": "EngineLease Core Implementation",
+     "kind": "feature",
+     "children": [
+      "Atomic file creation and metadata structure",
+      "PID and heartbeat liveness logic",
+      "Stale lease recovery with jittered retry",
+      "Waiter file management for queue tracking",
+      "Ahead(engineKey) estimation logic"
+     ]
+    },
+    {
+     "title": "Shim Integration",
+     "kind": "feature",
+     "children": [
+      "Wrap HTTP calls with EngineLease",
+      "Stderr heartbeat/wait reporting (30s interval)",
+      "Split failure messages (waited-for-engine vs engine-slow)"
+     ]
+    },
+    {
+     "title": "Panel & Telemetry Integration",
+     "kind": "feature",
+     "children": [
+      "PanelService: Inject 'Ahead' estimate into queued notes",
+      "PanelSettings/LiveRound: Render estimate in UI",
+      "Usage.jsonl: Ensure duration recording for rolling average"
+     ]
+    },
+    {
+     "title": "Verification & Measurement",
+     "kind": "verification",
+     "children": [
+      "Unit tests for all EngineLease edge cases",
+      "Manual 5-process parallel run against real engine",
+      "Documentation updates (module_server.md)"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "All non-blocking questions will be gathered and presented at the end of the final summary. A single batch of blocking questions will be asked immediately if encountered after the first unit's analysis.",
+   "modelPolicy": "Claude 3.5 Sonnet for architectural implementation and code generation; Claude 3 Opus for deep reasoning during the 'RED' test analysis and complex concurrency edge-case verification."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_round_card_detail",
+  "arm": "plain",
+  "verdict": "Stories",
+  "lines": 122,
+  "code": 0,
+  "seconds": 8.6,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 4,
+   "children": 12,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "backend_engine | extension_logic | ui_component | ui_styling"
+  },
+  "answerText": {
+   "approach": "A bottom-up implementation strategy starting with the C# backend data persistence, moving through the TypeScript view-state and rendering logic, and concluding with CSS/Documentation updates. This ensures the data contract is established before the UI attempts to consume it, preventing type mismatches.",
+   "units": [
+    {
+     "title": "Backend: Data Model & Persistence",
+     "kind": "backend_engine",
+     "children": [
+      "Update ReviewerState in SessionStore.cs",
+      "Implement duration capture in LiveRound.Report",
+      "Add unit tests for SessionStore and LiveRound persistence"
+     ]
+    },
+    {
+     "title": "Frontend: Data Contract & State",
+     "kind": "extension_logic",
+     "children": [
+      "Update TypeScript interfaces for ReviewerState",
+      "Update PanelState to handle optional seconds field"
+     ]
+    },
+    {
+     "title": "Frontend: Rendering Engine",
+     "kind": "ui_component",
+     "children": [
+      "Update reviewerLines to render duration strings",
+      "Refactor roundCard to use <details>/<summary> with conditional 'open' attribute",
+      "Implement CAPTURE phase toggle listener on document",
+      "Update unit tests for rounds.ts and panelView.ts"
+     ]
+    },
+    {
+     "title": "Frontend: Layout & UX",
+     "kind": "ui_styling",
+     "children": [
+      "Update CSS for #live-rounds max-height (640px)",
+      "Update helpContent and localized help files",
+      "Update module_extension.md and module_server.md"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will be asked only at the transition between 'Backend' and 'Frontend' units if the data contract requires clarification, or if a conflict is detected between the existing 'running' state logic and the new '<details>' DOM structure.",
+   "modelPolicy": "GPT-4o for architectural orchestration and C# backend logic; Claude 3.5 Sonnet for TypeScript rendering logic, CSS, and documentation to ensure high-fidelity UI/UX implementation."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_round_card_detail",
+  "arm": "commands",
+  "verdict": "Stories",
+  "lines": 122,
+  "code": 0,
+  "seconds": 9.8,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 4,
+   "children": 15,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "story | story | story | story"
+  },
+  "answerText": {
+   "approach": "I will decompose the plan into 4 logical stories, prioritizing data integrity and architectural stability by using Fable for server-side and state-critical logic, and Opus for UI/UX implementation. Each story will follow a strict cycle of implementation, review, test-driven verification, documentation, and commit before proceeding.",
+   "units": [
+    {
+     "title": "Story 1: Server-side Duration Persistence",
+     "kind": "story",
+     "children": [
+      "Implement ReviewerState.Seconds in SessionStore.cs",
+      "Update LiveRound.Report to capture and persist elapsed time",
+      "Add unit tests for session file compatibility and non-erasure of finished durations",
+      "Update module_server.md"
+     ]
+    },
+    {
+     "title": "Story 2: Extension State and Data Contract",
+     "kind": "story",
+     "children": [
+      "Update TypeScript interfaces for ReviewerState to include optional seconds",
+      "Implement logic to handle absent duration in the extension",
+      "Update module_extension.md"
+     ]
+    },
+    {
+     "title": "Story 3: UI Transformation - Details and Duration Rendering",
+     "kind": "story",
+     "children": [
+      "Update reviewerLines to render duration strings",
+      "Refactor roundCard to use <details>/<summary> with conditional 'open' attribute",
+      "Implement CSS update for #live-rounds height (640px)",
+      "Add unit tests for DOM structure and attribute presence",
+      "Update help content (helpRu, helpUk, helpDe, helpEs)"
+     ]
+    },
+    {
+     "title": "Story 4: Documentation and Release Manifest",
+     "kind": "story",
+     "children": [
+      "Finalize CHANGELOG.md",
+      "Update manifest",
+      "Final integration test pass"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will only be asked if a blocking ambiguity is encountered that cannot be resolved via the provided constraints or logical deduction. All non-blocking questions will be aggregated at the end of the final summary.",
+   "modelPolicy": "Fable (max) will be used for Story 1 and Story 2 (Data/Architecture/Server). Opus will be used for Story 3 and Story 4 (UI/Docs/Tests)."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_round_card_detail",
+  "arm": "epic",
+  "verdict": "Stories",
+  "lines": 122,
+  "code": 0,
+  "seconds": 12.6,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 6,
+   "children": 15,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "implementation | implementation | implementation | implementation | implementation | documentation"
+  },
+  "answerText": {
+   "approach": "A sequential implementation following the build order, moving from the C# backend data persistence to the TypeScript frontend rendering and finally the documentation/CSS updates. Each unit will be verified against the specific 'What must be true' constraints before proceeding.",
+   "units": [
+    {
+     "title": "Backend: Reviewer Duration Persistence",
+     "kind": "implementation",
+     "children": [
+      "Update ReviewerState in SessionStore.cs",
+      "Update LiveRound.Report to populate ReviewerState.Seconds from ReviewerProgress.Elapsed",
+      "Add unit tests in LiveRoundTests.cs for duration persistence and non-erasure"
+     ]
+    },
+    {
+     "title": "Frontend: Data Model & Type Extension",
+     "kind": "implementation",
+     "children": [
+      "Add optional 'seconds' field to the extension-side round/reviewer interfaces"
+     ]
+    },
+    {
+     "title": "Frontend: Reviewer Line Rendering",
+     "kind": "implementation",
+     "children": [
+      "Update reviewerLines to include duration string when 'seconds' is present"
+     ]
+    },
+    {
+     "title": "Frontend: Round Card Disclosure & State",
+     "kind": "implementation",
+     "children": [
+      "Refactor roundCard to use <details>/<summary> structure",
+      "Implement logic to apply 'open' attribute to <details> when round is running",
+      "Ensure reviewerLines are rendered inside the <details> body",
+      "Add CAPTURE phase toggle listener to document to handle <details> state persistence across patches"
+     ]
+    },
+    {
+     "title": "Frontend: UI Layout & Help",
+     "kind": "implementation",
+     "children": [
+      "Update CSS for #live-rounds max-height to 640px",
+      "Update helpContent/helpRu/helpUk/helpDe/helpEs to describe round expansion",
+      "Add npm tests for the new rendering logic and CSS"
+     ]
+    },
+    {
+     "title": "Documentation & Release",
+     "kind": "documentation",
+     "children": [
+      "Update module_extension.md (disclosure logic)",
+      "Update module_server.md (per-reviewer duration)",
+      "Update manifest and CHANGELOG"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "All questions will be gathered and presented in a single batch after the first unit is completed or if a fundamental architectural blocker is encountered.",
+   "modelPolicy": "GPT-4o for architectural reasoning and C# backend logic; Claude 3.5 Sonnet for TypeScript/CSS/HTML rendering and frontend unit tests; GPT-4o for final documentation and changelog synthesis."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_provider_liveness",
+  "arm": "plain",
+  "verdict": "Stories",
+  "lines": 70,
+  "code": 0,
+  "seconds": 10.6,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 6,
+   "children": 15,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "test_suite | engine | storage | service | ui | doc"
+  },
+  "answerText": {
+   "approach": "Implement a tiered liveness detection system that prioritizes static diagnosis, then cached live probes, and finally version checks to distinguish between installed and functional states. The architecture will utilize a non-redundant execution path by reusing the existing ReviewerExecutor to minimize process overhead and token consumption.",
+   "units": [
+    {
+     "title": "Test Infrastructure: Red Phase",
+     "kind": "test_suite",
+     "children": [
+      "Mock launcher implementation for version/refusal simulation",
+      "Test cases for incorrect 'own auth' reporting",
+      "Test cases for cache hit/miss logic"
+     ]
+    },
+    {
+     "title": "Core Logic: LivenessProbe Implementation",
+     "kind": "engine",
+     "children": [
+      "Define Answered | Refused | NotStarted enum/types",
+      "Implement LivenessProbe using IReviewerRuntime and ReviewerExecutor",
+      "Integrate minimal 'OK' prompt logic"
+     ]
+    },
+    {
+     "title": "Persistence: Liveness Cache",
+     "kind": "storage",
+     "children": [
+      "Implement timestamped file-based cache in server data directory",
+      "Implement cache expiration logic (1-hour TTL)"
+     ]
+    },
+    {
+     "title": "Service Integration: PanelService Refactor",
+     "kind": "service",
+     "children": [
+      "Update ProbeAsync logic: Diagnosis -> Cache -> Liveness -> Version",
+      "Implement 'refresh' argument handling for forced probes",
+      "Update VendorDiagnosis lookup table integration"
+     ]
+    },
+    {
+     "title": "Frontend: Panel UI Update",
+     "kind": "ui",
+     "children": [
+      "Update Reviewers view to display three distinct states",
+      "Update status wording for 'installed' vs 'answered'"
+     ]
+    },
+    {
+     "title": "Documentation & Final Validation",
+     "kind": "doc",
+     "children": [
+      "Update research/module_server.md with new state machine",
+      "Final end-to-end integration test"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will be asked only during the 'Core Logic' phase if the interface between LivenessProbe and ReviewerExecutor presents an ambiguity that violates the 'reuse-first' constraint.",
+   "modelPolicy": "GPT-4o for architectural orchestration and UI/Doc updates; Claude 3.5 Sonnet for deep C# logic implementation and complex test-driven development (TDD) cycles."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_provider_liveness",
+  "arm": "commands",
+  "verdict": "Stories",
+  "lines": 70,
+  "code": 0,
+  "seconds": 11.3,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 4,
+   "children": 12,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "story | story | story | story"
+  },
+  "answerText": {
+   "approach": "I will implement a tiered liveness detection system that transitions from static version checks to active token-based probes, utilizing a time-windowed cache to minimize latency and cost. The architecture will prioritize the diagnosis table and cache before falling back to process execution, ensuring the `providers` view accurately reflects the 'answered' vs 'installed' state.",
+   "units": [
+    {
+     "title": "Core Liveness Logic & State Definition",
+     "kind": "story",
+     "children": [
+      "Define Answered | Refused | NotStarted states in the domain",
+      "Implement LivenessProbe using IReviewerRuntime and existing ReviewerExecutor",
+      "Implement the liveness probe logic (smallest possible prompt round-trip)"
+     ]
+    },
+    {
+     "title": "Caching & Probe Orchestration",
+     "kind": "story",
+     "children": [
+      "Implement file-based cache in server data directory with TTL (1 hour)",
+      "Update ProbeAsync to follow the hierarchy: Diagnosis -> Cache -> --version -> Live Probe",
+      "Implement 'refresh' argument logic for the providers tool"
+     ]
+    },
+    {
+     "title": "UI/API Integration & Documentation",
+     "kind": "story",
+     "children": [
+      "Update PanelService.cs to expose the three distinct states in JSON",
+      "Update Panel frontend to display distinct wording for 'installed' vs 'answered'",
+      "Update research/module_server.md with the new state machine logic"
+     ]
+    },
+    {
+     "title": "Verification & Regression Suite",
+     "kind": "story",
+     "children": [
+      "Implement RED tests for the current defect (version-only success)",
+      "Implement cache-hit/miss assertion tests",
+      "Implement timeout and refusal handling tests"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will be aggregated and presented only when a blocking ambiguity is encountered that cannot be resolved via the provided research docs or the plan's hierarchy.",
+   "modelPolicy": "Fable (max) will be used for the 'Core Liveness Logic' (architectural integrity/state machine) and 'Caching & Probe Orchestration' (data consistency/concurrency). Opus will be used for 'UI/API Integration' and 'Verification & Regression Suite'."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_provider_liveness",
+  "arm": "epic",
+  "verdict": "Stories",
+  "lines": 70,
+  "code": 0,
+  "seconds": 11.5,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 5,
+   "children": 13,
+   "inRange": false,
+   "twoLevel": true,
+   "shapeAsOrdered": false,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "implementation | implementation | implementation | implementation | testing"
+  },
+  "answerText": {
+   "approach": "Implement a tiered liveness detection system that prioritizes static diagnosis and cached results before falling back to version checks and expensive live probes. The architecture will integrate a new LivenessProbe component into the existing ReviewerExecutor pipeline to ensure process reuse and minimize token consumption.",
+   "units": [
+    {
+     "title": "Core Liveness Logic & Interface",
+     "kind": "implementation",
+     "children": [
+      "Define LivenessProbe result types (Answered, Refused, NotStarted)",
+      "Implement LivenessProbe using ReviewerExecutor for process reuse",
+      "Implement minimal 'OK' prompt logic"
+     ]
+    },
+    {
+     "title": "Caching Layer",
+     "kind": "implementation",
+     "children": [
+      "Implement file-based cache in server data directory",
+      "Implement TTL logic (1 hour) and timestamping"
+     ]
+    },
+    {
+     "title": "PanelService Integration",
+     "kind": "implementation",
+     "children": [
+      "Update ProbeAsync logic: Diagnosis -> Cache -> --version -> Live Probe",
+      "Implement 'refresh' argument handling in providers tool",
+      "Update provider state mapping to include 'installed' vs 'answered'"
+     ]
+    },
+    {
+     "title": "Frontend/Panel UI Update",
+     "kind": "implementation",
+     "children": [
+      "Update Reviewers rows to display three distinct states",
+      "Ensure visual distinction between 'installed' and 'answered'"
+     ]
+    },
+    {
+     "title": "Verification & Documentation",
+     "kind": "testing",
+     "children": [
+      "Red-Green-Refactor test suite (Fake launcher for version/refusal/timeout)",
+      "Cache hit/miss and refresh validation",
+      "Update research/module_server.md"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "All non-blocking questions will be aggregated and presented at the end of the final summary. A single block will be issued only if a critical architectural ambiguity is encountered that prevents the start of the first unit.",
+   "modelPolicy": "GPT-4o for architectural orchestration and complex C# logic; Claude 3.5 Sonnet for high-precision unit test generation and frontend/JSON mapping; local/specialized models for documentation refinement."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_escalation_loopback",
+  "arm": "plain",
+  "verdict": "AsItIs",
+  "lines": 89,
+  "code": 0,
+  "seconds": 8.1,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 4,
+   "children": 13,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": true,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "specification | module | module | test_suite"
+  },
+  "answerText": {
+   "approach": "A file-based synchronization protocol using atomic JSON writes and directory watchers to bridge the server-extension gap without network overhead. Implementation follows a bottom-up strategy: defining the file schema, implementing the server-side blocking logic with timeouts, and finally the extension-side UI/watcher loop.",
+   "units": [
+    {
+     "title": "Protocol Definition & Schema",
+     "kind": "specification",
+     "children": [
+      "Define JSON schema for escalation and answer files",
+      "Define timeout configuration constants (minutes/seconds)"
+     ]
+    },
+    {
+     "title": "Server-Side Implementation",
+     "kind": "module",
+     "children": [
+      "Implement file-based escalation writer",
+      "Implement polling/watcher logic for answer file detection",
+      "Implement timeout and malformed-file handling logic",
+      "Replace static refusal in Tools.cs with ask_human logic"
+     ]
+    },
+    {
+     "title": "Extension-Side Implementation",
+     "kind": "module",
+     "children": [
+      "Implement FileSystemWatcher for escalation directory",
+      "Implement atomic answer writing (temp + rename)",
+      "Implement VS Code Modal UI and status-bar/rounds-view integration",
+      "Implement 'already answered' idempotency check"
+     ]
+    },
+    {
+     "title": "Integration & Verification",
+     "kind": "test_suite",
+     "children": [
+      "Execute server-side unit tests (timeouts, concurrency, malformed files)",
+      "Execute extension-side UI tests (modal dismissal, atomic writes)",
+      "End-to-end loopback verification"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will be asked only during the 'Protocol Definition' phase if schema ambiguities exist, or if a hardware/OS-specific FileSystemWatcher limitation is detected during implementation.",
+   "modelPolicy": "GPT-4o for architectural orchestration and schema design; Claude 3.5 Sonnet for high-precision C# (Server) and TypeScript (Extension) implementation; DeepSeek-V3 for rapid unit test generation and edge-case analysis."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_escalation_loopback",
+  "arm": "commands",
+  "verdict": "AsItIs",
+  "lines": 89,
+  "code": 0,
+  "seconds": 8.5,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 3,
+   "children": 9,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": true,
+   "epicWord": true,
+   "storyWord": true,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "epic | epic | epic"
+  },
+  "answerText": {
+   "approach": "I will implement a file-based synchronization protocol using a directory watcher and atomic file writes to ensure robust human-in-the-loop escalation without network overhead. The implementation will follow a strict 'test-driven, review-driven' cycle where each story is fully validated, documented, and committed before proceeding.",
+   "units": [
+    {
+     "title": "Epic: Escalation File Protocol (Server-Side)",
+     "kind": "epic",
+     "children": [
+      "Story 1.1: Implement `ask_human` file writing and polling logic (Fable)",
+      "Story 1.2: Implement timeout and malformed file handling (Fable)",
+      "Story 1.3: Implement concurrency and session isolation (Fable)",
+      "Story 1.4: Update `Tools.cs` and `module_server.md` (Opus)"
+     ]
+    },
+    {
+     "title": "Epic: Extension UI and Response (Client-Side)",
+     "kind": "epic",
+     "children": [
+      "Story 2.1: Implement directory watcher and modal trigger (Opus)",
+      "Story 2.2: Implement atomic answer writing and duplicate prevention (Fable)",
+      "Story 2.3: Implement status-bar and open-questions UI (Opus)"
+     ]
+    },
+    {
+     "title": "Epic: Integration and End-to-End Verification",
+     "kind": "epic",
+     "children": [
+      "Story 3.1: Full loopback integration test (Fable)",
+      "Story 3.2: Stress test: concurrent escalations and server restarts (Fable)"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will be aggregated and presented only when a blocking ambiguity is identified after a full review of all planned epics and stories. Non-blocking questions will be appended to the final summary.",
+   "modelPolicy": "Fable will be used for all architectural, security, data-integrity, and concurrency-sensitive stories (1.1, 1.2, 1.3, 2.2, 3.1, 3.2). Opus will be used for UI, documentation, and standard logic stories (1.4, 2.1, 2.3)."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_escalation_loopback",
+  "arm": "epic",
+  "verdict": "AsItIs",
+  "lines": 89,
+  "code": 0,
+  "seconds": 8.4,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 3,
+   "children": 12,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": true,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "implementation | implementation | verification"
+  },
+  "answerText": {
+   "approach": "I will implement a file-based synchronization protocol using a directory watcher and atomic file operations to ensure robust communication between the server and the extension without network overhead. The implementation will focus on a 'write-poll-respond' cycle using unique IDs to prevent cross-talk and handle timeouts/malformed files gracefully.",
+   "units": [
+    {
+     "title": "Server-side: Escalation File Protocol Implementation",
+     "kind": "implementation",
+     "children": [
+      "Define escalation file schema and ID generation",
+      "Implement `ask_human` logic with file writing and polling loop",
+      "Implement timeout logic using `COAI_ESCALATION_MINUTES/SECONDS`",
+      "Update `Tools.cs` to replace static refusal with the new protocol",
+      "Update `module_server.md` documentation"
+     ]
+    },
+    {
+     "title": "Extension-side: UI and File Watcher Implementation",
+     "kind": "implementation",
+     "children": [
+      "Implement directory watcher for `escalations/`",
+      "Implement atomic answer writing (temp + rename)",
+      "Implement VS Code modal UI and status-bar/rounds-view integration",
+      "Implement 'prompt-once-per-id' logic to prevent duplicate modals"
+     ]
+    },
+    {
+     "title": "Integration and End-to-End Testing",
+     "kind": "verification",
+     "children": [
+      "Execute all 12 defined test cases (6 server, 6 extension)",
+      "Verify timeout behavior and malformed file resilience",
+      "Verify concurrency handling with multiple IDs"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "All blocking questions will be gathered and presented in a single batch after the first full analysis of the existing codebase to ensure no redundant interruptions.",
+   "modelPolicy": "A high-reasoning model (e.g., o1/Claude 3.5 Sonnet) will be used for architectural logic and protocol design; a high-speed coding model will be used for boilerplate and unit test generation."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_panel_probing_state",
+  "arm": "plain",
+  "verdict": "AsItIs",
+  "lines": 85,
+  "code": 0,
+  "seconds": 11.5,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 4,
+   "children": 11,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": true,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "architectural_definition | implementation | implementation | validation"
+  },
+  "answerText": {
+   "approach": "Refactor the rendering pipeline to decouple state publication from asynchronous probe resolution by introducing an intermediate 'probing' state. This ensures the UI reflects immediate user intent (e.g., clicking refresh) before awaiting high-latency I/O operations.",
+   "units": [
+    {
+     "title": "State Model Expansion",
+     "kind": "architectural_definition",
+     "children": [
+      "Define 'probing' status in PanelState models",
+      "Update models.ts to support granular probe tracking (which specific probe is active)",
+      "Ensure staticKey logic accommodates the new state without triggering full repaints"
+     ]
+    },
+    {
+     "title": "Render Pipeline Refactor",
+     "kind": "implementation",
+     "children": [
+      "Modify panelProvider.ts to publish 'probing' state immediately upon render call",
+      "Wrap probe awaits in try/finally blocks to ensure state is cleared/updated regardless of outcome",
+      "Implement logic to prevent 'probing' state from outliving the probe (handling timeouts/failures)"
+     ]
+    },
+    {
+     "title": "UI/Markup Integration",
+     "kind": "implementation",
+     "children": [
+      "Update panelView.ts to render visual indicators (spinners/labels) for the 'probing' state",
+      "Verify live-region/patching behavior to prevent flickering during state transitions"
+     ]
+    },
+    {
+     "title": "Verification & Regression",
+     "kind": "validation",
+     "children": [
+      "Implement unit tests for state transition: Idle -> Probing -> Result/Failure",
+      "Implement integration tests simulating hung/slow probes to verify 'finally' block execution",
+      "Verify 'staticKey' stability to ensure patch-based updates"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will be asked only during the 'architectural_definition' phase if the existing `staticKey` implementation presents a conflict with the new state model, or if the granularity of probe tracking is ambiguous.",
+   "modelPolicy": "GPT-5.6-Luna for architectural reasoning and complex state machine logic; Codex for high-speed implementation of boilerplate and unit test scaffolding."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_panel_probing_state",
+  "arm": "commands",
+  "verdict": "AsItIs",
+  "lines": 85,
+  "code": 0,
+  "seconds": 9,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 3,
+   "children": 10,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": true,
+   "epicWord": true,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": true,
+   "namesFable": true,
+   "namesOpus": true,
+   "kinds": "epic | epic | epic"
+  },
+  "answerText": {
+   "approach": "I will refactor the rendering pipeline to decouple state publication from probe resolution, ensuring a 'probing' state is emitted immediately before any asynchronous await. This involves transforming the monolithic `render` function into a non-blocking state machine that manages lifecycle transitions (Idle -> Probing -> Settled/Error) using `finally` blocks to prevent state leakage.",
+   "units": [
+    {
+     "title": "Define Probing State in Models",
+     "kind": "epic",
+     "children": [
+      "Extend `PanelState` with a `probing` field or status enum",
+      "Update `models.ts` to support granular probing indicators (which probe is active)",
+      "Implement tests for state transition logic"
+     ]
+    },
+    {
+     "title": "Refactor Render Pipeline for Non-Blocking Probes",
+     "kind": "epic",
+     "children": [
+      "Modify `panelProvider.ts` to publish 'probing' state before `await` calls",
+      "Wrap probe executions in `try...finally` to ensure state clearance",
+      "Implement concurrent probe management to prevent `render` from blocking the main thread",
+      "Update `panelView.ts` to handle the new probing state in the markup"
+     ]
+    },
+    {
+     "title": "Integration and UX Verification",
+     "kind": "epic",
+     "children": [
+      "Verify `staticKey` behavior to ensure 'probing' is a patch, not a full repaint",
+      "Implement integration tests for hanging/failing probes",
+      "Update `research/module_extension.md` with the new state machine specification"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "Questions will be aggregated and presented only when a blocking dependency is identified or when a critical architectural assumption (e.g., the specific shape of the `probing` state in `PanelState`) requires operator confirmation to prevent wasted computation.",
+   "modelPolicy": "Fable (max) will be used for all units involving `PanelState` architecture, `render` pipeline refactoring, and concurrency logic to ensure zero-error state transitions. Opus will be used for markup updates, documentation, and standard unit test expansion."
+  }
+ },
+ {
+  "run": "B",
+  "model": "Gemma4-26B-A4B-Uncensored_vk128:latest",
+  "plan": "PLAN_panel_probing_state",
+  "arm": "epic",
+  "verdict": "AsItIs",
+  "lines": 85,
+  "code": 0,
+  "seconds": 8.2,
+  "error": "",
+  "score": {
+   "ok": true,
+   "units": 4,
+   "children": 11,
+   "inRange": true,
+   "twoLevel": true,
+   "shapeAsOrdered": true,
+   "epicWord": false,
+   "storyWord": false,
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "mentionsReview": true,
+   "mentionsCommit": true,
+   "batchesQuestions": false,
+   "namesFable": false,
+   "namesOpus": false,
+   "kinds": "refactor | implementation | implementation | test"
+  },
+  "answerText": {
+   "approach": "Refactor the rendering pipeline to decouple state publication from probe resolution by introducing an intermediate 'probing' state in the PanelState. This ensures the UI reflects active work immediately before entering any asynchronous await blocks, using a try-finally pattern to guarantee state cleanup.",
+   "units": [
+    {
+     "title": "State Model Expansion",
+     "kind": "refactor",
+     "children": [
+      "Update `models.ts` to include probing status in `PanelState`",
+      "Ensure `staticKey` and `liveRegions` logic supports partial state updates without full repaints"
+     ]
+    },
+    {
+     "title": "Asynchronous Render Orchestration",
+     "kind": "implementation",
+     "children": [
+      "Modify `panelProvider.ts` to publish 'probing' state before `probeLocalEngines` and other awaits",
+      "Implement `finally` blocks to clear probing state and publish final results/failures",
+      "Integrate probing state into `cliVersions` and price table await paths"
+     ]
+    },
+    {
+     "title": "View Layer Integration",
+     "kind": "implementation",
+     "children": [
+      "Update `panelView.ts` to render the 'looking' indicator/spinner based on the new state",
+      "Verify CSS/markup for the probing state to ensure no flicker occurs"
+     ]
+    },
+    {
+     "title": "Verification and Documentation",
+     "kind": "test",
+     "children": [
+      "Unit tests for state transitions (Idle -> Probing -> Result/Failure)",
+      "Integration test: Mock a hanging probe and verify 'probing' state is published and then cleared",
+      "Integration test: Mock a failed probe and verify 'probing' state is cleared and error is shown",
+      "Update `research/module_extension.md` with the new state machine definition"
+     ]
+    }
+   ],
+   "reviewsEachUnit": true,
+   "commitsEachUnit": true,
+   "questionPolicy": "All questions will be gathered and presented in a single batch only when a blocking dependency is encountered that cannot be resolved via architectural assumption.",
+   "modelPolicy": "GPT-4o for architectural analysis and state machine design; Claude 3.5 Sonnet for high-precision TypeScript implementation and test generation."
+  }
+ }
+]

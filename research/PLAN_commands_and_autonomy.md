@@ -1,6 +1,7 @@
 # PLAN — the gate can give ORDERS, and three switches decide which
 
-> Status: **IMPLEMENTED, 2026-09-03.**
+> Status: **IMPLEMENTED, 2026-09-03.** Extended 2026-09-04 with the loop's floor and measured on the
+> real corpus — see *What came back the next day*, at the end.
 >
 > **What the two rounds changed.** The plan round tightened the contract: the split command belongs to
 > the PLAN stage only (a code round has a diff and no plan, so a verdict computed there would be a
@@ -138,3 +139,30 @@ snippet contains the commands paragraph and its version is newer than the previo
 - [ ] A switch flipped one second before a call governs that call, with a test that says so.
 - [ ] The snippet tells a target repository's AI that commands exist and outrank its habits.
 - [ ] `CoaiMcp.Tests.exe` and `npm test` pass; docs, help and CHANGELOG updated; the plan promoted.
+
+## What came back the next day (2026-09-04)
+
+The operator asked two questions of the shipped feature, and both were right.
+
+**"Are the switches only fired on plan creation — and if the box is off, does nothing go?"** Yes, and
+there are now tests that say so through the whole server rather than only over the pure function:
+`SplitOrderTests` runs real plan rounds and asserts an empty `commands` with the box unticked, the
+order present with it ticked, and — the case that had already been fixed once — nothing at all on a
+plan the gate sent back to `revise`.
+
+**"When an epic comes back for its own plan review, do we tell it to split again? That process would
+be infinite."** It would have. The floor is now `CallerSessions`: the order is given ONCE per calling
+AI, identified by `CLAUDE_CODE_SESSION_ID` — Claude Code exports it to every child it spawns, and an
+MCP server on stdio is one of those children. A per-session memory could not have worked: our session
+is repo+branch and its plan stage happens once, so an epic can only return as a different session on
+its own branch. A caller already inside a split is told it is a piece and must build as one unit.
+
+**And a defect the end-to-end test found on its first run:** the split verdict was computed from
+`session.PlanText` — the plan of the PREVIOUS round, which is empty on the first plan round, i.e. the
+ordinary case. Every command therefore carried *"Measured from the plan you sent: 0 lines, 0 build
+step(s), 0 file(s) named"* and told the AI its 400-line plan was small enough to build as it stands.
+One word; the reason it survived the original review is that the pure tests passed the plan in
+directly and only the server had it wrong.
+
+Measured rather than asserted: 66 calls, 11 real plans, three arms, two models —
+[`RESULTS_commands_campaign.md`](RESULTS_commands_campaign.md).

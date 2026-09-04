@@ -14,13 +14,20 @@ namespace CoaiMcp.Core.Commands;
 /// Whether this is the PLAN gate. A code round has a diff and no plan, so a split verdict computed
 /// there would be a number invented from source — raised twice in this change's plan round.
 /// </param>
+/// <param name="FirstPlanRound">
+/// Whether this is the first plan round of this session. The order to SPLIT is given ONCE: an epic
+/// that comes back for its own plan review is already the product of a split, and telling it to
+/// split again is a loop with no floor — epics of epics, for ever. Raised by the operator before it
+/// could happen.
+/// </param>
 public sealed record CommandContext(
     bool Autonomous = false,
     bool SplitPlan = false,
     bool SplitWithFable = false,
     bool FableAvailable = false,
     string PlanText = "",
-    bool PlanStage = false);
+    bool PlanStage = false,
+    bool FirstPlanRound = true);
 
 /// <summary>
 /// The orders a round hands back with its verdict.
@@ -42,15 +49,26 @@ public static class GateCommands
             + "and they outrank your own defaults for this task. Follow them, and say in your summary "
             + "which ones you applied.";
 
+    /// <summary>
+    /// Whether this call actually ORDERS a split — the one thing the caller has to remember.
+    /// </summary>
+    /// <remarks>
+    /// Public because the server records the order and must record exactly what was given, never a
+    /// second copy of the same condition. Two copies of one question is how the surface-name check
+    /// ended up with three, one of which refused every leg of a measured arm.
+    /// </remarks>
+    public static bool OrdersSplit(CommandContext context) =>
+        context.SplitPlan && context.PlanStage && context.FirstPlanRound;
+
     /// <summary>The orders for this call, in the order they are meant to be carried out.</summary>
     public static IReadOnlyList<string> For(CommandContext context)
     {
         var commands = new List<string>();
         if (context.SplitPlan && context.PlanStage)
         {
-            commands.Add(SplitCommand(context));
+            commands.Add(OrdersSplit(context) ? SplitCommand(context) : AlreadySplitCommand);
         }
-        if (context.SplitPlan && context.PlanStage && context.SplitWithFable && context.FableAvailable)
+        if (OrdersSplit(context) && context.SplitWithFable && context.FableAvailable)
         {
             commands.Add(FableCommand);
         }
@@ -89,6 +107,21 @@ public static class GateCommands
             + "the next one. A story that is not reviewed, documented, tested and committed is not "
             + "finished.";
     }
+
+    /// <summary>
+    /// From the second plan round on: this plan is a PIECE of a split, not a plan to split again.
+    /// </summary>
+    /// <remarks>
+    /// Without this the loop has no floor. A plan is split into epics; each epic comes back for its
+    /// own plan review, which is the right thing to do; and the gate, having no memory of the first
+    /// order, tells it to split into epics again. The operator saw it before it could happen — and
+    /// it is why the split order is a once-per-session thing rather than a per-round one.
+    /// </remarks>
+    private const string AlreadySplitCommand =
+        "This plan is a PIECE of a split that is already under way, so do NOT split it again: build "
+            + "it as one unit, review its diff through this gate, fix, document, test and commit. If "
+            + "it is genuinely too big for one unit, say so in your summary and say what you would "
+            + "have cut it into — but do not start a second round of splitting on your own.";
 
     /// <summary>Which model does which half, when Fable is here.</summary>
     private const string FableCommand =

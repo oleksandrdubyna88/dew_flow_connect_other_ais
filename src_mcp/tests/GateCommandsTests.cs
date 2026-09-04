@@ -183,4 +183,93 @@ public sealed class GateCommandsTests
     [Fact]
     public void TheCommandsSayTheyMustBeFollowed() =>
         GateCommands.Preamble.Should().Contain("outrank").And.Contain("operator");
+
+    // ---------- the loop, and its floor ----------
+
+    [Fact]
+    public void AnEpicComingBack_IsToldItIsAPiece_NotToSplitAgain()
+    {
+        // The operator's question, and the whole reason FirstPlanRound exists: a plan is split into
+        // epics, each epic comes back for its own plan review, and a gate with no memory tells each
+        // one to split into epics. Epics of epics, for ever.
+        var again = GateCommands.For(new CommandContext(
+            SplitPlan: true, PlanText: PlanOf(lines: 554, steps: 7, files: 8, areas: 2),
+            PlanStage: true, FirstPlanRound: false));
+
+        again.Should().ContainSingle();
+        again[0].Should().Contain("do NOT split it again").And.Contain("as one unit");
+        again[0].Should().NotContain("EPICS").And.NotContain("STORIES");
+    }
+
+    [Fact]
+    public void TheAlreadySplitOrder_StillSaysWhatToDoWithEachPiece()
+    {
+        // "Do not split" must not read as "do not review": the per-unit loop is the valuable half
+        // of the order and it applies to a piece exactly as it applies to a story.
+        var again = GateCommands.For(new CommandContext(
+            SplitPlan: true, PlanText: SmallPlan, PlanStage: true, FirstPlanRound: false))[0];
+
+        again.Should().Contain("review its diff").And.Contain("commit");
+        again.Should().Contain("say so in your summary", "an oversized piece is reported, not silently built");
+    }
+
+    [Fact]
+    public void AnEpicComingBack_IsNeverToldToSplitItWithFable()
+    {
+        // The Fable order is about the SPLIT — "do the splitting with Fable". Handed to a piece
+        // that must not be split, it is an instruction with nothing to apply to.
+        var again = GateCommands.For(new CommandContext(
+            SplitPlan: true, SplitWithFable: true, FableAvailable: true,
+            PlanText: SmallPlan, PlanStage: true, FirstPlanRound: false));
+
+        again.Should().ContainSingle();
+        string.Join(' ', again).Should().NotContain("Fable");
+    }
+
+    [Fact]
+    public void TheAutonomyOrder_SurvivesTheEpic()
+    {
+        // Autonomy is not part of the split and has no reason to stop when the split does — a
+        // second interruption policy halfway through a task is the opposite of what was asked for.
+        var again = GateCommands.For(new CommandContext(
+            Autonomous: true, SplitPlan: true, PlanText: SmallPlan, PlanStage: true, FirstPlanRound: false));
+
+        again.Should().HaveCount(2);
+        again[1].Should().Contain("AUTONOMOUSLY");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void WithTheSplitSwitchOff_NeitherOrderIsGiven(bool firstRound)
+    {
+        // The operator's first question: with the box unticked, nothing goes — not the split order,
+        // and not the "you are a piece" order either, which would be a command about a feature
+        // nobody switched on.
+        GateCommands.For(new CommandContext(
+            SplitPlan: false, SplitWithFable: true, FableAvailable: true,
+            PlanText: SmallPlan, PlanStage: true, FirstPlanRound: firstRound))
+            .Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(true, true, true, true)]     // the one case that orders a split
+    [InlineData(true, true, false, false)]   // an epic coming back
+    [InlineData(true, false, true, false)]   // a code round
+    [InlineData(false, true, true, false)]   // the switch is off
+    public void OrdersSplit_AnswersExactlyWhatForActuallyDid(
+        bool splitPlan, bool planStage, bool firstRound, bool expected)
+    {
+        // The server records the order it gave, and it must ask ONE question to know it gave one.
+        // Two copies of the same condition is how the surface-name check ended up with three.
+        var context = new CommandContext(
+            SplitPlan: splitPlan, PlanText: SmallPlan, PlanStage: planStage, FirstPlanRound: firstRound);
+
+        GateCommands.OrdersSplit(context).Should().Be(expected);
+        // "After EVERY story" rather than "Split this plan": a plan small enough to build as it
+        // stands is still a split ORDER — it says so, and the per-story loop is the half that
+        // always applies. Caught by this test on its first run.
+        GateCommands.For(context).Any(c => c.Contains("After EVERY story", StringComparison.Ordinal))
+            .Should().Be(expected, "what it says and what it reports must be the same event");
+    }
 }
