@@ -76,7 +76,25 @@ public static class SettingsCheck
         }
     }
 
+    /// <summary>Phrases that belong to exactly ONE order, so finding one proves which order it was.</summary>
+    /// <remarks>
+    /// A word is not a check. <c>COAI_SPLIT_PLAN</c> was looked for as the word "story", which also
+    /// appears in the autonomy order — "re-read every epic and story you have written so far" — so
+    /// the switch was reported working in runs where no split order was given at all. Every phrase
+    /// here is quoted from the one command that can produce it.
+    /// </remarks>
+    private const string Autonomy = "Work AUTONOMOUSLY";
+    private const string OrdersASplit = "Split this plan into";
+    private const string AlreadySplit = "already under way";
+    private const string WithFable = "Fable";
+
     /// <summary>The three switches, which are visible as the ORDERS a passing plan round hands back.</summary>
+    /// <remarks>
+    /// The split order is given ONCE per calling session — the floor under epics-of-epics — so a
+    /// round can legitimately answer with the order NOT to split again. That order exists only
+    /// because the switch is on, and reading it as a failure is how three runs of four came back
+    /// marked SETTINGS NOT APPLIED on 2026-09-04 while the feature worked.
+    /// </remarks>
     private static void CheckSwitches(
         IReadOnlyDictionary<string, string> asked,
         IReadOnlyList<StageResult> stages,
@@ -92,19 +110,43 @@ public static class SettingsCheck
             return;
         }
 
-        foreach (var (key, word) in ((string Key, string Word)[])
-            [("COAI_AUTONOMOUS", "AUTONOMOUSLY"), ("COAI_SPLIT_PLAN", "story"), ("COAI_SPLIT_WITH_FABLE", "Fable")])
-        {
-            if (!asked.TryGetValue(key, out var value) || !value.Equals("true", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
+        var said = (string phrase) => passed.Commands.Any(c => c.Contains(phrase, StringComparison.OrdinalIgnoreCase));
+        Expect(asked, "COAI_AUTONOMOUS", said(Autonomy), "an order to work autonomously", mismatches, examined);
+        Expect(
+            asked,
+            "COAI_SPLIT_PLAN",
+            said(OrdersASplit) || said(AlreadySplit),
+            "an order about splitting the plan",
+            mismatches,
+            examined);
 
-            examined.Add(key);
-            if (!passed.Commands.Any(c => c.Contains(word, StringComparison.OrdinalIgnoreCase)))
-            {
-                mismatches.Add($"{key} is on, but the round handed back no order mentioning '{word}'");
-            }
+        // Fable's order rides on the split order and cannot appear without it. When the round said
+        // "already split", its absence is not evidence about the switch — and an instrument reports
+        // the absence of evidence as unchecked, never as a failure.
+        if (said(OrdersASplit))
+        {
+            Expect(asked, "COAI_SPLIT_WITH_FABLE", said(WithFable), "an order naming Fable", mismatches, examined);
+        }
+    }
+
+    /// <summary>A switch that is on must show its effect; one that is off is not this check's business.</summary>
+    private static void Expect(
+        IReadOnlyDictionary<string, string> asked,
+        string key,
+        bool seen,
+        string what,
+        List<string> mismatches,
+        List<string> examined)
+    {
+        if (!asked.TryGetValue(key, out var value) || !value.Equals("true", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        examined.Add(key);
+        if (!seen)
+        {
+            mismatches.Add($"{key} is on, but the round handed back no order that is {what}");
         }
     }
 

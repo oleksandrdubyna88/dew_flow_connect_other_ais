@@ -31,7 +31,7 @@ public static class Sessions
         var removed = false;
         foreach (var file in Directory.EnumerateFiles(sessions, "session-*.json"))
         {
-            if (!Describes(file, repoPath, branch))
+            if (Owner(file, repoPath, branch) != Whose.Mine)
             {
                 continue;
             }
@@ -52,14 +52,32 @@ public static class Sessions
     }
 
     /// <summary>
+    /// Whose session a file is — and the third answer, which is that nobody can tell.
+    /// </summary>
+    /// <remarks>
+    /// Two answers were not enough. Folding "unreadable" into "not mine" made a torn session file
+    /// indistinguishable from a neighbour's, and the run it belonged to would have been reported as
+    /// having written nothing at all rather than as having written something broken.
+    /// </remarks>
+    internal enum Whose
+    {
+        Mine,
+        Theirs,
+        Unreadable,
+    }
+
+    /// <summary>
     /// Whether this file is the session for that repo and branch.
     /// </summary>
     /// <remarks>
-    /// By reading it rather than by recomputing the server's file name. The name is a hash of a
-    /// canonicalised key, and a bench that reimplements that hash is one release away from deleting
-    /// the wrong file — or, worse, none.
+    /// <para>By reading it rather than by recomputing the server's file name. The name is a hash of
+    /// a canonicalised key, and a bench that reimplements that hash is one release away from
+    /// deleting the wrong file — or, worse, none.</para>
+    /// <para>Shared with <see cref="OnDisk"/>, which asks the same question for the opposite reason:
+    /// this one decides what to delete before a run, that one decides what to believe after it. Two
+    /// answers to one question is how a run came to be judged on a neighbour's session.</para>
     /// </remarks>
-    private static bool Describes(string file, string repoPath, string branch)
+    internal static Whose Owner(string file, string repoPath, string branch)
     {
         try
         {
@@ -70,11 +88,13 @@ public static class Sessions
 
             return Same(state?["repoPath"]?.GetValue<string>(), repoPath)
                 && (state?["branch"]?.GetValue<string>() ?? string.Empty)
-                    .Equals(branch, StringComparison.Ordinal);
+                    .Equals(branch, StringComparison.Ordinal)
+                ? Whose.Mine
+                : Whose.Theirs;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {
-            return false;
+            return Whose.Unreadable;
         }
     }
 

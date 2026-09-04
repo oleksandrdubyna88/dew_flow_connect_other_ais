@@ -24,10 +24,13 @@ public sealed record SessionOnDisk(int Rounds, int StillRunning, int Pending, st
     public bool Resolvable => Note.Length == 0 && StillRunning == 0 && Pending > 0;
 }
 
-/// <summary>Reads what the server left behind, without asking the server.</summary>
+/// <summary>Reads what the server left behind for ONE run, without asking the server.</summary>
 public static class OnDisk
 {
-    public static SessionOnDisk Read(string dataDir)
+    /// <param name="dataDir">The server's data directory — often the operator's own.</param>
+    /// <param name="repoPath">The repository this run reviewed.</param>
+    /// <param name="branch">The branch or commit it reviewed, which together with the repo IS the session.</param>
+    public static SessionOnDisk Read(string dataDir, string repoPath, string branch)
     {
         var sessions = Path.Combine(dataDir, "sessions");
         if (!Directory.Exists(sessions))
@@ -35,10 +38,23 @@ public static class OnDisk
             return new SessionOnDisk(0, 0, 0, "no sessions directory — the server wrote nothing");
         }
 
-        var files = Directory.EnumerateFiles(sessions, "session-*.json").ToList();
+        // THIS run's session, never every session in the directory. The bench writes into the real
+        // data directory on purpose — the operator watches the rounds appear in the panel while it
+        // works — and that directory belongs to every window on this machine. Reading all of it
+        // reported `1 still running, 40 pending` against a run that had finished cleanly: the forty
+        // were a neighbour's, and so was the one.
+        var byOwner = Directory.EnumerateFiles(sessions, "session-*.json")
+            .ToLookup(f => Sessions.Owner(f, repoPath, branch));
+        var files = byOwner[Sessions.Whose.Mine].ToList();
         if (files.Count == 0)
         {
-            return new SessionOnDisk(0, 0, 0, "no session file");
+            // A file nobody can read might have been this run's. Saying "no session file" about it
+            // would report a broken write as no write at all.
+            var torn = byOwner[Sessions.Whose.Unreadable].FirstOrDefault();
+
+            return new SessionOnDisk(0, 0, 0, torn is null
+                ? $"no session file for {repoPath} @ {branch}"
+                : $"{Path.GetFileName(torn)} does not parse");
         }
 
         var rounds = 0;
@@ -47,6 +63,8 @@ public static class OnDisk
         JsonObject? config = null;
         foreach (var file in files)
         {
+            // It parsed a moment ago, when it was matched. A server replacing it in between is the
+            // one way this fails, and it is worth saying so rather than counting it as empty.
             var session = Parse(file);
             if (session is null)
             {

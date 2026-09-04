@@ -96,6 +96,52 @@ public sealed class SettingsAppliedTests
     }
 
     [Fact]
+    public void TheAutonomyOrderIsNotEvidenceThatSplittingIsOn()
+    {
+        // Found by the campaign of 2026-09-04. The autonomy order says "re-read every epic and
+        // STORY you have written so far", so a check for the word `story` passed off a sentence
+        // about something else entirely, and COAI_SPLIT_PLAN was reported working in a run where
+        // no split order was given at all. A word that appears in another order is not a check.
+        var applied = SettingsCheck.Of(
+            Asked(("COAI_SPLIT_PLAN", "true")),
+            null,
+            [Plan("good_enough", "Work AUTONOMOUSLY. … re-read every epic and story you have written so far …")]);
+
+        applied.Ok.Should().BeFalse("nothing in that round ordered a split");
+    }
+
+    [Fact]
+    public void TheAlreadySplitOrder_IsTheSwitchWorking_NotTheSwitchMissing()
+    {
+        // The second run of a campaign, and every real epic coming back for its own plan review: the
+        // split order is given once per calling session, so what arrives is the order NOT to split
+        // again. That order only exists because the switch is on. Reading it as a failure is how
+        // three of four runs came back marked SETTINGS NOT APPLIED while the feature worked.
+        var applied = SettingsCheck.Of(
+            Asked(("COAI_SPLIT_PLAN", "true")),
+            null,
+            [Plan("good_enough", "This plan is a PIECE of a split that is already under way, so do NOT split it again: …")]);
+
+        applied.Ok.Should().BeTrue();
+        applied.Checked.Should().Contain("COAI_SPLIT_PLAN");
+    }
+
+    [Fact]
+    public void FableIsUncheckedWhenThereWasNoSplitToDoWithIt()
+    {
+        // Fable's order rides on the split order and cannot appear without it. When the round said
+        // "already split", the absence of a Fable order is not evidence about the switch — and a
+        // measuring instrument reports the absence of evidence as unchecked, never as a failure.
+        var applied = SettingsCheck.Of(
+            Asked(("COAI_SPLIT_PLAN", "true"), ("COAI_SPLIT_WITH_FABLE", "true")),
+            null,
+            [Plan("good_enough", "This plan is a PIECE of a split that is already under way, so do NOT split it again: …")]);
+
+        applied.Ok.Should().BeTrue();
+        applied.Checked.Should().NotContain("COAI_SPLIT_WITH_FABLE");
+    }
+
+    [Fact]
     public void ASwitchThatIsOff_IsNotChecked() =>
         SettingsCheck.Of(Asked(("COAI_AUTONOMOUS", "false")), null, [Plan("proceed")])
             .Checked.Should().BeEmpty();

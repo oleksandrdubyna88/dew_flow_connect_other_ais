@@ -92,26 +92,58 @@ public sealed class Bench(
     internal string DataDirOf(Case work, string arm, int repeat, int lane) =>
         DataDirFor(new Cell(work, arm, repeat), lane);
 
+    /// <summary>
+    /// The environment one cell's server runs under.
+    /// </summary>
+    /// <remarks>
+    /// The operator's WHOLE configuration, then this arm's vendors, then this run's overrides.
+    /// Taking only the vendors left thresholds, rounds per role, prompts and the exhausted-policy at
+    /// the server's defaults, so every number described a machine nobody runs.
+    /// </remarks>
+    internal IReadOnlyDictionary<string, string> EnvironmentFor(Cell cell)
+    {
+        var (vendors, _) = Vendors.For(cell.Arm, configured, options.Models);
+
+        return new Dictionary<string, string>(settings, StringComparer.Ordinal)
+        {
+            ["COAI_PROVIDERS"] = string.Join(",", vendors.Select(v => v.Id)),
+            ["COAI_VENDORS"] = Vendors.AsSetting(vendors),
+            ["COAI_CALLER_SESSION"] = CallerFor(cell),
+        };
+    }
+
+    /// <summary>
+    /// Who this run says it is — one identity per run, because one run models one AI session.
+    /// </summary>
+    /// <remarks>
+    /// <para>The gate gives the order to split a plan ONCE per calling session; that is the floor
+    /// under epics-of-epics, and it is deliberate. A campaign that calls with one identity therefore
+    /// measures the split path in its first run and the already-split path in every run after —
+    /// which is exactly what happened on 2026-09-04, and three runs of four came back marked
+    /// <c>SETTINGS NOT APPLIED</c> while the feature worked perfectly.</para>
+    /// <para>The campaign stamp is taken once per process, so a second campaign over the same cells
+    /// is a second set of sessions rather than yesterday's callers walking back in inside the
+    /// gate's 24-hour memory. Within one process the identity of a cell never moves: a resumed
+    /// campaign's recovered runs keep the identities they ran under.</para>
+    /// </remarks>
+    private string CallerFor(Cell cell) =>
+        $"bench-{_campaign}-{cell.Arm}-{cell.Case.Name}-{cell.Repeat}";
+
+    private readonly string _campaign =
+        $"{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Environment.ProcessId}";
+
     private async Task<RunRecord> OneAsync(Cell cell, int lane, CancellationToken ct)
     {
         // The operator's OWN vendors, selected by id — never a list rebuilt from names. Bare ids ran
         // the retired Gemini CLI under a vendor whose configured runtime is `antigravity`, and a
         // local vendor with no model at all, and the report blamed the release for both.
-        var (vendors, refusal) = Vendors.For(cell.Arm, configured, options.Models);
+        var (_, refusal) = Vendors.For(cell.Arm, configured, options.Models);
         if (refusal.Length > 0)
         {
             return new RunRecord(cell.Case, cell.Arm, cell.Repeat, lane) { HarnessError = refusal };
         }
 
-        // The operator's WHOLE configuration, then this arm's vendors, then this run's
-        // overrides. Taking only the vendors left thresholds, rounds per role, prompts and the
-        // exhausted-policy at the server's defaults, so every number described a machine nobody runs.
-        var env = new Dictionary<string, string>(settings, StringComparer.Ordinal)
-        {
-            ["COAI_PROVIDERS"] = string.Join(",", vendors.Select(v => v.Id)),
-            ["COAI_VENDORS"] = Vendors.AsSetting(vendors),
-        };
-
+        var env = EnvironmentFor(cell);
         var dataDir = DataDirFor(cell, lane);
         // A stale session is the previous campaign, not this one: it remembers the configuration it
         // was opened with and how far its stages got. One cost a whole run — every round came out on
@@ -123,7 +155,7 @@ public sealed class Bench(
 
         // The disk, not the answer. They came apart once and nothing said so — and neither did
         // the settings, which is why what was ASKED for is compared with what the session got.
-        var onDisk = OnDisk.Read(dataDir);
+        var onDisk = OnDisk.Read(dataDir, options.Repo, BranchFor(cell.Case));
 
         return run with
         {

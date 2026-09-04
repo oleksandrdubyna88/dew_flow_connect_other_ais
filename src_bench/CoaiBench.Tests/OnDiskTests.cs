@@ -28,22 +28,30 @@ public sealed class OnDiskTests : IDisposable
         }
     }
 
-    private void Session(string json)
+    private const string Repo = "D:/repo";
+    private const string Branch = "abc123";
+
+    /// <summary>A session for THIS run — the state block is what makes it this run's rather than a neighbour's.</summary>
+    private void Session(string body)
     {
         var sessions = Path.Combine(_dir, "sessions");
         Directory.CreateDirectory(sessions);
-        File.WriteAllText(Path.Combine(sessions, "session-abc.json"), json);
+        File.WriteAllText(
+            Path.Combine(sessions, "session-abc.json"),
+            $$"""{ "state": { "repoPath": "{{Repo}}", "branch": "{{Branch}}" }, {{body}} }""");
     }
+
+    private SessionOnDisk Read() => OnDisk.Read(_dir, Repo, Branch);
 
     [Fact]
     public void AFinishedRoundWithPendingFindings_IsResolvable()
     {
         Session("""
-            { "rounds": [ { "status": "done", "verdict": "proceed" } ],
-              "pending": [ { "title": "one" }, { "title": "two" } ] }
+            "rounds": [ { "status": "done", "verdict": "proceed" } ],
+            "pending": [ { "title": "one" }, { "title": "two" } ]
             """);
 
-        var read = OnDisk.Read(_dir);
+        var read = Read();
 
         read.Resolvable.Should().BeTrue();
         read.Pending.Should().Be(2);
@@ -53,23 +61,23 @@ public sealed class OnDiskTests : IDisposable
     public void ARoundStillRunning_IsNot()
     {
         // The exact shape of the afternoon's defect: the answer was handed over, the record was not.
-        Session("""{ "rounds": [ { "status": "running" } ], "pending": [] }""");
+        Session(""" "rounds": [ { "status": "running" } ], "pending": [] """);
 
-        OnDisk.Read(_dir).Resolvable.Should().BeFalse("its findings cannot be indexed into anything");
+        Read().Resolvable.Should().BeFalse("its findings cannot be indexed into anything");
     }
 
     [Fact]
     public void AFinishedRoundWithNothingPending_IsNotResolvableEither()
     {
-        Session("""{ "rounds": [ { "status": "done" } ], "pending": [] }""");
+        Session(""" "rounds": [ { "status": "done" } ], "pending": [] """);
 
-        OnDisk.Read(_dir).Resolvable.Should().BeFalse();
+        Read().Resolvable.Should().BeFalse();
     }
 
     [Fact]
     public void NoSessionsDirectory_SaysSoRatherThanPassing()
     {
-        var read = OnDisk.Read(_dir);
+        var read = Read();
 
         read.Resolvable.Should().BeFalse();
         read.Note.Should().Contain("wrote nothing");
@@ -78,9 +86,9 @@ public sealed class OnDiskTests : IDisposable
     [Fact]
     public void ATornFileIsNamed_NotSilentlyCountedAsZero()
     {
-        Session("{ this is not json");
+        Session(""" "rounds": [ """);
 
-        var read = OnDisk.Read(_dir);
+        var read = Read();
 
         read.Resolvable.Should().BeFalse();
         read.Note.Should().Contain("does not parse");
@@ -91,12 +99,12 @@ public sealed class OnDiskTests : IDisposable
     {
         // A reader that forbids writing is what killed six rounds here in one afternoon. The bench
         // must not reintroduce it from the outside: this holds the file the way a server does.
-        Session("""{ "rounds": [ { "status": "done" } ], "pending": [ { "title": "one" } ] }""");
+        Session(""" "rounds": [ { "status": "done" } ], "pending": [ { "title": "one" } ] """);
         var file = Directory.EnumerateFiles(Path.Combine(_dir, "sessions")).Single();
 
         using var held = new FileStream(
             file, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete);
 
-        OnDisk.Read(_dir).Resolvable.Should().BeTrue();
+        Read().Resolvable.Should().BeTrue();
     }
 }
