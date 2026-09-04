@@ -807,7 +807,7 @@ function roundCard(
   // halves come out of a session file somebody else wrote, so both are escaped.
   const reviewers = lines
     .map((row) =>
-      `<div class="reviewer"><span class="vendor" style="color:${vendorColour(row.provider)}">`
+      `<div class="reviewer"><span class="who" style="color:${vendorColour(row.provider)}">`
       + `${escapeHtml(row.provider)}</span>${escapeHtml(row.rest)}</div>`)
     .join('\n');
   const took = elapsed(round, nowMs);

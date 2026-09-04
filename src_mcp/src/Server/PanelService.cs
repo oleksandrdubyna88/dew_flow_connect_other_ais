@@ -592,12 +592,12 @@ public sealed class PanelService
                 Commands = commands.Count == 0 ? null : commands,
                 CommandsPreamble = commands.Count == 0 ? null : Core.Commands.GateCommands.Preamble,
             };
-            // BEST EFFORT, and this is the line that cost the most: one of six rounds killed by
-            // "Access to the path is denied" died HERE, after every reviewer had answered. The
-            // findings were in memory, the verdict was decided, and all of it was thrown away
-            // because a file could not be renamed. The trail is worth a great deal; it is not
-            // worth the round. A failure is logged loudly and the answer still goes back.
-            SaveOrWarn(session with
+            // REQUIRED, and the previous attempt at this was worse than the bug it fixed. Making it
+            // best-effort stopped the round dying and started it LYING: the caller was handed
+            // findings, numbered, and told to resolve them — while `resolve` reads the pending list
+            // from a file that was never written, so the round sat at `running` with nothing to
+            // decide on. An answer whose findings cannot be resolved is not an answer.
+            _store.Save(session with
             {
                 State = completed.State,
                 Rounds = [.. session.Rounds, record],
@@ -614,6 +614,16 @@ public sealed class PanelService
             audit.Findings(merged);
             NotifyIfAPersonMustDecide(completed.Verdict, session, merged);
             return Json(answer, ServerJsonContext.Default.ReviewAnswer);
+        }
+        catch (SessionStoreException e)
+        {
+            // The round ran and its findings are in the log; what failed is writing the state
+            // `resolve` needs. Saying so is the whole point — the caller re-runs the round instead
+            // of resolving indices into a list nobody wrote.
+            _log.Error(e, "the round completed but could not be recorded");
+
+            return Error($"the round completed but could not be recorded, so its findings cannot be "
+                + $"resolved — run it again. {e.Message}");
         }
         catch (Exception e) when (e is WorktreeException or ContextException)
         {
@@ -864,26 +874,6 @@ public sealed class PanelService
     /// <summary>Whether the caller may go and build: an order to split follows permission.</summary>
     private static bool MayProceed(RoundVerdict verdict) =>
         verdict is RoundVerdict.Proceed or RoundVerdict.GoodEnough or RoundVerdict.ContinueAnyway;
-
-    /// <summary>
-    /// Writes the round's trail, and does NOT take the round down if it cannot.
-    /// </summary>
-    /// <remarks>
-    /// Only for the record of a round that has already finished. Every other save — opening a
-    /// session, recording decisions — still throws, because those are the state the protocol runs
-    /// on and losing one silently would be worse than failing.
-    /// </remarks>
-    private void SaveOrWarn(PersistedSession session)
-    {
-        try
-        {
-            _store.Save(session);
-        }
-        catch (SessionStoreException e)
-        {
-            _log.Error(e, "the round finished but its record could not be written — the answer stands");
-        }
-    }
 
     /// <summary>
     /// Whom the split order is remembered against.

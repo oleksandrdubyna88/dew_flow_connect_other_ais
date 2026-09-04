@@ -64,7 +64,7 @@ function state(rounds: readonly RoundRecord[], openRounds: readonly string[] = [
 
 /** The markup one vendor name renders as, so a test says what it means rather than repeating it. */
 function vendorSpan(vendor: string): string {
-  return ["<span class=\"vendor\" style=\"color:", vendorColour(vendor), "\">", vendor, "</span>"].join("");
+  return ["<span class=\"who\" style=\"color:", vendorColour(vendor), "\">", vendor, "</span>"].join("");
 }
 
 const NOW = Date.parse('2026-09-03T16:20:00.000Z');

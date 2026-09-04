@@ -89,6 +89,14 @@ function thousands(count: number): string {
 
 /** How long a round has been going, or how long it took — the live part people watch. */
 export function elapsed(round: RoundRecord, nowMs: number): string {
+  // An INTERRUPTED round has no duration, and every number available for one is a lie. It was never
+  // written a completion time, so this used to fall back to "now" and show how long ago it STARTED —
+  // `361m 40s` beside an interrupted badge on a machine whose reviewer timeout is ten minutes. Once a
+  // restart sweeps it the sweep stamps the moment it noticed, which measures how long nobody looked.
+  // The per-reviewer times are real and stay; the round's own total is not a number anybody has.
+  if (round.status === 'interrupted') {
+    return '';
+  }
   const started = round.startedUtc === undefined ? NaN : Date.parse(round.startedUtc);
   if (Number.isNaN(started)) {
     return '';

@@ -146,6 +146,9 @@ internal sealed class SessionTurn : IDisposable
 
     private SessionTurn(FileStream? held) => _held = held;
 
+    /// <summary>Whether the turn is actually ours — a writer decides how to write on this.</summary>
+    public bool Held => _held is not null;
+
     public static SessionTurn Take(string sessionFile)
     {
         var lockFile = Path.ChangeExtension(sessionFile, null) + ".turn";
@@ -239,12 +242,26 @@ public sealed class SessionStore(string dataDir)
         // tried to move it, and the loser died with `UnauthorizedAccessException: Access to the path
         // is denied` out of `LiveRound.Persist`. Twice in one morning's log before it was understood.
         var temp = $"{file}.{Environment.ProcessId}-{Guid.NewGuid().ToString("N")[..8]}.tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(session, ServerJsonContext.Default.PersistedSession));
+        var json = JsonSerializer.Serialize(session, ServerJsonContext.Default.PersistedSession);
+        using (var turn = SessionTurn.Take(file))
+        {
+            if (turn.Held)
+            {
+                // IN PLACE, and no rename at all. Temp-and-move exists to keep a reader from seeing
+                // half a file; the turn does that better, because readers take the same turn. Once
+                // the lock is held there is nothing left for the rename to buy — and the rename was
+                // the only operation that could be denied. Serialising happens BEFORE the turn is
+                // taken, so a writer never holds it over work readers do not need.
+                File.WriteAllText(file, json);
+                return;
+            }
+        }
+
+        // Only when the turn could not be taken at all: fall back to the old shape, which at least
+        // cannot show a reader a half-written file.
+        File.WriteAllText(temp, json);
         try
         {
-            // The turn is held only for the rename, not for serialising: a writer that held it
-            // while formatting JSON would keep every reader waiting on work they do not need.
-            using var turn = SessionTurn.Take(file);
             MoveOverExisting(temp, file);
         }
         finally

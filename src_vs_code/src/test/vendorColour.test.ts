@@ -103,7 +103,7 @@ test('the vendor word is coloured and the rest of the row is not', () => {
   const html = panelHtml(state(), 'n0nce', Date.now());
 
   assert.ok(
-    html.includes(`<span class="vendor" style="color:${vendorColour('codex')}">codex</span>/PlanCritique`),
+    html.includes(`<span class="who" style="color:${vendorColour('codex')}">codex</span>/PlanCritique`),
     'the colour stops at the vendor name',
   );
 });
@@ -112,6 +112,6 @@ test('a vendor name from a session file is still escaped', () => {
   // The name comes out of JSON somebody else wrote. A colour is no reason to stop escaping it.
   const html = panelHtml(state(), 'n0nce', Date.now());
 
-  assert.ok(!html.includes('<span class="vendor" style="color:var(--vscode-charts-blue)"><script>'));
+  assert.ok(!html.includes('<span class="who" style="color:var(--vscode-charts-blue)"><script>'));
   assert.ok(html.includes('&lt;script&gt;</span>'), 'the name is escaped inside the coloured span');
 });

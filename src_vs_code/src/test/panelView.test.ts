@@ -459,7 +459,7 @@ test('a running round shows its status, its reviewers and what it has cost', () 
   // The vendor's word now carries its own colour, so the row is a span plus the rest of the
   // sentence. Same content, and the assertion now also says where the colour stops.
   assert.ok(html.includes(
-    `<span class="vendor" style="color:${vendorColour('codex')}">codex</span>/Architecture — done (2 findings)`));
+    `<span class="who" style="color:${vendorColour('codex')}">codex</span>/Architecture — done (2 findings)`));
   assert.ok(html.includes('5.3k in / 260 out'));
   assert.ok(html.includes('no cost reported'));
 });

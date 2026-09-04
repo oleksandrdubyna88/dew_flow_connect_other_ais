@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.29.6 — 2026-09-04 (server 0.16.0)
+
+**The vendor names in the rounds list are no longer struck through.** They were not struck through:
+each one was wearing the border of a settings card. The colour added in 0.29.4 was hung on
+`class="vendor"`, and `.vendor` already meant the reviewer's configuration box in this stylesheet —
+a border, a radius and eight pixels of padding. On a single word inside a tight line, the top and
+bottom edges of that box read as lines through the text. The word has its own class now, and a test
+asks the general question rather than the specific one: whatever class the reviewer row puts on a
+vendor, the stylesheet must not give it a border, padding, margin or a text decoration.
+
+**A round that did not finish no longer claims to have run for hours.** Rounds were showing `361m 40s`
+and `103m 44s` beside an *interrupted* badge on a machine whose reviewer timeout is ten
+minutes. None of them ran that long: a round that dies is never written a completion time, so the
+panel fell back to `now` and displayed how long ago it STARTED — and once a restart swept it, the
+sweep stamped the moment it noticed, which measures how long nobody looked. An interrupted round now
+shows no duration at all. The per-reviewer times beside it are real and stay.
+
 ## 0.29.5 — 2026-09-04 (server 0.16.0)
 
 **The three switches in *The gate* now stay ticked.** They were never registered as settings, and VS
