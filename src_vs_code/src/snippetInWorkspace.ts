@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { SnippetStatus, snippetStatus } from './claudeSnippet';
+import { SNIPPET_LOCATIONS, SNIPPET_MARKER, SnippetStatus, snippetStatus } from './claudeSnippet';
 
 /**
  * Which generation of the snippet this workspace is carrying, if any.
@@ -8,6 +8,11 @@ import { SnippetStatus, snippetStatus } from './claudeSnippet';
  * because the COPY command needs the same answer — a person clicking "Copy the CLAUDE.md snippet"
  * is entitled to be told that the copy already in this repository is older than the one they just
  * took — and two readers of the same four files would drift the moment somebody added a fifth.</p>
+ *
+ * <p><b>Since the block became a shared rule</b> (`dew_flow_conventions/common/coai-review-gate.md`,
+ * mounted at `.claude/rules/shared`), a repository in that family keeps NO copy of its own and the
+ * four instruction files are empty of it — so the mounted rule is read too, and such a repository
+ * reports `current` instead of the `absent` it would have reported before.</p>
  */
 export async function pastedSnippetStatus(): Promise<SnippetStatus> {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri;
@@ -15,11 +20,14 @@ export async function pastedSnippetStatus(): Promise<SnippetStatus> {
     return snippetStatus(undefined);
   }
 
-  for (const name of ['CLAUDE.md', 'AGENTS.md', 'GEMINI.md', '.github/copilot-instructions.md']) {
+  for (const name of SNIPPET_LOCATIONS) {
     const text = await readIfPresent(vscode.Uri.joinPath(root, name));
-    // The FIRST file that carries it wins. A repository with the block in two files has a problem
-    // this panel cannot fix, and reporting the older of the two would be arbitrary.
-    if (text.includes('Multi-model review gate (ConnectOtherAIs)')) {
+    // The FIRST location that carries it wins, and the instruction files are first on that list on
+    // purpose: a paste in CLAUDE.md is what the AI here actually READS, so a stale one has to be
+    // the sentence this reports. Answering with the mounted rule's version instead would put a
+    // green light over text three revisions old that is still being obeyed. The duplicate itself
+    // is somebody else's job — `gate-snippet-check.mjs` fails the build over it.
+    if (text.includes(SNIPPET_MARKER)) {
       return snippetStatus(text);
     }
   }

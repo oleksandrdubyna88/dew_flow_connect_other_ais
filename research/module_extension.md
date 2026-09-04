@@ -289,6 +289,20 @@ back out of the workspace's `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` or `.github/co
 of this product should disagree about which files an AI reads. The first file carrying the block
 wins; a repository with it in two places has a problem this panel cannot fix.
 
+**And since 2026-09-04 the block is not a paste at all where a family shares rules.** It is
+`common/coai-review-gate.md` in `dew_flow_conventions`, mounted at `.claude/rules/shared` in six
+repositories, so `SNIPPET_LOCATIONS` continues past the four instruction files to
+`.claude/rules/shared/common/coai-review-gate.md` and its unmounted twin. Named paths, not a walk —
+this runs on every repaint. The instruction files stay FIRST on that list deliberately: a paste in
+`CLAUDE.md` is what the AI in that repository actually reads, so a stale one must be the sentence
+the panel says, and answering with the mounted rule's version instead would be a green light over
+text still being obeyed. The duplicate itself is a red build rather than a panel line —
+`gate-snippet-check.mjs` in the conventions repository fails when a consumer carries its own copy,
+which is the half a panel can never do, because a panel only sees a repository somebody opened.
+`snippetVersion.test.ts` asserts the mounted file is byte-identical to `claudeSnippet()`, skipping
+locally when the submodule is not checked out and FAILING under `CI`, where the workflow initialises
+it and an unchecked drift would merge behind a green tick.
+
 **A number, not a hash — and both.** A hash cannot be forgotten but only answers "different", while
 the useful sentence is "OLDER than the current one": a stale paste and a locally edited one want
 opposite advice, and only an ordered number tells them apart. So the number is ordered and

@@ -37,6 +37,32 @@ export const SNIPPET_VERSION = 5;
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
 export const SNIPPET_BODY_SHA = '4e951347aa178972';
 
+/**
+ * Where a repository is allowed to keep the block, in the order a reader should believe them.
+ *
+ * <p><b>The instruction files come first, and that ordering is the whole point.</b> A block pasted
+ * into `CLAUDE.md` is what the AI in that repository actually reads, so if it is three revisions
+ * old that is the sentence the panel must say — reporting the mounted rule's version instead would
+ * be a green light over the stale text still being obeyed.</p>
+ *
+ * <p>The last two are the shared rule this family now keeps in `dew_flow_conventions`, mounted at
+ * `.claude/rules/shared`, plus the same file kept locally by a repository that has no submodule.
+ * Named paths rather than a walk: this runs on every panel repaint, and the file NAME is the
+ * convention. A repository that files it somewhere else reports `absent`, which is honest — the
+ * panel cannot claim to know about a copy it was never told to look for.</p>
+ */
+export const SNIPPET_LOCATIONS: readonly string[] = [
+  'CLAUDE.md',
+  'AGENTS.md',
+  'GEMINI.md',
+  '.github/copilot-instructions.md',
+  '.claude/rules/shared/common/coai-review-gate.md',
+  '.claude/rules/common/coai-review-gate.md',
+];
+
+/** The sentence a copy is recognised by, wherever it sits. */
+export const SNIPPET_MARKER = 'Multi-model review gate (ConnectOtherAIs)';
+
 /** What a workspace's pasted copy is, relative to what this build hands out. */
 export type SnippetStatus =
   | { readonly kind: 'current'; readonly current: number }
@@ -65,7 +91,7 @@ export function snippetVersionIn(text: string): number | undefined {
  */
 export function snippetStatus(pasted: string | undefined): SnippetStatus {
   const current = SNIPPET_VERSION;
-  if (pasted === undefined || !pasted.includes('Multi-model review gate (ConnectOtherAIs)')) {
+  if (pasted === undefined || !pasted.includes(SNIPPET_MARKER)) {
     return { kind: 'absent', current };
   }
   const found = snippetVersionIn(pasted);
