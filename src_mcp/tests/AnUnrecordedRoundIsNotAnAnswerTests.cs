@@ -62,6 +62,18 @@ public sealed class AnUnrecordedRoundIsNotAnAnswerTests : IAsyncLifetime
             Environment.SetEnvironmentVariable(name, null);
         }
 
+        // A read-only file cannot be deleted with its directory, and one test leaves one behind.
+        foreach (var file in Directory.Exists(_data)
+            ? Directory.EnumerateFiles(_data, "*", SearchOption.AllDirectories)
+            : [])
+        {
+            try
+            {
+                File.SetAttributes(file, FileAttributes.Normal);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        }
+
         foreach (var dir in (string[])[_repo, _data])
         {
             try
@@ -127,11 +139,15 @@ public sealed class AnUnrecordedRoundIsNotAnAnswerTests : IAsyncLifetime
         // `resolve` reads the pending list from the file that was never written.
         var service = Service();
         await service.OpenAsync(_repo, "feature");
-        // Held for WRITING while still letting others read: the round loads its session perfectly
-        // well and cannot write the result. Sharing None would block the read too and produce a
-        // different, honest error ("no session") — which is not the failure being pinned here.
-        using var held = new FileStream(
-            SessionFile(), FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+        // READABLE and not WRITABLE, which is the shape of the failure: the round loads its session
+        // perfectly well and cannot write the result back.
+        //
+        // The first version held the file open with FileShare.Read instead, and CI was right to
+        // refuse it: .NET enforces FileShare on Windows only — on Linux and macOS locking is
+        // advisory, the write went through, and the test failed on three legs of the release for a
+        // reason that had nothing to do with the behaviour. A read-only attribute denies the write
+        // on every platform.
+        File.SetAttributes(SessionFile(), FileAttributes.ReadOnly);
 
         var answer = Parse(await service.ReviewPlanAsync(_repo, "feature", "a plan worth reviewing"));
 
