@@ -66,6 +66,29 @@ public sealed class GitModulesTests
         GitModules.Parse($"[submodule \"x\"]\n\tpath = {path}\n").Should().BeEmpty();
     }
 
+    /// <summary>
+    /// The name lands in a git CONFIG KEY (<c>-c submodule.&lt;name&gt;.url=…</c>), so it is the half
+    /// that can set something nobody asked for.
+    /// </summary>
+    [Theory]
+    [InlineData("foo.url=https://evil.example/x")]
+    [InlineData("foo\n[core]\nsshCommand")]
+    [InlineData("foo bar")]
+    [InlineData("")]
+    public void ANameThatCouldSpellAnotherConfigKey_IsNotAMount(string name)
+    {
+        GitModules.IsSafeMountName(name).Should().BeFalse();
+        GitModules.Parse($"[submodule \"{name}\"]\n\tpath = ok/here\n").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TheNamesThisFamilyActuallyUses_AreAccepted()
+    {
+        GitModules.IsSafeMountName(".claude/rules/shared").Should().BeTrue();
+        GitModules.IsSafeMountName("dew_flow_conventions").Should().BeTrue();
+        GitModules.IsSafeMountName("external/dew_flow_mcp").Should().BeTrue();
+    }
+
     [Fact]
     public void AnOrdinaryRelativePath_IsAMount()
     {

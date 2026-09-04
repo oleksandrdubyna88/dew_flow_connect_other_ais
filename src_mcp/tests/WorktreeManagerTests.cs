@@ -216,6 +216,45 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
         File.Exists(Path.Combine(lease.Path, "a.txt")).Should().BeTrue("the rest of the tree is still there");
     }
 
+    /// <summary>
+    /// The source is a clone source with <c>protocol.file.allow</c> lifted, so "inside the checkout"
+    /// has to survive a junction — text normalisation cannot see one.
+    /// </summary>
+    [Fact]
+    public async Task ASourceReachedThroughALink_IsNotClonedFrom()
+    {
+        var outside = await AddSubmoduleAsync("real", "secret");
+        await File.WriteAllTextAsync(
+            Path.Combine(_repo, ".gitmodules"),
+            "[submodule \"linked\"]\n\tpath = linked\n\turl = https://example.invalid/x.git\n");
+        await Git(_repo, "add", ".gitmodules");
+        await Git(_repo, "commit", "-m", "declare a mount whose path is a link");
+        if (!TryLink(Path.Combine(_repo, "linked"), outside))
+        {
+            Assert.Skip("this machine cannot create a directory link without elevation");
+        }
+
+        var sha = await _manager.ResolveShaAsync(_repo, "main");
+        await using var lease = await _manager.AddAsync(_repo, sha, "s1", round: 1);
+
+        File.Exists(Path.Combine(lease.Path, "linked", "rules.md"))
+            .Should().BeFalse("a link is not a path inside the checkout, whatever it spells");
+    }
+
+    private static bool TryLink(string link, string target)
+    {
+        try
+        {
+            Directory.CreateSymbolicLink(link, target);
+
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>An upstream repository, added to <c>_repo</c> as a submodule at <paramref name="path"/>.</summary>
     private async Task<string> AddSubmoduleAsync(string path, string content)
     {

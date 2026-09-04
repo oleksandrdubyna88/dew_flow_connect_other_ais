@@ -51,6 +51,19 @@ public static class GitModules
         return mounts;
     }
 
+    /// <summary>
+    /// A name that can be spelt into a <c>git -c submodule.&lt;name&gt;.url=…</c> key and mean only that.
+    /// </summary>
+    /// <remarks>
+    /// The section name is as untrusted as the path, and it lands in a CONFIG KEY rather than a
+    /// value: a name carrying <c>=</c>, a newline or a bracket is a name that can set a key nobody
+    /// asked for. Ordinary git names — including this family's, which are paths — pass; anything
+    /// else drops the mount rather than being escaped, because a mount we cannot address is one
+    /// whose URL override would silently miss and send the round to the network.
+    /// </remarks>
+    public static bool IsSafeMountName(string name) =>
+        name.Length > 0 && name.All(IsOrdinaryNameChar);
+
     /// <summary>Relative, and made of ordinary segments — nothing that can resolve out of the tree.</summary>
     public static bool IsSafeMountPath(string path)
     {
@@ -67,9 +80,12 @@ public static class GitModules
     private static bool IsOrdinarySegment(string segment) =>
         segment.Length > 0 && segment != "." && segment != "..";
 
+    private static bool IsOrdinaryNameChar(char c) =>
+        char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-' or '/';
+
     private static void Collect(List<SubmoduleMount> mounts, string name, string path)
     {
-        if (name.Length > 0 && path.Length > 0 && IsSafeMountPath(path))
+        if (IsSafeMountName(name) && IsSafeMountPath(path))
         {
             mounts.Add(new SubmoduleMount(name, Normalise(path)));
         }
