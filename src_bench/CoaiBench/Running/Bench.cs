@@ -77,6 +77,10 @@ public sealed class Bench(
         };
 
         var dataDir = DataDirFor(cell, lane);
+        // A stale session is the previous campaign, not this one: it remembers the configuration it
+        // was opened with and how far its stages got. One cost a whole run — every round came out on
+        // the DEFAULT rounds and thresholds while the operator had set their own.
+        Sessions.Reset(dataDir, options.Repo, BranchFor(cell.Case));
         await using var client = new GateClient(options.Executable, dataDir, env);
         var run = await new RoundRunner(client, options.Repo, options.Timeout)
             .RunAsync(cell.Case, cell.Arm, cell.Repeat, lane, options.Stages);
@@ -93,6 +97,9 @@ public sealed class Bench(
     /// what five windows do to each other wants exactly the interference, and that lives in the
     /// shared directory — the sessions, the engine lease, the caller memory.
     /// </remarks>
+    /// <summary>The branch a case is reviewed on — its commit, or the checkout as it stands.</summary>
+    internal static string BranchFor(Case work) => work.Commit.Length > 0 ? work.Commit : "HEAD";
+
     internal string DataDirOf(Case work, string arm, int repeat, int lane) =>
         DataDirFor(new Cell(work, arm, repeat), lane);
 

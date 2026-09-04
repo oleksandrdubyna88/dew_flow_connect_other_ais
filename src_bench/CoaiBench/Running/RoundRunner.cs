@@ -37,7 +37,7 @@ public sealed class RoundRunner(GateClient client, string repo, TimeSpan timeout
         try
         {
             await client.HandshakeAsync(deadline.Token);
-            var branch = work.Commit.Length > 0 ? work.Commit : "HEAD";
+            var branch = Bench.BranchFor(work);
             await client.CallAsync("open", Args(("repoPath", repo), ("branch", branch)), deadline.Token);
 
             var planText = await File.ReadAllTextAsync(Path.Combine(repo, work.PlanFile), deadline.Token);
