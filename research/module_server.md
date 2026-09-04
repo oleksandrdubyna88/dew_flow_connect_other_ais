@@ -322,6 +322,26 @@ about what it was not shown would report compliance with rules it never saw, whi
 of evidence into a clean bill of health. A repo with no rules gets a sentence saying so, because a
 conventions pass with nothing to judge against would invent a standard.
 
+**And in this family the rules are a SUBMODULE, which for eight days meant they were not there at
+all.** `dew_flow_conventions` mounts at `.claude/rules/shared` in six consumers — 26 files, 208 455
+bytes — and git does not populate submodules in a linked worktree. Measured 2026-09-04 on
+`dew_flow_creds_for_devs`, whose `.claude/rules/` holds nothing but the mount: the round's
+`shared/` was empty, so every conventions pass there judged a diff against `CLAUDE.md` alone. The
+worktree now populates its own submodules from the PARENT checkout's copies
+(`runners/Worktrees/SubmodulePopulator.cs`) — offline, pinned to the reviewed commit, 1.49 s against
+2.45 s for the network form. Three consequences worth knowing:
+
+- **A mount that did not materialise is named**, in `RuleBundle.MissingMounts` and in the rendered
+  block. Zero files plus zero omissions used to be indistinguishable from a repository with no
+  rules, which is the same false clean bill of health one directory deeper.
+- **The repository's OWN rule folders are read before the mount**, so the 40 KB budget is spent
+  first on the rules a diff here can break; the family's are the same in six checkouts and are what
+  the budget drops. Alphabetical order decided this before, and a local `workflows/` sorts after
+  `shared/`.
+- **A rules repository's housekeeping is not a rule** — its `todo/`, `settings/`, `tools/` fixtures
+  and its own `README.md` / instruction files — and the exclusion is scoped to the mount, because a
+  repository is entitled to its own `.claude/rules/todo/`.
+
 **Round 1 of every code role is the conventions pass** (`prompts/conventions.md`), when rules exist
 and the person has not chosen otherwise. Three reviewers already cover architecture, security and
 performance, each with its own taste; the one thing none of them did is hold the change to the
