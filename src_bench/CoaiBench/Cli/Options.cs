@@ -73,6 +73,15 @@ public sealed record Options
     /// </remarks>
     public bool Isolate { get; init; }
 
+    /// <summary>
+    /// Start over rather than continuing an interrupted campaign in the same output directory.
+    /// </summary>
+    /// <remarks>
+    /// Continuing is the default because a campaign is an hour of vendor quota and a closed terminal
+    /// must not cost it twice. Starting over is a decision, and it is spelled.
+    /// </remarks>
+    public bool Fresh { get; init; }
+
     /// <summary>Settings handed to every server, as `COAI_X=value`.</summary>
     public IReadOnlyDictionary<string, string> Settings { get; init; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
@@ -135,10 +144,15 @@ public static class OptionsParser
     }
 
     /// <summary>Flags that are on or off, and therefore take nothing after them.</summary>
-    private static readonly HashSet<string> Switches = new(StringComparer.Ordinal) { "--isolate" };
+    private static readonly HashSet<string> Switches = new(StringComparer.Ordinal) { "--isolate", "--fresh" };
 
     private static Options ApplySwitch(Options options, string name) =>
-        name == "--isolate" ? options with { Isolate = true } : options;
+        name switch
+        {
+            "--isolate" => options with { Isolate = true },
+            "--fresh" => options with { Fresh = true },
+            _ => options,
+        };
 
     private static (string Name, string Value) Flag(IReadOnlyList<string> args, ref int at)
     {
@@ -235,6 +249,9 @@ public static class OptionsParser
                                     per ARM, so a three-vendor matrix takes a third of the evening.
                                     Give it a number and it is the "five windows" case as well
           --out <dir>               where the runs and tables go
+          --fresh                   start over instead of continuing an interrupted campaign in
+                                    the same --out. Continuing is the default: every run is written
+                                    the moment it lands, so a closed terminal costs nothing
           --timeout-minutes <n>     per run
 
         judge:

@@ -9,6 +9,9 @@ namespace CoaiBench.Running;
 /// <param name="Note">What went wrong reading it, or empty.</param>
 public sealed record SessionOnDisk(int Rounds, int StillRunning, int Pending, string Note = "")
 {
+    /// <summary>`state.config` as the server wrote it — what a settings check is measured against.</summary>
+    public JsonObject? Config { get; init; }
+
     /// <summary>
     /// Whether the findings the answer carried can be acted on at all.
     /// </summary>
@@ -41,6 +44,7 @@ public static class OnDisk
         var rounds = 0;
         var running = 0;
         var pending = 0;
+        JsonObject? config = null;
         foreach (var file in files)
         {
             var session = Parse(file);
@@ -54,9 +58,10 @@ public static class OnDisk
             running += theseRounds.OfType<JsonObject>()
                 .Count(r => r["status"]?.GetValue<string>() == "running");
             pending += (session["pending"] as JsonArray)?.Count ?? 0;
+            config ??= session["state"]?["config"] as JsonObject;
         }
 
-        return new SessionOnDisk(rounds, running, pending);
+        return new SessionOnDisk(rounds, running, pending) { Config = config };
     }
 
     private static JsonObject? Parse(string file)

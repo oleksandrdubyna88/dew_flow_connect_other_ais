@@ -91,19 +91,45 @@ public static class Program
             + string.Join(", ", configured.Select(v => $"{v.Id} ({v.Runtime}/{v.Model})")));
         Console.WriteLine($"settings in force:\n{PanelSettingsFile.Describe(settings)}\n");
         var outDir = OutDir(options);
+        var file = Path.Combine(outDir, "runs.json");
+        // PAUSE AND CONTINUE. A campaign is an hour of somebody's vendor quota; losing it to a closed
+        // terminal and paying for it twice is not a risk a measuring instrument should create. Every
+        // run is written the moment it lands, and pointing --out at an existing campaign continues it.
+        var already = options.Fresh || !File.Exists(file) ? [] : await RunStore.LoadAsync(file, ct);
+        var landed = new List<RunRecord>(already);
+        var writing = new SemaphoreSlim(1, 1);
         var runs = await new Bench(
             options with { OutDir = outDir, Executable = WhichServer(options) },
             corpus, configured, settings, Console.WriteLine)
-            .RunAsync(ct);
+            .RunAsync(already, async run =>
+            {
+                await writing.WaitAsync(CancellationToken.None);
+                try
+                {
+                    landed.Add(run);
+                    await RunStore.SaveAsync(file, landed, CancellationToken.None);
+                }
+                finally
+                {
+                    writing.Release();
+                }
+            }, ct);
         await File.WriteAllTextAsync(
             Path.Combine(outDir, "settings.md"),
             $"# The settings this campaign ran under\n\nFrom `{vendorsFile}`, with `--set` on top.\n\n"
                 + $"```\n{PanelSettingsFile.Describe(settings)}\n```\n",
             ct);
-        var file = Path.Combine(outDir, "runs.json");
-        await RunStore.SaveAsync(file, runs, ct);
+        await RunStore.SaveAsync(file, runs, CancellationToken.None);
         Report(runs, outDir);
         Console.WriteLine($"\n{runs.Count} run(s) → {file}");
+
+        if (ct.IsCancellationRequested)
+        {
+            Console.WriteLine(
+                $"\nstopped with {runs.Count} run(s) recorded. Continue with the same --out {outDir}");
+
+            return 2;
+        }
 
         return runs.Any(r => r.Stages.Count == 0) ? 1 : 0;
     }

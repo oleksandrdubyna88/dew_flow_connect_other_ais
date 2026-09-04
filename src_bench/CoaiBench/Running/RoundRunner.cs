@@ -122,6 +122,7 @@ public sealed class RoundRunner(GateClient client, string repo, TimeSpan timeout
             CostUsd: (reply["cost"] as JsonObject)?["costUsd"]?.GetValue<double?>())
         {
             Findings = [.. (reply["findings"] as JsonArray ?? []).OfType<JsonObject>().Select(FindingFrom)],
+            Commands = [.. (reply["commands"] as JsonArray ?? []).Select(c => c?.GetValue<string>() ?? string.Empty)],
         };
     }
 

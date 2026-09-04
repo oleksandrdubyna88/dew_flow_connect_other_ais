@@ -35,26 +35,62 @@ public sealed class Bench(
     /// <summary>Lanes: as many as there are arms unless a number was given.</summary>
     public int Lanes() => options.Parallel > 0 ? options.Parallel : Math.Max(1, options.Arms.Count);
 
-    public async Task<IReadOnlyList<RunRecord>> RunAsync(CancellationToken ct)
+    /// <summary>
+    /// Runs the matrix, skipping what a previous attempt already finished.
+    /// </summary>
+    /// <param name="already">Runs recovered from an interrupted campaign, by <see cref="RunRecord.Key"/>.</param>
+    /// <param name="finished">Called as each run lands, so an hour of work survives a Ctrl+C.</param>
+    /// <remarks>
+    /// A campaign is an hour of somebody's vendor quota. Losing it to an interrupted terminal, and
+    /// paying for it twice, is not a thing a measuring instrument should make people risk — so every
+    /// run is handed over the moment it completes, and a re-run of the same output directory picks up
+    /// where the last one stopped.
+    /// </remarks>
+    public async Task<IReadOnlyList<RunRecord>> RunAsync(
+        IReadOnlyList<RunRecord> already,
+        Func<RunRecord, Task> finished,
+        CancellationToken ct)
     {
+        var recovered = already.ToDictionary(r => r.Key, StringComparer.Ordinal);
         var cells = Cells();
-        var done = new RunRecord[cells.Count];
+        var todo = cells.Where(c => !recovered.ContainsKey(KeyOf(c))).ToList();
+        var done = new RunRecord?[todo.Count];
         var next = -1;
-        var lanes = Math.Min(Lanes(), cells.Count);
-        say($"{cells.Count} run(s) over {options.Arms.Count} arm(s), {lanes} in flight");
+        var lanes = Math.Max(1, Math.Min(Lanes(), todo.Count));
+        say(recovered.Count > 0
+            ? $"{cells.Count} run(s) over {options.Arms.Count} arm(s); {recovered.Count} already done, "
+                + $"{todo.Count} to go, {lanes} in flight"
+            : $"{cells.Count} run(s) over {options.Arms.Count} arm(s), {lanes} in flight");
 
         await Task.WhenAll(Enumerable.Range(1, lanes).Select(lane => Task.Run(async () =>
         {
-            for (var at = Interlocked.Increment(ref next); at < cells.Count;
+            for (var at = Interlocked.Increment(ref next); at < todo.Count && !ct.IsCancellationRequested;
                  at = Interlocked.Increment(ref next))
             {
-                done[at] = await OneAsync(cells[at], lane, ct);
-                say(Line(done[at]));
+                var run = await OneAsync(todo[at], lane, ct);
+                done[at] = run;
+                say(Line(run));
+                await finished(run);
             }
-        }, ct)));
+        }, CancellationToken.None)));
 
-        return done;
+        // Recovered first, then whatever this attempt managed — in the matrix's own order, so a
+        // resumed campaign reads exactly like one that never stopped.
+        var fresh = done.Where(r => r is not null).ToDictionary(r => r!.Key, r => r!, StringComparer.Ordinal);
+
+        return [.. cells
+            .Select(c => recovered.GetValueOrDefault(KeyOf(c)) ?? fresh.GetValueOrDefault(KeyOf(c)))
+            .Where(r => r is not null)
+            .Select(r => r!)];
     }
+
+    private static string KeyOf(Cell cell) => $"{cell.Arm}|{cell.Case.Name}|{cell.Repeat}";
+
+    /// <summary>The branch a case is reviewed on — its commit, or the checkout as it stands.</summary>
+    internal static string BranchFor(Case work) => work.Commit.Length > 0 ? work.Commit : "HEAD";
+
+    internal string DataDirOf(Case work, string arm, int repeat, int lane) =>
+        DataDirFor(new Cell(work, arm, repeat), lane);
 
     private async Task<RunRecord> OneAsync(Cell cell, int lane, CancellationToken ct)
     {
@@ -85,8 +121,15 @@ public sealed class Bench(
         var run = await new RoundRunner(client, options.Repo, options.Timeout)
             .RunAsync(cell.Case, cell.Arm, cell.Repeat, lane, options.Stages);
 
-        // The disk, not the answer. They came apart once and nothing said so.
-        return run with { OnDisk = OnDisk.Read(dataDir) };
+        // The disk, not the answer. They came apart once and nothing said so — and neither did
+        // the settings, which is why what was ASKED for is compared with what the session got.
+        var onDisk = OnDisk.Read(dataDir);
+
+        return run with
+        {
+            OnDisk = onDisk,
+            Settings = SettingsCheck.Of(env, onDisk.Config, run.Stages),
+        };
     }
 
     /// <summary>
@@ -97,12 +140,6 @@ public sealed class Bench(
     /// what five windows do to each other wants exactly the interference, and that lives in the
     /// shared directory — the sessions, the engine lease, the caller memory.
     /// </remarks>
-    /// <summary>The branch a case is reviewed on — its commit, or the checkout as it stands.</summary>
-    internal static string BranchFor(Case work) => work.Commit.Length > 0 ? work.Commit : "HEAD";
-
-    internal string DataDirOf(Case work, string arm, int repeat, int lane) =>
-        DataDirFor(new Cell(work, arm, repeat), lane);
-
     private string DataDirFor(Cell cell, int lane) =>
         !options.Isolate
             ? RealDataDir
@@ -131,7 +168,13 @@ public sealed class Bench(
                 : $"  [NOT RESOLVABLE: {run.OnDisk.StillRunning} still running, "
                     + $"{run.OnDisk.Pending} pending{Note(run.OnDisk.Note)}]";
 
-        return $"{run.Arm,-22} {run.Case.Name,-34} #{run.Repeat} {stages}{disk}";
+        // A setting that was accepted and did nothing looks exactly like one that worked, so the
+        // disagreement is printed the moment it happens rather than found in a table afterwards.
+        var applied = run.Settings is null || run.Settings.Ok
+            ? string.Empty
+            : $"  [SETTINGS NOT APPLIED: {string.Join("; ", run.Settings.Mismatches)}]";
+
+        return $"{run.Arm,-22} {run.Case.Name,-34} #{run.Repeat} {stages}{disk}{applied}";
     }
 
     private static string Note(string note) => note.Length == 0 ? string.Empty : $", {note}";

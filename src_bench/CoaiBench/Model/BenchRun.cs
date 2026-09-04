@@ -63,6 +63,15 @@ public sealed record StageResult(
     double? CostUsd = null)
 {
     public IReadOnlyList<Finding> Findings { get; init; } = [];
+
+    /// <summary>
+    /// The ORDERS the round handed back — how the three operator switches become observable.
+    /// </summary>
+    /// <remarks>
+    /// Recorded because a setting that is accepted and does nothing looks exactly like one that
+    /// works, and this is the only place the difference shows from outside.
+    /// </remarks>
+    public IReadOnlyList<string> Commands { get; init; } = [];
 }
 
 /// <summary>
@@ -74,6 +83,16 @@ public sealed record StageResult(
 /// <param name="Lane">Which parallel lane ran it, from 1. Always 1 when nothing is parallel.</param>
 public sealed record RunRecord(Case Case, string Arm, int Repeat, int Lane)
 {
+    /// <summary>
+    /// What makes this run THIS run — the key a resumed campaign skips by.
+    /// </summary>
+    /// <remarks>
+    /// The lane is deliberately not part of it: which lane picked a cell up is an accident of
+    /// scheduling, and a campaign resumed with a different lane count must still recognise its own
+    /// finished work.
+    /// </remarks>
+    public string Key => $"{Arm}|{Case.Name}|{Repeat}";
+
     public DateTime StartedUtc { get; init; } = DateTime.UtcNow;
 
     public DateTime FinishedUtc { get; init; }
@@ -95,4 +114,7 @@ public sealed record RunRecord(Case Case, string Arm, int Repeat, int Lane)
     /// `running` with nothing pending, so every index pointed into a list nobody had written.
     /// </remarks>
     public Running.SessionOnDisk? OnDisk { get; init; }
+
+    /// <summary>Whether the settings this run ASKED for are the ones it actually got.</summary>
+    public Running.SettingsApplied? Settings { get; init; }
 }
