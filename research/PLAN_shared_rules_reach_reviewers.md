@@ -1,14 +1,17 @@
 # PLAN — the family's shared rules must reach the reviewers
 
-> Status: **phases 1 and 2 implemented 2026-09-04 on `fix/worktree-shared-rules`; phase 3 not
-> started.** Scope: `src_mcp/runners/Worktrees/WorktreeManager.cs`,
-> `src_mcp/runners/Context/RuleFiles.cs`, `src_vs_code/src/panelProvider.ts`,
-> `src_vs_code/src/claudeSnippet.ts`, and one new shared rule file in the `dew_flow_conventions`
-> submodule.
+> Status: **IMPLEMENTED, 2026-09-04.** All three phases shipped, on two branches that are not yet
+> merged: phases 1–2 on `fix/worktree-shared-rules`, phase 3 on `feat/gate-snippet-shared-rule`
+> (which branches off `feat/commands-and-autonomy`, because snippet v5 exists only there). The
+> conventions half is already on `main` of `dew_flow_conventions` (83d05e8, 4dbead4) and pinned in
+> all six consumers. Deviations and the open tail are recorded at the end.
+> Scope: `src_mcp/runners/Worktrees/WorktreeManager.cs`, `src_mcp/runners/Context/RuleFiles.cs`,
+> `src_mcp/src/Server/SessionStore.cs`, `src_vs_code/src/claudeSnippet.ts`,
+> `src_vs_code/src/snippetInWorkspace.ts`, and two new files in the `dew_flow_conventions` submodule.
 >
 > Related docs: [review-gate.md](../.claude/rules/common/review-gate.md),
-> [architecture.md](../research/architecture.md),
-> [module_extension.md](../research/module_extension.md).
+> [architecture.md](architecture.md),
+> [module_extension.md](module_extension.md).
 >
 > **Plan round 1** (2026-09-04, all 3 reviewers answered, verdict `good_enough` on a one-round
 > budget): 16 findings, 14 accepted, 2 rejected with reasons. What the accepted ones changed is
@@ -213,3 +216,47 @@ DoD's first item already requires reading a real round's rendered bundle, and th
 - [ ] The snippet exists once in the family; `creds_for_devs` no longer carries its own copy.
 - [ ] Conventions pin bumped in every consumer in the same task (`pin-check.mjs` green after commit).
 - [ ] `research/module_*.md` updated for both halves; this plan promoted with its deviations.
+
+## What actually shipped, and what it cost
+
+**Phase 1 deviated in its mechanism, not its goal.** `git worktree add` has no
+`--recurse-submodules` in git 2.55, so the fix is a second command; and the naive
+`submodule update --init` goes to the network (2.45 s, and useless for a private submodule or an
+unreachable host). The source is the PARENT checkout's own copy instead — 1.49 s, offline, same
+pinned SHA — with `protocol.file.allow=always` lifted for that one invocation over a path this
+server computed and contained. The code round then found the two ways a computed path can still
+escape: a reparse point on the way to it, and a symlinked rule file read into a prompt. Both closed.
+
+**Phase 2's ordering was not a refinement, it was the point.** Alphabetical order decided the budget
+race by directory name; a local `workflows/` sorts after `shared/`, so 208 KB of family rules would
+be read first and the repository's own rule dropped. Local rules are now partitioned ahead of the
+mount.
+
+**Phase 3 gained a check nobody planned and lost one nobody needed.** The `--warn` adoption the plan
+reserved for `dew_flow_creds_for_devs` was not used anywhere: its pasted block was replaced by a
+pointer first, so all six consumers adopt `gate-snippet-check.mjs` at full strength. What the plan
+did NOT have, and the round insisted on, is the empty-mount case: a `.gitmodules` that declares the
+rules mount with nothing behind it has no gate rule at all, and zero copies outside a mount looked
+exactly like adoption.
+
+**And the gate broke on its own work, which is how a real defect surfaced.** Six `review_code` calls
+across two branches died with "Access to the path is denied". The cause, from the server's own log:
+a session file held open by a reader makes the atomic rename fail with `UnauthorizedAccessException`
+— not an `IOException`, so the `catch (IOException)` written for exactly this walked past it — and
+`File.ReadAllText` shares `Read` only, so every reader forbids the next write. Five `coai-mcp`
+processes were running, one per VS Code window, each polling that directory. Fixed on the phase-3
+branch with four tests; the deployed binary still carries the defect.
+
+## The open tail
+
+- **The code round for phase 3 never ran.** It is blocked by the defect above, in the INSTALLED
+  server; this branch's fix cannot help a process that is already running. Re-run
+  `review_code` for `feat/gate-snippet-shared-rule` over `feat/commands-and-autonomy` after the
+  server binary is reinstalled and the windows reconnect. The plan round did run: all 3 reviewers,
+  `good_enough`, 14 findings, 5 accepted, 9 rejected with reasons.
+- **Two branches to merge**, and `feat/commands-and-autonomy` itself is still unmerged and local:
+  `main` of this repository emits snippet v4 and knows nothing about the COMMANDS block, while the
+  installed extension is 0.29.x built from that branch.
+- **The running `coai-mcp` predates phases 1–2**, so rounds today still get `.claude/rules/shared`
+  as an empty directory. The conventions pass will only see the family's rules once the server is
+  rebuilt and reinstalled — which is also what the code round is waiting for.
