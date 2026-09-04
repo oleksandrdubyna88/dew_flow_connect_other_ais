@@ -111,10 +111,19 @@ public static class Program
             : [.. all.Where(c => options.Cases.Contains(c.Name, StringComparer.OrdinalIgnoreCase))];
     }
 
+    /// <summary>
+    /// Where the run goes — ABSOLUTE, because the server is handed it as its data directory.
+    /// </summary>
+    /// <remarks>
+    /// A relative one reached the server on the first real run and every reviewer failed with
+    /// "cannot find the path specified": a vendor CLI launches in a directory of its own. The server
+    /// resolves it now as well, and both are worth having — this one so the run files land where the
+    /// person expected, that one so no other caller can make the same mistake.
+    /// </remarks>
     private static string OutDir(Options options) =>
-        options.OutDir.Length > 0
+        Path.GetFullPath(options.OutDir.Length > 0
             ? options.OutDir
-            : Path.Combine("artifacts", "bench", DateTime.UtcNow.ToString("yyyy-MM-dd-HHmmss"));
+            : Path.Combine("artifacts", "bench", DateTime.UtcNow.ToString("yyyy-MM-dd-HHmmss")));
 
     private static async Task<int> JudgeAsync(Options options, CancellationToken ct)
     {

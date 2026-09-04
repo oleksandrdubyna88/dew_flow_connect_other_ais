@@ -208,7 +208,13 @@ public sealed record PanelSettings
         EscalationBudget = env("COAI_ESCALATION_SECONDS") is { Length: > 0 }
             ? TimeSpan.FromSeconds(IntVar(env, "COAI_ESCALATION_SECONDS", 30))
             : TimeSpan.FromMinutes(IntVar(env, "COAI_ESCALATION_MINUTES", 30)),
-        DataDir = env("COAI_DATA_DIR") is { Length: > 0 } dir ? dir : DefaultDataDir,
+        // ABSOLUTE, always. A relative one was accepted happily and made every round unrunnable: the
+        // server writes its schema file and hands the reviewer that same relative path, and a vendor
+        // CLI is launched in a directory of its own — so every reviewer answered "cannot find the
+        // path specified" and the round came back `call_human` with nothing reviewed. Everything
+        // reported success until the answer was empty, which is the worst shape a configuration
+        // mistake can take. Found by this repository's own bench on its first real run.
+        DataDir = env("COAI_DATA_DIR") is { Length: > 0 } dir ? Path.GetFullPath(dir) : DefaultDataDir,
         LocalMaxTokens = IntVar(env, "COAI_LOCAL_MAX_TOKENS", 8192),
         Autonomous = Flag(env, "COAI_AUTONOMOUS"),
         SplitPlan = Flag(env, "COAI_SPLIT_PLAN"),
