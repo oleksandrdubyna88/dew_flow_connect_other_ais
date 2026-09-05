@@ -126,11 +126,18 @@ function parts(version: string): number[] {
  * <p>Empty rather than an error: an offline machine is not a failure worth showing, which is how
  * the server's own update check already behaves.</p>
  */
+/** Where a vendor's newest version is read from. Exported for the test that pins the escaping. */
+export function registryUrlFor(source: VersionSource): string {
+  return source.kind === 'npm'
+    // Every slash, not the first: a scoped name has exactly one, so the two are equivalent today,
+    // and CodeQL (js/incomplete-sanitization, 2026-09-05) is right that a sanitiser which handles
+    // the first occurrence is a sanitiser that fails the moment the input has a second.
+    ? `https://registry.npmjs.org/${source.package.replaceAll('/', '%2f')}/latest`
+    : source.url;
+}
+
 export async function latestCliVersion(source: VersionSource): Promise<string> {
-  const url =
-    source.kind === 'npm'
-      ? `https://registry.npmjs.org/${source.package.replace('/', '%2f')}/latest`
-      : source.url;
+  const url = registryUrlFor(source);
   try {
     const response = await fetch(url, { headers: { accept: 'application/json' } });
     if (!response.ok) {
