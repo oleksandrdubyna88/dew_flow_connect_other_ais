@@ -87,6 +87,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The snippet the ⋯ menu hands out and the shared rule six repositories load must be the same
+      # text, and the only test that can compare them reads the rule out of this submodule. Without
+      # this step that test has nothing to read — and it FAILS here rather than skipping, because a
+      # skip in CI is how a changed snippet merges behind a green tick. One submodule, depth 1: the
+      # job needs a markdown file, not a history.
+      - name: Conventions submodule
+        run: git submodule update --init --depth 1 .claude/rules/shared
+
       - uses: actions/setup-node@v7
         with:
           node-version: 22
