@@ -112,7 +112,7 @@ public sealed class RoundsQueryTests : IDisposable
     }
 
     [Fact]
-    public void AFindingRaisedAgainOverAStandingRejection_IsListedOnItsOwn()
+    public void AFindingRaisedAgainAndRejectedAgain_IsListedOnItsOwn()
     {
         // The more interesting kind of disagreement, and a much shorter list than the accepted one.
         var standing = Found("session file opened without FileShare");
@@ -120,12 +120,43 @@ public sealed class RoundsQueryTests : IDisposable
         {
             db.RecordRound(Session, Round(2), [standing, Found("something new")],
                 new RoundContext("SCOPE", "7133c2f", "claude-code", [standing]));
+            db.RecordDecisions("s1", "CodeReview", 2,
+                [new Decision.Rejected(standing, "still no"), new Decision.Accepted(Found("something new"))]);
         }
 
         var defended = RoundsQuery.Read(_dir).Defended;
 
         defended.Should().ContainSingle().Which.Title.Should().Be("session file opened without FileShare");
         defended[0].ReRaised.Should().BeTrue();
+        defended[0].Reason.Should().Be("still no");
+    }
+
+    [Fact]
+    public void AFindingRaisedAgainAndThenACCEPTED_IsNotADefendedDisagreement()
+    {
+        // The opposite case, and the one the code gate caught: a repeat the caller was PERSUADED by
+        // is not a disagreement it is defending. Listing it there would report a false one.
+        var persuaded = Found("session file opened without FileShare");
+        using (var db = RoundsDb.Open(_dir, _log)!)
+        {
+            db.RecordRound(Session, Round(2), [persuaded],
+                new RoundContext("SCOPE", "7133c2f", "claude-code", [persuaded]));
+            db.RecordDecisions("s1", "CodeReview", 2, [new Decision.Accepted(persuaded)]);
+        }
+
+        RoundsQuery.Read(_dir).Defended.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AFindingRaisedAgainAndNotYetDecided_IsNotListedEither()
+    {
+        var open = Found("session file opened without FileShare");
+        using (var db = RoundsDb.Open(_dir, _log)!)
+        {
+            db.RecordRound(Session, Round(2), [open], new RoundContext("SCOPE", "7133c2f", "claude-code", [open]));
+        }
+
+        RoundsQuery.Read(_dir).Defended.Should().BeEmpty("nobody has argued with it a second time yet");
     }
 
     [Fact]

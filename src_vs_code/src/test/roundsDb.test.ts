@@ -44,7 +44,7 @@ const NOW = Date.parse('2026-09-05T08:00:00.000Z');
 const LOG: DbLog = {
   rounds: [{
     repoPath: 'D:\\repo', branch: 'main', stage: 'CodeReview', number: 1,
-    startedUtc: '2026-09-05T07:41:00.000Z', accepted: 1, rejected: 1,
+    startedUtc: '2026-09-05T07:41:00.000Z', sessionId: 's1', accepted: 1, rejected: 1,
     findings: [
       {
         ordinal: 0, severity: 'Major', category: 'Reliability', file: 'src/Panel.cs', line: 40,
@@ -100,9 +100,15 @@ test('nonsense, or a shape from a future server, is an empty log rather than a b
 
 test('a round is matched however Windows spelled its path', () => {
   assert.equal(
-    roundKeyOf('D:\\repo\\', 'MAIN', 'CodeReview', 1),
-    roundKeyOf('d:/repo', 'main', 'codereview', 1),
+    roundKeyOf('s1', 'D:\\repo\\', 'MAIN', 'CodeReview', 1),
+    roundKeyOf('s1', 'd:/repo', 'main', 'codereview', 1),
     'separators, a trailing slash and case are not three different repositories');
+  // And the session is in the key because round numbers restart: one repository and branch reviewed
+  // twice has two "CodeReview round 1" records, and keyed without it the second overwrote the first.
+  assert.notEqual(
+    roundKeyOf('s1', 'D:/repo', 'main', 'CodeReview', 1),
+    roundKeyOf('s2', 'D:/repo', 'main', 'CodeReview', 1),
+    'two sessions each have a round 1');
 });
 
 test('the row a round belongs to carries its findings', () => {

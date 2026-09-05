@@ -28,6 +28,15 @@ public sealed record LoggedRound(
     string StartedUtc,
     int Accepted,
     int Rejected,
+    /// <summary>
+    /// Which session it belonged to — the half of the key that makes it unique.
+    /// </summary>
+    /// <remarks>
+    /// Round numbers restart per session, so one repository and branch reviewed twice has two
+    /// "CodeReview round 1" records; without this the second overwrote the first and a row showed
+    /// another review's findings. Found by the code gate, two vendors independently.
+    /// </remarks>
+    string SessionId,
     IReadOnlyList<LoggedFinding> Findings);
 
 /// <summary>How often one kind of thing was accepted — a category, a role, or a vendor.</summary>
@@ -66,7 +75,9 @@ public static class RoundsQuery
             return new LoggedLog([], [], []);
         }
 
-        using var db = new SqliteConnection($"Data Source={file};Pooling=False;Mode=ReadOnly");
+        // Read-only, unpooled, and with a busy timeout rather than the default of none: a reader
+        // never blocks a WAL writer, but the open itself can still meet a checkpoint.
+        using var db = new SqliteConnection($"Data Source={file};Pooling=False;Mode=ReadOnly;Default Timeout=5");
         db.Open();
 
         return new LoggedLog(Rounds(db, limit), BlindSpots(db), Defended(db));
@@ -77,7 +88,7 @@ public static class RoundsQuery
         var findings = FindingsByRound(db, limit);
         using var read = db.CreateCommand();
         read.CommandText = """
-            SELECT r.id, s.repo_path, s.branch, r.stage, r.number, r.started_utc, r.accepted, r.rejected
+            SELECT r.id, s.repo_path, s.branch, r.stage, r.number, r.started_utc, r.accepted, r.rejected, r.session_id
             FROM rounds r JOIN sessions s ON s.id = r.session_id
             ORDER BY r.started_utc DESC LIMIT $limit
             """;
@@ -94,6 +105,7 @@ public static class RoundsQuery
                 rows.GetString(5),
                 rows.GetInt32(6),
                 rows.GetInt32(7),
+                rows.GetString(8),
                 findings.TryGetValue(rows.GetInt64(0), out var mine) ? mine : []));
         }
 
@@ -164,11 +176,11 @@ public static class RoundsQuery
     private static List<BlindSpot> GroupedBy(SqliteConnection db, string column)
     {
         using var read = db.CreateCommand();
-        // The column is one of three names written HERE, never anything a caller sends — the only
-        // way a column name can be interpolated safely, and it is worth saying out loud.
+        // The column is one of three names written HERE, never anything a caller sends — and it is
+        // quoted anyway, so the shape cannot become an injection the day somebody makes it dynamic.
         read.CommandText = $"""
-            SELECT {column}, SUM(resolution = 'accept'), COUNT(*)
-            FROM findings WHERE resolution <> '' GROUP BY {column} ORDER BY 2 DESC
+            SELECT "{column}", SUM(resolution = 'accept'), COUNT(*)
+            FROM findings WHERE resolution <> '' GROUP BY "{column}" ORDER BY 2 DESC
             """;
         using var rows = read.ExecuteReader();
         var spots = new List<BlindSpot>();
@@ -187,9 +199,13 @@ public static class RoundsQuery
     /// Findings a reviewer raised again over a rejection that still stood.
     /// </summary>
     /// <remarks>
-    /// Capped, and the cap is REPORTED rather than silent: a list that was cut and looks whole is
-    /// worse than no list, because somebody counts it later and reads the cap as the measurement.
-    /// One extra row is fetched so the caller can tell "exactly two hundred" from "more than that".
+    /// <para>Rejected AGAIN, not merely raised again: a finding the caller rejected once, had put to
+    /// it a second time, and rejected once more. Without that condition the list also held the ones
+    /// it was persuaded by — a repeat that was then ACCEPTED is the opposite of a defended
+    /// disagreement, and it is the case this tab exists to tell apart. Found by the code gate.</para>
+    /// <para>Capped, and the cap is REPORTED rather than silent: a list that was cut and looks whole
+    /// is worse than no list, because somebody counts it later and reads the cap as the measurement.
+    /// One extra row is fetched so the caller can tell "exactly two hundred" from "more than that".</para>
     /// </remarks>
     private static List<LoggedFinding> Defended(SqliteConnection db)
     {
@@ -197,7 +213,7 @@ public static class RoundsQuery
         read.CommandText = """
             SELECT ordinal, severity, category, file, line, title, why, fix, role, is_gating,
                    providers, resolution, reason, re_raised
-            FROM findings WHERE re_raised = 1 ORDER BY id DESC LIMIT $limit
+            FROM findings WHERE re_raised = 1 AND resolution = 'reject' ORDER BY id DESC LIMIT $limit
             """;
         read.Parameters.AddWithValue("$limit", DefendedCap + 1);
         using var rows = read.ExecuteReader();

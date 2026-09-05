@@ -39,6 +39,8 @@ export interface DbRound {
   readonly stage: string;
   readonly number: number;
   readonly startedUtc: string;
+  /** Which session it belonged to — the half of the key that makes it unique. */
+  readonly sessionId: string;
   /** How the caller closed the gate; -1 until it did. */
   readonly accepted: number;
   readonly rejected: number;
@@ -89,6 +91,7 @@ function round(raw: Partial<DbRound>): DbRound {
     stage: raw.stage ?? '',
     number: raw.number ?? 0,
     startedUtc: raw.startedUtc ?? '',
+    sessionId: raw.sessionId ?? '',
     accepted: raw.accepted ?? -1,
     rejected: raw.rejected ?? -1,
     findings: (raw.findings ?? []).map(finding),
@@ -118,12 +121,24 @@ function finding(raw: Partial<DbFinding>): DbFinding {
  * The key a round is found by, from either side.
  *
  * <p>The page builds its rows from the session files and the database knows nothing of them, so the
- * two are matched on what both record: the repository, the branch, the stage and the round number.
- * Paths are compared the way this family compares them everywhere — separators normalised, case
- * ignored, because Windows writes the same folder three ways in one afternoon.</p>
+ * two are matched on what both record: the SESSION, the repository, the branch, the stage and the
+ * round number. Paths are compared the way this family compares them everywhere — separators
+ * normalised, case ignored, because Windows writes the same folder three ways in one afternoon.</p>
+ *
+ * <p><b>The session is part of it because round numbers restart.</b> One repository and branch
+ * reviewed twice has two "CodeReview round 1" records; keyed without the session, the second
+ * overwrote the first and a row showed another review's findings. Two of the gate's reviewers found
+ * that independently.</p>
  */
-export function roundKeyOf(repoPath: string, branch: string, stage: string, number: number): string {
+export function roundKeyOf(
+  sessionId: string,
+  repoPath: string,
+  branch: string,
+  stage: string,
+  number: number,
+): string {
   return [
+    sessionId,
     repoPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase(),
     branch.toLowerCase(),
     stage.toLowerCase().replace(/\s+/g, ''),
@@ -135,7 +150,7 @@ export function roundKeyOf(repoPath: string, branch: string, stage: string, numb
 export function findingsByRound(log: DbLog): Map<string, readonly DbFinding[]> {
   const byRound = new Map<string, readonly DbFinding[]>();
   for (const one of log.rounds) {
-    byRound.set(roundKeyOf(one.repoPath, one.branch, one.stage, one.number), one.findings);
+    byRound.set(roundKeyOf(one.sessionId, one.repoPath, one.branch, one.stage, one.number), one.findings);
   }
 
   return byRound;

@@ -107,6 +107,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private openRouterPrices: PriceTable = {};
   private liteLlmPrices: PriceTable = {};
   private pricesCheckedAt = 0;
+  /** The rounds database as last read, and when — a read is a process spawn. */
+  private roundsLogCache: DbLog = EMPTY_LOG;
+  private roundsLogAt = 0;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -181,9 +184,19 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * showing everything it builds from the session files.</p>
    */
   async roundsLog(): Promise<DbLog> {
+    // Cached for a few seconds, because the log page refreshes every tick while a round runs and
+    // each read is a process spawn plus a walk of the whole findings table. The gate called that
+    // out twice: a hot path is not where a child process belongs. A few seconds is shorter than any
+    // round and longer than any burst of ticks.
+    const AGE_MS = 10_000;
+    if (Date.now() - this.roundsLogAt < AGE_MS) {
+      return this.roundsLogCache;
+    }
     const server = serverPath(this.context.globalStorageUri);
+    this.roundsLogAt = Date.now();
+    this.roundsLogCache = server === undefined ? EMPTY_LOG : await readLog(server.fsPath);
 
-    return server === undefined ? EMPTY_LOG : readLog(server.fsPath);
+    return this.roundsLogCache;
   }
 
   /**

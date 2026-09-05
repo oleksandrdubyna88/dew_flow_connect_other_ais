@@ -161,7 +161,8 @@ function rowFrom(
     vendors: [...new Set(states.map((s) => s.provider))],
     reviewers: reviewerLines(round),
     reviewerColours: rows.map((r) => vendorColour(r.provider)),
-    found: byRound.get(roundKeyOf(session.state.repoPath, session.state.branch, round.stage, round.number)) ?? [],
+    found: byRound.get(roundKeyOf(
+      session.state.sessionId, session.state.repoPath, session.state.branch, round.stage, round.number)) ?? [],
   };
 }
 
