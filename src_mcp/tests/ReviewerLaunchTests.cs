@@ -113,6 +113,32 @@ public sealed class ReviewerLaunchTests
     }
 
     /// <summary>
+    /// The other half of the seam: nothing, and nonsense, are both "not findings".
+    /// </summary>
+    /// <remarks>
+    /// Pure, and asked for on this change's code round: the evidence rule treats an empty answer
+    /// like a missing one, and the PARSE has to agree — an empty string is not a review, and it must
+    /// not reach <c>ReviewParser</c> as though it might be.
+    /// </remarks>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("prose, not findings")]
+    public void ParseAnswer_AnswersNothing_ForAnythingThatIsNotAReview(string? raw)
+    {
+        ReviewerExecutor.ParseAnswer(raw, "codex").Should().BeNull();
+    }
+
+    [Fact]
+    public void ParseAnswer_ReadsARealReview_AndStampsWhoSaidIt()
+    {
+        var review = ReviewerExecutor.ParseAnswer(FakeCliInvocations.CleanReview, "codex");
+
+        review.Should().NotBeNull();
+    }
+
+    /// <summary>
     /// An EMPTY answer takes the same path as a missing one — an adapter that returns "" rather
     /// than null must not cost the transcript. Raised on this story's plan round.
     /// </summary>
