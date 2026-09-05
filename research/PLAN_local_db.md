@@ -114,7 +114,7 @@ round record keeps counts.
 2. `sql.js` in the VSIX; `RoundsDbReader` opening the file's bytes read-only; the page's provider
    pushes query results; the JSON path stays as the fallback when there is no database yet.
 3. The page: findings under an expanded row (closing
-   [PLAN_findings_in_the_log.md](PLAN_findings_in_the_log.md)); the search box queries FTS through the
+   [todo/PLAN_findings_in_the_log.md](../todo/PLAN_findings_in_the_log.md)); the search box queries FTS through the
    provider with a small debounce, results replacing the table.
 
 ### Epic 3 — measured
