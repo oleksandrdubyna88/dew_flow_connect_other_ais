@@ -209,12 +209,10 @@ public sealed class SessionStore(string dataDir)
     private static string ReadShared(string file)
     {
         using var turn = SessionTurn.Take(file);
-        using var stream = new FileStream(
-            file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        using var reader = new StreamReader(stream);
 
-        return reader.ReadToEnd();
+        return SharedRead.Text(file);
     }
+
 
     public void Save(PersistedSession session)
     {
