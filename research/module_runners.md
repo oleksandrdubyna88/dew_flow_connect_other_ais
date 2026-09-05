@@ -43,7 +43,8 @@ sequenceDiagram
 | `ReviewerRuntimeSelector` | same | unknown provider refuses naming the catalog |
 | `ReviewerOutcome` (closed), `ReviewerExecutor`, `RateLimit` | `Reviewers/ReviewerExecutor.cs` | one launch + one repair; SIX named outcomes incl. NotStarted; `Ok` carries the run's `Usage`, both launches counted when repaired |
 | `Usage`, `UsageParser` | `core/Findings/UsageParser.cs` | schema-less scan over any vendor envelope; MAX per key name then sum per category, so a streamed cumulative total is never summed with itself; money only when the vendor priced the run |
-| `BoundedScheduler`, `ReviewerWork`, `ReviewerSummaryFactory` | `Reviewers/BoundedScheduler.cs` | global + per-provider semaphores; one rate-limit retry after backoff |
+| `BoundedScheduler`, `ReviewerWork`, `ReviewerSummaryFactory` | `Reviewers/BoundedScheduler.cs` | global + per-provider semaphores; a rate limit climbs the ladder below |
+| `RetryLadder` | `Reviewers/RetryLadder.cs` | the waits and when to stop: four steps, jittered, bounded by the reviewer's own deadline; pure, so the jitter is a table rather than a stopwatch |
 
 ## The decisions a reader needs
 
@@ -62,6 +63,23 @@ sequenceDiagram
   ground, with the visibility half accepted.
 - **Provider cap beside the global cap** — a rate limit is per vendor; a global cap alone puts all
   its slots on one provider.
+- **A rate limit gets a LADDER, not one retry** — 5 s, 30 s, 60 s, 120 s (`COAI_RETRY_BACKOFF`),
+  each spread by up to a fifth either way. One interval was the wrong single number for the two
+  things it had to serve: a plain `429`/`503 high demand` clears in seconds, while a usage window
+  does not clear inside a round at all. The jitter is not decoration — a code round launches nine
+  reviewers at once, so nine meet the limit in the same instant and a fixed interval would send them
+  all back into it in the same instant too.
+  Three things end the climb: the ladder is spent, the limit is **hopeless** (a daily allowance —
+  still not retried at all, ladder or no ladder), or the next wait would outrun the reviewer's own
+  deadline. That last budget counts WALL CLOCK from the first launch, not the sum of the waits: the
+  failed launches are most of the time spent, and 5 s + 30 s of waiting fits a 60-second deadline
+  that the two attempts producing them have already blown.
+  **`COAI_RATE_LIMIT_BACKOFF_SECONDS` still means what it meant** — set alone, it is a one-step
+  ladder at that number. A deployment that deliberately chose 45 seconds must not silently become
+  four retries, and nothing would have said so; an unreadable `COAI_RETRY_BACKOFF` falls back and is
+  reported through `PanelSettings.Unrecognised` rather than half-applied.
+  The round's summary carries the attempts it actually took (`RateLimited.Attempts`), because
+  "after one retry" was a true sentence with one step and a confident wrong number with four.
 - **Antigravity (`agy`) is the closest fit to this product's contract**: `--json-schema` puts the
   finding schema straight into `result.response`, the same envelope carries `usage`, and the model
   ids carry their own reasoning effort. Its prompt rides `--input-format stream-json` on stdin as

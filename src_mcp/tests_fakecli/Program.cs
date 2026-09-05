@@ -10,6 +10,13 @@
 //   flip <flag> <firstStderr> <firstExit> <thenStdout>
 //                                        — first launch: create <flag>, stderr, exit <firstExit>;
 //                                          later launches: <thenStdout> to stdout, exit 0
+//   fail-until <counter> <n> <stderr> <exit> <thenStdout>
+//                                        — while <counter> has <n> lines or fewer: stderr, exit
+//                                          <exit>; after that: <thenStdout> to stdout, exit 0.
+//                                          Pair it with the `count <counter>` prefix, which is what
+//                                          writes those lines. `flip` is the same idea for n=1 and
+//                                          stays because half the suite uses it; a ladder needs a
+//                                          stand-in that can fail more than once.
 //
 // Deliberately dumb: every behaviour a test needs, none it does not.
 
@@ -171,7 +178,38 @@ switch (args0)
         Console.Out.Write(thenStdout);
         return 0;
 
+    case ["fail-until", var counter, var times, var stderrText, var exitCode, var thenStdout]:
+        // The counter is read, never written, here: the `count` prefix above has already appended
+        // this launch's line, so a launch sees its own attempt number.
+        if (LinesIn(counter) <= int.Parse(times))
+        {
+            Console.Error.WriteLine(stderrText);
+            return int.Parse(exitCode);
+        }
+
+        Console.Out.Write(thenStdout);
+        return 0;
+
     default:
         Console.Error.WriteLine($"fake-cli: unknown verb [{string.Join(' ', args0)}]");
         return 64;
+}
+
+/// <summary>
+/// How many launches the counter file has recorded — with a share mode that tolerates the writer
+/// above, since on Windows a plain read of a file another handle has open throws.
+/// </summary>
+static int LinesIn(string path)
+{
+    try
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new StreamReader(stream);
+
+        return reader.ReadToEnd().Split('\n', StringSplitOptions.RemoveEmptyEntries).Length;
+    }
+    catch (FileNotFoundException)
+    {
+        return 0;
+    }
 }

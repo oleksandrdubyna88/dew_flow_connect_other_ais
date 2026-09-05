@@ -284,10 +284,9 @@ for it answers `404 lost — the server restarted while this review ran`, which 
 | The vendor, transient (`429 Too Many Requests`, `503 high demand`, no time) | next slot without waiting; none free → **5 s → 30 s → 60 s → 120 s**, jitter ±20 % (nine reviewers start together and would otherwise retry together), `Retry-After` overrides a step upward, all inside the reviewer's deadline (3 m 35 s of 10 min); then `RateLimited` + 5 min cooldown |
 | This server (per-caller cap or the rate limiter) | the client shim honours `Retry-After` and re-submits; polling never reaches the limiter (≤ 1 request per 25 s per reviewer) |
 
-The steps are configuration, `COAI_RETRY_BACKOFF=5,30,60,120`, read into `RetryLadder` in Runners.
-`BoundedScheduler.RunWithOneRetryAsync` (`:364`) — one retry after `RateLimitBackoff`, skipped when
-`Hopeless` (`:374`) — becomes a call to the same ladder, so the developer's own `coai-mcp` gets the same
-protection against a local codex 429.
+The steps are configuration, `COAI_RETRY_BACKOFF=5,30,60,120`, read into `RetryLadder` in Runners —
+**already shipped** ahead of this plan, so what the server adds is the slot rotation around it, not the
+waiting itself.
 
 ### Usage and admins
 
@@ -385,7 +384,7 @@ suites, the same guard `LocalRuntime.OpenAiBaseOf` / `openAiBaseOf` live under.
 | `VendorHealth.ProbeAsync` | `PanelService.cs:134` | the catalog's health column |
 | `RuntimeResolution` — `RuntimeNameOf`, `RuntimeFor`, `AuthOf` | `PanelService.cs:231-262` | the "third copy of one decision" that already shipped a defect must not get a fourth |
 | `UsageLedger` | `src_mcp/src/Server/UsageLedger.cs` | it references nothing MCP-shaped today |
-| `RetryLadder` | new, replacing `BoundedScheduler.RunWithOneRetryAsync`'s single step (`:364`) | the same ladder on both machines |
+| ~~`RetryLadder`~~ | **done** — shipped separately, `Reviewers/RetryLadder.cs`; `BoundedScheduler` climbs it and `COAI_RATE_LIMIT_BACKOFF_SECONDS` still means one step | the same ladder on both machines |
 
 `PanelService.cs` shrinks to one-line delegations. `CoaiMcp.Tests` must pass **unchanged** after the move —
 that is the proof it was a move.
@@ -641,7 +640,7 @@ The split was made on Fable; stories marked **F** run on Fable because being wro
 
 | Epic | Story | Delivers | Model |
 |---|---|---|---|
-| **1 · One library for two binaries** | 1.1 | `ReviewerExecutor.LaunchAsync` out of `RunOnceAsync`; `RetryLadder` replacing the single retry; `CoaiMcp.Tests` unchanged | Opus |
+| **1 · One library for two binaries** | 1.1 | `ReviewerExecutor.LaunchAsync` out of `RunOnceAsync`; `CoaiMcp.Tests` unchanged. (`RetryLadder` **shipped ahead of this epic**, on its own — it fixes the local `coai-mcp` today, where a transient 429 gets one retry at fifteen seconds and then fails the round.) | Opus |
 | | 1.2 | `RuntimeResolution` + `VendorHealth` out of `PanelService`; `UsageLedger` moved | Opus |
 | | 1.3 | `RemoteRuntime`, `RemoteAsk`, `TeamServerAuth` (with URL normalisation and the shared vector), `--ask-remote`, every registry point, `ProbeAsync`'s remote arm | Opus |
 | **2 · `coai-server`** | 2.1 | skeleton, logging, guards, the mirrored auth, sessions, `X-Coai-Contract`, the harness | **F** |

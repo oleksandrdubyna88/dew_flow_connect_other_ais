@@ -38,7 +38,17 @@ public abstract record ReviewerOutcome
     /// bare "exit 1" made: a per-minute throttle a retry clears and a DAILY quota that no retry
     /// can clear read identically, and only one of them is worth waiting for.
     /// </param>
-    public sealed record RateLimited(string Reason = "") : ReviewerOutcome;
+    /// <param name="Attempts">
+    /// How many launches it actually took before this was the answer — one when the limit was
+    /// hopeless from the first word, up to one more than the ladder has steps.
+    /// </param>
+    /// <remarks>
+    /// It travels ON the outcome because the summary is built from outcomes alone, and the number
+    /// is known only inside the scheduler's retry loop. Without it the round said "after one retry"
+    /// however many launches there had been — a sentence that was true when there was one step and
+    /// became a confident wrong number the moment there were four.
+    /// </remarks>
+    public sealed record RateLimited(string Reason = "", int Attempts = 1) : ReviewerOutcome;
 
     /// <summary>
     /// The process never ran: the CLI is not installed, or the configured path is wrong. Its own
