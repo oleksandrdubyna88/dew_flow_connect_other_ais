@@ -64,7 +64,10 @@ jobs:
       - name: The extension's coverage
         working-directory: src_vs_code
         run: |
-          npm ci
+          # --ignore-scripts: SonarCloud githubactions:S6505 — a lifecycle script runs as CI with the
+          # token in the environment. esbuild ships its binary as an optional platform dependency
+          # rather than a postinstall download, so the bundler the tests use still works without them.
+          npm ci --ignore-scripts
           npm run compile
           mkdir -p ../coverage
           node --test --experimental-test-coverage --test-reporter=lcov                --test-reporter-destination=../coverage/extension.lcov "out/test/"*.test.js
