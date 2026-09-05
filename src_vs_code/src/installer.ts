@@ -10,6 +10,7 @@ import {
   Side,
   assetNameFor,
   binaryNameFor,
+  companionsOf,
   entryPathIn,
   installedKey,
   ridFor,
@@ -281,11 +282,9 @@ async function verify(bytes: Uint8Array, sumUrl: string, asset: string): Promise
  * companion is a feature that degrades, not a server that will not start.</p>
  */
 async function copyCompanions(from: vscode.Uri, storage: vscode.Uri, rid: CoaiRid): Promise<void> {
-  const binary = binaryNameFor(rid);
-  for (const [name, kind] of await vscode.workspace.fs.readDirectory(from)) {
-    if (kind !== vscode.FileType.File || name === binary) {
-      continue;
-    }
+  const entries = (await vscode.workspace.fs.readDirectory(from))
+    .map(([name, kind]) => [name, kind === vscode.FileType.File] as const);
+  for (const name of companionsOf(entries, rid)) {
     try {
       await vscode.workspace.fs.copy(
         vscode.Uri.joinPath(from, name),
