@@ -236,4 +236,77 @@ public sealed class EscalationsTests : IDisposable
         await polling;
         failures.Should().Be(0, "a person's answer must not be refused because the server was looking at the file");
     }
+
+    [Fact]
+    public async Task TheServersOwnAtomicWrite_IsNotRefusedByAServerReadingIt()
+    {
+        // The half the first test missed, and the gate caught: the server saves a question by
+        // writing a scratch file and MOVING it over the real one, and on Windows that move is a
+        // DELETE of the open file. Sharing flags alone were measured to be not enough here — with
+        // the reader sharing delete and the rename retried ten times, hot readers still starved the
+        // writer — so both sides take the same TURN, which is the mechanism this repository already
+        // arrived at for session files. 174 of 200 replacements were refused before that.
+        using var stop = new CancellationTokenSource();
+        var polling = Task.Run(() =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                _escalations.DecisionFor("s-1");
+            }
+        });
+
+        var failures = 0;
+        for (var attempt = 0; attempt < 200; attempt++)
+        {
+            try
+            {
+                _escalations.Notify(Question("q1") with { Question = "attempt " + attempt });
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // BOTH, because File.Move answers with UnauthorizedAccessException and this
+                // repository has already lost six rounds to a catch that named only IOException.
+                failures++;
+            }
+        }
+
+        await stop.CancelAsync();
+        await polling;
+        failures.Should().Be(0, "the server's own atomic save must survive another server reading the file");
+    }
+
+    [Fact]
+    public async Task TheSameHoldsForTheQUESTIONFile_NotOnlyTheAnswer()
+    {
+        // Both reads were on the plain File.ReadAllText, and a fix that took only the one this test
+        // suite happened to exercise would leave the other blocking the panel's own writes.
+        var path = _escalations.QuestionPath("q1");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "{}");
+        using var stop = new CancellationTokenSource();
+        var polling = Task.Run(() =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                _escalations.DecisionFor("s-1");
+            }
+        });
+
+        var failures = 0;
+        for (var attempt = 0; attempt < 200; attempt++)
+        {
+            try
+            {
+                File.WriteAllText(path, "{\"id\":\"q1\",\"text\":\"attempt " + attempt + "\"}");
+            }
+            catch (IOException)
+            {
+                failures++;
+            }
+        }
+
+        await stop.CancelAsync();
+        await polling;
+        failures.Should().Be(0, "the question file is written by the panel while the server reads it");
+    }
 }
