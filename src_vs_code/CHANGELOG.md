@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.30.0 — 2026-09-05 (server 0.18.0)
+
+**The gate's own rule stopped being a paste, and the panel can see where it went.** The block that
+teaches a repository's main AI to call this gate used to be copied into each repository's
+`CLAUDE.md`, and a copy does not move when its source does: `dew_flow_creds_for_devs` was found
+carrying **v2** while this extension handed out **v5** — three revisions behind, missing the whole
+COMMANDS block, the "reject in round 1" rule and the enforced stop after `call_human`. It lives once
+now, as `common/coai-review-gate.md` in `dew_flow_conventions`, and reaches six repositories through
+the submodule they already mount.
+
+So the panel reads two more places after the four instruction files: the mounted rule and its
+unmounted twin. A repository whose only copy is the mount now reports **current** instead of the
+*absent* it would have reported before. The instruction files stay FIRST on that list deliberately —
+a paste in `CLAUDE.md` is what the AI there actually reads, so a stale one has to be the sentence
+the panel says; answering with the mounted rule's version instead would be a green light over text
+still being obeyed.
+
+**A drift between the two is a red build.** A test asserts the mounted rule is byte-identical to
+what the ⋯ menu hands out. It skips on a fresh clone without the submodule and **fails under CI**,
+where the workflow now checks that one submodule out — a skip there is exactly how a changed snippet
+would merge behind a green tick. `gate-snippet-check.mjs` fails the build of any consumer that keeps
+its own copy of the block, which is the half a panel can never do: a panel only sees a repository
+somebody has opened.
+
+**Server 0.18.0** carries the other half — a round's worktree now actually contains the shared rules
+it is meant to be judged against, instead of the empty directory git leaves in a linked worktree.
+
 ## 0.29.13 — 2026-09-05 (server 0.17.5)
 
 **The Review rounds page came up empty again, saying `R is not defined`.** The same class of defect
