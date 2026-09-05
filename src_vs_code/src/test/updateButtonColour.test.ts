@@ -26,7 +26,7 @@ function css(): string {
   return panelHtml({
     settings: DEFAULTS,
     vendors: DEFAULT_VENDORS,
-    codexModels: [],
+    codexModels: [], agyModels: [],
     localEngines: {},
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
     side: '',

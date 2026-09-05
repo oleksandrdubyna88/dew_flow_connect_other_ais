@@ -23,7 +23,7 @@ import { DEFAULT_VENDORS } from '../vendors';
 const state = (): PanelState => ({
   settings: DEFAULTS,
   vendors: DEFAULT_VENDORS,
-  codexModels: [],
+  codexModels: [], agyModels: [],
   localEngines: {},
   server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
   side: '',

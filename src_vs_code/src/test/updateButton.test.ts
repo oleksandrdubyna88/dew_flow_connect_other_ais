@@ -33,7 +33,7 @@ function html(vendors: readonly Vendor[], cliStatus: Record<string, CliStatus>):
   return panelHtml({
     settings: DEFAULTS,
     vendors,
-    codexModels: [],
+    codexModels: [], agyModels: [],
     localEngines: {},
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
     side: '',

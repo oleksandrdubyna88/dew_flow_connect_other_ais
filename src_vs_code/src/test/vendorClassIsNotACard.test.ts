@@ -46,7 +46,7 @@ function state(): PanelState {
   return {
     settings: DEFAULTS,
     vendors: [],
-    codexModels: [],
+    codexModels: [], agyModels: [],
     localEngines: {},
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
     side: '',

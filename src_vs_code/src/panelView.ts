@@ -34,6 +34,8 @@ export interface PanelState {
   readonly settings: CoaiSettings;
   readonly vendors: readonly Vendor[];
   readonly codexModels: readonly ModelChoice[];
+  /** What `agy models` lists on this machine, or none when it could not be asked. */
+  readonly agyModels: readonly ModelChoice[];
   /**
    * The server binary on the side this panel is running on — the disk, then the binary's own
    * `--version`, then this side's record. Never a record made on another side.
@@ -258,7 +260,7 @@ function updateLabel(id: string, cli: CliStatus): string {
 }
 
 function reviewersBody(state: PanelState): string {
-  return `${state.vendors.map((v) => vendorCard(v, state.codexModels, state.cliStatus[v.id] ?? UNKNOWN_CLI, state.modelPrices[v.model], state.localEngines[v.id])).join('\n')}
+  return `${state.vendors.map((v) => vendorCard(v, state.codexModels, state.cliStatus[v.id] ?? UNKNOWN_CLI, state.modelPrices[v.model], state.localEngines[v.id], state.agyModels)).join('\n')}
 <button class="add" data-command="addVendor" title="${escapeHtml(HELP.addVendor)}">＋&nbsp; Add a reviewer</button>`;
 }
 
@@ -278,10 +280,11 @@ function vendorCard(
   cli: CliStatus,
   price: ModelPrice | undefined,
   localEngine?: LocalEngine,
+  agyModels: readonly ModelChoice[] = [],
 ): string {
   const id = escapeHtml(vendor.id);
   const local = vendor.runtime === 'local';
-  const models = modelsFor(vendor.runtime, codexModels, vendor.model, localEngine);
+  const models = modelsFor(vendor.runtime, codexModels, vendor.model, localEngine, agyModels);
   // Who is asked for an endpoint: everybody except the shipped vendors that already know where
   // they go. It used to be "everybody with a baseUrl already set, plus local" — which hid the field
   // from the one preset whose entire purpose is to be given a base URL ("Another OpenAI-compatible
@@ -344,7 +347,7 @@ ${local ? remoteNotice(vendor.baseUrl) : ''}
     <select data-setting="model" data-vendor="${id}" title="${escapeHtml(local ? HELP.localModel : HELP.vendorModel)}">
       ${modelOptions(models, vendor.model, local ? 'whatever the engine answers with' : "the CLI's default")}
     </select>
-    <div class="hint">${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(vendor.runtime, codexModels, localEngine))}</div>
+    <div class="hint">${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(vendor.runtime, codexModels, localEngine, agyModels))}</div>
   </div>${endpoint}${executable}
 </div>`;
 }

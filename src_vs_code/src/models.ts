@@ -31,6 +31,21 @@ export const RUNTIMES = ['codex', 'gemini', 'claude', 'antigravity', 'local'] as
 
 export type Runtime = (typeof RUNTIMES)[number];
 
+/**
+ * `agy models` → the ids it lists, in its order.
+ *
+ * <p>Two columns separated by a tab: the id, then the label a person reads. Anything else on the
+ * line — the "Fetching available models..." it prints first, a blank line, a warning — is not two
+ * columns and is skipped, so a CLI that greets you does not become a model called "Fetching".</p>
+ */
+export function parseAgyModels(text: string): ModelChoice[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.split('\t'))
+    .filter((columns) => columns.length >= 2 && columns[0]!.trim().length > 0 && columns[1]!.trim().length > 0)
+    .map((columns) => ({ id: columns[0]!.trim(), label: columns[1]!.trim() }));
+}
+
 /** `~/.codex/models_cache.json` → the slugs it lists. A missing or broken cache is simply none. */
 export function parseCodexModels(text: string): ModelChoice[] {
   try {
@@ -81,6 +96,7 @@ export function modelsFor(
   discoveredCodex: readonly ModelChoice[],
   current: string,
   localEngine?: LocalEngine,
+  discoveredAgy: readonly ModelChoice[] = [],
 ): ModelChoice[] {
   // A local engine's list is DISCOVERED, and that is the whole difference from the others: what can
   // be picked is what is installed on this machine this minute. A list compiled when this extension
@@ -106,7 +122,7 @@ export function modelsFor(
       : runtime === 'claude'
         ? [...CURATED_CLAUDE_MODELS]
         : runtime === 'antigravity'
-          ? [...ANTIGRAVITY_MODELS]
+          ? [...(discoveredAgy.length > 0 ? discoveredAgy : ANTIGRAVITY_MODELS)]
           : [...CURATED_GEMINI_MODELS];
   if (current.length > 0 && !base.some((m) => m.id === current)) {
     base.unshift({ id: current, label: `${current} (yours)` });
@@ -115,12 +131,17 @@ export function modelsFor(
 }
 
 /**
- * What `agy models` lists on a Google AI Pro subscription.
+ * What `agy models` listed on a Google AI Pro subscription WHEN THIS WAS WRITTEN.
  *
  * <p>One subscription, three families: the effort level is part of the model id rather than a
  * separate setting, which is why `-high` and `-low` are listed as distinct choices.</p>
+ *
+ * <p><b>A fallback, not the answer.</b> It is what the panel offers when the CLI cannot be asked,
+ * and it goes stale in silence — the operator found Gemini 3.8 Flash missing from this list on
+ * 2026-09-05 while `agy models` had listed it, along with 3.6 and a Pro (Low), for some time. The
+ * discovered list comes first now.</p>
  */
-const ANTIGRAVITY_MODELS: readonly ModelChoice[] = [
+export const ANTIGRAVITY_MODELS: readonly ModelChoice[] = [
   { id: 'gemini-3.7-flash-high', label: 'Gemini 3.7 Flash (High)' },
   { id: 'gemini-3.7-flash-medium', label: 'Gemini 3.7 Flash (Medium)' },
   { id: 'gemini-3.7-flash-low', label: 'Gemini 3.7 Flash (Low)' },
@@ -135,6 +156,7 @@ export function modelsProvenance(
   runtime: Runtime,
   discoveredCodex: readonly ModelChoice[],
   localEngine?: LocalEngine,
+  discoveredAgy: readonly ModelChoice[] = [],
 ): string {
   if (runtime === 'local') {
     // The engine's own note carries the reason when nothing answered, which is the case this line
@@ -148,7 +170,12 @@ export function modelsProvenance(
     return 'aliases the Claude CLI resolves to the latest of each family. Any exact id can be typed in.';
   }
   if (runtime === 'antigravity') {
-    return 'what `agy models` lists for this subscription — Gemini, Claude and GPT-OSS through one CLI.';
+    // The truth about where the list came from, which this line used to state wrongly: it claimed
+    // the CLI's own answer while offering a snapshot taken when the file was written — and the
+    // snapshot was a model generation behind before anybody noticed.
+    return discoveredAgy.length > 0
+      ? `${discoveredAgy.length} models \`agy models\` lists for this subscription.`
+      : 'a list from when this was written — `agy` did not answer, so it may be behind. Any id can be typed in.';
   }
   return discoveredCodex.length > 0
     ? `${discoveredCodex.length} models the Codex CLI has cached for this machine.`

@@ -23,7 +23,7 @@ const usage = [
 const state = (over: Partial<PanelState> = {}): PanelState => ({
   settings: DEFAULTS,
   vendors: DEFAULT_VENDORS,
-  codexModels: [],
+  codexModels: [], agyModels: [],
   localEngines: {},
   server: { kind: 'known', version: '0.6.0', remembered: false, updateOffered: true },
   side: '',
