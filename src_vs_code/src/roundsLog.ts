@@ -321,7 +321,14 @@ export function asInstant(localValue: string, endOfMinute: boolean): string {
   return isNaN(at) ? '' : new Date(at + (endOfMinute ? 59999 : 0)).toISOString();
 }
 
-/** What a figure in a money column says, or an em dash where there is no figure. */
+/**
+ * What a figure in a money column says, or an em dash where there is no figure.
+ *
+ * <p>Also embedded into the page, and also self-contained. {@link cost3} and {@link costTitle} carry
+ * their own copies of this rather than calling it: a function embedded by its source text cannot
+ * reach a module-level binding, because the minifier renames the binding and not the call inside the
+ * text. Two copies of four lines is the price of that, and the alternative was a blank page.</p>
+ */
 export function money(value: number | null | undefined): string {
   return typeof value !== 'number' || !isFinite(value)
     ? '—'
@@ -340,17 +347,34 @@ export function money(value: number | null | undefined): string {
  * plus marks a total that had to leave a reviewer out, so it is a floor.</p>
  */
 export function cost3(row: Costed): string {
+  // Its own copy of the money formatter, and that is the rule rather than an oversight: this
+  // function is embedded into the page by its SOURCE TEXT, into a scope where only its own name was
+  // re-declared. A call to a module-level binding arrives there under the name the minifier gave it
+  // - 0.29.12 shipped this calling money() and the page said "R is not defined" the moment a row
+  // asked for its cost. Self-contained is what makes an embedded function survive the bundler.
+  // (And no backticks in here either: this text lands inside a template literal.)
+  var figure = function (value: number | null | undefined): string {
+    return typeof value !== 'number' || !isFinite(value)
+      ? '—'
+      : '$' + value.toFixed(value < 1 ? 3 : 2);
+  };
   if (typeof row.costTotalUsd !== 'number') {
     return '—';
   }
 
   return (row.costIsEstimate ? '~' : '')
-    + money(row.costInUsd) + ' / ' + money(row.costOutUsd) + ' / ' + money(row.costTotalUsd)
+    + figure(row.costInUsd) + ' / ' + figure(row.costOutUsd) + ' / ' + figure(row.costTotalUsd)
     + (row.costPartial ? '+' : '');
 }
 
 /** The same thing in words, for the cell's tooltip — the column is narrow and the marks are one character. */
 export function costTitle(row: Costed): string {
+  // Self-contained, for the reason spelled out on cost3 above.
+  var figure = function (value: number | null | undefined): string {
+    return typeof value !== 'number' || !isFinite(value)
+      ? '—'
+      : '$' + value.toFixed(value < 1 ? 3 : 2);
+  };
   if (typeof row.costTotalUsd !== 'number') {
     return 'No price is listed for these models, so this round has no cost figure.';
   }
@@ -361,8 +385,8 @@ export function costTitle(row: Costed): string {
     ? ' Some of it could not be priced, so the total is a floor.'
     : '';
 
-  return 'Input ' + money(row.costInUsd) + ' + output ' + money(row.costOutUsd)
-    + ' = ' + money(row.costTotalUsd) + '. ' + how + part;
+  return 'Input ' + figure(row.costInUsd) + ' + output ' + figure(row.costOutUsd)
+    + ' = ' + figure(row.costTotalUsd) + '. ' + how + part;
 }
 
 /** Just the cost fields, because these three run in the page against plain row objects. */

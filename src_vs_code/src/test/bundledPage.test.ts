@@ -23,6 +23,31 @@ import * as path from 'node:path';
 /** The repository's `src_vs_code`. The suite runs from its root, which is what `npm test` does. */
 const ROOT = process.cwd();
 
+/** Every function the page embeds by its SOURCE TEXT, and therefore every one this file guards. */
+const EMBEDDED = ['compareRows', 'rowMatches', 'money', 'cost3', 'costTitle', 'asInstant'];
+
+const NOW = Date.parse('2026-09-05T08:00:00.000Z');
+
+/** One finished round, priced from one ledger line — enough to exercise every cell of a row. */
+const SESSION = {
+  state: { sessionId: 's1', repoPath: 'D:/repo', branch: 'main', stage: 'CodeReview', awaitingResolve: false },
+  rounds: [{
+    stage: 'CodeReview', number: 1, verdict: 'proceed', gatingCount: 1,
+    reviewers: 'all 2 reviewers answered', status: 'done',
+    startedUtc: '2026-09-05T07:41:00.000Z', completedUtc: '2026-09-05T07:43:10.000Z',
+    subject: 'SCOPE - something', tokensIn: 1_000_000, tokensOut: 200_000,
+    reviewerStates: [{ provider: 'codex', role: 'Architecture', status: 'done', findings: 1, note: '', seconds: 23 }],
+  }],
+};
+
+const USED = {
+  utc: '2026-09-05T07:42:00.000Z', provider: 'codex', model: 'gpt-5.6-sol', role: 'Architecture',
+  stage: 'CodeReview', seconds: 23, tokensIn: 1_000_000, tokensOut: 200_000, costUsd: null, outcome: 'ok',
+};
+
+const PRICES = (model: string) =>
+  model === 'gpt-5.6-sol' ? { inPerMillion: 2, outPerMillion: 10 } : undefined;
+
 function bundledPage(): { html: string; script: string } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-bundle-'));
   const entry = path.join(dir, 'entry.mjs');
@@ -46,8 +71,14 @@ function bundledPage(): { html: string; script: string } {
   new Function('module', 'exports', bundle)(shim, shim.exports);
   const module_ = shim.exports as unknown as {
     roundsLogHtml: (rows: unknown[], questions: unknown[], nonce: string, usage?: string) => string;
+    rowsFrom: (sessions: unknown[], now: number, priceOf?: unknown, usage?: unknown[]) => unknown[];
   };
-  const html = module_.roundsLogHtml([], [], 'n0nce');
+  // WITH a row, and a priced one. This helper used to render an empty page, and an empty page never
+  // calls the functions that format a row — which is exactly how 0.29.12 shipped "R is not defined":
+  // `cost3` is embedded by its source text and CALLED `money`, a module-level binding the minifier
+  // had renamed to `R`. The page defines `money`, so nothing looked missing until a row asked for
+  // its cost.
+  const html = module_.roundsLogHtml(module_.rowsFrom([SESSION], NOW, PRICES, [USED]), [], 'n0nce');
   fs.rmSync(dir, { recursive: true, force: true });
 
   return { html, script: html.slice(html.indexOf('<script'), html.lastIndexOf('</script>')) };
@@ -56,7 +87,7 @@ function bundledPage(): { html: string; script: string } {
 test('the minified bundle still defines the functions the page calls', () => {
   const { script } = bundledPage();
 
-  for (const name of ['compareRows', 'rowMatches']) {
+  for (const name of EMBEDDED) {
     assert.ok(
       new RegExp(`var ${name}\\s*=\\s*function`).test(script),
       `${name} is not defined in the page the bundle produces — this is the 0.29.10 defect`,
@@ -91,4 +122,56 @@ test('the page script the bundle produces parses and runs', () => {
     'the page script threw on its first render',
   );
   assert.equal(seen['failed']?.textContent ?? '', '', 'the page reported an error to itself on first render');
+  assert.match(
+    seen['rows']?.innerHTML ?? '',
+    /<tr/,
+    'the page rendered no rows, so nothing that formats a row was ever called');
 });
+
+test('a function embedded by its source calls nothing the minifier can rename', () => {
+  // The rule this file exists for, stated as a CHECK rather than left to a runtime error. A function
+  // embedded by `.toString()` lands in a scope where only its own name was re-declared, so any other
+  // module-level binding it calls arrives under the minified name - `R`, `q`, `Ee` - and the page
+  // dies the moment that line runs. Self-contained is the whole contract.
+  const { script } = bundledPage();
+
+  for (const name of EMBEDDED) {
+    assert.deepEqual(
+      strangers(embedded(script, name), name),
+      [],
+      `${name} calls a name that only exists inside the bundle - inline what it needs`);
+  }
+});
+
+/** The source of one embedded function, from `var name = function` to its closing brace. */
+function embedded(script: string, name: string): string {
+  const start = script.indexOf(`var ${name} = function`);
+  assert.notEqual(start, -1, `${name} is not embedded in the page`);
+  let depth = 0;
+  for (let at = script.indexOf('{', start); at < script.length; at++) {
+    depth += script[at] === '{' ? 1 : script[at] === '}' ? -1 : 0;
+    if (depth === 0) {
+      return script.slice(start, at + 1);
+    }
+  }
+
+  return assert.fail(`${name} is never closed`);
+}
+
+/**
+ * Names this function calls that it did not declare and cannot see.
+ *
+ * <p>Short ones only: a minifier writes one to three characters and nothing here is written that way
+ * by hand, so `R(` inside an embedded function is a call into the bundle's own scope. Methods are
+ * skipped - `a.b()` is a property of something already in hand.</p>
+ */
+function strangers(body: string, name: string): string[] {
+  const declared = [...body.matchAll(/\b(?:function|var|let|const)\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1]);
+  const params = body.slice(body.indexOf('(') + 1, body.indexOf(')')).split(',').map((p) => p.trim());
+  const mine = new Set([name, 'if', 'for', 'while', 'switch', 'catch', 'return', 'typeof', ...declared, ...params]);
+
+  return [...new Set(
+    [...body.matchAll(/(?:^|[^\w$.])([A-Za-z_$][\w$]{0,2})\s*\(/g)]
+      .map((m) => m[1] as string)
+      .filter((called) => !mine.has(called)))];
+}

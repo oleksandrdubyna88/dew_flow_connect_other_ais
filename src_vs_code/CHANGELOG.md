@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.29.13 — 2026-09-05 (server 0.17.5)
+
+**The Review rounds page came up empty again, saying `R is not defined`.** The same class of defect
+as 0.29.10's `rowMatches is not defined`, and the guard written for that one could not see it: the
+page embeds some functions by their SOURCE TEXT, and `cost3` — added in 0.29.12 — *called* `money`.
+Minified, `money` becomes `R` inside the bundle, and the text of `cost3` goes to the page still
+calling `R`, which the page has never heard of. The page defined `money` under its own name, so
+nothing looked missing until a row asked for its cost.
+
+So an embedded function now carries what it needs. And the check for it is no longer a runtime
+error waiting to happen:
+
+- the bundled-page test renders a page **with a row in it** — the old one rendered an empty page,
+  and an empty page never calls anything that formats a row, which is precisely why it passed while
+  the installed extension died;
+- a new test reads each embedded function out of the shipped page and fails if it calls any name
+  short enough to be a minifier's and not declared inside it. `cost3 calls a name that only exists
+  inside the bundle` is what it says, before anybody installs anything.
+
 ## 0.29.12 — 2026-09-05 (server 0.17.5)
 
 **The Cost column says three numbers: in / out / total.** It was empty on every row, because it
