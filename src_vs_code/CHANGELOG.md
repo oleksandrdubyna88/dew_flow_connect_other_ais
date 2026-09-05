@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.30.4 — 2026-09-05 (server 0.18.2)
+
+**The server shipped unable to open its own database, on every platform.** 0.18.1 carried the
+executable alone. Native AOT compiles managed code; the call into SQLite still resolves at run time
+through the OS loader, which searches the directory the executable sits in — so the installed server
+threw `DllNotFoundException` the first time anything touched the rounds database. That write is
+best-effort by design, so it failed in silence: rounds ran, findings were answered, nothing was
+recorded, and the log page had nothing to show.
+
+It answered `--version`, `--help` and a full `tools/list` exchange throughout, which is why every
+check passed. Found by running the installed build against a real round rather than by reading it.
+
+Three fixes: the release archive carries the native library and the job **fails** if the publish
+output has none; the release smoke makes the published binary actually open a database, which is the
+check that would have caught this; and the installer copies everything the archive brought rather
+than the one file it knows by name.
+
+## Server 0.18.2 — 2026-09-05
+
+Ships `e_sqlite3` beside the binary, for win-x64/arm64, linux-x64/arm64 and osx-x64/arm64.
+
 ## 0.30.3 — 2026-09-05 (server 0.18.1)
 
 **The antigravity model list is asked for, not remembered.** The dropdown offered Gemini 3.7 Flash
