@@ -1,11 +1,23 @@
 # PLAN — the rounds log is a page with a table, not a markdown file
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/{extension.ts, roundsLog.ts (new),
-> roundsLogPanel.ts (new), rounds.ts}`, their tests, the help entry for *Show review rounds*, CHANGELOG.
+> Status: **IMPLEMENTED, 2026-09-05.** Epics 1 and 2 shipped in extension 0.29.9: *Show review rounds*
+> opens a page with one sortable, filterable, searchable table over every round of every session, and
+> `rounds.md` — with its five-second rewrite, its markdown renderers and their 27 tests — is gone.
+> Epic 3 (findings inside an expanded row) was not built and is its own plan:
+> [PLAN_findings_in_the_log.md](../todo/PLAN_findings_in_the_log.md).
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_rounds_collapse_and_vendor_colour.md](../research/PLAN_rounds_collapse_and_vendor_colour.md) — the
-> sidebar history this replaces.
+> **Deviations.** The sort and filter predicates are not "pure functions under test" beside a page
+> copy — they are the page's: `compareRows` and `rowMatches` reference nothing outside their
+> parameters and their SOURCE is embedded into the webview script verbatim, asserted by the tests, so
+> one implementation serves both. The duration column needed the sidebar's year-one cap
+> (`MAX_PLAUSIBLE_SECONDS`, now exported) the moment the markdown renderer that carried it was
+> deleted — found by the RED test written for exactly that guarantee before the deletion. The help got
+> no article of its own: the *Active rounds* article's usage paragraph is where people are told the
+> log exists, and a second article saying the same thing in five languages was judged noise.
+>
+> Related docs: [module_extension.md](module_extension.md),
+> [PLAN_rounds_collapse_and_vendor_colour.md](PLAN_rounds_collapse_and_vendor_colour.md) — the sidebar
+> history this replaces.
 
 ## The symptom, reported by the operator on 2026-09-05
 

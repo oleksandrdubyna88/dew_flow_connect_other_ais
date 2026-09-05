@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.29.9 — 2026-09-05 (server 0.17.1)
+
+**The rounds log is a page with a table.** *Show review rounds* used to write `rounds.md` under the
+data directory and open it as a text document: fifty-three lines of markdown tables, one block per
+session, each row one unwrapped line running off the right edge, nothing to sort, filter or search,
+and a rewrite every five seconds while the tab was open that reloaded the editor each time. It now
+opens a page with one table over every round of every session — when, repository, branch, stage,
+round, what, status, verdict, gating, findings, duration, tokens in and out, cost, reviewers. Click a
+column to sort it either way; narrow by repository, branch, stage, status, verdict or vendor; type
+into the search box to match the subject, the branch, the repository or a reviewer line; click a row
+to see its reviewers. Open questions stay at the top with their *Answer…* button.
+
+The table advances by itself while a round runs, and your sort, filters, search text, scroll
+position and expanded rows survive that — the page is only ever pushed rows, and only when they
+changed. The markdown renderer and the tab-tracking that fed the rewrite are gone.
+
 ## 0.29.8 — 2026-09-05 (server 0.17.1)
 
 **The sidebar shows what is running, and nothing else.** *Recent rounds* is now *Active rounds*: a

@@ -111,6 +111,17 @@ test('a round from an older server has no subject, no tokens and no reviewers, a
   assert.equal(row.startedUtc, '', 'absent is not the epoch');
 });
 
+test('a start date from an older server does not become a billion seconds', () => {
+  // .NET's default date is year ONE. Subtracting it from a real completion time produced
+  // "1065396701m 44s" in the panel and in the file alike; the markdown renderer had a cap and
+  // this page must not lose it with the renderer.
+  const yearOne = round({ startedUtc: '0001-01-01T00:00:00', completedUtc: '2026-09-01T09:00:00Z' });
+  const [row] = rowsFrom([session([yearOne])], NOW) as [LogRow];
+
+  assert.equal(row.seconds, null, 'an implausible duration is no duration');
+  assert.equal(row.startedUtc, '0001-01-01T00:00:00', 'the raw value is kept; only the arithmetic refuses it');
+});
+
 // ---------- sorting: the function the PAGE runs ----------
 
 function rowsWith(...subjects: readonly string[]): LogRow[] {
@@ -194,6 +205,7 @@ test('nothing from a session or a question reaches the page unescaped', () => {
   assert.ok(!html.includes('<img src=x'), 'the subject is data, in the JSON and in the markup');
   assert.ok(html.includes('&lt;b&gt;unresolved&lt;/b&gt;'), 'the question is text');
   assert.ok(html.includes('Token in log'));
+  assert.ok(roundsLogHtml([], [{ ...question(), openFindings: [] }], 'n').includes('No findings attached'), 'and a question without findings says so');
   assert.ok(html.includes('data-command="answer"') && html.includes('data-id="q1"'), 'the answer button reaches the command');
 });
 

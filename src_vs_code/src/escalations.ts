@@ -74,22 +74,3 @@ export function modalText(escalation: Escalation): string {
     .join('\n');
   return `${escalation.question}\n\nStill gating:\n${findings}\n\n(${where})`;
 }
-
-/** One markdown section per open question, for the rounds view. */
-export function renderEscalations(open: readonly Escalation[]): string {
-  if (open.length === 0) {
-    return '';
-  }
-  const sections = open
-    .map((e) => {
-      const findings = e.openFindings
-        .map((f) => `  - \`${f.severity}\` ${f.category} ${f.file ? `\`${f.file}:${f.line ?? ''}\`` : ''} — ${f.title}`)
-        .join('\n');
-      return (
-        `### ${e.branch} · asked ${e.askedUtc}\n\n${e.question}\n\n` +
-        (findings.length > 0 ? `Still gating:\n${findings}\n` : '_No findings attached._\n')
-      );
-    })
-    .join('\n');
-  return `## Open questions — a review is waiting on you\n\n${sections}\n`;
-}

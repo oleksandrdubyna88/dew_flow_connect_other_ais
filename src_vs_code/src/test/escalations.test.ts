@@ -4,7 +4,6 @@ import {
   Escalation,
   modalText,
   parseEscalation,
-  renderEscalations,
   shouldPrompt,
   statusBarText,
 } from '../escalations';
@@ -81,15 +80,3 @@ test('a question with no findings reads cleanly, with no empty heading', () => {
   assert.ok(text.includes('Ship anyway?'));
 });
 
-test('the rounds view renders open questions, and nothing when there are none', () => {
-  assert.equal(renderEscalations([]), '', 'no section at all when nothing is waiting');
-  const rendered = renderEscalations([escalation()]);
-  assert.ok(rendered.includes('a review is waiting on you'));
-  assert.ok(rendered.includes('Ship anyway?'));
-  assert.ok(rendered.includes('token compared with =='));
-  assert.ok(rendered.includes('feature/x'));
-});
-
-test('a question with no findings says so rather than showing an empty list', () => {
-  assert.ok(renderEscalations([escalation({ openFindings: [] })]).includes('No findings attached'));
-});

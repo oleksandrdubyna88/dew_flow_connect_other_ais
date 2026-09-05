@@ -4,7 +4,6 @@ import { test } from 'node:test';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
 import { liveRegions, PANEL_COMMANDS, panelHtml, PanelState, staticKey } from '../panelView';
-import { roundsViewIsOpen } from '../rounds';
 
 /**
  * What has to repaint, and what must not.
@@ -66,24 +65,6 @@ test('the window tabs stay outside the patched region, so a click always lands',
   const live = html.indexOf('id="live-usage"');
   assert.ok(tabs > 0 && live > 0);
   assert.ok(tabs < live, 'a button inside a patched region loses its listener on the next tick');
-});
-
-/**
- * The rounds view is rewritten only while somebody has it open, and "open" was decided by an
- * exact string comparison of two Windows paths. VS Code hands back `c:\\Users\\…` for a tab it
- * restored and `C:\\Users\\…` for one this extension opened, so a restored tab silently stopped
- * being refreshed and the file went stale while rounds kept running.
- */
-test('a restored tab is still the rounds view, whatever case the drive letter came back in', () => {
-  const target = 'C:\\Users\\me\\AppData\\Local\\coai-mcp\\rounds.md';
-  assert.ok(roundsViewIsOpen(['c:\\Users\\me\\AppData\\Local\\coai-mcp\\rounds.md'], target));
-  assert.ok(roundsViewIsOpen([target], target));
-});
-
-test('another file is never mistaken for the rounds view', () => {
-  const target = 'C:\\Users\\me\\AppData\\Local\\coai-mcp\\rounds.md';
-  assert.ok(!roundsViewIsOpen(['C:\\Users\\me\\AppData\\Local\\coai-mcp\\usage.jsonl'], target));
-  assert.ok(!roundsViewIsOpen([], target));
 });
 
 /**

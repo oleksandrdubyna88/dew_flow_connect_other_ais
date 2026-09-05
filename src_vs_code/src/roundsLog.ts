@@ -1,6 +1,6 @@
 import { Escalation } from './escalations';
 import { roundKey } from './panelView';
-import { reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
+import { MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorColour } from './vendorColour';
 import { escapeHtml, jsonForScript } from './webviewHtml';
 
@@ -130,7 +130,14 @@ function secondsOf(round: RoundRecord, status: LogRow['status'], nowMs: number):
     return null;
   }
   const completed = Date.parse(round.completedUtc);
-  return Number.isNaN(completed) ? null : Math.max(0, Math.round((completed - started) / 1000));
+  if (Number.isNaN(completed)) {
+    return null;
+  }
+  const seconds = Math.round((completed - started) / 1000);
+  // .NET's default date is year ONE, and a server that never recorded a start wrote exactly that.
+  // Subtracting it from a real completion time produced "1065396701m 44s" once; the sidebar's
+  // `elapsed` refuses the same way, with the same cap.
+  return seconds < 0 || seconds > MAX_PLAUSIBLE_SECONDS ? null : seconds;
 }
 
 // ---------------------------------------------------------------------------------------------

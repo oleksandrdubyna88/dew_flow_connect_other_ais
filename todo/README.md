@@ -8,7 +8,7 @@ Convention: `.claude/rules/shared/common/planning-docs.md`.
 
 | Plan | What it is for |
 |---|---|
-| [PLAN_rounds_log_view.md](PLAN_rounds_log_view.md) | The rounds log becomes a page with one sortable, filterable, searchable table over every round of every session — and `rounds.md`, rewritten every five seconds while its tab was open, stops being written. The other half of the 2026-09-05 ruling that left the sidebar with only what is running. |
+| [PLAN_findings_in_the_log.md](PLAN_findings_in_the_log.md) | An expanded row of the rounds log lists the findings themselves, not only how many — the one epic of the log-view plan that was not built, and the question of whether the server should keep findings per round. |
 | [PLAN_bench_campaign_after_the_store_fix.md](PLAN_bench_campaign_after_the_store_fix.md) | Six code rounds died today and every fix has a test but none has carried a real round. Two cases sequentially against the recorded 0.15.0 numbers, then five windows on one data directory, then Fable judging what was worth having. |
 | [PLAN_multi_repo_and_uncommitted.md](PLAN_multi_repo_and_uncommitted.md) | A change that spans several repositories is reviewed as one round with one verdict, and work that is not committed yet can be reviewed at all — the working tree snapshotted into a real commit object so nothing downstream changes. |
 | [PLAN_local_trust_and_vllm.md](PLAN_local_trust_and_vllm.md) | The local reviewer assumes a trusted Ollama on this machine. Acknowledging a non-loopback host, a key path for a served vLLM, and whether cancellation works on anything else. |
@@ -24,6 +24,7 @@ in [../research/](../research/) with `IMPLEMENTED` status, beside the record of 
 
 | Date | Plan | What it delivered |
 |---|---|---|
+| 2026-09-05 | [PLAN_rounds_log_view.md](../research/PLAN_rounds_log_view.md) | *Show review rounds* opens a page with one sortable, filterable, searchable table over every round of every session; `rounds.md` and its five-second rewrite are gone. The sort and filter the tests exercise are the ones the page runs — their source is embedded verbatim. |
 | 2026-09-04 | [PLAN_rounds_collapse_and_vendor_colour.md](../research/PLAN_rounds_collapse_and_vendor_colour.md) | *Split with Fable* fires on the checkbox alone — the reviewer list it consulted could never contain Fable, because Fable is the calling AI's own model — a round the panel opened closes itself while a round the person opened stays theirs, and every vendor name carries one stable colour from the editor's chart palette. Its own tails cost three more releases: a dead round claiming `361m 40s`, a card that offered to open into an apology for having nothing, and a triangle that repainted the world. |
 | 2026-09-03 | [PLAN_engine_lease.md](../research/PLAN_engine_lease.md) | Two windows, two servers, one GPU: the card is now leased across processes by the operating system's own lock. Measured with five parallel processes — 5 of 5 answered, 4.3 s — and the measurement found what no review did: the local request carried no token ceiling, so a reasoning model spent every deadline thinking. |
 | 2026-09-03 | [PLAN_round_card_detail.md](../research/PLAN_round_card_detail.md) | A finished round opens to its reviewers — status, findings, its own duration and what it read — and the disclosure survives the five-second repaint that used to close it. |

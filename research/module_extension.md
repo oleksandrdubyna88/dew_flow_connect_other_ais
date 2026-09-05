@@ -622,6 +622,25 @@ absent is unknown, and printing a zero would be a measurement nobody made. The l
 tall (640px) — a sidebar is usually far taller than 320px, and five rounds filled it with room to
 spare.
 
+**The rounds log is a page with a table (2026-09-05).** `coai.showRounds` opens a `WebviewPanel`
+(`roundsLogPanel.ts`, one per window, `retainContextWhenHidden`) rendered by `roundsLog.ts`: one
+table over every round of every session — when, repository, branch, stage, round, subject, status,
+verdict, gating, findings, duration, tokens in/out, cost, reviewers — with a sort on every column,
+a select per facet (repository, branch, stage, status, verdict, vendor), a search box over subject,
+branch, repository and reviewer lines, and a row that expands to its reviewers. It replaced
+`rounds.md`, a markdown file written under the data directory, opened as a text document and
+rewritten every five seconds while its tab was open.
+
+Two decisions define it. **The predicates are the page's**: `compareRows` and `rowMatches`
+reference nothing outside their parameters and their source is embedded into the webview script
+verbatim (`roundsLog.test.ts` asserts the embedding), so the function the tests exercise is the
+function the table sorts with — one implementation rather than a TypeScript one and a hand-copied
+JavaScript one. **The provider only pushes**: sorting, filtering, searching and expanding are page
+state and never come back to the extension host (the lesson of the sidebar's disclosures), and a
+push happens only when the serialised rows or questions changed, so the tick re-renders nothing for
+a page where nothing moved. The duration column carries the sidebar's own cap: a year-one start date
+from an older server is no duration rather than a billion seconds.
+
 **The sidebar shows what is running, and nothing else (2026-09-05).** *Recent rounds* became
 *Active rounds*. A round in flight is shown whole — its reviewers, their durations, what each has found
 so far — because that is what somebody is waiting on; a finished round is not in the sidebar at all. The
