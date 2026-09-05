@@ -60,7 +60,27 @@ public sealed record PanelSettings
     public TimeSpan ReviewerTimeout { get; init; } = TimeSpan.FromMinutes(10);
 
     /// <summary>How long a rate-limited reviewer waits before its one retry.</summary>
+    /// <remarks>
+    /// Kept as the panel's own setting and as the older way of saying "one retry, at this
+    /// interval": setting it, and nothing else, still means exactly that — see
+    /// <see cref="RetryLadder"/> for the precedence.
+    /// </remarks>
     public TimeSpan RateLimitBackoff { get; init; } = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// The waits a rate-limited reviewer climbs, in order.
+    /// </summary>
+    /// <remarks>
+    /// <para>Four steps by default — 5 s, 30 s, 60 s, 120 s — because one interval is the wrong
+    /// number for both cases it has to serve: a transient <c>429</c> clears in seconds, and a usage
+    /// window does not clear at all within a round.</para>
+    /// <para><b>An operator who set the old variable keeps the old behaviour.</b> With
+    /// <c>COAI_RETRY_BACKOFF</c> unset and <c>COAI_RATE_LIMIT_BACKOFF_SECONDS</c> set, this is a
+    /// ONE-step ladder at that number: a deployment that deliberately chose 45 seconds must not
+    /// silently become four retries, and nothing would have said so. Raised twice, by two vendors,
+    /// on this change's plan round.</para>
+    /// </remarks>
+    public IReadOnlyList<TimeSpan> RetryLadder { get; init; } = Runners.Reviewers.RetryLadder.Default;
 
     /// <summary>
     /// How long an escalation waits for a person before answering "nobody answered yet".
@@ -212,6 +232,7 @@ public sealed record PanelSettings
         LocalConcurrency = IntVar(env, "COAI_LOCAL_CONCURRENCY", 1),
         ReviewerTimeout = TimeSpan.FromMinutes(IntVar(env, "COAI_REVIEWER_TIMEOUT_MINUTES", 10)),
         RateLimitBackoff = TimeSpan.FromSeconds(IntVar(env, "COAI_RATE_LIMIT_BACKOFF_SECONDS", 15)),
+        RetryLadder = LadderFrom(env),
         // Seconds win when set: minutes are the setting a person configures, seconds are for a
         // short budget a test or a scripted run needs. One knob would have had to lie about one
         // of the two.
@@ -271,9 +292,36 @@ public sealed record PanelSettings
     /// likely cure — because the likely cause is a panel newer than the server, and "unknown value"
     /// alone sends somebody back into the settings file where the answer is not.
     /// </remarks>
+    /// <summary>
+    /// The ladder this server climbs: the new setting, else the old one as a single step, else the
+    /// shipped four.
+    /// </summary>
+    private static IReadOnlyList<TimeSpan> LadderFrom(Func<string, string?> env)
+    {
+        if (Runners.Reviewers.RetryLadder.Parse(env("COAI_RETRY_BACKOFF")) is { Count: > 0 } ladder)
+        {
+            return ladder;
+        }
+
+        // Absent is not the same as unreadable, and neither is the same as "nobody has an opinion":
+        // only a value somebody wrote gets to override the default.
+        return env("COAI_RATE_LIMIT_BACKOFF_SECONDS") is { Length: > 0 }
+            ? [TimeSpan.FromSeconds(IntVar(env, "COAI_RATE_LIMIT_BACKOFF_SECONDS", 15))]
+            : Runners.Reviewers.RetryLadder.Default;
+    }
+
     private static IReadOnlyList<string> UnknownValues(Func<string, string?> env)
     {
         var unknown = new List<string>();
+        if (env("COAI_RETRY_BACKOFF") is { Length: > 0 } backoff
+            && Runners.Reviewers.RetryLadder.Parse(backoff).Count == 0)
+        {
+            unknown.Add(
+                $"COAI_RETRY_BACKOFF is '{backoff}', which this server cannot read as a list of "
+                + "seconds — it is using the waits it would have used anyway. The form is "
+                + "'5,30,60,120', and one number means one retry at that interval.");
+        }
+
         if (env("COAI_ON_EXHAUSTED") is { Length: > 0 } policy
             && PolicyOf(policy) == StagePolicy.Human
             && !string.Equals(policy, "human", StringComparison.OrdinalIgnoreCase))

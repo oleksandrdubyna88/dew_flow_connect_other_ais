@@ -55,6 +55,11 @@ public sealed class BoundedSchedulerTests
             "with one vendor, its own cap is the binding one");
     }
 
+    /// <summary>
+    /// A configured single step still means a single retry — the behaviour
+    /// <c>COAI_RATE_LIMIT_BACKOFF_SECONDS</c> has always bought, pinned so the ladder cannot take
+    /// it away from a deployment that asked for it by name.
+    /// </summary>
     [Fact]
     public async Task RateLimited_RetriesExactlyOnce_ThenSucceeds()
     {
@@ -87,6 +92,97 @@ public sealed class BoundedSchedulerTests
             "a quota is a distinct outcome, never a timeout in disguise");
         (await File.ReadAllLinesAsync(counter, TestContext.Current.CancellationToken)).Should().HaveCount(2);
     }
+
+    /// <summary>
+    /// The ladder: a limit that clears on the second wait is a reviewer that ANSWERS, where the
+    /// single retry reported it as failed for the round.
+    /// </summary>
+    [Fact]
+    public async Task RateLimitedTwice_ClimbsTheLadder_ThenAnswers()
+    {
+        var counter = Path.Combine(_dir, "ladder-count.txt");
+        var work = new ReviewerWork(FakeCliInvocations.Invoke(
+            "codex",
+            ["count", counter, "fail-until", counter, "2", "429 Too Many Requests", "1", FakeCliInvocations.CleanReview]));
+
+        var results = await new BoundedScheduler(retryLadder: Tiny(3))
+            .RunAllAsync([work], _executor, TestContext.Current.CancellationToken);
+
+        results.Single().Outcome.Should().BeOfType<ReviewerOutcome.Ok>(
+            "the third attempt was not rate limited, and the ladder had a step left for it");
+        (await File.ReadAllLinesAsync(counter, TestContext.Current.CancellationToken))
+            .Should().HaveCount(3, "two limits, two waits, three launches");
+    }
+
+    /// <summary>
+    /// A ladder that is spent is the answer, and the count of attempts travels with it — the
+    /// summary used to say "after one retry" whatever had happened.
+    /// </summary>
+    [Fact]
+    public async Task RateLimitedThroughout_IsNamed_WithTheAttemptsItActuallyTook()
+    {
+        var counter = Path.Combine(_dir, "ladder-spent.txt");
+        var work = new ReviewerWork(FakeCliInvocations.Invoke(
+            "codex",
+            ["count", counter, "stderr-exit", "429 Too Many Requests", "1"]));
+
+        var results = await new BoundedScheduler(retryLadder: Tiny(2))
+            .RunAllAsync([work], _executor, TestContext.Current.CancellationToken);
+
+        results.Single().Outcome.Should().BeOfType<ReviewerOutcome.RateLimited>()
+            .Which.Attempts.Should().Be(3, "one launch plus a step each for the two waits");
+        (await File.ReadAllLinesAsync(counter, TestContext.Current.CancellationToken)).Should().HaveCount(3);
+        ReviewerSummaryFactory.From(results).Failures.Single()
+            .Should().Contain("after 3 attempts", "a person reading the round gets the real number");
+    }
+
+    /// <summary>
+    /// The one limit no ladder may climb. Measured before this existed: gemini answered "you have
+    /// exhausted your daily quota", the scheduler waited and launched a second doomed reviewer, and
+    /// the round took 157 seconds instead of 19. A four-step ladder would have made it worse.
+    /// </summary>
+    [Fact]
+    public async Task AHopelessLimit_IsNotRetriedAtAll_HoweverLongTheLadder()
+    {
+        var counter = Path.Combine(_dir, "hopeless-count.txt");
+        var work = new ReviewerWork(FakeCliInvocations.Invoke(
+            "gemini",
+            ["count", counter, "stderr-exit", "You have exhausted your daily quota on this model", "1"]));
+
+        var results = await new BoundedScheduler(retryLadder: Tiny(4))
+            .RunAllAsync([work], _executor, TestContext.Current.CancellationToken);
+
+        results.Single().Outcome.Should().BeOfType<ReviewerOutcome.RateLimited>()
+            .Which.Attempts.Should().Be(1);
+        (await File.ReadAllLinesAsync(counter, TestContext.Current.CancellationToken))
+            .Should().HaveCount(1, "a daily allowance clears at midnight, not after a wait");
+    }
+
+    /// <summary>
+    /// A reviewer whose own deadline is shorter than the ladder stops when the deadline does,
+    /// rather than waiting past it to fail once more.
+    /// </summary>
+    [Fact]
+    public async Task ALadderLongerThanTheReviewersDeadline_StopsAtTheDeadline()
+    {
+        var counter = Path.Combine(_dir, "budget-count.txt");
+        var work = new ReviewerWork(FakeCliInvocations.Invoke(
+            "codex",
+            ["count", counter, "stderr-exit", "429 Too Many Requests", "1"],
+            timeout: TimeSpan.FromMilliseconds(250)));
+
+        var results = await new BoundedScheduler(
+                retryLadder: [TimeSpan.FromMilliseconds(1), TimeSpan.FromSeconds(30)])
+            .RunAllAsync([work], _executor, TestContext.Current.CancellationToken);
+
+        results.Single().Outcome.Should().BeOfType<ReviewerOutcome.RateLimited>();
+        (await File.ReadAllLinesAsync(counter, TestContext.Current.CancellationToken))
+            .Should().HaveCount(2, "the 1ms step fits a 250ms deadline and the 30s step cannot");
+    }
+
+    /// <summary>A ladder of n steps, each too short to slow a test down.</summary>
+    private static IReadOnlyList<TimeSpan> Tiny(int steps) =>
+        [.. Enumerable.Repeat(TimeSpan.FromMilliseconds(1), steps)];
 
     [Fact]
     public async Task FourOfSixAnswer_TheSummaryNamesWhoFailedAndWhy()

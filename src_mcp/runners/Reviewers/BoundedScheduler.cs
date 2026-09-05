@@ -43,15 +43,37 @@ public sealed record ReviewerProgress(
 /// <remarks>
 /// A global cap bounds the machine; a per-provider cap bounds each vendor, because a rate limit
 /// is per vendor and a global cap alone would happily put all of its slots on one provider. A
-/// rate-limited reviewer is retried exactly once after a backoff, and only then reported.
+/// rate-limited reviewer climbs a ladder of waits — 5 s, 30 s, 60 s, 120 s by default, each jittered
+/// — and is reported only when the ladder is spent, the limit is hopeless, or the next wait would
+/// outrun the reviewer's own deadline.
 /// </remarks>
 public sealed class BoundedScheduler(
     int globalCap = 3,
     int perProviderCap = 2,
     TimeSpan? rateLimitBackoff = null,
-    int sharedResourceCap = 1)
+    int sharedResourceCap = 1,
+    IReadOnlyList<TimeSpan>? retryLadder = null,
+    Func<double>? jitterRoll = null)
 {
-    private readonly TimeSpan _backoff = rateLimitBackoff ?? TimeSpan.FromSeconds(15);
+    /// <summary>
+    /// The waits a rate-limited reviewer climbs, widest source first.
+    /// </summary>
+    /// <remarks>
+    /// A ladder if one was given; otherwise the single backoff if THAT was given, because passing
+    /// it is how a caller says "one retry, at this interval" and a deployment that set
+    /// <c>COAI_RATE_LIMIT_BACKOFF_SECONDS</c> must keep meaning what it meant; otherwise the
+    /// shipped ladder. The distinction is possible only because the parameter is nullable — a
+    /// defaulted fifteen seconds and a configured fifteen seconds would be the same value.
+    /// </remarks>
+    private readonly IReadOnlyList<TimeSpan> _ladder =
+        retryLadder is { Count: > 0 } ladder ? ladder
+        : rateLimitBackoff is { } backoff ? [backoff]
+        : RetryLadder.Default;
+
+    /// <summary>
+    /// Where the jitter comes from — injected, so a test can pin a wait instead of sleeping.
+    /// </summary>
+    private readonly Func<double> _roll = jitterRoll ?? Random.Shared.NextDouble;
 
     private int _running;
 
@@ -215,7 +237,7 @@ public sealed class BoundedScheduler(
                             var watch = System.Diagnostics.Stopwatch.StartNew();
                             try
                             {
-                                var outcome = await RunWithOneRetryAsync(w, executor, ct);
+                                var outcome = await RunWithLadderAsync(w, executor, ct);
                                 Report(onProgress, w.Invocation, outcome is ReviewerOutcome.Ok ? "done" : "failed", outcome, watch.Elapsed);
                                 return (w.Invocation, outcome);
                             }
@@ -361,23 +383,41 @@ public sealed class BoundedScheduler(
         }
     }
 
-    private async Task<ReviewerOutcome> RunWithOneRetryAsync(ReviewerWork w, ReviewerExecutor executor, CancellationToken ct)
+    /// <summary>
+    /// Launch, and while the answer is a rate limit worth waiting out, climb the ladder.
+    /// </summary>
+    /// <remarks>
+    /// <para>The budget is the reviewer's OWN deadline and the clock starts at the first launch, so
+    /// what is measured is wall time — the failed launches as well as the waits. A reviewer that has
+    /// already spent its deadline being refused does not then wait two more minutes to be refused
+    /// once more.</para>
+    /// <para>A daily allowance is still not retried at all, ladder or no ladder: it clears at
+    /// midnight in somebody else's timezone, and the one measured case cost a round 157 seconds
+    /// instead of 19 for a second doomed launch.</para>
+    /// </remarks>
+    private async Task<ReviewerOutcome> RunWithLadderAsync(ReviewerWork w, ReviewerExecutor executor, CancellationToken ct)
     {
+        var budget = w.Invocation.Request.Timeout;
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var attempts = 1;
         var outcome = await executor.RunAsync(w.Invocation, w.Repair, ct);
-        if (outcome is not ReviewerOutcome.RateLimited limited)
+
+        while (outcome is ReviewerOutcome.RateLimited limited && !RateLimit.Hopeless(limited.Reason))
         {
-            return outcome;
+            var wait = RetryLadder.NextWait(attempts - 1, _ladder, _roll(), watch.Elapsed, budget);
+            if (wait is null)
+            {
+                return limited with { Attempts = attempts };
+            }
+
+            await Task.Delay(wait.Value, ct);
+            attempts += 1;
+            outcome = await executor.RunAsync(w.Invocation, w.Repair, ct);
         }
 
-        // A retry is for a limit that clears while you wait. A daily allowance does not, and
-        // spending the backoff plus a second doomed launch on one only makes the round slower.
-        if (RateLimit.Hopeless(limited.Reason))
-        {
-            return limited;
-        }
-
-        await Task.Delay(_backoff, ct);
-        return await executor.RunAsync(w.Invocation, w.Repair, ct);
+        return outcome is ReviewerOutcome.RateLimited hopeless
+            ? hopeless with { Attempts = attempts }
+            : outcome;
     }
 }
 
@@ -395,7 +435,10 @@ public static class ReviewerSummaryFactory
     public static string Describe(ReviewerOutcome outcome) => outcome switch
     {
         ReviewerOutcome.TimedOut => "timeout",
-        ReviewerOutcome.RateLimited r => $"rate limited (after one retry){Because(r.Reason)}",
+        // The real number, because after the ladder it is not always one — and a round that says
+        // "one retry" over four launches is a sentence a person would plan around.
+        ReviewerOutcome.RateLimited r =>
+            $"rate limited (after {r.Attempts} attempt{(r.Attempts == 1 ? "" : "s")}){Because(r.Reason)}",
         // The stderr tail travels WITH the exit code. "exit 1" alone was what made the same codex
         // failure undiagnosable twice at a real gate: the executor had captured the reason and
         // this sentence — the only place a person reads — threw it away.

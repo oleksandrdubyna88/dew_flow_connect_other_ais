@@ -48,7 +48,8 @@ public sealed class PanelService
             settings.GlobalConcurrency,
             settings.PerProviderConcurrency,
             settings.RateLimitBackoff,
-            settings.LocalConcurrency);
+            settings.LocalConcurrency,
+            settings.RetryLadder);
         // Unparseable answers are kept beside the sessions, so "it would not parse" can be read
         // rather than guessed at.
         _executor = new ReviewerExecutor(launcher, Path.Combine(settings.DataDir, "unparseable"));
