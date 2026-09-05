@@ -791,9 +791,7 @@ public sealed class PanelService
         IReadOnlyList<string>? planPrompts = null,
         bool deal = false)
     {
-        var schemaFile = Path.Combine(_settings.DataDir, "finding-schema.json");
-        Directory.CreateDirectory(_settings.DataDir);
-        File.WriteAllText(schemaFile, FindingSchema.Json);
+        var schemaFile = SchemaFile.Ensure(_settings.DataDir);
         var outputDir = Directory.CreateTempSubdirectory("coai-answers-").FullName;
         PruneOldAnswerDirs();
 

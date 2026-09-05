@@ -30,7 +30,21 @@ public sealed class ParallelRepeatsAreSeparateSessionsTests
     public void ARunOfAReviewedCase_HasItsOwnBranch_NamedForTheRun()
     {
         Bench.BranchFor(new Cell(Reviewed, "codex,gemini,local", Repeat: 2))
-            .Should().Be("bench/split-once-r2");
+            .Should().Be("bench/codex-gemini-local/split-once-r2");
+    }
+
+    [Fact]
+    public void TwoARMS_OfOneCaseAndRepeat_AreTwoBranches()
+    {
+        // Found by the seven-arm matrix of 2026-09-05 in its first minute: the branch was named for
+        // the case and the repeat alone, so all seven arms of one cell shared one ref and one
+        // worktree — `git worktree add: Preparing worktree (detached HEAD 267e07a)` from whichever
+        // server lost. An arm is what makes a run different from its neighbours; it belongs in the name.
+        var one = Bench.BranchFor(new Cell(Reviewed, "codex", 1));
+        var two = Bench.BranchFor(new Cell(Reviewed, "codex,gemini", 1));
+
+        one.Should().NotBe(two);
+        two.Should().Be("bench/codex-gemini/split-once-r1", "a comma is not a ref character");
     }
 
     [Fact]

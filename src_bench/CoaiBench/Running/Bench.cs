@@ -99,7 +99,12 @@ public sealed class Bench(
     /// all along.
     /// </remarks>
     internal static string BranchFor(Cell cell) =>
-        cell.Case.Commit.Length > 0 ? $"bench/{cell.Case.Name}-r{cell.Repeat}" : "HEAD";
+        cell.Case.Commit.Length > 0
+            ? $"bench/{Ref(cell.Arm)}/{cell.Case.Name}-r{cell.Repeat}"
+            : "HEAD";
+
+    /// <summary>An arm as a git ref component: commas separate vendors, and a ref cannot hold one.</summary>
+    private static string Ref(string arm) => arm.Replace(',', '-').Replace(' ', '-');
 
     /// <summary>What the run's ref points at — the reviewed commit and nothing newer.</summary>
     internal static string RefTarget(Case work) => work.Commit;
