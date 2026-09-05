@@ -123,6 +123,16 @@ first one's live round dead.
   and the six-launch fan-out with three distinct role prompts, all observed.
 - Stdout purity is a test: verbose logging on, every stdout line must parse as JSON.
 
+## `PanelService` no longer decides what a vendor IS (2026-09-05)
+
+`RuntimeFor`, `AuthOf` and the `--version` health probe are one-line delegations now; the decision
+itself is `CoaiMcp.Runners.Reviewers.RuntimeResolution` and `VendorProbe`, and `UsageLedger` moved
+into `CoaiMcp.Runners.Accounting` whole. The reason is the section below and the one before it: the
+question "what is this vendor" has had two copies twice, and both times the copy that was missed was
+the one that was wrong. The planned Team server asks all three questions of the same vendors, so it
+would have been the third copy. The delegations stay because the tests call them here — which is
+also what proved the move was a move rather than a rewrite: every existing test passed unedited.
+
 ## A reviewer answers for its VENDOR, not for its runtime (2026-09-02)
 
 `ReviewerRuntimeSelector.Named(runtime, vendorId)` is the one place a runtime is chosen by name, and

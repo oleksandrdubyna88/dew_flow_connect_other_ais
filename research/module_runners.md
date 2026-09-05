@@ -44,6 +44,9 @@ sequenceDiagram
 | `ReviewerOutcome` (closed), `ReviewerExecutor`, `RateLimit`, `ReviewerLaunch` | `Reviewers/ReviewerExecutor.cs` | one launch + one repair; SIX named outcomes incl. NotStarted; `Ok` carries the run's `Usage`, both launches counted when repaired. **`LaunchAsync` is the public half**: launch → classify → the vendor's RAW answer + usage, with the parse left to the caller |
 | `Usage`, `UsageParser` | `core/Findings/UsageParser.cs` | schema-less scan over any vendor envelope; MAX per key name then sum per category, so a streamed cumulative total is never summed with itself; money only when the vendor priced the run |
 | `BoundedScheduler`, `ReviewerWork`, `ReviewerSummaryFactory` | `Reviewers/BoundedScheduler.cs` | global + per-provider semaphores; a rate limit climbs the ladder below |
+| `VendorIdentity`, `RuntimeResolution` | `Reviewers/RuntimeResolution.cs` | the ONE answer to "what is this vendor": which runtime it drives, the adapter for it, and how it authenticates — asked by both binaries, after two incidents where a second copy of it was the one that was wrong |
+| `VendorHealth`, `VendorProbe` | `Reviewers/VendorProbe.cs` | the `--version` health probe behind `providers` and the Team server's catalog; a retired runtime is answered BEFORE the probe, a local engine instead of it, and a CLI that never answers says so rather than reporting the kill's exit code |
+| `UsageLedger`, `UsageEntry`, `LedgerJsonContext` | `Accounting/UsageLedger.cs` | one JSON line per reviewer run, unindented because the reader is line-based; moved here so the server appends the same shape |
 | `RetryLadder` | `Reviewers/RetryLadder.cs` | the waits and when to stop: four steps, jittered, bounded by the reviewer's own deadline; pure, so the jitter is a table rather than a stopwatch |
 
 ## The decisions a reader needs
@@ -74,6 +77,15 @@ sequenceDiagram
   adapter whose output file never appeared says so with a null answer, and what that means is the
   caller's judgement. An EMPTY answer takes the same path as a missing one, so an envelope that came
   back blank still leaves its transcript as evidence.
+- **"What is this vendor" is answered once, in the library.** `RuntimeResolution.NameOf` / `.For` /
+  `.AuthOf` take a `VendorIdentity` — three strings, because three is what the answers read — and
+  every caller asks them rather than repeating the arms. The order inside is the load-bearing part:
+  `local` before the base-URL arm (a local vendor IS a vendor with a base url), an explicit runtime
+  before the id (`my-claude` is a claude, not a codex). Both of those orders are fixes for defects
+  that shipped, and the reason this lives here rather than in one binary is the third: the question
+  had two copies twice, and the copy that was missed was the one that was wrong — a local reviewer
+  silently became a codex one, and then was dropped from every round while the panel showed it as
+  configured.
 - **Provider cap beside the global cap** — a rate limit is per vendor; a global cap alone puts all
   its slots on one provider.
 - **A rate limit gets a LADDER, not one retry** — 5 s, 30 s, 60 s, 120 s (`COAI_RETRY_BACKOFF`),

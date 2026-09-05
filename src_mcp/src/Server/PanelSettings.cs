@@ -521,3 +521,19 @@ public sealed record PanelSettings
     private static int CountVar(Func<string, string?> env, string name, int fallback) =>
         int.TryParse(env(name), out var value) && value >= 0 ? value : fallback;
 }
+
+/// <summary>
+/// A configured vendor as the library's resolution needs it — the bridge between this server's
+/// settings type and <see cref="Runners.Reviewers.VendorIdentity"/>.
+/// </summary>
+/// <remarks>
+/// It exists so <c>CoaiMcp.Runners</c> need not know what a <see cref="ProviderSettings"/> is:
+/// the library answers questions about a vendor, and a vendor is three strings. Everything else on
+/// this record — the model, the executable path, whether it is enabled — belongs to a launch or to
+/// a probe, and travels as its own argument.
+/// </remarks>
+public static class ProviderIdentity
+{
+    public static Runners.Reviewers.VendorIdentity Identity(this ProviderSettings provider) =>
+        new(provider.Provider, provider.Runtime, provider.BaseUrl);
+}
