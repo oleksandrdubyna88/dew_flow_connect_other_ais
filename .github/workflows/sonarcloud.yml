@@ -28,6 +28,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # blame and new-code detection need the whole history
+      # This job runs the extension's tests for their coverage, and one of them compares the shared
+      # rule with the snippet the menu hands out — so it needs the rule on disk for the same reason
+      # the CI job does. It fails rather than skips without it, deliberately.
+      - name: Conventions submodule
+        run: git submodule update --init --depth 1 .claude/rules/shared
       - uses: actions/setup-java@v6
         with:
           distribution: zulu
