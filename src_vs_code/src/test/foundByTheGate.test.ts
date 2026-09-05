@@ -28,7 +28,7 @@ const engine = (over: Partial<LocalEngine> = {}): LocalEngine => ({
 const state = (over: Partial<PanelState> = {}): PanelState => ({
   settings: DEFAULTS,
   vendors: DEFAULT_VENDORS,
-  codexModels: [],
+  codexModels: [], agyModels: [],
   localEngines: {},
   server: { kind: 'known', version: '0.12.0', remembered: false, updateOffered: false },
   side: '',

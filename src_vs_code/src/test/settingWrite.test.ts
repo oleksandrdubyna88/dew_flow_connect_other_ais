@@ -53,7 +53,7 @@ test('no control that writes a role-keyed setting is labelled as a vendor', () =
   const html = panelHtml({
     settings: DEFAULTS,
     vendors: DEFAULT_VENDORS,
-    codexModels: [],
+    codexModels: [], agyModels: [],
     localEngines: {},
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
     side: '',
@@ -86,7 +86,7 @@ test('every role id the panel writes to is a role, and no vendor shares the name
   const html = panelHtml({
     settings: DEFAULTS,
     vendors: DEFAULT_VENDORS,
-    codexModels: [],
+    codexModels: [], agyModels: [],
     localEngines: {},
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
     side: '',
@@ -129,7 +129,7 @@ test('the number of prompt pickers follows that role\u2019s rounds', () => {
     panelHtml({
       settings: { ...DEFAULTS, rounds },
       vendors: DEFAULT_VENDORS,
-      codexModels: [],
+      codexModels: [], agyModels: [],
     localEngines: {},
       server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
       side: '',

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.30.3 — 2026-09-05 (server 0.18.1)
+
+**The antigravity model list is asked for, not remembered.** The dropdown offered Gemini 3.7 Flash
+and nothing newer while `agy models` on the same machine listed **3.8 first** — along with 3.6 and a
+Pro (Low) the panel had never heard of. The list was a hand-written constant, and the line under it
+said *"what `agy models` lists for this subscription"*, which made a snapshot look like an answer.
+The test that guarded that line asserted the sentence and carried a comment claiming the provenance
+was admitted; the two disagreed, and the constant went a model generation stale behind them.
+
+`agy models` is now read the way the CLI versions are — at most once an hour, only when a vendor is
+actually set to that runtime, and never fatally: if it does not answer, the old list is offered and
+the line says so instead of claiming the CLI said it.
+
 ## 0.30.2 — 2026-09-05 (server 0.18.1)
 
 **A rate you typed in prices the round.** The Cost column works a round out from the usage ledger and

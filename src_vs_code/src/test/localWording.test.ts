@@ -24,7 +24,7 @@ const ENGINE: LocalEngine = {
 
 function html(vendors: readonly Vendor[]): string {
   return panelHtml({
-    settings: DEFAULTS, vendors, codexModels: [],
+    settings: DEFAULTS, vendors, codexModels: [], agyModels: [],
     localEngines: Object.fromEntries(vendors.filter((v) => v.runtime === 'local').map((v) => [v.id, ENGINE])),
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
     side: '', latestServerVersion: '', questions: [], sessions: [],

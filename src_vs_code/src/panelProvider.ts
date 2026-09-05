@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { discoverEngine, LocalEngine, openAiBaseOf, probeEngine } from './localEngines';
 import { EscalationWatcher } from './escalationWatcher';
-import { ModelChoice, parseCodexModels } from './models';
+import { ModelChoice, parseAgyModels, parseCodexModels } from './models';
 import {
   isPanelCommand,
   liveRegions,
@@ -18,10 +18,11 @@ import { parseUsage, priceOf, UsageEntry, Window } from './usage';
 import {
   CliStatus,
   latestCliVersion,
+  unquoted,
   versionProbeCandidates,
   versionSourceFor,
 } from './cliVersions';
-import { askVersion } from './versionProbe';
+import { askVersion, capture } from './versionProbe';
 import { latestServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog, EMPTY_LOG } from './roundsDb';
 import { readLog } from './roundsDbRead';
@@ -74,6 +75,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
   private view?: vscode.WebviewView;
   private codexModels: ModelChoice[] = [];
+  /**
+   * What `agy models` last listed, and when it was asked.
+   *
+   * <p>Asked rather than remembered, because the remembered list went a model generation stale in
+   * silence — the operator found Gemini 3.8 Flash missing from the dropdown while the CLI had been
+   * listing it. Asked at most once an hour, because it is a process and a network call, and a
+   * subscription does not gain models between two repaints.</p>
+   */
+  private agyModels: ModelChoice[] = [];
+  private agyCheckedAt = 0;
   /** What the last repaint was drawn from, so only a real change to the controls repaints. */
   private paintedKey = '';
   /** One nonce per panel instance: the CSP admits our one script, and a repaint reuses it. */
@@ -248,6 +259,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const settings = settingsFrom((section) => config.get(section));
     const vendors = vendorsFrom(config.get('vendors'));
     this.codexModels = await this.readCodexModels();
+    this.agyModels = await this.readAgyModels(vendors);
     // The published version is read FIRST because the server's status is stated against it — and
     // both belong to the side this extension host is running on, never to "the machine".
     const published = await this.publishedVersion();
@@ -256,6 +268,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       settings,
       vendors,
       codexModels: this.codexModels,
+      agyModels: this.agyModels,
       server: await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published),
       side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),
       questions: this.watcher.openQuestions,
@@ -1036,6 +1049,28 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * The Codex CLI's own model cache — what this machine can actually reach today, rather than a
    * list we would have to keep up to date by hand.
    */
+  /**
+   * The models this subscription actually has, from the CLI that knows.
+   *
+   * <p>Only when a vendor is set to that runtime — an installed `agy` nobody uses is not worth a
+   * process on every repaint — and only once an hour. Anything at all going wrong leaves the list
+   * empty, which the dropdown reads as "use the fallback and say so".</p>
+   */
+  private async readAgyModels(vendors: readonly Vendor[]): Promise<ModelChoice[]> {
+    const AN_HOUR = 60 * 60 * 1000;
+    if (!vendors.some((v) => v.runtime === 'antigravity')) {
+      return [];
+    }
+    if (Date.now() - this.agyCheckedAt < AN_HOUR && this.agyModels.length > 0) {
+      return this.agyModels;
+    }
+    this.agyCheckedAt = Date.now();
+    const agy = vendors.find((v) => v.runtime === 'antigravity')?.executablePath || 'agy';
+    const { code, output } = await capture(unquoted(agy), ['models'], false, 20_000);
+
+    return code === 0 ? parseAgyModels(output) : [];
+  }
+
   private async readCodexModels(): Promise<ModelChoice[]> {
     const home = process.env['USERPROFILE'] ?? process.env['HOME'];
     const codexHome = process.env['CODEX_HOME'] ?? (home === undefined ? undefined : `${home}/.codex`);

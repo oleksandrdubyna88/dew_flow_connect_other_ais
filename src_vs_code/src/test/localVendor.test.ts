@@ -36,7 +36,7 @@ function html(vendors: readonly Vendor[], engine: LocalEngine): string {
   return panelHtml({
     settings: DEFAULTS,
     vendors,
-    codexModels: [],
+    codexModels: [], agyModels: [],
     localEngines: Object.fromEntries(vendors.filter((v) => v.runtime === 'local').map((v) => [v.id, engine])),
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
     side: '',

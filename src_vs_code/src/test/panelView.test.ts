@@ -11,6 +11,7 @@ import { DEFAULT_VENDORS } from '../vendors';
 const state = (over: Partial<PanelState> = {}): PanelState => ({
   settings: DEFAULTS,
   vendors: DEFAULT_VENDORS,
+  agyModels: [],
   codexModels: [
     { id: 'gpt-5.6-sol', label: 'GPT-5.6-Sol' },
     { id: 'gpt-5.4-mini', label: 'GPT-5.4-Mini' },
@@ -113,7 +114,12 @@ test("codex offers the CLI's own cached models; antigravity offers what agy list
   assert.ok(html.includes('value="gpt-5.6-sol"'), 'discovered from ~/.codex/models_cache.json');
   assert.ok(html.includes('models the Codex CLI has cached'));
   assert.ok(html.includes('value="gemini-3.7-flash-high"'));
-  assert.ok(html.includes('one CLI'), 'the provenance of the list is admitted, never passed off as discovery');
+  // This used to assert the sentence "what `agy models` lists for this subscription" while the list
+  // was a hand-written constant — and the assertion's own comment claimed the provenance was
+  // admitted. The two disagreed, and the constant went a model generation stale behind that.
+  assert.ok(
+    html.includes('did not answer'),
+    'with nothing discovered, the line says the list may be behind rather than claiming the CLI said it');
 });
 
 test('the picker is a SELECT with every model visible, never a filtering datalist', () => {
