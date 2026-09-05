@@ -199,4 +199,41 @@ public sealed class EscalationsTests : IDisposable
         File.Exists(escalations.QuestionPath("qFirst")).Should().BeTrue(
             "a notice nobody can see is the defect, not the cure");
     }
+
+    [Fact]
+    public async Task ReadingAnAnswer_DoesNotForbidWritingIt()
+    {
+        // The defect this family has already paid for three times, in a fourth place: File.ReadAllText
+        // opens with FileShare.Read, so a READER forbids writing. Here the reader is the server
+        // polling for an answer and the writer is the person answering — and their answer fails with
+        // "used by another process" and is lost. Found on 2026-09-05 by a flaky test of this class.
+        var path = _escalations.AnswerPath("q1");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "{}");
+        using var stop = new CancellationTokenSource();
+        var polling = Task.Run(() =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                _escalations.ReadAnswer("q1");
+            }
+        });
+
+        var failures = 0;
+        for (var attempt = 0; attempt < 400; attempt++)
+        {
+            try
+            {
+                File.WriteAllText(path, "{\"answer\":\"attempt " + attempt + "\"}");
+            }
+            catch (IOException)
+            {
+                failures++;
+            }
+        }
+
+        await stop.CancelAsync();
+        await polling;
+        failures.Should().Be(0, "a person's answer must not be refused because the server was looking at the file");
+    }
 }
