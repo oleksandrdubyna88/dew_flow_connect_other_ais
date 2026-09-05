@@ -14,7 +14,7 @@ import {
 } from './panelView';
 import { parseSession, SessionFile } from './rounds';
 import { PriceOfModel, usageTabHtml } from './roundsLog';
-import { parseUsage, UsageEntry, Window } from './usage';
+import { parseUsage, priceOf, UsageEntry, Window } from './usage';
 import {
   CliStatus,
   latestCliVersion,
@@ -159,20 +159,32 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   async modelPrice(): Promise<PriceOfModel> {
     await this.refreshPriceTables();
     const [open, lite] = [this.openRouterPrices, this.liteLlmPrices];
+    // What the OPERATOR typed, per vendor, wins over any list — through the same priceOf the
+    // spending tab uses rather than a second copy of the rule. It is the only thing that can price
+    // a local engine at all: no public list has ever heard of one, so its rounds read as a floor
+    // until somebody says what it costs them.
+    const vendors = vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors'));
     // Looked up once per DISTINCT model and remembered, rather than re-derived inside the loop that
     // prices a hundred rounds — the gate's performance finding, and it costs nothing to honour.
     // The whole price list is searched, not only the models the vendors are set to now, because a
     // finished round is priced by the model that answered it.
     const seen = new Map<string, { inPerMillion: number; outPerMillion: number } | undefined>();
 
-    return (model) => {
-      if (!seen.has(model)) {
-        const price = priceFor(model, open, lite);
-        seen.set(model, price === undefined ? undefined : { inPerMillion: price.inPerMillion, outPerMillion: price.outPerMillion });
+    return (model, provider) => {
+      const key = provider + '|' + model;
+      if (!seen.has(key)) {
+        const typed = priceOf(provider, vendors, (id) => published(id, open, lite));
+        seen.set(key, typed === undefined ? undefined : { inPerMillion: typed.in, outPerMillion: typed.out });
       }
 
-      return seen.get(model);
+      return seen.get(key);
     };
+
+    function published(id: string, openRouter: PriceTable, liteLlm: PriceTable) {
+      const price = priceFor(id, openRouter, liteLlm);
+
+      return price === undefined ? undefined : { inPerMillion: price.inPerMillion, outPerMillion: price.outPerMillion };
+    }
   }
 
   /**
