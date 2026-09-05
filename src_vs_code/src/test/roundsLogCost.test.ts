@@ -180,14 +180,14 @@ test('the column shows in / out / total, and a dash when there is nothing to sho
 
 test('three figures, always three, with a dash for whatever is unknown', () => {
   assert.equal(
-    cost3({ costInUsd: 2, costOutUsd: 2, costTotalUsd: 4, costIsEstimate: true, costPartial: false }),
+    cost3({ costInUsd: 2, costOutUsd: 2, costTotalUsd: 4, costIsEstimate: true, costPartial: false }, money),
     '~$2.00 / $2.00 / $4.00');
   assert.equal(
-    cost3({ costInUsd: null, costOutUsd: null, costTotalUsd: 0.42, costIsEstimate: false, costPartial: false }),
+    cost3({ costInUsd: null, costOutUsd: null, costTotalUsd: 0.42, costIsEstimate: false, costPartial: false }, money),
     '— / — / $0.420',
     'a billed total with no split still reads as three');
   assert.equal(
-    cost3({ costInUsd: null, costOutUsd: null, costTotalUsd: null, costIsEstimate: false, costPartial: false }),
+    cost3({ costInUsd: null, costOutUsd: null, costTotalUsd: null, costIsEstimate: false, costPartial: false }, money),
     '—',
     'and nothing priced is a dash, not an empty cell');
 });
