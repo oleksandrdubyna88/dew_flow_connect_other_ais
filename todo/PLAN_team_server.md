@@ -640,7 +640,7 @@ The split was made on Fable; stories marked **F** run on Fable because being wro
 
 | Epic | Story | Delivers | Model |
 |---|---|---|---|
-| **1 · One library for two binaries** | ~~1.1~~ **done** | `ReviewerExecutor.LaunchAsync` out of `RunOnceAsync`, with `ParseAnswer` pure beside it; every existing test passed unedited. (`RetryLadder` shipped ahead of the epic, on its own — it fixes the local `coai-mcp` today, where a transient 429 got one retry at fifteen seconds and then failed the round.) | Opus |
+| **1 · One library for two binaries** | ~~1.1~~ **done** | `ReviewerExecutor.LaunchAsync` out of `RunOnceAsync`, with `ParseAnswer` pure beside it; every existing test passed UNEDITED — which is what "unchanged" meant here, never "no new tests": new behaviour ships with its own, as the testing rule requires. (`RetryLadder` shipped ahead of the epic, on its own — it fixes the local `coai-mcp` today, where a transient 429 got one retry at fifteen seconds and then failed the round.) | Opus |
 | | 1.2 | `RuntimeResolution` + `VendorHealth` out of `PanelService`; `UsageLedger` moved | Opus |
 | | 1.3 | `RemoteRuntime`, `RemoteAsk`, `TeamServerAuth` (with URL normalisation and the shared vector), `--ask-remote`, every registry point, `ProbeAsync`'s remote arm | Opus |
 | **2 · `coai-server`** | 2.1 | skeleton, logging, guards, the mirrored auth, sessions, `X-Coai-Contract`, the harness | **F** |
