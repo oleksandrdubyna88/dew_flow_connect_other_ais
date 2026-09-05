@@ -58,7 +58,7 @@ public sealed class Judge(string executable, string model, string repo)
             stages.Add(stage with { Findings = findings });
         }
 
-        return run with { Stages = stages };
+        return run with { Stages = stages, JudgedBy = model };
     }
 
     private async Task<Finding> OneAsync(Case work, Finding finding, CancellationToken ct)
