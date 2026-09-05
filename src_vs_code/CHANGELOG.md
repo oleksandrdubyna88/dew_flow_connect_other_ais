@@ -1,5 +1,19 @@
 # Changelog
 
+## Server 0.17.5 — 2026-09-05
+
+**A round no longer dies because a neighbour was writing the schema file.** Every round rewrote
+`finding-schema.json` before launching its reviewers; the data directory belongs to every window on
+the machine; on Windows two writers is an exception rather than a queue. Found by the seven-lane
+matrix in its first minute — `the round failed: The process cannot access the file
+'finding-schema.json' because it is being used by another process` — for a file whose content is a
+compile-time constant and was already correct on disk. It is written now only when it is missing or
+different, and a lost race is not an error: the neighbour is writing the same bytes. It fails open,
+because a reviewer that cannot read the schema answers unshaped JSON, which a round already handles,
+while a round that never launches over a locked constant is strictly worse.
+
+**This is the release to have when several VS Code windows review at once.**
+
 ## Server 0.17.4 — 2026-09-05
 
 **A local review cannot list findings until the token ceiling cuts it off.** The third way the local
