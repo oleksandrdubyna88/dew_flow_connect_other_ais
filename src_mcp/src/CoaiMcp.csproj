@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
   </ItemGroup>
 
   <ItemGroup>

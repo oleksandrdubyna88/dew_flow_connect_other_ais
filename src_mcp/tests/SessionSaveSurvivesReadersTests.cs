@@ -126,4 +126,22 @@ public sealed class SessionSaveSurvivesReadersTests : IDisposable
 
         act.Should().NotThrow("a round that cannot draw itself is still a round");
     }
+
+    [Fact]
+    public void TheInstantASessionOpened_SurvivesEverySaveAfterIt()
+    {
+        // It used to be read from the file's creation time, and a save here writes a scratch file
+        // and MOVES it over the real one — so the "opening" became the last save on Windows, and on
+        // Linux most filesystems have no birth time to give at all. The first round's window over
+        // the caller's transcript collapsed to nothing either way. Found by the code gate.
+        var store = new SessionStore(_dir);
+        var opened = DateTime.UtcNow.AddHours(-2);
+        var session = new PersistedSession(
+            new SessionState("s1", "D:/repo", "main", new PanelConfig()), []) { OpenedUtc = opened };
+
+        store.Save(session);
+        store.Save(store.Load("D:/repo", "main")! with { PlanText = "a later save" });
+
+        store.Load("D:/repo", "main")!.OpenedUtc.Should().BeCloseTo(opened, TimeSpan.FromSeconds(1));
+    }
 }

@@ -108,6 +108,16 @@ public sealed record PanelSettings
     public string DataDir { get; init; } = DefaultDataDir;
 
     /// <summary>
+    /// Where the CALLER's own transcripts live, when they are not Claude Code's.
+    /// </summary>
+    /// <remarks>
+    /// Empty means the default, which is <c>~/.claude/projects</c> because that is what drives this
+    /// gate today. The gate itself said the store should not be wired to one vendor's CLI, and it is
+    /// right — this is the seam, and it costs one environment variable rather than a protocol.
+    /// </remarks>
+    public string AgentLogDir { get; init; } = string.Empty;
+
+    /// <summary>
     /// What a LOCAL reviewer is told about thinking: <c>none</c> by default, a level to ask for it,
     /// or <c>engine</c> to say nothing and take the engine's own default.
     /// </summary>
@@ -215,6 +225,7 @@ public sealed record PanelSettings
         // reported success until the answer was empty, which is the worst shape a configuration
         // mistake can take. Found by this repository's own bench on its first real run.
         DataDir = env("COAI_DATA_DIR") is { Length: > 0 } dir ? Path.GetFullPath(dir) : DefaultDataDir,
+        AgentLogDir = env("COAI_AGENT_LOG_DIR") is { Length: > 0 } logs ? Path.GetFullPath(logs) : string.Empty,
         LocalMaxTokens = IntVar(env, "COAI_LOCAL_MAX_TOKENS", 8192),
         Autonomous = Flag(env, "COAI_AUTONOMOUS"),
         SplitPlan = Flag(env, "COAI_SPLIT_PLAN"),

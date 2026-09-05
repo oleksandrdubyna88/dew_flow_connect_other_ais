@@ -246,6 +246,61 @@ sessions are rewritten as rounds advance and hold one repo+branch, while "what h
 this month" spans every session and must outlive all of them. Failed reviewers are recorded too,
 and recording never throws: a ledger that can fail a review is worse than one with a gap in it.
 
+## The rounds database (`coai.db`, 2026-09-05)
+
+`Store/RoundsDb` writes a SQLite projection beside the sessions: `sessions`, `rounds`, `reviewers`
+and — the reason it exists — `findings`, every one with its severity, file, line, title, why, fix,
+the vendor that raised it, the role it wore, and **what the caller decided about it and why**.
+Search is FTS5 over `title/why/fix/file`, kept in step by triggers.
+
+**Why.** A session file records that codex produced four findings. It does not record the findings:
+their text went into the reply to the calling agent, and for the rejected ones into the standing
+rejection list. Everything else was gone when the round closed, so the log page could only show
+counts and "every finding that ever mentioned FileShare" had no answer on this machine.
+
+**What it is for.** Finding the blind spots in an AI's own reasoning (operator, 2026-09-05). So a
+round also carries the scope the caller stated, the commit the reviewers read, which caller it was,
+and how it closed the gate — `accepted` and `rejected` counts, `-1` until it closes one. An
+**accepted** finding is by definition something the caller had not seen and then agreed was worth
+having: that is the blind-spot corpus. A **rejection** is a disagreement, and one a later round
+raises again is flagged `re_raised` — the gate discounts those, and a disagreement the caller keeps
+defending is the more interesting kind.
+
+`rounds.agent_log` holds what the caller was DOING in the stretch this round closes: a trimmed slice
+of its own CLI transcript (`~/.claude/projects/**/*.jsonl`) between the previous round and this
+one — the operator's framing, "session opened 13:00, plan review 13:39, so that stretch is the plan
+round's". `Store/AgentLog` reads it shared and read-only, keeps instant/kind/first 600 characters,
+names a tool call rather than quoting its arguments, caps at 400 entries or 256 KB, and says inside
+the slice when it had to cut. It never leaves the machine.
+
+**What the gate changed about it.** Its own two rounds over this diff took nine findings: the
+transcript slice keeps to ONE session (entries working in the repo or under it; failing that, the
+busiest transcript in the window — sweeping every project into this repository's database was a real
+objection from two security reviewers); a line is skipped by a day scan before it is parsed and the
+first entry past the window ends the file; a decision follows the DEFECT rather than the ordinal it
+had in one reply; the opening instant is recorded on the session rather than read from the file's
+creation time, which a save-by-move destroys on Windows and Linux never had; `COAI_AGENT_LOG_DIR`
+points the reader at another CLI's transcripts; and `Open` catches anything at all, because a
+migration step throwing something unlisted must not take down a review it only records.
+
+**Shape decisions.**
+
+- A **projection, never the source of truth**. The session files are unchanged and still drive every
+  round; every write here is best-effort (`PanelService.Project`) — a database that cannot be
+  written must never take down a round somebody is waiting for.
+- **Opened per write, not held.** A round takes minutes and produces two or three writes; a held
+  connection buys nothing and costs a file handle five servers would fight over. `Pooling=False`
+  for the same reason — a pooled connection keeps the handle after `Dispose`, which turned nine
+  unrelated tests red on their own cleanup.
+- WAL, for the five-window case.
+- `Microsoft.Data.Sqlite.Core` plus a chosen `SQLitePCLRaw.bundle_e_sqlite3` 3.0.5, not the
+  all-in-one package: that one pins 2.1.11, whose native lib carries GHSA-2m69-gcr7-jv3q, and this
+  repository builds advisories as errors. **Native AOT publishes clean with it** — measured
+  2026-09-05: 17.7 MB, zero IL or trim warnings.
+
+The extension does not read it yet; the log page still flattens the session files. That half is
+[todo/PLAN_local_db_reader.md](../todo/PLAN_local_db_reader.md).
+
 ## The audit trail
 
 `RoundAudit` writes what the one-line round summary cannot: the roster and the exact argv (at

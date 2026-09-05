@@ -11,6 +11,10 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="CoaiMcp.Tests" />
+    <!-- The projection asks the gate's own question — "is this the same defect?" — rather than
+         growing a second answer to it. Named here instead of making the rule public, so it stays an
+         implementation detail with one more reader. -->
+    <InternalsVisibleTo Include="coai-mcp" />
   </ItemGroup>
 
 </Project>

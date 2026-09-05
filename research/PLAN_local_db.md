@@ -1,12 +1,43 @@
 # PLAN — a local database under the rounds log: structure, and a search that is real
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_mcp/src/Server/{SessionStore.cs, UsageLedger}`
-> (the writer), a new `src_mcp/src/Store/` (SQLite), `src_vs_code/src/{roundsLog.ts, roundsLogPanel.ts,
-> extension.ts}` (the reader), their tests, `research/module_server.md`, `module_extension.md`.
+> Status: **Epic 1 IMPLEMENTED, 2026-09-05** — the server writes `coai.db` (sessions, rounds,
+> reviewers, every finding with its resolution and reason, FTS5 search) and 24 tests cover it over
+> real SQLite. **Epic 2 (the extension reads it) is NOT built** and is extracted into
+> [todo/PLAN_local_db_reader.md](../todo/PLAN_local_db_reader.md); **Epic 3 (the five-window
+> measurement) is not run.** Scope as built: `src_mcp/src/Store/{RoundsDb,Schema,RoundContext,AgentLog}.cs`,
+> `PanelService` (two call sites, both best-effort), `SessionStore.OpenedUtc`, `research/module_server.md`.
 >
-> Related docs: [PLAN_rounds_log_view.md](../research/PLAN_rounds_log_view.md) — the page this feeds;
-> [PLAN_findings_in_the_log.md](PLAN_findings_in_the_log.md) — subsumed by this plan's findings table;
-> [module_server.md](../research/module_server.md), [module_extension.md](../research/module_extension.md).
+> **Deviations, and one whole epic that was not in the plan.**
+>
+> 1. **The findings table grew an analysis half, because the data was asked for by name.** The
+>    operator's follow-up on the day: *"нужно писать сами находки в локал бд, плюс желательно ещё
+>    писать какие были приняты"*, and then the reason — finding the blind spots in an AI's own
+>    reasoning. So `rounds` also carries `plan_text`, `head_sha`, `caller`, `accepted`, `rejected`,
+>    and `findings` carries `re_raised`. An accepted finding IS the blind-spot record: something the
+>    caller had not seen and then agreed was worth having. A rejection a later round raises again is
+>    a blind spot being defended, which is the more interesting kind.
+> 2. **`rounds.agent_log`, which the plan never imagined.** What the caller was DOING in the stretch
+>    the round closes, sliced out of its own CLI transcript by time window — the operator's framing:
+>    *"сессия началась в 13:00 и ревью плана было в 13:39... берём всё за этот промежуток"*. New file
+>    `Store/AgentLog.cs`, trimmed hard (400 entries / 256 KB / 600 characters an entry, a tool call
+>    keeping its name and not its arguments), read-only and local.
+> 3. **`Microsoft.Data.Sqlite.Core` plus a chosen `SQLitePCLRaw.bundle_e_sqlite3` 3.0.5**, not the
+>    all-in-one package the plan named: that one pins 2.1.11, whose native lib carries
+>    GHSA-2m69-gcr7-jv3q, and this repository builds advisories as errors. Native AOT publishes clean
+>    with it — 17.7 MB, zero IL or trim warnings, measured.
+> 4. **Opened per write, not held for the process.** The plan said nothing about lifetime; the tests
+>    did. A held connection kept the file handle after `Dispose` (pooling) and nine unrelated tests
+>    went red on their own cleanup. `Pooling=False` and a connection per write — a round produces two
+>    or three, over minutes.
+> 5. **No startup rebuild-from-session-files sweep** (plan Epic 1.4). It would restore rounds and
+>    reviewers and could never restore a finding's text, which is the only part that is not
+>    recoverable — so a database that will not open is simply not used, and the round is recorded in
+>    its session file as before. Written down rather than half-built.
+>
+> Related docs: [PLAN_rounds_log_view.md](PLAN_rounds_log_view.md) — the page this feeds;
+> [todo/PLAN_findings_in_the_log.md](../todo/PLAN_findings_in_the_log.md) — closed by this plan's
+> findings table once the reader lands; [module_server.md](module_server.md),
+> [module_extension.md](module_extension.md).
 
 ## The ask, verbatim
 
@@ -83,7 +114,7 @@ round record keeps counts.
 2. `sql.js` in the VSIX; `RoundsDbReader` opening the file's bytes read-only; the page's provider
    pushes query results; the JSON path stays as the fallback when there is no database yet.
 3. The page: findings under an expanded row (closing
-   [PLAN_findings_in_the_log.md](PLAN_findings_in_the_log.md)); the search box queries FTS through the
+   [todo/PLAN_findings_in_the_log.md](../todo/PLAN_findings_in_the_log.md)); the search box queries FTS through the
    provider with a small debounce, results replacing the table.
 
 ### Epic 3 — measured

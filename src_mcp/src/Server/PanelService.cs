@@ -288,7 +288,13 @@ public sealed class PanelService
         var session = _store.Load(repoPath, branch)
             ?? new PersistedSession(
                 new SessionState(Guid.NewGuid().ToString("N")[..8], repoPath, branch, _settings.Rounds),
-                []);
+                [])
+            {
+                // Stamped once, here, and carried by every later save. It bounds the first round's
+                // window over the caller's transcript, and the file system cannot be asked for it:
+                // a save moves a scratch file over this one.
+                OpenedUtc = DateTime.UtcNow,
+            };
         _store.Save(session);
         _log.Information("session {SessionId} open for {Branch}", session.State.SessionId, branch);
         return Json(SessionAnswerFor(session), ServerJsonContext.Default.SessionAnswer);
@@ -625,6 +631,15 @@ public sealed class PanelService
             });
             audit.Closing(answer.Verdict, gate.GatingCount, summary.Sentence, record);
             audit.Findings(merged);
+            // And into the database, with what the round was ABOUT. Best-effort by construction:
+            // the round is already answered and saved, and a projection that cannot be written must
+            // never take it down.
+            Project(db => db.RecordRound(
+                completed.State,
+                record,
+                merged,
+                new Store.RoundContext(
+                    planText, sha, caller, [.. gate.Discounted], WhatTheCallerWasDoing(session, record))));
             NotifyIfAPersonMustDecide(completed.Verdict, session, merged);
             return Json(answer, ServerJsonContext.Default.ReviewAnswer);
         }
@@ -1006,6 +1021,51 @@ public sealed class PanelService
     /// "ignore all this" would be an off switch on the gate, and it is deliberately not offered.
     /// <c>Discuss</c> leaves the session exactly where it is: the AI is meant to stop and talk.</para>
     /// </remarks>
+    /// <summary>
+    /// The caller's own work in the stretch this round closes.
+    /// </summary>
+    /// <remarks>
+    /// <para>From the end of the PREVIOUS round to the start of this one — the operator's own
+    /// framing: the session opened at 13:00 and the plan review ran at 13:39, so that stretch is the
+    /// plan round's; the code was written between 13:39 and 15:03, so that stretch is the code
+    /// round's. A first round is bounded by when the session was opened.</para>
+    /// <para>Best-effort like everything else here, and read from the CLI's own transcripts, which
+    /// this server only ever reads.</para>
+    /// </remarks>
+    private string WhatTheCallerWasDoing(PersistedSession session, RoundRecord record)
+    {
+        var previous = session.Rounds.Count > 0 ? session.Rounds[^1].CompletedUtc : DateTime.MinValue;
+        var from = previous > session.OpenedUtc ? previous : session.OpenedUtc;
+        var transcripts = _settings.AgentLogDir.Length > 0 ? _settings.AgentLogDir : Store.AgentLog.DefaultProjectsDir;
+
+        return from == DateTime.MinValue
+            ? string.Empty
+            : Store.AgentLog.Slice(transcripts, from, record.StartedUtc, session.State.RepoPath);
+    }
+
+    /// <summary>
+    /// A write to the projection, which is never allowed to matter.
+    /// </summary>
+    /// <remarks>
+    /// The session files are the source of truth and the round is what somebody is waiting for. A
+    /// database that is locked, full or corrupt is a line in the log, not a failed review.
+    /// </remarks>
+    private void Project(Action<Store.RoundsDb> write)
+    {
+        try
+        {
+            using var db = Store.RoundsDb.Open(_settings.DataDir, _log);
+            if (db is not null)
+            {
+                write(db);
+            }
+        }
+        catch (Exception e)
+        {
+            _log.Warning(e, "the round could not be projected into the rounds database");
+        }
+    }
+
     private PersistedSession WithHumanDecision(PersistedSession session)
     {
         var decision = _escalations.DecisionFor(session.State.SessionId);
@@ -1026,6 +1086,14 @@ public sealed class PanelService
                 return Error(refused.Sentence);
             case Transition.Moved moved:
                 _store.Save(session with { State = moved.State, Pending = [] });
+                // How the caller closed this gate: how many findings it took, which it argued with
+                // and why. The one thing this data is for — an accepted finding is something the
+                // caller had not seen and then agreed was worth having.
+                Project(db => db.RecordDecisions(
+                    session.State.SessionId,
+                    session.Rounds.Count == 0 ? session.State.Stage.ToString() : session.Rounds[^1].Stage,
+                    session.Rounds.Count == 0 ? 0 : session.Rounds[^1].Number,
+                    decisions));
                 var instruction = moved.State switch
                 {
                     { Stage: Stage.CodeReview, RoundsRunThisStage: 0 } when session.State.Stage == Stage.PlanReview =>
