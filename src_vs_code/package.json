@@ -320,7 +320,8 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p ./",
+    "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true })\"",
+    "compile": "npm run clean && tsc -p ./",
     "typecheck": "tsc -p ./ --noEmit",
     "test": "npm run compile && node scripts/run-tests.mjs",
     "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",

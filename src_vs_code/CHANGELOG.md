@@ -5,11 +5,20 @@
 **The Cost column says three numbers: in / out / total.** It was empty on every row, because it
 rendered the figure only a vendor that prices its own runs ever reports — and none of the three
 here does. It is now worked out from the tokens each reviewer actually read and wrote and the same
-two public price lists the spending section already reads, **priced per reviewer**: a round's tokens
-are the sum over vendors whose rates differ by an order of magnitude, so one multiplication over the
-round total would be a number with no meaning. A `~` marks a total derived from a price list rather
-than billed; a `+` marks one that left an unpriced reviewer out, so it is a floor. Hovering the cell
-spells all of that out in a sentence.
+two public price lists the spending section already reads. A `~` marks a total derived from a price
+list rather than billed; a `+` marks one that is a floor because something in it could not be
+priced; a `—` means nobody knows, which is a different claim from nothing. Hovering the cell spells
+all of that out in a sentence.
+
+**Priced from the usage ledger, at the price of the model that answered.** The first cut of this
+priced each of the round's reviewer states, and the column stayed empty in the installed extension:
+a reviewer state records `{provider, role, status, findings, note, seconds}` and no tokens at all.
+The ledger has one line per reviewer run with its tokens AND its model, so a round is priced from
+the lines that fall inside it — which also means a finished round keeps the cost it had when it ran,
+instead of moving the next time somebody points a vendor at a different model. A round whose lines
+do not add up to the tokens it recorded says so with the `+`, because two rounds of one stage
+running at once can each match the other's lines by time alone. Found by this product's own gate,
+nine reviewers over the diff.
 
 **The date range takes a time, and the page opens on today.** The two pickers are date **and**
 time now, and the log opens showing today from its first minute to its last — the question somebody

@@ -13,7 +13,7 @@ import {
   VSCODE_COMMAND_FOR,
 } from './panelView';
 import { parseSession, SessionFile } from './rounds';
-import { usageTabHtml } from './roundsLog';
+import { PriceOfModel, usageTabHtml } from './roundsLog';
 import { parseUsage, UsageEntry, Window } from './usage';
 import {
   CliStatus,
@@ -144,24 +144,41 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
 
   /**
-   * What each vendor's CURRENT model costs per million tokens, for the log page's Cost column.
+   * What a MODEL costs per million tokens, for the log page's Cost column.
    *
-   * <p>By provider, because a round's reviewer rows name the vendor and which model it is set to is
-   * this panel's configuration rather than the round's. The same two public price lists the spending
-   * section reads — nothing new is fetched.</p>
+   * <p>By model id rather than by vendor: a round is priced from the usage ledger, and every line
+   * there names the model that actually answered — so a finished round keeps the cost it had when
+   * it ran, however the vendor is configured today. The same two public price lists the spending
+   * section reads; nothing new is fetched.</p>
    */
-  async providerPrice(): Promise<(provider: string) => { inPerMillion: number; outPerMillion: number } | undefined> {
-    const vendors = vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors'));
-    const prices = await this.modelPrices(vendors);
-    const byProvider = new Map<string, { inPerMillion: number; outPerMillion: number }>();
-    for (const vendor of vendors) {
-      const price = prices[vendor.model];
-      if (price !== undefined) {
-        byProvider.set(vendor.id, { inPerMillion: price.inPerMillion, outPerMillion: price.outPerMillion });
-      }
-    }
+  async modelPrice(): Promise<PriceOfModel> {
+    await this.refreshPriceTables();
+    const [open, lite] = [this.openRouterPrices, this.liteLlmPrices];
+    // Looked up once per DISTINCT model and remembered, rather than re-derived inside the loop that
+    // prices a hundred rounds — the gate's performance finding, and it costs nothing to honour.
+    // The whole price list is searched, not only the models the vendors are set to now, because a
+    // finished round is priced by the model that answered it.
+    const seen = new Map<string, { inPerMillion: number; outPerMillion: number } | undefined>();
 
-    return (provider) => byProvider.get(provider);
+    return (model) => {
+      if (!seen.has(model)) {
+        const price = priceFor(model, open, lite);
+        seen.set(model, price === undefined ? undefined : { inPerMillion: price.inPerMillion, outPerMillion: price.outPerMillion });
+      }
+
+      return seen.get(model);
+    };
+  }
+
+  /**
+   * The ledger, whole, for pricing rounds.
+   *
+   * <p>Not the `remembered` subset the spending tab shows: forgetting a vendor's spending is a
+   * decision about the SPENDING VIEW, and it must not silently empty the Cost column of rounds that
+   * really did cost money.</p>
+   */
+  async usageLines(): Promise<readonly UsageEntry[]> {
+    return this.readUsage();
   }
 
   /** The spending window the page shows. Today by default — since midnight, by the operator's ruling. */
@@ -332,7 +349,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * always showed, with dashes where the prices would be — which is exactly what it showed before
    * this existed.</p>
    */
-  private async modelPrices(vendors: readonly Vendor[]): Promise<Record<string, ModelPrice>> {
+  /** The two public lists, fetched at most once a day and kept in memory. */
+  private async refreshPriceTables(): Promise<void> {
     const A_DAY = 24 * 60 * 60 * 1000;
     if (Date.now() - this.pricesCheckedAt > A_DAY) {
       this.pricesCheckedAt = Date.now();
@@ -341,6 +359,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         fetchTable(LITELLM_PRICES, liteLlmTable),
       ]);
     }
+  }
+
+  private async modelPrices(vendors: readonly Vendor[]): Promise<Record<string, ModelPrice>> {
+    await this.refreshPriceTables();
 
     const prices: Record<string, ModelPrice> = {};
     for (const vendor of vendors) {
