@@ -201,6 +201,61 @@ from the outside. Its partial result (8 worth having, 11 not) is recorded but no
 computed over 12 % of a set is not a measurement. Re-running it is one command and no rounds, which
 is exactly why the judgement was built as a second pass over data already on disk.
 
+## Epic 4 — every combination, on server 0.17.4
+
+Seven arms — each vendor alone, each pair, all three — over the same two cases, twice each, both
+stages, seven lanes. 28 runs; 25 produced verdicts and 3 failed, all three to two defects the matrix
+found in its first minute and which are fixed (below).
+
+| arm | code round | findings | plan round | findings | code tokens in |
+|---|---|---|---|---|---|
+| `gemini` | **28 s** | 1 | **14 s** | 3 | 105k |
+| `codex` | 70 s | 2 | 42 s | 6 | 219k |
+| `codex,gemini` | 72 s | **5** | 37 s | **8** | 285k |
+| `gemini,local` | 249 s | 6 | 178 s | 9 | 199k |
+| `local` | 286 s | 6 | 94 s | 6 | **47k** |
+| `codex,gemini,local` | 295 s | **10** | 77 s | **13** | 322k |
+| `codex,local` | 311 s | 9 | 50 s | 10 | 247k |
+
+Medians over the runs that produced a verdict.
+
+### What it says, plainly
+
+**Two hosted vendors are the code round.** `codex,gemini` returns five findings in seventy-two
+seconds. Adding the local model returns ten in two hundred and ninety-five: **the third vendor
+doubles the findings and quadruples the wall clock** — and by epic 3's judgement only about one in
+nine of the local model's findings is worth having, so those five extra findings are worth roughly
+half of one. Four minutes of everybody's GPU for half a finding is the trade, stated.
+
+**The local model is not slow because it is local.** Its own arm reads 47k input tokens against
+codex's 219k — it is given a fraction of the context — and still takes four times as long, because
+one card serialises every local reviewer of every window. That is a queue, not a model.
+
+**Gemini is the cheapest thing here and knows the least.** Twenty-eight seconds and one finding on a
+code round. It earns its place beside codex (5 findings together against codex's 2 alone) and not on
+its own.
+
+**The plan round holds up under every arm.** Every combination answers it in 14–178 s for 3–13
+findings, at a tenth of the code round's tokens — the same shape epic 3 measured, now across seven
+configurations.
+
+### What the matrix found in its first minute
+
+Three of the 28 runs failed, to two defects, both fixed with a red test first:
+
+- **`the round failed: The process cannot access the file 'finding-schema.json' because it is being
+  used by another process`** — a product defect. Every round rewrote that file before launching its
+  reviewers; the data directory belongs to every window; on Windows two writers is an exception
+  rather than a queue. A whole round died for a file whose content is a compile-time constant and
+  was already correct on disk. `SchemaFile.Ensure` writes it only when it is missing or different
+  and fails open.
+- **`git worktree add: Preparing worktree (detached HEAD 267e07a)`** and, from the same cause, `the
+  plan stage is over for this session` — a bench defect. The branch was named for the case and the
+  repeat alone, so all seven arms of one cell shared one ref, one session and one worktree. The arm
+  is in the name now.
+
+Neither could have been found by a test: both need several servers, and one needs Windows.
+
 ## The two ways the local model fails, and what each needed
 
 | date | symptom | mechanism | fix | measured |
