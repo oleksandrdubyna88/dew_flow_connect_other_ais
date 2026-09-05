@@ -176,11 +176,18 @@ re-reads the panel's file:
 
 ```json
 [
-  { "id": "codex",       "runtime": "codex",       "models": ["gpt-5.6-luna", "gpt-5.6-sol"], "slots": ["a", "b"], "slotConcurrency": 1 },
-  { "id": "antigravity", "runtime": "antigravity", "models": ["gemini-3.7-flash-high", "gemini-3.1-pro-high"], "slots": ["a"] },
-  { "id": "claude",      "runtime": "claude",      "models": ["sonnet", "opus"], "slots": ["a"] }
+  { "id": "codex",       "runtime": "codex",       "models": ["gpt-5.6-luna"],         "slots": ["a"], "slotConcurrency": 1 },
+  { "id": "antigravity", "runtime": "antigravity", "models": ["gemini-3.8-flash-low"], "slots": ["a"], "slotConcurrency": 1 },
+  { "id": "claude",      "runtime": "claude",      "models": ["haiku"],                "slots": ["a"], "slotConcurrency": 1 }
 ]
 ```
+
+**That is the real file, written to `/opt/coai/data/vendors.json` on 2026-09-05** — the operator's
+choice of one model per vendor, and each id was read from the CLI itself rather than from a list:
+`gpt-5.6-luna` is in the Codex CLI's own `models_cache.json`, and `agy models` on this subscription
+lists **3.8** Flash as well as 3.7, so the newest at low effort is `gemini-3.8-flash-low`. Claude is the
+alias `haiku`, which the CLI resolves to the current 4.5 — the same convention the panel's curated list
+uses, and swap it for `claude-haiku-4-5-20251001` if that family should never move.
 
 `POST /api/reviews` refuses a vendor or model not on this list (`400`, naming the list). The catalog answer
 carries each vendor's health from the same probe `providers` uses (`--version` after
@@ -516,6 +523,45 @@ host-level steps that cannot affect the vault's own site file:
    never touched, so a mistake in ours cannot take it with it.
 
 **The name is `coai.remsoft.dev`** (A → 82.165.44.219, TTL 600).
+
+### The slots are signed in, and all three answered a real call
+
+Done on the VM, 2026-09-05, before a line of the server existed — this was the plan's largest
+unverified assumption, and it holds. Each CLI was installed once on the host, symlinked into
+`/usr/local/bin`, and signed in with `HOME` and the vendor's own variable pointed at
+`/opt/coai/data/accounts/<vendor>/a`, which is exactly the shape `SlotEnvironment.For` will produce.
+The credentials landed where they were meant to: `.codex/auth.json`, `.claude/.credentials.json`,
+`.gemini/antigravity-cli/antigravity-oauth-token`.
+
+Then a real one-shot call through each slot, not a `--version`:
+
+| vendor | result |
+|---|---|
+| codex | answered `OK`, 3 069 tokens, exit 0 |
+| antigravity | `status: SUCCESS`, `response: "OK"`, usage reported in full (6 127 in / 585 out, 584 thinking, 8 132 cache-read) |
+| claude | **authenticated and refused for quota** — `api_error_status: 429`, and the words below |
+
+Three things that only a real machine could have told us:
+
+1. **Codex's device-code login is off by default on the ACCOUNT.** `codex login --device-auth` returns
+   a consent page that refuses with *"Enable device code authorization for Codex in ChatGPT Security
+   Settings"*. It is one toggle in the ChatGPT account, and without it the only route on a headless box
+   is an SSH port-forward of the CLI's loopback redirect. `POST_DEPLOY.md` says so, because the next
+   person provisioning a slot meets it first.
+2. **The first real rate-limit sentence, captured:** `You've hit your session limit · resets 9:30pm
+   (UTC)`. `CooldownParser` is built from observed strings and this is the first one — note that it
+   carries the timezone, which is what makes parking a slot until that time safe rather than a guess.
+3. **A per-slot `HOME` makes Claude install a copy of itself into the slot** — 206 MB under
+   `<slot>/.local`, against 48 KB for codex and 17 MB for antigravity. It works, and it is the growth
+   surface this plan's own table did not predict: three slots would be three copies, and an update
+   reaches whichever slot ran next. The image therefore installs the CLIs system-wide and the slot
+   carries credentials only; `POST_DEPLOY.md` checks a slot's size, because a slot growing past a few
+   tens of megabytes means a binary has moved into it.
+
+**The Claude slot is the operator's own account.** That is why the very first probe met a session
+limit — the same subscription was answering this conversation at the time. A team server sharing one
+person's Claude is a team server whose reviewers stop when that person is working; a separate account
+for the slot is the fix, and it is an operator decision rather than a code change.
 
 ### The machine is small, and that is a design input rather than a footnote
 
