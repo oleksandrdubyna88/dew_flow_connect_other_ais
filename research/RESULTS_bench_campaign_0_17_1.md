@@ -1,6 +1,6 @@
 # RESULTS — the campaign after the store fix (server 0.17.1, 2026-09-05)
 
-> The plan: [PLAN_bench_campaign_after_the_store_fix.md](PLAN_bench_campaign_after_the_store_fix.md).
+> The plan: [PLAN_bench_campaign_after_the_store_fix.md](../todo/PLAN_bench_campaign_after_the_store_fix.md) — promoted here when this report is complete.
 > The instrument: [module_bench.md](module_bench.md). Raw data: `artifacts/bench/epic1-v0.17.1/runs.json`
 > (sequential) and `artifacts/bench/epic2-v0.17.1/runs.json` (five windows), git-ignored, on the
 > operator's machine.
