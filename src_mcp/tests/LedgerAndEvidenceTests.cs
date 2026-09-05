@@ -6,8 +6,6 @@ using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
 
-using CoaiMcp.Runners.Accounting;
-
 namespace CoaiMcp.Tests;
 
 /// <summary>

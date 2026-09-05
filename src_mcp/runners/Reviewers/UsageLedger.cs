@@ -2,7 +2,7 @@ using System.Text.Json;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Reviewers;
 
-namespace CoaiMcp.Runners.Accounting;
+namespace CoaiMcp.Runners.Reviewers;
 
 /// <summary>One reviewer run, as it will be counted forever.</summary>
 /// <param name="Outcome">`ok` or the failure's own name — a round that cost money without

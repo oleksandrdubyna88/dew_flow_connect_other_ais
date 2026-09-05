@@ -385,7 +385,7 @@ suites, the same guard `LocalRuntime.OpenAiBaseOf` / `openAiBaseOf` live under.
 | ~~`ReviewerExecutor.LaunchAsync`~~ | **done** — public on `ReviewerExecutor`, returning `ReviewerLaunch(Terminal, Answer, Usage, Evidence)`; `ParseAnswer(raw, provider)` is pure beside it | the server launches and classifies; the client parses |
 | ~~`VendorHealth.ProbeAsync`~~ | **done** — `VendorProbe.RunAsync`, with the probe timeout an explicit parameter and a hung CLI reported as silent rather than as the kill's exit code | the catalog's health column |
 | ~~`RuntimeResolution`~~ | **done** — `NameOf`/`For`/`AuthOf` over a three-string `VendorIdentity` | the "third copy of one decision" that already shipped a defect must not get a fourth |
-| ~~`UsageLedger`~~ | **done** — `runners/Accounting/`, namespace `Accounting` rather than `Usage`, which would have shadowed the `Usage` TYPE inside the library | it references nothing MCP-shaped today |
+| ~~`UsageLedger`~~ | **done** — `runners/Reviewers/`, beside the outcomes it records. Not its own namespace: `Runners.Usage` shadowed the `Usage` TYPE library-wide, and `Runners.Accounting` would have forced a `using` into a test this move had to leave untouched | it references nothing MCP-shaped today |
 | ~~`RetryLadder`~~ | **done** — shipped separately, `Reviewers/RetryLadder.cs`; `BoundedScheduler` climbs it and `COAI_RATE_LIMIT_BACKOFF_SECONDS` still means one step | the same ladder on both machines |
 
 `PanelService.cs` shrinks to one-line delegations. `CoaiMcp.Tests` must pass **unchanged** after the move —
