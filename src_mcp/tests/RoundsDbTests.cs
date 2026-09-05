@@ -234,6 +234,58 @@ public sealed class RoundsDbTests : IDisposable
     }
 
     [Fact]
+    public void AFileFromAnEarlierBuild_IsBroughtUpToWhatThisOneNeeds()
+    {
+        // CREATE TABLE IF NOT EXISTS is not a migration: it creates nothing when the table is there,
+        // so a column added later would be missing for ever on a file an older build made — and a
+        // best-effort writer would swallow the error every time.
+        using (var first = RoundsDb.Open(_dir, _log)!)
+        {
+            first.RecordRound(Session, Round(), [Found("one")]);
+        }
+
+        using var again = RoundsDb.Open(_dir, _log)!;
+        again.RecordRound(Session, Round(2), [Found("two")]);
+
+        Query("PRAGMA user_version").Single().Values.Single().Should().NotBe("0", "the file records how far it has come");
+        Query("SELECT number FROM rounds ORDER BY number").Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task AWriterThatMeetsAnother_WaitsInsteadOfLosingTheRound()
+    {
+        // The five-window case, made to happen on purpose. Another server holds a write transaction;
+        // without a busy timeout SQLite answers SQLITE_BUSY at once, and a best-effort write swallows
+        // it — the record then silently loses exactly the rounds that were busiest.
+        using (var first = RoundsDb.Open(_dir, _log)!)
+        {
+            first.RecordRound(Session, Round(), [Found("already here")]);
+        }
+
+        using var holder = new SqliteConnection($"Data Source={Path.Combine(_dir, RoundsDb.FileName)};Pooling=False");
+        holder.Open();
+        Execute(holder, "BEGIN IMMEDIATE");
+
+        var waiting = Task.Run(() =>
+        {
+            using var second = RoundsDb.Open(_dir, _log)!;
+            second.RecordRound(Session, Round(2), [Found("written while the other held the file")]);
+        });
+        await Task.Delay(400, TestContext.Current.CancellationToken);
+        Execute(holder, "COMMIT");
+
+        await waiting; // it must have waited, not thrown
+        Query("SELECT number FROM rounds ORDER BY number").Should().HaveCount(2);
+    }
+
+    private static void Execute(SqliteConnection db, string sql)
+    {
+        using var command = db.CreateCommand();
+        command.CommandText = sql;
+        command.ExecuteNonQuery();
+    }
+
+    [Fact]
     public void ADatabaseThatCannotBeOpenedIsNotAnException()
     {
         // Every caller's correct behaviour is to carry on without one: a round is what somebody is

@@ -47,7 +47,16 @@ public sealed class RoundsDb : IDisposable
             Directory.CreateDirectory(dataDir);
             // Pooling off: a pooled connection keeps the file handle open after Dispose, and this
             // opens for one write and closes. It cost a test suite nine red cleanups to learn.
-            var db = new SqliteConnection($"Data Source={Path.Combine(dataDir, FileName)};Pooling=False");
+            //
+            // The busy timeout is stated rather than assumed, and what it is worth was MEASURED
+            // rather than argued: the gate said a concurrent write would return SQLITE_BUSY at once
+            // and a best-effort write would swallow it. It does not — with a second server holding
+            // a write transaction, the test passes with this setting and without it, because
+            // Microsoft.Data.Sqlite already retries a busy database until CommandTimeout (30 s).
+            // So this is a statement of intent that outlives that default, not the fix it looked
+            // like; the loss the gate feared does not reproduce.
+            var db = new SqliteConnection(
+                $"Data Source={Path.Combine(dataDir, FileName)};Pooling=False;Default Timeout=5");
             db.Open();
             Migrate(db);
 
@@ -61,11 +70,37 @@ public sealed class RoundsDb : IDisposable
         }
     }
 
+    /// <summary>
+    /// Brings the file up to the schema this build expects.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>CREATE TABLE IF NOT EXISTS</c> alone is not a migration and the gate was right to
+    /// say so: it creates nothing when the table already exists, so a column added later is missing
+    /// on every database an older build created — and a best-effort writer would swallow the error
+    /// for ever. <c>user_version</c> records where the file has got to, and each step is applied in
+    /// order, once.</para>
+    /// <para>A step must be idempotent and additive. Adding a column belongs here; anything that
+    /// cannot be expressed as one is a reason to delete the file instead — it is a projection, and
+    /// the sessions it projects are still on disk.</para>
+    /// </remarks>
     private static void Migrate(SqliteConnection db)
     {
         Run(db, "PRAGMA journal_mode=WAL");
-        Run(db, Schema.Tables);
-        Run(db, Schema.Search);
+        Run(db, "PRAGMA busy_timeout=5000");
+        var version = Version(db);
+        for (var step = version; step < Schema.Steps.Length; step++)
+        {
+            Run(db, Schema.Steps[step]);
+            Run(db, $"PRAGMA user_version={step + 1}");
+        }
+    }
+
+    private static int Version(SqliteConnection db)
+    {
+        using var read = db.CreateCommand();
+        read.CommandText = "PRAGMA user_version";
+
+        return Convert.ToInt32(read.ExecuteScalar() ?? 0);
     }
 
     /// <summary>

@@ -47,6 +47,12 @@ jobs:
 
       # The rules that check themselves: a misfiled plan and a stale pin are red builds,
       # not discoveries.
+      # The server ships as Native AOT and now carries a native dependency (SQLite). A trim or IL
+      # warning that only appears at publish time used to be discovered by a release; it is a
+      # pull-request check now, which is what the review gate asked for on 2026-09-05.
+      - name: Publish the server the way it ships (Native AOT)
+        run: dotnet publish src_mcp/src/CoaiMcp.csproj -c Release -r linux-x64 -warnaserror
+
       - name: Plan lifecycle
         run: node .claude/rules/shared/tools/plan-lifecycle.mjs
 

@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using CoaiMcp.Core.Findings;
+using CoaiMcp.Core.Gate;
 
 namespace CoaiMcp.Store;
 
@@ -34,14 +35,12 @@ public readonly record struct RoundContext(
 {
     /// <summary>Whether this finding is one the caller had already rejected.</summary>
     /// <remarks>
-    /// Matched by identity of what it SAYS rather than by reference: the discounted list holds the
-    /// same finding objects the merged list holds today, and a comparison that quietly depends on
-    /// that would break the day one of them is rebuilt from JSON.
+    /// Through the product's OWN rule for "the same defect" — same category, same file, lines within
+    /// five, and as much wording overlap as those coordinates leave necessary. The first version
+    /// compared titles and file names by hand, which was a second matching rule for a question this
+    /// codebase had already answered once; the gate named it and it was right.
     /// </remarks>
     public bool WasReRaised(Finding finding) =>
-        !ReRaised.IsDefaultOrEmpty
-        && ReRaised.Any(other =>
-            string.Equals(other.Title, finding.Title, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(other.File, finding.File, StringComparison.OrdinalIgnoreCase));
+        !ReRaised.IsDefaultOrEmpty && ReRaised.Any(other => FindingDedup.SameDefect(other, finding));
 
 }

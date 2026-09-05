@@ -13,6 +13,16 @@ namespace CoaiMcp.Store;
 /// </remarks>
 internal static class Schema
 {
+    /// <summary>
+    /// The schema, as ordered steps. The file records how many it has had (<c>user_version</c>).
+    /// </summary>
+    /// <remarks>
+    /// Append, never edit: step 0 is what every existing database already ran, and rewriting it
+    /// would change nothing on disk while changing what a new file gets — two shapes with one
+    /// version number, which is the failure this exists to prevent.
+    /// </remarks>
+    internal static readonly string[] Steps = [Tables, Search];
+
     internal const string Tables = """
         CREATE TABLE IF NOT EXISTS sessions (
             id          TEXT PRIMARY KEY,
