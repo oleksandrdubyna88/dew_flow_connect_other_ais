@@ -1,20 +1,28 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { LogRow, roundsLogHtml, rowsFrom } from '../roundsLog';
+import { asInstant, cost3, LogRow, money, roundsLogHtml, rowsFrom } from '../roundsLog';
 import { RoundRecord, SessionFile } from '../rounds';
+import { UsageEntry } from '../usage';
 
 /**
  * The Cost column says three numbers: what the round read, what it wrote, and the sum.
  *
  * <p>Asked for on 2026-09-05, looking at the log: the column was empty on every row. It rendered
- * `costUsd` — which only a vendor that prices its own runs ever reports, and none of the three
- * here does — so a column that could be computed from tokens and a public price list showed a dash
- * on all ninety-eight rounds.</p>
+ * `costUsd` — which only a vendor that prices its own runs ever reports, and none of the three here
+ * does — so a column that could be computed from tokens and a public price list showed nothing on
+ * all ninety-eight rounds.</p>
  *
- * <p>Priced per REVIEWER, not per round: a round's tokens are the sum over vendors whose prices
- * differ by an order of magnitude, so one multiplication over the round total would be a number
- * with no meaning. A reviewer whose model has no listed price contributes nothing and the row says
- * the total is partial rather than quietly under-reporting.</p>
+ * <p>The first version priced each REVIEWER STATE of the round, and the column stayed empty in the
+ * installed extension. The reason is in the session file: a reviewer state records
+ * `{provider, role, status, findings, note, seconds}` and <b>no tokens at all</b> — the totals live
+ * on the round, summed over vendors whose prices differ by an order of magnitude, which is not a
+ * number anything can be multiplied by.</p>
+ *
+ * <p>What DOES record tokens per reviewer is the usage ledger, one line per reviewer run with the
+ * model that answered: `{utc, provider, model, role, stage, seconds, tokensIn, tokensOut, costUsd}`.
+ * So a round is priced from the ledger lines that fall inside it, each at the price of the model
+ * that line names — which also settles what the gate raised twice: a round priced from the vendor's
+ * CURRENT model changes its historical cost the moment somebody switches models.</p>
  */
 
 function round(over: Partial<RoundRecord> = {}): RoundRecord {
@@ -30,8 +38,9 @@ function round(over: Partial<RoundRecord> = {}): RoundRecord {
     subject: 'SCOPE — something',
     tokensIn: 1_000_000,
     tokensOut: 200_000,
+    // Exactly as the server writes it: no tokens on a reviewer state.
     reviewerStates: [
-      { provider: 'codex', role: 'Architecture', status: 'done', findings: 1, note: '', tokensIn: 1_000_000, tokensOut: 200_000 },
+      { provider: 'codex', role: 'Architecture', status: 'done', findings: 1, note: '', seconds: 23 },
     ],
     ...over,
   } as RoundRecord;
@@ -44,86 +53,160 @@ function session(rounds: readonly RoundRecord[]): SessionFile {
   } as unknown as SessionFile;
 }
 
+function used(over: Partial<UsageEntry> = {}): UsageEntry {
+  return {
+    utc: '2026-09-05T07:42:00.000Z',
+    provider: 'codex',
+    model: 'gpt-5.6-sol',
+    role: 'Architecture',
+    stage: 'CodeReview',
+    seconds: 23,
+    tokensIn: 1_000_000,
+    tokensOut: 200_000,
+    costUsd: null,
+    ...over,
+  } as UsageEntry;
+}
+
 const NOW = Date.parse('2026-09-05T08:00:00.000Z');
+
 /** $2 per million in, $10 per million out — round numbers so the arithmetic is checkable by eye. */
-const PRICES = (provider: string) =>
-  provider === 'codex' ? { inPerMillion: 2, outPerMillion: 10 } : undefined;
+const PRICES = (model: string) =>
+  model === 'gpt-5.6-sol'
+    ? { inPerMillion: 2, outPerMillion: 10 }
+    : model === 'gemini-3-pro'
+      ? { inPerMillion: 4, outPerMillion: 20 }
+      : undefined;
 
-test('a round is priced per reviewer: in, out and the sum', () => {
-  const [row] = rowsFrom([session([round()])], NOW, PRICES) as [LogRow];
+test('a round as the server actually writes it is priced from the ledger, not left blank', () => {
+  // The defect the operator photographed: reviewer states carry no tokens, so nothing could be
+  // priced and every Cost cell was empty.
+  const [row] = rowsFrom([session([round()])], NOW, PRICES, [used()]) as [LogRow];
 
-  assert.equal(row.costInUsd, 2, '1M tokens at $2/M');
-  assert.equal(row.costOutUsd, 2, '200k tokens at $10/M');
+  assert.equal(row.costInUsd, 2, '1M read at $2/M');
+  assert.equal(row.costOutUsd, 2, '200k written at $10/M');
   assert.equal(row.costTotalUsd, 4);
-  assert.equal(row.costIsEstimate, true, 'derived from a public price list, not billed');
+  assert.equal(row.costIsEstimate, true, 'a list price, not a bill');
+  assert.equal(row.costPartial, false);
 });
 
-test('two vendors at different prices are added up, each at its own rate', () => {
+test('each reviewer is priced at the rate of the model that answered', () => {
   const two = round({
-    reviewerStates: [
-      { provider: 'codex', role: 'Architecture', status: 'done', findings: 0, note: '', tokensIn: 1_000_000, tokensOut: 100_000 },
-      { provider: 'local', role: 'Architecture', status: 'done', findings: 0, note: '', tokensIn: 1_000_000, tokensOut: 100_000 },
-    ],
+    tokensIn: 2_000_000,
+    tokensOut: 400_000,
+    reviewers: 'all 2 reviewers answered',
   });
-  const prices = (p: string) =>
-    p === 'codex' ? { inPerMillion: 2, outPerMillion: 10 } : { inPerMillion: 0, outPerMillion: 0 };
+  const [row] = rowsFrom([session([two])], NOW, PRICES, [
+    used(),
+    used({ provider: 'gemini', model: 'gemini-3-pro', role: 'SecurityReliability' }),
+  ]) as [LogRow];
 
-  const [row] = rowsFrom([session([two])], NOW, prices) as [LogRow];
-
-  assert.equal(row.costInUsd, 2, 'the local model is free, so only codex costs');
-  assert.equal(row.costOutUsd, 1);
-  assert.equal(row.costTotalUsd, 3);
+  assert.equal(row.costInUsd, 2 + 4, 'a million each, at each model\u2019s own rate');
+  assert.equal(row.costOutUsd, 2 + 4);
+  assert.equal(row.costTotalUsd, 12);
 });
 
-test('a reviewer whose model has no listed price makes the total PARTIAL, never smaller in silence', () => {
-  const mixed = round({
-    reviewerStates: [
-      { provider: 'codex', role: 'Architecture', status: 'done', findings: 0, note: '', tokensIn: 1_000_000, tokensOut: 0 },
-      { provider: 'mystery', role: 'Architecture', status: 'done', findings: 0, note: '', tokensIn: 5_000_000, tokensOut: 0 },
-    ],
-  });
+test('the price of the model that ANSWERED, not the one the vendor is set to now', () => {
+  // Raised twice by the gate: switching a vendor's model must not move what a finished round cost.
+  const [row] = rowsFrom([session([round()])], NOW, PRICES, [
+    used({ model: 'gemini-3-pro' }),
+  ]) as [LogRow];
 
-  const [row] = rowsFrom([session([mixed])], NOW, PRICES) as [LogRow];
-
-  assert.equal(row.costInUsd, 2);
-  assert.equal(row.costPartial, true, 'one reviewer could not be priced and the row says so');
+  assert.equal(row.costTotalUsd, 4 + 4, 'priced as gemini-3-pro, whatever codex is set to today');
 });
 
-test('a round a vendor actually billed uses the billed number, and is not an estimate', () => {
-  const billed = round({ costUsd: 7.5 });
+test('a model no list prices leaves the total a floor, and says so', () => {
+  const [row] = rowsFrom([session([round()])], NOW, PRICES, [
+    used(),
+    used({ provider: 'local', model: 'Qwen3.5-35B-A3B:latest', role: 'UxDxPerformance' }),
+  ]) as [LogRow];
 
-  const [row] = rowsFrom([session([billed])], NOW, PRICES) as [LogRow];
-
-  assert.equal(row.costTotalUsd, 7.5, 'what was charged wins over what we worked out');
-  assert.equal(row.costIsEstimate, false);
+  assert.equal(row.costTotalUsd, 4, 'what could be priced');
+  assert.equal(row.costPartial, true, 'and a mark that something could not');
 });
 
-test('no prices at all is no cost, never a zero', () => {
-  const [row] = rowsFrom([session([round()])], NOW) as [LogRow];
+test('a round with no ledger lines has NO cost — not a zero', () => {
+  const [row] = rowsFrom([session([round()])], NOW, PRICES, []) as [LogRow];
 
-  assert.equal(row.costTotalUsd, null, 'a zero would read as free');
+  assert.equal(row.costTotalUsd, null, 'absent is not free');
   assert.equal(row.costInUsd, null);
+  assert.equal(row.costPartial, false, 'nothing is claimed at all, so nothing is partial');
 });
 
-test('the page prints the three numbers, and says which is which', () => {
-  const html = roundsLogHtml(rowsFrom([session([round()])], NOW, PRICES), [], 'n');
-  const script = html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
+test('a reviewer whose tokens were never recorded is not priced as zero', () => {
+  // A line written before the ledger recorded tokens: the fields are simply absent.
+  const noTokens = { ...used({ provider: 'gemini', model: 'gemini-3-pro' }) } as Record<string, unknown>;
+  delete noTokens['tokensIn'];
+  delete noTokens['tokensOut'];
+  const [row] = rowsFrom([session([round()])], NOW, PRICES, [used(), noTokens as unknown as UsageEntry]) as [LogRow];
 
-  assert.ok(html.includes('>Cost</th>') || html.includes('Cost'), 'the column is there');
-  assert.match(script, /costInUsd/, 'the page renders the input cost');
-  assert.match(script, /costOutUsd/);
-  assert.match(script, /costTotalUsd/);
-  assert.ok(html.includes('in / out / total'), 'the header or the hint says what the three numbers are');
+  assert.equal(row.costTotalUsd, 4, 'only the reviewer that reported tokens is counted');
+  assert.equal(row.costPartial, true, 'and the total says it is a floor');
 });
 
-test('a cell that can be cut off carries its full text as a tooltip', () => {
-  // Reported from the page: the What and Reviewers columns are cut and there is no way to read the
-  // rest. The full string is the cell's own title, so hovering shows it without widening the table.
-  const html = roundsLogHtml(rowsFrom([session([round()])], NOW, PRICES), [], 'n');
-  const script = html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
+test('only the lines inside the round, and of its own stage, are its cost', () => {
+  const [row] = rowsFrom([session([round()])], NOW, PRICES, [
+    used(),
+    used({ utc: '2026-09-05T07:50:00.000Z' }),
+    used({ utc: '2026-09-05T07:42:30.000Z', stage: 'PlanReview' }),
+  ]) as [LogRow];
 
-  assert.match(script, /class="what" title=/, 'the subject');
-  assert.match(script, /class="who-answered" title=/, 'the reviewer summary');
-  assert.match(script, /class="num cost" title=/, 'the cost, whose marks need a sentence');
-  assert.match(script, /function costTitle/, 'and the cost tooltip spells the three numbers out');
+  assert.equal(row.costTotalUsd, 4, 'the later line and the other stage belong to other rounds');
+});
+
+test('a total that does not match the tokens the round recorded is a floor', () => {
+  // Two rounds of one stage running at once — the five-window case — can each match the other's
+  // lines by time alone. When the tokens do not add up to what the round recorded, say so.
+  const [row] = rowsFrom([session([round({ tokensIn: 5_000_000 })])], NOW, PRICES, [used()]) as [LogRow];
+
+  assert.equal(row.costPartial, true);
+});
+
+test('a vendor that billed the round wins over any list price', () => {
+  const billed = round({ costUsd: 0.42 });
+  const [row] = rowsFrom([session([billed])], NOW, PRICES, [used()]) as [LogRow];
+
+  assert.equal(row.costTotalUsd, 0.42);
+  assert.equal(row.costIsEstimate, false, 'a bill is not an estimate');
+});
+
+test('the column shows in / out / total, and a dash when there is nothing to show', () => {
+  const html = roundsLogHtml(rowsFrom([session([round()])], NOW, PRICES, [used()]), [], 'n');
+
+  assert.match(html, /data-sort="costTotalUsd"/, 'the column sorts like every other');
+  assert.match(html, /<th[^>]*>Cost<\/th>/, 'and it is named');
+  assert.match(html.slice(html.indexOf('<script')), /var cost3 = function/, 'the page uses the tested function itself');
+});
+
+test('three figures, always three, with a dash for whatever is unknown', () => {
+  assert.equal(
+    cost3({ costInUsd: 2, costOutUsd: 2, costTotalUsd: 4, costIsEstimate: true, costPartial: false }),
+    '~$2.00 / $2.00 / $4.00');
+  assert.equal(
+    cost3({ costInUsd: null, costOutUsd: null, costTotalUsd: 0.42, costIsEstimate: false, costPartial: false }),
+    '— / — / $0.420',
+    'a billed total with no split still reads as three');
+  assert.equal(
+    cost3({ costInUsd: null, costOutUsd: null, costTotalUsd: null, costIsEstimate: false, costPartial: false }),
+    '—',
+    'and nothing priced is a dash, not an empty cell');
+});
+
+test('a money figure never renders as NaN or undefined', () => {
+  assert.equal(money(undefined), '—');
+  assert.equal(money(null), '—');
+  assert.equal(money(Number.NaN), '—');
+  assert.equal(money(1.5), '$1.50');
+  assert.equal(money(0.004), '$0.004', 'a fraction of a cent still says something');
+});
+
+test('the upper bound of a range includes the minute it names', () => {
+  // "Today" ends at 23:59, and a round at 23:59:30 belongs to today. Raised by three reviewers at
+  // once on 2026-09-05.
+  const chosen = Date.parse('2026-09-05T23:59');
+
+  assert.equal(asInstant('2026-09-05T23:59', true), new Date(chosen + 59_999).toISOString());
+  assert.equal(asInstant('2026-09-05T00:00', false), new Date(Date.parse('2026-09-05T00:00')).toISOString());
+  assert.equal(asInstant('', true), '', 'no bound is no bound');
+  assert.equal(asInstant('not a date', true), '', 'and neither is nonsense');
 });

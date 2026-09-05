@@ -93,26 +93,34 @@ export interface LogFilters {
 }
 
 /**
- * What one vendor's model costs per million tokens, or nothing when no list prices it.
+ * What a MODEL costs per million tokens, or nothing when no list prices it.
  *
- * <p>By PROVIDER rather than by model id: a round's reviewer rows name the vendor, and which model
- * that vendor is set to is the panel's configuration, not the round's.</p>
+ * <p>By the model id the ledger recorded, never by the vendor's current setting: a round priced
+ * from what codex happens to be set to today changes its cost the moment somebody switches models,
+ * which the gate raised twice over on 2026-09-05.</p>
  */
-export type ProviderPrice = (provider: string) => { inPerMillion: number; outPerMillion: number } | undefined;
+export type PriceOfModel = (model: string) => { inPerMillion: number; outPerMillion: number } | undefined;
 
 /** Every round of every session, newest first. */
 export function rowsFrom(
   sessions: readonly SessionFile[],
   nowMs: number = Date.now(),
-  priceOf: ProviderPrice = () => undefined,
+  priceOf: PriceOfModel = () => undefined,
+  usage: readonly UsageEntry[] = [],
 ): LogRow[] {
   return sessions
-    .flatMap((session) => session.rounds.map((round) => rowFrom(session, round, nowMs, priceOf)))
+    .flatMap((session) => session.rounds.map((round) => rowFrom(session, round, nowMs, priceOf, usage)))
     .sort((a, b) => (b.startedUtc || b.completedUtc).localeCompare(a.startedUtc || a.completedUtc));
 }
 
-function rowFrom(session: SessionFile, round: RoundRecord, nowMs: number, priceOf: ProviderPrice): LogRow {
-  const cost = costOf(round, priceOf);
+function rowFrom(
+  session: SessionFile,
+  round: RoundRecord,
+  nowMs: number,
+  priceOf: PriceOfModel,
+  usage: readonly UsageEntry[],
+): LogRow {
+  const cost = costOf(round, priceOf, usage, nowMs);
   const status = round.status === 'running' ? 'running' : round.status === 'interrupted' ? 'interrupted' : 'done';
   const states = round.reviewerStates ?? [];
   const rows = reviewerRows(round);
@@ -144,32 +152,51 @@ function rowFrom(session: SessionFile, round: RoundRecord, nowMs: number, priceO
 }
 
 /**
- * What a round cost, per REVIEWER.
+ * What a round cost, from the USAGE LEDGER.
  *
- * <p>A round's own token totals are the sum over vendors whose prices differ by an order of
- * magnitude, so one multiplication over the round total would be a number with no meaning. Each
- * reviewer is priced at its own vendor's rate and the results are added; a reviewer whose model no
- * list prices contributes nothing and sets `costPartial`, because a total that quietly leaves
- * somebody out is worse than one that says it is a floor.</p>
+ * <p>Not from the round's reviewer states: those record `{provider, role, status, findings, note,
+ * seconds}` and no tokens at all, which is why the first version of this column was empty on every
+ * row in the installed extension. And not from the round's own totals either — they are a sum over
+ * vendors whose prices differ by an order of magnitude, so one multiplication over them is a number
+ * with no meaning.</p>
+ *
+ * <p>The ledger has exactly what is needed: one line per reviewer run, with the tokens it used and
+ * the MODEL that answered. Each line is priced at its own model's rate, so a round keeps the cost
+ * it had when it ran even after somebody points the vendor at a different model.</p>
+ *
+ * <p>A line with no listed price, or with no tokens recorded, contributes nothing and sets
+ * `costPartial`: a total that quietly leaves somebody out is worse than one that says it is a
+ * floor. So does a total whose tokens do not add up to what the round itself recorded — two rounds
+ * of one stage running at once can each match the other's lines by time alone, and that is the
+ * honest way to say the figure may not be only this round's.</p>
  *
  * <p>A vendor that BILLED the round wins over anything worked out from a price list — the two are
  * not the same kind of number, and `costIsEstimate` says which one this is.</p>
  */
-function costOf(round: RoundRecord, priceOf: ProviderPrice): Pick<LogRow, 'costInUsd' | 'costOutUsd' | 'costTotalUsd' | 'costIsEstimate' | 'costPartial'> {
+function costOf(
+  round: RoundRecord,
+  priceOf: PriceOfModel,
+  usage: readonly UsageEntry[],
+  nowMs: number,
+): Pick<LogRow, 'costInUsd' | 'costOutUsd' | 'costTotalUsd' | 'costIsEstimate' | 'costPartial'> {
   const billed = round.costUsd ?? null;
   let inUsd = 0;
   let outUsd = 0;
   let priced = 0;
   let unpriced = 0;
-  for (const state of round.reviewerStates ?? []) {
-    const price = priceOf(state.provider);
-    if (price === undefined) {
+  let tokensIn = 0;
+  let tokensOut = 0;
+  for (const line of linesOf(round, usage, nowMs)) {
+    const price = priceOf(line.model);
+    if (price === undefined || line.tokensIn === undefined || line.tokensOut === undefined) {
       unpriced += 1;
       continue;
     }
     priced += 1;
-    inUsd += ((state.tokensIn ?? 0) / 1_000_000) * price.inPerMillion;
-    outUsd += ((state.tokensOut ?? 0) / 1_000_000) * price.outPerMillion;
+    tokensIn += line.tokensIn;
+    tokensOut += line.tokensOut;
+    inUsd += (line.tokensIn / 1_000_000) * price.inPerMillion;
+    outUsd += (line.tokensOut / 1_000_000) * price.outPerMillion;
   }
   const nothingPriced = priced === 0;
 
@@ -178,8 +205,33 @@ function costOf(round: RoundRecord, priceOf: ProviderPrice): Pick<LogRow, 'costI
     costOutUsd: nothingPriced ? null : round4(outUsd),
     costTotalUsd: billed ?? (nothingPriced ? null : round4(inUsd + outUsd)),
     costIsEstimate: billed === null && !nothingPriced,
-    costPartial: unpriced > 0 && !nothingPriced,
+    costPartial: !nothingPriced && (unpriced > 0 || drifted(round, tokensIn + tokensOut)),
   };
+}
+
+/**
+ * The ledger lines that belong to this round: written while it ran, and of its own stage.
+ *
+ * <p>By time and stage because that is all there is to match on — a ledger line names no round.
+ * (The local database will carry the round's id on every line and end the guessing; until then this
+ * is exact for one round at a time and marked partial when the tokens disagree.)</p>
+ */
+function linesOf(round: RoundRecord, usage: readonly UsageEntry[], nowMs: number): readonly UsageEntry[] {
+  const from = round.startedUtc ?? '';
+  if (from.length === 0 || usage.length === 0) {
+    return [];
+  }
+  const to = round.completedUtc.length > 0 ? round.completedUtc : new Date(nowMs).toISOString();
+
+  return usage.filter(
+    (line) => line.utc >= from && line.utc <= to && line.stage.toLowerCase() === round.stage.toLowerCase());
+}
+
+/** Whether the priced lines add up to what the round said it used, within a fiftieth. */
+function drifted(round: RoundRecord, counted: number): boolean {
+  const recorded = (round.tokensIn ?? 0) + (round.tokensOut ?? 0);
+
+  return recorded > 0 && Math.abs(counted - recorded) > recorded / 50;
 }
 
 /** Cents-and-a-bit, so a sum of many small numbers does not drift into float noise. */
@@ -251,6 +303,70 @@ export function compareRows(a: LogRow, b: LogRow, key: SortKey, dir: 'asc' | 'de
   }
   return String(x).localeCompare(String(y)) * sign;
 }
+
+/**
+ * A wall-clock value from a `datetime-local` input, as the instant the filter compares against.
+ *
+ * <p>What the input holds is WALL CLOCK and what a round records is UTC, so comparing the two as
+ * strings is wrong by the reader's offset. `endOfMinute` includes the minute the bound names, which
+ * is what a minute-granularity picker means by it — without it "to 23:59" ends at 23:59:00.000 and
+ * the last minute of today falls outside the range the page opens on.</p>
+ */
+export function asInstant(localValue: string, endOfMinute: boolean): string {
+  if (!localValue) {
+    return '';
+  }
+  var at = new Date(localValue).getTime();
+
+  return isNaN(at) ? '' : new Date(at + (endOfMinute ? 59999 : 0)).toISOString();
+}
+
+/** What a figure in a money column says, or an em dash where there is no figure. */
+export function money(value: number | null | undefined): string {
+  return typeof value !== 'number' || !isFinite(value)
+    ? '—'
+    : '$' + value.toFixed(value < 1 ? 3 : 2);
+}
+
+/**
+ * The three figures the column is named for: what the round READ, what it WROTE, and the sum.
+ *
+ * <p>Always three, always with the slashes, an em dash standing in for anything unknown — a vendor
+ * that bills one total and reports no split reads `— / — / $0.42` rather than a lone number the
+ * header promises to be three. And a round nothing could price is a dash, never an empty cell: an
+ * empty cell says "nothing to see", which is a different claim from "nobody knows".</p>
+ *
+ * <p>A tilde marks a total worked out from a public price list rather than one a vendor billed; a
+ * plus marks a total that had to leave a reviewer out, so it is a floor.</p>
+ */
+export function cost3(row: Costed): string {
+  if (typeof row.costTotalUsd !== 'number') {
+    return '—';
+  }
+
+  return (row.costIsEstimate ? '~' : '')
+    + money(row.costInUsd) + ' / ' + money(row.costOutUsd) + ' / ' + money(row.costTotalUsd)
+    + (row.costPartial ? '+' : '');
+}
+
+/** The same thing in words, for the cell's tooltip — the column is narrow and the marks are one character. */
+export function costTitle(row: Costed): string {
+  if (typeof row.costTotalUsd !== 'number') {
+    return 'No price is listed for these models, so this round has no cost figure.';
+  }
+  var how = row.costIsEstimate
+    ? 'Worked out from a public price list, not billed.'
+    : 'Reported by the vendor.';
+  var part = row.costPartial
+    ? ' Some of it could not be priced, so the total is a floor.'
+    : '';
+
+  return 'Input ' + money(row.costInUsd) + ' + output ' + money(row.costOutUsd)
+    + ' = ' + money(row.costTotalUsd) + '. ' + how + part;
+}
+
+/** Just the cost fields, because these three run in the page against plain row objects. */
+export type Costed = Pick<LogRow, 'costInUsd' | 'costOutUsd' | 'costTotalUsd' | 'costIsEstimate' | 'costPartial'>;
 
 /** Whether a row survives the selects and the search box. A blank search is no search. */
 export function rowMatches(row: LogRow, filters: LogFilters, search: string): boolean {
@@ -511,19 +627,16 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
   // which is why the page now reports its own errors (0.29.10 found this one in a minute).
   var compareRows = ${compareRows.toString()};
   var rowMatches = ${rowMatches.toString()};
+  var money = ${money.toString()};
+  var cost3 = ${cost3.toString()};
+  var costTitle = ${costTitle.toString()};
 
   var state = { sortKey: 'startedUtc', dir: 'desc', filters: {}, search: '', expanded: {} };
   function localDay(d) {
     var p = function (n) { return (n < 10 ? '0' : '') + n; };
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
   }
-  // What a datetime-local input holds is WALL CLOCK; what a round records is UTC. Comparing the two
-  // as strings would be wrong by the offset, so the input's value becomes an instant before it filters.
-  function asInstant(localValue) {
-    if (!localValue) { return ''; }
-    var t = new Date(localValue);
-    return isNaN(t.getTime()) ? '' : t.toISOString();
-  }
+  var asInstant = ${asInstant.toString()};
 
   function esc(value) {
     return String(value)
@@ -549,29 +662,7 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
     var m = Math.floor(s / 60);
     return m < 60 ? m + 'm ' + (s % 60) + 's' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
   }
-  function money(c) {
-    return c === null || c === undefined ? '' : '$' + c.toFixed(c < 1 ? 3 : 2);
-  }
-  // Three numbers, in the order the header names them: what the round READ, what it WROTE, and the
-  // sum. A tilde marks a total worked out from a public price list rather than one a vendor billed;
-  // a plus marks a total that left an unpriced reviewer out, so it is a floor.
-  // What the three numbers mean, spelled out for the tooltip — the column is narrow and the marks
-  // are one character each.
-  function costTitle(r) {
-    if (r.costTotalUsd === null || r.costTotalUsd === undefined) { return 'No price is listed for these models, so this round has no cost figure.'; }
-    var how = r.costIsEstimate
-      ? 'Worked out from a public price list, not billed.'
-      : 'Reported by the vendor.';
-    var part = r.costPartial ? ' One reviewer had no listed price, so the total is a floor.' : '';
-    return 'Input ' + money(r.costInUsd) + ' + output ' + money(r.costOutUsd) + ' = ' + money(r.costTotalUsd) + '. ' + how + part;
-  }
-  function cost3(r) {
-    if (r.costTotalUsd === null || r.costTotalUsd === undefined) { return ''; }
-    var mark = (r.costIsEstimate ? '~' : '') ;
-    var tail = r.costPartial ? '+' : '';
-    if (r.costInUsd === null || r.costInUsd === undefined) { return mark + money(r.costTotalUsd) + tail; }
-    return mark + money(r.costInUsd) + ' / ' + money(r.costOutUsd) + ' / ' + money(r.costTotalUsd) + tail;
-  }
+
   function badge(status) {
     return '<span class="badge ' + esc(status) + '">' + esc(status) + '</span>';
   }
@@ -676,8 +767,10 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
   var fromInput = document.getElementById('from');
   var toInput = document.getElementById('to');
   function readDates() {
-    state.filters.from = asInstant(fromInput.value);
-    state.filters.to = asInstant(toInput.value);
+    state.filters.from = asInstant(fromInput.value, false);
+    // The upper bound INCLUDES the minute it names: the picker has minute granularity, so "to 23:59"
+    // that stopped at 23:59:00.000 dropped the last minute of the day the page opens on.
+    state.filters.to = asInstant(toInput.value, true);
     render();
   }
   // Today, from its first minute to its last — the range the page opens on, because the question
