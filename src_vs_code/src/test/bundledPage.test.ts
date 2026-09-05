@@ -26,7 +26,23 @@ const ROOT = process.cwd();
 /** Every function the page embeds by its SOURCE TEXT, and therefore every one this file guards. */
 const EMBEDDED = ['compareRows', 'rowMatches', 'money', 'cost3', 'costTitle', 'asInstant'];
 
-const NOW = Date.parse('2026-09-05T08:00:00.000Z');
+/**
+ * The instant the page is rendered at, frozen — because the page opens on TODAY.
+ *
+ * <p>This test passed on the day it was written and went red the next morning: the fixture round is
+ * dated, the default filter is "since local midnight" taken from the browser's own clock, and a
+ * round from yesterday is filtered out into the empty page this test exists to forbid. Freezing the
+ * clock is what makes it a test of the page rather than of the calendar. Midday UTC, so the fixture
+ * falls inside the local day of every inhabited offset.</p>
+ */
+const NOW = Date.parse('2026-09-05T12:00:00.000Z');
+
+/** `Date`, stopped at NOW, for the page script - `new Date()` and `Date.now()` both answer with it. */
+const FROZEN_DATE = new Proxy(Date, {
+  construct: (target, args) =>
+    args.length === 0 ? new target(NOW) : new target(...(args as [number])),
+  get: (target, property) => (property === 'now' ? () => NOW : Reflect.get(target, property)),
+});
 
 /** One finished round, priced from one ledger line — enough to exercise every cell of a row. */
 const SESSION = {
@@ -34,14 +50,14 @@ const SESSION = {
   rounds: [{
     stage: 'CodeReview', number: 1, verdict: 'proceed', gatingCount: 1,
     reviewers: 'all 2 reviewers answered', status: 'done',
-    startedUtc: '2026-09-05T07:41:00.000Z', completedUtc: '2026-09-05T07:43:10.000Z',
+    startedUtc: '2026-09-05T11:41:00.000Z', completedUtc: '2026-09-05T11:43:10.000Z',
     subject: 'SCOPE - something', tokensIn: 1_000_000, tokensOut: 200_000,
     reviewerStates: [{ provider: 'codex', role: 'Architecture', status: 'done', findings: 1, note: '', seconds: 23 }],
   }],
 };
 
 const USED = {
-  utc: '2026-09-05T07:42:00.000Z', provider: 'codex', model: 'gpt-5.6-sol', role: 'Architecture',
+  utc: '2026-09-05T11:42:00.000Z', provider: 'codex', model: 'gpt-5.6-sol', role: 'Architecture',
   stage: 'CodeReview', seconds: 23, tokensIn: 1_000_000, tokensOut: 200_000, costUsd: null, outcome: 'ok',
 };
 
@@ -117,8 +133,8 @@ test('the page script the bundle produces parses and runs', () => {
     addEventListener() {},
   };
   assert.doesNotThrow(
-    () => new Function('document', 'window', 'acquireVsCodeApi', body)(
-      document_, { addEventListener() {} }, () => ({ postMessage() {} })),
+    () => new Function('document', 'window', 'acquireVsCodeApi', 'Date', body)(
+      document_, { addEventListener() {} }, () => ({ postMessage() {} }), FROZEN_DATE),
     'the page script threw on its first render',
   );
   assert.equal(seen['failed']?.textContent ?? '', '', 'the page reported an error to itself on first render');

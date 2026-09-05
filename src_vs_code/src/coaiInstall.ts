@@ -68,6 +68,19 @@ export function binaryNameFor(rid: CoaiRid): string {
   return rid.startsWith('win-') ? `${BINARY}.exe` : BINARY;
 }
 
+/**
+ * Which of the archive's files travel beside the binary: all of them but the binary itself.
+ *
+ * <p>Pure, and separate from the copying, because this is the decision and the copy is plumbing —
+ * and because the decision is what shipped wrong. Directories are skipped; the archive has none
+ * today and a nested one would not be a companion.</p>
+ */
+export function companionsOf(entries: readonly (readonly [string, boolean])[], rid: CoaiRid): string[] {
+  const binary = binaryNameFor(rid);
+
+  return entries.filter(([name, isFile]) => isFile && name !== binary).map(([name]) => name);
+}
+
 /** `mcp-v0.1.0` → `0.1.0`; any other tag line yields nothing rather than a wrong version. */
 export function versionFromTag(tag: string): string | undefined {
   return tag.startsWith(TAG_PREFIX) && tag.length > TAG_PREFIX.length
