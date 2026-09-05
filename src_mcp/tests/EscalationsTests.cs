@@ -140,9 +140,16 @@ public sealed class EscalationsTests : IDisposable
     public async Task AnAnswerWrittenDuringTheFinalWait_IsStillSeen()
     {
         // The last poll lands after the deadline; a naive loop would miss this and report silence.
-        var slow = new Escalations(_data, pollInterval: TimeSpan.FromMilliseconds(500));
-        var task = slow.AskAsync(Question("qLate"), TimeSpan.FromMilliseconds(150), TestContext.Current.CancellationToken);
-        await Task.Delay(30, TestContext.Current.CancellationToken);
+        //
+        // The interval is longer than the deadline ON PURPOSE: no intermediate poll can fire, so the
+        // only thing that can see this answer is the check AFTER the deadline — which is the whole
+        // guarantee. The first shape of this test gave the write 30 ms against a 150 ms deadline and
+        // passed on a developer machine while failing on a loaded CI runner, where a `Task.Delay(30)`
+        // is not 30 ms; it was measuring the runner, not the loop. Two seconds is not a slower test,
+        // it is a margin wide enough that only a missing final check can fail it.
+        var slow = new Escalations(_data, pollInterval: TimeSpan.FromSeconds(30));
+        var task = slow.AskAsync(Question("qLate"), TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
         WriteAnswer("qLate", "just in time");
 
         (await task).Should().BeOfType<EscalationOutcome.Answered>().Which.Text.Should().Be("just in time");
