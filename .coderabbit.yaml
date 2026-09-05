@@ -1,0 +1,89 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit for dew_flow_connect_other_ais — a Native-AOT .NET 10 MCP server (src_mcp), a VS Code
+# extension in TypeScript (src_vs_code) and a .NET 10 measurement bench (src_bench).
+#
+# The repository's own rules are the review standard: CLAUDE.md and .claude/rules/**. The shared
+# family rules are a git SUBMODULE at .claude/rules/shared and may not be checked out for the
+# reviewer, so the ones that matter most are restated per path below.
+language: "ru-RU"
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "main"
+  path_filters:
+    - "!**/bin/**"
+    - "!**/obj/**"
+    - "!**/out/**"
+    - "!**/node_modules/**"
+    - "!**/*.vsix"
+    - "!artifacts/**"
+    - "!**/package-lock.json"
+    - "!research/data/**"
+  path_instructions:
+    - path: "src_mcp/**/*.cs"
+      instructions: |
+        .NET 10 / C# 14, published Native AOT: no reflection-based JSON, no dynamic code; System.Text.Json
+        with Utf8JsonWriter/JsonNode only. Records for every data container; `class` only for stateful
+        services. No null in business logic: return empty collections/strings, not null; nullable types
+        only where the rules allow them. Primary constructors for DI. Cyclomatic complexity of a method
+        must not exceed 4 — flag a method that does. Pure logic goes into `private static` methods.
+        Every behavioural change ships with an xUnit v3 test in src_mcp/tests (Microsoft Testing
+        Platform: tests run as an executable, never `dotnet test`). A bug fix must add a test that
+        reproduces the defect. Windows file semantics matter here: FileShare is enforced on Windows and
+        advisory elsewhere — review every FileStream open mode and share mode.
+    - path: "src_vs_code/src/**/*.ts"
+      instructions: |
+        VS Code extension. Page/view modules (panelView.ts, roundsLog.ts, helpPage.ts, …) must be free of
+        `vscode` imports so they are unit-testable with node:test; anything importing `vscode` is glue.
+        Everything from a session file or a vendor reaches the webview escaped (escapeHtml /
+        jsonForScript). Webview scripts live inside template literals: no backticks inside them. Live
+        patches must skip identical HTML; a webview's own state must never round-trip through the
+        extension host and be re-applied (that produced a toggle feedback loop once). Colours come
+        from --vscode-* variables, never bare hex. Every new behaviour has a test under src/test.
+    - path: "src_bench/**/*.cs"
+      instructions: |
+        The measurement bench. It records and does not judge; a number it prints must be a measurement,
+        never a guess (print "—" for unmeasured). It drives the INSTALLED server through the real
+        protocol. Each run models one AI session (its own COAI_CALLER_SESSION) on its own git ref.
+        Reading the operator's shared data directory must be scoped to this run's session.
+    - path: "**/*.md"
+      instructions: |
+        todo/ holds plans not yet done; research/ documents the system as it is. A plan carries a status
+        line on line 2-3. A promoted plan records its deviations. Do not flag the narrative commit-message
+        and doc style — it is deliberate. Do flag a doc that contradicts the code in the same PR.
+    - path: ".github/workflows/*.yml"
+      instructions: |
+        Tests run as executables (xUnit v3 / MTP): a step running `dotnet test` is a defect. The bench is
+        built and tested in CI but never packaged into a release.
+  tools:
+    gitleaks:
+      enabled: true
+    actionlint:
+      enabled: true
+    markdownlint:
+      enabled: false
+    yamllint:
+      enabled: true
+    eslint:
+      enabled: false
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  opt_out: false
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "CLAUDE.md"
+      - ".claude/rules/**/*.md"
