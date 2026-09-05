@@ -191,14 +191,19 @@ public sealed class Bench(
                 $"{s.Stage}: {(s.Verdict.Length > 0 ? s.Verdict : "ERROR " + s.Error)} "
                 + $"{s.Findings.Count}f {s.Seconds}s {s.TokensIn}/{s.TokensOut}"));
 
-        // The disk is printed beside the answer, because "12 findings" and "none of them can be
-        // resolved" have looked identical from the answer alone.
+        // The disk is printed beside the answer, because "12 findings" and "the record was never
+        // written" have looked identical from the answer alone. And the resolve's own reply, because
+        // that is where "can these findings be acted on" is actually answered.
         var disk = run.OnDisk is null || run.Stages.Count == 0
             ? string.Empty
-            : run.OnDisk.Resolvable
-                ? "  [resolvable]"
-                : $"  [NOT RESOLVABLE: {run.OnDisk.StillRunning} still running, "
+            : run.OnDisk.Clean
+                ? "  [clean]"
+                : $"  [DIRTY: {run.OnDisk.StillRunning} still running, "
                     + $"{run.OnDisk.Pending} pending{Note(run.OnDisk.Note)}]";
+        var refused = run.Stages.Where(s => s.ResolveRefused.Length > 0).ToList();
+        var resolve = refused.Count == 0
+            ? string.Empty
+            : $"  [RESOLVE REFUSED: {string.Join("; ", refused.Select(s => $"{s.Stage}: {s.ResolveRefused}"))}]";
 
         // A setting that was accepted and did nothing looks exactly like one that worked, so the
         // disagreement is printed the moment it happens rather than found in a table afterwards.
@@ -206,7 +211,7 @@ public sealed class Bench(
             ? string.Empty
             : $"  [SETTINGS NOT APPLIED: {string.Join("; ", run.Settings.Mismatches)}]";
 
-        return $"{run.Arm,-22} {run.Case.Name,-34} #{run.Repeat} {stages}{disk}{applied}";
+        return $"{run.Arm,-22} {run.Case.Name,-34} #{run.Repeat} {stages}{disk}{resolve}{applied}";
     }
 
     private static string Note(string note) => note.Length == 0 ? string.Empty : $", {note}";

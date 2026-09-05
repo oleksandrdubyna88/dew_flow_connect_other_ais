@@ -72,6 +72,16 @@ public sealed record StageResult(
     /// works, and this is the only place the difference shows from outside.
     /// </remarks>
     public IReadOnlyList<string> Commands { get; init; } = [];
+
+    /// <summary>
+    /// What the server said when the bench resolved this stage's findings — empty when it accepted.
+    /// </summary>
+    /// <remarks>
+    /// The one place "can these findings be acted on" is actually answered. The reply was thrown away
+    /// until 2026-09-05, so a refusal — every index pointing into a round record that was never
+    /// written — was invisible at the exact call where the server names it.
+    /// </remarks>
+    public string ResolveRefused { get; init; } = string.Empty;
 }
 
 /// <summary>

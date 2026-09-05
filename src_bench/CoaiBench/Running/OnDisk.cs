@@ -5,7 +5,7 @@ namespace CoaiBench.Running;
 /// <summary>What the session file says after a run — which is not the same as what the answer said.</summary>
 /// <param name="Rounds">How many rounds the file carries.</param>
 /// <param name="StillRunning">Rounds left at `running`, which a finished run must not have.</param>
-/// <param name="Pending">How many findings `resolve` can actually index into.</param>
+/// <param name="Pending">What the run left unresolved — informational; a run that did its job leaves none.</param>
 /// <param name="Note">What went wrong reading it, or empty.</param>
 public sealed record SessionOnDisk(int Rounds, int StillRunning, int Pending, string Note = "")
 {
@@ -13,15 +13,23 @@ public sealed record SessionOnDisk(int Rounds, int StillRunning, int Pending, st
     public JsonObject? Config { get; init; }
 
     /// <summary>
-    /// Whether the findings the answer carried can be acted on at all.
+    /// Whether the session was left as a finished run leaves it: every round written to a terminal
+    /// state, and the file readable.
     /// </summary>
     /// <remarks>
-    /// The check exists because the alternative was believed for an afternoon. A round returned
+    /// <para>The check exists because the alternative was believed for an afternoon. A round returned
     /// findings, numbered, with an instruction to resolve them — and its record had never been
-    /// written, so the session said `running` and `pending` was empty and every index pointed into
-    /// nothing. The answer looked perfect. Only the disk knew.
+    /// written, so the session said `running` and every index pointed into nothing. The answer looked
+    /// perfect. Only the disk knew.</para>
+    /// <para>It used to demand <c>Pending &gt; 0</c> as well, and that was a definition that could only
+    /// be true for somebody else's session: the bench resolves every finding straight after each
+    /// stage, so a run that did its job leaves NOTHING pending. The first campaign on 0.17.1 came back
+    /// with every run tagged not resolvable at zero pending, and the day before, "resolvable" had
+    /// meant a neighbour's forty findings read out of the shared directory. Whether the findings could
+    /// be resolved is answered where the server says so — the resolve call's own reply, kept on the
+    /// stage as <see cref="Model.StageResult.ResolveRefused"/>.</para>
     /// </remarks>
-    public bool Resolvable => Note.Length == 0 && StillRunning == 0 && Pending > 0;
+    public bool Clean => Note.Length == 0 && StillRunning == 0;
 }
 
 /// <summary>Reads what the server left behind for ONE run, without asking the server.</summary>

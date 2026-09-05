@@ -63,7 +63,7 @@ public sealed class OneRunIsOneSessionTests : IDisposable
 
         var read = OnDisk.Read(_dir, "D:/repo", "abc123");
 
-        read.Resolvable.Should().BeTrue("the neighbour's unfinished round is not this run's business");
+        read.Clean.Should().BeTrue("the neighbour's unfinished round is not this run's business");
         read.Pending.Should().Be(1, "and neither are the neighbour's findings");
         read.StillRunning.Should().Be(0);
     }
@@ -75,7 +75,7 @@ public sealed class OneRunIsOneSessionTests : IDisposable
 
         var read = OnDisk.Read(_dir, "D:/repo", "abc123");
 
-        read.Resolvable.Should().BeFalse();
+        read.Clean.Should().BeFalse();
         read.Note.Should().Contain("no session");
     }
 

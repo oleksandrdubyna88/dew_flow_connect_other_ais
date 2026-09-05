@@ -44,34 +44,27 @@ public sealed class OnDiskTests : IDisposable
     private SessionOnDisk Read() => OnDisk.Read(_dir, Repo, Branch);
 
     [Fact]
-    public void AFinishedRoundWithPendingFindings_IsResolvable()
+    public void AFinishedSessionWithNothingLeftPending_IsClean()
     {
-        Session("""
-            "rounds": [ { "status": "done", "verdict": "proceed" } ],
-            "pending": [ { "title": "one" }, { "title": "two" } ]
-            """);
+        // What a run leaves behind when it worked: the bench resolved every finding straight after
+        // each stage, so `pending` is EMPTY. The first definition demanded pending > 0 and was
+        // therefore false for every run that had done its job — and true, yesterday, only because
+        // it was reading a neighbour's forty findings out of the shared directory.
+        Session(""" "rounds": [ { "status": "done", "verdict": "proceed" } ], "pending": [] """);
 
         var read = Read();
 
-        read.Resolvable.Should().BeTrue();
-        read.Pending.Should().Be(2);
+        read.Clean.Should().BeTrue();
+        read.Pending.Should().Be(0, "informational — what the bench left unresolved, which should be nothing");
     }
 
     [Fact]
-    public void ARoundStillRunning_IsNot()
+    public void ARoundStillRunning_IsNotClean()
     {
         // The exact shape of the afternoon's defect: the answer was handed over, the record was not.
         Session(""" "rounds": [ { "status": "running" } ], "pending": [] """);
 
-        Read().Resolvable.Should().BeFalse("its findings cannot be indexed into anything");
-    }
-
-    [Fact]
-    public void AFinishedRoundWithNothingPending_IsNotResolvableEither()
-    {
-        Session(""" "rounds": [ { "status": "done" } ], "pending": [] """);
-
-        Read().Resolvable.Should().BeFalse();
+        Read().Clean.Should().BeFalse("a round the server still calls running was never finished on disk");
     }
 
     [Fact]
@@ -79,7 +72,7 @@ public sealed class OnDiskTests : IDisposable
     {
         var read = Read();
 
-        read.Resolvable.Should().BeFalse();
+        read.Clean.Should().BeFalse();
         read.Note.Should().Contain("wrote nothing");
     }
 
@@ -90,7 +83,7 @@ public sealed class OnDiskTests : IDisposable
 
         var read = Read();
 
-        read.Resolvable.Should().BeFalse();
+        read.Clean.Should().BeFalse();
         read.Note.Should().Contain("does not parse");
     }
 
@@ -105,6 +98,6 @@ public sealed class OnDiskTests : IDisposable
         using var held = new FileStream(
             file, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete);
 
-        Read().Resolvable.Should().BeTrue();
+        Read().Clean.Should().BeTrue();
     }
 }

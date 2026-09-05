@@ -88,16 +88,27 @@ public sealed class RoundRunner(GateClient client, string repo, TimeSpan timeout
     {
         var (answer, seconds) = await client.CallAsync(tool, arguments, ct);
         var result = Read(name, seconds, answer);
-        if (result.Verdict.Length > 0)
+        if (result.Verdict.Length == 0)
         {
-            await client.CallAsync(
-                "resolve",
-                Args(("repoPath", repo), ("branch", branch), ("decisions", AcceptAll(result.Findings.Count))),
-                ct);
+            return result;
         }
 
-        return result;
+        // The reply is the measurement. A refusal here — "finding 3 does not exist" — is the server
+        // saying the answer it just gave cannot be acted on, which is the defect the on-disk check
+        // was written for and could never see from the disk after this very call emptied `pending`.
+        var (resolved, _) = await client.CallAsync(
+            "resolve",
+            Args(("repoPath", repo), ("branch", branch), ("decisions", AcceptAll(result.Findings.Count))),
+            ct);
+
+        return result with { ResolveRefused = RefusalIn(resolved) };
     }
+
+    /// <summary>What a resolve reply says went wrong, or empty when it accepted the decisions.</summary>
+    internal static string RefusalIn(JsonNode? reply) =>
+        reply is not JsonObject answer
+            ? "the resolve answered with nothing"
+            : Text(answer, "error");
 
     /// <summary>Accepting everything: the bench measures the gate, not a policy for arguing with it.</summary>
     private static string AcceptAll(int findings) =>
