@@ -10,9 +10,10 @@ namespace CoaiBench.Running;
 /// <para>The protocol in the order the product refuses to let anybody skip. Every finding is
 /// ACCEPTED, because the bench measures what the gate produced and not how a caller argued with it;
 /// a rejection would change the next round's arithmetic and make two runs incomparable.</para>
-/// <para>Each run gets its own BRANCH — <c>bench/&lt;arm&gt;-&lt;case&gt;-&lt;repeat&gt;</c> — because a
-/// session is keyed by repo+branch and its plan stage happens once. Two runs of one case on one
-/// branch would be one session, and the second would be refused rather than measured.</para>
+/// <para>Each run gets its own BRANCH — <c>bench/&lt;case&gt;-r&lt;repeat&gt;</c>, a real ref at the case's
+/// commit, made by <see cref="Bench"/> — because a session is keyed by repo+branch and its plan stage
+/// happens once. Two runs of one case on one branch would be one session: the second refused rather
+/// than measured, or, in parallel, two servers writing one session file and creating one worktree.</para>
 /// </remarks>
 public sealed class RoundRunner(GateClient client, string repo, TimeSpan timeout)
 {
@@ -29,7 +30,7 @@ public sealed class RoundRunner(GateClient client, string repo, TimeSpan timeout
     internal static bool Passed(string verdict) =>
         verdict is "proceed" or "good_enough" or "continue_anyway";
 
-    public async Task<RunRecord> RunAsync(Case work, string arm, int repeat, int lane, Stages stages)
+    public async Task<RunRecord> RunAsync(Case work, string arm, int repeat, int lane, Stages stages, string branch)
     {
         var record = new RunRecord(work, arm, repeat, lane);
         var stageResults = new List<StageResult>();
@@ -37,7 +38,6 @@ public sealed class RoundRunner(GateClient client, string repo, TimeSpan timeout
         try
         {
             await client.HandshakeAsync(deadline.Token);
-            var branch = Bench.BranchFor(work);
             await client.CallAsync("open", Args(("repoPath", repo), ("branch", branch)), deadline.Token);
 
             var planText = await File.ReadAllTextAsync(Path.Combine(repo, work.PlanFile), deadline.Token);

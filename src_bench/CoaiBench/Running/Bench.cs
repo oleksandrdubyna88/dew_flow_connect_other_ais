@@ -86,8 +86,23 @@ public sealed class Bench(
 
     private static string KeyOf(Cell cell) => $"{cell.Arm}|{cell.Case.Name}|{cell.Repeat}";
 
-    /// <summary>The branch a case is reviewed on — its commit, or the checkout as it stands.</summary>
-    internal static string BranchFor(Case work) => work.Commit.Length > 0 ? work.Commit : "HEAD";
+    /// <summary>
+    /// The branch a run is reviewed on: a ref OF ITS OWN at the case's commit, or the checkout as it
+    /// stands for a plan-only case.
+    /// </summary>
+    /// <remarks>
+    /// A session is keyed by repo+branch, and the branch must be a real ref because the server diffs
+    /// it. This used to hand the case's commit as the branch, so three parallel repeats of one case
+    /// shared one session key, one session file and one worktree name — and the five-window campaign
+    /// of 2026-09-05 found it in its first minute: <c>fatal: 'coai-wt-a0fc7e7d-r1' already exists</c>,
+    /// two servers creating the same worktree. The runner's own remark had promised a branch per run
+    /// all along.
+    /// </remarks>
+    internal static string BranchFor(Cell cell) =>
+        cell.Case.Commit.Length > 0 ? $"bench/{cell.Case.Name}-r{cell.Repeat}" : "HEAD";
+
+    /// <summary>What the run's ref points at — the reviewed commit and nothing newer.</summary>
+    internal static string RefTarget(Case work) => work.Commit;
 
     internal string DataDirOf(Case work, string arm, int repeat, int lane) =>
         DataDirFor(new Cell(work, arm, repeat), lane);
@@ -148,14 +163,26 @@ public sealed class Bench(
         // A stale session is the previous campaign, not this one: it remembers the configuration it
         // was opened with and how far its stages got. One cost a whole run — every round came out on
         // the DEFAULT rounds and thresholds while the operator had set their own.
-        Sessions.Reset(dataDir, options.Repo, BranchFor(cell.Case));
+        // The run's own ref, created (or moved back) at the reviewed commit. Left in place afterwards:
+        // a `bench/*` ref is cheap, the server's worktree may still have it checked out, and the
+        // session file on disk names it.
+        if (cell.Case.Commit.Length > 0)
+        {
+            var (exit, said) = await Git.RunAsync(options.Repo, ["branch", "-f", BranchFor(cell), RefTarget(cell.Case)], ct);
+            if (exit != 0)
+            {
+                return new RunRecord(cell.Case, cell.Arm, cell.Repeat, lane) { HarnessError = $"git branch -f {BranchFor(cell)}: {said}" };
+            }
+        }
+
+        Sessions.Reset(dataDir, options.Repo, BranchFor(cell));
         await using var client = new GateClient(options.Executable, dataDir, env);
         var run = await new RoundRunner(client, options.Repo, options.Timeout)
-            .RunAsync(cell.Case, cell.Arm, cell.Repeat, lane, options.Stages);
+            .RunAsync(cell.Case, cell.Arm, cell.Repeat, lane, options.Stages, BranchFor(cell));
 
         // The disk, not the answer. They came apart once and nothing said so — and neither did
         // the settings, which is why what was ASKED for is compared with what the session got.
-        var onDisk = OnDisk.Read(dataDir, options.Repo, BranchFor(cell.Case));
+        var onDisk = OnDisk.Read(dataDir, options.Repo, BranchFor(cell));
 
         return run with
         {

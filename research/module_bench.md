@@ -84,5 +84,6 @@ See [src_bench/README.md](../src_bench/README.md). Tests: `./src_bench/CoaiBench
 
 - [RESULTS_commands_campaign.md](RESULTS_commands_campaign.md) — the commands-and-autonomy campaign.
 - [RESULTS_predelivery_campaign.md](RESULTS_predelivery_campaign.md).
-- The store-fix campaign of 2026-09-05 — see `todo/PLAN_bench_campaign_after_the_store_fix.md` until it
-  is promoted with its report.
+- [RESULTS_bench_campaign_0_17_1.md](RESULTS_bench_campaign_0_17_1.md) — the store-fix campaign of
+  2026-09-05: sequential and five-window runs, Fable's judgement, and the three instrument defects
+  above, each found by a run.
