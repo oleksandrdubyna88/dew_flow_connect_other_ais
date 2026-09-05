@@ -1,5 +1,15 @@
 # Changelog
 
+## Server 0.17.4 — 2026-09-05
+
+**A local review cannot list findings until the token ceiling cuts it off.** The third way the local
+model fails, found by the five-window campaign once the strings were bounded: forty-three findings in
+385 lines, and `max_tokens` inside the forty-third's `why`. Every string was finite; the array was
+not. The schema the local route sends now bounds `findings` at ten — the count at which a review with
+every string at its bound still fits the ceiling, so a schema-valid answer can always finish. Ten is
+also more than any local reviewer here has returned and been worth resolving; a review with forty
+findings is a review nobody reads.
+
 ## 0.29.11 — 2026-09-05 (server 0.17.3)
 
 **The Review rounds page draws its rows in the installed extension, not only on a developer's
