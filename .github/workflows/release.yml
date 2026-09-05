@@ -182,6 +182,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The suite this job runs includes a test that compares the MOUNTED shared rule with the
+      # snippet the menu hands out, so it needs the submodule on disk — and it fails rather than
+      # skips without it, deliberately. CI and the Sonar job both do this; the release did not, and
+      # the first tag after that test landed could not be built (extension-v0.29.13, 2026-09-05).
+      - name: Conventions submodule
+        working-directory: .
+        run: git submodule update --init --depth 1 .claude/rules/shared
+
       - uses: actions/setup-node@v7
         with:
           node-version: 20
