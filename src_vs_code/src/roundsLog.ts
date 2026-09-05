@@ -581,11 +581,15 @@ function share(spot: BlindSpot): string {
   return spot.total === 0 ? '—' : `${Math.round((100 * spot.accepted) / spot.total)}`;
 }
 
+/** What the server caps that list at; it sends one more so the page can say there are more. */
+const DEFENDED_CAP = 200;
+
 function defendedHtml(defended: readonly DbFinding[]): string {
   if (defended.length === 0) {
     return '';
   }
   const items = defended
+    .slice(0, DEFENDED_CAP)
     .map((f) => `<div class="finding declined"><span class="sev">${escapeHtml(f.severity)}</span> `
       + `<span class="where">${escapeHtml(f.file ? `${f.file}:${f.line}` : 'no file')}</span> `
       + `<b>${escapeHtml(f.title)}</b><div class="why">${escapeHtml(f.why)}</div>`
@@ -593,9 +597,15 @@ function defendedHtml(defended: readonly DbFinding[]): string {
       + `${f.reason ? ` &middot; the standing reason: ${escapeHtml(f.reason)}` : ''}</div></div>`)
     .join('');
 
+  // The server fetches one more than it will show, so "exactly two hundred" and "more than that"
+  // are different answers. A list that was cut and looks whole is worse than no list.
+  const cut = defended.length > DEFENDED_CAP
+    ? ` The most recent ${DEFENDED_CAP} of them; there are more.`
+    : '';
+
   return '<h2>Rejected, and raised again anyway</h2>'
     + '<div class="hint">A disagreement the caller is defending — the rejection still stood when'
-    + ' another reviewer made the same case.</div>'
+    + ` another reviewer made the same case.${cut}</div>`
     + `<div class="findings">${items}</div>`;
 }
 

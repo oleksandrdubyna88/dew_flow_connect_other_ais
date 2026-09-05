@@ -180,15 +180,26 @@ public static class RoundsQuery
         return spots;
     }
 
-    /// <summary>Findings a reviewer raised again over a rejection that still stood.</summary>
+    /// <summary>How many defended disagreements are listed before the list says it was cut.</summary>
+    private const int DefendedCap = 200;
+
+    /// <summary>
+    /// Findings a reviewer raised again over a rejection that still stood.
+    /// </summary>
+    /// <remarks>
+    /// Capped, and the cap is REPORTED rather than silent: a list that was cut and looks whole is
+    /// worse than no list, because somebody counts it later and reads the cap as the measurement.
+    /// One extra row is fetched so the caller can tell "exactly two hundred" from "more than that".
+    /// </remarks>
     private static List<LoggedFinding> Defended(SqliteConnection db)
     {
         using var read = db.CreateCommand();
         read.CommandText = """
             SELECT ordinal, severity, category, file, line, title, why, fix, role, is_gating,
                    providers, resolution, reason, re_raised
-            FROM findings WHERE re_raised = 1 ORDER BY id DESC LIMIT 200
+            FROM findings WHERE re_raised = 1 ORDER BY id DESC LIMIT $limit
             """;
+        read.Parameters.AddWithValue("$limit", DefendedCap + 1);
         using var rows = read.ExecuteReader();
         var defended = new List<LoggedFinding>();
         while (rows.Read())
