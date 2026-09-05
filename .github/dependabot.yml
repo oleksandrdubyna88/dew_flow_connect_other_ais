@@ -1,0 +1,55 @@
+# Dependabot version updates — grouped, weekly, on Monday morning Kyiv time, one pull request per
+# ecosystem so a week of bumps is one review rather than fifteen.
+#
+# Security updates are separate and immediate (enabled in the repository settings, 2026-09-05).
+#
+# Family exceptions: FluentAssertions stays on 7.x — 8.x changed its licence; the pin is deliberate
+# and is the one major bump Dependabot must not propose.
+version: 2
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Europe/Kyiv"
+    groups:
+      nuget-minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "FluentAssertions"
+        update-types: ["version-update:semver-major"]
+    labels: ["dependencies", "nuget"]
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: "npm"
+    directory: "/src_vs_code"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Europe/Kyiv"
+    groups:
+      npm-minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    labels: ["dependencies", "npm"]
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Europe/Kyiv"
+    groups:
+      actions:
+        patterns: ["*"]
+    labels: ["dependencies", "ci"]
+    commit-message:
+      prefix: "ci(deps)"
