@@ -76,7 +76,11 @@ jobs:
           # with tests. c8 reads the same V8 data and applies the source maps, so the report names
           # the TypeScript. (Measured 2026-09-05 on PR #10: SF:out\cliVersions.js against
           # SF:src\cliVersions.ts.)
-          npx c8 --reporter=lcovonly --report-dir=../coverage/c8 --src=src node --test "out/test/"*.test.js
+          # The installed binary, never npx: npx resolves and runs a package on demand, which is a
+          # supply-chain hole in CI with a token in the environment (SonarCloud githubactions:S6505,
+          # S8543). c8 is a declared dev dependency, so npm ci has already put it here at the version
+          # the lock file pins.
+          ./node_modules/.bin/c8 --reporter=lcovonly --report-dir=../coverage/c8 --src=src node --test "out/test/"*.test.js
           # c8 writes them relative to THIS folder, with the platform's separators; Sonar wants them
           # relative to the repository root.
           sed -e 's|^SF:|SF:src_vs_code/|' -e 's|\\|/|g' ../coverage/c8/lcov.info > ../coverage/extension.lcov
