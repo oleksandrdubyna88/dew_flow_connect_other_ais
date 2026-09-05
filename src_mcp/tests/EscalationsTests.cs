@@ -309,4 +309,29 @@ public sealed class EscalationsTests : IDisposable
         await polling;
         failures.Should().Be(0, "the question file is written by the panel while the server reads it");
     }
+
+    [Fact]
+    public void AFileNobodyCanReadRightNow_IsNothingYet_NotAThrow()
+    {
+        // The other half of the sharing contract, and the one that keeps a poll alive: when the file
+        // genuinely cannot be opened — somebody holding it exclusively, a half-finished replacement —
+        // the read answers "nothing yet" and the next poll finds it whole. A throw here would take
+        // down the round that is waiting for the person.
+        var path = _escalations.AnswerPath("q1");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "{\"answer\":\"there\"}");
+        using var held = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        _escalations.ReadAnswer("q1").Should().BeNull("a file nobody can open is not an answer");
+    }
+
+    [Fact]
+    public void AQuestionFileNobodyCanReadRightNow_IsSkipped_NotAThrow()
+    {
+        _escalations.Notify(Question("q1"));
+        using var held = new FileStream(
+            _escalations.QuestionPath("q1"), FileMode.Open, FileAccess.Read, FileShare.None);
+
+        _escalations.DecisionFor("s-1").ToString().Should().Be("None", "and the walk over questions continues");
+    }
 }
