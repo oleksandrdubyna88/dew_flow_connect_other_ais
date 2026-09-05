@@ -70,7 +70,16 @@ jobs:
           npm ci --ignore-scripts
           npm run compile
           mkdir -p ../coverage
-          node --test --experimental-test-coverage --test-reporter=lcov                --test-reporter-destination=../coverage/extension.lcov "out/test/"*.test.js
+          # Through c8 rather than node's own --experimental-test-coverage: node writes the paths of
+          # the files it EXECUTED, which are out/*.js, while Sonar analyses src/*.ts — so every
+          # extension change arrived at the gate as 0 % coverage of new code even when it shipped
+          # with tests. c8 reads the same V8 data and applies the source maps, so the report names
+          # the TypeScript. (Measured 2026-09-05 on PR #10: SF:out\cliVersions.js against
+          # SF:src\cliVersions.ts.)
+          npx c8 --reporter=lcovonly --report-dir=../coverage/c8 --src=src node --test "out/test/"*.test.js
+          # c8 writes them relative to THIS folder, with the platform's separators; Sonar wants them
+          # relative to the repository root.
+          sed -e 's|^SF:|SF:src_vs_code/|' -e 's|\\|/|g' ../coverage/c8/lcov.info > ../coverage/extension.lcov
       - name: End
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
