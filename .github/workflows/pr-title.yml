@@ -14,7 +14,10 @@ jobs:
     name: pr · semantic title
     runs-on: ubuntu-latest
     steps:
-      - uses: amannn/action-semantic-pull-request@v5
+      # Pinned to a commit, not a tag: a tag can be moved under you, and this action reads the
+      # pull request with a token. SonarCloud githubactions:S7637, 2026-09-05. Dependabot keeps the
+      # comment's version current — it rewrites both the SHA and the trailing tag.
+      - uses: amannn/action-semantic-pull-request@e32d7e603df1aa1ba07e981f2a23455dee596825 # v5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
