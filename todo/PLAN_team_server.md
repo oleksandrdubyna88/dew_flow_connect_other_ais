@@ -555,22 +555,33 @@ parameterised.
 `src_server/Dockerfile`: the same two-stage Native AOT build, but the runtime stage is
 `runtime-deps:10.0-noble` (not chiseled — it needs a shell) **plus Node 22 copied from the official
 `node:22-bookworm-slim` image as a build stage** (the runtime-deps image carries no Node, and `npm` without
-Node is the first thing a reviewer of this plan caught), then the three CLIs at **pinned versions**:
-`npm i -g @openai/codex@0.153.4 @anthropic-ai/claude-code@2.1.258` and Google's installer at the release
-carrying `agy` **1.1.27**, each followed by `<cli> --version` **during the build** so an image cannot be
-published with a CLI that does not start.
+Node is the first thing a reviewer of this plan caught), then the three CLIs, each followed by `<cli> --version` **during the build** so an image cannot be
+published with a CLI that does not start:
 
-Those three numbers are what the operator's own machine runs on 2026-09-05, read from the CLIs rather
-than from a changelog — the version an adapter's flags were verified against is the version the VM
-should run, and "latest" would silently be a different one. `agy` is **not** an npm package (it installs
-into `~/.local`/`%LOCALAPPDATA%` from Google's `install.sh`), so pinning it means pinning the installer's
-release rather than a package version; whether that installer takes a version argument is the one thing
-to check when story 4.1 is written, and if it does not, the image fetches the release asset directly.
+```
+npm i -g @openai/codex @anthropic-ai/claude-code
+curl -fsSL https://antigravity.google/cli/install.sh | bash
+```
 
-The versions are `ARG`s, stamped as image labels and reported in `/api/catalog`; they are
-raised deliberately, one commit per bump, because the adapters' flags, envelopes and rate-limit wording
-are verified per CLI version (`ReviewerRuntime.cs:150`) and a silent bump on rebuild would pass every
-fake-CLI test and fail every real review. The image is rebuilt to update a CLI; `POST_DEPLOY.md` says so.
+**Latest, not pinned — the operator's decision of 2026-09-05, recorded with its cost.** The adapters'
+flags are verified against particular CLI versions (`ReviewerRuntime.cs` names codex 0.147.0, gemini
+0.55.1, claude 2.1.197, agy 1.1.22), and a vendor that changes a flag, an envelope or its rate-limit
+wording between two rebuilds passes every fake-CLI test in CI and fails every real review. The mitigation
+that costs nothing: **the server reports the versions it actually has** — read from the binaries at
+startup, carried in `/api/catalog`, shown on the panel's row — so "what is running there" is a question
+with an answer rather than an assumption, and a round that starts failing has somewhere to look first.
+
+**Verified on the VM, 2026-09-05**, in `node:22-bookworm-slim` (which is what the runtime stage borrows
+Node from): `codex-cli 0.153.4` and `2.1.258 (Claude Code)` install from npm and run; `agy` is **not** an
+npm package and its installer takes **no version argument** — it always installs whatever
+`…/manifests/linux_amd64.json` currently names, which was `1.1.27`. That manifest also carries a direct
+tarball URL and its **sha512**, so a pin, if one is ever wanted, is a checksummed artefact rather than a
+flag the installer does not have; extracted, the binary is a single 210 MB file called `antigravity`
+(`agy` is the installer's alias) and it answers `--version` cleanly.
+
+A CLI is updated by rebuilding the image, which is what makes an update a deliberate act even without a
+pin; `POST_DEPLOY.md` reads the versions back afterwards, so a rebuild that moved a vendor says so on the
+day it happened rather than during the first failing round.
 
 Sign-in on the VM: `docker compose exec -it coai coai-server login <vendor> <slot>` takes the slot's lock,
 sets the slot's `HOME` and variables, and runs the CLI's own flow with the terminal inherited:
