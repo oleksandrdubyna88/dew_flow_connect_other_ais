@@ -49,6 +49,16 @@ export interface LogRow {
   readonly tokensIn: number | null;
   readonly tokensOut: number | null;
   readonly costUsd: number | null;
+  /** What the round's reviewers READ, in dollars — null when nothing could be priced. */
+  readonly costInUsd: number | null;
+  /** What they WROTE. */
+  readonly costOutUsd: number | null;
+  /** The two added up, or what a vendor actually billed when it says so. */
+  readonly costTotalUsd: number | null;
+  /** True when the number is derived from a public price list rather than billed. */
+  readonly costIsEstimate: boolean;
+  /** True when at least one reviewer's model had no listed price, so the total is a floor. */
+  readonly costPartial: boolean;
   /** How many answered, in the server's own words ("7 of 9 reviewers answered"). */
   readonly answered: string;
   readonly vendors: readonly string[];
@@ -61,7 +71,7 @@ export interface LogRow {
 /** The columns a header click can sort by. */
 export type SortKey =
   | 'startedUtc' | 'repoName' | 'branch' | 'stage' | 'number' | 'subject' | 'status' | 'verdict'
-  | 'gating' | 'findings' | 'seconds' | 'tokensIn' | 'tokensOut' | 'costUsd' | 'answered';
+  | 'gating' | 'findings' | 'seconds' | 'tokensIn' | 'tokensOut' | 'costTotalUsd' | 'answered';
 
 /** The facets a select can narrow by. Empty or absent means "any". */
 export interface LogFilters {
@@ -76,14 +86,27 @@ export interface LogFilters {
   readonly to?: string;
 }
 
+/**
+ * What one vendor's model costs per million tokens, or nothing when no list prices it.
+ *
+ * <p>By PROVIDER rather than by model id: a round's reviewer rows name the vendor, and which model
+ * that vendor is set to is the panel's configuration, not the round's.</p>
+ */
+export type ProviderPrice = (provider: string) => { inPerMillion: number; outPerMillion: number } | undefined;
+
 /** Every round of every session, newest first. */
-export function rowsFrom(sessions: readonly SessionFile[], nowMs: number = Date.now()): LogRow[] {
+export function rowsFrom(
+  sessions: readonly SessionFile[],
+  nowMs: number = Date.now(),
+  priceOf: ProviderPrice = () => undefined,
+): LogRow[] {
   return sessions
-    .flatMap((session) => session.rounds.map((round) => rowFrom(session, round, nowMs)))
+    .flatMap((session) => session.rounds.map((round) => rowFrom(session, round, nowMs, priceOf)))
     .sort((a, b) => (b.startedUtc || b.completedUtc).localeCompare(a.startedUtc || a.completedUtc));
 }
 
-function rowFrom(session: SessionFile, round: RoundRecord, nowMs: number): LogRow {
+function rowFrom(session: SessionFile, round: RoundRecord, nowMs: number, priceOf: ProviderPrice): LogRow {
+  const cost = costOf(round, priceOf);
   const status = round.status === 'running' ? 'running' : round.status === 'interrupted' ? 'interrupted' : 'done';
   const states = round.reviewerStates ?? [];
   const rows = reviewerRows(round);
@@ -106,11 +129,56 @@ function rowFrom(session: SessionFile, round: RoundRecord, nowMs: number): LogRo
     tokensIn: round.tokensIn ?? null,
     tokensOut: round.tokensOut ?? null,
     costUsd: round.costUsd ?? null,
+    ...cost,
     answered: round.reviewers,
     vendors: [...new Set(states.map((s) => s.provider))],
     reviewers: reviewerLines(round),
     reviewerColours: rows.map((r) => vendorColour(r.provider)),
   };
+}
+
+/**
+ * What a round cost, per REVIEWER.
+ *
+ * <p>A round's own token totals are the sum over vendors whose prices differ by an order of
+ * magnitude, so one multiplication over the round total would be a number with no meaning. Each
+ * reviewer is priced at its own vendor's rate and the results are added; a reviewer whose model no
+ * list prices contributes nothing and sets `costPartial`, because a total that quietly leaves
+ * somebody out is worse than one that says it is a floor.</p>
+ *
+ * <p>A vendor that BILLED the round wins over anything worked out from a price list — the two are
+ * not the same kind of number, and `costIsEstimate` says which one this is.</p>
+ */
+function costOf(round: RoundRecord, priceOf: ProviderPrice): Pick<LogRow, 'costInUsd' | 'costOutUsd' | 'costTotalUsd' | 'costIsEstimate' | 'costPartial'> {
+  const billed = round.costUsd ?? null;
+  let inUsd = 0;
+  let outUsd = 0;
+  let priced = 0;
+  let unpriced = 0;
+  for (const state of round.reviewerStates ?? []) {
+    const price = priceOf(state.provider);
+    if (price === undefined) {
+      unpriced += 1;
+      continue;
+    }
+    priced += 1;
+    inUsd += ((state.tokensIn ?? 0) / 1_000_000) * price.inPerMillion;
+    outUsd += ((state.tokensOut ?? 0) / 1_000_000) * price.outPerMillion;
+  }
+  const nothingPriced = priced === 0;
+
+  return {
+    costInUsd: nothingPriced ? null : round4(inUsd),
+    costOutUsd: nothingPriced ? null : round4(outUsd),
+    costTotalUsd: billed ?? (nothingPriced ? null : round4(inUsd + outUsd)),
+    costIsEstimate: billed === null && !nothingPriced,
+    costPartial: unpriced > 0 && !nothingPriced,
+  };
+}
+
+/** Cents-and-a-bit, so a sum of many small numbers does not drift into float noise. */
+function round4(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
 }
 
 function repoNameOf(repoPath: string): string {
@@ -278,7 +346,7 @@ const COLUMNS: ReadonlyArray<{ key: SortKey; label: string; numeric?: boolean }>
   { key: 'seconds', label: 'Took', numeric: true },
   { key: 'tokensIn', label: 'Tokens in', numeric: true },
   { key: 'tokensOut', label: 'Tokens out', numeric: true },
-  { key: 'costUsd', label: 'Cost', numeric: true },
+  { key: 'costTotalUsd', label: 'Cost', numeric: true },
   { key: 'answered', label: 'Reviewers' },
 ];
 
@@ -349,9 +417,14 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
   th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--vscode-panel-border); white-space: nowrap; vertical-align: top; }
   th { position: sticky; top: 0; background: var(--vscode-editor-background); cursor: pointer; user-select: none; }
   th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.cost { white-space: nowrap; }
   th[data-sort].asc::after { content: " ▲"; opacity: .7; }
   th[data-sort].desc::after { content: " ▼"; opacity: .7; }
   td.what { white-space: normal; min-width: 260px; max-width: 560px; }
+  /* Long cells are cut with an ellipsis rather than pushing the table sideways; the full text is
+     the cell's own title, so hovering reads it. */
+  td.who-answered { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+  td[title] { cursor: help; }
   tr[data-key] { cursor: pointer; }
   tr[data-key]:hover td { background: var(--vscode-list-hoverBackground); }
   tr.detail td { white-space: normal; background: var(--vscode-editorWidget-background); padding: 6px 8px 8px 28px; cursor: default; }
@@ -402,7 +475,7 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
 </table>
 </div>
 <div id="empty" class="empty"${rows.length === 0 ? '' : ' hidden'}>No rounds yet. A session appears once an AI calls <code>open</code> for a repository and branch.</div>
-<div class="hint">Click a column to sort, a row to see its reviewers. The table advances by itself while a round runs; your sort, filters and search stay.</div>
+<div class="hint">Cost is <b>in / out / total</b> — <code>~</code> means worked out from a public price list rather than billed, <code>+</code> means one reviewer's model had no listed price so the total is a floor. Click a column to sort, a row to see its reviewers. The table advances by itself while a round runs; your sort, filters and search stay.</div>
 </section>
 <section id="tab-usage" hidden><div id="usage-body">${usageHtml}</div></section>
 <script nonce="${nonce}">
@@ -463,6 +536,26 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
   function money(c) {
     return c === null || c === undefined ? '' : '$' + c.toFixed(c < 1 ? 3 : 2);
   }
+  // Three numbers, in the order the header names them: what the round READ, what it WROTE, and the
+  // sum. A tilde marks a total worked out from a public price list rather than one a vendor billed;
+  // a plus marks a total that left an unpriced reviewer out, so it is a floor.
+  // What the three numbers mean, spelled out for the tooltip — the column is narrow and the marks
+  // are one character each.
+  function costTitle(r) {
+    if (r.costTotalUsd === null || r.costTotalUsd === undefined) { return 'No price is listed for these models, so this round has no cost figure.'; }
+    var how = r.costIsEstimate
+      ? 'Worked out from a public price list, not billed.'
+      : 'Reported by the vendor.';
+    var part = r.costPartial ? ' One reviewer had no listed price, so the total is a floor.' : '';
+    return 'Input ' + money(r.costInUsd) + ' + output ' + money(r.costOutUsd) + ' = ' + money(r.costTotalUsd) + '. ' + how + part;
+  }
+  function cost3(r) {
+    if (r.costTotalUsd === null || r.costTotalUsd === undefined) { return ''; }
+    var mark = (r.costIsEstimate ? '~' : '') ;
+    var tail = r.costPartial ? '+' : '';
+    if (r.costInUsd === null || r.costInUsd === undefined) { return mark + money(r.costTotalUsd) + tail; }
+    return mark + money(r.costInUsd) + ' / ' + money(r.costOutUsd) + ' / ' + money(r.costTotalUsd) + tail;
+  }
   function badge(status) {
     return '<span class="badge ' + esc(status) + '">' + esc(status) + '</span>';
   }
@@ -489,10 +582,10 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
       html += '<tr data-key="' + esc(r.key) + '">'
         + '<td>' + when(r.startedUtc || r.completedUtc) + '</td>'
         + '<td title="' + esc(r.repoPath) + '">' + esc(r.repoName) + '</td>'
-        + '<td>' + esc(r.branch) + '</td>'
+        + '<td title="' + esc(r.branch) + '">' + esc(r.branch) + '</td>'
         + '<td>' + esc(r.stage) + '</td>'
         + '<td class="num">' + r.number + '</td>'
-        + '<td class="what">' + esc(r.subject) + '</td>'
+        + '<td class="what" title="' + esc(r.subject) + '">' + esc(r.subject) + '</td>'
         + '<td>' + badge(r.status) + '</td>'
         + '<td>' + esc(r.verdict) + '</td>'
         + '<td class="num">' + r.gating + '</td>'
@@ -500,8 +593,8 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
         + '<td class="num">' + took(r.seconds) + '</td>'
         + '<td class="num">' + num(r.tokensIn) + '</td>'
         + '<td class="num">' + num(r.tokensOut) + '</td>'
-        + '<td class="num">' + money(r.costUsd) + '</td>'
-        + '<td>' + esc(r.answered) + '</td>'
+        + '<td class="num cost" title="' + esc(costTitle(r)) + '">' + cost3(r) + '</td>'
+        + '<td class="who-answered" title="' + esc(r.answered) + '">' + esc(r.answered) + '</td>'
         + '</tr>';
       if (state.expanded[r.key]) {
         html += '<tr class="detail"><td colspan="15">' + detail(r) + '</td></tr>';

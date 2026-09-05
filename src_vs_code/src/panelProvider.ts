@@ -143,6 +143,27 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
 
 
+  /**
+   * What each vendor's CURRENT model costs per million tokens, for the log page's Cost column.
+   *
+   * <p>By provider, because a round's reviewer rows name the vendor and which model it is set to is
+   * this panel's configuration rather than the round's. The same two public price lists the spending
+   * section reads — nothing new is fetched.</p>
+   */
+  async providerPrice(): Promise<(provider: string) => { inPerMillion: number; outPerMillion: number } | undefined> {
+    const vendors = vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors'));
+    const prices = await this.modelPrices(vendors);
+    const byProvider = new Map<string, { inPerMillion: number; outPerMillion: number }>();
+    for (const vendor of vendors) {
+      const price = prices[vendor.model];
+      if (price !== undefined) {
+        byProvider.set(vendor.id, { inPerMillion: price.inPerMillion, outPerMillion: price.outPerMillion });
+      }
+    }
+
+    return (provider) => byProvider.get(provider);
+  }
+
   /** The spending window the page shows. Today by default — since midnight, by the operator's ruling. */
   setUsageWindow(window: string): void {
     if ((['day', 'week', 'month', 'year'] as readonly string[]).includes(window)) {
