@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using CoaiMcp.Core.Findings;
 
 namespace CoaiMcp.Runners.Reviewers;
@@ -199,7 +200,7 @@ public static class LocalAsk
             json.WriteString("name", "findings");
             json.WriteBoolean("strict", true);
             json.WritePropertyName("schema");
-            validate.RootElement.WriteTo(json);
+            Bounded(schemaJson).WriteTo(json);
             json.WriteEndObject();
             json.WriteEndObject();
 
@@ -207,6 +208,57 @@ public static class LocalAsk
         }
 
         return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    /// <summary>How long a finding's free text may be, in characters, on the local route only.</summary>
+    /// <remarks>
+    /// <para>A reasoning model can reason in the wrong place. Observed twice on 2026-09-05: the answer
+    /// opened as good JSON and then the <c>why</c> field became the model's chain of thought — <i>"The
+    /// plan *is* the instruction. The plan says … Is there a violation? Maybe … No. Wait"</i> — for
+    /// thirty kilobytes until <c>max_tokens</c> cut it mid-string. The frequency penalty above cannot
+    /// touch that; it is not a repeated sentence. The GRAMMAR can: the engine constrains generation to
+    /// the schema, and a string with a <c>maxLength</c> is a string the model is forced to close.</para>
+    /// <para>A thousand characters is about a hundred and fifty words — more than any finding that
+    /// has ever been worth having here used, and a fifth of what the leak spent before the first
+    /// sentence ended. The title gets two hundred, because it is one sentence by definition.</para>
+    /// <para>Local ONLY. Codex feeds the shared schema to OpenAI's strict structured outputs, which
+    /// reject <c>maxLength</c> as an unsupported keyword with a 400 — so the bound is added to the copy
+    /// this route sends, never to <c>FindingSchema.Json</c>.</para>
+    /// </remarks>
+    private static readonly (string Field, int MaxLength)[] FreeTextBounds =
+    [
+        ("title", 200),
+        ("why", 1000),
+        ("fix", 1000),
+    ];
+
+    /// <summary>
+    /// The finding schema with its free-text fields bounded — or any other schema exactly as given.
+    /// </summary>
+    /// <remarks>
+    /// The walker looks for the finding schema's own shape and touches nothing else: a probe or a test
+    /// handing this route a schema of another shape must get it back unchanged rather than rewritten
+    /// by code that assumed what it was looking at.
+    /// </remarks>
+    internal static JsonNode Bounded(string schemaJson)
+    {
+        var root = JsonNode.Parse(schemaJson) ?? throw new JsonException("the schema parsed to nothing");
+        if (root["properties"]?["findings"]?["items"]?["properties"] is not JsonObject fields)
+        {
+            return root;
+        }
+
+        foreach (var (field, maxLength) in FreeTextBounds)
+        {
+            if (fields[field] is JsonObject property && property["type"]?.GetValue<string>() == "string")
+            {
+                property["maxLength"] = maxLength;
+                var description = property["description"]?.GetValue<string>() ?? string.Empty;
+                property["description"] = $"{description} (at most {maxLength} characters)".Trim();
+            }
+        }
+
+        return root;
     }
 
     /// <summary>
