@@ -211,20 +211,27 @@ public static class Program
 
         var runs = await RunStore.LoadAsync(options.RunsFile, ct);
         var judge = new Judge("claude", options.Judge, options.Repo);
-        var judged = new List<RunRecord>();
-        foreach (var run in runs)
-        {
-            judged.Add(await judge.JudgeAsync(run, ct));
-            var counted = judged[^1].Stages.SelectMany(s => s.Findings).ToList();
-            Console.WriteLine(
-                $"{run.Arm,-22} {run.Case.Name,-34} #{run.Repeat} "
-                + $"{counted.Count(f => f.Useful == "yes")}/{counted.Count} worth having");
-        }
+        var judged = await JudgePass.RunAsync(
+            runs,
+            options.Judge,
+            judge.JudgeAsync,
+            (all, token) => RunStore.SaveAsync(options.RunsFile, all, token),
+            Announce,
+            ct);
 
-        await RunStore.SaveAsync(options.RunsFile, judged, ct);
         Report(judged, Path.GetDirectoryName(options.RunsFile) ?? ".");
 
         return 0;
+    }
+
+    /// <summary>One line per run as the judgement walks the file, saying which ones it paid for.</summary>
+    private static void Announce(RunRecord run, bool judgedNow)
+    {
+        var counted = run.Stages.SelectMany(s => s.Findings).ToList();
+        Console.WriteLine(
+            $"{run.Arm,-22} {run.Case.Name,-34} #{run.Repeat} "
+            + $"{counted.Count(f => f.Useful == "yes")}/{counted.Count} worth having"
+            + (judgedNow ? "" : "   (kept - already judged)"));
     }
 
     private static async Task<int> TableAsync(Options options, CancellationToken ct)
@@ -244,10 +251,15 @@ public static class Program
     {
         var perArm = Tables.PerArm(runs);
         var perRun = Tables.PerRun(runs);
-        Console.WriteLine($"\n{perArm}\n{perRun}");
+
+        // Who found it ALONE. The per-arm table cannot answer that: a provider whose every finding
+        // repeats another's scores exactly as well there as one that found things by itself, and the
+        // second is the only thing a second provider is worth paying for.
+        var overlap = Overlap.Table(Overlap.Across(runs));
+        Console.WriteLine($"\n{perArm}\n{overlap}\n{perRun}");
         Directory.CreateDirectory(outDir);
         File.WriteAllText(
             Path.Combine(outDir, "tables.md"),
-            $"# Bench\n\n## Per arm\n\n{perArm}\n## Per run\n\n{perRun}");
+            $"# Bench\n\n## Per arm\n\n{perArm}\n## Who found it alone\n\n{overlap}\n## Per run\n\n{perRun}");
     }
 }
