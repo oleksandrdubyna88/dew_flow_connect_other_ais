@@ -48,7 +48,7 @@ jobs:
             /o:"remsoftdev" \
             /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.host.url="https://sonarcloud.io" \
-            /d:sonar.cs.vscoveragexml.reportsPaths="coverage/*.xml" \
+            /d:sonar.cs.vscoveragexml.reportsPaths="coverage/*.xml"             /d:sonar.javascript.lcov.reportPaths="coverage/extension.lcov"             /d:sonar.typescript.lcov.reportPaths="coverage/extension.lcov" \
             /d:sonar.exclusions="**/bin/**,**/obj/**,artifacts/**,**/node_modules/**,src_mcp/tests_fakecli/**" \
             /d:sonar.coverage.exclusions="**/tests/**,**/*.Tests/**,src_mcp/tests_fakecli/**"
       - name: Build
@@ -58,6 +58,16 @@ jobs:
           mkdir -p coverage
           dotnet-coverage collect -f xml -o coverage/server.xml -- ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests
           dotnet-coverage collect -f xml -o coverage/bench.xml -- ./src_bench/CoaiBench.Tests/bin/Release/net10.0/CoaiBench.Tests
+      # The extension is TypeScript and the .NET scanner does not run its tests, so every change to
+      # src_vs_code arrived at the gate as 0 % coverage of new code — a number about the analysis
+      # rather than about the change. Node's own runner writes lcov.
+      - name: The extension's coverage
+        working-directory: src_vs_code
+        run: |
+          npm ci
+          npm run compile
+          mkdir -p ../coverage
+          node --test --experimental-test-coverage --test-reporter=lcov                --test-reporter-destination=../coverage/extension.lcov "out/test/"*.test.js
       - name: End
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
