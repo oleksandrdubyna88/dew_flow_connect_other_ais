@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace CoaiMcp.Runners.Accounting;
+namespace CoaiMcp.Runners.Reviewers;
 
 /// <summary>
 /// The ledger's own serializer, and the only difference that matters is <b>not</b> indented.

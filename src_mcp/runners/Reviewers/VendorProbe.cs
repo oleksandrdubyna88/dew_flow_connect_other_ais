@@ -5,7 +5,11 @@ namespace CoaiMcp.Runners.Reviewers;
 /// <summary>
 /// What one vendor looks like before anybody trusts it with a round.
 /// </summary>
-/// <param name="CliFound">Whether the executable could be started at all.</param>
+/// <param name="CliFound">
+/// Whether the executable could be STARTED — not whether it works. A CLI that started and then
+/// never answered is `true` here with a note saying so, because the two failures have different
+/// cures: one is a missing install, the other a machine or a vendor that is busy.
+/// </param>
 /// <param name="Version">What the CLI said about itself, or empty.</param>
 /// <param name="Auth">`own auth` · `vault key` · `unavailable` — the last of which bars the round.</param>
 /// <param name="Note">
@@ -47,7 +51,10 @@ public static class VendorProbe
         CancellationToken ct = default,
         TimeSpan? timeout = null)
     {
-        if (RuntimeResolution.For(vendor) is null)
+        // Resolved once: `For` constructs a runtime, and asking it twice per probe allocated one
+        // per configured vendor per catalog call for nothing.
+        var runtime = RuntimeResolution.For(vendor);
+        if (runtime is null)
         {
             return new VendorHealth(enabled, false, "", "unavailable",
                 ReviewerRuntimeSelector.Default.RefusalFor(vendor.Provider));
@@ -72,9 +79,7 @@ public static class VendorProbe
             return new VendorHealth(false, false, "", auth, "disabled in settings");
         }
 
-        var exe = executablePath.Length > 0
-            ? executablePath
-            : RuntimeResolution.For(vendor)?.DefaultExecutable ?? vendor.Provider;
+        var exe = executablePath.Length > 0 ? executablePath : runtime.DefaultExecutable;
 
         return await AskItsVersionAsync(launcher, vendor, exe, auth, authNote, timeout ?? DefaultTimeout, ct);
     }
@@ -133,11 +138,19 @@ public static class VendorProbe
             // `providers` is the health probe a person reads before trusting a panel, so a known
             // closed door is named here too rather than only when a round has already failed.
             var cure = VendorDiagnosis.For(result.StdErr + result.StdOut);
+            // Whichever stream the CLI actually used. Reading stderr alone left the note as
+            // "--version exited 1: " for every vendor that writes its diagnosis to stdout — an exit
+            // code and a colon, which is the shape of a sentence that helps nobody.
+            var said = result.StdErr.Trim().Length > 0 ? result.StdErr.Trim() : result.StdOut.Trim();
 
             return new VendorHealth(true, true, "", auth,
-                cure ?? $"--version exited {result.ExitCode}: {result.StdErr.Trim()}");
+                cure ?? $"--version exited {result.ExitCode}: {said}");
         }
-        catch (System.ComponentModel.Win32Exception)
+        // Win32Exception is what a missing or unrunnable executable throws, and it is the case with
+        // a cure. The other two are the ones a bad path can still produce — a directory where a file
+        // was named, a handle that will not open — and a health probe that FAULTS takes the whole
+        // catalog answer with it, which is a worse answer than any note.
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
         {
             // A missing CLI is the one failure with a one-line answer, so the answer goes here
             // rather than on a vendor's docs page. This used to be a blanket "antigravity has no

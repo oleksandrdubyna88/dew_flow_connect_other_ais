@@ -107,6 +107,32 @@ public sealed class VendorProbeTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// A CLI that writes its refusal to STDOUT still gets a note with words in it.
+    /// </summary>
+    /// <remarks>
+    /// Found by gemini on this change's code round: reading stderr alone left the note as
+    /// "--version exited 1: " — an exit code, a colon, and nothing — for every vendor that
+    /// diagnoses itself on the other stream.
+    /// </remarks>
+    [Fact]
+    public async Task ARefusalOnStdout_IsNotLost()
+    {
+        Environment.SetEnvironmentVariable("FAKECLI_EXIT", "1");
+        Environment.SetEnvironmentVariable("FAKECLI_STDOUT", "this vendor explains itself on stdout");
+        try
+        {
+            var health = await Probe(Vendor("codex"), exe: FakeCliInvocations.Exe);
+
+            health.Note.Should().Contain("this vendor explains itself on stdout");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKECLI_EXIT", null);
+            Environment.SetEnvironmentVariable("FAKECLI_STDOUT", "fake-cli 9.9.9");
+        }
+    }
+
     [Fact]
     public async Task AVendorTurnedOff_SaysSo_AndIsNotProbed()
     {
