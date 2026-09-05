@@ -1,11 +1,25 @@
 # PLAN — does the gate still work, and does it hold under five windows?
 
-> Status: **plan only, nothing measured yet.** Scope: no production code — this is a measurement of
-> `mcp 0.17.0` using `src_bench/CoaiBench`, and any product change it provokes gets its own plan.
+> Status: **IMPLEMENTED, 2026-09-05.** All three epics ran; the results are in
+> [RESULTS_bench_campaign_0_17_1.md](RESULTS_bench_campaign_0_17_1.md). The question the campaign was
+> for is answered: a real round survives the session-store fix, sequentially and under five servers
+> sharing one data directory — 6 of 6 verdicts, 6 of 6 clean on disk, 6 of 6 resolves accepted.
+>
+> **Deviations.** Epic 2 had to run TWICE: the first run found a defect in the bench rather than in
+> the server (three repeats of one case shared one branch, so two servers created the same worktree),
+> and it is recorded as the worst case rather than discarded. Epic 3's judgement completed for epic 1
+> (92 of 104 findings) and stopped at a usage limit for epic 2b, recorded as partial rather than
+> tabulated. The campaign also found FIVE defects in its own instrument and three ways the local model
+> fails — each fixed, each with a test, and the local-model trio shipped as server 0.17.1, 0.17.2 and
+> 0.17.4.
+>
+> **The tail:** re-run the judge over epic 2b when the limit allows (one command, no rounds), and act
+> on what the judgement says about the local reviewer on code rounds — a configuration decision the
+> report states with its numbers and leaves to the operator.
 >
 > Related: [../src_bench/README.md](../src_bench/README.md) ·
-> [../research/module_server.md](../research/module_server.md) ·
-> [../research/RESULTS_commands_campaign.md](../research/RESULTS_commands_campaign.md)
+> [../research/module_server.md](module_server.md) ·
+> [../research/RESULTS_commands_campaign.md](RESULTS_commands_campaign.md)
 
 ## The goal, and why now
 
