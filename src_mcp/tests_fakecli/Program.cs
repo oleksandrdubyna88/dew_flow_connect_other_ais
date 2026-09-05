@@ -18,6 +18,22 @@
 // launcher's own missing StandardOutputEncoding was found.
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
+// A stand-in that dies unhandled destroys the evidence it exists to produce. Windows CI failed a
+// full loop twice with `exit -532462766` — 0xE0434352, "a managed exception escaped" — and all the
+// executor could keep was the TAIL of the runtime's stack dump, which ends inside a `FileStream`
+// constructor's parameter list and names neither the exception nor the path. One line, written
+// last, is worth the whole dump: the tail is what survives.
+AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+{
+    var error = e.ExceptionObject as Exception;
+    Console.Error.WriteLine(
+        $"fake-cli: {error?.GetType().Name ?? "unknown"}: {error?.Message ?? "no message"}");
+    Console.Error.Flush();
+    // Before the runtime prints its own dump, so our line is the last thing on the stream rather
+    // than the first thing scrolled off it.
+    Environment.Exit(97);
+};
+
 // Vendor mode: behave like a reviewer CLI whatever the argv shape, steered by environment —
 // the vendor runtimes build real codex/gemini argvs, and the fan-out tests drive THOSE.
 //   FAKECLI_MODE=vendor

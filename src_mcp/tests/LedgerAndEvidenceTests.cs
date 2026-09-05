@@ -12,6 +12,13 @@ namespace CoaiMcp.Tests;
 /// What a round SPENT and what it can still show for a failure — the two things an independent
 /// verification pass found wrong on 2026-09-01, both of which had a doc comment claiming otherwise.
 /// </summary>
+/// <remarks>
+/// In the <c>fakecli-env</c> collection because it LAUNCHES the fake CLI, whose behaviour is
+/// steered by process-wide environment variables that other classes set and clear. A verb this
+/// class passes in argv is only read when <c>FAKECLI_MODE</c> is unset, so running beside a class
+/// that sets it is a race with nothing holding it off.
+/// </remarks>
+[Collection("fakecli-env")]
 public sealed class LedgerAndEvidenceTests : IDisposable
 {
     private readonly string _dir = Directory.CreateTempSubdirectory("coai-ledger-").FullName;

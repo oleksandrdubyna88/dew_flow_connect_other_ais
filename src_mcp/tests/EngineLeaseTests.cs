@@ -16,6 +16,13 @@ namespace CoaiMcp.Tests;
 /// tests below can kill a holder rather than simulate one, and there is no heartbeat, no pid and no
 /// stealing rule to test because there is none to get wrong.</para>
 /// </remarks>
+/// <remarks>
+/// In the <c>fakecli-env</c> collection because it LAUNCHES the fake CLI, whose behaviour is
+/// steered by process-wide environment variables that other classes set and clear. A verb this
+/// class passes in argv is only read when <c>FAKECLI_MODE</c> is unset, so running beside a class
+/// that sets it is a race with nothing holding it off.
+/// </remarks>
+[Collection("fakecli-env")]
 public sealed class EngineLeaseTests : IDisposable
 {
     private readonly string _dir = Directory.CreateTempSubdirectory("coai-lease-").FullName;
