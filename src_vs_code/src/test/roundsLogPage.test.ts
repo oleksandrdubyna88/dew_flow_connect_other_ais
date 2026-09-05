@@ -93,7 +93,7 @@ test('a round with no date at all is kept by an open range and dropped by a boun
 test('the toolbar offers the date range and a Today shortcut', () => {
   const html = roundsLogHtml([], [], 'n');
 
-  assert.ok(html.includes('id="from"') && html.includes('type="date"'), 'from');
+  assert.ok(html.includes('id="from"') && html.includes('type="datetime-local"'), 'from, with a time');
   assert.ok(html.includes('id="to"'), 'to');
   assert.ok(html.includes('id="today"'), 'today');
 });
@@ -107,4 +107,32 @@ test('the page has two tabs, rounds and usage, and rounds is the one shown first
   assert.ok(html.includes('id="tab-usage"'), 'the usage tab has a body');
   assert.ok(html.includes('SPENDING'), 'the spending region the provider rendered is placed in it');
   assert.match(script(html), /message\.type === 'usage'/, 'and it is re-posted live like the rows');
+});
+
+function pageScript(html: string): string {
+  return html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
+}
+
+test('the page opens on today, and All dates clears the range', () => {
+  const html = roundsLogHtml([], [], 'n');
+
+  assert.match(pageScript(html), /function setToday/, 'the range is set on load');
+  assert.ok(html.includes('id="alldates"'), 'with a way back to everything');
+  assert.match(pageScript(html), /setToday\(\);/, 'and today is what the first render applies');
+});
+
+test('a bare day as the upper bound means the END of that day', () => {
+  // "To 2026-09-05" against a round at 14:30 that day would otherwise exclude the whole of today.
+  const row = rowsFrom([session([round({ startedUtc: '2026-09-05T14:30:00.000Z', completedUtc: '2026-09-05T14:35:00.000Z' })])], NOW)[0]!;
+
+  assert.equal(rowMatches(row, { to: '2026-09-05' }, ''), true);
+  assert.equal(rowMatches(row, { to: '2026-09-04' }, ''), false);
+});
+
+test('an instant bound compares against the instant the round started', () => {
+  const row = rowsFrom([session([round({ startedUtc: '2026-09-05T14:30:00.000Z', completedUtc: '2026-09-05T14:35:00.000Z' })])], NOW)[0]!;
+
+  assert.equal(rowMatches(row, { from: '2026-09-05T14:00:00.000Z' }, ''), true);
+  assert.equal(rowMatches(row, { from: '2026-09-05T15:00:00.000Z' }, ''), false, 'it started before that');
+  assert.equal(rowMatches(row, { to: '2026-09-05T14:31:00.000Z' }, ''), true);
 });

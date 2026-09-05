@@ -11,6 +11,12 @@ round total would be a number with no meaning. A `~` marks a total derived from 
 than billed; a `+` marks one that left an unpriced reviewer out, so it is a floor. Hovering the cell
 spells all of that out in a sentence.
 
+**The date range takes a time, and the page opens on today.** The two pickers are date **and**
+time now, and the log opens showing today from its first minute to its last — the question somebody
+has when they open it is almost always what happened today. **All dates** clears the range in one
+click. Storage stays UTC per the family rule; the conversion is the UI's, so the pickers speak your
+wall clock and the filtering happens on instants.
+
 **Long cells can be read.** The subject, the branch and the reviewer summary carry their full text
 as a tooltip, so a column that is cut with an ellipsis no longer hides the rest of it.
 
