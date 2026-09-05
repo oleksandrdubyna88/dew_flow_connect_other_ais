@@ -288,7 +288,13 @@ public sealed class PanelService
         var session = _store.Load(repoPath, branch)
             ?? new PersistedSession(
                 new SessionState(Guid.NewGuid().ToString("N")[..8], repoPath, branch, _settings.Rounds),
-                []);
+                [])
+            {
+                // Stamped once, here, and carried by every later save. It bounds the first round's
+                // window over the caller's transcript, and the file system cannot be asked for it:
+                // a save moves a scratch file over this one.
+                OpenedUtc = DateTime.UtcNow,
+            };
         _store.Save(session);
         _log.Information("session {SessionId} open for {Branch}", session.State.SessionId, branch);
         return Json(SessionAnswerFor(session), ServerJsonContext.Default.SessionAnswer);
@@ -1029,12 +1035,12 @@ public sealed class PanelService
     private string WhatTheCallerWasDoing(PersistedSession session, RoundRecord record)
     {
         var previous = session.Rounds.Count > 0 ? session.Rounds[^1].CompletedUtc : DateTime.MinValue;
-        var opened = _store.OpenedUtc(session.State.RepoPath, session.State.Branch);
-        var from = previous > opened ? previous : opened;
+        var from = previous > session.OpenedUtc ? previous : session.OpenedUtc;
+        var transcripts = _settings.AgentLogDir.Length > 0 ? _settings.AgentLogDir : Store.AgentLog.DefaultProjectsDir;
 
         return from == DateTime.MinValue
             ? string.Empty
-            : Store.AgentLog.Slice(Store.AgentLog.DefaultProjectsDir, from, record.StartedUtc, session.State.RepoPath);
+            : Store.AgentLog.Slice(transcripts, from, record.StartedUtc, session.State.RepoPath);
     }
 
     /// <summary>

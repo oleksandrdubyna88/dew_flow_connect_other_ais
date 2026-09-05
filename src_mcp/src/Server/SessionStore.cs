@@ -80,6 +80,18 @@ public sealed record RoundRecord(
 /// <summary>What the store persists: the state machine's state plus the human-readable trail.</summary>
 public sealed record PersistedSession(SessionState State, List<RoundRecord> Rounds)
 {
+    /// <summary>
+    /// When `open` first created this session.
+    /// </summary>
+    /// <remarks>
+    /// Recorded rather than read from the file's creation time, which was the first version and is
+    /// wrong twice: a save here writes a scratch file and MOVES it over the real one, so the
+    /// creation time becomes the last save on Windows, and on Linux most filesystems do not keep a
+    /// birth time at all and answer with the inode's change time. Either way the first round's
+    /// window over the caller's transcript would collapse to nothing. Found by the code gate.
+    /// </remarks>
+    public DateTime OpenedUtc { get; init; }
+
     /// <summary>The last round's merged findings — what `resolve`'s indices point into.</summary>
     public List<Finding> Pending { get; init; } = [];
 
@@ -356,22 +368,6 @@ public sealed class SessionStore(string dataDir)
 
     private static bool IsOrphaned(RoundRecord round, Func<int, bool> processIsAlive) =>
         round.Status == RoundRecord.Running && (round.RunnerPid == 0 || !processIsAlive(round.RunnerPid));
-
-    /// <summary>
-    /// When this session was first opened, as the file system remembers it.
-    /// </summary>
-    /// <remarks>
-    /// The session record carries no opening instant of its own, and the file's creation time is the
-    /// same fact: `open` writes it once and every later save replaces the contents. It is used to
-    /// bound the first round's window over the caller's own transcript — before that instant there
-    /// is nothing about this session to attach.
-    /// </remarks>
-    public DateTime OpenedUtc(string repoPath, string branch)
-    {
-        var file = FileFor(repoPath, branch);
-
-        return File.Exists(file) ? File.GetCreationTimeUtc(file) : DateTime.MinValue;
-    }
 
     private string FileFor(string repoPath, string branch)
     {

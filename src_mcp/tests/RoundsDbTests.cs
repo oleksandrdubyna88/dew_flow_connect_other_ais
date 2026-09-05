@@ -315,6 +315,27 @@ public sealed class RoundsDbTests : IDisposable
     }
 
     [Fact]
+    public void ADecisionFollowsTheDEFECT_NotThePositionItHadInOneReply()
+    {
+        // An ordinal is where a finding stood in one reply. If a re-run puts a different finding
+        // there, the previous decision must not stay attached to it: a rejection shown against a
+        // defect nobody rejected is worse than losing the record of it. Raised by the code gate.
+        using var db = RoundsDb.Open(_dir, _log)!;
+        var first = new[] { Found("session file opened without FileShare"), Found("the retry never gives up") };
+        db.RecordRound(Session, Round(), first);
+        db.RecordDecisions("s1", "CodeReview", 1,
+            [new Decision.Rejected(first[0], "already handled"), new Decision.Accepted(first[1])]);
+
+        // The same round, run again, with a different finding first.
+        db.RecordRound(Session, Round(), [Found("something else entirely"), first[1]]);
+
+        var rows = Query("SELECT title, resolution, reason FROM findings ORDER BY ordinal");
+        rows[0]["resolution"].Should().BeEmpty("this is not the finding that was rejected");
+        rows[0]["reason"].Should().BeEmpty();
+        rows[1]["resolution"].Should().Be("accept", "and this one is still the same defect");
+    }
+
+    [Fact]
     public void ADatabaseThatCannotBeOpenedIsNotAnException()
     {
         // Every caller's correct behaviour is to carry on without one: a round is what somebody is

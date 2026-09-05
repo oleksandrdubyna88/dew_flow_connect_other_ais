@@ -283,7 +283,17 @@ public sealed class RoundsDb : IDisposable
                     severity = excluded.severity, category = excluded.category, file = excluded.file,
                     line = excluded.line, title = excluded.title, why = excluded.why, fix = excluded.fix,
                     role = excluded.role, is_gating = excluded.is_gating, providers = excluded.providers,
-                    re_raised = excluded.re_raised
+                    re_raised = excluded.re_raised,
+                    -- An ordinal is a POSITION in one reply, not an identity. When the finding at
+                    -- this position is a different one, its predecessor's decision must not stay
+                    -- attached to it — the gate called that out, and attaching a rejection to a
+                    -- defect nobody rejected is worse than losing the record of it.
+                    resolution   = CASE WHEN findings.title = excluded.title AND findings.file = excluded.file
+                                        THEN findings.resolution ELSE '' END,
+                    reason       = CASE WHEN findings.title = excluded.title AND findings.file = excluded.file
+                                        THEN findings.reason ELSE '' END,
+                    resolved_utc = CASE WHEN findings.title = excluded.title AND findings.file = excluded.file
+                                        THEN findings.resolved_utc ELSE '' END
                 """;
             var finding = findings[ordinal];
             Bind(write, "$round", roundId);

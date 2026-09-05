@@ -50,7 +50,7 @@ public static class FindingDedup
     /// coordinates leave necessary: little when a real file and line anchor both findings, the
     /// full amount when neither has a file and the title is all there is to go on.
     /// </summary>
-    public static bool SameDefect(Finding a, Finding b)
+    internal static bool SameDefect(Finding a, Finding b)
     {
         if (a.Category != b.Category ||
             !NormalisePath(a.File).Equals(NormalisePath(b.File), StringComparison.OrdinalIgnoreCase) ||
