@@ -127,6 +127,28 @@ test('every RID the workflow builds is a RID the extension will install', () => 
   assert.deepEqual([...built].sort(), [...COAI_RIDS].sort());
 });
 
+test('the release carries the native library the binary opens its database through', () => {
+  // 0.18.1 shipped the executable alone. Native AOT compiles managed code; the P/Invoke into
+  // SQLite still resolves at run time through the OS loader, which searches the directory the
+  // executable sits in — so the installed server threw DllNotFoundException the first time
+  // anything touched the rounds database, and the write is best-effort, so it did it in silence.
+  // It answered --version, --help and a full tools/list exchange throughout.
+  const workflow = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', '.github', 'workflows', 'release.yml'),
+    'utf8',
+  );
+
+  assert.match(workflow, /e_sqlite3/, 'the archive carries the native library');
+  assert.match(
+    workflow,
+    /is not in the publish output/,
+    'and the job FAILS when it is missing, rather than shipping a server that cannot open its own database');
+  assert.match(
+    workflow,
+    /COAI_DATA_DIR="\$DB" "\$EXE" --log/,
+    'the smoke makes the published binary actually open one — the check that would have caught it');
+});
+
 test('an unsupported platform is refused rather than guessed at', () => {
   assert.equal(ridFor('freebsd', 'x64'), undefined);
   assert.equal(ridFor('darwin', 'ppc'), undefined);
