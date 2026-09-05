@@ -6,9 +6,10 @@ import { clientTargetsLine, CLIENT_TARGETS, installedMessage, mcpServerBlock } f
 import { installLatest, latestServerVersion, serverExists, serverOnThisSide, serverPath } from './installer';
 import { EscalationWatcher } from './escalationWatcher';
 import { PanelProvider } from './panelProvider';
-import { renderEscalations } from './escalations';
 import { showHelp } from './helpPanel';
-import { parseSession, renderRounds, roundsViewIsOpen, SessionFile } from './rounds';
+import { parseSession, SessionFile } from './rounds';
+import { rowsFrom } from './roundsLog';
+import { RoundsLogPanel } from './roundsLogPanel';
 import { envBlock, settingsFrom } from './settingsShape';
 import { ServerSettingsSync } from './serverSettingsSync';
 import { vendorsFrom } from './vendors';
@@ -25,6 +26,12 @@ import { vendorsFrom } from './vendors';
  */
 export function activate(context: vscode.ExtensionContext): void {
   const watcher = new EscalationWatcher(dataDir());
+  const roundsLog = new RoundsLogPanel(async (id) => {
+    const question = watcher.openQuestions.find((q) => q.id === id);
+    if (question !== undefined) {
+      await watcher.answerCommand(question);
+    }
+  });
   const panel = new PanelProvider(context, watcher, dataDir(), async (id) => {
     const question = watcher.openQuestions.find((q) => q.id === id);
     if (question !== undefined) {
@@ -37,9 +44,10 @@ export function activate(context: vscode.ExtensionContext): void {
     // What the title bar switches on: green while somebody is waiting on an answer.
     void vscode.commands.executeCommand('setContext', 'coai.hasQuestions', watcher.openQuestions.length > 0);
     void panel.render();
-    // And the rounds view, if it is open: a round advances on its own, so the page it is shown on
-    // has to as well. Nothing is written when nobody is looking.
-    void refreshRoundsFile(watcher);
+    // And the rounds log, if it is open: a round advances on its own, so the page it is shown on
+    // has to as well. Nothing is read for it when nobody is looking, and nothing is pushed when
+    // nothing changed.
+    void refreshRoundsLog(roundsLog, watcher);
   };
   watcher.start();
 
@@ -73,7 +81,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('coai.copyConfigBlock', () => copyConfigBlock(context)),
     vscode.commands.registerCommand('coai.copyClaudeSnippet', copyClaudeSnippet),
-    vscode.commands.registerCommand('coai.showRounds', () => showRounds(watcher)),
+    vscode.commands.registerCommand('coai.showRounds', () => showRoundsLog(roundsLog, watcher)),
     vscode.commands.registerCommand('coai.answerQuestion', () => answerQuestion(watcher)),
     // The same action under a second id, so the title bar can show a green icon while a question
     // is waiting — a menu icon cannot be recoloured by state, but which command is shown can.
@@ -200,78 +208,25 @@ async function copyClaudeSnippet(): Promise<void> {
   void vscode.window.showInformationMessage(copiedMessage(await pastedSnippetStatus()));
 }
 
-/** Where the rounds view lives on disk. One file, rewritten — never a new tab per look. */
-function roundsFile(): vscode.Uri {
-  return vscode.Uri.joinPath(dataDir(), 'rounds.md');
-}
-
 /**
- * The rounds view, as a REAL file that is written and then opened.
+ * The rounds log, opened — or brought forward, if it is already open.
  *
- * <p>It used to be an untitled document built from a string, which VS Code treats as unsaved
- * work: every close asked whether to save it, and there was nothing to save — the content is
- * derived from the server's session files and regenerated on demand. A real path under the data
- * directory closes without a word, reopens at the same tab, and can be kept open while a round
- * runs because {@link refreshRoundsFile} rewrites it in place.</p>
+ * <p>It was a markdown FILE, `rounds.md` under the data directory, written and then opened as a
+ * text document and rewritten every five seconds while its tab was open. Fifty-three lines of
+ * tables nobody could sort, filter or search, and a rewrite that reloaded the editor on every tick.
+ * The page keeps the same command and the same data; only the surface changed.</p>
  */
-async function showRounds(watcher: EscalationWatcher): Promise<void> {
+async function showRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher): Promise<void> {
   await watcher.refresh();
-  const file = await writeRoundsFile(watcher);
-  if (file === undefined) {
-    void vscode.window.showErrorMessage(
-      `The rounds view could not be written to ${roundsFile().fsPath}. Check that the folder is writable.`,
-    );
-    return;
-  }
-
-  const document = await vscode.workspace.openTextDocument(file);
-  await vscode.window.showTextDocument(document, { preview: false });
+  log.show(rowsFrom(await readSessions()), watcher.openQuestions);
 }
 
-/** Renders the view to its file. Returns the path, or undefined when the disk refused. */
-async function writeRoundsFile(watcher: EscalationWatcher): Promise<vscode.Uri | undefined> {
-  const sessions = await readSessions();
-  // Open questions first: a blocked round is more urgent than the history of finished ones.
-  const markdown = renderEscalations(watcher.openQuestions) + renderRounds(sessions);
-  const file = roundsFile();
-  try {
-    await vscode.workspace.fs.createDirectory(dataDir());
-    await vscode.workspace.fs.writeFile(file, new TextEncoder().encode(markdown));
-    return file;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Keeps an OPEN rounds view current while a round runs.
- *
- * <p>Only when it is already open: writing a file nobody is looking at every few seconds is churn,
- * and a document VS Code has open is reloaded from disk by the editor itself, so the numbers
- * advance without anybody pressing anything.</p>
- *
- * <p><b>"Open" means a TAB, not a loaded document.</b> `workspace.textDocuments` is the editor's
- * own cache and VS Code is free to drop an entry for a file the person is not currently looking
- * at — so a rounds view left open behind another tab stopped being refreshed, and the file went
- * stale with nothing to see but a number that would not move. A tab is what the person sees, so a
- * tab is what this asks about. A document that IS loaded and has unsaved edits still wins: an
- * automatic rewrite must never discard something somebody typed.</p>
- */
-async function refreshRoundsFile(watcher: EscalationWatcher): Promise<void> {
-  const path = roundsFile().fsPath;
-  const dirty = vscode.workspace.textDocuments.filter((d) => d.isDirty).map((d) => d.uri.fsPath);
-  if (roundsViewIsOpen(dirty, path)) {
+/** Keeps an OPEN log current while a round runs. Nothing is read when nobody is looking. */
+async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher): Promise<void> {
+  if (!log.isOpen) {
     return;
   }
-
-  const tabs = vscode.window.tabGroups.all
-    .flatMap((group) => group.tabs)
-    .map((tab) => (tab.input instanceof vscode.TabInputText ? tab.input.uri.fsPath : ''))
-    .filter((p) => p.length > 0);
-  const loaded = vscode.workspace.textDocuments.map((d) => d.uri.fsPath);
-  if (roundsViewIsOpen([...tabs, ...loaded], path)) {
-    await writeRoundsFile(watcher);
-  }
+  log.update(rowsFrom(await readSessions()), watcher.openQuestions);
 }
 
 /** The server's own session files: its data dir, or `COAI_DATA_DIR` when the person set one. */
