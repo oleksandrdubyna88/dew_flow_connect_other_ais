@@ -54,6 +54,7 @@ public static class VendorProbe
         // Resolved once: `For` constructs a runtime, and asking it twice per probe allocated one
         // per configured vendor per catalog call for nothing.
         var runtime = RuntimeResolution.For(vendor);
+        var runtimeName = RuntimeResolution.NameOf(vendor);
         if (runtime is null)
         {
             return new VendorHealth(enabled, false, "", "unavailable",
@@ -63,12 +64,12 @@ public static class VendorProbe
         // A retired runtime is answered before the probe, not by it: `gemini --version` exits 0
         // without ever reaching Google, so a probe built on --version is structurally incapable of
         // seeing the retirement and reported "own auth" for a vendor that could not sign in at all.
-        if (VendorDiagnosis.ForRuntime(RuntimeResolution.NameOf(vendor)) is { } retired)
+        if (VendorDiagnosis.ForRuntime(runtimeName) is { } retired)
         {
             return new VendorHealth(enabled, false, "", "unavailable", retired);
         }
 
-        if (RuntimeResolution.NameOf(vendor) == "local")
+        if (runtimeName == "local")
         {
             return LocalHealth(vendor, enabled, model);
         }
@@ -81,7 +82,7 @@ public static class VendorProbe
 
         var exe = executablePath.Length > 0 ? executablePath : runtime.DefaultExecutable;
 
-        return await AskItsVersionAsync(launcher, vendor, exe, auth, authNote, timeout ?? DefaultTimeout, ct);
+        return await AskItsVersionAsync(launcher, runtimeName, exe, auth, authNote, timeout ?? DefaultTimeout, ct);
     }
 
     /// <summary>
@@ -108,7 +109,7 @@ public static class VendorProbe
 
     private static async Task<VendorHealth> AskItsVersionAsync(
         IProcessLauncher launcher,
-        VendorIdentity vendor,
+        string runtimeName,
         string exe,
         string auth,
         string authNote,
@@ -156,7 +157,7 @@ public static class VendorProbe
             // rather than on a vendor's docs page. This used to be a blanket "antigravity has no
             // Linux CLI" door in VendorDiagnosis.ForRuntime, which fired BEFORE this probe and so
             // told a machine with a working `agy` that it had none.
-            var install = VendorDiagnosis.InstallCure(RuntimeResolution.NameOf(vendor));
+            var install = VendorDiagnosis.InstallCure(runtimeName);
 
             return new VendorHealth(true, false, "", auth,
                 install is null

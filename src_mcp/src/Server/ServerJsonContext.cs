@@ -1,7 +1,6 @@
 using System.Text.Json.Serialization;
 using CoaiMcp.Core.Findings;
 
-
 namespace CoaiMcp.Server;
 
 /// <summary>What `providers` reports for one vendor — configuration meets reality.</summary>
