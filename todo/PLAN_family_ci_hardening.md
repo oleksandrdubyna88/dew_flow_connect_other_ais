@@ -4,7 +4,7 @@
 > listed below as done.** Scope: every `dew_flow_*` repository's `.github/` (workflows, dependabot,
 > PR template), `.editorconfig` where missing, and `dew_flow_conventions` for the rule that binds them.
 >
-> Related docs: [PLAN_local_db.md](PLAN_local_db.md) (unrelated, same week);
+> Related docs: [research/PLAN_local_db.md](../research/PLAN_local_db.md) (unrelated, same week);
 > `dew_flow_conventions/common/pull-requests.md` (the rule this plan enforces mechanically);
 > [module_bench.md](../research/module_bench.md) — the bench stays out of every release.
 
