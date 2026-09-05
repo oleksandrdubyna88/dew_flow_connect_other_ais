@@ -1,7 +1,7 @@
 [
   {
     "name": "rounds-collapse",
-    "planFile": "todo/PLAN_rounds_collapse_and_vendor_colour.md",
+    "planFile": "research/PLAN_rounds_collapse_and_vendor_colour.md",
     "commit": "267e07a",
     "baseRef": "afe7fc7"
   },

@@ -1,12 +1,30 @@
 # PLAN — a finished round closes itself, vendors keep one colour, and Fable stops being a reviewer
 
-> Status: **plan only, nothing implemented yet.** Scope:
-> `src_mcp/{core/Commands/GateCommands.cs, src/Server/PanelService.cs}`,
-> `src_vs_code/src/{panelProvider.ts, panelView.ts, rounds.ts}`, their tests, the help and the docs.
+> Status: **IMPLEMENTED, 2026-09-04.** All three shipped in extension 0.29.4-0.29.7 with server
+> 0.16.0: *Split with Fable* fires on the checkbox alone and `FableAvailable` is gone, a round the
+> panel opened closes itself while a round the person opened stays theirs, and every vendor name
+> carries one stable colour drawn from the editor's chart palette.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [module_server.md](../research/module_server.md),
-> [PLAN_commands_and_autonomy.md](../research/PLAN_commands_and_autonomy.md).
+> **Deviations.** The colour function went into its own `vendorColour.ts` rather than into
+> `rounds.ts`: `rounds.ts` parses session files and the palette is a view concern, and the spending
+> rows need it without needing the parser. The span's class is `who`, not the planned `vendor` —
+> `.vendor` already meant the settings card in this stylesheet, so the word came out wearing a
+> border, a radius and eight pixels of padding, which on a single word inside a tight line reads as
+> a line THROUGH the text. It shipped that way in 0.29.4 and was reported as struck-out vendor
+> names; the test that replaced it asks the general question rather than the specific one.
+>
+> **Three defects this plan created and its own tails.** A round that never finished claimed to have
+> run for `361m 40s` on a machine whose reviewer timeout is ten minutes — a dead round is never
+> written a completion time, so the panel measured how long ago it started (0.29.6). Rounds recorded
+> before per-reviewer detail existed became disclosures that opened into an apology for having
+> nothing, with the hand cursor promising it; they are flat lines now (0.29.7). And the toggle had
+> to repaint to build a card's body, which meant reading the configuration, stat-ing the server
+> binary, probing every vendor CLI, asking GitHub what was published and fetching two price tables —
+> up to twenty seconds for a triangle (0.29.7).
+>
+> Related docs: [module_extension.md](module_extension.md),
+> [module_server.md](module_server.md),
+> [PLAN_commands_and_autonomy.md](PLAN_commands_and_autonomy.md).
 
 ## Three symptoms, reported by the operator
 

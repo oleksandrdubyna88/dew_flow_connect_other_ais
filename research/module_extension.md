@@ -622,6 +622,30 @@ absent is unknown, and printing a zero would be a measurement nobody made. The l
 tall (640px) — a sidebar is usually far taller than 320px, and five rounds filled it with room to
 spare.
 
+**A card promises only what it has, and a click costs only what it needs (2026-09-04).** Three
+corrections to the list above, all reported from looking at it.
+
+*A round that never finished shows no duration at all.* Cards were reading `361m 40s` and `103m 44s`
+beside an *interrupted* badge on a machine whose reviewer timeout is ten minutes. None ran that long:
+a round that dies is never written a completion time, so the panel fell back to `now` and displayed
+how long ago it STARTED — and once a restart swept it, the sweep stamped the moment it noticed, which
+measures how long nobody looked. The per-reviewer times beside it are real and stay.
+
+*A round with nothing to open is a line, not a disclosure.* Rounds recorded before the server kept
+`reviewerStates` have no detail and never will; they were `<details>` all the same, offering the hand
+cursor, and clicking one opened a card containing a sentence apologising for being empty. `.round.flat`
+carries the same summary with `cursor: default`. A control that promises something it has not got is
+worse than a line that promises nothing.
+
+*The toggle patches the rounds region, not the panel.* A card's body is only BUILT when it is open, so
+the click had to repaint — and `render()` reads the configuration, stats the server binary, runs every
+vendor CLI for its version, asks GitHub what is published and fetches two public price tables. Twenty
+seconds for a triangle. `patchRounds()` re-reads the session files alone; an opened card whose rows are
+not built yet says *Reading this round…* rather than looking empty. The spending window got the same
+treatment (`patchUsage()`, with the last repaint's prices reused): choosing Today or Month is
+arithmetic over rows already in hand, and a list price does not change because somebody asked about a
+different week.
+
 ### Three switches that give the gate orders (2026-09-03)
 
 *The gate* section gained three checkboxes — **Work autonomously**, **Split the plan into epics and
