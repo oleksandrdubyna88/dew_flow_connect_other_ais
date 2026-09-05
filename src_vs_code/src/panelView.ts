@@ -752,8 +752,11 @@ function roundCard(round: RoundRecord & { branch: string }, nowMs: number): stri
   const subject = (round.subject ?? '').length > 0
     ? `<div class="subject">${escapeHtml(round.subject!)}</div>`
     : '';
-  const head = `${subject}<div class="verdict">${escapeHtml(stageName(round.stage))} ${round.number} · `
-    + `${escapeHtml(round.branch)} · <span class="badge running">running</span> · ${round.gatingCount} gating</div>`
+  // Three lines, not one: the sidebar is narrow, and one line with the stage, the branch and the
+  // badge was cut off with an ellipsis exactly where the branch name got interesting.
+  const head = `${subject}<div class="line">${escapeHtml(stageName(round.stage))} ${round.number}</div>`
+    + `<div class="line branch">${escapeHtml(round.branch)}</div>`
+    + `<div class="line"><span class="badge running">running</span> · ${round.gatingCount} gating</div>`
     + `<div class="usage">${took.length > 0 ? `${escapeHtml(took)} · ` : ''}${escapeHtml(costPhrase(round))}</div>`;
 
   return `<div class="round" data-round="${escapeHtml(roundKey(round))}">${head}
@@ -953,6 +956,8 @@ const CSS = `
   /* A running round is a block: nothing to open, so nothing to point at. */
   .round { margin: 0 0 4px; }
   .round .subject { font-weight: 600; }
+  .round .line { white-space: normal; overflow-wrap: anywhere; }
+  .round .branch { font-family: var(--vscode-editor-font-family); font-size: .92em; opacity: .85; }
   /* A hand promises something opens. Only the cards that DO open show one — the flat ones are a
      line, not a control, and offering a hand over them is the panel telling a small lie. */
   /* Shown for the moment between the click and the reviewers arriving. The body is built by the

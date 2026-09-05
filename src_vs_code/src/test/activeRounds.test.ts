@@ -109,6 +109,17 @@ test('there is nothing to open: no card is a disclosure and the page never repor
   assert.ok(!html.includes("type: 'round'"), 'the toggle listener that fed the loop is gone');
 });
 
+test('the card head is three lines, so a narrow sidebar never cuts the branch off', () => {
+  // Reported from the panel: "code review 1 · bench/rounds-collapse-r2 · running · 0 gating" on one
+  // line, cut with an ellipsis where the branch got interesting.
+  const html = roundsBody([session([round()], 'bench/rounds-collapse-r2')], NOW);
+
+  assert.ok(html.includes('<div class="line">code review 1</div>'), 'the stage and number on their own line');
+  assert.ok(html.includes('<div class="line branch">bench/rounds-collapse-r2</div>'), 'the branch on its own');
+  assert.ok(html.includes('<div class="line"><span class="badge running">running</span> · 0 gating</div>'));
+  assert.ok(!html.includes('code review 1 · bench'), 'nothing joins them back into one line');
+});
+
 test('the section is called what it shows', () => {
   const html = panelHtml(state([]), 'n', NOW);
 

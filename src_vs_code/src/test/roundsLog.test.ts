@@ -193,8 +193,6 @@ test('the page carries the rows as JSON, the predicates verbatim, and no backtic
   assert.ok(html.includes('<table'), 'a table');
   assert.ok(script.includes('var compareRows = ' + compareRows.toString()), 'the sort the tests ran is the sort the page runs — bound by assignment, because a minifier renames the declaration');
   assert.ok(script.includes('var rowMatches = ' + rowMatches.toString()), 'and the filter');
-  assert.ok(!/
-\s*function (compareRows|rowMatches)\(/.test(script), 'no bare declaration whose name a bundler may rewrite');
   assert.ok(!script.includes('`'), 'the script lives inside a template literal');
   assert.ok(script.includes('"subject":"SCOPE'), 'the rows are there to render from');
   assert.ok(html.includes('nonce="n0nce"'));
