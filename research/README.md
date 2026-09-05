@@ -15,6 +15,7 @@ Documentation of shipped behaviour: [architecture.md](architecture.md) is the en
 | [module_runners.md](module_runners.md) | The runners module: process seam, worktree lifecycle, the five failure modes |
 | [PLAN_epic_04_server.md](PLAN_epic_04_server.md) | IMPLEMENTED 2026-08-31 — coai-mcp: the stdio server, review tools, vault keys, release line |
 | [module_server.md](module_server.md) | The server module: the seven tools, the stage flow, persistence, what is verified |
+| [module_bench.md](module_bench.md) | the measurement bench: drives the installed server over a corpus, records without judging, Fable judges after; the three things it got wrong about itself |
 | [PLAN_epic_05_extension.md](PLAN_epic_05_extension.md) | IMPLEMENTED 2026-08-31 — the VS Code extension: settings, install button, rounds view, snippet |
 | [module_extension.md](module_extension.md) | The extension module: commands, the install path, what it deliberately does not do |
 | [PLAN_epic_06_proof.md](PLAN_epic_06_proof.md) | IMPLEMENTED 2026-08-31 — proof: the scripted end-to-end in CI, and the recorded real run |
