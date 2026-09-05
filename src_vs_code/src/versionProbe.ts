@@ -63,6 +63,22 @@ export async function askVersion(executable: string, platform: Platform = curren
  * why the try/catch is around the call and not only in an `error` handler.</p>
  */
 function run(target: string, args: readonly string[], shell: boolean): Promise<string> {
+  return capture(target, args, shell, CAP_MS).then(({ code, output }) => (code === 0 ? parseCliVersion(output) : ''));
+}
+
+/**
+ * Everything a binary printed, or nothing at all.
+ *
+ * <p>The version probe's own spawn, widened rather than copied: the hardening below — the tree kill,
+ * the synchronous-throw catch, the empty working directory for the shell branch — was written
+ * against real failures, and a second launcher would have to learn each of them again.</p>
+ */
+export function capture(
+  target: string,
+  args: readonly string[],
+  shell: boolean,
+  capMs: number,
+): Promise<{ code: number; output: string }> {
   return new Promise((resolve) => {
     let child: ReturnType<typeof spawn>;
     try {
@@ -74,7 +90,7 @@ function run(target: string, args: readonly string[], shell: boolean): Promise<s
         ...(shell ? { cwd: tmpdir() } : {}),
       });
     } catch {
-      resolve('');
+      resolve({ code: -1, output: '' });
       return;
     }
 
@@ -84,8 +100,8 @@ function run(target: string, args: readonly string[], shell: boolean): Promise<s
       // panel repaints. Both codex's and the local reviewer's rounds named this; the tree is what
       // has to go.
       killTree(child, shell);
-      resolve('');
-    }, CAP_MS);
+      resolve({ code: -1, output: '' });
+    }, capMs);
 
     let output = '';
     child.stdout?.on('data', (chunk: Buffer) => {
@@ -93,11 +109,11 @@ function run(target: string, args: readonly string[], shell: boolean): Promise<s
     });
     child.on('error', () => {
       clearTimeout(timer);
-      resolve('');
+      resolve({ code: -1, output: '' });
     });
     child.on('close', (code) => {
       clearTimeout(timer);
-      resolve(code === 0 ? parseCliVersion(output) : '');
+      resolve({ code: code ?? -1, output });
     });
   });
 }

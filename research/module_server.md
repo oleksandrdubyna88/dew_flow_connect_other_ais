@@ -298,8 +298,12 @@ migration step throwing something unlisted must not take down a review it only r
   repository builds advisories as errors. **Native AOT publishes clean with it** — measured
   2026-09-05: 17.7 MB, zero IL or trim warnings.
 
-The extension does not read it yet; the log page still flattens the session files. That half is
-[todo/PLAN_local_db_reader.md](../todo/PLAN_local_db_reader.md).
+**The page reads it through `--log`.** `coai-mcp --log [--limit N]` prints the database as JSON and
+exits: rounds with their findings and resolutions, the accepted/total counts grouped by category,
+role and vendor, and the findings raised again over a standing rejection (`Store/RoundsQuery`). The
+extension owns no SQLite for the same reason it owns no native module — the alternative was a
+WebAssembly build in the VSIX to query a file this binary already writes. Version skew is ordinary:
+a server without the flag exits 64 and the page shows what it always showed.
 
 ## The audit trail
 
