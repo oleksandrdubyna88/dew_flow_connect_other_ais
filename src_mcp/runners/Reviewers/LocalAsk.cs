@@ -225,6 +225,9 @@ public static class LocalAsk
     /// reject <c>maxLength</c> as an unsupported keyword with a 400 — so the bound is added to the copy
     /// this route sends, never to <c>FindingSchema.Json</c>.</para>
     /// </remarks>
+    /// <summary>How many findings one local reviewer may return. See <see cref="Bounded"/>.</summary>
+    private const int MaxFindings = 10;
+
     private static readonly (string Field, int MaxLength)[] FreeTextBounds =
     [
         ("title", 200),
@@ -243,10 +246,19 @@ public static class LocalAsk
     internal static JsonNode Bounded(string schemaJson)
     {
         var root = JsonNode.Parse(schemaJson) ?? throw new JsonException("the schema parsed to nothing");
-        if (root["properties"]?["findings"]?["items"]?["properties"] is not JsonObject fields)
+        if (root["properties"]?["findings"] is not JsonObject findings
+            || findings["items"]?["properties"] is not JsonObject fields)
         {
             return root;
         }
+
+        // The third way the local model fails, found once the strings were bounded: forty-three
+        // findings in 385 lines, and the token ceiling inside the forty-third's `why`. Every string
+        // was finite; the array was not. Ten is the number at which a full-length review — every
+        // string at its bound, ~2,400 characters a finding — still fits the 8,192-token ceiling, so a
+        // schema-valid answer can always finish; it is also more than any local reviewer here has
+        // returned and been worth resolving. A review with forty findings is a review nobody reads.
+        findings["maxItems"] = MaxFindings;
 
         foreach (var (field, maxLength) in FreeTextBounds)
         {
