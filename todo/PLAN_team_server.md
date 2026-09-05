@@ -3,8 +3,9 @@
 > Status: **plan only, nothing implemented yet, 2026-09-04.** Scope: a new `src_server/` (the
 > `coai-server` host + tests + `http/` suite + `deploy/`), `src_mcp/runners` (a `remote` runtime, the
 > `--ask-remote` shim, three extractions), `src_vs_code/` (a *Team servers* section, sign-in identical
-> to CredsForDevs, the reviewer picker, the usage section), and one small generic change in
-> `dew_flow_creds_for_devs/deploy/` so two products share one edge on one VM.
+> to CredsForDevs, the reviewer picker, the usage section), and two host-level steps on the VM — a site
+> file beside the vault's and a certificate of its own. **No change to `dew_flow_creds_for_devs`**: the
+> machine's edge turned out to be a host nginx rather than the vault's container (see *Deployment*).
 >
 > Related docs: [architecture.md](../research/architecture.md),
 > [module_runners.md](../research/module_runners.md), [module_server.md](../research/module_server.md),
@@ -299,7 +300,8 @@ answered nothing is exactly what a spending record must not hide.
 ### Configuration (`Coai:*` / `Auth:*`, `__` in the environment)
 
 `Coai:AllowedDomains` (required unless `Coai:AllowAnyDomain=true`), `Coai:Admins`, `Coai:DataDir`,
-`Coai:SessionTtlDays=7`, `Coai:VendorsFile=/data/vendors.json`, `Coai:MaxConcurrency=4`,
+`Coai:SessionTtlDays=7`, `Coai:VendorsFile=/data/vendors.json`, `Coai:MaxConcurrency=4` (**1 on the
+VM this ships to — see *The machine is small***),
 `Coai:PerCallerInFlight=3`, `Coai:PerCallerQueue=20`, `Coai:RetryBackoffSeconds=5,30,60,120`,
 `Coai:JobRetentionMinutes=60`, `Coai:RateLimit:PermitLimit=120`, `Coai:RateLimit:WindowSeconds=10`,
 `Coai:RequireForwardedHttps=true`, `Auth:Microsoft:Tenant|Audiences|ClientScope`,
@@ -481,28 +483,64 @@ pasted English), `SETTING_ALIAS` for `coai.teamServers`, `ALIAS` for the four
 commands, `HelpKey` tooltips in `help.ts:12` for the section's controls. The article's *what can go wrong*
 names what leaves the machine.
 
-## Deployment — the same VM as CredsForDevs, one edge
+## Deployment — the same VM as CredsForDevs, whose edge is not what this plan assumed
 
-The creds stack already binds 80/443 (`deploy/docker-compose.yml`), so this stack has **no nginx and no
-certbot**: the app container joins the creds network (`cred-vault_edge`, from `name: cred-vault` at
-`docker-compose.yml:17` and `:268-269`) and the creds nginx serves `coai.<domain>` as a second server
-block. Two generic knobs in `dew_flow_creds_for_devs/deploy/`, a separate commit there:
+**Read on the machine, 2026-09-05, before any of it was built.** The first draft of this section
+described the CredsForDevs compose stack as the edge and proposed two generic knobs in its `deploy/`
+to share it. That is not how this VM is put together, and the difference removes the whole
+sub-project rather than complicating it:
 
-- `EXTRA_NGINX_DIR` — `nginx/entrypoint.sh` (`:32`, `:51`) writes `include /etc/nginx/extra.d/*.conf;` and
-  compose mounts the directory read-only; this repo's `deploy/nginx-include/coai.conf.template` is the
-  block (same headers and real-ip rules as `vault.conf.template`, `client_max_body_size 4m` for a code-round
-  prompt, `proxy_read_timeout` left at 120 s because a poll waits at most 25 s). **The upstream is a
-  variable, never a literal**: `resolver 127.0.0.11 valid=30s; set $coai_upstream coai:8080;
-  proxy_pass http://$coai_upstream;` — nginx resolves a literal `proxy_pass http://coai:8080` at config
-  load, so with the coai container stopped, or merely starting second, the shared nginx would refuse to
-  start or reload and take the **vault** down with it. A variable defers the lookup to the request, and a
-  missing coai answers 502 on its own name while the vault keeps serving (gemini, on this plan). The pebble
-  run starts creds' stack with the include present and coai absent, and asserts the vault still answers;
-- `EXTRA_DOMAINS` — `certbot/entrypoint.sh` (`:51`, `:81`) appends `-d <name>` per extra name with
-  `--cert-name ${DOMAIN} --expand`, so one certificate carries both names and the coai block references
-  the same files. Covered by creds' `deploy/acme-test/` (pebble) run.
+| What the draft assumed | What `82.165.44.219` actually runs |
+|---|---|
+| the creds compose nginx binds 80/443 | it binds **`127.0.0.1:8081` and `127.0.0.1:8443`** and runs with `TLS_MODE=none` |
+| that nginx is the public edge | the edge is a **host nginx** under systemd, with one site file per service in `/etc/nginx/sites-enabled/` (`credsfordevs`, `rsd`, `apiwebscraper`) |
+| certbot inside the stack, one certificate expanded with `--expand` | **host certbot** (`/usr/bin/certbot`, `certbot.timer`) with `authenticator = nginx`, ECDSA, and **one certificate per name** — `credsfordevs.remsoft.dev` and `webscrapper.cryptoscout.ai` are separate |
+| the app joins the `cred-vault_edge` docker network | nothing needs a shared network: every service is reached on **loopback**, proxied by the host |
 
-This repo's `deploy/`: `docker-compose.yml` (the app on the external network, `/data` bind mount for
+So **`dew_flow_creds_for_devs` is not touched at all** — no `EXTRA_NGINX_DIR`, no `EXTRA_DOMAINS`, no
+pebble run, and nothing of the vault's is edited to make room for a neighbour. Story 4.2 shrinks to two
+host-level steps that cannot affect the vault's own site file:
+
+1. **A site of our own**: `/etc/nginx/sites-available/coai` → `sites-enabled`, modelled line for line on
+   `credsfordevs` (which already carries what the container template would have: its own
+   `limit_req_zone`/`limit_conn_zone`, HSTS, `nosniff`, `DENY`, `no-referrer`, `server_tokens off`,
+   `X-Forwarded-*` **set** rather than appended so a caller cannot forge the identity the rate limiter
+   partitions on). Ours differs in exactly three values: `client_max_body_size 4m` for a code-round
+   prompt, `proxy_read_timeout 60s` because a poll waits at most 25 s, and `proxy_pass
+   http://127.0.0.1:8090`. No `resolver` trick is needed — a literal loopback address is not a name
+   nginx has to resolve at config load, so a stopped coai container answers 502 on its own name and the
+   vault is untouched. **8090 was checked free**; taken on this box today are 5000, 5001, 5432 (postgres),
+   1431 (mssql), 8081 and 8443 (creds).
+2. **A certificate of our own**: `certbot --nginx -d coai.remsoft.dev`, which joins the existing
+   renewal timer. One name, one certificate, like every other site here — the vault's certificate is
+   never touched, so a mistake in ours cannot take it with it.
+
+**The name is `coai.remsoft.dev`** (A → 82.165.44.219, TTL 600).
+
+### The machine is small, and that is a design input rather than a footnote
+
+Also read on 2026-09-05: **3.8 GB of RAM, 2 vCPU, no swap**, with ~1.9 GB available while
+SQL Server alone holds 866 MB resident and a `dotnet` service 276 MB — beside postgres, the Azure
+agent, four containers and this vault. 116 GB of disk, 101 GB free, so disk is not the constraint.
+
+What this plan proposes to add to that box is a .NET host **plus up to three agentic Node CLIs
+running at once**, each of which is a full Node process; the local measurements in this repository
+have seen a single reviewer's prompt reach 200 000 input tokens, and the CLIs are not small
+processes. So:
+
+- `Coai:MaxConcurrency` **starts at 1** on this machine, not the 4 the configuration table defaults
+  to, and is raised only against a measurement. One reviewer at a time is also what the slot caps
+  want (`slotConcurrency: 1` per account, for the token-rotation race), so this costs less than it
+  sounds: the parallelism a round wants is across VENDORS, and this box has one subscription of each.
+- **Swap, or more memory, before the first real round.** With no swap, the first Node CLI that
+  overshoots is not a slow round — it is the OOM killer choosing among SQL Server, postgres and the
+  vault. A 4 GB swapfile is the cheap half of the answer and reversible; resizing the VM is the other.
+  This is an operator decision and is recorded here rather than taken silently.
+- The container therefore carries `mem_limit` (say 1.5 GB) so that the thing which dies when this is
+  wrong is **ours**, and the vault beside it keeps serving.
+
+This repo's `deploy/`: `docker-compose.yml` (the app on **loopback only** — `ports: 127.0.0.1:8090:8080`,
+never `0.0.0.0`, since the host nginx is the only thing that may reach it — `/data` bind mount for
 accounts + `vendors.json` + sessions + usage, `tmpfs /tmp`, non-root uid `10001`, `cap_drop: ALL`,
 `no-new-privileges`, **not** `read_only` because the CLIs write caches under `HOME`), the one-shot
 **`init` service from creds** (`docker-compose.yml`'s `init`: `mkdir -p` + `chown 10001:10001` over the
@@ -510,6 +548,7 @@ bind mounts, `network_mode: none`, `service_completed_successfully` before the a
 a bind-mounted `./data` is root-owned and the writability guard would refuse to start, which is exactly the
 first-boot failure creds recorded — `.env.example` (`ALLOWED_DOMAINS`, `ADMINS`, `MS_TENANT`,
 `MS_AUDIENCES`, `MS_CLIENT_SCOPE`, `GOOGLE_ENABLED`, `GOOGLE_AUDIENCES`, `LOCAL_SIGNING_KEY`, `DATA_DIR`,
+`MEM_LIMIT`,
 `LOG_DIR`, `COAI_IMAGE`, the limits), `update.sh` and `backup.sh` copied from creds with the image name
 parameterised.
 
@@ -651,7 +690,7 @@ The split was made on Fable; stories marked **F** run on Fable because being wro
 | | 3.2 | *Add a reviewer* from a Team server, the `remote` row, the catalog-fed model dropdown, help in five languages | Opus |
 | | 3.3 | usage per server, *Company*, the person search | Opus |
 | **4 · Ship it** | 4.1 | `Dockerfile` (Node, pinned CLIs, build-time `--version`), compose with `init`, `.env.example`, `update.sh`/`backup.sh` | Opus |
-| | 4.2 | creds: `EXTRA_NGINX_DIR` / `EXTRA_DOMAINS`, the variable upstream, the pebble assertion — its own repository, its own gate | **F** |
+| | 4.2 | the host edge: a `coai` site file beside `credsfordevs`, and `certbot --nginx -d coai.remsoft.dev`. **Nothing in `dew_flow_creds_for_devs` is touched** — the machine's edge is a host nginx, not the vault's container (see *Deployment*) | **F** |
 | | 4.3 | `release.yml` `server-v*`, `POST_DEPLOY.md`, `research/module_team_server.md` + the three module docs, this plan promoted | Opus |
 
 ## Test plan
@@ -686,7 +725,7 @@ CI. The one manual verification is step 8, and the record says so.
 - [ ] `http/` passes with exit 0 against a started stack; `POST_DEPLOY.md` run against the VM.
 - [ ] `CoaiMcp.Tests`, `CoaiServer.Tests`, `npm test` green; `plan-lifecycle.mjs` green; help coverage green
       in five languages.
-- [ ] The creds `EXTRA_NGINX_DIR` / `EXTRA_DOMAINS` change is committed there with its pebble test.
+- [ ] `https://coai.remsoft.dev/api/health` answers over TLS, and `https://credsfordevs.remsoft.dev/api/health` still answers — checked with the coai container STOPPED as well as running, since a neighbour that can break the vault is the one thing this arrangement must not allow.
 - [ ] Every mirrored file names its source and date.
 
 ## v2 — recorded here so it is not re-derived
