@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.29.12 — 2026-09-05 (server 0.17.5)
+
+**The Cost column says three numbers: in / out / total.** It was empty on every row, because it
+rendered the figure only a vendor that prices its own runs ever reports — and none of the three
+here does. It is now worked out from the tokens each reviewer actually read and wrote and the same
+two public price lists the spending section already reads, **priced per reviewer**: a round's tokens
+are the sum over vendors whose rates differ by an order of magnitude, so one multiplication over the
+round total would be a number with no meaning. A `~` marks a total derived from a price list rather
+than billed; a `+` marks one that left an unpriced reviewer out, so it is a floor. Hovering the cell
+spells all of that out in a sentence.
+
+**Long cells can be read.** The subject, the branch and the reviewer summary carry their full text
+as a tooltip, so a column that is cut with an ellipsis no longer hides the rest of it.
+
 ## Server 0.17.5 — 2026-09-05
 
 **A round no longer dies because a neighbour was writing the schema file.** Every round rewrote

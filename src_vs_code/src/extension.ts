@@ -233,7 +233,7 @@ async function copyClaudeSnippet(): Promise<void> {
  */
 async function showRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher, panel: PanelProvider): Promise<void> {
   await watcher.refresh();
-  log.show(rowsFrom(await readSessions()), watcher.openQuestions, await panel.usageTab());
+  log.show(rowsFrom(await readSessions(), Date.now(), await panel.providerPrice()), watcher.openQuestions, await panel.usageTab());
 }
 
 /** Keeps an OPEN log current while a round runs. Nothing is read when nobody is looking. */
@@ -241,7 +241,7 @@ async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher,
   if (!log.isOpen) {
     return;
   }
-  log.update(rowsFrom(await readSessions()), watcher.openQuestions, await panel.usageTab(), force);
+  log.update(rowsFrom(await readSessions(), Date.now(), await panel.providerPrice()), watcher.openQuestions, await panel.usageTab(), force);
 }
 
 /** The server's own session files: its data dir, or `COAI_DATA_DIR` when the person set one. */
