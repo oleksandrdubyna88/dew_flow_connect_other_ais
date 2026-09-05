@@ -329,7 +329,7 @@
     "icon": "node scripts/generate-icon.mjs"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
+    "@types/node": "^26.4.1",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.0.0",
     "esbuild": "^0.25.0",
