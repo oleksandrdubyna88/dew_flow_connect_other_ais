@@ -197,7 +197,7 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
     {
         try
         {
-            return JsonSerializer.Deserialize(File.ReadAllText(path), EscalationJsonContext.Default.EscalationQuestion);
+            return JsonSerializer.Deserialize(SharedRead.Text(path), EscalationJsonContext.Default.EscalationQuestion);
         }
         catch (JsonException)
         {
@@ -220,7 +220,7 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
 
         try
         {
-            var answer = JsonSerializer.Deserialize(File.ReadAllText(path), EscalationJsonContext.Default.EscalationAnswer);
+            var answer = JsonSerializer.Deserialize(SharedRead.Text(path), EscalationJsonContext.Default.EscalationAnswer);
             return answer is { Answer.Length: > 0 } ? answer : null;
         }
         catch (JsonException)
