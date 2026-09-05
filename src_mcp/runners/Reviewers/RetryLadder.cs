@@ -87,25 +87,68 @@ public static class RetryLadder
     /// </remarks>
     public static IReadOnlyList<TimeSpan> Parse(string? csv)
     {
-        var parts = (csv ?? string.Empty)
-            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 0)
+        var text = (csv ?? string.Empty).Trim();
+        if (text.Length == 0)
         {
             return [];
         }
 
+        // Empty entries are KEPT and then refused. Dropping them silently is how `5,,60` would
+        // become `5,60` — a ladder nobody wrote, applied without a word. (codex, code round.)
+        var parts = text.Split(',', StringSplitOptions.TrimEntries);
+
         var steps = new List<TimeSpan>(parts.Length);
         foreach (var part in parts)
         {
-            if (!double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds)
-                || seconds <= 0)
+            if (!Step(part, out var step))
             {
                 return [];
             }
 
-            steps.Add(TimeSpan.FromSeconds(seconds));
+            steps.Add(step);
         }
 
         return steps;
     }
+
+    /// <summary>
+    /// One entry as a wait, or false — including for the values that PARSE and cannot be a wait.
+    /// </summary>
+    /// <remarks>
+    /// <c>Infinity</c>, <c>NaN</c> and <c>1e20</c> all satisfy <see cref="double.TryParse(string,
+    /// NumberStyles, IFormatProvider, out double)"/> and then throw out of
+    /// <see cref="TimeSpan.FromSeconds(double)"/> — and this runs while a server is reading its
+    /// settings, so the throw would take the whole configuration down instead of falling back to
+    /// the shipped ladder and reporting the value. A day is the ceiling because anything longer is
+    /// not a retry ladder, it is a typo, and a typo deserves the fallback and the sentence.
+    /// </remarks>
+    private static bool Step(string part, out TimeSpan step)
+    {
+        step = TimeSpan.Zero;
+        if (!double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds)
+            || !double.IsFinite(seconds)
+            || seconds <= 0
+            || seconds > MaxStepSeconds)
+        {
+            return false;
+        }
+
+        step = TimeSpan.FromSeconds(seconds);
+
+        return true;
+    }
+
+    private static readonly double MaxStepSeconds = TimeSpan.FromDays(1).TotalSeconds;
+
+    /// <summary>
+    /// What is LEFT of a reviewer's deadline — what a retry launch is allowed to take.
+    /// </summary>
+    /// <remarks>
+    /// A retry used to carry the reviewer's whole timeout again, so a first launch that spent nine
+    /// minutes of a ten-minute deadline could be followed by a second with ten more: a reviewer
+    /// running nineteen minutes against a deadline of ten. Never negative — a deadline already past
+    /// is no time at all, and a negative timeout is not a thing a process can be given.
+    /// </remarks>
+    public static TimeSpan Remaining(TimeSpan elapsed, TimeSpan budget) =>
+        elapsed >= budget ? TimeSpan.Zero : budget - elapsed;
 }

@@ -180,6 +180,33 @@ public sealed class BoundedSchedulerTests
             .Should().HaveCount(2, "the 1ms step fits a 250ms deadline and the 30s step cannot");
     }
 
+    /// <summary>
+    /// A reviewer that is waiting out a rate limit SAYS so, with the attempt and the wait.
+    /// </summary>
+    /// <remarks>
+    /// The ladder can hold a reviewer for over three minutes, and the panel's only report until now
+    /// was "running" — indistinguishable from a model that is thinking. Raised on this change's code
+    /// round, and it is the same lesson the queued-reviewer note already learned.
+    /// </remarks>
+    [Fact]
+    public async Task AReviewerWaitingOutALimit_SaysWhatItIsWaitingFor()
+    {
+        var counter = Path.Combine(_dir, "note-count.txt");
+        var work = new ReviewerWork(FakeCliInvocations.Invoke(
+            "codex",
+            ["count", counter, "fail-until", counter, "1", "429 Too Many Requests", "1", FakeCliInvocations.CleanReview]));
+        var notes = new List<string>();
+
+        await new BoundedScheduler(retryLadder: Tiny(2))
+            .RunAllAsync(
+                [work],
+                _executor,
+                TestContext.Current.CancellationToken,
+                p => { lock (notes) { notes.Add($"{p.Status}|{p.Note}"); } });
+
+        notes.Should().ContainMatch("*rate limited*", "the status alone reads as a model thinking");
+    }
+
     /// <summary>A ladder of n steps, each too short to slow a test down.</summary>
     private static IReadOnlyList<TimeSpan> Tiny(int steps) =>
         [.. Enumerable.Repeat(TimeSpan.FromMilliseconds(1), steps)];

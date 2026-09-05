@@ -80,6 +80,12 @@ sequenceDiagram
   reported through `PanelSettings.Unrecognised` rather than half-applied.
   The round's summary carries the attempts it actually took (`RateLimited.Attempts`), because
   "after one retry" was a true sentence with one step and a confident wrong number with four.
+  **A retry gets what is LEFT of the deadline**, never the whole of it again: a first launch that
+  spends nine minutes of a ten-minute budget and comes back rate limited would otherwise be followed
+  by a second carrying ten more, and a reviewer would run for nineteen minutes against a deadline of
+  ten. And the wait is **said out loud** — the ladder can hold a reviewer for over three minutes,
+  where "running" reads exactly like a model that is thinking, so each wait reports the attempt and
+  how long it will be. Both found by codex reviewing this very change.
 - **Antigravity (`agy`) is the closest fit to this product's contract**: `--json-schema` puts the
   finding schema straight into `result.response`, the same envelope carries `usage`, and the model
   ids carry their own reasoning effort. Its prompt rides `--input-format stream-json` on stdin as

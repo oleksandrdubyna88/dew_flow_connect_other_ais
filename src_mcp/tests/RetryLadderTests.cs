@@ -125,8 +125,40 @@ public sealed class RetryLadderTests
     [InlineData("5,nonsense,60")]
     [InlineData("5,0,60")]
     [InlineData("5,-30")]
+    // A missing element is a typo, and dropping it quietly would run a ladder nobody wrote —
+    // `5,,60` is not `5,60`. Raised by codex on this change's code round.
+    [InlineData("5,,60")]
+    [InlineData("5, ,60")]
+    [InlineData(",5")]
+    [InlineData("5,")]
+    // Parseable as a double and not expressible as a wait: `TimeSpan.FromSeconds` throws on these,
+    // and a settings read that throws takes the whole server's configuration with it instead of
+    // falling back and saying so. Also codex, same round.
+    [InlineData("Infinity")]
+    [InlineData("-Infinity")]
+    [InlineData("NaN")]
+    [InlineData("1e20")]
+    [InlineData("5,1e400")]
     public void Parse_RefusesAnythingItCannotReadWhole(string csv)
     {
         RetryLadder.Parse(csv).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// What a RETRY is allowed to take: what is left of the deadline, never the whole of it again.
+    /// </summary>
+    /// <remarks>
+    /// The finding this pins, from the code round: a first launch that spends nine minutes of a
+    /// ten-minute deadline and comes back rate limited would otherwise wait five seconds and start
+    /// a second launch carrying a fresh ten-minute timeout — a reviewer running for nineteen
+    /// minutes against a deadline of ten.
+    /// </remarks>
+    [Fact]
+    public void ARetry_GetsWhatIsLeftOfTheDeadline_NotTheWholeOfItAgain()
+    {
+        RetryLadder.Remaining(TimeSpan.FromMinutes(9), TimeSpan.FromMinutes(10))
+            .Should().Be(TimeSpan.FromMinutes(1));
+        RetryLadder.Remaining(TimeSpan.FromMinutes(11), TimeSpan.FromMinutes(10))
+            .Should().Be(TimeSpan.Zero, "a deadline already past leaves nothing, never a negative timeout");
     }
 }

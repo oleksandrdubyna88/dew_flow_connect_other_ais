@@ -237,7 +237,7 @@ public sealed class BoundedScheduler(
                             var watch = System.Diagnostics.Stopwatch.StartNew();
                             try
                             {
-                                var outcome = await RunWithLadderAsync(w, executor, ct);
+                                var outcome = await RunWithLadderAsync(w, executor, onProgress, ct);
                                 Report(onProgress, w.Invocation, outcome is ReviewerOutcome.Ok ? "done" : "failed", outcome, watch.Elapsed);
                                 return (w.Invocation, outcome);
                             }
@@ -395,7 +395,11 @@ public sealed class BoundedScheduler(
     /// midnight in somebody else's timezone, and the one measured case cost a round 157 seconds
     /// instead of 19 for a second doomed launch.</para>
     /// </remarks>
-    private async Task<ReviewerOutcome> RunWithLadderAsync(ReviewerWork w, ReviewerExecutor executor, CancellationToken ct)
+    private async Task<ReviewerOutcome> RunWithLadderAsync(
+        ReviewerWork w,
+        ReviewerExecutor executor,
+        Action<ReviewerProgress>? onProgress,
+        CancellationToken ct)
     {
         var budget = w.Invocation.Request.Timeout;
         var watch = System.Diagnostics.Stopwatch.StartNew();
@@ -410,15 +414,30 @@ public sealed class BoundedScheduler(
                 return limited with { Attempts = attempts };
             }
 
+            // Said out loud, because the ladder can hold a reviewer for minutes and "running" reads
+            // exactly like a model that is thinking.
+            Report(onProgress, w.Invocation, "running", elapsed: watch.Elapsed,
+                note: $"rate limited on attempt {attempts} — waiting {wait.Value.TotalSeconds:F0}s before the next");
             await Task.Delay(wait.Value, ct);
             attempts += 1;
-            outcome = await executor.RunAsync(w.Invocation, w.Repair, ct);
+            // What is LEFT of the deadline, never the whole of it again.
+            outcome = await executor.RunAsync(
+                WithinRemaining(w.Invocation, watch.Elapsed, budget),
+                w.Repair is null ? null : WithinRemaining(w.Repair, watch.Elapsed, budget),
+                ct);
         }
 
         return outcome is ReviewerOutcome.RateLimited hopeless
             ? hopeless with { Attempts = attempts }
             : outcome;
     }
+
+    /// <summary>The same launch, allowed only the time this reviewer has left.</summary>
+    private static ReviewerInvocation WithinRemaining(ReviewerInvocation invocation, TimeSpan elapsed, TimeSpan budget) =>
+        invocation with
+        {
+            Request = invocation.Request with { Timeout = RetryLadder.Remaining(elapsed, budget) },
+        };
 }
 
 /// <summary>Folds a fan-out's outcomes into the core's honest per-round summary.</summary>
