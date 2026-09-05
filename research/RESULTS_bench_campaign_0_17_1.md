@@ -145,6 +145,62 @@ launch for it, and the code round under three minutes at the median — from sev
 a local reviewer still costs minutes is a queue, and a queue is a different problem with a
 different fix (a second engine, or fewer local roles per round when windows pile up).
 
+## Epic 3 — Fable's judgement, and the table the operator asked for
+
+Fable read every finding of epic 1 **with the file it names, at the commit that was reviewed**, one
+finding per call, one turn, no tools — and answered whether it was worth having for the person who
+has to act on it. 104 findings; 92 judged, 12 unreadable answers left `unjudged` rather than counted
+either way.
+
+| stage | runs | median time | median findings | **worth having** | not | unjudged | tokens in / out |
+|---|---|---|---|---|---|---|---|
+| plan round | 4 | 36 s | 13 | **29** | 22 | 3 | 177k / 21.3k |
+| code round | 4 | 431 s | 12 | **10** | 31 | 9 | 1,584k / 147.1k |
+
+**The plan round is where the value is, and it is not close.** Three times the useful findings of the
+code round, at a ninth of the input tokens and a twelfth of the time. A plan round costs 44k tokens
+and returns seven or eight things worth changing; a code round costs 400k and returns one to four.
+That is the shape the earlier findings study reported, now with a second, independent measurement
+behind it.
+
+### Per vendor — the number that decides what to run
+
+| vendor | findings | worth having | not | share worth having |
+|---|---|---|---|---|
+| `codex` (gpt-5.6-luna) | 35 | 24 | 5 | **83 %** |
+| `gemini` (antigravity, flash-low) | 23 | 10 | 8 | 56 % |
+| `local` (Qwen3.5-35B-A3B-Q5) | 46 | 5 | 40 | **11 %** |
+
+The local model produces the MOST findings and the fewest worth having: forty of its forty-five
+judged findings were noise — true but not worth attention, restatements of what the code already
+says, or simply wrong about this code. It is also the reviewer that costs the GPU, queues every
+other window behind it, and produced all three of the failure modes this campaign fixed. On this
+evidence it earns its place on plan rounds, where it is cheap and fast, and not on code rounds —
+a configuration change for the operator to make, stated with its numbers rather than made by the
+bench.
+
+### Per run
+
+| case | # | stage | verdict | time | findings | worth having | not | tokens in / out |
+|---|---|---|---|---|---|---|---|---|
+| rounds-collapse | 1 | plan | good_enough | 39 s | 13 | 7 | 5 | 38k / 5.7k |
+| rounds-collapse | 1 | code | proceed | 506 s | 14 | 1 | 8 | 489k / 40.9k |
+| rounds-collapse | 2 | plan | good_enough | 54 s | 15 | 6 | 7 | 41k / 5.6k |
+| rounds-collapse | 2 | code | proceed | 475 s | 11 | 1 | 7 | 515k / 44.7k |
+| split-once | 1 | plan | good_enough | 25 s | 13 | 8 | 5 | 51k / 6.0k |
+| split-once | 1 | code | proceed | 386 s | 12 | 4 | 8 | 297k / 31.2k |
+| split-once | 2 | plan | good_enough | 33 s | 13 | 8 | 5 | 48k / 3.9k |
+| split-once | 2 | code | proceed | 309 s | 13 | 4 | 8 | 283k / 30.3k |
+
+### What the judgement cost, and why epic 2b is only part-judged
+
+Each judgement is one Claude Code call carrying the finding and its code: about nineteen seconds and
+a full prompt-cache creation apiece. Epic 2b's 159 findings were started and 140 came back
+`unjudged` — the calls stopped answering partway through, which is what a usage limit looks like
+from the outside. Its partial result (8 worth having, 11 not) is recorded but not tabulated: a share
+computed over 12 % of a set is not a measurement. Re-running it is one command and no rounds, which
+is exactly why the judgement was built as a second pass over data already on disk.
+
 ## The two ways the local model fails, and what each needed
 
 | date | symptom | mechanism | fix | measured |
@@ -187,5 +243,6 @@ Every one of these was found by a run, not by a reader.
 - [ ] Epic 2 run at five lanes on one data directory, with every server's stderr kept.
 - [x] Every finished round *clean* on disk — checked by the scoped read; resolvability answered by the
       resolve reply from this fix on (recorded for epic 2; epic 1 ran on the binary that threw it away).
-- [ ] Fable's judgement over both run files.
-- [ ] This report complete, and the plan promoted.
+- [x] Fable's judgement over epic 1 in full (92 of 104 findings judged); epic 2b started and
+      stopped at a usage limit, recorded as partial rather than tabulated.
+- [x] This report complete; the plan is promoted with it.
