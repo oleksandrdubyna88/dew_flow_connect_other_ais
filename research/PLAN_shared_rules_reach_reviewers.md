@@ -1,13 +1,11 @@
 # PLAN — the family's shared rules must reach the reviewers
 
-> Status: **IMPLEMENTED, 2026-09-04.** All three phases shipped, on two branches that are not yet
-> merged: phases 1–2 on `fix/worktree-shared-rules`, phase 3 on `feat/gate-snippet-shared-rule`
-> (which branches off `feat/commands-and-autonomy`, because snippet v5 exists only there). The
-> conventions half is already on `main` of `dew_flow_conventions` (83d05e8, 4dbead4) and pinned in
-> all six consumers. Deviations and the open tail are recorded at the end.
-> Scope: `src_mcp/runners/Worktrees/WorktreeManager.cs`, `src_mcp/runners/Context/RuleFiles.cs`,
-> `src_mcp/src/Server/SessionStore.cs`, `src_vs_code/src/claudeSnippet.ts`,
-> `src_vs_code/src/snippetInWorkspace.ts`, and two new files in the `dew_flow_conventions` submodule.
+> Status: **IMPLEMENTED (phases 1–2), 2026-09-05.** This pull request carries them. Phase 3 — the
+> snippet as a shared rule — is a separate pull request; its `dew_flow_conventions` half is already
+> on that repository's `main` (83d05e8, 4dbead4) and pinned in all six consumers, so the rule is
+> live for every session already and only the extension's half of it is outstanding.
+> Scope of this change: `src_mcp/runners/Worktrees/` (the populator and the manager),
+> `src_mcp/runners/Git/GitModules.cs`, `src_mcp/runners/Context/RuleFiles.cs`, and their tests.
 >
 > Related docs: [review-gate.md](../.claude/rules/common/review-gate.md),
 > [architecture.md](architecture.md),
@@ -244,19 +242,26 @@ across two branches died with "Access to the path is denied". The cause, from th
 a session file held open by a reader makes the atomic rename fail with `UnauthorizedAccessException`
 — not an `IOException`, so the `catch (IOException)` written for exactly this walked past it — and
 `File.ReadAllText` shares `Read` only, so every reader forbids the next write. Five `coai-mcp`
-processes were running, one per VS Code window, each polling that directory. Fixed on the phase-3
-branch with four tests; the deployed binary still carries the defect.
+processes were running, one per VS Code window, each polling that directory. The diagnosis was
+right and the remedy this plan reached for was not: sharing flags plus a retry. What shipped in
+`main` instead, from another session's measurement, is `SessionTurn` — an OS lock file that gives
+readers and writers a turn — because sharing and ten retries over half a second still let four
+readers starve the writer in two runs of three. The lesson is worth keeping separately from the
+fix: a race answered with more retries is a hope with a bigger budget.
 
 ## The open tail
 
-- **The code round for phase 3 never ran.** It is blocked by the defect above, in the INSTALLED
-  server; this branch's fix cannot help a process that is already running. Re-run
-  `review_code` for `feat/gate-snippet-shared-rule` over `feat/commands-and-autonomy` after the
-  server binary is reinstalled and the windows reconnect. The plan round did run: all 3 reviewers,
-  `good_enough`, 14 findings, 5 accepted, 9 rejected with reasons.
-- **Two branches to merge**, and `feat/commands-and-autonomy` itself is still unmerged and local:
-  `main` of this repository emits snippet v4 and knows nothing about the COMMANDS block, while the
-  installed extension is 0.29.x built from that branch.
-- **The running `coai-mcp` predates phases 1–2**, so rounds today still get `.claude/rules/shared`
-  as an empty directory. The conventions pass will only see the family's rules once the server is
-  rebuilt and reinstalled — which is also what the code round is waiting for.
+- **Phase 3 is a separate pull request** — `SNIPPET_LOCATIONS`, the panel's lookup and the CI step
+  for `gate-snippet-check.mjs`. The conventions half of it is already live, which is the half that
+  matters for correctness: every session in the six consumers loads
+  `common/coai-review-gate.md` today. What is outstanding is the panel being able to SEE it, and the
+  six CI steps that would fail a repository which kept its own copy.
+- **The locked-session-file defect this plan's own rounds exposed was fixed independently**, and
+  better, while these branches sat unmerged: `main` carries `SessionTurn`, an OS lock file that
+  gives readers and writers a turn across every process. The measurement recorded there refutes the
+  approach these branches had taken — with sharing flags and ten retries over half a second, four
+  readers in a hot loop still starved the writer in two runs of three. Retrying harder is a hope
+  with a bigger budget; a turn is a mechanism. Nothing of that fix is carried here.
+- **The running `coai-mcp` predates this change**, so until the server is rebuilt and reinstalled a
+  round still gets `.claude/rules/shared` as an empty directory. That is what the whole change is
+  about, and it is the one part a merge alone does not deliver.
