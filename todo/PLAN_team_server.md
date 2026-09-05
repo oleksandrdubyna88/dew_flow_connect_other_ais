@@ -22,7 +22,7 @@ A company has many developers and does not want each of them to buy a Codex, an 
 Claude subscription. It buys **one of each**, installs the three CLIs on **one Linux VM** (the same VM
 that already runs the CredsForDevs vault), signs each CLI in once, and runs `coai-server` there. A
 developer opens the ConnectOtherAIs panel, adds the Team server by URL, signs in with the company
-Microsoft (or Google) account, and from then on *＋ Add a reviewer* offers "Team server ‹name›" → the
+**Microsoft** account, and from then on *＋ Add a reviewer* offers "Team server ‹name›" → the
 vendors the server allows → the models the server allows. Their local `coai-mcp` composes the review
 prompt exactly as it does today and sends it to the server instead of to a CLI on their machine; the
 server runs the CLI on the VM and hands back the answer and the tokens. Nobody outside the company
@@ -65,7 +65,7 @@ And from CredsForDevs, the half that already solved "a company server behind Mic
 | The contract-version header and the 426 that precedes authentication | `src_minimalapi_server/src/ContractVersion.cs:30`, `:58`, `:77` | `X-Coai-Contract` |
 | Anonymous `/api/client-config` advertising the scope, and the guard against a server naming a Graph scope | `Program.cs:545`; `src_vs_code/src/clientConfig.ts` (`isSafeAdvertisedScope`) | plus a `providers` list |
 | The sign-in UX: `$(person-add)` Add Account → `$(azure) Microsoft` / `$(globe) Google` quick-pick → `vscode.authentication.getSession`; the email row with `media/account-green.svg` / `account-grey.svg` (an SVG file on purpose — a ThemeIcon is repainted in the selection colour); `$(sign-out)` Sign Out; the 401 "sign in again" and 403 "outside the allowed domain" sentences | `src_vs_code/src/commands/accountCommands.ts:109-147`, `accountItem.ts:24-47`, `authManager.ts:29-46`, `msScopes.ts`, `transportFactory.ts:204-228`, `serverTransport.ts:52`, `:181-190` | the *Team servers* section |
-| The self-registered Google provider (PKCE + loopback listener) | `src_vs_code/src/googleAuthProvider.ts:74`, `googleOauth.ts` | registered as **`coai-google`** — VS Code refuses a second registration of the id `google` that CredsForDevs already owns |
+| The self-registered Google provider (PKCE + loopback listener) | `src_vs_code/src/googleAuthProvider.ts:74`, `googleOauth.ts` | **v2, not copied now** — and when it is, registered as `coai-google`, because VS Code refuses a second registration of the id `google` that CredsForDevs already owns |
 | The in-process test harness on the Local scheme | `src_minimalapi_server/tests/VaultServer.cs`, `Tokens.cs` | `src_server/tests/CoaiServerHarness.cs`, `Tokens.cs` |
 | The compose stack, the Native AOT Dockerfile, the release job that builds a multi-arch image on `server-v*` | `deploy/docker-compose.yml`, `src_minimalapi_server/Dockerfile`, `.github/workflows/release.yml:34`, `:86` | `deploy/`, `src_server/Dockerfile`, a `server-image` job here |
 
@@ -82,7 +82,7 @@ sequenceDiagram
   participant S as coai-server (VM)
   participant C as codex / agy / claude (VM, one HOME per slot)
   P->>S: GET /api/client-config (anonymous) → scope, providers
-  P->>P: getSession(microsoft | coai-google)
+  P->>P: getSession(microsoft)
   P->>S: POST /api/session (IdP bearer) → server token, 7 days
   P->>P: token → <dataDir>/servers/<hash>.token · email → globalState
   P->>S: GET /api/catalog → vendors, allowed models, health, slots
@@ -130,7 +130,7 @@ text; unhandled errors are `500 {"error":"internal error"}` with the detail in t
 | Route | Auth | Answers |
 |---|---|---|
 | `GET /api/health` | none | `{ok, version}`; the container's healthcheck (`--healthcheck` exec) |
-| `GET /api/client-config` | none | `{microsoftScope, providers:["microsoft","google"]}` — only the schemes actually enabled |
+| `GET /api/client-config` | none | `{microsoftScope, providers:[…]}` — the schemes actually enabled, which in v1 is `["microsoft"]` |
 | `POST /api/session` | **IdP token only** | `201 {token, expiresUtc, email}` — a session token may not mint another |
 | `DELETE /api/session` | any | `204`; revokes the token that authenticated this call |
 | `GET /api/whoami` | any | `{email, name, isAdmin}` |
@@ -421,19 +421,27 @@ move without a person touching anything, it becomes a THIRD live region, deliber
 
 ### Sign-in, identical to CredsForDevs
 
+**Microsoft only in v1** — the operator's decision, 2026-09-05. Google costs the whole self-registered
+provider (PKCE, a loopback listener, a client id and a secret every developer pastes once, ~430 lines
+mirrored from creds) to serve nobody: the company is on Entra, and the domain allow-list is the point of
+the product. The server keeps its Google scheme wired but **off** (`GOOGLE_ENABLED=false`, as creds
+defaults), because a scheme that is configured-and-disabled is a `.env` line away and a scheme that was
+never written is a release; the client advertises and offers exactly what the server says is enabled, so
+turning it on later needs no new wire contract. `coai-google`, `googleOauth.ts` and the loopback listener
+are v2.
+
 `teamServerAuth.ts` (the `vscode`-facing half) and `teamServers.ts` (pure, `fetch`-only):
 
 1. `GET /api/client-config` — cached per URL, https or loopback-http only, and the advertised scope must
    match `api://…/<name>` (`clientConfig.ts`'s `isSafeAdvertisedScope`, mirrored) — never a Graph scope a
    server could name to make the extension mint a token for it.
-2. The quick-pick from `accountCommands.ts:110-116` — `$(azure) Microsoft` / `$(globe) Google` — filtered
-   to what the server advertises.
+2. **No quick-pick while one provider is advertised** — a menu with one item is a click that teaches
+   nothing. The pick from `accountCommands.ts:110-116` (`$(azure) Microsoft` / `$(globe) Google`) appears
+   only when `providers` names more than one, which is what makes v2 a server setting rather than a
+   client release.
 3. `vscode.authentication.getSession('microsoft', [advertisedScope], {createIfNone: true,
-   clearSessionPreference: true})`, or `getSession('coai-google', ['openid','email','profile'], …)` —
-   `googleAuthProvider.ts` + `googleOauth.ts` + the loopback listener mirrored from creds and registered
-   under **`coai-google`** with its own `coai.googleClientId` setting and `coai.*` secret keys.
-4. `POST /api/session` with the access token (Microsoft) or the id token (Google — an access token there is
-   opaque, `transportFactory.ts:204-228`) → token file + `globalState` (`email`, `expiresUtc`).
+   clearSessionPreference: true})`.
+4. `POST /api/session` with the access token → token file + `globalState` (`email`, `expiresUtc`).
 5. **Silent renewal**: when fewer than 2 days remain, the extension re-runs steps 3–4 with
    `createIfNone: false`; nobody clicks weekly. If the IdP session itself is gone the row goes grey with
    *sign in again*, the sentence `serverTransport.ts:181-190` uses for 401.
@@ -470,7 +478,7 @@ visible offline; the server's numbers are the truth because a person may have tw
 
 `helpCoverage.test.ts` (`:49`, `:58`, `:62`) fails the build for a command or setting no article names: a new
 article *Team servers* (`helpContent.ts` + `helpDe/Es/Ru/Uk.ts`, real translations — the test rejects
-pasted English), `SETTING_ALIAS` for `coai.teamServers` and `coai.googleClientId`, `ALIAS` for the four
+pasted English), `SETTING_ALIAS` for `coai.teamServers`, `ALIAS` for the four
 commands, `HelpKey` tooltips in `help.ts:12` for the section's controls. The article's *what can go wrong*
 names what leaves the machine.
 
@@ -510,9 +518,18 @@ parameterised.
 `runtime-deps:10.0-noble` (not chiseled — it needs a shell) **plus Node 22 copied from the official
 `node:22-bookworm-slim` image as a build stage** (the runtime-deps image carries no Node, and `npm` without
 Node is the first thing a reviewer of this plan caught), then the three CLIs at **pinned versions**:
-`npm i -g @openai/codex@<x> @anthropic-ai/claude-code@<y>` and Google's `install.sh` at a pinned release,
-each followed by `<cli> --version` **during the build** so an image cannot be published with a CLI that
-does not start. The versions are `ARG`s, stamped as image labels and reported in `/api/catalog`; they are
+`npm i -g @openai/codex@0.153.4 @anthropic-ai/claude-code@2.1.258` and Google's installer at the release
+carrying `agy` **1.1.27**, each followed by `<cli> --version` **during the build** so an image cannot be
+published with a CLI that does not start.
+
+Those three numbers are what the operator's own machine runs on 2026-09-05, read from the CLIs rather
+than from a changelog — the version an adapter's flags were verified against is the version the VM
+should run, and "latest" would silently be a different one. `agy` is **not** an npm package (it installs
+into `~/.local`/`%LOCALAPPDATA%` from Google's `install.sh`), so pinning it means pinning the installer's
+release rather than a package version; whether that installer takes a version argument is the one thing
+to check when story 4.1 is written, and if it does not, the image fetches the release asset directly.
+
+The versions are `ARG`s, stamped as image labels and reported in `/api/catalog`; they are
 raised deliberately, one commit per bump, because the adapters' flags, envelopes and rate-limit wording
 are verified per CLI version (`ReviewerRuntime.cs:150`) and a silent bump on rebuild would pass every
 fake-CLI test and fail every real review. The image is rebuilt to update a CLI; `POST_DEPLOY.md` says so.
@@ -539,9 +556,8 @@ verification is a `POST_DEPLOY.md` item rather than a sentence here: `login anti
 4. **Add a client application** `aebc6443-996d-45c2-90f0-388ff96faa56` (Visual Studio Code), authorised for
    that scope.
 5. `.env`: `MS_TENANT=<tenant id>`, `MS_AUDIENCES=<client-id>,api://<client-id>`,
-   `MS_CLIENT_SCOPE=api://<client-id>/coai.access`, `ALLOWED_DOMAINS=<company domain>`. Google, when wanted:
-   a Desktop OAuth client in Google Cloud Console → `GOOGLE_AUDIENCES=<its client id>`; developers enter the
-   client secret once in the extension, as in creds.
+   `MS_CLIENT_SCOPE=api://<client-id>/coai.access`, `ALLOWED_DOMAINS=<company domain>`.
+   `GOOGLE_ENABLED` stays `false` in v1 and there is nothing else to set.
 
 ### Release, contract suite, post-deploy
 
@@ -632,7 +648,7 @@ The split was made on Fable; stories marked **F** run on Fable because being wro
 | | 2.2 | `vendors.json` + catalog, slots (selector, environment, cooldown parser, registry with the OS lock), `login` | **F** |
 | | 2.3 | jobs — store, runner, `expiresUtc`, the epoch id, the ladder, cancel — and the reviews endpoints | Opus |
 | | 2.4 | usage + admins + the `http/` suite | Opus |
-| **3 · The panel** | 3.1 | *Team servers* section, sign-in (Microsoft, `coai-google`), the token file, silent renewal, sign-out | **F** |
+| **3 · The panel** | 3.1 | *Team servers* section, sign-in (Microsoft), the token file, silent renewal, sign-out | **F** |
 | | 3.2 | *Add a reviewer* from a Team server, the `remote` row, the catalog-fed model dropdown, help in five languages | Opus |
 | | 3.3 | usage per server, *Company*, the person search | Opus |
 | **4 · Ship it** | 4.1 | `Dockerfile` (Node, pinned CLIs, build-time `--version`), compose with `init`, `.env.example`, `update.sh`/`backup.sh` | Opus |
@@ -650,8 +666,8 @@ CI. The one manual verification is step 8, and the record says so.
 
 - [ ] A developer with a Team server row runs a plan round and a code round through it, and the round
       card shows `team-codex/Architecture — done` with tokens.
-- [ ] A Microsoft account outside `ALLOWED_DOMAINS` is refused with the 403 sentence; a Google account
-      likewise; a session token cannot mint another.
+- [ ] A Microsoft account outside `ALLOWED_DOMAINS` is refused with the 403 sentence; a session token
+      cannot mint another.
 - [ ] Two codex slots signed in: a rate-limited slot parks until the vendor's own reset time and the next
       job lands on the other slot; a slot whose refresh failed shows *needs sign-in* with the cure.
 - [ ] Killing the client mid-review sends `DELETE` and the CLI on the VM is gone within seconds; killing
@@ -681,6 +697,11 @@ CI. The one manual verification is step 8, and the record says so.
 - **Full mode on the server** — a read-only clone per repository under `/data/repos`, refreshed by
   `git fetch` per job, a worktree pinned to the client's SHA; the client sends `repoUrl` + `sha`. Needs a
   deploy key per repository and a growth budget of its own.
+- **Google sign-in** — the server scheme is already there and off; what v2 adds is the client half:
+  `coai-google` (VS Code refuses a second `google`), `googleOauth.ts`, the loopback listener, a
+  `coai.googleClientId` setting and the secret each developer pastes once — plus `GOOGLE_ENABLED=true`
+  and a Desktop OAuth client id in `GOOGLE_AUDIENCES`. The quick-pick appears on its own the moment
+  `/api/client-config` names two providers, so no wire change is owed.
 - **The auth code as a shared package** (`DewFlow.ServerAuth`: the schemes, `TokenIdentity`,
   `ContractVersion`, the guards; and a TS twin for `clientConfig`/`msScopes`/`googleOauth`) — once a third
   consumer exists.
