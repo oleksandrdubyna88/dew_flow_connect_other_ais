@@ -41,7 +41,7 @@ sequenceDiagram
 | `DiffExclusions`, `ContextAssembler` | `Context/ContextAssembler.cs` | numstat → per-file diffs with `:(exclude,glob)` pathspecs; binary sizes via `cat-file -s` |
 | `IReviewerRuntime`: `CodexRuntime`, `DeepseekRuntime`, `GeminiRuntime`, `ClaudeRuntime`, `AntigravityRuntime`, `CustomCodexRuntime` | `Reviewers/ReviewerRuntime.cs`, `ClaudeRuntime.cs`, `CustomRuntime.cs` | THE vendor adapter: `Build` (argv, pure) + `ReadAnswer` + `ReadUsage`, the last two with working defaults. Flags verified against codex 0.147.0 / gemini 0.55.1 / claude 2.1.197 / agy 1.1.22; keys ride env, never argv; DeepSeek = Codex config-shifted |
 | `ReviewerRuntimeSelector` | same | unknown provider refuses naming the catalog |
-| `ReviewerOutcome` (closed), `ReviewerExecutor`, `RateLimit` | `Reviewers/ReviewerExecutor.cs` | one launch + one repair; SIX named outcomes incl. NotStarted; `Ok` carries the run's `Usage`, both launches counted when repaired |
+| `ReviewerOutcome` (closed), `ReviewerExecutor`, `RateLimit`, `ReviewerLaunch` | `Reviewers/ReviewerExecutor.cs` | one launch + one repair; SIX named outcomes incl. NotStarted; `Ok` carries the run's `Usage`, both launches counted when repaired. **`LaunchAsync` is the public half**: launch → classify → the vendor's RAW answer + usage, with the parse left to the caller |
 | `Usage`, `UsageParser` | `core/Findings/UsageParser.cs` | schema-less scan over any vendor envelope; MAX per key name then sum per category, so a streamed cumulative total is never summed with itself; money only when the vendor priced the run |
 | `BoundedScheduler`, `ReviewerWork`, `ReviewerSummaryFactory` | `Reviewers/BoundedScheduler.cs` | global + per-provider semaphores; a rate limit climbs the ladder below |
 | `RetryLadder` | `Reviewers/RetryLadder.cs` | the waits and when to stop: four steps, jittered, bounded by the reviewer's own deadline; pure, so the jitter is a table rather than a stopwatch |
@@ -61,6 +61,19 @@ sequenceDiagram
   in the prompt, that rules it was not shown exist. Failing the round instead would turn an
   infrastructure hiccup into an outage — a code-round finding that was rejected on exactly that
   ground, with the visibility half accepted.
+- **The launch and the parse are two things, and the seam between them is public.**
+  `LaunchAsync` answers what the PROCESS said — the terminal outcome when there is one, otherwise the
+  vendor's raw answer, its usage, and the transcript as evidence when the envelope came back empty.
+  `RunOnceAsync` is that plus `ParseAnswer`, which is pure and takes exactly what it reads: the text
+  and the provider that stamps each finding's origin. The seam exists because a second binary needs
+  the first half without the second — the planned Team server runs the same CLIs through the same
+  adapters and hands the raw answer back over HTTP, while parsing, the repair launch and
+  de-duplication stay with the client that asked. A copy of this classification over there is how the
+  vendor-set drift in this repository happened twice.
+  **`Terminal == null` means the process ran and exited zero — never that there is an answer**: an
+  adapter whose output file never appeared says so with a null answer, and what that means is the
+  caller's judgement. An EMPTY answer takes the same path as a missing one, so an envelope that came
+  back blank still leaves its transcript as evidence.
 - **Provider cap beside the global cap** — a rate limit is per vendor; a global cap alone puts all
   its slots on one provider.
 - **A rate limit gets a LADDER, not one retry** — 5 s, 30 s, 60 s, 120 s (`COAI_RETRY_BACKOFF`),
