@@ -625,6 +625,14 @@ public sealed class PanelService
             });
             audit.Closing(answer.Verdict, gate.GatingCount, summary.Sentence, record);
             audit.Findings(merged);
+            // And into the database, with what the round was ABOUT. Best-effort by construction:
+            // the round is already answered and saved, and a projection that cannot be written must
+            // never take it down.
+            Project(db => db.RecordRound(
+                completed.State,
+                record,
+                merged,
+                new Store.RoundContext(planText, sha, caller, [.. gate.Discounted])));
             NotifyIfAPersonMustDecide(completed.Verdict, session, merged);
             return Json(answer, ServerJsonContext.Default.ReviewAnswer);
         }
@@ -1006,6 +1014,29 @@ public sealed class PanelService
     /// "ignore all this" would be an off switch on the gate, and it is deliberately not offered.
     /// <c>Discuss</c> leaves the session exactly where it is: the AI is meant to stop and talk.</para>
     /// </remarks>
+    /// <summary>
+    /// A write to the projection, which is never allowed to matter.
+    /// </summary>
+    /// <remarks>
+    /// The session files are the source of truth and the round is what somebody is waiting for. A
+    /// database that is locked, full or corrupt is a line in the log, not a failed review.
+    /// </remarks>
+    private void Project(Action<Store.RoundsDb> write)
+    {
+        try
+        {
+            using var db = Store.RoundsDb.Open(_settings.DataDir, _log);
+            if (db is not null)
+            {
+                write(db);
+            }
+        }
+        catch (Exception e)
+        {
+            _log.Warning(e, "the round could not be projected into the rounds database");
+        }
+    }
+
     private PersistedSession WithHumanDecision(PersistedSession session)
     {
         var decision = _escalations.DecisionFor(session.State.SessionId);
@@ -1026,6 +1057,14 @@ public sealed class PanelService
                 return Error(refused.Sentence);
             case Transition.Moved moved:
                 _store.Save(session with { State = moved.State, Pending = [] });
+                // How the caller closed this gate: how many findings it took, which it argued with
+                // and why. The one thing this data is for — an accepted finding is something the
+                // caller had not seen and then agreed was worth having.
+                Project(db => db.RecordDecisions(
+                    session.State.SessionId,
+                    session.Rounds.Count == 0 ? session.State.Stage.ToString() : session.Rounds[^1].Stage,
+                    session.Rounds.Count == 0 ? 0 : session.Rounds[^1].Number,
+                    decisions));
                 var instruction = moved.State switch
                 {
                     { Stage: Stage.CodeReview, RoundsRunThisStage: 0 } when session.State.Stage == Stage.PlanReview =>

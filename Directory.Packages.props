@@ -17,6 +17,17 @@
          The console sink is our own AnsiConsoleSink (the packaged themes emit nothing
          once stdout is redirected - measured, see the rule); only the core pipeline
          and the file sink come from packages. Apache-2.0. -->
+    <!-- The rounds database: every round, every reviewer and every FINDING with what the caller
+         decided about it, which no file in the data directory held before. Microsoft's own
+         provider rather than an ORM: hand-written SQL over SqliteCommand is what stays inside
+         Native AOT, and the e_sqlite3 bundle publishes per RID. MIT. -->
+    <!-- .Core plus the bundle chosen HERE, rather than the all-in-one Microsoft.Data.Sqlite: that
+         one pins SQLitePCLRaw 2.1.11, whose native lib.e_sqlite3 carries GHSA-2m69-gcr7-jv3q (high),
+         and this repository builds warnings-as-errors on advisories. The 3.x family is the fixed
+         one. Apache-2.0 / MIT. -->
+    <PackageVersion Include="Microsoft.Data.Sqlite.Core" Version="10.0.0" />
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+
     <PackageVersion Include="Serilog" Version="4.4.0" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
   </ItemGroup>
