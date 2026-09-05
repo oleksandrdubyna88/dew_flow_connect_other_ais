@@ -200,6 +200,35 @@ test('a money figure never renders as NaN or undefined', () => {
   assert.equal(money(0.004), '$0.004', 'a fraction of a cent still says something');
 });
 
+test('a rate typed against the VENDOR prices a model no public list has ever heard of', () => {
+  // The operator's own words, 2026-09-05: "для локал модели все правильно, я сам вписываю, но если я
+  // впишу должно считаться". A local engine appears in no price list, so until somebody says what it
+  // costs them, its rounds read as a floor. When they say, it counts.
+  const typedForTheVendor = (_model: string, provider: string) =>
+    provider === 'local' ? { inPerMillion: 1, outPerMillion: 2 } : undefined;
+  const [row] = rowsFrom([session([round()])], NOW, typedForTheVendor, [
+    used({ provider: 'local', model: 'Qwen3.5-35B-A3B:latest' }),
+  ]) as [LogRow];
+
+  assert.equal(row.costInUsd, 1, '1M read at the rate that was typed in');
+  assert.equal(row.costOutUsd, 0.4, '200k written at twice it');
+  assert.equal(row.costTotalUsd, 1.4);
+  assert.equal(row.costPartial, false, 'and it is not a floor: somebody stated the rate');
+});
+
+test('the model is still what a list is asked about, and the vendor is who was asked', () => {
+  // Both halves reach the lookup, because they answer different questions: a list prices a MODEL,
+  // and a person types a rate against a VENDOR.
+  const seen: string[] = [];
+  rowsFrom([session([round()])], NOW, (model, provider) => {
+    seen.push(model + '@' + provider);
+
+    return undefined;
+  }, [used()]);
+
+  assert.deepEqual(seen, ['gpt-5.6-sol@codex']);
+});
+
 test('the upper bound of a range includes the minute it names', () => {
   // "Today" ends at 23:59, and a round at 23:59:30 belongs to today. Raised by three reviewers at
   // once on 2026-09-05.

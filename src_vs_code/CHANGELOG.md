@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.30.2 — 2026-09-05 (server 0.18.1)
+
+**A rate you typed in prices the round.** The Cost column works a round out from the usage ledger and
+a public price list, and a local engine appears in no public list — so its rounds read as a floor,
+whatever it actually costs. The per-vendor rate the panel has always had now reaches that
+calculation, through the same rule the spending tab already used: **the specific statement wins over
+the general one**, per field, so filling in only the input rate keeps it and lets the output rate
+fall back rather than the vendor going dark.
+
 ## 0.30.1 — 2026-09-05 (server 0.18.1)
 
 **The log shows the findings themselves, not only how many.** Expand a round and the sentences are

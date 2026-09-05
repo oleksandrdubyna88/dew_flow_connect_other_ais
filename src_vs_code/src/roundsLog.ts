@@ -102,13 +102,16 @@ export interface LogFilters {
 }
 
 /**
- * What a MODEL costs per million tokens, or nothing when no list prices it.
+ * What one reviewer's run costs per million tokens, or nothing when nothing prices it.
  *
- * <p>By the model id the ledger recorded, never by the vendor's current setting: a round priced
- * from what codex happens to be set to today changes its cost the moment somebody switches models,
- * which the gate raised twice over on 2026-09-05.</p>
+ * <p>Both halves of the ledger line are passed, and each answers a different question. The MODEL is
+ * what a public price list knows, and it is the model the line RECORDED — a round priced from what
+ * codex happens to be set to today would change its cost the moment somebody switched models. The
+ * VENDOR is what the operator's own typed rate is attached to: a flat subscription, a negotiated
+ * rate, a local engine no list has ever heard of. The specific statement wins over the general one,
+ * which is the rule the spending tab already used and this now shares.</p>
  */
-export type PriceOfModel = (model: string) => { inPerMillion: number; outPerMillion: number } | undefined;
+export type PriceOfModel = (model: string, provider: string) => { inPerMillion: number; outPerMillion: number } | undefined;
 
 /** Every round of every session, newest first. */
 export function rowsFrom(
@@ -202,7 +205,7 @@ function costOf(
   let tokensIn = 0;
   let tokensOut = 0;
   for (const line of linesOf(round, usage, nowMs)) {
-    const price = priceOf(line.model);
+    const price = priceOf(line.model, line.provider);
     if (price === undefined || line.tokensIn === undefined || line.tokensOut === undefined) {
       unpriced += 1;
       continue;
