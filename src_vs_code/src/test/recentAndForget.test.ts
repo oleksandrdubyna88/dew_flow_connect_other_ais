@@ -11,10 +11,11 @@ import { DEFAULT_VENDORS } from '../vendors';
 /**
  * Two things the panel was asked for from in front of it.
  *
- * <p><b>Recent rounds is a WINDOW, not a top-six.</b> It showed the six newest rounds whatever their
- * age, so a quiet week left last month on screen looking current, and a busy afternoon hid the
- * morning. Seventy-two hours, and however many that is, with the list scrolling rather than pushing
- * everything below it off the panel.</p>
+ * <p><b>The rounds section shows what is RUNNING.</b> It was a top-six, then a 72-hour window of
+ * finished rounds with disclosures — and the disclosures are where the flicker lived. Ruled on
+ * 2026-09-05: the sidebar answers "what is happening now", the history is a log with a table
+ * (`PLAN_rounds_log_view.md`). What this file keeps from the window era is the one rule that still
+ * holds — a round in flight is shown whatever its age — and the scroll container.</p>
  *
  * <p><b>A vendor's spending row can be forgotten.</b> `gemini` sits in the ledger with two failed
  * runs and nothing else, because it was retired mid-flight; there was no way to clear it. Forgetting
@@ -74,7 +75,6 @@ function html(over: {
     questions: [],
     sessions: over.sessions ?? [],
     openSections: [],
-    openRounds: [],
     usage: over.usage ?? [],
     usageWindow: 'week',
     cliStatus: over.cliStatus ?? {},
@@ -83,26 +83,16 @@ function html(over: {
   }, 'nonce', NOW);
 }
 
-test('rounds inside 72 hours are shown, however many there are', () => {
-  // Eight, where the old view stopped at six. The window decides, not a count.
+test('finished rounds are not in the sidebar, however recent — the log has them', () => {
   const rounds = Array.from({ length: 8 }, (_, i) =>
     round({ number: i + 1, subject: `round-${i + 1}`, completedUtc: `2026-09-01T${String(10 + i).padStart(2, '0')}:00:00Z` }));
 
   const page = html({ sessions: [session(rounds)] });
 
   for (let i = 1; i <= 8; i += 1) {
-    assert.match(page, new RegExp(`round-${i}\\b`), `round-${i} is inside the window and missing`);
+    assert.doesNotMatch(page, new RegExp(`round-${i}\b`), `round-${i} finished an hour ago and is not the sidebar's business`);
   }
-});
-
-test('a round older than 72 hours is not shown', () => {
-  const page = html({ sessions: [session([
-    round({ subject: 'yesterday', completedUtc: '2026-08-31T20:00:00Z' }),
-    round({ subject: 'last-week', completedUtc: '2026-08-25T20:00:00Z' }),
-  ])] });
-
-  assert.match(page, /yesterday/);
-  assert.doesNotMatch(page, /last-week/, 'a week-old round reads as current when it is the only one on screen');
+  assert.match(page, /Nothing is running/);
 });
 
 test('a round still running is shown whatever its age', () => {
@@ -121,10 +111,10 @@ test('the list scrolls instead of pushing the rest of the panel away', () => {
   assert.match(page, /#live-rounds\s*\{[^}]*max-height/, 'nothing caps its height');
 });
 
-test('the empty state says the window, not just "nothing"', () => {
+test('the empty state says where the rounds went, not just "nothing"', () => {
   const page = html({ sessions: [session([round({ completedUtc: '2026-08-01T10:00:00Z' })])] });
 
-  assert.match(page, /72 hours/, 'a filtered-empty list must not read the same as a never-used one');
+  assert.match(page, /Show review rounds/, 'a person with a month of history must not read that their work is gone');
 });
 
 test('every vendor with recorded spending offers to forget it', () => {

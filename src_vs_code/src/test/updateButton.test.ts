@@ -41,7 +41,6 @@ function html(vendors: readonly Vendor[], cliStatus: Record<string, CliStatus>):
     questions: [],
     sessions: [],
     openSections: [],
-    openRounds: [],
     usage: [],
     usageWindow: 'week',
     cliStatus,

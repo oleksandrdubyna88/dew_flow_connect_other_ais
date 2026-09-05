@@ -622,6 +622,27 @@ absent is unknown, and printing a zero would be a measurement nobody made. The l
 tall (640px) — a sidebar is usually far taller than 320px, and five rounds filled it with room to
 spare.
 
+**The sidebar shows what is running, and nothing else (2026-09-05).** *Recent rounds* became
+*Active rounds*. A round in flight is shown whole — its reviewers, their durations, what each has found
+so far — because that is what somebody is waiting on; a finished round is not in the sidebar at all. The
+history it carried (72 hours of finished rounds, each a disclosure, with an open-set policy in
+`openRounds.ts` and a document-level `toggle` listener) is a log, and a log wants a table with filters,
+sorting and search — a page, which is `todo/PLAN_rounds_log_view.md`.
+
+That ruling is also what ended the flicker. Reported first as "works on the first click, then shows
+what it should and disappears", then — after 0.29.7 made the click fast — as "it flickers". One loop,
+two speeds: the rounds list is replaced through `innerHTML` on every live patch; inserting a
+`<details open>` that way fires `toggle` exactly as a click does; the document-level listener posted it
+to the provider; the provider answered with another patch. While a toggle cost a twenty-second repaint
+the loop crawled; at a millisecond a patch it ran at the speed of a message round-trip. The open-set
+module and its tests are deleted rather than guarded: there are no disclosures now, so there is nothing
+for the loop to be made of. The page also compares each live region's HTML with what it last showed and
+skips identical markup — a five-second tick on which nothing happened, which is most of them, no longer
+recreates every element and drops the scroll position.
+
+The section below records the disclosure design as it stood for one day, because its two lessons —
+a card must not promise what it has not got, and a click must not repaint the world — survive it.
+
 **A card promises only what it has, and a click costs only what it needs (2026-09-04).** Three
 corrections to the list above, all reported from looking at it.
 

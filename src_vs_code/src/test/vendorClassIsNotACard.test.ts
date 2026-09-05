@@ -54,7 +54,6 @@ function state(): PanelState {
     questions: [],
     sessions: [session],
     openSections: ['rounds'],
-    openRounds: [],
     usage: [],
     usageWindow: 'week',
     cliStatus: {},

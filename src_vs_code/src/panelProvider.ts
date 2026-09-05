@@ -9,13 +9,11 @@ import {
   liveRegions,
   OPEN_BY_DEFAULT,
   panelHtml,
-  roundsBody,
   staticKey,
   usageRegion,
   VSCODE_COMMAND_FOR,
 } from './panelView';
 import { parseSession, SessionFile } from './rounds';
-import { afterToggle, nextOpenRounds, NOTHING_OPEN, OpenRounds } from './openRounds';
 import { parseUsage, UsageEntry, Window } from './usage';
 import {
   CliStatus,
@@ -81,18 +79,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   /** Which sections the person has open — kept HERE because the panel repaints on every
       change, and a section that snapped shut mid-edit would be worse than none. */
   private openSections: string[] = [...OPEN_BY_DEFAULT];
-  /**
-   * Which round cards are expanded, and which running rounds have already been opened once.
-   *
-   * <p>The person's own choice, kept HERE for the same reason the sections are — the rounds list is
-   * patched into the page every five seconds, and a disclosure holding its state only in the DOM
-   * would close under somebody mid-read.</p>
-   * <p>The POLICY — running is open, finished closes again, and what the person opened is never
-   * touched — is next door in `openRounds.ts`, pure and tested. It lived HERE until 2026-09-04 and
-   * was therefore untestable: the rule it enforced shipped on nothing but a comment saying it was
-   * right, and it was not.</p>
-   */
-  private rounds: OpenRounds = NOTHING_OPEN;
   /** Which window the spending chart shows. A view preference, so it lives here, not in config. */
   private usageWindow: Window = 'week';
   /** The newest published server version, and when GitHub last answered. */
@@ -139,17 +125,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     view.webview.options = { enableScripts: true };
     view.webview.onDidReceiveMessage(
       (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string; open?: boolean; role?: string; round?: number }) => {
-        if (m.type === 'round' && m.id !== undefined) {
-          // The card is THEIRS now — open or closed alike — which is the whole of "do not touch
-          // what I opened": the auto-collapse only ever closes cards the panel still owns.
-          this.rounds = afterToggle(this.rounds, m.id, m.open === true);
-          // ONLY the rounds are redrawn. This used to call render(), which reads the configuration,
-          // stats the server binary, probes every vendor CLI for its version, asks GitHub what is
-          // published and fetches two public price tables — so opening a card could sit there for
-          // twenty seconds before its reviewers appeared. None of that can have changed because
-          // somebody clicked a triangle.
-          void this.patchRounds();
-        } else if (m.type === 'section' && m.id !== undefined) {
+        if (m.type === 'section' && m.id !== undefined) {
           this.openSections = m.open === true
             ? [...new Set([...this.openSections, m.id])]
             : this.openSections.filter((s) => s !== m.id);
@@ -171,45 +147,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     void this.render();
   }
 
-  /**
-   * The rounds to render expanded: the person's own, plus whatever is running now.
-   *
-   * <p><b>Running is open, finished is closed, and what the person opened is never touched.</b> The
-   * panel opens a round when it starts and closes it again when it stops — but only if that card is
-   * still open on the panel's own initiative. The moment somebody clicks it, the key leaves
-   * {@link panelOpened} and the card is theirs: opened by them it survives the round ending, closed
-   * by them it stays shut for the rest of the run.</p>
-   * <p>The previous rule kept a finished round open "because that is the moment its reviewers are
-   * worth reading". True for one round and wrong for a list — every round anybody had watched stayed
-   * expanded, and the list became a wall. Overruled by the person who uses it.</p>
-   */
-  private expanded(sessions: readonly SessionFile[]): readonly string[] {
-    const cards = sessions.flatMap((s) => s.rounds.map((r) => ({ branch: s.state.branch, ...r })));
-    this.rounds = nextOpenRounds(this.rounds, cards);
 
-    return this.rounds.open;
-  }
-
-  /**
-   * Redraws the rounds list and NOTHING else.
-   *
-   * <p>What a person is waiting for when they open a card is the reviewers of one round — a few
-   * small files this extension can read in milliseconds. {@link render} would also stat the server
-   * binary, probe every vendor CLI for its version, ask GitHub what is published and fetch two
-   * public price tables, and it was on the click path: opening a card could sit for twenty seconds.
-   * None of those can have changed because somebody clicked a triangle.</p>
-   */
-  private async patchRounds(): Promise<void> {
-    if (this.view === undefined) {
-      return;
-    }
-
-    const sessions = await this.readSessions();
-    void this.view.webview.postMessage({
-      type: 'live',
-      rounds: roundsBody(sessions, this.expanded(sessions)),
-    });
-  }
 
   /**
    * Redraws the spending region and NOTHING else.
@@ -254,7 +192,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),
       questions: this.watcher.openQuestions,
       openSections: this.openSections,
-      openRounds: this.expanded(sessions),
       sessions,
       usage: this.remembered(await this.readUsage()),
       usageWindow: this.usageWindow,

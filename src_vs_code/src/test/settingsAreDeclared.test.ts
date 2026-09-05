@@ -30,7 +30,6 @@ const state = (): PanelState => ({
   questions: [],
   sessions: [],
   openSections: ['reviewers', 'language', 'prompts', 'gate', 'limits', 'keys', 'server', 'usage', 'rounds'],
-  openRounds: [],
   usage: [],
   usageWindow: 'week',
   cliStatus: {},

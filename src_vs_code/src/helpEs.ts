@@ -37,7 +37,7 @@ export const ES: Readonly<Record<string, HelpBody>> = {
     whatItIs: "Menú ⋯ → **Copy the CLAUDE.md snippet** da un párrafo que se pega en el repositorio que quiere revisar. Le dice a la IA que trabaja allí que existe una puerta de revisión y en qué orden se usa.",
     why: "Un asistente con herramientas pero sin instrucción no se le ocurre abrir una sesión de revisión. Ese párrafo ES la instrucción, y vive en el repositorio y no en la extensión porque es una propiedad del proyecto, no de su editor.",
     setup: "Cópielo, péguelo en el `CLAUDE.md` de ese repositorio (o en lo que lea su asistente) y haga commit. No nombra ningún repositorio: la IA que lo lee ya está dentro de una copia de trabajo que puede nombrar ella misma.",
-    usage: "A partir de ahí el asistente abre una sesión, envía el plan, resuelve los hallazgos, implementa, envía el diff y vuelve a resolver. Usted lo observa en **Recent rounds** y responde a lo que escale.",
+    usage: "A partir de ahí el asistente abre una sesión, envía el plan, resuelve los hallazgos, implementa, envía el diff y vuelve a resolver. Usted lo observa en **Active rounds** y responde a lo que escale.",
     whatCanGoWrong: "Nada obliga a cumplir ese párrafo. El asistente puede ignorarlo, y la puerta no puede llamarse a sí misma. Lo que SÍ puede es negarse a revisar código mientras el plan no haya pasado, y eso lo hace.",
   },
   "the-gate": {
@@ -81,12 +81,12 @@ export const ES: Readonly<Record<string, HelpBody>> = {
     whatCanGoWrong: "Un proveedor que necesita clave y no la tiene aparece en **providers** como `unavailable` con su motivo y se cae del abanico — no se salta en silencio.",
   },
   "recent-rounds": {
-    title: "Recent rounds: qué hubo y qué está pasando ahora",
-    whatItIs: "Las últimas rondas, las recientes arriba, y la que está en curso siempre primera. En la fila: qué se revisó, la etapa, el veredicto, el número de hallazgos bloqueantes, el tiempo y el gasto.",
-    why: "Una revisión tarda minutos. Sin esto, el panel no distinguiría «seis revisores trabajando» de «aquí no se ha ejecutado nunca nada», y habría que bajar al log.",
-    setup: "Nada que configurar. El servidor escribe la ronda en disco en el momento de arrancarla y la actualiza a medida que avanzan los revisores, así que la imagen sobrevive a recargar la ventana, reiniciar la extensión y matar el servidor.",
-    usage: "Cualquier ronda se despliega. Pulse una y verá sus revisores: proveedor y rol, qué hizo, cuántos hallazgos presentó, cuánto tardó ÉL y cuánto leyó — la pregunta que el total de la ronda no puede responder, porque una ronda es tan lenta como su revisor más lento. Una ronda en curso se despliega sola una vez para poder seguirla, y después queda como usted la deje. **Show review rounds** en el menú ⋯ abre lo mismo como fichero, que puede dejar abierto junto al trabajo: se reescribe según avanzan las rondas.",
-    whatCanGoWrong: "Una ronda abandonada por un servidor caído se lee como *interrupted*, no como «lleva ejecutándose para siempre». Las rondas escritas por un servidor antiguo pueden no tener gasto ni tema: entonces no se guardaban, y rellenarlo a posteriori sería inventarlo.",
+    title: "Active rounds: qué está en marcha ahora mismo",
+    whatItIs: "Cada ronda en curso, la más reciente arriba, completa: qué se revisa, la etapa, la rama, cuánto lleva — y debajo cada revisor que la ronda lanzó, con lo que ha hecho hasta ahora, cuántos hallazgos ha presentado, cuánto ha tardado ÉL y qué ha leído.",
+    why: "Una revisión tarda minutos, y lo que se espera no es un veredicto sino los revisores que lo producen. Una ronda terminada es otra pregunta — «qué pasó» — y eso es un registro, que pide una tabla con filtros, ordenación y búsqueda, no una barra lateral. Así que la barra lateral se queda solo con el presente.",
+    setup: "Nada que configurar. El servidor escribe la ronda en disco al arrancarla y la actualiza a medida que avanzan los revisores, así que la imagen sobrevive a recargar la ventana, reiniciar la extensión y matar el servidor.",
+    usage: "No hay nada que pulsar: una ronda en curso ya está abierta, y cuando termina sale de la barra lateral. Todo lo que ha corrido alguna vez — terminado, interrumpido, cada revisor y cada número — está en **Show review rounds** (el menú ⋯ del título del panel).",
+    whatCanGoWrong: "Una ronda abandonada por un servidor caído pasa a *interrupted* en el siguiente arranque y desaparece de aquí; sigue en el registro. Si aquí se lee *Nothing is running* mientras su asistente dice que está revisando, el servidor con el que habla escribe en otro sitio — un `COAI_DATA_DIR` en su configuración que esta ventana no comparte.",
   },
   "what-each-ai-has-used": {
     title: "Qué ha gastado cada IA: tokens, dinero y tiempo",

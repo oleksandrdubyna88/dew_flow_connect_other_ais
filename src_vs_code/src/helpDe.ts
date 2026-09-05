@@ -37,7 +37,7 @@ export const DE: Readonly<Record<string, HelpBody>> = {
     whatItIs: "Menü ⋯ → **Copy the CLAUDE.md snippet** liefert einen Absatz, der in das Repository kommt, das Sie reviewen lassen wollen. Er sagt der dort arbeitenden KI, dass es ein Review-Gate gibt und in welcher Reihenfolge es benutzt wird.",
     why: "Ein Assistent mit Werkzeugen, aber ohne Anweisung, kommt nicht von selbst darauf, eine Review-Sitzung zu öffnen. Dieser Absatz IST die Anweisung, und er lebt im Repository statt in der Erweiterung, weil er eine Eigenschaft des Projekts ist und nicht Ihres Editors.",
     setup: "Kopieren, in die `CLAUDE.md` jenes Repositories einfügen (oder in das, was Ihr Assistent liest), committen. Er nennt kein Repository: die KI, die ihn liest, sitzt ohnehin in einer Arbeitskopie, die sie selbst benennen kann.",
-    usage: "Danach öffnet der Assistent eine Sitzung, schickt den Plan, arbeitet die Befunde ab, implementiert, schickt das Diff und arbeitet erneut ab. Sie sehen das unter **Recent rounds** und beantworten, was er eskaliert.",
+    usage: "Danach öffnet der Assistent eine Sitzung, schickt den Plan, arbeitet die Befunde ab, implementiert, schickt das Diff und arbeitet erneut ab. Sie sehen das unter **Active rounds** und beantworten, was er eskaliert.",
     whatCanGoWrong: "Nichts erzwingt diesen Absatz. Der Assistent kann ihn ignorieren, und das Gate kann sich nicht selbst aufrufen. Was es KANN: sich weigern, Code zu reviewen, solange der Plan nicht durch ist — und das tut es.",
   },
   "the-gate": {
@@ -81,12 +81,12 @@ export const DE: Readonly<Record<string, HelpBody>> = {
     whatCanGoWrong: "Ein Hersteller, der einen Schlüssel braucht und keinen hat, erscheint in **providers** als `unavailable` mit Grund und fällt aus dem Fächer — er wird nicht stillschweigend übersprungen.",
   },
   "recent-rounds": {
-    title: "Recent rounds: was war und was gerade läuft",
-    whatItIs: "Die letzten Runden, neueste oben, die laufende immer zuerst. In der Zeile: was reviewt wurde, die Stufe, das Verdikt, die Zahl blockierender Befunde, Dauer und Kosten.",
-    why: "Ein Review dauert Minuten. Ohne das könnte das Panel „sechs Reviewer arbeiten“ nicht von „hier lief nie etwas“ unterscheiden, und man müsste ins Log steigen.",
-    setup: "Nichts einzustellen. Der Server schreibt eine Runde beim Start auf die Platte und aktualisiert sie, während die Reviewer vorankommen — das Bild überlebt also ein neu geladenes Fenster, einen Neustart der Erweiterung und einen abgeschossenen Server.",
-    usage: "Jede Runde lässt sich aufklappen. Ein Klick zeigt ihre Reviewer: Anbieter und Rolle, was er getan hat, wie viele Funde, wie lange ER gebraucht hat und wie viel er gelesen hat — die Frage, die die Gesamtzeit der Runde nicht beantworten kann, denn eine Runde ist so langsam wie ihr langsamster Reviewer. Eine laufende Runde klappt sich einmal selbst auf, damit man ihr zusehen kann, und bleibt danach so, wie Sie sie verlassen haben. **Show review rounds** im ⋯-Menü öffnet dasselbe als Datei, die Sie neben der Arbeit offen lassen können — sie schreibt sich fort, während die Runden laufen.",
-    whatCanGoWrong: "Eine Runde, die ein abgestürzter Server zurückließ, liest sich als *interrupted*, nicht als „läuft ewig“. Runden, die ein älterer Server schrieb, haben womöglich weder Kosten noch Thema: das wurde damals nicht geschrieben, und es nachträglich zu ergänzen wäre erfunden.",
+    title: "Active rounds: was gerade läuft",
+    whatItIs: "Jede laufende Runde, neueste oben, vollständig: was reviewt wird, die Stufe, der Branch, wie lange sie schon läuft — und darunter jeder Reviewer, den die Runde gestartet hat, mit dem, was er bisher getan hat, wie viele Funde er eingereicht hat, wie lange ER gebraucht hat und was er gelesen hat.",
+    why: "Ein Review dauert Minuten, und worauf man wartet, ist kein Verdikt, sondern die Reviewer, die es erzeugen. Eine abgeschlossene Runde ist eine andere Frage — „was war“ — und das ist ein Protokoll, das eine Tabelle mit Filtern, Sortierung und Suche braucht, keine Seitenleiste. Die Seitenleiste behält also nur die Gegenwart.",
+    setup: "Nichts einzustellen. Der Server schreibt eine Runde beim Start auf die Platte und aktualisiert sie, während die Reviewer vorankommen — das Bild überlebt ein neu geladenes Fenster, einen Neustart der Erweiterung und einen abgeschossenen Server.",
+    usage: "Es gibt nichts anzuklicken: eine laufende Runde ist bereits offen, und wenn sie fertig ist, verlässt sie die Seitenleiste. Alles, was je gelaufen ist — fertig, unterbrochen, jeder Reviewer, jede Zahl — steht unter **Show review rounds** (das ⋯-Menü im Titel des Panels).",
+    whatCanGoWrong: "Eine Runde, die ein abgestürzter Server zurückließ, wird beim nächsten Start auf *interrupted* gesetzt und verschwindet hier; im Protokoll bleibt sie. Steht hier *Nothing is running*, während Ihr Assistent sagt, er reviewe gerade, schreibt der Server, mit dem er spricht, woanders hin — ein `COAI_DATA_DIR` in seiner Konfiguration, das dieses Fenster nicht teilt.",
   },
   "what-each-ai-has-used": {
     title: "Was jede KI verbraucht hat: Token, Geld und Zeit",

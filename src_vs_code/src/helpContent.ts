@@ -118,7 +118,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       setup:
         'Copy it, paste it into that repository\'s `CLAUDE.md` (or whatever your assistant reads), commit it. It names no repository — the AI reading it is already in a checkout it can name for itself.',
       usage:
-        'From then on the assistant opens a session, sends its plan, resolves the findings, implements, sends the diff, and resolves again. You watch it in **Recent rounds** and answer anything it escalates.',
+        'From then on the assistant opens a session, sends its plan, resolves the findings, implements, sends the diff, and resolves again. You watch it in **Active rounds** and answer anything it escalates.',
       whatCanGoWrong:
         'Nothing enforces the snippet. An assistant can ignore it, and the gate cannot make itself be called — what it CAN do is refuse to review code before a plan has passed, which it does.',
     },
@@ -225,17 +225,17 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
   {
     id: 'recent-rounds',
     en: {
-      title: 'Recent rounds: what happened, and what is happening now',
+      title: "Active rounds: what is running right now",
       whatItIs:
-        'The last few rounds, newest first, with a round in flight always at the top. Each line names what was reviewed, the stage, the verdict, the gating count, how long it took and what it consumed.',
+        "Every round in flight, newest first, shown whole: what is being reviewed, the stage, the branch, how long it has run — and under it every reviewer the round launched, with what each has done so far, how many findings it has filed, how long IT has taken and what it read.",
       why:
-        'A review takes minutes. Without this the panel could not tell "six reviewers are working" from "nothing has ever run here", and the person watching had to read a log to find out.',
+        "A review takes minutes, and what somebody is waiting on is not a verdict but the reviewers producing it. A finished round is a different question — \"what happened\" — and that is a log, which wants a table with filters, sorting and search rather than a sidebar. So the sidebar keeps only the present tense.",
       setup:
-        'Nothing to set up. The server writes a round to disk the moment it starts and updates it as each reviewer moves, so the story survives a reload, a restarted extension, and a killed server.',
+        "Nothing to set up. The server writes a round to disk the moment it starts and updates it as each reviewer moves, so the picture survives a reload, a restarted extension and a killed server.",
       usage:
-        'Every round opens. Click one and it shows the reviewers it ran: each vendor and role, what it did, how many findings it filed, how long IT took and what it read — which is the question a round total cannot answer, since a round is as slow as its slowest reviewer. A round in flight opens itself once so you can watch it, and stays as you leave it afterwards. **Show review rounds** in the ⋯ menu opens the same thing as a file you can keep open beside your work — it rewrites itself as rounds advance.',
+        "There is nothing to click: a running round is already open, and when it finishes it leaves the sidebar. Everything that has ever run — finished, interrupted, every reviewer and every number — is in **Show review rounds** (the ⋯ menu on the panel's title).",
       whatCanGoWrong:
-        'A round abandoned by a crashed server reads as *interrupted* rather than running forever. Rounds written by an older server may show no usage and no subject — those numbers were not recorded then, and inventing them afterwards would be a guess.',
+        "A round abandoned by a crashed server is swept to *interrupted* on the next start and disappears from here; it is still in the log. If the section reads *Nothing is running* while your assistant says it is reviewing, the server it talks to is writing somewhere else — a `COAI_DATA_DIR` in its config that this window does not share.",
     },
   },
   {

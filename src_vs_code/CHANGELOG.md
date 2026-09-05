@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.29.8 — 2026-09-05 (server 0.17.1)
+
+**The sidebar shows what is running, and nothing else.** *Recent rounds* is now *Active rounds*: a
+round in flight is shown whole — its reviewers, their durations, what each has found so far — because
+that is what somebody is waiting on. A finished round is not in the sidebar at all. The history it used
+to carry, 72 hours of disclosures, is a log, and a log wants a table with filters, sorting and search:
+that page is the next release (`todo/PLAN_rounds_log_view.md`); until then *Show review rounds* still
+opens `rounds.md`.
+
+**And that is what stops the flicker.** Reported as "works on the first click, then shows what it
+should and disappears" and, after 0.29.7 made the click fast, as "it flickers". One loop, two speeds:
+the rounds list is replaced through `innerHTML` on every live patch, inserting a `<details open>` that
+way fires `toggle` exactly as a click does, the document-level listener posted it to the provider, and
+the provider answered with another patch. While a toggle cost a twenty-second repaint the loop crawled;
+at a millisecond a patch it ran at the speed of a message round-trip. There are no disclosures, no
+open-set policy and no toggle listener now, so there is nothing for the loop to be made of. The
+open-set module and its nine tests are deleted rather than guarded.
+
+**A live patch that changes nothing touches nothing.** The page compares each region's HTML with what
+it showed last and skips identical markup — replacing it recreated every element and dropped the
+scroll position on every five-second tick where nothing had happened, which is most of them.
+
+**Server 0.17.1** carries the local reviewer's frequency penalty from 0.29.7's notes; its release was
+held up two attempts by a test-harness race that only a two-core Windows runner could hit (the fake
+reviewer read gemini's `-o json` as codex's `-o <file>` and three reviewers fought over a file called
+`json`). Nothing in the product changed for it.
+
 ## 0.29.7 — 2026-09-04 (server 0.17.1)
 
 **Opening a round no longer takes twenty seconds.** A card's reviewers are only built when it is

@@ -19,7 +19,6 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   questions: [],
   sessions: [],
   openSections: ['reviewers', 'language', 'prompts', 'gate', 'limits', 'keys', 'server', 'usage', 'rounds'],
-  openRounds: [],
   usage: [],
   usageWindow: 'week',
   cliStatus: {},
@@ -270,26 +269,25 @@ test('a question written by someone else cannot inject markup', () => {
   assert.ok(html.includes('&lt;img src=x'));
 });
 
-test('rounds are newest first, and an empty history says so', () => {
-  assert.ok(panelHtml(state(), 'n').includes('No rounds yet'));
+test('the sidebar lists what is running; a finished round belongs to the log', () => {
+  assert.ok(panelHtml(state(), 'n').includes('Nothing is running'));
   const html = panelHtml(
     state({
       sessions: [
         {
           state: { sessionId: 's', repoPath: 'r', branch: 'feature/x', stage: 'CodeReview', awaitingResolve: false },
           rounds: [
-            { stage: 'PlanReview', number: 1, verdict: 'revise', gatingCount: 3, reviewers: 'all 2', completedUtc: '2026-08-30T00:00:00Z' },
-            { stage: 'CodeReview', number: 1, verdict: 'proceed', gatingCount: 0, reviewers: 'all 6', completedUtc: '2026-08-30T04:00:00Z' },
+            { stage: 'PlanReview', number: 1, verdict: 'revise', gatingCount: 3, reviewers: 'all 2', completedUtc: '2026-08-30T00:00:00Z', status: 'done' },
+            { stage: 'CodeReview', number: 1, verdict: '', gatingCount: 0, reviewers: '1 of 6', completedUtc: '', status: 'running', startedUtc: '2026-08-30T04:00:00Z' },
           ],
         },
       ],
     }),
     'n',
-    // A clock, because Recent rounds is a 72-hour WINDOW now: with the real one these August dates
-    // are outside it and neither round renders, which would make this an assertion about nothing.
     Date.parse('2026-08-30T06:00:00Z'),
   );
-  assert.ok(html.indexOf('proceed') < html.indexOf('revise'), 'the newest round leads');
+  assert.ok(html.includes('badge running'), 'the round in flight is shown');
+  assert.ok(!html.includes('revise'), 'the finished one is not — the log has it');
 });
 
 test('escapeHtml handles the four characters that matter', () => {

@@ -35,7 +35,6 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   latestServerVersion: '0.12.0',
   questions: [],
   openSections: ['reviewers'],
-  openRounds: [],
   sessions: [],
   usage: [],
   usageWindow: 'week',

@@ -29,7 +29,7 @@ function html(vendors: readonly Vendor[]): string {
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
     side: '', latestServerVersion: '', questions: [], sessions: [],
     openSections: ['reviewers'],
-    openRounds: [], usage: [], usageWindow: 'week', cliStatus: {}, modelPrices: {},
+    usage: [], usageWindow: 'week', cliStatus: {}, modelPrices: {},
     snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
   }, 'nonce');
 }

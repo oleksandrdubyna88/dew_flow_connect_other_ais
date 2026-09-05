@@ -91,7 +91,6 @@ function state(): PanelState {
     questions: [],
     sessions: [running()],
     openSections: ['rounds'],
-    openRounds: [],
     usage: [],
     usageWindow: 'week',
     cliStatus: {},

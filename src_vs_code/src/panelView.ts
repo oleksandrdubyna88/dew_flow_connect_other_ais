@@ -56,7 +56,6 @@ export interface PanelState {
    * the DOM would snap shut under the person mid-read. Raised as Blocking by this change's own
    * gate, which is the failure it would have shipped with.</p>
    */
-  readonly openRounds: readonly string[];
   /** Every reviewer run the server has recorded, newest last. */
   readonly usage: readonly UsageEntry[];
   /** Which window the spending chart is showing. */
@@ -121,7 +120,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     section('keys', 'Vendor keys', open, keysBody(state)),
     section('server', 'Server', open, serverBody(state)),
     section('usage', 'What each AI has used', open, usageBody(state)),
-    section('rounds', 'Recent rounds', open, `<div id="live-rounds">${roundsBody(state.sessions, state.openRounds, nowMs)}</div>`),
+    section('rounds', 'Active rounds', open, `<div id="live-rounds">${roundsBody(state.sessions, nowMs)}</div>`),
   ].join('\n');
 
   return `<!DOCTYPE html>
@@ -156,16 +155,6 @@ ${body}
     el.addEventListener('toggle', () =>
       vscode.postMessage({ type: 'section', id: el.dataset.section, open: el.open }));
   }
-  // A round's disclosure, in the CAPTURE phase and on the document: the toggle event does not
-  // bubble, and the rounds list is REPLACED wholesale by the live patch every five seconds — a
-  // listener bound to the elements themselves would be gone with the elements that had it.
-  // (No backticks in this block: it lives inside a template literal, and one would end the page.)
-  document.addEventListener('toggle', (event) => {
-    const el = event.target;
-    if (el instanceof HTMLDetailsElement && (el.dataset.round ?? '') !== '') {
-      vscode.postMessage({ type: 'round', id: el.dataset.round, open: el.open });
-    }
-  }, true);
   for (const el of document.querySelectorAll('[data-command]')) {
     el.addEventListener('click', () =>
       vscode.postMessage({ type: 'command', command: el.dataset.command, id: el.dataset.id }));
@@ -175,6 +164,12 @@ ${body}
   // flight, and any open escalation. Patching them leaves every other control ALONE,
   // which is the whole point: assigning the panel's html reloads the webview, and a reload
   // closes any open dropdown. This is what stopped the pickers snapping shut mid-choice.
+  // What each region showed last. Identical markup is not re-applied: replacing it recreates
+  // every element and drops the scroll position, and "nothing changed" is the common case on a
+  // five-second tick.
+  let lastQuestions = '';
+  let lastRounds = '';
+  let lastUsage = '';
   window.addEventListener('message', (event) => {
     const message = event.data;
     if (message?.type !== 'live') {
@@ -183,13 +178,16 @@ ${body}
     const questions = document.getElementById('live-questions');
     const rounds = document.getElementById('live-rounds');
     const usage = document.getElementById('live-usage');
-    if (questions !== null) {
+    if (questions !== null && typeof message.questions === 'string' && message.questions !== lastQuestions) {
+      lastQuestions = message.questions;
       questions.innerHTML = message.questions;
     }
-    if (rounds !== null) {
+    if (rounds !== null && typeof message.rounds === 'string' && message.rounds !== lastRounds) {
+      lastRounds = message.rounds;
       rounds.innerHTML = message.rounds;
     }
-    if (usage !== null) {
+    if (usage !== null && typeof message.usage === 'string' && message.usage !== lastUsage) {
+      lastUsage = message.usage;
       usage.innerHTML = message.usage;
     }
     // The answer buttons live inside the patched HTML, so they are re-bound here.
@@ -738,137 +736,61 @@ export function usageRegion(
 <div class="hint total">All vendors: ${shortNumber(all.tokens)} tokens · ${total(all.cost, all.guess)} · ${shortDuration(all.seconds)}</div>`;
 }
 
-/** How far back this section looks. A window a person can hold in their head: three days. */
-const RECENT_HOURS = 72;
-
 /**
- * The rounds of the last {@link RECENT_HOURS}, newest first, however many that is.
+ * The rounds that are RUNNING, newest first — and nothing else.
  *
- * <p>It was the six newest whatever their age, and both halves of that were wrong: a quiet week left
- * last month on screen looking current, and a busy afternoon hid the morning. A window answers
- * "what has been happening" — which is the question the section is for — and the list scrolls
- * instead of pushing everything below it off the panel.</p>
- *
- * <p>A round still RUNNING is always shown. It has no completion time to compare, and it is the one
- * row somebody is actually waiting on.</p>
+ * <p>This section used to be a 72-hour history of finished rounds, each a disclosure that opened
+ * to its reviewers, with a policy for who had opened what and a document-level toggle listener to
+ * report it. That is where the flicker lived: a list replaced through innerHTML every five seconds
+ * fires `toggle` for every open card exactly as a click does, and the provider answered each with
+ * another patch. Ruled on 2026-09-05: the sidebar answers "what is happening now"; everything that
+ * has happened is a log, and a log is a page with a table. A running round is shown whole, because
+ * its reviewers are what somebody is waiting on; a finished one is not shown at all.</p>
  */
-/**
- * The rounds list on its own — what the provider patches when a card is toggled.
- *
- * <p>Exported so a toggle costs a few small file reads instead of a full repaint. Opening a card
- * used to run the whole render: stat the server binary, probe every vendor CLI, ask GitHub what is
- * published, fetch two price tables — twenty seconds before the reviewers appeared.</p>
- */
-export function roundsBody(
-  sessions: readonly SessionFile[],
-  openRounds: readonly string[],
-  nowMs: number = Date.now(),
-): string {
-  const all = sessions.flatMap((s) => s.rounds.map((r) => ({ branch: s.state.branch, ...r })));
-  const since = new Date(nowMs - RECENT_HOURS * 60 * 60 * 1000).toISOString();
-  const rounds = all
-    .filter((r) => isRunning(r) || r.completedUtc > since)
-    .sort((a, b) => Number(isRunning(b)) - Number(isRunning(a)) || b.completedUtc.localeCompare(a.completedUtc));
-  if (rounds.length === 0) {
-    // Two different empty states, because they mean different things: nothing has ever run, or
-    // nothing has run lately. A view that says "no rounds yet" to somebody with a month of history
-    // is telling them their work is gone.
-    return all.length === 0
-      ? '<div class="empty">No rounds yet.</div>'
-      : `<div class="empty">Nothing in the last ${RECENT_HOURS} hours. Older rounds are in <b>Show review rounds</b>.</div>`;
+export function roundsBody(sessions: readonly SessionFile[], nowMs: number = Date.now()): string {
+  const running = sessions
+    .flatMap((s) => s.rounds.map((r) => ({ branch: s.state.branch, ...r })))
+    .filter(isRunning)
+    .sort((a, b) => (b.startedUtc ?? '').localeCompare(a.startedUtc ?? ''));
+  if (running.length === 0) {
+    return '<div class="empty">Nothing is running. Every round, finished or not, is in <b>Show review rounds</b>.</div>';
   }
 
-  return rounds.map((r) => roundCard(r, openRounds, nowMs)).join('\n');
+  return running.map((r) => roundCard(r, nowMs)).join('\n');
 }
 
 /**
  * A round's identity across repaints — branch, stage, number and the instant it started.
  *
- * <p>Four fields rather than the round number, because this has to survive the five-second patch
- * AND tell two rounds of the same number on two branches apart. The start time is what makes a
- * re-run a new card instead of one inheriting the previous open state.</p>
+ * <p>Four fields rather than the round number: two rounds of the same number on two branches are
+ * two rounds, and a re-run is a new one rather than the old one back.</p>
  */
 export function roundKey(round: RoundRecord & { branch: string }): string {
   return `${round.branch}|${round.stage}|${round.number}|${round.startedUtc}`;
 }
 
-/**
- * One round: closed to a line, open to its reviewers.
- *
- * <p><b>A `<details>` whose open set lives in the state</b>, exactly as the sections do — not
- * scripted state, and not "open because it is running". This list is patched into the page every
- * five seconds, so a disclosure keeping its state only in the DOM would snap shut under the person
- * mid-read; and a card opened only because the round was running would snatch the reviewers away at
- * the moment it finished, which is when somebody most wants to read them. Both were raised against
- * the plan for this change, one of them as Blocking.</p>
- */
-function roundCard(
-  round: RoundRecord & { branch: string },
-  openRounds: readonly string[],
-  nowMs: number,
-): string {
-  const verdict = isRunning(round)
-    ? '<span class="badge running">running</span>'
-    : round.status === 'interrupted'
-      ? '<span class="badge stopped">interrupted</span>'
-      : `<b>${escapeHtml(round.verdict)}</b>`;
-  const key = roundKey(round);
-  const open = openRounds.includes(key);
-  // Built only for a card that is OPEN. A finished round keeps its reviewers — that is the whole
-  // change — but rendering nine of them for every round in the list on every five-second tick is
-  // work nobody sees. The provider repaints the moment a card is toggled, so the body is there by
-  // the time it becomes visible. (codex, this change's code round.)
-  // A round IN FLIGHT always carries its body, whether or not the open set mentions it: "the
-  // reviewers of a running round are visible" is a promise of this renderer, not something a
-  // provider can be trusted to arrange, and it is one round rather than a list.
-  const lines = open || isRunning(round) ? reviewerRows(round) : [];
+/** One running round, whole: what it is, how far it has got, and every reviewer's line. */
+function roundCard(round: RoundRecord & { branch: string }, nowMs: number): string {
   // Only the vendor's WORD carries the colour; the rest of the row is exactly as it was. Both
   // halves come out of a session file somebody else wrote, so both are escaped.
-  const reviewers = lines
+  const reviewers = reviewerRows(round)
     .map((row) =>
       `<div class="reviewer"><span class="who" style="color:${vendorColour(row.provider)}">`
       + `${escapeHtml(row.provider)}</span>${escapeHtml(row.rest)}</div>`)
     .join('\n');
   const took = elapsed(round, nowMs);
-  // WHAT was reviewed leads the line; the branch and the round number follow it. A list of rounds
-  // identified only by stage and number is a column of numbers — a person scanning it is looking
-  // for the plan they remember, not for round four.
+  // WHAT is being reviewed leads the line; the branch and the round number follow it.
   const subject = (round.subject ?? '').length > 0
     ? `<div class="subject">${escapeHtml(round.subject!)}</div>`
     : '';
-
   const head = `${subject}<div class="verdict">${escapeHtml(stageName(round.stage))} ${round.number} · `
-    + `${escapeHtml(round.branch)} · ${verdict} · ${round.gatingCount} gating</div>`
+    + `${escapeHtml(round.branch)} · <span class="badge running">running</span> · ${round.gatingCount} gating</div>`
     + `<div class="usage">${took.length > 0 ? `${escapeHtml(took)} · ` : ''}${escapeHtml(costPhrase(round))}</div>`;
 
-  // A round with nothing recorded to show is NOT a disclosure. It used to be one, so it offered a
-  // hand cursor, opened on a click and showed a sentence apologising for itself — a control that
-  // promises something it has not got. Rounds from a server older than `reviewerStates` are the
-  // ordinary case for this, and they are not going to grow any.
-  if (!Expandable(round)) {
-    return `<div class="round flat" data-round="${escapeHtml(key)}">${head}</div>`;
-  }
-
-  return `<details class="round" data-round="${escapeHtml(key)}"${open ? ' open' : ''}>
-<summary>${head}</summary>
-${lines.length > 0 ? reviewers : '<div class="reviewer loading">Reading this round…</div>'}
-</details>`;
+  return `<div class="round" data-round="${escapeHtml(roundKey(round))}">${head}
+${reviewers}</div>`;
 }
 
-/**
- * Whether this card has anything to open — the difference between a disclosure and a line.
- * </summary>
- * <remarks>
- * The body is built only when a card is open, so "has reviewers to show" cannot be read off the
- * rendered body; it is a property of the RECORD, and this is where it is asked.
- * </remarks>
- */
-function Expandable(round: RoundRecord): boolean {
-  // A RUNNING round counts even before it has recorded anybody: its reviewers are on their way, and
-  // a card that refuses to open for the ten seconds before the first one reports is worse than one
-  // that opens on nothing.
-  return (round.reviewerStates ?? []).length > 0 || isRunning(round);
-}
 
 /**
  * The two regions the provider may patch without reloading the webview — the round in flight and
@@ -877,7 +799,7 @@ function Expandable(round: RoundRecord): boolean {
  */
 export function liveRegions(state: PanelState, nowMs: number = Date.now()): { questions: string; rounds: string; usage: string } {
   return {
-    usage: usageRows(state), questions: questionsSection(state.questions), rounds: roundsBody(state.sessions, state.openRounds, nowMs) };
+    usage: usageRows(state), questions: questionsSection(state.questions), rounds: roundsBody(state.sessions, nowMs) };
 }
 
 /**
@@ -1059,15 +981,13 @@ const CSS = `
   /* Twice what it was. A sidebar is usually far taller than 320px, so five rounds filled the list
      and everything else sat behind a scrollbar in a panel with room to spare. */
   #live-rounds { max-height: 640px; overflow-y: auto; }
-  details.round { margin: 0 0 4px; }
+  /* A running round is a block: nothing to open, so nothing to point at. */
+  .round { margin: 0 0 4px; }
+  .round .subject { font-weight: 600; }
   /* A hand promises something opens. Only the cards that DO open show one — the flat ones are a
      line, not a control, and offering a hand over them is the panel telling a small lie. */
-  .round.flat { margin: 0 0 4px; cursor: default; }
-  details.round > summary { list-style: none; cursor: pointer; }
   /* Shown for the moment between the click and the reviewers arriving. The body is built by the
      provider, so there is always a gap; an empty card during it reads as a card with nothing in it. */
-  .reviewer.loading { opacity: 0.6; font-style: italic; }
-  details.round > summary::-webkit-details-marker { display: none; }
   .reviewer { font-size: 11px; opacity: .85; margin: 1px 0 1px 8px; }
   .badge { padding: 0 5px; border-radius: 8px; font-size: 10px; font-weight: 600; }
   .badge.running { background: var(--vscode-charts-green); color: var(--vscode-editor-background); }

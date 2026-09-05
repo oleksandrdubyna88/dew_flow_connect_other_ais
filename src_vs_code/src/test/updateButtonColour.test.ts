@@ -34,7 +34,6 @@ function css(): string {
     questions: [],
     sessions: [],
     openSections: [],
-    openRounds: [],
     usage: [],
     usageWindow: 'week',
     cliStatus: {},
