@@ -22,7 +22,9 @@ import {
   versionSourceFor,
 } from './cliVersions';
 import { askVersion } from './versionProbe';
-import { latestServerVersion, serverOnThisSide } from './installer';
+import { latestServerVersion, serverOnThisSide, serverPath } from './installer';
+import { DbLog, EMPTY_LOG } from './roundsDb';
+import { readLog } from './roundsDbRead';
 import { sideLabel } from './coaiInstall';
 import {
   fetchTable,
@@ -105,6 +107,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private openRouterPrices: PriceTable = {};
   private liteLlmPrices: PriceTable = {};
   private pricesCheckedAt = 0;
+  /** The rounds database as last read, and when — a read is a process spawn. */
+  private roundsLogCache: DbLog = EMPTY_LOG;
+  private roundsLogAt = 0;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -168,6 +173,30 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
       return seen.get(model);
     };
+  }
+
+  /**
+   * The rounds database, as the installed server reads it.
+   *
+   * <p>Through the server rather than through SQLite of our own: it owns the schema, it already has
+   * the file, and the alternative was a WebAssembly build in the VSIX. A server too old for the flag
+   * answers nothing, which is the same to the page as a machine that has run no rounds — it goes on
+   * showing everything it builds from the session files.</p>
+   */
+  async roundsLog(): Promise<DbLog> {
+    // Cached for a few seconds, because the log page refreshes every tick while a round runs and
+    // each read is a process spawn plus a walk of the whole findings table. The gate called that
+    // out twice: a hot path is not where a child process belongs. A few seconds is shorter than any
+    // round and longer than any burst of ticks.
+    const AGE_MS = 10_000;
+    if (Date.now() - this.roundsLogAt < AGE_MS) {
+      return this.roundsLogCache;
+    }
+    const server = serverPath(this.context.globalStorageUri);
+    this.roundsLogAt = Date.now();
+    this.roundsLogCache = server === undefined ? EMPTY_LOG : await readLog(server.fsPath);
+
+    return this.roundsLogCache;
   }
 
   /**

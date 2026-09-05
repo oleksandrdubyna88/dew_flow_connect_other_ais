@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.30.1 — 2026-09-05 (server 0.18.1)
+
+**The log shows the findings themselves, not only how many.** Expand a round and the sentences are
+there — severity, file and line, what the reviewer said, what it proposed, and **what was decided
+about it, with the reason a rejection carried**. A finding that repeats one already rejected is
+marked *raised again*.
+
+**A third tab: what it keeps missing.** The two questions this data exists to answer.
+*What the caller ACCEPTS*, by category, by reviewer role and by vendor — an accepted finding is by
+definition something the AI had not seen and then agreed was worth having, which is the blind-spot
+corpus. Shown as accepted **over total**, because a category that produces eleven findings and gets
+none taken says something quite different from one that produces nine and gets seven. And *rejected,
+and raised again anyway*: the shorter, sharper list of disagreements the caller is defending.
+
+**No SQLite in the extension.** The alternative was a WebAssembly build in the VSIX or a native
+module per platform, to ask questions of a file the server already writes and whose schema it owns.
+The server answers `--log` with JSON instead. A server older than the flag answers nothing, which
+reads to the page exactly like a machine that has run no rounds — everything built from the session
+files carries on as before.
+
+## Server 0.18.1 — 2026-09-05
+
+`--log [--limit N]` prints the rounds database as JSON and leaves: rounds with their findings and
+resolutions, what the caller accepted and rejected grouped three ways, and the findings raised again
+over a standing rejection. Read-only, and an empty answer for a machine with no database rather than
+an error.
 ## 0.30.0 — 2026-09-05 (server 0.18.0)
 
 **The gate's own rule stopped being a paste, and the panel can see where it went.** The block that

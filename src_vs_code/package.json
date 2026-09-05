@@ -1,8 +1,8 @@
 {
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
-  "description": "Your AI writes the code; other vendors' models review it — the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.30.0",
+  "description": "Your AI writes the code; other vendors' models review it \u2014 the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
+  "version": "0.30.1",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -31,7 +31,7 @@
       },
       {
         "command": "coai.installServer",
-        "title": "Install the MCP server…",
+        "title": "Install the MCP server\u2026",
         "category": "ConnectOtherAIs"
       },
       {
@@ -52,14 +52,14 @@
       },
       {
         "command": "coai.answerQuestion",
-        "title": "Answer the open question…",
+        "title": "Answer the open question\u2026",
         "icon": "$(comment-discussion)",
         "category": "ConnectOtherAIs"
       },
       {
         "command": "coai.answerQuestionWaiting",
         "category": "ConnectOtherAIs",
-        "title": "Answer the open question…",
+        "title": "Answer the open question\u2026",
         "icon": "media/question-waiting.svg"
       }
     ],
@@ -69,7 +69,7 @@
         "coai.promptsPerRound": {
           "type": "object",
           "default": {},
-          "markdownDescription": "Which prompt each role uses on each round, by catalog id — `{ \"Architecture\": [\"architecture\", \"arch-boundaries\"] }`. Index 0 is round 1. An empty or unknown entry is treated as *not chosen*: round 1 of a code role falls back to the conventions pass when the repository has written rules, and every other round to that role's universal prompt.",
+          "markdownDescription": "Which prompt each role uses on each round, by catalog id \u2014 `{ \"Architecture\": [\"architecture\", \"arch-boundaries\"] }`. Index 0 is round 1. An empty or unknown entry is treated as *not chosen*: round 1 of a code role falls back to the conventions pass when the repository has written rules, and every other round to that role's universal prompt.",
           "additionalProperties": {
             "type": "array",
             "items": {
@@ -86,7 +86,7 @@
             "escalate"
           ],
           "default": "human",
-          "markdownDescription": "When rounds run out with findings still gating: `continue` as-is (said out loud), call a `human`, or `escalate` the ladder (reviewer effort → reviewer model → arbiter model)."
+          "markdownDescription": "When rounds run out with findings still gating: `continue` as-is (said out loud), call a `human`, or `escalate` the ladder (reviewer effort \u2192 reviewer model \u2192 arbiter model)."
         },
         "coai.maxConcurrency": {
           "type": "integer",
@@ -98,7 +98,7 @@
           "type": "integer",
           "default": 2,
           "minimum": 1,
-          "description": "Reviewer CLI processes per vendor at once — a rate limit is per vendor."
+          "description": "Reviewer CLI processes per vendor at once \u2014 a rate limit is per vendor."
         },
         "coai.reviewerTimeoutMinutes": {
           "type": "integer",
@@ -109,7 +109,7 @@
         "coai.credsKey": {
           "type": "string",
           "default": "",
-          "markdownDescription": "The CredsForDevs **config-entry key** (minted by *Enable Code Access…* on the entry holding vendor API keys). A pass to one vault entry — revocable, useless while VS Code is closed — not a secret itself. Empty = keyless vendors only."
+          "markdownDescription": "The CredsForDevs **config-entry key** (minted by *Enable Code Access\u2026* on the entry holding vendor API keys). A pass to one vault entry \u2014 revocable, useless while VS Code is closed \u2014 not a secret itself. Empty = keyless vendors only."
         },
         "coai.escalationMinutes": {
           "type": "integer",
@@ -141,7 +141,7 @@
               "pricePerMillionOut": 0
             }
           ],
-          "markdownDescription": "The reviewers. Edit them in the **ConnectOtherAIs** panel — add a vendor, remove one, or point it at another model. `runtime` is which CLI shape it uses (`codex` or `gemini`); `baseUrl` makes it an OpenAI-compatible endpoint driven through the Codex CLI.",
+          "markdownDescription": "The reviewers. Edit them in the **ConnectOtherAIs** panel \u2014 add a vendor, remove one, or point it at another model. `runtime` is which CLI shape it uses (`codex` or `gemini`); `baseUrl` makes it an OpenAI-compatible endpoint driven through the Codex CLI.",
           "items": {
             "type": "object",
             "required": [
@@ -198,7 +198,7 @@
         "coai.dealPlanLenses": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Deal the plan stage’s lenses across the vendors instead of giving every vendor the same one. **Off** (the default): every vendor answers the same question, so two vendors agreeing on a finding is a fact the gate can use. **On**: every lens gets asked once at half the launches, and that agreement is gone."
+          "markdownDescription": "Deal the plan stage\u2019s lenses across the vendors instead of giving every vendor the same one. **Off** (the default): every vendor answers the same question, so two vendors agreeing on a finding is a fact the gate can use. **On**: every lens gets asked once at half the launches, and that agreement is gone."
         },
         "coai.dealCodeLenses": {
           "type": "boolean",
@@ -212,8 +212,8 @@
             "worktree"
           ],
           "enumDescriptions": [
-            "Fast — the reviewer gets the diff, the plan and the project's rules, in an empty directory.",
-            "Full — the reviewer also gets the checkout of the commit under review."
+            "Fast \u2014 the reviewer gets the diff, the plan and the project's rules, in an empty directory.",
+            "Full \u2014 the reviewer also gets the checkout of the commit under review."
           ],
           "default": "none",
           "markdownDescription": "What a code reviewer is given. **Fast** (default) sends the composed prompt with nothing to explore; measured, every hosted model found more useful defects that way at a fraction of the input tokens. **Full** also hands it the checkout of the commit under review."
@@ -223,7 +223,7 @@
           "default": 0,
           "minimum": -5,
           "maximum": 5,
-          "markdownDescription": "Text size on the ConnectOtherAIs help page, in steps of 10% from the base — `5` is about ×1.6, `-5` about ÷1.6. The ± buttons on the page write this same setting, and it syncs with your other machines."
+          "markdownDescription": "Text size on the ConnectOtherAIs help page, in steps of 10% from the base \u2014 `5` is about \u00d71.6, `-5` about \u00f71.6. The \u00b1 buttons on the page write this same setting, and it syncs with your other machines."
         },
         "coai.helpLanguage": {
           "type": "string",
@@ -234,7 +234,7 @@
           ],
           "enumDescriptions": [
             "English",
-            "Русский"
+            "\u0420\u0443\u0441\u0441\u043a\u0438\u0439"
           ],
           "markdownDescription": "The language of the **Help** pages only. Articles not yet translated show English with a note. The switch at the top of the help page writes this same setting."
         },
@@ -246,12 +246,12 @@
         "coai.splitPlan": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "After a plan passes, tell the assistant to break it into 2-4 epics and each into 2-4 logically complete stories, and to close every story properly: review its diff through this gate, fix, document, test, commit. The order is given once per assistant — an epic coming back for its own review is told it is a piece, not told to split again."
+          "markdownDescription": "After a plan passes, tell the assistant to break it into 2-4 epics and each into 2-4 logically complete stories, and to close every story properly: review its diff through this gate, fix, document, test, commit. The order is given once per assistant \u2014 an epic coming back for its own review is told it is a piece, not told to split again."
         },
         "coai.splitWithFable": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Do the split itself with Fable at its highest version, and send the stories where being wrong is expensive — payments, security, architecture, data migration — back to it; the ordinary ones run on Opus. Fable here is a model of YOUR assistant, not a reviewer in the list."
+          "markdownDescription": "Do the split itself with Fable at its highest version, and send the stories where being wrong is expensive \u2014 payments, security, architecture, data migration \u2014 back to it; the ordinary ones run on Opus. Fable here is a model of YOUR assistant, not a reviewer in the list."
         }
       }
     },

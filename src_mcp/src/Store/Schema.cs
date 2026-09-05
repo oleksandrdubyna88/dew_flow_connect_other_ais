@@ -99,6 +99,8 @@ internal static class Schema
 
         CREATE INDEX IF NOT EXISTS rounds_by_time   ON rounds (started_utc DESC);
         CREATE INDEX IF NOT EXISTS findings_by_round ON findings (round_id);
+        -- The defended list reads this and nothing else, over the whole table, on every refresh.
+        CREATE INDEX IF NOT EXISTS findings_re_raised ON findings (re_raised, resolution);
         """;
 
     /// <summary>

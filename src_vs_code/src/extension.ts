@@ -8,7 +8,7 @@ import { EscalationWatcher } from './escalationWatcher';
 import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
 import { parseSession, SessionFile } from './rounds';
-import { rowsFrom } from './roundsLog';
+import { blindSpotsHtml, rowsFrom } from './roundsLog';
 import { RoundsLogPanel } from './roundsLogPanel';
 import { envBlock, settingsFrom } from './settingsShape';
 import { ServerSettingsSync } from './serverSettingsSync';
@@ -233,10 +233,16 @@ async function copyClaudeSnippet(): Promise<void> {
  */
 async function showRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher, panel: PanelProvider): Promise<void> {
   await watcher.refresh();
+
+  // The page FIRST, from the session files alone — everything it has ever shown comes from those, so
+  // it is complete without the database. Reading the database spawns the server, and a person who
+  // opened a log should not wait on a process to see it: the findings arrive in the next push, a
+  // moment later. Raised by the gate as blocking the panel on an unannounced read.
   log.show(
     rowsFrom(await readSessions(), Date.now(), await panel.modelPrice(), await panel.usageLines()),
     watcher.openQuestions,
     await panel.usageTab());
+  await refreshRoundsLog(log, watcher, panel, true);
 }
 
 /** Keeps an OPEN log current while a round runs. Nothing is read when nobody is looking. */
@@ -244,11 +250,13 @@ async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher,
   if (!log.isOpen) {
     return;
   }
+  const fresh = await panel.roundsLog();
   log.update(
-    rowsFrom(await readSessions(), Date.now(), await panel.modelPrice(), await panel.usageLines()),
+    rowsFrom(await readSessions(), Date.now(), await panel.modelPrice(), await panel.usageLines(), fresh),
     watcher.openQuestions,
     await panel.usageTab(),
-    force);
+    force,
+    blindSpotsHtml(fresh));
 }
 
 /** The server's own session files: its data dir, or `COAI_DATA_DIR` when the person set one. */

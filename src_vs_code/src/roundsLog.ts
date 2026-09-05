@@ -5,6 +5,7 @@ import { UsageEntry, Window, WINDOWS } from './usage';
 import { Vendor } from './vendors';
 import { MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorColour } from './vendorColour';
+import { BlindSpot, DbFinding, DbLog, EMPTY_LOG, findingsByRound, roundKeyOf } from './roundsDb';
 import { escapeHtml, jsonForScript } from './webviewHtml';
 
 /**
@@ -66,6 +67,14 @@ export interface LogRow {
   readonly reviewers: readonly string[];
   /** Parallel to `reviewers`: the vendor word's colour, so the page needs no palette of its own. */
   readonly reviewerColours: readonly string[];
+  /**
+   * What this round FOUND, from the rounds database — empty when the server predates it.
+   *
+   * <p>The session files record that a reviewer produced four findings and not what they were, so
+   * the Findings column was a number with nothing behind it. These are the sentences. Named apart
+   * from `findings`, which is that count and stays what it is.</p>
+   */
+  readonly found: readonly DbFinding[];
 }
 
 /** The columns a header click can sort by. */
@@ -107,9 +116,12 @@ export function rowsFrom(
   nowMs: number = Date.now(),
   priceOf: PriceOfModel = () => undefined,
   usage: readonly UsageEntry[] = [],
+  log: DbLog = EMPTY_LOG,
 ): LogRow[] {
+  const byRound = findingsByRound(log);
+
   return sessions
-    .flatMap((session) => session.rounds.map((round) => rowFrom(session, round, nowMs, priceOf, usage)))
+    .flatMap((session) => session.rounds.map((round) => rowFrom(session, round, nowMs, priceOf, usage, byRound)))
     .sort((a, b) => (b.startedUtc || b.completedUtc).localeCompare(a.startedUtc || a.completedUtc));
 }
 
@@ -119,6 +131,7 @@ function rowFrom(
   nowMs: number,
   priceOf: PriceOfModel,
   usage: readonly UsageEntry[],
+  byRound: Map<string, readonly DbFinding[]> = new Map(),
 ): LogRow {
   const cost = costOf(round, priceOf, usage, nowMs);
   const status = round.status === 'running' ? 'running' : round.status === 'interrupted' ? 'interrupted' : 'done';
@@ -148,6 +161,8 @@ function rowFrom(
     vendors: [...new Set(states.map((s) => s.provider))],
     reviewers: reviewerLines(round),
     reviewerColours: rows.map((r) => vendorColour(r.provider)),
+    found: byRound.get(roundKeyOf(
+      session.state.sessionId, session.state.repoPath, session.state.branch, round.stage, round.number)) ?? [],
   };
 }
 
@@ -520,7 +535,88 @@ function facetOptions(rows: readonly LogRow[], key: Facet): string {
  * questions block is rendered here and re-posted as HTML by the same function, so there is one
  * renderer for it.</p>
  */
-export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escalation[], nonce: string, usageHtml = ''): string {
+/**
+ * The two questions this data exists to answer, as a region of the page.
+ *
+ * <p>Operator, 2026-09-05: <i>"я хочу сначала идентифицировать [белые пятна], а потом уже или рагом
+ * или математикой дать инструмент, который закроет эти пятна"</i>. Identifying them is this.</p>
+ *
+ * <p><b>What it accepted</b> is the blind-spot corpus: a finding the caller took is by definition
+ * something it had not seen and then agreed was worth having. Shown as accepted OVER total, because
+ * a category that produces fifty findings and gets two taken says something quite different from
+ * one that produces two and gets both — the second is the blind spot; the first is noise.</p>
+ *
+ * <p><b>What it argued with and got again</b> is the shorter and sharper list: the caller rejected
+ * it with a reason, the rejection still stood, and a reviewer raised it anyway.</p>
+ */
+export function blindSpotsHtml(log: DbLog): string {
+  if (log.blindSpots.length === 0 && log.defended.length === 0) {
+    return '<div class="empty">Nothing decided yet. This fills in as gates are closed —'
+      + ' every accepted finding is something the AI had not seen and then agreed was worth having.</div>';
+  }
+
+  return '<div class="spots">'
+    + spotTable('By category', log.blindSpots.filter((s) => s.kind === 'category'))
+    + spotTable('By reviewer role', log.blindSpots.filter((s) => s.kind === 'role'))
+    + spotTable('By vendor', log.blindSpots.filter((s) => s.kind === 'providers'))
+    + '</div>'
+    + defendedHtml(log.defended);
+}
+
+function spotTable(title: string, spots: readonly BlindSpot[]): string {
+  if (spots.length === 0) {
+    return '';
+  }
+  const rows = [...spots]
+    .sort((a, b) => b.accepted - a.accepted || b.total - a.total)
+    .map((s) => `<tr><td>${escapeHtml(s.name)}</td><td class="num">${s.accepted}</td>`
+      + `<td class="num">${s.total}</td><td class="num">${share(s)}</td></tr>`)
+    .join('');
+
+  return `<div><h2>${escapeHtml(title)}</h2><table><thead><tr><th></th>`
+    + '<th class="num">taken</th><th class="num">of</th><th class="num">%</th>'
+    + `</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function share(spot: BlindSpot): string {
+  return spot.total === 0 ? '—' : `${Math.round((100 * spot.accepted) / spot.total)}`;
+}
+
+/** What the server caps that list at; it sends one more so the page can say there are more. */
+const DEFENDED_CAP = 200;
+
+function defendedHtml(defended: readonly DbFinding[]): string {
+  if (defended.length === 0) {
+    return '';
+  }
+  const items = defended
+    .slice(0, DEFENDED_CAP)
+    .map((f) => `<div class="finding declined"><span class="sev">${escapeHtml(f.severity)}</span> `
+      + `<span class="where">${escapeHtml(f.file ? `${f.file}:${f.line}` : 'no file')}</span> `
+      + `<b>${escapeHtml(f.title)}</b><div class="why">${escapeHtml(f.why)}</div>`
+      + `<div class="verdict">${escapeHtml(f.providers)} / ${escapeHtml(f.role)}`
+      + `${f.reason ? ` &middot; the standing reason: ${escapeHtml(f.reason)}` : ''}</div></div>`)
+    .join('');
+
+  // The server fetches one more than it will show, so "exactly two hundred" and "more than that"
+  // are different answers. A list that was cut and looks whole is worse than no list.
+  const cut = defended.length > DEFENDED_CAP
+    ? ` The most recent ${DEFENDED_CAP} of them; there are more.`
+    : '';
+
+  return '<h2>Rejected, and raised again anyway</h2>'
+    + '<div class="hint">A disagreement the caller is defending — the rejection still stood when'
+    + ` another reviewer made the same case.${cut}</div>`
+    + `<div class="findings">${items}</div>`;
+}
+
+export function roundsLogHtml(
+  rows: readonly LogRow[],
+  questions: readonly Escalation[],
+  nonce: string,
+  usageHtml = '',
+  spotsHtml = '',
+): string {
   const headers = COLUMNS
     .map((c) => `<th data-sort="${c.key}"${c.numeric ? ' class="num"' : ''}>${c.label}</th>`)
     .join('');
@@ -589,13 +685,24 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
   .warn { color: var(--vscode-charts-yellow); }
   .link { background: none; border: none; color: var(--vscode-textLink-foreground); padding: 0 4px; }
   .hint { opacity: .65; font-size: .9em; margin-top: 10px; }
+  .findings { margin-top: 8px; }
+  .finding { border-left: 3px solid var(--vscode-panel-border); padding: 2px 0 6px 10px; margin: 6px 0; }
+  .finding.took { border-left-color: var(--vscode-charts-green, var(--vscode-charts-blue)); }
+  .finding.declined { border-left-color: var(--vscode-charts-orange); }
+  .finding .sev { font-weight: 600; }
+  .finding .where { opacity: .75; font-family: var(--vscode-editor-font-family); font-size: .92em; }
+  .finding .why { opacity: .85; margin: 2px 0 0; }
+  .finding .verdict { opacity: .75; font-size: .92em; margin-top: 3px; }
+  .finding .again { color: var(--vscode-charts-orange); font-size: .9em; }
+  .spots { display: flex; flex-wrap: wrap; gap: 18px; }
+  .spots table { width: auto; min-width: 260px; }
 </style>
 </head>
 <body>
 <h1>Review rounds</h1>
 <div id="failed" class="failed" hidden></div>
 <div id="questions">${questionsHtml(questions)}</div>
-<div class="tabs"><button type="button" class="tab on" data-tab="rounds">Rounds</button><button type="button" class="tab" data-tab="usage">What each AI has used</button></div>
+<div class="tabs"><button type="button" class="tab on" data-tab="rounds">Rounds</button><button type="button" class="tab" data-tab="usage">What each AI has used</button><button type="button" class="tab" data-tab="spots">What it keeps missing</button></div>
 <section id="tab-rounds">
 <div class="toolbar">
       <input id="search" type="search" placeholder="Search subject, branch, repository, reviewers…" autocomplete="off">
@@ -617,6 +724,7 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
 <div class="hint">Showing <b>today</b> — <b>All dates</b> clears the range, and the pickers take a time as well as a day. Cost is <b>in / out / total</b> — <code>~</code> means worked out from a public price list rather than billed, <code>+</code> means one reviewer's model had no listed price so the total is a floor. Click a column to sort, a row to see its reviewers. The table advances by itself while a round runs; your sort, filters and search stay.</div>
 </section>
 <section id="tab-usage" hidden><div id="usage-body">${usageHtml}</div></section>
+<section id="tab-spots" hidden><div id="spots-body">${spotsHtml}</div></section>
 <script nonce="${nonce}">
 (function () {
   // A page that fails must say so on the page. The first release of this page came up as a header
@@ -692,7 +800,32 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
       var rest = slash < 0 ? '' : line.slice(slash);
       lines += '<div class="reviewer"><span class="who" style="color:' + esc(row.reviewerColours[i] || 'inherit') + '">' + esc(who) + '</span>' + esc(rest) + '</div>';
     }
-    return lines;
+    return lines + foundHtml(row);
+  }
+  // What the round FOUND, under the reviewers that found it. Severity first because that is how a
+  // person triages, then where, then what it said and what was decided about it - an accepted
+  // finding is something this repository's author had not seen, which is the whole point of keeping
+  // them.
+  function foundHtml(row) {
+    if (!row.found || row.found.length === 0) {
+      return '';
+    }
+    var out = '<div class="findings">';
+    for (var i = 0; i < row.found.length; i++) {
+      var f = row.found[i];
+      var mark = f.resolution === 'accept' ? 'took' : f.resolution === 'reject' ? 'declined' : 'open';
+      out += '<div class="finding ' + esc(mark) + '">'
+        + '<span class="sev">' + esc(f.severity) + '</span> '
+        + '<span class="where">' + esc(f.file ? f.file + ':' + f.line : 'no file') + '</span> '
+        + '<b>' + esc(f.title) + '</b>'
+        + (f.reRaised ? ' <span class="again">raised again</span>' : '')
+        + '<div class="why">' + esc(f.why) + '</div>'
+        + (f.fix ? '<div class="why"><i>fix:</i> ' + esc(f.fix) + '</div>' : '')
+        + '<div class="verdict">' + esc(f.providers) + ' / ' + esc(f.role) + ' &middot; <b>' + esc(mark) + '</b>'
+        + (f.reason ? ': ' + esc(f.reason) : '') + '</div>'
+        + '</div>';
+    }
+    return out + '</div>';
   }
   function render() {
     var shown = ROWS.filter(function (r) { return rowMatches(r, state.filters, state.search); });
@@ -745,6 +878,7 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
       }
       document.getElementById('tab-rounds').hidden = which !== 'rounds';
       document.getElementById('tab-usage').hidden = which !== 'usage';
+      document.getElementById('tab-spots').hidden = which !== 'spots';
       return;
     }
     var button = target.closest('[data-command]');
@@ -815,6 +949,10 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
   window.addEventListener('message', function (event) {
     var message = event.data;
     if (!message) { return; }
+    if (message.type === 'spots' && typeof message.html === 'string') {
+      document.getElementById('spots-body').innerHTML = message.html;
+      return;
+    }
     if (message.type === 'usage' && typeof message.html === 'string') {
       document.getElementById('usage-body').innerHTML = message.html;
       return;

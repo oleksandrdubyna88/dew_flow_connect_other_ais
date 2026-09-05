@@ -31,6 +31,8 @@ export class RoundsLogPanel {
   private panel: vscode.WebviewPanel | undefined;
   private lastPayload = '';
   private lastUsage = '';
+  /** The same for the blind-spot region: pushed only when it actually changed. */
+  private lastSpots = '';
 
   constructor(private readonly hooks: RoundsLogHooks) {}
 
@@ -39,10 +41,10 @@ export class RoundsLogPanel {
     return this.panel !== undefined;
   }
 
-  show(rows: readonly LogRow[], questions: readonly Escalation[], usageHtml: string): void {
+  show(rows: readonly LogRow[], questions: readonly Escalation[], usageHtml: string, spotsHtml = ''): void {
     if (this.panel !== undefined) {
       this.panel.reveal();
-      this.update(rows, questions, usageHtml, true);
+      this.update(rows, questions, usageHtml, true, spotsHtml);
       return;
     }
     const panel = vscode.window.createWebviewPanel(
@@ -54,9 +56,10 @@ export class RoundsLogPanel {
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] },
     );
     this.panel = panel;
-    panel.webview.html = roundsLogHtml(rows, questions, crypto.randomBytes(16).toString('hex'), usageHtml);
+    panel.webview.html = roundsLogHtml(rows, questions, crypto.randomBytes(16).toString('hex'), usageHtml, spotsHtml);
     this.lastPayload = payloadOf(rows, questions);
     this.lastUsage = usageHtml;
+    this.lastSpots = spotsHtml;
     panel.webview.onDidReceiveMessage((message: { type?: string; command?: string; id?: string }) => {
       if (message.type !== 'command' || typeof message.id !== 'string') {
         return;
@@ -72,11 +75,12 @@ export class RoundsLogPanel {
       this.panel = undefined;
       this.lastPayload = '';
       this.lastUsage = '';
+      this.lastSpots = '';
     });
   }
 
   /** Pushes what changed — the rows, the spending region, or both — and nothing when nothing did. */
-  update(rows: readonly LogRow[], questions: readonly Escalation[], usageHtml: string, force = false): void {
+  update(rows: readonly LogRow[], questions: readonly Escalation[], usageHtml: string, force = false, spotsHtml = ''): void {
     if (this.panel === undefined) {
       return;
     }
@@ -88,6 +92,10 @@ export class RoundsLogPanel {
     if (force || usageHtml !== this.lastUsage) {
       this.lastUsage = usageHtml;
       void this.panel.webview.postMessage({ type: 'usage', html: usageHtml });
+    }
+    if (force || spotsHtml !== this.lastSpots) {
+      this.lastSpots = spotsHtml;
+      void this.panel.webview.postMessage({ type: 'spots', html: spotsHtml });
     }
   }
 }

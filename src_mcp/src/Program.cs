@@ -60,6 +60,17 @@ internal static class Program
         /// moment somebody copies the one they were told to install.
         /// </remarks>
         AskLocal,
+
+        /// <summary>
+        /// Print the rounds database as JSON and leave.
+        /// </summary>
+        /// <remarks>
+        /// For the panel, which owns no SQLite of its own and should not have to: the alternative
+        /// was a WebAssembly build in the VSIX or a native module per platform, to ask questions of
+        /// a file this binary already writes and whose schema it owns. A read-only mode costs
+        /// nothing and keeps every query beside its table.
+        /// </remarks>
+        Log,
     }
 
     /// <summary>Which of the three this invocation is. Pure, so it is a unit test.</summary>
@@ -69,6 +80,7 @@ internal static class Program
             : args[0] is "--help" or "-h" or "help" ? Startup.Help
             : args[0] is "--version" or "-v" or "version" ? Startup.Version
             : args[0] == "--ask-local" ? Startup.AskLocal
+            : args[0] == "--log" ? Startup.Log
             : Startup.Usage;
 
     private static async Task<int> Main(string[] args)
@@ -93,6 +105,9 @@ internal static class Program
             case Startup.AskLocal:
                 return await AskLocalAsync(args);
 
+            case Startup.Log:
+                return LogJson(args);
+
             default:
                 return await ServeAsync();
         }
@@ -112,6 +127,43 @@ internal static class Program
     /// <para>Exit 0 with no answer file is not possible: a failure exits non-zero AND says why on
     /// stderr, so the round reports the reason rather than "the vendor returned an empty answer".</para>
     /// </remarks>
+    /// <summary>
+    /// The rounds database on stdout, as JSON. Never the protocol, so stdout is a person's terminal.
+    /// </summary>
+    /// <remarks>
+    /// An empty log — no database yet, or one that cannot be read — is an empty result and exit 0,
+    /// not an error: a panel asking a machine that has never run a round is asking a fair question
+    /// and deserves an answer it can render.
+    /// </remarks>
+    private static int LogJson(string[] args)
+    {
+        var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
+        try
+        {
+            Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
+                Store.RoundsQuery.Read(settings.DataDir, Limit(args)),
+                Server.ServerJsonContext.Default.LoggedLog));
+        }
+        catch (Exception e) when (e is Microsoft.Data.Sqlite.SqliteException or IOException or UnauthorizedAccessException)
+        {
+            Note($"the rounds database could not be read: {e.Message}");
+            Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
+                new Store.LoggedLog([], [], []), Server.ServerJsonContext.Default.LoggedLog));
+        }
+
+        return 0;
+    }
+
+    /// <summary>`--log --limit 50`, or the default. A number nobody can read is the default too.</summary>
+    internal static int Limit(string[] args)
+    {
+        var at = Array.IndexOf(args, "--limit");
+
+        return at >= 0 && at + 1 < args.Length && int.TryParse(args[at + 1], out var limit) && limit > 0
+            ? limit
+            : Store.RoundsQuery.DefaultLimit;
+    }
+
     internal static async Task<int> AskLocalAsync(string[] args)
     {
         var flags = Flags(args);
