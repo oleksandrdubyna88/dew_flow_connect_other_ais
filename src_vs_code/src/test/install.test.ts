@@ -6,6 +6,7 @@ import {
   COAI_RIDS,
   assetNameFor,
   binaryNameFor,
+  companionsOf,
   compareVersions,
   entryPathIn,
   ridFor,
@@ -127,6 +128,28 @@ test('every RID the workflow builds is a RID the extension will install', () => 
   assert.deepEqual([...built].sort(), [...COAI_RIDS].sort());
 });
 
+test('the release carries the native library the binary opens its database through', () => {
+  // 0.18.1 shipped the executable alone. Native AOT compiles managed code; the P/Invoke into
+  // SQLite still resolves at run time through the OS loader, which searches the directory the
+  // executable sits in — so the installed server threw DllNotFoundException the first time
+  // anything touched the rounds database, and the write is best-effort, so it did it in silence.
+  // It answered --version, --help and a full tools/list exchange throughout.
+  const workflow = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', '.github', 'workflows', 'release.yml'),
+    'utf8',
+  );
+
+  assert.match(workflow, /e_sqlite3/, 'the archive carries the native library');
+  assert.match(
+    workflow,
+    /is not in the publish output/,
+    'and the job FAILS when it is missing, rather than shipping a server that cannot open its own database');
+  assert.match(
+    workflow,
+    /COAI_DATA_DIR="\$DB" "\$EXE" --log/,
+    'the smoke makes the published binary actually open one — the check that would have caught it');
+});
+
 test('an unsupported platform is refused rather than guessed at', () => {
   assert.equal(ridFor('freebsd', 'x64'), undefined);
   assert.equal(ridFor('darwin', 'ppc'), undefined);
@@ -225,4 +248,48 @@ test('an access denial on the binary names both causes instead of asserting one'
 
 test('a sharing violation still says plainly that something has the file open', () => {
   assert.match(installFailureHint('EBUSY: resource busy or locked, copyfile coai-mcp.exe', 'EBUSY'), /is in use/);
+});
+
+test('every file the archive brought travels beside the binary', () => {
+  // 0.18.1 shipped the executable alone. Native AOT compiles managed code; the call into SQLite
+  // still resolves at run time through the OS loader, which searches the directory the executable
+  // sits in - so the installed server threw DllNotFoundException the first time anything touched
+  // the rounds database, and because that write is best-effort it failed in silence.
+  const archive = [
+    ['coai-mcp.exe', true],
+    ['e_sqlite3.dll', true],
+  ] as const;
+
+  assert.deepEqual(companionsOf(archive, 'win-x64'), ['e_sqlite3.dll']);
+});
+
+test('a companion is named by what the archive holds, not by a list kept here', () => {
+  // The point of copying the archive's contents rather than a file we know by name: the next
+  // native dependency needs no change in the installer at all.
+  const entries = [
+    ['coai-mcp', true],
+    ['libe_sqlite3.so', true],
+    ['libsomething-not-yet-invented.so', true],
+  ] as const;
+
+  assert.deepEqual(companionsOf(entries, 'linux-x64'), [
+    'libe_sqlite3.so',
+    'libsomething-not-yet-invented.so',
+  ]);
+});
+
+test('the binary itself is not a companion, and neither is a directory', () => {
+  // The binary is copied by name, because that name is what the panel launches; copying it twice
+  // would be harmless but a directory would not be - vscode.workspace.fs.copy would recurse.
+  const entries = [
+    ['coai-mcp', true],
+    ['libe_sqlite3.dylib', true],
+    ['runtimes', false],
+  ] as const;
+
+  assert.deepEqual(companionsOf(entries, 'osx-arm64'), ['libe_sqlite3.dylib']);
+});
+
+test('an archive of nothing but the binary leaves nothing behind to copy', () => {
+  assert.deepEqual(companionsOf([['coai-mcp.exe', true]], 'win-arm64'), []);
 });

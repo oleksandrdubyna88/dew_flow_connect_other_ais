@@ -114,6 +114,21 @@ jobs:
           COAI_CONTRACT_EXE: ${{ github.workspace }}/out/coai-mcp${{ runner.os == 'Windows' && '.exe' || '' }}
         run: |
           EXE=./out/coai-mcp${{ runner.os == 'Windows' && '.exe' || '' }}
+          # FIRST: make it open a database. --help and a tools/list exchange never touch SQLite, so
+          # a binary shipped without its native library passed both and failed at the one thing the
+          # database exists for. An empty file is a valid empty database, so this loads the library
+          # and reads through it — the exact path that was broken.
+          DB=$(mktemp -d)
+          : > "$DB/coai.db"
+          if ! COAI_DATA_DIR="$DB" "$EXE" --log > /dev/null 2>"$DB/err"; then
+            if [ "${{ matrix.rid }}" = "osx-x64" ] && grep -q 'Bad CPU type' "$DB/err"; then
+              echo "osx-x64 cannot be executed on this arm64 runner; the database smoke is skipped with the rest."
+            else
+              echo "the published binary cannot open a database:"
+              cat "$DB/err"
+              exit 1
+            fi
+          fi
           if ! OUT=$("$EXE" --help 2>&1); then
             if [ "${{ matrix.rid }}" = "osx-x64" ] && printf '%s' "$OUT" | grep -q 'Bad CPU type'; then
               echo "osx-x64 cannot be executed on this arm64 runner; smoke skipped for this RID."
@@ -139,11 +154,24 @@ jobs:
 
           ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests${{ runner.os == 'Windows' && '.exe' || '' }} --filter-class "*McpContractTests"
 
+      # The binary AND the native library it dlopens. Native AOT compiles managed code; a P/Invoke
+      # into SQLite still resolves at run time through the OS loader, which searches the directory
+      # the executable sits in. Shipping the executable alone produced a server that started,
+      # answered --version and --help, passed the contract smoke — and threw DllNotFoundException
+      # the first time anything touched the rounds database, where the write is best-effort and the
+      # failure was therefore silent. Found on 0.18.1, in the installed build, by running it.
       - name: Package
         shell: bash
         run: |
           NAME="coai-mcp-$VERSION-${{ matrix.rid }}"
           mkdir "$NAME"
+          NATIVE=$(ls out/*e_sqlite3* 2>/dev/null | head -1)
+          if [ -z "$NATIVE" ]; then
+            echo "the SQLite native library is not in the publish output — the server would ship unable to open its own database"
+            ls -la out
+            exit 1
+          fi
+          cp "$NATIVE" "$NAME/"
           if [[ "${{ matrix.rid }}" == win-* ]]; then
             cp out/coai-mcp.exe "$NAME/"
             7z a "$NAME.zip" "$NAME" > /dev/null
