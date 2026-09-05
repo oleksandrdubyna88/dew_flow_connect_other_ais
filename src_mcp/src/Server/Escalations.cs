@@ -205,8 +205,10 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
         {
             return null;
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
+            // BOTH: a file being replaced right now answers with the second, and this repository has
+            // already lost six rounds to a catch that named only the first.
             return null;
         }
     }
@@ -230,9 +232,9 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
         {
             return null;
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return null; // being written right now; the next poll will find it whole
+            return null; // being written or replaced right now; the next poll will find it whole
         }
     }
 
