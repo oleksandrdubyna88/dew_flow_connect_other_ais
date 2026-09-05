@@ -127,4 +127,14 @@ public sealed record RunRecord(Case Case, string Arm, int Repeat, int Lane)
 
     /// <summary>Whether the settings this run ASKED for are the ones it actually got.</summary>
     public Running.SettingsApplied? Settings { get; init; }
+
+    /// <summary>
+    /// Which judge model has an opinion on this run. Empty until one does.
+    /// </summary>
+    /// <remarks>
+    /// It is what makes a judgement resumable: a pass restarted over the same file skips the runs
+    /// this judge already answered, and a DIFFERENT judge re-judges all of them rather than leaving
+    /// the file half in one model's opinion and half in another.
+    /// </remarks>
+    public string JudgedBy { get; init; } = string.Empty;
 }

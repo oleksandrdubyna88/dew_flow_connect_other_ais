@@ -84,4 +84,28 @@ public sealed class JudgeReadsTheCodeItJudgesTests
         arguments.Should().Contain("--disallowedTools");
         arguments.Should().ContainInOrder("--output-format", "json");
     }
+
+    [Fact]
+    public void AFindingThatNamesALineBeyondTheFile_IsNotACrash()
+    {
+        // It was. A reviewer citing line 500 of a fifty-line file made the window start at 420 and
+        // end at 50, and Enumerable.Range was handed a count of -369:
+        //   System.ArgumentOutOfRangeException ... (Parameter 'count')
+        // That took down the whole judgement on its FOURTEENTH run of fourteen, and because the pass
+        // saved once at the end, thirteen judged runs went with it (2026-09-06, the 0.18.0 matrix).
+        var file = string.Join('\n', Enumerable.Range(1, 50).Select(n => $"line {n}"));
+
+        Judge.Window(file, line: 500, radius: 80).Should().BeEmpty("there is nothing there to show");
+        Judge.Window(file, line: 120, radius: 80).Should().Contain("50: line 50").And.NotContain("39: line 39",
+            "but a window that still overlaps the file shows the part that is there");
+    }
+
+    [Fact]
+    public void AWindowNeverRunsPastEitherEndOfTheFile()
+    {
+        var file = string.Join('\n', Enumerable.Range(1, 10).Select(n => $"line {n}"));
+
+        Judge.Window(file, line: 1, radius: 80).Should().Contain("1: line 1").And.Contain("10: line 10");
+        Judge.Window(file, line: 10, radius: 80).Should().Contain("10: line 10");
+    }
 }

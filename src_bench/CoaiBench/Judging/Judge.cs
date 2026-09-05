@@ -58,7 +58,7 @@ public sealed class Judge(string executable, string model, string repo)
             stages.Add(stage with { Findings = findings });
         }
 
-        return run with { Stages = stages };
+        return run with { Stages = stages, JudgedBy = model };
     }
 
     private async Task<Finding> OneAsync(Case work, Finding finding, CancellationToken ct)
@@ -119,6 +119,16 @@ public sealed class Judge(string executable, string model, string repo)
         var (from, to) = line <= 0
             ? (1, Math.Min(lines.Length, 2 * radius + 1))
             : (Math.Max(1, line - radius), Math.Min(lines.Length, line + radius));
+
+        // A reviewer may cite a line the file does not have - a stale number, a hallucinated one, a
+        // path that resolved to a different file than the one it was reading. Then `from` runs past
+        // `to`, the count below goes negative, and this threw - taking the whole judgement down with
+        // it on its fourteenth run of fourteen. There is simply nothing to show; the judge gets no
+        // window and reads the finding on its own words.
+        if (from > to)
+        {
+            return string.Empty;
+        }
 
         return string.Join("\n", Enumerable.Range(from, to - from + 1).Select(n => $"{n}: {lines[n - 1]}"));
     }
