@@ -58,7 +58,11 @@ public sealed class GitModulesTests
     [InlineData("../../elsewhere")]
     [InlineData("a/../../b")]
     [InlineData("/etc/passwd")]
+    // Rooted on the platform that WROTE it, which is not the one reading it: a drive path is an
+    // ordinary relative directory called "C:" to Path.IsPathRooted on Linux, where CI runs. This
+    // case went green on Windows and red there, which is how the guard came to be platform-blind.
     [InlineData("C:/Windows")]
+    [InlineData("\\\\server\\share")]
     [InlineData("")]
     public void APathThatCanLeaveTheCheckout_IsNotAMount(string path)
     {

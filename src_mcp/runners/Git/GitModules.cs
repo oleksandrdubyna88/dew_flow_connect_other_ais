@@ -71,8 +71,23 @@ public static class GitModules
 
         return normalised.Length > 0
             && !System.IO.Path.IsPathRooted(normalised)
+            && !RootedSomewhereElse(normalised)
             && normalised.Split('/').All(IsOrdinarySegment);
     }
+
+    /// <summary>
+    /// Absolute where it was WRITTEN, which is not necessarily where it is read.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="System.IO.Path.IsPathRooted(string)"/> answers for the platform running it, and a
+    /// review runs on whichever machine the round is on: <c>C:/Windows</c> is rooted on Windows and
+    /// an ordinary relative directory called <c>C:</c> on Linux, where CI runs. A
+    /// <c>.gitmodules</c> is a file inside the repository under review, so the safe reading is the
+    /// stricter one on every platform — nobody mounts a submodule at a directory named <c>C:</c>.
+    /// Caught by CI on Linux, where the Windows-path case of this rule's own test went green.
+    /// </remarks>
+    private static bool RootedSomewhereElse(string path) =>
+        path.StartsWith('/') || (path.Length > 1 && path[1] == ':');
 
     /// <summary>Forward slashes and no trailing separator, so paths compare as text.</summary>
     public static string Normalise(string path) => path.Trim().Replace('\\', '/').TrimEnd('/');
