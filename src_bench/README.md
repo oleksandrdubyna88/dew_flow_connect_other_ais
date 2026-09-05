@@ -9,6 +9,22 @@ It drives the **published** `coai-mcp` over stdio, one server process per run. T
 five windows is five processes, and the failures worth measuring here — a shared data directory, a
 lock held across processes, one GPU behind them all — do not exist inside a single one.
 
+## Where it runs: THIS checkout
+
+`--repo .` — the repository you are standing in, and nothing else is needed. The bench only ever
+writes refs (`git branch -f bench/<arm>/<case>-r<n>`); the server makes its own worktree, detached
+at a SHA, so no branch of yours is touched and no file in your tree moves. Afterwards:
+
+```bash
+git branch --list 'bench/*' | xargs -r git branch -D    # the refs a campaign leaves behind
+```
+
+The campaigns of 2026-09 ran from a temporary clone instead, and the reason was a defect rather than
+a preference: one corpus case pointed at `artifacts/bench/plan-B.md`, and `artifacts/` is
+git-ignored — so the file existed only in the folder where it had been written, and a fresh clone
+could not run that case at all. Case texts live in `src_bench/cases/` now, which is what makes the
+corpus portable.
+
 ## The runs it exists for
 
 ```bash

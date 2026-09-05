@@ -7,7 +7,7 @@
   },
   {
     "name": "split-once",
-    "planFile": "artifacts/bench/plan-B.md",
+    "planFile": "src_bench/cases/split-once.md",
     "commit": "7133c2f",
     "baseRef": "4a27a17"
   },
