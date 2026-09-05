@@ -19,14 +19,14 @@ jobs:
     name: build · test · family checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Only the rules submodule — never `submodules: recursive`, which would drag whatever
       # code submodules appear later into a markdown walk (conventions ROLLOUT.md).
       - name: Conventions submodule
         run: git submodule update --init --depth 1 .claude/rules/shared
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -80,9 +80,9 @@ jobs:
     name: extension · typecheck · test · package
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
