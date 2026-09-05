@@ -273,6 +273,16 @@ round's". `Store/AgentLog` reads it shared and read-only, keeps instant/kind/fir
 names a tool call rather than quoting its arguments, caps at 400 entries or 256 KB, and says inside
 the slice when it had to cut. It never leaves the machine.
 
+**What the gate changed about it.** Its own two rounds over this diff took nine findings: the
+transcript slice keeps to ONE session (entries working in the repo or under it; failing that, the
+busiest transcript in the window — sweeping every project into this repository's database was a real
+objection from two security reviewers); a line is skipped by a day scan before it is parsed and the
+first entry past the window ends the file; a decision follows the DEFECT rather than the ordinal it
+had in one reply; the opening instant is recorded on the session rather than read from the file's
+creation time, which a save-by-move destroys on Windows and Linux never had; `COAI_AGENT_LOG_DIR`
+points the reader at another CLI's transcripts; and `Open` catches anything at all, because a
+migration step throwing something unlisted must not take down a review it only records.
+
 **Shape decisions.**
 
 - A **projection, never the source of truth**. The session files are unchanged and still drive every
