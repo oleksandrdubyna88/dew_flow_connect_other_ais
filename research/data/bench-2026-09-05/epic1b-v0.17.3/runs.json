@@ -1,0 +1,2222 @@
+[
+  {
+    "case": {
+      "name": "rounds-collapse",
+      "planFile": "research/PLAN_rounds_collapse_and_vendor_colour.md",
+      "commit": "267e07a",
+      "baseRef": "afe7fc7"
+    },
+    "arm": "codex,gemini,local",
+    "repeat": 1,
+    "lane": 1,
+    "key": "codex,gemini,local|rounds-collapse|1",
+    "startedUtc": "2026-09-05T09:50:33.223379Z",
+    "finishedUtc": "2026-09-05T09:53:09.3761705Z",
+    "stages": [
+      {
+        "stage": "plan-1",
+        "seconds": 48.5,
+        "verdict": "good_enough",
+        "error": "",
+        "gatingCount": 11,
+        "reviewers": "all 3 reviewers answered",
+        "tokensIn": 39011,
+        "tokensOut": 7345,
+        "costUsd": null,
+        "findings": [
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "The auto-close algorithm does not define what happens when a panel-opened round disappears before a finished state is observed",
+            "why": "If a running round is deleted, rotated out of session data, or the server is killed before the next poll, the round can remain in expanded while ownership is merely pruned, leaving a stale expanded card.",
+            "fix": "Specify and test disappearance and server-failure handling, removing missing rounds from both expansion and ownership state consistently.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Architecture",
+            "file": "",
+            "line": 0,
+            "title": "The plan does not define how panel ownership survives refreshes, provider recreation, or extension restarts",
+            "why": "The behavior depends on an in-memory second set. Restarting the extension while a person has opened a running round loses that fact, so completion can collapse the round against the person\u0027s choice.",
+            "fix": "Define the ownership state lifetime, persist or reconstruct person-owned state, and test reload/recreation/restart during a running round.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Security",
+            "file": "",
+            "line": 0,
+            "title": "The escaping requirement is not specified for every rendered context or renderer path",
+            "why": "Testing only a vendor containing \u003C does not catch values such as \u003C/span\u003E\u003Cscript\u003E or quotes and ampersands in other output contexts; a shared renderer could still emit malformed markup or executable content.",
+            "fix": "Specify context-appropriate escaping at the renderer boundary, prohibit raw vendor interpolation, and test closing tags, quotes, ampersands, and both text and HTML paths.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "The Fable command path has no failure or retry contract",
+            "why": "With the checkbox enabled and the server unavailable, timing out, or killed after accepting the request but before persisting the round, the plan does not define whether the UI reports failure or whether a retry can duplicate the order.",
+            "fix": "Specify acknowledgement, timeout, retry, and idempotency behavior, and test unavailable-server, timeout, and partial-submission retries.",
+            "role": "PlanCritique",
+            "isGating": false,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Performance",
+            "file": "",
+            "line": 0,
+            "title": "[Build order #3 / panelProvider] Toggling round cards re-evaluates the full panel refresh pipeline instead of isolating UI expansion state.",
+            "why": "Expanding or collapsing a card triggers a complete view rebuild that probes vendor CLIs, stats server binaries, and executes network fetches, causing up to twenty-second UI freezes on a simple disclosure toggle.",
+            "fix": "Isolate card expansion/collapse state mutations so toggling disclosure renders only the card body from cached state without invoking external probes or network requests.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "[What must be true #2 / Build order #3] Unfinished or crashed rounds lack completion timestamps, causing elapsed time calculations to grow unbounded.",
+            "why": "When a round crashes, terminates abruptly, or times out without writing a completion record, the panel calculates duration as \u0060now - startTime\u0060, displaying runtimes in the hundreds of minutes on rounds that failed or timed out after ten minutes.",
+            "fix": "Detect dead rounds by comparing elapsed time against the reviewer timeout threshold or active process heartbeat, capping duration and marking the round as timed out or aborted.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Ux",
+            "file": "",
+            "line": 0,
+            "title": "[Build order #5 / panelView] Reusing CSS class \u0027.vendor\u0027 for inline text spans collides with existing card container styling.",
+            "why": "The stylesheet already defines \u0060.vendor\u0060 with card-level borders, border-radius, and padding, causing inline \u0060\u003Cspan\u003E\u0060 elements around vendor names to render with box borders across the text.",
+            "fix": "Use a distinct inline class name such as \u0060who\u0060 or \u0060vendor-label\u0060 that carries no inherited card-level box model styles.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Ux",
+            "file": "",
+            "line": 0,
+            "title": "[What must be true #2, #3] Legacy rounds recorded prior to per-reviewer metadata render as interactive disclosures with empty bodies.",
+            "why": "Historical session records without detailed reviewer breakdowns still render with expansion triangles and interactive hand cursors, opening into empty containers.",
+            "fix": "Conditionally render disclosure controls only for rounds that contain reviewer detail, rendering legacy rounds as non-collapsible flat summary rows.",
+            "role": "PlanCritique",
+            "isGating": false,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Architecture",
+            "file": "",
+            "line": 0,
+            "title": "[Build order #4 / rounds.ts] Placing theme palette resolution \u0027vendorColour\u0027 in session parser creates an inverted dependency.",
+            "why": "\u0060rounds.ts\u0060 handles session log file parsing; placing VS Code chart palette resolution inside it forces independent view components (such as spending rows) to depend on session parser modules.",
+            "fix": "Extract \u0060vendorColour\u0060 into a separate presentation utility module (\u0060vendorColour.ts\u0060) accessible to all view components.",
+            "role": "PlanCritique",
+            "isGating": false,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Blocking",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Ambiguous ownership logic causes data loss on restart",
+            "why": "The plan relies on the assumption that a round \u0027opened by the panel\u0027 can be identified solely by its presence in a specific set or its current state. If the extension host restarts or the round object is re-hydrated from a session file, the code loses the context of \u0027who opened it\u0027 because no persistent ID links the \u0027opened by panel\u0027 set to the round\u0027s history. Result: A round opened by the panel, finished, and then the extension restarts is treated as \u0027person opened\u0027 (because it\u0027s not in the pruned set) and stays open forever, or conversely, a person\u0027s round is auto-closed because it matches a stale state.",
+            "fix": "Add a deterministic ID field to the round object (e.g., \u0060session_id\u0060 or \u0060round_id\u0060) and use it to match the \u0027opened by panel\u0027 state against the round\u0027s lifecycle events, rather than relying on object identity or timestamp proximity.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Blocking",
+            "category": "Architecture",
+            "file": "",
+            "line": 0,
+            "title": "Fable gating logic is fundamentally misaligned with system architecture",
+            "why": "The plan assumes \u0060PanelService.FableIsUsable()\u0060 checks if Fable is a \u0027reviewer\u0027 in the provider list. Since Fable is the \u0027calling AI\u0027 and not a configured reviewer, this check returns false on every real machine. Result: The \u0027Split with Fable\u0027 checkbox becomes inert; users toggle it expecting a split, but the system ignores it because it waits for a non-existent reviewer configuration, leading to silent failure where the intended workflow never triggers.",
+            "fix": "Replace the \u0060FableAvailable\u0060 flag with a direct check of the \u0060CommandContext\u0060 for the presence of the Fable model instance or a configuration key that explicitly enables the \u0027Split\u0027 mode, rather than checking a provider list that Fable is not part of.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Performance",
+            "file": "",
+            "line": 0,
+            "title": "Synchronous expensive I/O on UI render path causes 20s latency",
+            "why": "The plan states the toggle must \u0027repaint to build a card\u0027s body\u0027, triggering a sequence of synchronous operations: reading config, stat-ing binary, probing CLIs, and fetching GitHub price tables. Result: When a user toggles the switch or opens a card, the UI freezes for up to 20 seconds while these blocking calls complete, causing the user to think the extension has hung or crashed, leading to double-toggling or premature closure.",
+            "fix": "Cache the result of the configuration read, server stat, CLI probe, and price table fetches in memory or a local store, and only re-evaluate on explicit configuration changes or a defined interval, rather than on every toggle repaint.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Dead rounds report incorrect duration due to missing completion state",
+            "why": "The plan admits that \u0027a dead round is never written a completion time\u0027, so the system measures duration from the start time. Result: If a round crashes or times out (e.g., after 10 minutes) but the process doesn\u0027t die, the system calculates duration as \u0027current time - start time\u0027. A round that died 360 minutes ago will report \u0027361m 40s\u0027 instead of \u002710m\u0027, misleading the user about the actual runtime and potentially causing the system to think a long-running process is still active when it is dead.",
+            "fix": "Introduce a \u0027last known state\u0027 timestamp or explicit \u0027completion\u0027 flag in the round object that is written immediately upon the round\u0027s logical finish, rather than inferring completion from the absence of activity or measuring duration from start time.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Ux",
+            "file": "",
+            "line": 0,
+            "title": "Visual regression causes vendor names to appear struck-through",
+            "why": "The plan notes that the span class \u0060who\u0060 (or \u0060vendor\u0060) inherits a border, radius, and padding from the \u0060.vendor\u0060 class used for the settings card. Result: When a single word is rendered inside this container with tight line spacing, the border/padding creates a visual artifact that looks like a strikethrough line through the text. Users perceive the vendor name as \u0027deleted\u0027 or \u0027invalid\u0027, causing confusion about whether the split actually occurred.",
+            "fix": "Add a specific CSS class for the \u0027vendor\u0027 text span that overrides the default line-height and padding, or explicitly set \u0060display: inline-block\u0060 with \u0060line-height: normal\u0060 to prevent the text from being visually struck through by the container\u0027s border.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Legacy rounds render as empty placeholders with misleading interaction cues",
+            "why": "The plan states that rounds recorded before per-reviewer detail became \u0027disclosures that opened into an apology\u0027. Result: When a user clicks on a legacy round, they see a \u0027hand cursor\u0027 promising detail, but the content is empty or just an apology. This creates a false expectation of data, leading to user frustration when they realize the round has no actionable history, and the \u0027flat line\u0027 rendering makes it indistinguishable from a failed load.",
+            "fix": "Implement a fallback UI state for rounds recorded before per-reviewer detail existed, or explicitly mark them as \u0027legacy\u0027 with a distinct visual indicator, rather than rendering them as \u0027flat lines\u0027 with a hand cursor.",
+            "role": "PlanCritique",
+            "isGating": false,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          }
+        ],
+        "commands": [
+          "Split this plan into 2-4 logically complete STORIES. It is not broad enough to need epics. (Measured from the plan you sent: 109 lines, 6 build step(s), 5 file(s) named, 5 area(s) touched. That is a heuristic \u2014 if it is wrong for this plan, say so in your summary and do what is right.) After EVERY story: call review_code on that story\u0027s diff, resolve every finding, fix what you accepted, update the documentation and the tests, and commit. Only then start the next one. A story that is not reviewed, documented, tested and committed is not finished.",
+          "Do the SPLIT itself with Fable at its highest available version \u2014 deciding what the epics and stories are is the judgement that shapes everything after it. Then implement: ordinary stories on Opus, and anything where being wrong is expensive \u2014 payments, money, authentication, security, architecture, data migration \u2014 on Fable (max) again. Name the model you used for each story in your summary.",
+          "Work AUTONOMOUSLY. Say that you are working autonomously, and keep saying what you are writing right now as you go. Autonomous means these orders, not a mood: (1) every bug and every problem spot gets a RED-GREEN-RED test \u2014 a failing test first, then the fix, then the test green, then a check that the test really fails without the fix; (2) the documentation is updated with every change \u2014 the README, the manifest if there is one, the module docs and every other file that describes what you changed; (3) before any release, run ALL the tests that exist, not only the ones near your change; (4) if the repository has a release or pull request process, do it \u2014 and on a pull request, wait about five minutes, then check whether automatic comments appeared, read them and fix what they name; (5) if a deploy triggers automatically, verify the result against the target environment \u2014 dev, stage or test \u2014 and read its logs for errors before calling it done; (6) re-read your own code against the repository\u0027s rules and follow them, not only the ones you remember. A question that does not block you is not asked now: write it down and put every one of them at the END of your final summary. A question that DOES block you is asked at once \u2014 but before you ask it, re-read every epic and story you have written so far and gather every other blocking question you can foresee, so the person is interrupted once with all of them rather than repeatedly with one. Where you can proceed under a stated assumption, do that instead of asking, and say what you assumed."
+        ],
+        "resolveRefused": ""
+      },
+      {
+        "stage": "code",
+        "seconds": 107.6,
+        "verdict": "proceed",
+        "error": "",
+        "gatingCount": 7,
+        "reviewers": "all 9 reviewers answered",
+        "tokensIn": 445237,
+        "tokensOut": 13724,
+        "costUsd": null,
+        "findings": [
+          {
+            "severity": "Major",
+            "category": "Convention",
+            "file": "src_vs_code/src/panelView.ts",
+            "line": 811,
+            "title": "Reviewer vendor spans use the forbidden \u0060vendor\u0060 class instead of the documented \u0060who\u0060 class",
+            "why": "The plan explicitly records that the shipped span class is \u0060who\u0060 because \u0060.vendor\u0060 already styles the settings card; using \u0060class=\u0022vendor\u0022\u0060 applies that existing card styling to inline reviewer names.",
+            "fix": "Change the reviewer span class from \u0060vendor\u0060 to \u0060who\u0060, and update the corresponding tests to expect \u0060class=\u0022who\u0022\u0060.",
+            "role": "Architecture",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/SessionStore.cs",
+            "line": 154,
+            "title": "Concurrent saves can still overwrite newer session state with an older snapshot",
+            "why": "If writer A loads round 1, writer B adds round 2 and saves, then writer A saves afterward, each unique scratch file moves successfully but A replaces B\u0027s newer session with its stale snapshot, silently losing round 2 and its progress.",
+            "fix": "Serialize the read/merge/write/move sequence per session across processes, or add revision checking and merge/retry before replacing the destination.",
+            "role": "SecurityReliability",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Reliability",
+            "file": "src_vs_code/src/panelView.ts",
+            "line": 809,
+            "title": "A malformed session reviewer provider can crash panel rendering",
+            "why": "A hand-edited or partially malformed session containing \u0060\u0022provider\u0022: null\u0060 reaches \u0060vendorColour(row.provider)\u0060, whose \u0060trim()\u0060 call throws; the repaint then fails instead of displaying the session safely.",
+            "fix": "Validate or normalize reviewer providers while parsing session files, or make \u0060vendorColour\u0060 accept non-string values and fall back to the foreground colour.",
+            "role": "SecurityReliability",
+            "isGating": false,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Ux",
+            "file": "src_vs_code/src/panelProvider.ts",
+            "line": 140,
+            "title": "Clicking a round disclosure still waits for the provider\u0027s full refresh before showing the card body",
+            "why": "When a person opens or closes a round, the handler immediately repaints through the full refresh path; on a machine where configuration reads, CLI probes, server checks, GitHub checks, and price-table requests take up to 20 seconds, the click appears inert with no busy or terminal error state.",
+            "fix": "Update the disclosure state and render the round body locally first, then refresh unrelated sections asynchronously; expose a busy/error state if the full refresh is unavoidable.",
+            "role": "UxDxPerformance",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Performance",
+            "file": "src_mcp/src/Server/SessionStore.cs",
+            "line": 159,
+            "title": "Transient save contention synchronously stalls reviewer progress for up to 200 ms per save",
+            "why": "During concurrent servers writing the same session, each reviewer transition can sleep 20, 40, 60, and 80 ms before retrying; a nine-reviewer round can therefore accumulate seconds of blocked progress-path time, while the person sees the round stop advancing without any status explaining the delay.",
+            "fix": "Move persistence off the reviewer-transition path or make the bounded retry asynchronous; report a persistence-in-progress/error state when saving cannot complete promptly.",
+            "role": "UxDxPerformance",
+            "isGating": false,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Performance",
+            "file": "src_mcp/src/Server/SessionStore.cs",
+            "line": 180,
+            "title": "Synchronous Thread.Sleep in retry loop blocks calling threads during concurrent file moves",
+            "why": "When concurrent writers or file locks on Windows trigger IOException/UnauthorizedAccessException, SessionStore.Save executes a synchronous Thread.Sleep(20 * attempt) on the current thread for up to 5 attempts (total ~300ms sleep). Under burst traffic across multiple active reviewer transitions or MCP requests, this blocks thread-pool/server execution threads synchronously instead of yielding or using asynchronous backoff.",
+            "fix": "If SessionStore remains synchronous, keep backoff minimal/non-spinning or use Task.Delay in an async SaveAsync pipeline; alternatively use a short SpinWait or minimal yield (e.g. Thread.Yield() / short sleep) to avoid holding server execution threads.",
+            "role": "UxDxPerformance",
+            "isGating": true,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Ux",
+            "file": "src_vs_code/src/panelView.ts",
+            "line": 810,
+            "title": "Vendor span uses class \u0027vendor\u0027 which conflicts with existing card styles",
+            "why": "The plan deviations document explicitly noted that \u0027.vendor already meant the settings card in this stylesheet, so the word came out wearing a border, a radius and eight pixels of padding, which on a single word inside a tight line reads as a line THROUGH the text\u0027 and required the class to be \u0027who\u0027. However, roundCard in panelView.ts still renders \u0060\u003Cspan class=\u0022vendor\u0022 style=\u0022...\u0022\u003E\u0060 instead of \u0060\u003Cspan class=\u0022who\u0022 style=\u0022...\u0022\u003E\u0060, re-triggering unwanted padding/border styling around the vendor name.",
+            "fix": "Replace \u0060class=\u0022vendor\u0022\u0060 with \u0060class=\u0022who\u0022\u0060 in \u0060roundCard\u0060 inside \u0060src_vs_code/src/panelView.ts\u0060 and update related unit tests.",
+            "role": "UxDxPerformance",
+            "isGating": false,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Convention",
+            "file": "src_mcp/src/Server/SessionStore.cs",
+            "line": 175,
+            "title": "Session save retry loop may silently swallow a final failure",
+            "why": "The rule in \u0060.claude/rules/common/review-gate.md\u0060 states: \u0027The server refuses one without it\u0027 (referring to scope) and implies strict adherence to protocol. More critically, the \u0060vendor-routing.md\u0060 rule states \u0027breaking it is invisible in the output\u0027. The \u0060MoveOverExisting\u0060 method retries 5 times. If the 5th attempt fails, the \u0060catch\u0060 block inside the loop (line 183) catches the exception but the loop exits. The method then returns. The caller (\u0060Save\u0060) has a \u0060try...finally\u0060 block. If \u0060MoveOverExisting\u0060 throws, it propagates. If it succeeds, it returns. However, the logic \u0060catch (Exception e) when (...) \u0026\u0026 attempt \u003C attempts\u0060 means on the 5th attempt, if it fails, the loop exits *without* re-throwing or handling the exception explicitly in a way that guarantees visibility. Wait, looking closer: \u0060catch\u0060 block has \u0060Thread.Sleep\u0060. If \u0060attempt\u0060 reaches 5, the loop condition \u0060attempt \u003C= attempts\u0060 is true. Inside, if it throws, it hits the catch. \u0060attempt \u003C attempts\u0060 (5 \u003C 5) is false. So it *",
+            "fix": "Ensure the \u0060MoveOverExisting\u0060 method\u0027s retry loop uses a bounded number of attempts and that the final attempt throws if it fails, rather than silently swallowing the error.",
+            "role": "Architecture",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/SessionStore.cs",
+            "line": 175,
+            "title": "Concurrent save race condition leaves orphaned scratch files and silent failures",
+            "why": "In \u0060SessionStore.Save\u0060, the code generates a unique scratch filename using \u0060Environment.ProcessId\u0060 and a GUID. However, if two processes (or threads in a multi-threaded scenario) happen to generate the same GUID or if the process ID is reused rapidly, they could collide. More critically, the \u0060MoveOverExisting\u0060 method retries 5 times with exponential backoff (20ms, 40ms, 60ms, 80ms, 100ms). If the destination file is held by a virus scanner or another process for longer than ~250ms, the move fails. The code then enters the \u0060finally\u0060 block and calls \u0060TryDelete(temp)\u0060. If the move failed, \u0060temp\u0060 still exists. If the \u0060TryDelete\u0060 fails (e.g., file locked), it swallows the exception. The result is a session file that never updated (stale data) and a temporary file left behind, potentially filling the disk or causing future collisions if the temp name generation isn\u0027t perfectly unique. The comment admits \u0027a save that never lands is a real problem\u0027 but the \u0060finally\u0060 block\u0027s \u0060TryDelete\u0060 might *",
+            "fix": "Ensure the \u0060MoveOverExisting\u0060 retry loop uses a bounded, non-infinite backoff and that the final exception is re-thrown or logged with context, rather than silently swallowed if the file is held by a scanner.",
+            "role": "SecurityReliability",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Security",
+            "file": "src_vs_code/src/panelView.ts",
+            "line": 806,
+            "title": "Potential HTML injection in vendor name rendering if escaping order is flawed",
+            "why": "In \u0060roundCard\u0060, the code constructs the reviewer row as: \u0060\u003Cspan class=\u0022vendor\u0022 style=\u0022color:${vendorColour(row.provider)}\u0022\u003E\u0060 \u002B \u0060${escapeHtml(row.provider)}\u0060 \u002B \u0060\u003C/span\u003E${escapeHtml(row.rest)}\u0060. If \u0060row.provider\u0060 contains a string like \u0060\u003Cscript\u003E\u0060, \u0060escapeHtml\u0060 converts it to \u0060\u0026lt;script\u0026gt;\u0060. However, if the \u0060vendorColour\u0060 function (or the caller) relies on the raw provider name for the style, and the style attribute is interpolated directly into the HTML string without escaping, an attacker could inject a style attribute. Wait, the style is \u0060color:var(...)\u0060, so it\u0027s safe. The real risk is if \u0060row.provider\u0060 is used in a context where it\u0027s not escaped *before* being placed inside the span, or if \u0060row.rest\u0060 contains unescaped HTML. The code escapes \u0060row.provider\u0060 and \u0060row.rest\u0060 separately. The risk is if \u0060row.provider\u0060 is *not* escaped before being used in the \u0060style\u0060 attribute (e.g., if \u0060vendorColour\u0060 returned a hex value that wasn\u0027t quoted, but it returns a CSS variable). The actual flaw",
+            "fix": "Ensure \u0060vendorColour\u0060 is called *after* \u0060escapeHtml\u0060 or that the HTML structure wraps the escaped text correctly, preventing a scenario where a vendor name like \u0060\u003Cscript\u003E\u0060 renders as an active tag if the escaping logic is applied to the wrong part of the string.",
+            "role": "SecurityReliability",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Reliability",
+            "file": "src_vs_code/src/openRounds.ts",
+            "line": 45,
+            "title": "Race condition in round state management could lead to duplicate keys or lost state",
+            "why": "The \u0060nextOpenRounds\u0060 function builds a \u0060Set\u0060 of keys from \u0060cards\u0060. If two rounds have the same \u0060roundKey\u0060 (e.g., same repo, branch, stage, number), the second one will overwrite the first in the Set. This means if a user has two rounds with identical metadata (perhaps from different branches or a bug in ID generation), only one will be tracked in the \u0060open\u0060 state. If the user interacts with the \u0027wrong\u0027 one (the one that was processed last), the state update might not reflect the actual round they clicked. This is a subtle data loss scenario where the UI state diverges from the actual session data.",
+            "fix": "Add a check to ensure \u0060roundKey\u0060 is unique across all rounds before adding to the \u0060open\u0060 set, or handle collisions explicitly.",
+            "role": "SecurityReliability",
+            "isGating": false,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          }
+        ],
+        "commands": [
+          "Work AUTONOMOUSLY. Say that you are working autonomously, and keep saying what you are writing right now as you go. Autonomous means these orders, not a mood: (1) every bug and every problem spot gets a RED-GREEN-RED test \u2014 a failing test first, then the fix, then the test green, then a check that the test really fails without the fix; (2) the documentation is updated with every change \u2014 the README, the manifest if there is one, the module docs and every other file that describes what you changed; (3) before any release, run ALL the tests that exist, not only the ones near your change; (4) if the repository has a release or pull request process, do it \u2014 and on a pull request, wait about five minutes, then check whether automatic comments appeared, read them and fix what they name; (5) if a deploy triggers automatically, verify the result against the target environment \u2014 dev, stage or test \u2014 and read its logs for errors before calling it done; (6) re-read your own code against the repository\u0027s rules and follow them, not only the ones you remember. A question that does not block you is not asked now: write it down and put every one of them at the END of your final summary. A question that DOES block you is asked at once \u2014 but before you ask it, re-read every epic and story you have written so far and gather every other blocking question you can foresee, so the person is interrupted once with all of them rather than repeatedly with one. Where you can proceed under a stated assumption, do that instead of asking, and say what you assumed."
+        ],
+        "resolveRefused": ""
+      }
+    ],
+    "harnessError": "",
+    "serverSaid": "[09:53:09 \u001B[32mINF\u001B[0m] coai-mcp#27060 finding [Major/Reliability] src_mcp/src/Server/SessionStore.cs:175 - Concurrent save race condition leaves orphaned scratch files and silent failures (from local) [gating] Round=1 Stage=CodeReview\r | [09:53:09 \u001B[32mINF\u001B[0m] coai-mcp#27060 finding [Major/Security] src_vs_code/src/panelView.ts:806 - Potential HTML injection in vendor name rendering if escaping order is flawed (from local) [gating] Round=1 Stage=CodeReview\r | [09:53:09 \u001B[32mINF\u001B[0m] coai-mcp#27060 finding [Minor/Reliability] src_vs_code/src/openRounds.ts:45 - Race condition in round state management could lead to duplicate keys or lost state (from local) Round=1 Stage=CodeReview",
+    "onDisk": {
+      "rounds": 2,
+      "stillRunning": 0,
+      "pending": 0,
+      "note": "",
+      "config": {
+        "onExhausted": "GoodEnough",
+        "roles": {
+          "PlanCritique": {
+            "maxRounds": 1,
+            "threshold": 6
+          },
+          "Architecture": {
+            "maxRounds": 2,
+            "threshold": 5
+          },
+          "SecurityReliability": {
+            "maxRounds": 1,
+            "threshold": 5
+          },
+          "UxDxPerformance": {
+            "maxRounds": 1,
+            "threshold": 5
+          }
+        }
+      },
+      "clean": true
+    },
+    "settings": {
+      "mismatches": [],
+      "checked": [
+        "PlanCritique rounds",
+        "PlanCritique threshold",
+        "Architecture threshold",
+        "SecurityReliability rounds",
+        "SecurityReliability threshold",
+        "UxDxPerformance rounds",
+        "UxDxPerformance threshold",
+        "on-exhausted",
+        "COAI_AUTONOMOUS",
+        "COAI_SPLIT_PLAN",
+        "COAI_SPLIT_WITH_FABLE"
+      ],
+      "ok": true
+    }
+  },
+  {
+    "case": {
+      "name": "rounds-collapse",
+      "planFile": "research/PLAN_rounds_collapse_and_vendor_colour.md",
+      "commit": "267e07a",
+      "baseRef": "afe7fc7"
+    },
+    "arm": "codex,gemini,local",
+    "repeat": 2,
+    "lane": 1,
+    "key": "codex,gemini,local|rounds-collapse|2",
+    "startedUtc": "2026-09-05T09:53:09.4882874Z",
+    "finishedUtc": "2026-09-05T09:57:34.1116866Z",
+    "stages": [
+      {
+        "stage": "plan-1",
+        "seconds": 50.3,
+        "verdict": "good_enough",
+        "error": "",
+        "gatingCount": 10,
+        "reviewers": "all 3 reviewers answered",
+        "tokensIn": 40582,
+        "tokensOut": 5114,
+        "costUsd": null,
+        "findings": [
+          {
+            "severity": "Major",
+            "category": "Security",
+            "file": "",
+            "line": 0,
+            "title": "The escaping requirement is broader than the only specified escaping test",
+            "why": "A session file containing \u0060\u003Cimg src=x onerror=...\u003E\u0060 in a round title, reviewer metadata, or a spending-row field can still execute if those interpolations use innerHTML; the test only covers a vendor name in one reviewer row.",
+            "fix": "Define and audit every session-derived HTML sink, centralize escaping or use textContent/DOM construction, and test malicious values in every rendered field and section.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "The plan does not specify compatibility or rollout handling for the required server version",
+            "why": "If the extension updates to 0.29.x while the installed server remains below 0.16.0, ticking the checkbox can send an unsupported Fable command and leave the user with no order or an unhandled command error.",
+            "fix": "Specify the minimum server version and upgrade/handshake behavior, including a user-visible failure for an incompatible server and a tested mixed-version path.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "The dead-round duration correction is asserted but absent from the build and test work",
+            "why": "A round that never records a completion time can still be displayed as running for the elapsed time since it started, producing values such as \u0060361m 40s\u0060 after a ten-minute reviewer timeout; none of the listed tests exercises this state or defines the fallback duration.",
+            "fix": "Specify the timeout/unknown-completion state and add a test for a round with no completion timestamp after the reviewer is killed or times out.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Legacy rounds without reviewer detail are not covered by the implementation or verification steps",
+            "why": "Opening a pre-detail session can still present a clickable disclosure that expands to an apology or empty body, despite the plan claiming those rows became flat lines; the test plan contains no legacy-session fixture.",
+            "fix": "Define the render rule for missing detail, make the disclosure non-interactive, and test a pre-detail session file.",
+            "role": "PlanCritique",
+            "isGating": false,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Performance",
+            "file": "",
+            "line": 0,
+            "title": "Build order 3: Toggle repaint re-evaluates heavy machine state during card expansion/collapse",
+            "why": "The plan relies on toggling cards open/closed via the standard panel repaint, but the panel render path synchronously stat-checks server binaries, probes all vendor CLIs, queries GitHub releases, and fetches pricing tables. When a person toggles a round card or an auto-collapse triggers, the UI freezes or delays for up to 20 seconds instead of toggling state instantly.",
+            "fix": "Decouple panel fold/expansion rendering from backend vendor probing and network fetches, or cache environment stats so toggling state only re-renders the DOM.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "What must be true #2: Dead or interrupted rounds lack completion timestamps, causing stale \u0027running\u0027 state and inflated durations",
+            "why": "A round that crashes or is killed never writes a completion timestamp to its session file. The auto-collapse logic in step 3 checks whether a round is no longer running, but without explicit timeout/dead-round detection, the panel treats the round as indefinitely running and auto-expanded, reporting elapsed time of hundreds of minutes past the reviewer timeout.",
+            "fix": "Add a dead/timeout round check that considers rounds older than the reviewer timeout as stopped/failed so they collapse and stop calculating elapsed time.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Ux",
+            "file": "",
+            "line": 0,
+            "title": "Build order 5: CSS class conflict on \u0060.vendor\u0060 card styling corrupts inline span layout",
+            "why": "Wrapping the vendor name in \u0060\u003Cspan class=\u0022vendor\u0022\u003E\u0060 collides with existing CSS rules for \u0060.vendor\u0060 (which define card borders, border-radius, and 8px padding). When rendered inline inside reviewer rows, the text appears struck through or misaligned with broken line-height.",
+            "fix": "Use a distinct class name such as \u0060who\u0060 or \u0060vendor-tag\u0060 that does not conflict with existing card styles in the stylesheet.",
+            "role": "PlanCritique",
+            "isGating": false,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Ux",
+            "file": "",
+            "line": 0,
+            "title": "What must be true #3: Opening legacy session records without reviewer details creates empty interactive disclosure cards",
+            "why": "Legacy session files recorded before per-reviewer breakdown existed are rendered as expandable disclosure cards with pointer cursor. Clicking them expands an empty card body with no review information.",
+            "fix": "Render historical session rounds that lack reviewer details as flat non-expandable rows rather than disclosure cards.",
+            "role": "PlanCritique",
+            "isGating": false,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Blocking",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Ambiguous ownership logic causes data loss on restart",
+            "why": "The plan relies on the assumption that a round \u0027opened by the panel\u0027 can be identified solely by its presence in a specific set or its current state. If the extension host restarts or the round object is re-hydrated from a session file, the code loses the context of \u0027who opened it\u0027 because no persistent ID links the \u0027opened by panel\u0027 set to the round\u0027s history. Result: A round opened by the panel, finished, and then the extension restarts is treated as \u0027person opened\u0027 (because it\u0027s not in the pruned set) and stays open forever, or conversely, a person\u0027s round is auto-closed because it matches a stale state.",
+            "fix": "Add a deterministic ID field to the round object (e.g., \u0060session_id\u0060 or \u0060round_id\u0060) and use it to match the \u0027opened by panel\u0027 state against the round\u0027s lifecycle events, rather than relying on object identity or timestamp proximity.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Blocking",
+            "category": "Architecture",
+            "file": "",
+            "line": 0,
+            "title": "Fable gating logic is fundamentally misaligned with system architecture",
+            "why": "The plan assumes \u0060PanelService.FableIsUsable()\u0060 checks if Fable is a \u0027reviewer\u0027 in the provider list. Since Fable is the \u0027calling AI\u0027 and not a configured reviewer, this check returns false on every real machine. Result: The \u0027Split with Fable\u0027 checkbox becomes inert; users toggle it expecting a split, but the system ignores it because it waits for a non-existent reviewer configuration, leading to silent failure where the intended workflow never triggers.",
+            "fix": "Replace the \u0060FableAvailable\u0060 flag with a direct check of the \u0060CommandContext\u0060 for the presence of the Fable model instance or a configuration key that explicitly enables the \u0027Split\u0027 mode, rather than checking a provider list that Fable is not part of.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Performance",
+            "file": "",
+            "line": 0,
+            "title": "Synchronous expensive I/O on UI render path causes 20s latency",
+            "why": "The plan states the toggle must \u0027repaint to build a card\u0027s body\u0027, triggering a sequence of synchronous operations: reading config, stat-ing binary, probing CLIs, and fetching GitHub price tables. Result: When a user toggles the switch or opens a card, the UI freezes for up to 20 seconds while these blocking calls complete, causing the user to think the extension has hung or crashed, leading to double-toggling or premature closure.",
+            "fix": "Cache the result of the configuration read, server stat, CLI probe, and price table fetches in memory or a local store, and only re-evaluate on explicit configuration changes or a defined interval, rather than on every toggle repaint.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Dead rounds report incorrect duration due to missing completion state",
+            "why": "The plan admits that \u0027a dead round is never written a completion time\u0027, so the system measures duration from the start time. Result: If a round crashes or times out (e.g., after 10 minutes) but the process doesn\u0027t die, the system calculates duration as \u0027current time - start time\u0027. A round that died 360 minutes ago will report \u0027361m 40s\u0027 instead of \u002710m\u0027, misleading the user about the actual runtime and potentially causing the system to think a long-running process is still active when it is dead.",
+            "fix": "Introduce a \u0027last known state\u0027 timestamp or explicit \u0027completion\u0027 flag in the round object that is written immediately upon the round\u0027s logical finish, rather than inferring completion from the absence of activity or measuring duration from start time.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Ux",
+            "file": "",
+            "line": 0,
+            "title": "Visual regression causes vendor names to appear struck-through",
+            "why": "The plan notes that the span class \u0060who\u0060 (or \u0060vendor\u0060) inherits a border, radius, and padding from the \u0060.vendor\u0060 class used for the settings card. Result: When a single word is rendered inside this container with tight line spacing, the border/padding creates a visual artifact that looks like a strikethrough line through the text. Users perceive the vendor name as \u0027deleted\u0027 or \u0027invalid\u0027, causing confusion about whether the split actually occurred.",
+            "fix": "Add a specific CSS class for the \u0027vendor\u0027 text span that overrides the default line-height and padding, or explicitly set \u0060display: inline-block\u0060 with \u0060line-height: normal\u0060 to prevent the text from being visually struck through by the container\u0027s border.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Legacy rounds render as empty placeholders with misleading interaction cues",
+            "why": "The plan states that rounds recorded before per-reviewer detail became \u0027disclosures that opened into an apology\u0027. Result: When a user clicks on a legacy round, they see a \u0027hand cursor\u0027 promising detail, but the content is empty or just an apology. This creates a false expectation of data, leading to user frustration when they realize the round has no actionable history, and the \u0027flat line\u0027 rendering makes it indistinguishable from a failed load.",
+            "fix": "Implement a fallback UI state for rounds recorded before per-reviewer detail existed, or explicitly mark them as \u0027legacy\u0027 with a distinct visual indicator, rather than rendering them as \u0027flat lines\u0027 with a hand cursor.",
+            "role": "PlanCritique",
+            "isGating": false,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          }
+        ],
+        "commands": [
+          "Split this plan into 2-4 logically complete STORIES. It is not broad enough to need epics. (Measured from the plan you sent: 109 lines, 6 build step(s), 5 file(s) named, 5 area(s) touched. That is a heuristic \u2014 if it is wrong for this plan, say so in your summary and do what is right.) After EVERY story: call review_code on that story\u0027s diff, resolve every finding, fix what you accepted, update the documentation and the tests, and commit. Only then start the next one. A story that is not reviewed, documented, tested and committed is not finished.",
+          "Do the SPLIT itself with Fable at its highest available version \u2014 deciding what the epics and stories are is the judgement that shapes everything after it. Then implement: ordinary stories on Opus, and anything where being wrong is expensive \u2014 payments, money, authentication, security, architecture, data migration \u2014 on Fable (max) again. Name the model you used for each story in your summary.",
+          "Work AUTONOMOUSLY. Say that you are working autonomously, and keep saying what you are writing right now as you go. Autonomous means these orders, not a mood: (1) every bug and every problem spot gets a RED-GREEN-RED test \u2014 a failing test first, then the fix, then the test green, then a check that the test really fails without the fix; (2) the documentation is updated with every change \u2014 the README, the manifest if there is one, the module docs and every other file that describes what you changed; (3) before any release, run ALL the tests that exist, not only the ones near your change; (4) if the repository has a release or pull request process, do it \u2014 and on a pull request, wait about five minutes, then check whether automatic comments appeared, read them and fix what they name; (5) if a deploy triggers automatically, verify the result against the target environment \u2014 dev, stage or test \u2014 and read its logs for errors before calling it done; (6) re-read your own code against the repository\u0027s rules and follow them, not only the ones you remember. A question that does not block you is not asked now: write it down and put every one of them at the END of your final summary. A question that DOES block you is asked at once \u2014 but before you ask it, re-read every epic and story you have written so far and gather every other blocking question you can foresee, so the person is interrupted once with all of them rather than repeatedly with one. Where you can proceed under a stated assumption, do that instead of asking, and say what you assumed."
+        ],
+        "resolveRefused": ""
+      },
+      {
+        "stage": "code",
+        "seconds": 214.2,
+        "verdict": "proceed",
+        "error": "",
+        "gatingCount": 8,
+        "reviewers": "8 of 9 reviewers answered; failed: local/Architecture: unparseable: the answer was not the schema\u0027s JSON after one repair attempt (the answer was kept at C:\\Users\\strug\\AppData\\Local\\coai-mcp\\unparseable\\local-Architecture-20260905-095713-796.txt)",
+        "tokensIn": 404789,
+        "tokensOut": 24336,
+        "costUsd": null,
+        "findings": [
+          {
+            "severity": "Minor",
+            "category": "Convention",
+            "file": "todo/PLAN_rounds_collapse_and_vendor_colour.md",
+            "line": 3,
+            "title": "The committed plan remains marked as unimplemented after the change shipped",
+            "why": "The file says \u0022Status: plan only, nothing implemented yet\u0022 even though this diff implements the plan, contrary to its Definition of Done: \u0022the plan promoted.\u0022 This leaves repository planning metadata describing the opposite state.",
+            "fix": "Promote or remove this TODO plan by updating its status and checklist to reflect the shipped implementation, or replace it with the canonical completed plan under research/.",
+            "role": "Architecture",
+            "isGating": false,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/SessionStore.cs",
+            "line": 158,
+            "title": "Concurrent saves still use last-writer-wins and can silently delete session history",
+            "why": "With two MCP servers sharing the data directory, both can load the same session, then append different round records and call Save. The unique scratch names prevent the move collision, but the later \u0060File.Move(..., overwrite: true)\u0060 replaces the earlier complete JSON with its stale snapshot, so one server\u0027s newly completed round (and its status/findings) disappears without an error; the next load presents an apparently valid but incomplete session.",
+            "fix": "Serialize saves per session or perform a compare/merge under a lock (at minimum reload the destination immediately before replacement and merge round records/pending state), so a successful concurrent save cannot overwrite newer session data.",
+            "role": "SecurityReliability",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/SessionStore.cs",
+            "line": 145,
+            "title": "A failed scratch-file write bypasses cleanup and leaves abandoned files behind",
+            "why": "\u0060File.WriteAllText\u0060 runs before the \u0060try/finally\u0060. If the file is created and the write then fails, for example because the disk fills, the per-write \u0060.tmp\u0060 remains permanently in \u0060sessions\u0060; repeated failed progress saves can accumulate scratch files and may consume the remaining space, making recovery harder.",
+            "fix": "Move the \u0060File.WriteAllText\u0060 call inside the \u0060try/finally\u0060 (or track whether the scratch path was created) so partial scratch files are deleted on write failures too.",
+            "role": "SecurityReliability",
+            "isGating": false,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Ux",
+            "file": "src_vs_code/src/panelView.ts",
+            "line": 807,
+            "title": "Reviewer vendor spans still use the stylesheet\u0027s settings-card class",
+            "why": "The plan notes that \u0060.vendor\u0060 already styles settings cards with borders, radius, and padding, but this renderer emits \u0060class=\u0022vendor\u0022\u0060. Every reviewer name rendered in an open card therefore receives those card styles, making the compact reviewer row visibly malformed instead of colouring only the vendor word.",
+            "fix": "Use the dedicated \u0060who\u0060 class for reviewer and spending vendor spans, or rename the existing settings-card selector so the vendor-name span has no card styling.",
+            "role": "UxDxPerformance",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Performance",
+            "file": "src_vs_code/src/panelProvider.ts",
+            "line": 138,
+            "title": "Opening or closing one card still performs the full expensive refresh synchronously from the user\u0027s action",
+            "why": "Each round toggle immediately calls \u0060refresh()\u0060. The refresh path still performs configuration reads, server-binary stat/probing, GitHub version lookup, vendor CLI probes, and price-table fetches; with a cold network or several vendors this can take up to about 20 seconds, so clicking a disclosure appears unresponsive and gives no progress or terminal error state.",
+            "fix": "Separate the cheap round-card repaint from the periodic/explicit metadata refresh, so the toggle updates the cached session view immediately; if the full refresh is unavoidable, show an in-progress state and a failure state.",
+            "role": "UxDxPerformance",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Blocking",
+            "category": "Convention",
+            "file": "todo/PLAN_rounds_collapse_and_vendor_colour.md",
+            "line": 3,
+            "title": "Plan file added in todo/ with status \u0027plan only, nothing implemented yet\u0027 despite the change implementing it and the Definition of Done requiring plan promotion",
+            "why": "The project\u0027s plan lifecycle rules (referenced in CLAUDE.md: \u0027node .claude/rules/shared/tools/plan-lifecycle.mjs\u0027) and the plan\u0027s own written Definition of Done specify: \u0027- [ ] CoaiMcp.Tests.exe and npm test pass; docs, help and CHANGELOG updated; the plan promoted.\u0027 Introducing the plan as a new file in todo/ asserting \u0027\u003E Status: **plan only, nothing implemented yet.**\u0027 directly violates the promotion requirement for implemented work.",
+            "fix": "Promote the plan file to research/ with an updated IMPLEMENTED status header matching the implementation record, or remove it from todo/.",
+            "role": "Architecture",
+            "isGating": true,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Ux",
+            "file": "src_vs_code/src/panelView.ts",
+            "line": 809,
+            "title": "Inline vendor span uses class \u0022vendor\u0022, inheriting settings card border and padding styles.",
+            "why": "The stylesheet already defines \u0022.vendor\u0022 for the settings card container with a border, border-radius, and 8px of padding. Applying class=\u0022vendor\u0022 to the inline vendor span in tight reviewer rows causes the vendor name to render inside an oversized padded box that clips adjacent text and appears visually struck through.",
+            "fix": "Change class=\u0022vendor\u0022 to class=\u0022who\u0022 (or another non-colliding class name) in panelView.ts and update the corresponding assertions in tests.",
+            "role": "UxDxPerformance",
+            "isGating": true,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/SessionStore.cs",
+            "line": 175,
+            "title": "Session save retry loop may hang indefinitely on persistent file locks",
+            "why": "The \u0060MoveOverExisting\u0060 method retries 5 times with a fixed sleep interval (20ms * attempt). If a file lock (e.g., from an antivirus scanner or another process) persists longer than the total retry window (approx 150ms), the code throws. However, if the lock is held by a process that never releases it (rare but possible in enterprise environments), the \u0060Thread.Sleep\u0060 loop might not be sufficient to handle transient spikes, or worse, if the logic is extended, it could spin. More critically, the \u0060MoveOverExisting\u0060 method is called inside a \u0060try\u0060 block that catches \u0060IOException\u0060 and \u0060UnauthorizedAccessException\u0060. If the file is held by a scanner that intermittently locks/unlocks, the retry might succeed. But if the lock is permanent, it throws. The real risk is that the \u0060MoveOverExisting\u0060 logic is *not* robust enough for high-concurrency scenarios where multiple writers might contend for the same destination file *after* the unique temp name collision is resolved. If the destination file (",
+            "fix": "Ensure the \u0060MoveOverExisting\u0060 retry loop uses a bounded, non-infinite wait strategy (e.g., exponential backoff with a hard cap) or a \u0060CancellationToken\u0060 to prevent the server from hanging indefinitely if the destination file is held by a long-running process (like an antivirus scanner) that never releases it.",
+            "role": "SecurityReliability",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/SessionStore.cs",
+            "line": 175,
+            "title": "Temporary scratch files accumulate on failed moves due to cleanup timing",
+            "why": "In \u0060SessionStore.Save\u0060, the \u0060TryDelete(temp)\u0060 is called in a \u0060finally\u0060 block *after* the \u0060MoveOverExisting\u0060 loop. If \u0060MoveOverExisting\u0060 throws an exception on the final attempt (e.g., \u0060UnauthorizedAccessException\u0060 after 5 retries), the \u0060finally\u0060 block executes and deletes the temp file. However, if the loop succeeds but the \u0060File.Move\u0060 throws *during* the retry (e.g., on attempt 3), the \u0060finally\u0060 block runs, deleting the temp file, but the exception propagates. The critical issue is that if \u0060MoveOverExisting\u0060 throws *before* the loop finishes (e.g., on the first try), the \u0060finally\u0060 block deletes the temp file. But if the loop completes successfully, the temp file is deleted. The real risk is if \u0060MoveOverExisting\u0060 throws *after* a successful move but before the \u0060finally\u0060 block runs (unlikely), or if the \u0060TryDelete\u0060 itself fails silently. More critically, if \u0060MoveOverExisting\u0060 throws on the *last* attempt, the \u0060finally\u0060 block runs, deleting the temp file. But if the loop *succeeds* (all",
+            "fix": "Move the \u0060File.Delete(temp)\u0060 call inside the \u0060try\u0060 block of \u0060MoveOverExisting\u0060 or ensure it runs before the retry loop completes, so that if the move fails after the first attempt, the temporary file is cleaned up before the next retry.",
+            "role": "UxDxPerformance",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Ux",
+            "file": "src_vs_code/src/openRounds.ts",
+            "line": 75,
+            "title": "User toggle state may not persist correctly across panel ticks",
+            "why": "When a user closes a card (e.g., \u0060afterToggle(previous, key, false)\u0060), the \u0060open\u0060 set is updated to remove the key. However, if the panel re-renders before the next tick, and the round is still running, the \u0060nextOpenRounds\u0060 logic might re-add it to \u0060open\u0060 if it\u0027s in \u0060autoOpened\u0060. The current logic removes the key from \u0060panelOpened\u0060, but if the round is still running, \u0060nextOpenRounds\u0060 will re-add it to \u0060autoOpened\u0060 and \u0060open\u0060 on the next tick, effectively ignoring the user\u0027s close action. This creates a flicker where the card closes, then re-opens immediately if the round is still running.",
+            "fix": "Ensure \u0060afterToggle\u0060 updates the \u0060open\u0060 set correctly when a user closes a card that was previously auto-opened, and that the \u0060panelOpened\u0060 set is updated to reflect the user\u0027s explicit choice.",
+            "role": "UxDxPerformance",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Performance",
+            "file": "src_vs_code/src/panelProvider.ts",
+            "line": 165,
+            "title": "Unnecessary recomputation of open rounds state on every render tick",
+            "why": "The \u0060expanded\u0060 method in \u0060panelProvider.ts\u0060 calls \u0060nextOpenRounds\u0060 on every render tick (every 5 seconds). This function performs set operations and filtering on the entire list of rounds. While the logic is simple, doing this on every tick for a large number of rounds (e.g., 100\u002B rounds) creates unnecessary CPU overhead. The state should only be recomputed when the \u0060sessions\u0060 data actually changes (e.g., a new round starts, a round finishes, or a user toggles a card).",
+            "fix": "Cache the result of \u0060nextOpenRounds\u0060 and only recompute it when the underlying \u0060sessions\u0060 data changes, rather than on every render tick.",
+            "role": "UxDxPerformance",
+            "isGating": false,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          }
+        ],
+        "commands": [
+          "Work AUTONOMOUSLY. Say that you are working autonomously, and keep saying what you are writing right now as you go. Autonomous means these orders, not a mood: (1) every bug and every problem spot gets a RED-GREEN-RED test \u2014 a failing test first, then the fix, then the test green, then a check that the test really fails without the fix; (2) the documentation is updated with every change \u2014 the README, the manifest if there is one, the module docs and every other file that describes what you changed; (3) before any release, run ALL the tests that exist, not only the ones near your change; (4) if the repository has a release or pull request process, do it \u2014 and on a pull request, wait about five minutes, then check whether automatic comments appeared, read them and fix what they name; (5) if a deploy triggers automatically, verify the result against the target environment \u2014 dev, stage or test \u2014 and read its logs for errors before calling it done; (6) re-read your own code against the repository\u0027s rules and follow them, not only the ones you remember. A question that does not block you is not asked now: write it down and put every one of them at the END of your final summary. A question that DOES block you is asked at once \u2014 but before you ask it, re-read every epic and story you have written so far and gather every other blocking question you can foresee, so the person is interrupted once with all of them rather than repeatedly with one. Where you can proceed under a stated assumption, do that instead of asking, and say what you assumed."
+        ],
+        "resolveRefused": ""
+      }
+    ],
+    "harnessError": "",
+    "serverSaid": "[09:57:34 \u001B[32mINF\u001B[0m] coai-mcp#4896 finding [Major/Ux] src_vs_code/src/openRounds.ts:75 - User toggle state may not persist correctly across panel ticks (from local) [gating] Round=1 Stage=CodeReview\r | [09:57:34 \u001B[32mINF\u001B[0m] coai-mcp#4896 finding [Minor/Performance] src_vs_code/src/panelProvider.ts:165 - Unnecessary recomputation of open rounds state on every render tick (from local) Round=1 Stage=CodeReview\r | [09:57:34 \u001B[32mINF\u001B[0m] coai-mcp#4896 settings reloaded - the panel\u0027s file changed on disk",
+    "onDisk": {
+      "rounds": 2,
+      "stillRunning": 0,
+      "pending": 0,
+      "note": "",
+      "config": {
+        "onExhausted": "GoodEnough",
+        "roles": {
+          "PlanCritique": {
+            "maxRounds": 1,
+            "threshold": 6
+          },
+          "Architecture": {
+            "maxRounds": 2,
+            "threshold": 5
+          },
+          "SecurityReliability": {
+            "maxRounds": 1,
+            "threshold": 5
+          },
+          "UxDxPerformance": {
+            "maxRounds": 1,
+            "threshold": 5
+          }
+        }
+      },
+      "clean": true
+    },
+    "settings": {
+      "mismatches": [],
+      "checked": [
+        "PlanCritique rounds",
+        "PlanCritique threshold",
+        "Architecture threshold",
+        "SecurityReliability rounds",
+        "SecurityReliability threshold",
+        "UxDxPerformance rounds",
+        "UxDxPerformance threshold",
+        "on-exhausted",
+        "COAI_AUTONOMOUS",
+        "COAI_SPLIT_PLAN",
+        "COAI_SPLIT_WITH_FABLE"
+      ],
+      "ok": true
+    }
+  },
+  {
+    "case": {
+      "name": "split-once",
+      "planFile": "artifacts/bench/plan-B.md",
+      "commit": "7133c2f",
+      "baseRef": "4a27a17"
+    },
+    "arm": "codex,gemini,local",
+    "repeat": 1,
+    "lane": 1,
+    "key": "codex,gemini,local|split-once|1",
+    "startedUtc": "2026-09-05T09:57:34.1854628Z",
+    "finishedUtc": "2026-09-05T10:00:18.3373566Z",
+    "stages": [
+      {
+        "stage": "plan-1",
+        "seconds": 35.5,
+        "verdict": "good_enough",
+        "error": "",
+        "gatingCount": 13,
+        "reviewers": "all 3 reviewers answered",
+        "tokensIn": 39413,
+        "tokensOut": 4389,
+        "costUsd": null,
+        "findings": [
+          {
+            "severity": "Blocking",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Atomic claim across processes is promised but no claim protocol or verification is specified",
+            "why": "If two servers read the same unclaimed record concurrently, both can pass the check and issue the split order, violating the once-only guarantee.",
+            "fix": "Specify an atomic create/transaction primitive for the claim and include a concurrent two-process check proving exactly one process issues the order.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Architecture",
+            "file": "",
+            "line": 0,
+            "title": "The no-session-id fallback has no defined stable checkout identity",
+            "why": "When a caller exports no session id and changes from branch \u0060feature\u0060 to \u0060feature-epic-1\u0060, the implementation has no specified key that links those sessions; it can either split the epic again or accidentally share state with another checkout of the same repository.",
+            "fix": "Define canonical checkout identity and keying rules, including worktrees, cloned paths, and simultaneous checkouts, then verify parent and child branches share only the intended claim.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Claim lifetime and reset rules are missing, so old state can control unrelated future plans",
+            "why": "A claim persisted for a checkout or branch can remain when the user returns a year later or reuses a branch for a new root plan, causing the new caller to be treated as an already-split piece and skip the required split order.",
+            "fix": "Bind claims to an explicit plan/run identity or generation, define cleanup/reset behavior, and verify branch reuse and a later independent plan start fresh.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "The plan does not define how the verdict from this review round is bound to the claim",
+            "why": "If a previous passing verdict is cached and the current plan review fails, the stale pass can still trigger a command; conversely, a current pass can be ignored after an intermediate state update.",
+            "fix": "Store and evaluate the current round identifier or plan hash together with the verdict, and make the eligibility check and claim use that same record atomically.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "A process killed between claiming and issuing leaves retries unable to complete the promised order",
+            "why": "With the required once-only claim, a server that claims successfully and is terminated before spawning the command leaves the next attempt believing the order was already issued, so a passing caller receives no split or autonomy command.",
+            "fix": "Specify a durable state transition and recovery policy, such as an atomic claim-plus-enqueue record with retryable delivery and an idempotent command, and verify termination at each boundary.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "The unwritable-store fail-open behavior is asserted without defining the observable result",
+            "why": "When the feature is enabled and the data directory is read-only, callers cannot tell whether fail-open means issuing the command without a claim, continuing with an in-memory claim, or aborting; different implementations can silently disable splitting or issue duplicates.",
+            "fix": "Define the exact warning, exit/result behavior, and command policy for an unwritable store, and verify it with a read-only directory while the plan passes.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Blocking",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Fail-open on unwritable store causes infinite recursive split loops",
+            "why": "Requirement 5 specifies that an unwritable store fails open with a warning. If the claim store cannot write the record marking that an epic split has occurred, every subsequent round checking the unwritable store will find no claim record and repeatedly order another epic split on every child epic, reintroducing the infinite recursion the feature was designed to eliminate.",
+            "fix": "Fail safe on unwritable store by assuming a claim exists and issuing the autonomy/single-unit order (or blocking the split order) when storage is unwritable.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Architecture",
+            "file": "",
+            "line": 0,
+            "title": "Fallback tracking across checkout branches without session IDs lacks a defined concrete keying mechanism",
+            "why": "Requirement 6 mandates following callers across branches of one checkout without requiring the AI to pass identifiers (Constraints) or relying on CLAUDE_CODE_SESSION_ID. Because git checkouts switch HEAD or worktrees have distinct paths, there is no shared caller-level lifecycle identifier defined to distinguish independent user runs from child epic reviews in the same repo checkout, causing either false-positive split suppression or missed claims.",
+            "fix": "Specify the exact fallback identity boundary (e.g. tie fallback claims to a parent commit hash or specific worktree/repo lockfile with a TTL) to define when the claim expires.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Ux",
+            "file": "",
+            "line": 0,
+            "title": "Retries and user-driven re-plans under the same caller session are permanently blocked from splitting",
+            "why": "Requirement 1 enforces that a caller is ordered to split exactly once. If a user rejects a generated split, changes top-level requirements, and requests a fresh plan review within the same active CLAUDE_CODE_SESSION_ID, the plan review gate will see the existing claim and refuse to issue a split order, forcing the entire modified scope to be built as a single monolithic unit.",
+            "fix": "Define a re-plan / reset mechanism (e.g., scoping the split claim to root plan hash/revision or supporting an explicit force/reset flag).",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Security",
+            "file": "",
+            "line": 0,
+            "title": "Unsanitized caller ID strings in file-based storage risk path traversal and filename invalidity",
+            "why": "Caller IDs (e.g. CLAUDE_CODE_SESSION_ID or fallback strings) are external input used directly in file paths. If the ID contains path separators, slashes, or OS-reserved filename characters (like colons on Windows), filesystem operations will either escape the intended directory or fail with invalid path errors.",
+            "fix": "Hash or strictly alphanumeric-sanitize the caller ID (e.g. SHA-256 digest) before using it as a filename or path component.",
+            "role": "PlanCritique",
+            "isGating": false,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Blocking",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Atomic claim across processes relies on transient environment variables rather than persistent state.",
+            "why": "Constraint 4 states \u0027two servers sharing a data directory cannot both give it\u0027 based on an atomic claim. However, Constraint 7 and the \u0027What must be true\u0027 section rely on \u0060CLAUDE_CODE_SESSION_ID\u0060 being exported to children. If Server A spawns a child process that splits the plan, and Server B (or a different instance of Server A) starts a new process in the same directory before the first child finishes or commits, the new process may not inherit the \u0060CLAUDE_CODE_SESSION_ID\u0060 correctly or may generate a new one. This breaks the \u0027atomic claim\u0027 because two independent processes could simultaneously believe they are the sole \u0027caller\u0027 for the same repo/branch, leading to conflicting split orders and race conditions in the data directory.",
+            "fix": "Explicitly define the \u0027caller\u0027 as a persistent process ID or a shared lock file in the data directory, rather than relying on an environment variable passed to child processes.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Blocking",
+            "category": "Architecture",
+            "file": "",
+            "line": 0,
+            "title": "No mechanism exists to enforce the \u0027floor\u0027 for epics of epics without external state.",
+            "why": "The plan states \u0027A plan that passes is told to split... Epics of epics, with no floor.\u0027 It relies on the \u0027caller\u0027 to supply the floor. If the \u0027caller\u0027 is a human or a script that forgets to pass the floor, or if the \u0027caller\u0027 is a new session that doesn\u0027t know the previous depth, the system will recursively split epics indefinitely. For example, if a user runs the plan on a branch that was already split once, but the \u0027caller\u0027 (the script invoking the plan) doesn\u0027t track that it was already split, the system will split the epic again, creating an infinite recursion of epics until memory or token limits are hit.",
+            "fix": "Add a persistent \u0027split depth\u0027 counter to the plan state or a dedicated metadata file that increments with each split, rather than relying on the caller to supply the floor.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Split verdict depends on \u0027plan THIS round reviewed\u0027 without verifying if the plan has already been split.",
+            "why": "Constraint 7 states \u0027The split verdict is measured from the plan THIS round reviewed.\u0027 If a user re-runs the plan on a branch that was already split (e.g., a year later), the system might re-evaluate the \u0027plan\u0027 as if it were new. If the plan\u0027s content hasn\u0027t changed but the \u0027floor\u0027 wasn\u0027t tracked, the system might split an already-split epic again. For instance, a user runs the plan, it splits into Epics. A year later, the user runs the plan again on the same branch. The system sees the \u0027plan\u0027 (the original text) and splits it again, creating \u0027Epics of Epics of Epics\u0027 because the \u0027floor\u0027 was never recorded in the plan\u0027s state.",
+            "fix": "Implement a \u0027split depth\u0027 check in the plan review logic that reads the current depth from the plan\u0027s history or a metadata file, rather than assuming the caller knows it.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Ux",
+            "file": "",
+            "line": 0,
+            "title": "Human operator has no visibility into the split hierarchy before committing, risking irreversible deep nesting.",
+            "why": "The plan states \u0027A caller is ordered to split ONCE.\u0027 If the user (the \u0027caller\u0027) types the command, pastes it, and hits enter, they have no way to know if the system will split the plan into 2 epics or 4 epics, or if it will split an already-split epic. If the user makes a mistake (e.g., runs the plan on a branch that was already split), they might accidentally create a deep hierarchy of epics that is hard to manage. For example, a user runs the plan on a branch that was already split once, and the system splits it again, creating a hierarchy of 4 levels deep. The user then has to manually flatten this hierarchy, which is time-consuming and error-prone.",
+            "fix": "Add a \u0027dry-run\u0027 or \u0027preview\u0027 step that shows the split hierarchy before committing, allowing the user to verify the depth.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Unwritable store fails OPEN with a warning rather than failing the entire operation.",
+            "why": "Constraint 5 states \u0027An unwritable store fails OPEN with a warning rather than silently disabling the feature.\u0027 If the store is unwritable (e.g., due to permissions or disk full), the system will log a warning but continue. This means the split order might be lost, and the system will proceed as if the split was successful. For example, a user runs the plan, and the store is unwritable. The system logs a warning and continues. The user then commits the split, but the split order was never saved. Later, when the user tries to review the split, the system sees no split order and treats the plan as a single unit, leading to confusion and potential data loss.",
+            "fix": "Add a \u0027split depth\u0027 check in the plan review logic that reads the current depth from the plan\u0027s history or a metadata file, rather than assuming the caller knows it.",
+            "role": "PlanCritique",
+            "isGating": false,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          }
+        ],
+        "commands": [
+          "Split this plan into 2-4 logically complete STORIES. It is not broad enough to need epics. (Measured from the plan you sent: 29 lines, 7 build step(s), 0 file(s) named, 1 area(s) touched. That is a heuristic \u2014 if it is wrong for this plan, say so in your summary and do what is right.) After EVERY story: call review_code on that story\u0027s diff, resolve every finding, fix what you accepted, update the documentation and the tests, and commit. Only then start the next one. A story that is not reviewed, documented, tested and committed is not finished.",
+          "Do the SPLIT itself with Fable at its highest available version \u2014 deciding what the epics and stories are is the judgement that shapes everything after it. Then implement: ordinary stories on Opus, and anything where being wrong is expensive \u2014 payments, money, authentication, security, architecture, data migration \u2014 on Fable (max) again. Name the model you used for each story in your summary.",
+          "Work AUTONOMOUSLY. Say that you are working autonomously, and keep saying what you are writing right now as you go. Autonomous means these orders, not a mood: (1) every bug and every problem spot gets a RED-GREEN-RED test \u2014 a failing test first, then the fix, then the test green, then a check that the test really fails without the fix; (2) the documentation is updated with every change \u2014 the README, the manifest if there is one, the module docs and every other file that describes what you changed; (3) before any release, run ALL the tests that exist, not only the ones near your change; (4) if the repository has a release or pull request process, do it \u2014 and on a pull request, wait about five minutes, then check whether automatic comments appeared, read them and fix what they name; (5) if a deploy triggers automatically, verify the result against the target environment \u2014 dev, stage or test \u2014 and read its logs for errors before calling it done; (6) re-read your own code against the repository\u0027s rules and follow them, not only the ones you remember. A question that does not block you is not asked now: write it down and put every one of them at the END of your final summary. A question that DOES block you is asked at once \u2014 but before you ask it, re-read every epic and story you have written so far and gather every other blocking question you can foresee, so the person is interrupted once with all of them rather than repeatedly with one. Where you can proceed under a stated assumption, do that instead of asking, and say what you assumed."
+        ],
+        "resolveRefused": ""
+      },
+      {
+        "stage": "code",
+        "seconds": 128.5,
+        "verdict": "proceed",
+        "error": "",
+        "gatingCount": 10,
+        "reviewers": "all 9 reviewers answered",
+        "tokensIn": 265567,
+        "tokensOut": 15311,
+        "costUsd": null,
+        "findings": [
+          {
+            "severity": "Major",
+            "category": "Convention",
+            "file": "src_mcp/src/Server/PanelService.cs",
+            "line": 586,
+            "title": "The split-order predicate is evaluated more than once instead of being asked once.",
+            "why": "The written rule says: \u201CThe condition that issues the order and the condition that claims it are ONE question asked once.\u201D \u0060OrdersSplit(provisional)\u0060 is evaluated for claiming, then \u0060OrdersSplit(context)\u0060 is evaluated again for logging and the command path evaluates the predicate through \u0060For\u0060; this can make claiming and issuance observe different conditions.",
+            "fix": "Evaluate the predicate once, store the result, use that result to claim and construct the context, and use the stored result for logging/issuance.",
+            "role": "Architecture",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 92,
+            "title": "Expired-claim deletion is not atomic with claim creation",
+            "why": "Two servers can both observe an expired claim; after one creates a fresh file, the other can delete that fresh file and create its own claim. Both return true and issue the split order, violating the once-only guarantee.",
+            "fix": "Serialize expiry replacement with a per-caller lock, then re-read the stamp while locked before deleting and creating the replacement.",
+            "role": "SecurityReliability",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 100,
+            "title": "A corrupt or temporarily locked claim fails closed without warning",
+            "why": "If the process is killed after creating the stamp but before writing its contents, the next request cannot parse it, attempts CreateNew, and the IOException is treated as another process\u0027s claim because the file exists. The caller is then denied the order indefinitely. The same happens when an expired file is temporarily locked.",
+            "fix": "Distinguish an existing live claim from claim-store errors, and atomically repair malformed or expired stamps under the same per-caller lock; warn and return true when the store cannot be modified.",
+            "role": "SecurityReliability",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 110,
+            "title": "Unexpired claim file is deleted during race between expiration check and file creation",
+            "why": "When an existing claim file expires and two concurrent processes call TryClaimSplitOrder, or when one process finds an expired file while another process simultaneously creates a fresh valid claim file, the first process executes \u0060if (File.Exists(file)) File.Delete(file);\u0060 without verifying that the file currently on disk is still the expired one. This deletes the valid, newly-written claim of the winner, allowing a subsequent attempt or retry to overwrite or claim again, breaking the mutual exclusion guarantee.",
+            "fix": "Avoid naked File.Delete before CreateNew; instead, use an atomic file replace/open strategy or open with appropriate file share and lock semantics so an active claim cannot be unlinked by a concurrent claimant.",
+            "role": "SecurityReliability",
+            "isGating": true,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/PanelService.cs",
+            "line": 914,
+            "title": "Anonymous callers across different repos with identical relative/empty paths collide on the same claim",
+            "why": "When session.State.RepoPath is not an absolute canonical path or contains characters sanitized identically in FileFor, anonymous callers across different working trees or checkouts will map to the exact same claim file \u0060repo:\u003Cpath\u003E\u0060, causing an unrelated checkout to falsely be treated as an existing piece of a split plan.",
+            "fix": "Ensure \u0060session.State.RepoPath\u0060 is resolved to a fully-qualified canonical path (e.g., \u0060Path.GetFullPath(session.State.RepoPath)\u0060) before constructing the caller identity string.",
+            "role": "SecurityReliability",
+            "isGating": false,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Convention",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 105,
+            "title": "Nullable callback parameter risks NullReferenceException",
+            "why": "The method signature \u0060Action\u003Cstring\u003E? warn = null\u0060 allows the caller to omit the argument. If the code path reaches \u0060warn?.Invoke\u0060 (line 117) and the caller passed \u0060null\u0060 explicitly or the default was not handled correctly in a specific call site, the warning logic could fail silently or throw if the null check is bypassed in a future refactor. More critically, the test \u0060AnUnwritableStore_GivesTheOrderRatherThanSwallowingIt\u0060 passes a lambda, but \u0060PanelService\u0060 (line 583) passes a lambda. However, the method signature change from \u0060RecordSplitOrder\u0060 to \u0060TryClaimSplitOrder\u0060 introduces a new optional parameter that was not present in the original API contract, potentially breaking callers that rely on positional arguments or implicit defaults if not careful.",
+            "fix": "Remove the \u0060Action\u003Cstring\u003E? warn\u0060 parameter from \u0060TryClaimSplitOrder\u0060 or ensure the caller passes a non-null delegate. The current implementation invokes \u0060warn?.Invoke\u0060 without guaranteeing the caller provides one, risking a \u0060NullReferenceException\u0060 if called without the argument.",
+            "role": "Architecture",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Convention",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 117,
+            "title": "Inconsistent handling of optional warning callback",
+            "why": "The method \u0060TryClaimSplitOrder\u0060 accepts an optional \u0060warn\u0060 callback. While the code uses \u0060warn?.Invoke\u0060, the logic inside the \u0060catch (Exception e)\u0060 block assumes the callback might be null. If a caller passes \u0060null\u0060 explicitly, the warning is swallowed. The rule requires \u0027a warning rather than silently disabling\u0027, but if the callback is null, the warning is silent.",
+            "fix": "Ensure the \u0060warn\u0060 action is invoked with a consistent message format or handle the case where \u0060warn\u0060 is null more explicitly if the design requires it to be optional.",
+            "role": "Architecture",
+            "isGating": false,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Convention",
+            "file": "src_mcp/src/Server/PanelService.cs",
+            "line": 573,
+            "title": "Inconsistent state propagation for FirstPlanRound",
+            "why": "The code sets \u0060FirstPlanRound: true\u0060 on \u0060provisional\u0060. Then it checks \u0060Core.Commands.GateCommands.OrdersSplit(provisional)\u0060. If true, it creates a new \u0060context\u0060 with \u0060FirstPlanRound\u0060 set to the result of \u0060TryClaimSplitOrder\u0060. If false, it uses \u0060provisional\u0060 as \u0060context\u0060. This means if the order is not split, \u0060FirstPlanRound\u0060 remains true. If the order is split, \u0060FirstPlanRound\u0060 becomes the boolean result of the claim. This logic is complex and potentially confusing, but more importantly, it deviates from the rule that \u0027The condition that issues the order and the condition that claims it are ONE question asked once.\u0027 The code asks \u0060OrdersSplit\u0060 twice (once for \u0060provisional\u0060, once for \u0060context\u0060 implicitly via the \u0060if\u0060 block) or relies on the state of \u0060provisional\u0060 being consistent.",
+            "fix": "The variable \u0060provisional\u0060 is created but then immediately used to create \u0060context\u0060. The logic \u0060FirstPlanRound: true\u0060 is set on \u0060provisional\u0060, but then \u0060context\u0060 is created from \u0060provisional\u0060 only if \u0060OrdersSplit\u0060 returns true. This creates a potential inconsistency where \u0060FirstPlanRound\u0060 might be true in \u0060provisional\u0060 but false in \u0060context\u0060 if the condition fails, or vice versa depending on the flow.",
+            "role": "Architecture",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Convention",
+            "file": "src_mcp/src/Server/PanelService.cs",
+            "line": 573,
+            "title": "Violation of \u0027ONE question asked once\u0027 rule",
+            "why": "The rule states: \u0027The condition that issues the order and the condition that claims it are ONE question asked once.\u0027 The current code calls \u0060Core.Commands.GateCommands.OrdersSplit(provisional)\u0060 to decide whether to claim, but then calls \u0060Core.Commands.GateCommands.OrdersSplit(context)\u0060 again in the \u0060if\u0060 block to log. This is two questions. The logging should be based on the result of the claim, not a re-evaluation of the condition.",
+            "fix": "Align the logic to ensure the \u0027one question\u0027 rule is strictly followed. The \u0060OrdersSplit\u0060 check should be the sole determinant for both issuing and claiming.",
+            "role": "Architecture",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Convention",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 113,
+            "title": "Redundant or confusing exception handling",
+            "why": "The code has \u0060catch (IOException)\u0060 for the race condition and \u0060catch (Exception e) when (e is IOException or UnauthorizedAccessException)\u0060 for the \u0027fail open\u0027 case. The second catch block is technically redundant because \u0060IOException\u0060 is already caught by the first block. The logic flow suggests the first catch is for the race (file exists), and the second is for other IO errors. However, the \u0060when\u0060 clause in the second catch makes it specific to \u0060IOException\u0060 or \u0060UnauthorizedAccessException\u0060, which might overlap with the first catch if the order of evaluation is not clear.",
+            "fix": "The \u0060catch (Exception e)\u0060 block catches \u0060IOException\u0060 or \u0060UnauthorizedAccessException\u0060 specifically, but the outer \u0060catch (IOException)\u0060 handles the race condition. The inner catch for \u0060Exception\u0060 might be redundant or confusing.",
+            "role": "Architecture",
+            "isGating": false,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Convention",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 117,
+            "title": "Warning message clarity",
+            "why": "The warning message \u0027the split-order memory at {Dir} could not be written ({e.Message}) \u2014 the order is being given, and may be given again\u0027 is clear, but the rule requires \u0027a warning rather than silently disabling\u0027. If \u0060warn\u0060 is null, the warning is silent. The rule implies a warning *must* be issued, so the \u0060warn\u0060 parameter should perhaps be required or a default logger used.",
+            "fix": "Ensure the \u0060warn\u0060 callback is invoked with a message that clearly indicates the \u0027fail open\u0027 nature.",
+            "role": "Architecture",
+            "isGating": false,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Convention",
+            "file": "src_mcp/src/Server/PanelService.cs",
+            "line": 913,
+            "title": "Change in fallback logic for anonymous clients",
+            "why": "The rule states: \u0027A client that exports no session id is still followed across the branches of one checkout.\u0027 The previous implementation used \u0060session.State.SessionId\u0060 (which is repo\u002Bbranch), causing every epic to be treated as a new caller. The new implementation uses \u0060session.State.RepoPath\u0060, which correctly follows the caller across branches. This is a compliance fix, but it changes the behavior significantly.",
+            "fix": "The \u0060CallerFor\u0060 method now uses \u0060session.State.RepoPath\u0060 instead of \u0060session.State.SessionId\u0060. This is a change in the fallback logic.",
+            "role": "Architecture",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Convention",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 93,
+            "title": "API contract change from void to bool",
+            "why": "The method signature changed from \u0060void RecordSplitOrder\u0060 to \u0060bool TryClaimSplitOrder\u0060. This is a breaking change for any caller that relied on the void return. However, the rule requires \u0027The condition that issues the order and the condition that claims it are ONE question asked once.\u0027 The new return value allows the caller to know if the claim succeeded, which is necessary for the \u0027fail open\u0027 logic.",
+            "fix": "The \u0060TryClaimSplitOrder\u0060 method now returns a \u0060bool\u0060 indicating success, whereas \u0060RecordSplitOrder\u0060 was \u0060void\u0060. This is a change in the API contract.",
+            "role": "Architecture",
+            "isGating": false,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 98,
+            "title": "Atomic claim race window created by pre-delete of expired file",
+            "why": "The code deletes an existing file (\u0060File.Delete(file)\u0060) before attempting \u0060FileMode.CreateNew\u0060. If a second server process checks \u0060StillRemembered\u0060 (returns false), then deletes the file, then attempts \u0060CreateNew\u0060 while the first process is still deleting, the second process\u0027s \u0060CreateNew\u0060 will succeed. This allows two servers to both believe they claimed the order, violating the atomicity guarantee required to prevent \u0027epics of epics\u0027 loops.",
+            "fix": "Move the \u0060File.Delete(file)\u0060 call to a separate \u0060if\u0060 block before the \u0060try\u0060 block, or wrap the delete in its own try-catch to ensure the atomic \u0060CreateNew\u0060 is not shadowed by a delete failure.",
+            "role": "SecurityReliability",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Security",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 92,
+            "title": "Path traversal vulnerability in caller identity file naming",
+            "why": "The \u0060caller\u0060 string is used directly to construct a file path via \u0060FileFor(caller)\u0060. If a malicious or misbehaving client passes a \u0060caller\u0060 value like \u0060../../etc/passwd\u0060 or \u0060..\\..\\windows\\system32\u0060, the code could write to or overwrite arbitrary files on the server\u0027s filesystem, potentially overwriting configuration or log files, or creating a symlink to a sensitive file.",
+            "fix": "Sanitize the \u0060caller\u0060 string (e.g., remove or replace \u0060..\u0060, \u0060/\u0060, \u0060\\\u0060, and control characters) before using it in \u0060FileFor(caller)\u0060.",
+            "role": "SecurityReliability",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 98,
+            "title": "Potential deadlock or hang if file delete is blocked",
+            "why": "If the file to be deleted is locked by another process (e.g., an antivirus scanner or a previous crashed instance), \u0060File.Delete\u0060 will block or throw an exception. If it throws, the \u0060CreateNew\u0060 might not execute, or if it hangs, the server thread blocks. The current catch block only handles \u0060IOException\u0060 from \u0060CreateNew\u0060, not from the delete.",
+            "fix": "Add a timeout to the \u0060File.Delete\u0060 operation or ensure the \u0060try\u0060 block covers the delete operation as well, or use a more robust locking mechanism (e.g., \u0060FileLock\u0060 or \u0060Mutex\u0060) instead of relying solely on \u0060CreateNew\u0060 after a delete.",
+            "role": "SecurityReliability",
+            "isGating": false,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Ux",
+            "file": "src_mcp/src/Server/PanelService.cs",
+            "line": 578,
+            "title": "Silent failure of split order claim obscures state",
+            "why": "When \u0060TryClaimSplitOrder\u0060 returns \u0060false\u0060 (e.g., due to a race or unwritable store), the code proceeds to use the \u0060provisional\u0060 context without explicitly logging or signaling that the claim failed. A user or downstream process might expect the split order to be active, but it was silently skipped, leading to confusion about why the split didn\u0027t occur.",
+            "fix": "Add a specific log entry or return value indicating that the split order was claimed, and ensure the UI or downstream process reflects this state change immediately.",
+            "role": "UxDxPerformance",
+            "isGating": false,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Performance",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 95,
+            "title": "Redundant file existence check before atomic create",
+            "why": "The code checks \u0060File.Exists(file)\u0060 before attempting \u0060FileMode.CreateNew\u0060. While this is intended to handle expired claims, it adds an extra disk I/O operation. In high-frequency scenarios (e.g., many concurrent splits), this check could become a bottleneck, especially if the file system is slow or the directory is large.",
+            "fix": "Cache the \u0060File.Exists(file)\u0060 check result or use a more efficient file system operation to avoid redundant disk I/O in high-frequency scenarios.",
+            "role": "UxDxPerformance",
+            "isGating": false,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          }
+        ],
+        "commands": [
+          "Work AUTONOMOUSLY. Say that you are working autonomously, and keep saying what you are writing right now as you go. Autonomous means these orders, not a mood: (1) every bug and every problem spot gets a RED-GREEN-RED test \u2014 a failing test first, then the fix, then the test green, then a check that the test really fails without the fix; (2) the documentation is updated with every change \u2014 the README, the manifest if there is one, the module docs and every other file that describes what you changed; (3) before any release, run ALL the tests that exist, not only the ones near your change; (4) if the repository has a release or pull request process, do it \u2014 and on a pull request, wait about five minutes, then check whether automatic comments appeared, read them and fix what they name; (5) if a deploy triggers automatically, verify the result against the target environment \u2014 dev, stage or test \u2014 and read its logs for errors before calling it done; (6) re-read your own code against the repository\u0027s rules and follow them, not only the ones you remember. A question that does not block you is not asked now: write it down and put every one of them at the END of your final summary. A question that DOES block you is asked at once \u2014 but before you ask it, re-read every epic and story you have written so far and gather every other blocking question you can foresee, so the person is interrupted once with all of them rather than repeatedly with one. Where you can proceed under a stated assumption, do that instead of asking, and say what you assumed."
+        ],
+        "resolveRefused": ""
+      }
+    ],
+    "harnessError": "",
+    "serverSaid": "[10:00:18 \u001B[32mINF\u001B[0m] coai-mcp#43800 finding [Minor/Reliability] src_mcp/src/Server/CallerSessions.cs:98 - Potential deadlock or hang if file delete is blocked (from local) Round=1 Stage=CodeReview\r | [10:00:18 \u001B[32mINF\u001B[0m] coai-mcp#43800 finding [Minor/Ux] src_mcp/src/Server/PanelService.cs:578 - Silent failure of split order claim obscures state (from local) Round=1 Stage=CodeReview\r | [10:00:18 \u001B[32mINF\u001B[0m] coai-mcp#43800 finding [Minor/Performance] src_mcp/src/Server/CallerSessions.cs:95 - Redundant file existence check before atomic create (from local) Round=1 Stage=CodeReview",
+    "onDisk": {
+      "rounds": 2,
+      "stillRunning": 0,
+      "pending": 0,
+      "note": "",
+      "config": {
+        "onExhausted": "GoodEnough",
+        "roles": {
+          "PlanCritique": {
+            "maxRounds": 1,
+            "threshold": 6
+          },
+          "Architecture": {
+            "maxRounds": 2,
+            "threshold": 5
+          },
+          "SecurityReliability": {
+            "maxRounds": 1,
+            "threshold": 5
+          },
+          "UxDxPerformance": {
+            "maxRounds": 1,
+            "threshold": 5
+          }
+        }
+      },
+      "clean": true
+    },
+    "settings": {
+      "mismatches": [],
+      "checked": [
+        "PlanCritique rounds",
+        "PlanCritique threshold",
+        "Architecture threshold",
+        "SecurityReliability rounds",
+        "SecurityReliability threshold",
+        "UxDxPerformance rounds",
+        "UxDxPerformance threshold",
+        "on-exhausted",
+        "COAI_AUTONOMOUS",
+        "COAI_SPLIT_PLAN",
+        "COAI_SPLIT_WITH_FABLE"
+      ],
+      "ok": true
+    }
+  },
+  {
+    "case": {
+      "name": "split-once",
+      "planFile": "artifacts/bench/plan-B.md",
+      "commit": "7133c2f",
+      "baseRef": "4a27a17"
+    },
+    "arm": "codex,gemini,local",
+    "repeat": 2,
+    "lane": 1,
+    "key": "codex,gemini,local|split-once|2",
+    "startedUtc": "2026-09-05T10:00:18.4421052Z",
+    "finishedUtc": "2026-09-05T10:05:05.7597008Z",
+    "stages": [
+      {
+        "stage": "plan-1",
+        "seconds": 43.6,
+        "verdict": "good_enough",
+        "error": "",
+        "gatingCount": 12,
+        "reviewers": "all 3 reviewers answered",
+        "tokensIn": 39411,
+        "tokensOut": 4886,
+        "costUsd": null,
+        "findings": [
+          {
+            "severity": "Blocking",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "The unwritable-store fail-open requirement contradicts the atomic single-claim guarantee",
+            "why": "With a read-only or full shared data directory, two servers can both find the caller eligible, fail to persist the claim, and\u2014under fail-open semantics\u2014both issue the split order. The claimed cross-process guarantee is therefore false exactly when persistence is unavailable.",
+            "fix": "Define the degraded-mode contract explicitly and use a coordination mechanism that can atomically claim; if at-most-once delivery is mandatory, refuse to issue the order on claim failure and surface the warning.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "The plan does not define crash recovery between claiming and issuing the command",
+            "why": "If a process records the claim and is killed before emitting the command, the caller is permanently told to build one unit; if it emits the command and dies before recording the claim, a retry emits it twice. Asking the condition once does not make these two side effects atomic.",
+            "fix": "Specify an idempotent command or durable reservation/outbox state machine, including which outcome is guaranteed after a crash and how retries resolve pending claims.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Architecture",
+            "file": "",
+            "line": 0,
+            "title": "The caller identity and claim lifecycle are underspecified, allowing collisions and permanent suppression",
+            "why": "A filename-safe transformation can map distinct caller IDs such as \u0060a/b\u0060 and \u0060a\\b\u0060 to the same key, causing one caller\u0027s claim to suppress the other. Conversely, a once-claimed session or checkout can later start an unrelated plan and incorrectly skip splitting because no plan/round boundary or reset rule is defined.",
+            "fix": "Use a reversible encoding or fixed-length hash with collision handling, define the exact fallback checkout identity, and bind claims to a plan/round identity with explicit retry, completion, and cleanup semantics.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "\u201CMeasured from the plan THIS round\u201D has no specified source or invalidation rule",
+            "why": "A plan that passes in round 1 can be edited into a failing plan and retried in the same session; if the implementation reuses the stored round-1 verdict, it still issues the split order despite the current plan failing. The inverse can also suppress a newly passing plan.",
+            "fix": "Define a round identifier or content digest produced by the gate, require the caller decision to use that exact verdict, and invalidate or recompute it whenever the reviewed plan changes.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Convention",
+            "file": "",
+            "line": 0,
+            "title": "The plan provides no acceptance checks for its externally visible guarantees",
+            "why": "An implementation can invoke storage or emit a command when the switch is off, emit after a failed verdict, or issue twice under two concurrent servers, and nothing in the plan requires an observable check to catch those regressions before users encounter them.",
+            "fix": "Add concrete acceptance cases covering off, failed verdict, same caller across branches, missing session ID, revised plans, concurrent processes, unwritable storage, and kill/retry at each claim-command boundary.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Blocking",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Unwritable store failing open creates an infinite epic splitting recursion loop",
+            "why": "Requirement 5 dictates that an unwritable claim store fails OPEN. When the store is read-only or unwritable (e.g. permission issues or disk full), claiming the split order will fail and fall back to allowing the split verdict. Consequently, every child epic that returns on its own branch will also fail to persist a claim and be repeatedly ordered to split, directly reproducing the infinite \u0027epics of epics\u0027 loop that this plan was intended to prevent.",
+            "fix": "Fail CLOSED on store write errors for split orders (treat an unwritable store as already claimed / fallback to the autonomy order) or fail the review step with an explicit error rather than issuing split commands.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Fallback tracking for clients without session IDs is unspecified and conflicts with cross-branch session isolation",
+            "why": "Requirement 6 mandates tracking callers across branches when no session ID exists, while the problem statement notes sessions are keyed by repo\u002Bbranch. The plan provides no mechanism (e.g., lockfile, git state, checkout-level identifier) for identifying the same checkout across branches without a caller session ID, meaning child branches will either be treated as new sessions (causing repeated splitting) or share global state that collides across parallel runs.",
+            "fix": "Specify the exact checkout-level identifier (such as a hash of the repository root path or git common dir) used as the fallback claim key when CLAUDE_CODE_SESSION_ID is unset.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Security",
+            "file": "",
+            "line": 0,
+            "title": "Missing sanitization specification for caller ID file-path traversal",
+            "why": "The constraints state that caller ID is external and reaches a filename without escaping, but neither specifies nor verifies sanitization/encoding. If a malicious or malformed session ID containing directory traversal characters (e.g. \u0060../../\u0060 or Windows path separators) is supplied, it could read or write claims outside the designated storage directory.",
+            "fix": "Hash the session ID (e.g. SHA-256) or strictly whitelist alphanumeric characters before using it as a filename in the claim store.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Ux",
+            "file": "",
+            "line": 0,
+            "title": "Long-lived caller session IDs will suppress legitimate split orders across unrelated future plans",
+            "why": "A caller session ID in an interactive CLI or persistent IDE session remains constant across multiple independent tasks. If a split claim is keyed solely on caller ID without scoping to the initial root plan or goal, subsequent independent tasks in the same session that legitimately need splitting will be permanently blocked from receiving split orders.",
+            "fix": "Scope the claim key to a combination of the caller session ID and the root plan\u0027s hash or initial task ID.",
+            "role": "PlanCritique",
+            "isGating": false,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Blocking",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Atomic claim across processes relies on transient environment variables rather than persistent state.",
+            "why": "Constraint 4 states \u0027two servers sharing a data directory cannot both give it\u0027 based on an atomic claim. However, Constraint 7 and the \u0027What must be true\u0027 section rely on \u0060CLAUDE_CODE_SESSION_ID\u0060 being exported to children. If Server A spawns a child process that splits the plan, and Server B (or a different instance of Server A) starts a new process in the same directory before the first child finishes or commits, the new process may not inherit the \u0060CLAUDE_CODE_SESSION_ID\u0060 correctly or may generate a new one. This breaks the \u0027atomic claim\u0027 because two independent processes could simultaneously believe they are the sole \u0027caller\u0027 for the same repo/branch, leading to conflicting split orders and race conditions in the data directory.",
+            "fix": "Explicitly define the \u0027caller\u0027 as a persistent process ID or a shared lock file in the data directory, rather than relying on an environment variable passed to child processes.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Blocking",
+            "category": "Architecture",
+            "file": "",
+            "line": 0,
+            "title": "No mechanism exists to enforce the \u0027floor\u0027 for epics of epics without external state.",
+            "why": "The plan states \u0027A plan that passes is told to split... Epics of epics, with no floor.\u0027 It relies on the \u0027caller\u0027 to supply the floor. If the \u0027caller\u0027 is a human or a script that forgets to pass the floor, or if the \u0027caller\u0027 is a new session that doesn\u0027t know the previous depth, the system will recursively split epics indefinitely. For example, if a user runs the plan on a branch that was already split once, but the \u0027caller\u0027 (the script invoking the plan) doesn\u0027t track that it was already split, the system will split the epic again, creating an infinite recursion of epics until memory or token limits are hit.",
+            "fix": "Add a persistent \u0027split depth\u0027 counter to the plan state or a dedicated metadata file that increments with each split, rather than relying on the caller to supply the floor.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Split verdict depends on \u0027plan THIS round reviewed\u0027 without verifying if the plan has already been split.",
+            "why": "Constraint 7 states \u0027The split verdict is measured from the plan THIS round reviewed.\u0027 If a user re-runs the plan on a branch that was already split (e.g., a year later), the system might re-evaluate the \u0027plan\u0027 as if it were new. If the plan\u0027s content hasn\u0027t changed but the \u0027floor\u0027 wasn\u0027t tracked, the system might split an already-split epic again. For instance, a user runs the plan, it splits into Epics. A year later, the user runs the plan again on the same branch. The system sees the \u0027plan\u0027 (the original text) and splits it again, creating \u0027Epics of Epics of Epics\u0027 because the \u0027floor\u0027 was never recorded in the plan\u0027s state.",
+            "fix": "Implement a \u0027split depth\u0027 check in the plan review logic that reads the current depth from the plan\u0027s history or a metadata file, rather than assuming the caller knows it.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Ux",
+            "file": "",
+            "line": 0,
+            "title": "Human operator has no visibility into the split hierarchy before committing, risking irreversible deep nesting.",
+            "why": "The plan states \u0027A caller is ordered to split ONCE.\u0027 If the user (the \u0027caller\u0027) types the command, pastes it, and hits enter, they have no way to know if the system will split the plan into 2 epics or 4 epics, or if it will split an already-split epic. If the user makes a mistake (e.g., runs the plan on a branch that was already split), they might accidentally create a deep hierarchy of epics that is hard to manage. For example, a user runs the plan on a branch that was already split once, and the system splits it again, creating a hierarchy of 4 levels deep. The user then has to manually flatten this hierarchy, which is time-consuming and error-prone.",
+            "fix": "Add a \u0027dry-run\u0027 or \u0027preview\u0027 step that shows the split hierarchy before committing, allowing the user to verify the depth.",
+            "role": "PlanCritique",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Reliability",
+            "file": "",
+            "line": 0,
+            "title": "Unwritable store fails OPEN with a warning rather than failing the entire operation.",
+            "why": "Constraint 5 states \u0027An unwritable store fails OPEN with a warning rather than silently disabling the feature.\u0027 If the store is unwritable (e.g., due to permissions or disk full), the system will log a warning but continue. This means the split order might be lost, and the system will proceed as if the split was successful. For example, a user runs the plan, and the store is unwritable. The system logs a warning and continues. The user then commits the split, but the split order was never saved. Later, when the user tries to review the split, the system sees no split order and treats the plan as a single unit, leading to confusion and potential data loss.",
+            "fix": "Add a \u0027split depth\u0027 check in the plan review logic that reads the current depth from the plan\u0027s history or a metadata file, rather than assuming the caller knows it.",
+            "role": "PlanCritique",
+            "isGating": false,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          }
+        ],
+        "commands": [
+          "Split this plan into 2-4 logically complete STORIES. It is not broad enough to need epics. (Measured from the plan you sent: 29 lines, 7 build step(s), 0 file(s) named, 1 area(s) touched. That is a heuristic \u2014 if it is wrong for this plan, say so in your summary and do what is right.) After EVERY story: call review_code on that story\u0027s diff, resolve every finding, fix what you accepted, update the documentation and the tests, and commit. Only then start the next one. A story that is not reviewed, documented, tested and committed is not finished.",
+          "Do the SPLIT itself with Fable at its highest available version \u2014 deciding what the epics and stories are is the judgement that shapes everything after it. Then implement: ordinary stories on Opus, and anything where being wrong is expensive \u2014 payments, money, authentication, security, architecture, data migration \u2014 on Fable (max) again. Name the model you used for each story in your summary.",
+          "Work AUTONOMOUSLY. Say that you are working autonomously, and keep saying what you are writing right now as you go. Autonomous means these orders, not a mood: (1) every bug and every problem spot gets a RED-GREEN-RED test \u2014 a failing test first, then the fix, then the test green, then a check that the test really fails without the fix; (2) the documentation is updated with every change \u2014 the README, the manifest if there is one, the module docs and every other file that describes what you changed; (3) before any release, run ALL the tests that exist, not only the ones near your change; (4) if the repository has a release or pull request process, do it \u2014 and on a pull request, wait about five minutes, then check whether automatic comments appeared, read them and fix what they name; (5) if a deploy triggers automatically, verify the result against the target environment \u2014 dev, stage or test \u2014 and read its logs for errors before calling it done; (6) re-read your own code against the repository\u0027s rules and follow them, not only the ones you remember. A question that does not block you is not asked now: write it down and put every one of them at the END of your final summary. A question that DOES block you is asked at once \u2014 but before you ask it, re-read every epic and story you have written so far and gather every other blocking question you can foresee, so the person is interrupted once with all of them rather than repeatedly with one. Where you can proceed under a stated assumption, do that instead of asking, and say what you assumed."
+        ],
+        "resolveRefused": ""
+      },
+      {
+        "stage": "code",
+        "seconds": 243.6,
+        "verdict": "good_enough",
+        "error": "",
+        "gatingCount": 12,
+        "reviewers": "all 9 reviewers answered",
+        "tokensIn": 269357,
+        "tokensOut": 25708,
+        "costUsd": null,
+        "findings": [
+          {
+            "severity": "Blocking",
+            "category": "Convention",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 92,
+            "title": "Expired-claim replacement is not atomic across processes.",
+            "why": "This breaks the written rule: \u201CThe claim is atomic across processes: two servers sharing a data directory cannot both give it.\u201D Deleting the expired file before \u0060CreateNew\u0060 lets one process delete a newly recreated claim belonging to another, allowing both \u0060CreateNew\u0060 calls to succeed.",
+            "fix": "Replace the delete-then-create sequence with an atomic cross-process claim/renewal operation so expiry replacement cannot remove another process\u0027s claim.",
+            "role": "Architecture",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 99,
+            "title": "Expired-claim replacement is not atomic and can issue duplicate orders",
+            "why": "Two servers can both see an expired claim, delete the file, and race to create replacements; one can delete the other\u0027s newly created claim before creating its own. A concurrent plan round after expiry can therefore receive two split orders despite the claimed cross-process guarantee.",
+            "fix": "Make expiry replacement atomic, such as claiming via an exclusive lock/rename that verifies the old stamp, instead of delete-then-CreateNew.",
+            "role": "SecurityReliability",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 109,
+            "title": "An existing expired file causes write failures to fail closed without the required warning",
+            "why": "When an expired claim exists and \u0060File.Delete\u0060 or \u0060CreateNew\u0060 fails because the directory is unwritable, the disk is full, or access is denied, \u0060File.Exists(file)\u0060 is true and the first catch returns false. The caller gets no order and no warning, contrary to the fail-open requirement; a persistent stale file can silently disable splitting for that caller.",
+            "fix": "Only treat an IOException as a competing claim when an active claim was successfully observed or the file was created by another process; otherwise warn and return true for all storage failures.",
+            "role": "SecurityReliability",
+            "isGating": true,
+            "providers": [
+              "codex"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 110,
+            "title": "Unconditional File.Delete before FileMode.CreateNew breaks cross-process claim atomicity",
+            "why": "When two server processes race to claim an unrecorded or expired caller, Process 1 and Process 2 both pass StillRemembered. Process 1 creates and writes the claim file. Process 2 then reaches File.Exists(file) and immediately calls File.Delete(file), removing Process 1\u0027s fresh claim file and successfully acquiring its own FileMode.CreateNew stream. Both processes return true from TryClaimSplitOrder, resulting in duplicate split orders being issued.",
+            "fix": "Do not unconditionally delete existing files before FileMode.CreateNew; handle existing files by inspecting their timestamp under file locking or attempting atomic creation/replacement only when verified expired.",
+            "role": "SecurityReliability",
+            "isGating": true,
+            "providers": [
+              "gemini"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Convention",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 88,
+            "title": "Atomic claim introduces side-effect dependency via callback parameter",
+            "why": "The rule states: \u0027The condition that issues the order and the condition that claims it are ONE question asked once.\u0027 By passing an \u0060Action\u003Cstring\u003E? warn\u0060 into the atomic claim method, the method\u0027s return value (the claim result) becomes coupled with a side-effect (logging) that is not part of the atomic state transition. This breaks the purity of the \u0027one question\u0027 contract, as the caller must now manage the logging context for the claim to be complete.",
+            "fix": "Remove the \u0060Action\u003Cstring\u003E? warn\u0060 parameter from \u0060TryClaimSplitOrder\u0060 and the \u0060warn?.Invoke\u0060 call inside the catch block. The rule requires the caller to be ordered ONCE, and the claim logic to be atomic. The current implementation introduces a side-effect (logging a warning) that depends on an external callback, which violates the principle that the condition that issues the order and the condition that claims it are ONE question asked once. The warning is a side effect of the failure mode, not part of the atomic claim itself.",
+            "role": "Architecture",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Convention",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 95,
+            "title": "Atomic claim logic separated into check-then-delete-then-create, violating \u0027ONE question\u0027 rule",
+            "why": "The rule states: \u0027The condition that issues the order and the condition that claims it are ONE question asked once.\u0027 The current implementation performs a \u0060File.Exists\u0060 check, deletes the file if present, and then attempts \u0060CreateNew\u0060. This sequence is not atomic. If another process deletes the file between the check and the \u0060CreateNew\u0060, or if the \u0060CreateNew\u0060 fails because the file was created by another process in that window, the logic returns \u0060false\u0060 (claim lost) or \u0060true\u0060 (claim won) inconsistently. The rule requires a single atomic operation to determine the outcome, not a sequence of operations that can be interrupted.",
+            "fix": "Change the catch block for \u0060IOException\u0060 to not return \u0060false\u0060 when \u0060File.Exists(file)\u0060 is true. The current logic returns \u0060false\u0060 if the file exists (implying a race where someone else claimed it), but the rule requires that \u0027A caller that already holds a claim is a caller already inside a split, and is told so.\u0027 The current implementation returns \u0060false\u0060 for an existing file, which is correct, but the logic \u0060if (File.Exists(file)) { File.Delete(file); }\u0060 followed by \u0060CreateNew\u0060 creates a race window where the file could be deleted by another process between the check and the write, leading to a silent failure or duplicate claim if not handled strictly. The rule \u0027The condition that issues the order and the condition that claims it are ONE question asked once\u0027 implies the check and the claim must be inseparable. The current code separates the existence check (delete) from the atomic creation.",
+            "role": "Architecture",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Convention",
+            "file": "src_mcp/src/Server/PanelService.cs",
+            "line": 554,
+            "title": "FirstPlanRound flag set before atomic claim, violating \u0027ONE question\u0027 rule",
+            "why": "The rule states: \u0027The condition that issues the order and the condition that claims it are ONE question asked once.\u0027 The current code sets \u0060FirstPlanRound: true\u0060 in the \u0060provisional\u0060 context before calling \u0060TryClaimSplitOrder\u0060. This means the flag is set regardless of whether the claim succeeds. If the claim fails (e.g., due to an unwritable store), the flag remains \u0060true\u0060, but the caller is not actually ordered to split (because the claim failed). This creates a state where the flag says \u0027first round\u0027 but the order was not given, violating the atomicity of the \u0027one question\u0027 contract.",
+            "fix": "Remove the \u0060FirstPlanRound: true\u0060 assignment in the \u0060provisional\u0060 context. The rule states: \u0027A caller is ordered to split ONCE. A plan that is already a piece is told so instead.\u0027 The current code sets \u0060FirstPlanRound\u0060 to \u0060true\u0060 unconditionally, then checks \u0060OrdersSplit\u0060 and claims the order. This means the \u0060FirstPlanRound\u0060 flag is set before the claim is verified, potentially allowing a caller that has already claimed an order to be treated as a first-round caller if the claim fails (e.g., due to an unwritable store). The rule requires that the \u0027claim\u0027 and the \u0027order\u0027 are one question. The current code separates the flag setting from the claim verification.",
+            "role": "Architecture",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Convention",
+            "file": "src_mcp/src/Server/PanelService.cs",
+            "line": 907,
+            "title": "Comment misrepresents fallback logic: \u0027Our session\u0027 vs \u0027checkout\u0027",
+            "why": "The rule states: \u0027A client that exports no session id is still followed across the branches of one checkout.\u0027 The comment in \u0060CallerFor\u0060 says: \u0027Our session is repo\u002Bbranch, and an epic arrives on its own branch: a session-keyed fallback would call every epic a fresh caller...\u0027 This implies the fallback is the session, but the code actually falls back to \u0060session.State.RepoPath\u0060 (the checkout). The comment is misleading because it suggests the fallback is the session, when it is actually the checkout. This is a minor deviation because the code is correct, but the comment could confuse a reader about the actual fallback mechanism.",
+            "fix": "Change the fallback from \u0060CallerIdentity.Current()\u0060 to \u0060session.State.RepoPath\u0060 to be consistent with the rule \u0027A client that exports no session id is still followed across the branches of one checkout.\u0027 The current code uses \u0060CallerIdentity.Current()\u0060 which returns the session ID, but the rule requires that a client with no session ID falls back to the checkout (repo path), not the session. The current code uses \u0060CallerIdentity.Current()\u0060 which is the session ID, and only falls back to \u0060session.State.RepoPath\u0060 if the session ID is empty. This is correct, but the comment in the code says \u0027Our session is repo\u002Bbranch\u0027, which is misleading. The rule requires that the fallback is the checkout, not the session. The current code uses \u0060CallerIdentity.Current()\u0060 which is the session ID, and only falls back to \u0060session.State.RepoPath\u0060 if the session ID is empty. This is correct, but the comment in the code says \u0027Our session is repo\u002Bbranch\u0027, which is misleading. The rule requires that the backup",
+            "role": "Architecture",
+            "isGating": false,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Blocking",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 93,
+            "title": "Race condition allows duplicate split orders under concurrent load",
+            "why": "The method checks \u0060StillRemembered\u0060 (read) before attempting \u0060FileMode.CreateNew\u0060 (write). If two servers run in parallel: Server A reads \u0027unclaimed\u0027, Server B reads \u0027unclaimed\u0027, Server A writes and succeeds, Server B writes and succeeds. The test \u0060TheClaimIsATOMIC\u0060 passes because it uses \u0060Parallel.For\u0060 on the same instance, but the logic relies on the OS \u0060CreateNew\u0060 to serialize. However, the pre-check \u0060if (StillRemembered(...))\u0060 is outside the \u0060try\u0060 block. If a file exists but is stale (expired), it is deleted. If two servers race to delete and create, or if the check happens between the delete and create, both might succeed if the check logic isn\u0027t perfectly atomic with the write. More critically, the \u0060catch (IOException) when (File.Exists(file))\u0060 block returns \u0060false\u0060 (claim failed), but if the file was created by a rival just before the exception, the caller thinks they failed, yet the rival succeeded. Wait, the real issue is: if \u0060StillRemembered\u0060 returns false (file expired or no",
+            "fix": "Move the \u0060StillRemembered\u0060 check inside the \u0060try\u0060 block, immediately after \u0060Directory.CreateDirectory\u0060, so the check happens on the same file handle state as the \u0060CreateNew\u0060 attempt.",
+            "role": "SecurityReliability",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Security",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 93,
+            "title": "Path traversal vulnerability in caller identity file name",
+            "why": "The \u0060caller\u0060 string is used directly in \u0060FileFor(caller)\u0060 to create a file path. If a caller passes a value like \u0060../../etc/passwd\u0060 or \u0060C:\\Windows\\System32\\config\u0060, the code writes to an arbitrary location on the filesystem. An attacker controlling the caller ID (e.g., via a malicious MCP client or environment variable) could overwrite critical system files or log files, or create a symlink to a sensitive file, leading to data leakage or privilege escalation.",
+            "fix": "Sanitize the \u0060caller\u0060 string (e.g., remove or replace \u0060/\u0060, \u0060\\\u0060, \u0060:\u0060, \u0060*\u0060, \u0060?\u0060, \u0060",
+            "role": "SecurityReliability",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 90,
+            "title": "Potential deadlock or hang on slow/unresponsive storage",
+            "why": "The code performs \u0060File.Exists\u0060 followed by \u0060File.Delete\u0060 and then \u0060FileMode.CreateNew\u0060. If the underlying storage is slow, network-mounted, or the file handle is locked by another process, these operations can block indefinitely. In a high-concurrency scenario with many callers, this could lead to thread pool exhaustion or a complete stall of the server\u0027s ability to process new requests.",
+            "fix": "Add a timeout to the \u0060File.Exists\u0060 and \u0060File.Delete\u0060 operations, or use a more robust locking mechanism (e.g., \u0060Mutex\u0060) to prevent indefinite hangs on slow storage.",
+            "role": "SecurityReliability",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Ux",
+            "file": "src_mcp/src/Server/PanelService.cs",
+            "line": 575,
+            "title": "Inconsistent state propagation for FirstPlanRound flag",
+            "why": "The code creates a \u0060provisional\u0060 context with \u0060FirstPlanRound: true\u0060, then conditionally updates it based on \u0060TryClaimSplitOrder\u0060. However, if \u0060GateCommands.OrdersSplit(provisional)\u0060 returns false, the \u0060context\u0060 variable is assigned the \u0060provisional\u0060 object, but the logic for \u0060FirstPlanRound\u0060 might not be correctly reflected in the final \u0060commands\u0060 generated by \u0060GateCommands.For(context)\u0060. If the \u0060FirstPlanRound\u0060 flag is used elsewhere in the system to determine behavior, this inconsistency could lead to unexpected splitting behavior or missed split orders.",
+            "fix": "Ensure the \u0060provisional\u0060 context is passed correctly to \u0060GateCommands.For\u0060 and that the \u0060FirstPlanRound\u0060 flag is consistently applied across all code paths, not just the split order path.",
+            "role": "SecurityReliability",
+            "isGating": false,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Architecture",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 85,
+            "title": "Missing null/empty check for caller identity",
+            "why": "If \u0060caller\u0060 is an empty string or null, \u0060FileFor(caller)\u0060 might create a file with a weird name (e.g., \u0060.\u0060 or \u0060null\u0060) or throw an exception. This could lead to silent failures where the split order is recorded but not retrievable, or the file system becomes cluttered with invalid entries.",
+            "fix": "Add a check to ensure the \u0060caller\u0060 string is not empty or null before using it in \u0060FileFor\u0060.",
+            "role": "SecurityReliability",
+            "isGating": false,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Reliability",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 97,
+            "title": "Race condition in atomic claim due to pre-check delete",
+            "why": "The code checks if a file exists and deletes it (line 97) before attempting \u0060FileMode.CreateNew\u0060. If two servers run in parallel: Server A checks \u0060StillRemembered\u0060 (false), Server B checks \u0060StillRemembered\u0060 (false), Server A deletes the file, Server B deletes the file (no-op), Server A creates the file and returns true, Server B attempts to create the file and throws \u0060IOException\u0060. The current catch block for \u0060IOException\u0060 checks \u0060File.Exists(file)\u0060 to determine if it was a race. However, if Server B deletes the file *after* Server A creates it but *before* Server B\u0027s \u0060CreateNew\u0060 executes, the \u0060File.Exists\u0060 check in the catch block will be true (because Server A created it), causing Server B to return \u0060false\u0060 (claim failed) instead of \u0060true\u0060 (claim succeeded). This creates a scenario where two servers can both believe they failed to claim, or worse, if the delete happens between the check and the create, the logic for \u0027someone else claimed it\u0027 becomes ambiguous. More critically, if the",
+            "fix": "Move the \u0060File.Delete(file)\u0060 call inside the \u0060try\u0060 block, immediately after the \u0060StillRemembered\u0060 check, or wrap it in its own try-catch before the \u0060CreateNew\u0060 attempt.",
+            "role": "UxDxPerformance",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Major",
+            "category": "Ux",
+            "file": "src_mcp/src/Server/PanelService.cs",
+            "line": 578,
+            "title": "Split order claimed on rounds that may not issue a command",
+            "why": "The code calls \u0060Core.Commands.GateCommands.OrdersSplit(provisional)\u0060 to determine if a split should be ordered. If this returns true, it then calls \u0060TryClaimSplitOrder\u0060. However, the \u0060provisional\u0060 context used for the claim includes \u0060FirstPlanRound: true\u0060 (line 573), which is hardcoded. The original logic used \u0060!_callers.SplitAlreadyOrdered(caller, DateTime.UtcNow)\u0060 to determine if it was the first round. By hardcoding \u0060FirstPlanRound: true\u0060 and then checking \u0060OrdersSplit\u0060 *after* the claim, the code risks claiming a split order for a round that might not actually be the \u0027first\u0027 round in the sequence if the logic for determining \u0027first\u0027 is decoupled from the claim. Specifically, if \u0060OrdersSplit\u0060 returns true based on \u0060provisional\u0060, but the claim fails (e.g., due to race), the system might proceed with a split order that was already claimed by another process, or fail to claim it when it should have. The logic flow is: 1. Create provisional with \u0060FirstPlanRound: true\u0060. 2. Check if \u0060pro\u0060",
+            "fix": "Pass the \u0060provisional\u0060 context to \u0060OrdersSplit\u0060 *after* the claim attempt, or ensure the claim is only attempted if \u0060OrdersSplit\u0060 returns true, to avoid claiming a split order on a round that doesn\u0027t actually issue a split command.",
+            "role": "UxDxPerformance",
+            "isGating": true,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          },
+          {
+            "severity": "Minor",
+            "category": "Performance",
+            "file": "src_mcp/src/Server/CallerSessions.cs",
+            "line": 95,
+            "title": "Redundant file system checks in atomic claim logic",
+            "why": "The code performs \u0060File.Exists(file)\u0060 (line 95) and then \u0060File.Delete(file)\u0060 (line 97), followed by \u0060new FileStream(file, ...)\u0060 (line 100). In a high-concurrency environment where multiple servers are checking the same caller, this results in multiple file system calls per claim attempt. While \u0060File.Exists\u0060 is a check, the subsequent \u0060Delete\u0060 and \u0060CreateNew\u0060 operations are expensive. If the file exists and is not expired, the code deletes it and then tries to create a new one. This sequence of operations (check, delete, create) can be optimized by using a single atomic operation or by caching the existence check. In a scenario with 100 concurrent servers checking the same caller, this could lead to 300 file system calls per second, potentially causing I/O contention.",
+            "fix": "Cache the \u0060File.Exists\u0060 result or use a single \u0060File.TryOpen\u0060 pattern to avoid redundant file system calls in high-frequency scenarios.",
+            "role": "UxDxPerformance",
+            "isGating": false,
+            "providers": [
+              "local"
+            ],
+            "useful": "unjudged",
+            "verdict": ""
+          }
+        ],
+        "commands": [
+          "Work AUTONOMOUSLY. Say that you are working autonomously, and keep saying what you are writing right now as you go. Autonomous means these orders, not a mood: (1) every bug and every problem spot gets a RED-GREEN-RED test \u2014 a failing test first, then the fix, then the test green, then a check that the test really fails without the fix; (2) the documentation is updated with every change \u2014 the README, the manifest if there is one, the module docs and every other file that describes what you changed; (3) before any release, run ALL the tests that exist, not only the ones near your change; (4) if the repository has a release or pull request process, do it \u2014 and on a pull request, wait about five minutes, then check whether automatic comments appeared, read them and fix what they name; (5) if a deploy triggers automatically, verify the result against the target environment \u2014 dev, stage or test \u2014 and read its logs for errors before calling it done; (6) re-read your own code against the repository\u0027s rules and follow them, not only the ones you remember. A question that does not block you is not asked now: write it down and put every one of them at the END of your final summary. A question that DOES block you is asked at once \u2014 but before you ask it, re-read every epic and story you have written so far and gather every other blocking question you can foresee, so the person is interrupted once with all of them rather than repeatedly with one. Where you can proceed under a stated assumption, do that instead of asking, and say what you assumed."
+        ],
+        "resolveRefused": ""
+      }
+    ],
+    "harnessError": "",
+    "serverSaid": "[10:05:05 \u001B[32mINF\u001B[0m] coai-mcp#43792 finding [Major/Reliability] src_mcp/src/Server/CallerSessions.cs:97 - Race condition in atomic claim due to pre-check delete (from local) [gating] Round=1 Stage=CodeReview\r | [10:05:05 \u001B[32mINF\u001B[0m] coai-mcp#43792 finding [Major/Ux] src_mcp/src/Server/PanelService.cs:578 - Split order claimed on rounds that may not issue a command (from local) [gating] Round=1 Stage=CodeReview\r | [10:05:05 \u001B[32mINF\u001B[0m] coai-mcp#43792 finding [Minor/Performance] src_mcp/src/Server/CallerSessions.cs:95 - Redundant file system checks in atomic claim logic (from local) Round=1 Stage=CodeReview",
+    "onDisk": {
+      "rounds": 2,
+      "stillRunning": 0,
+      "pending": 0,
+      "note": "",
+      "config": {
+        "onExhausted": "GoodEnough",
+        "roles": {
+          "PlanCritique": {
+            "maxRounds": 1,
+            "threshold": 6
+          },
+          "Architecture": {
+            "maxRounds": 2,
+            "threshold": 5
+          },
+          "SecurityReliability": {
+            "maxRounds": 1,
+            "threshold": 5
+          },
+          "UxDxPerformance": {
+            "maxRounds": 1,
+            "threshold": 5
+          }
+        }
+      },
+      "clean": true
+    },
+    "settings": {
+      "mismatches": [],
+      "checked": [
+        "PlanCritique rounds",
+        "PlanCritique threshold",
+        "Architecture threshold",
+        "SecurityReliability rounds",
+        "SecurityReliability threshold",
+        "UxDxPerformance rounds",
+        "UxDxPerformance threshold",
+        "on-exhausted",
+        "COAI_AUTONOMOUS",
+        "COAI_SPLIT_PLAN",
+        "COAI_SPLIT_WITH_FABLE"
+      ],
+      "ok": true
+    }
+  }
+]
