@@ -1,0 +1,34 @@
+name: pr · title
+
+# The pull request title becomes the line in main's history (rebase keeps commits, squash uses the
+# title), so it has to say what changed in the family's own shape: `type: what changed`.
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  semantic:
+    name: pr · semantic title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            test
+            chore
+            refactor
+            perf
+            ci
+            build
+          requireScope: false
+          subjectPattern: ^(?![A-Z]).+$
+          subjectPatternError: |
+            The subject "{subject}" starts with a capital letter; the family writes `type: lower-case what changed`.
