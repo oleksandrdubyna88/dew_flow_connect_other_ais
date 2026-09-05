@@ -63,6 +63,7 @@ public sealed class GitModulesTests
     // case went green on Windows and red there, which is how the guard came to be platform-blind.
     [InlineData("C:/Windows")]
     [InlineData("\\\\server\\share")]
+    [InlineData("\\server\\share")]
     [InlineData("")]
     public void APathThatCanLeaveTheCheckout_IsNotAMount(string path)
     {
@@ -84,6 +85,27 @@ public sealed class GitModulesTests
         GitModules.IsSafeMountName(name).Should().BeFalse();
         GitModules.Parse($"[submodule \"{name}\"]\n\tpath = ok/here\n").Should().BeEmpty();
     }
+
+    /// <summary>
+    /// The separator is converted BEFORE anything judges the path, and that is what makes the guard
+    /// mean the same thing on both platforms.
+    /// </summary>
+    /// <remarks>
+    /// <para>Written after the backslash cases above were found to have no teeth here. On Windows
+    /// <c>Path.IsPathRooted</c> already refuses <c>\server\share</c>, so the theory row passes with
+    /// normalisation deleted — it asserts the truth of the machine it runs on, which is the exact
+    /// shape of the defect this whole guard exists for. On Linux nothing but this conversion stands
+    /// between a Windows-rooted path and the leading-slash check.</para>
+    /// <para>So the conversion is asserted directly, on the one public method that performs it: no
+    /// platform can make this pass by accident.</para>
+    /// </remarks>
+    [Theory]
+    [InlineData("\\server\\share", "/server/share")]
+    [InlineData("\\\\server\\share", "//server/share")]
+    [InlineData("C:\\Windows", "C:/Windows")]
+    [InlineData(".claude\\rules\\shared", ".claude/rules/shared")]
+    public void EverySeparatorIsAForwardSlashBeforeAnythingJudgesThePath(string written, string expected) =>
+        GitModules.Normalise(written).Should().Be(expected);
 
     [Fact]
     public void TheNamesThisFamilyActuallyUses_AreAccepted()
