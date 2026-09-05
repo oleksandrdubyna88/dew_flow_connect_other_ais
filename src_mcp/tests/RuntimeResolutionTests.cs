@@ -69,6 +69,48 @@ public sealed class RuntimeResolutionTests
             "an unknown provider is a refusal naming the catalog, never a silent default");
     }
 
+    /// <summary>
+    /// The adapter a vendor gets is the runtime <see cref="RuntimeResolution.NameOf"/> named — for
+    /// every shape, not by coincidence.
+    /// </summary>
+    /// <remarks>
+    /// Raised by codex and gemini on this change's code round, and it is the defect this whole type
+    /// exists to prevent, one level further in: `For` used to re-decide "has a base url" for itself
+    /// instead of following `NameOf`, so the moment a new name is added — `remote`, next story —
+    /// `NameOf` would say remote while `For` handed back the Codex adapter. Two answers to one
+    /// question, inside the type that was supposed to end them.
+    /// </remarks>
+    [Theory]
+    [InlineData("codex", "", "")]
+    [InlineData("claude", "claude", "")]
+    [InlineData("my-claude", "claude", "")]
+    [InlineData("local", "local", "http://127.0.0.1:11434/v1")]
+    [InlineData("local", "local", "")]
+    [InlineData("mistral", "codex", "https://api.mistral.ai/v1")]
+    [InlineData("deepseek", "", "")]
+    [InlineData("antigravity", "antigravity", "")]
+    public void TheAdapterAVendorGets_IsTheRuntimeItWasNamed(string provider, string runtime, string baseUrl)
+    {
+        var vendor = Vendor(provider, runtime, baseUrl);
+        var expected = RuntimeResolution.NameOf(vendor);
+
+        var actual = RuntimeResolution.For(vendor) switch
+        {
+            LocalRuntime => "local",
+            // The custom runtime IS the codex CLI, pointed elsewhere — which is what NameOf calls it.
+            CustomCodexRuntime => "codex",
+            ClaudeRuntime => "claude",
+            AntigravityRuntime => "antigravity",
+            GeminiRuntime => "gemini",
+            DeepseekRuntime => "deepseek",
+            CodexRuntime => "codex",
+            null => "",
+            _ => "unknown",
+        };
+
+        actual.Should().Be(expected);
+    }
+
     // ---------- who may review at all ----------
 
     [Fact]

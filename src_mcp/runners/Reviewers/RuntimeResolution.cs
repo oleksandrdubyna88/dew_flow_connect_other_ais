@@ -45,21 +45,29 @@ public static class RuntimeResolution
     /// The runtime for one configured reviewer: a built-in by name, or — when the operator gave it a
     /// base URL — the generic custom one. A vendor added in the panel is DATA, not a release.
     /// </summary>
-    public static IReviewerRuntime? For(VendorIdentity vendor) =>
-        // Through NameOf, which is the ONE place that answers "what is this vendor". It used to ask
-        // `Runtime == "local"` here as well, and a third copy of the same question in the auth
-        // decision was never updated — so a local reviewer was silently dropped from every round.
-        NameOf(vendor) == "local"
-            ? new LocalRuntime(vendor.Provider, vendor.BaseUrl)
-            : vendor.BaseUrl.Length > 0
-                ? new CustomCodexRuntime(vendor.Provider, vendor.BaseUrl)
-                // An EXPLICIT runtime outranks the id, and that order is the fix for a real defect:
-                // the id was consulted first, so a vendor called `claude` worked by accident while
-                // `my-claude` — same runtime, different name — silently ran the Codex CLI. The
-                // vendor's own id travels with the runtime; see ReviewerRuntimeSelector.Named for
-                // what happened when it did not.
-                : ReviewerRuntimeSelector.Named(vendor.Runtime, vendor.Provider)
-                  ?? ReviewerRuntimeSelector.Default.Find(vendor.Provider);
+    /// <remarks>
+    /// <para><b>It dispatches on <see cref="NameOf"/> and never re-decides anything for itself.</b>
+    /// It used to ask `BaseUrl.Length > 0` again on its own, which read as harmless — the two agreed
+    /// on every vendor that exists today. They would have stopped agreeing on the first new name:
+    /// `NameOf` would answer `remote` while this handed back the Codex adapter, which is the split
+    /// decision this whole type was extracted to end, reintroduced inside it. Raised by codex and
+    /// gemini on this change's code round; <c>TheAdapterAVendorGets_IsTheRuntimeItWasNamed</c> is
+    /// the guard.</para>
+    /// <para>The base-URL arm survives as a CONDITION on the codex name rather than a decision of
+    /// its own: `NameOf` has already turned "has an endpoint" into `codex`, and what is left here is
+    /// which codex — the CLI's own service, or somebody else's.</para>
+    /// </remarks>
+    public static IReviewerRuntime? For(VendorIdentity vendor) => NameOf(vendor) switch
+    {
+        "local" => new LocalRuntime(vendor.Provider, vendor.BaseUrl),
+        "codex" when vendor.BaseUrl.Length > 0 => new CustomCodexRuntime(vendor.Provider, vendor.BaseUrl),
+        // An EXPLICIT runtime outranks the id, and that order is the fix for a real defect: the id
+        // was consulted first, so a vendor called `claude` worked by accident while `my-claude` —
+        // same runtime, different name — silently ran the Codex CLI. The vendor's own id travels
+        // with the runtime; see ReviewerRuntimeSelector.Named for what happened when it did not.
+        var name => ReviewerRuntimeSelector.Named(name, vendor.Provider)
+                    ?? ReviewerRuntimeSelector.Default.Find(vendor.Provider),
+    };
 
     /// <summary>
     /// How a vendor authenticates — and therefore whether it can run at all.
