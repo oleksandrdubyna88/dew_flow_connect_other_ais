@@ -72,8 +72,15 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor")
         Console.Error.WriteLine(stderrText);
     }
 
+    // `-o` means two different things to two vendors. Codex takes `-o <absolute path>.json` — where
+    // to WRITE the answer. Gemini takes `-o json` — what FORMAT to answer in. Reading every `-o` as
+    // codex's made a gemini-shaped launch write a file literally called `json`, in its working
+    // directory — which every reviewer of a round shares. Three gemini reviewers then opened one
+    // file at once, and on Windows, where a share mode is enforced rather than advisory, the losers
+    // died: two release attempts lost to `exit -532462766`, never reproducible on a developer
+    // machine. A rooted path is the one thing that separates a destination from a format name.
     var outIndex = Array.IndexOf(args, "-o");
-    if (outIndex >= 0 && outIndex + 1 < args.Length &&
+    if (outIndex >= 0 && outIndex + 1 < args.Length && Path.IsPathRooted(args[outIndex + 1]) &&
         Environment.GetEnvironmentVariable("FAKECLI_OUTFILE_TEXT") is { Length: > 0 } fileText)
     {
         File.WriteAllText(args[outIndex + 1], fileText);
