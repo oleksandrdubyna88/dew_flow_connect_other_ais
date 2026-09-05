@@ -90,15 +90,18 @@ export function parseUsage(text: string): UsageEntry[] {
 }
 
 /**
- * The entries inside a window, counted back from `now`.
+ * The entries inside a window.
  *
- * <p>"Today" is the last 24 hours rather than since midnight: a review at 23:50 and one at 00:10
- * belong to the same piece of work, and a chart that splits them at a calendar boundary answers a
- * question nobody asked.</p>
+ * <p><b>"Today" is since local midnight.</b> It was the last 24 hours — "a review at 23:50 and one
+ * at 00:10 belong to the same piece of work" — and the operator overruled it on 2026-09-05: what
+ * today cost is a question about the calendar day, and a rolling day answers a different one. Week,
+ * month and year stay rolling: a quiet Monday morning must still show last week's work.</p>
  */
 export function within(entries: readonly UsageEntry[], window: Window, now: Date): UsageEntry[] {
   const days = WINDOWS.find((w) => w.id === window)?.days ?? 1;
-  const cutoff = now.getTime() - days * 24 * 60 * 60 * 1000;
+  const cutoff = window === 'day'
+    ? new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    : now.getTime() - days * 24 * 60 * 60 * 1000;
   return entries.filter((e) => {
     const at = Date.parse(e.utc);
     return Number.isFinite(at) && at >= cutoff;

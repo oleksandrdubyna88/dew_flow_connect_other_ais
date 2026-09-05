@@ -1,6 +1,8 @@
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { UsageEntry } from '../usage';
+import { roundsLogHtml, usageTabHtml } from '../roundsLog';
 import { escapeHtml, panelHtml, PanelState } from '../panelView';
 import { DEFAULTS } from '../settingsShape';
 import { vendorColour } from '../vendorColour';
@@ -482,19 +484,15 @@ test('no two sections define the same class, because the loser is dimmed in sile
 });
 
 test('a spending row shows the vendor and its cost apart, not run together', () => {
-  const html = panelHtml(
-    state({
-      usage: [
-        { utc: new Date().toISOString(), provider: 'antigravity', model: 'm', role: 'PlanCritique',
-          stage: 'PlanReview', outcome: 'Ok', tokensIn: 55_800, tokensOut: 25_500, costUsd: null, seconds: 84 },
-      ],
-    }),
-    'n0nce',
-  );
+  // The spending section moved to the rounds log page on 2026-09-05; the rule about the row is the
+  // same there. "antigravity—" is what a name butted against the money dash reads as, and it read
+  // as a typo. The two are adjacent in the markup on purpose — it is the ROW that holds them apart.
+  const usage = usageTabHtml(
+    [{ utc: new Date().toISOString(), provider: 'antigravity', model: 'm', role: 'PlanCritique',
+       stage: 'PlanReview', outcome: 'Ok', tokensIn: 55_800, tokensOut: 25_500, costUsd: null, seconds: 84 } as UsageEntry],
+    'day', [], {});
+  const html = roundsLogHtml([], [], 'n0nce', usage);
 
-  // "antigravity—" is what a name butted against the money dash reads as, and it read as a typo.
-  // The two are adjacent in the markup on purpose — it is the ROW that holds them apart, so the
-  // assertion is on the class that gets positioned and on the rule that positions it.
   assert.match(html, /<span class="cost">/, 'the money needs an element the row can push to its far end');
   assert.match(html, /\.spend \.head \{[^}]*space-between/, 'the row puts the name and the cost at opposite ends');
   assert.match(html, /\.spend \.figures \{/, 'the tokens are the answer, so they are not styled as a hint');

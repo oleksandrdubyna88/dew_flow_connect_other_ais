@@ -10,10 +10,10 @@ import {
   OPEN_BY_DEFAULT,
   panelHtml,
   staticKey,
-  usageRegion,
   VSCODE_COMMAND_FOR,
 } from './panelView';
 import { parseSession, SessionFile } from './rounds';
+import { usageTabHtml } from './roundsLog';
 import { parseUsage, UsageEntry, Window } from './usage';
 import {
   CliStatus,
@@ -80,7 +80,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       change, and a section that snapped shut mid-edit would be worse than none. */
   private openSections: string[] = [...OPEN_BY_DEFAULT];
   /** Which window the spending chart shows. A view preference, so it lives here, not in config. */
-  private usageWindow: Window = 'week';
+  private usageWindow: Window = 'day';
   /** The newest published server version, and when GitHub last answered. */
   private latestServer = '';
   private latestCheckedAt = 0;
@@ -105,13 +105,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private openRouterPrices: PriceTable = {};
   private liteLlmPrices: PriceTable = {};
   private pricesCheckedAt = 0;
-  /**
-   * The prices the last full repaint computed, reused when only the spending WINDOW changes.
-   *
-   * <p>Fetching two public price tables to answer "what did this week cost" is the reason choosing
-   * a window took seconds. A list price does not change because somebody clicked Month.</p>
-   */
-  private lastPrices: Record<string, ModelPrice> = {};
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -149,26 +142,22 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
 
 
-  /**
-   * Redraws the spending region and NOTHING else.
-   *
-   * <p>Choosing a window is arithmetic over rows already read from the ledger. It used to repaint
-   * the whole panel, which is why switching Today to Week took seconds.</p>
-   */
-  private async patchUsage(): Promise<void> {
-    if (this.view === undefined) {
-      return;
-    }
 
-    const config = vscode.workspace.getConfiguration('coai');
-    void this.view.webview.postMessage({
-      type: 'live',
-      usage: usageRegion(
-        this.remembered(await this.readUsage()),
-        this.usageWindow,
-        vendorsFrom(config.get('vendors')),
-        this.lastPrices),
-    });
+  /** The spending window the page shows. Today by default — since midnight, by the operator's ruling. */
+  setUsageWindow(window: string): void {
+    if ((['day', 'week', 'month', 'year'] as readonly string[]).includes(window)) {
+      this.usageWindow = window as Window;
+    }
+  }
+
+  /**
+   * The spending tab of the rounds log page: the ledger, the forget marks, the prices and the window
+   * — everything the sidebar section used to show, rendered by the same function, for the page.
+   */
+  async usageTab(): Promise<string> {
+    const vendors = vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors'));
+
+    return usageTabHtml(this.remembered(await this.readUsage()), this.usageWindow, vendors, await this.modelPrices(vendors));
   }
 
   /** Re-read everything and repaint: the configuration, the sessions, the ledger and the probes. */
@@ -197,7 +186,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       usageWindow: this.usageWindow,
       latestServerVersion: published,
       cliStatus: await this.vendorCliStatus(vendors),
-      modelPrices: this.lastPrices = await this.modelPrices(vendors),
+      modelPrices: await this.modelPrices(vendors),
       snippetStatus: await pastedSnippetStatus(),
       localEngines: await this.probeLocalEngines(vendors),
     };
@@ -359,7 +348,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * <p>Modal, because it is not reversible from the panel and the number it clears is the only
    * record of what a month cost.</p>
    */
-  private async forgetUsage(provider: string): Promise<void> {
+  async forgetUsage(provider: string): Promise<void> {
     const forget = 'Forget';
     const answer = await vscode.window.showWarningMessage(
       `Clear ${provider}'s recorded runs from the spending chart?`,
@@ -737,11 +726,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // stats the server binary, probes every vendor CLI, asks GitHub what is published and fetches
     // two price tables — and switching a window took seconds for an arithmetic change over rows the
     // extension already had in hand.
-    if (command === 'usageWindow') {
-      await this.patchUsage();
-      return;
-    }
-
     await this.render();
   }
 

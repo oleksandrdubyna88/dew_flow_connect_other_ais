@@ -122,6 +122,5 @@ test('a live patch that carries the same HTML as last time does not touch the DO
   const script = panelHtml(state([]), 'n', NOW).split('</style>')[1] ?? '';
 
   assert.match(script, /message\.rounds !== lastRounds/, 'the rounds region is compared before it is replaced');
-  assert.match(script, /message\.usage !== lastUsage/);
   assert.match(script, /message\.questions !== lastQuestions/);
 });

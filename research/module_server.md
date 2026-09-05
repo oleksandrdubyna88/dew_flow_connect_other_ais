@@ -675,3 +675,15 @@ data before the rule was written.
 write time or length changed; `SettingsAreLiveTests` now states it as a requirement rather than a
 convenience — a switch ticked a second before a call governs that call, in both directions, and
 creating a file where there was none counts as a change.
+
+## The autonomy order is six instructions (2026-09-05)
+
+`COAI_AUTONOMOUS` used to hand back one sentence — work autonomously, batch the questions. The
+operator, over the checkbox: *"эта галочка должна говорить не просто работать автономно, а давать чёткие
+инструкции"*. `GateCommands.AutonomyCommand` now spells out what autonomous means, and
+`AutonomyIsAnInstructionTests` holds each order: a red-green-red test for every bug; documentation,
+README, manifest and module docs updated with every change; ALL the tests before a release; the
+repository's release or pull-request process followed, with a pull request's automatic comments read
+five minutes later; an automatic deploy verified against dev, stage or test with its logs read; the
+code re-read against the repository's rules; and the assistant saying that it is autonomous and what it
+is writing right now. The question-batching rule is unchanged.

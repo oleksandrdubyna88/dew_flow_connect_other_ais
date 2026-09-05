@@ -134,12 +134,17 @@ public static class GateCommands
             + "Name the model you used for each story in your summary.";
 
     /// <summary>
-    /// When to interrupt the person, and when not to.
+    /// What "autonomous" is made of, and when to interrupt the person.
     /// </summary>
     /// <remarks>
-    /// The "re-read the epics" clause is conditional, because early in a task there may be no epics
-    /// yet and an instruction that cannot be carried out is one an AI has to interpret. Raised in
-    /// this change's plan round.
+    /// <para>The six numbered orders are the operator's, 2026-09-05: <i>"эта галочка должна говорить не
+    /// просто работать автономно, а давать чёткие инструкции"</i>. An AI told only to work
+    /// autonomously fills in its own idea of the word, and the idea that gets filled in is the
+    /// cheapest one — skip the tests, skip the docs, ship. Each order is one the operator had to give
+    /// by hand that week.</para>
+    /// <para>The "re-read the epics" clause is conditional, because early in a task there may be no
+    /// epics yet and an instruction that cannot be carried out is one an AI has to interpret. Raised
+    /// in this change's plan round.</para>
     /// </remarks>
     private static string AutonomyCommand(CommandContext context)
     {
@@ -147,11 +152,24 @@ public static class GateCommands
             ? "re-read every epic and story you have written so far"
             : "re-read the whole plan";
 
-        return "Work AUTONOMOUSLY. A question that does not block you is not asked now: write it down "
-            + "and put every one of them at the END of your final summary. A question that DOES block "
-            + $"you is asked at once — but before you ask it, {scope} and gather every other blocking "
-            + "question you can foresee, so the person is interrupted once with all of them rather "
-            + "than repeatedly with one. Where you can proceed under a stated assumption, do that "
-            + "instead of asking, and say what you assumed.";
+        return "Work AUTONOMOUSLY. Say that you are working autonomously, and keep saying what you "
+            + "are writing right now as you go. Autonomous means these orders, not a mood: "
+            + "(1) every bug and every problem spot gets a RED-GREEN-RED test — a failing test first, "
+            + "then the fix, then the test green, then a check that the test really fails without the "
+            + "fix; (2) the documentation is updated with every change — the README, the manifest if "
+            + "there is one, the module docs and every other file that describes what you changed; "
+            + "(3) before any release, run ALL the tests that exist, not only the ones near your change; "
+            + "(4) if the repository has a release or pull request process, do it — and on a pull "
+            + "request, wait about five minutes, then check whether automatic comments appeared, read "
+            + "them and fix what they name; (5) if a deploy triggers automatically, verify the result "
+            + "against the target environment — dev, stage or test — and read its logs for errors "
+            + "before calling it done; (6) re-read your own code against the repository's rules and "
+            + "follow them, not only the ones you remember. "
+            + "A question that does not block you is not asked now: write it down and put every one "
+            + "of them at the END of your final summary. A question that DOES block you is asked at "
+            + $"once — but before you ask it, {scope} and gather every other blocking question you can "
+            + "foresee, so the person is interrupted once with all of them rather than repeatedly "
+            + "with one. Where you can proceed under a stated assumption, do that instead of asking, "
+            + "and say what you assumed.";
     }
 }

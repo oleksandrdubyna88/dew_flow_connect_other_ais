@@ -1,6 +1,7 @@
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { usageTabHtml } from '../roundsLog';
 import { CliStatus } from '../cliVersions';
 import { panelHtml, PANEL_COMMANDS } from '../panelView';
 import { RoundRecord, SessionFile } from '../rounds';
@@ -118,7 +119,8 @@ test('the empty state says where the rounds went, not just "nothing"', () => {
 });
 
 test('every vendor with recorded spending offers to forget it', () => {
-  const page = html({ usage: [usage('codex', '2026-09-01T10:00:00Z'), usage('gemini', '2026-09-01T11:00:00Z')] });
+  // On the rounds log page's spending tab since 2026-09-05 — the sidebar section is gone.
+  const page = usageTabHtml([usage('codex', '2026-09-01T10:00:00Z'), usage('gemini', '2026-09-01T11:00:00Z')], 'year', [], {});
 
   for (const id of ['codex', 'gemini']) {
     assert.match(
@@ -135,7 +137,7 @@ test('forgetting is a command the provider must handle', () => {
 
 test('a vendor with nothing recorded has nothing to forget', () => {
   // The button belongs to a ROW, and a vendor with no runs has no row.
-  const page = html({ usage: [usage('codex', '2026-09-01T10:00:00Z')] });
+  const page = usageTabHtml([usage('codex', '2026-09-01T10:00:00Z')], 'year', [], {});
 
   assert.doesNotMatch(page, /data-command="forgetUsage" data-id="gemini"/);
 });

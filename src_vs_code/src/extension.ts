@@ -26,13 +26,28 @@ import { vendorsFrom } from './vendors';
  */
 export function activate(context: vscode.ExtensionContext): void {
   const watcher = new EscalationWatcher(dataDir());
-  const roundsLog = new RoundsLogPanel(async (id) => {
-    const question = watcher.openQuestions.find((q) => q.id === id);
-    if (question !== undefined) {
-      await watcher.answerCommand(question);
-    }
+  // Declared before the panel so the hooks can reach it; assigned right after.
+  let roundsLog: RoundsLogPanel;
+  let panelRef: PanelProvider;
+  roundsLog = new RoundsLogPanel({
+    onAnswer: async (id) => {
+      const question = watcher.openQuestions.find((q) => q.id === id);
+      if (question !== undefined) {
+        await watcher.answerCommand(question);
+      }
+    },
+    // The spending tab's two commands go to the sidebar's provider, which owns the window choice,
+    // the price cache and the "forget" marks — one owner, whichever surface shows the numbers.
+    onUsageWindow: async (window) => {
+      panelRef.setUsageWindow(window);
+      await refreshRoundsLog(roundsLog, watcher, panelRef, true);
+    },
+    onForget: async (provider) => {
+      await panelRef.forgetUsage(provider);
+      await refreshRoundsLog(roundsLog, watcher, panelRef, true);
+    },
   });
-  const panel = new PanelProvider(context, watcher, dataDir(), async (id) => {
+  const panel = panelRef = new PanelProvider(context, watcher, dataDir(), async (id) => {
     const question = watcher.openQuestions.find((q) => q.id === id);
     if (question !== undefined) {
       await watcher.answerCommand(question);
@@ -47,7 +62,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // And the rounds log, if it is open: a round advances on its own, so the page it is shown on
     // has to as well. Nothing is read for it when nobody is looking, and nothing is pushed when
     // nothing changed.
-    void refreshRoundsLog(roundsLog, watcher);
+    void refreshRoundsLog(roundsLog, watcher, panel);
   };
   watcher.start();
 
@@ -81,7 +96,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('coai.copyConfigBlock', () => copyConfigBlock(context)),
     vscode.commands.registerCommand('coai.copyClaudeSnippet', copyClaudeSnippet),
-    vscode.commands.registerCommand('coai.showRounds', () => showRoundsLog(roundsLog, watcher)),
+    vscode.commands.registerCommand('coai.showRounds', () => showRoundsLog(roundsLog, watcher, panel)),
     vscode.commands.registerCommand('coai.answerQuestion', () => answerQuestion(watcher)),
     // The same action under a second id, so the title bar can show a green icon while a question
     // is waiting — a menu icon cannot be recoloured by state, but which command is shown can.
@@ -216,17 +231,17 @@ async function copyClaudeSnippet(): Promise<void> {
  * tables nobody could sort, filter or search, and a rewrite that reloaded the editor on every tick.
  * The page keeps the same command and the same data; only the surface changed.</p>
  */
-async function showRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher): Promise<void> {
+async function showRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher, panel: PanelProvider): Promise<void> {
   await watcher.refresh();
-  log.show(rowsFrom(await readSessions()), watcher.openQuestions);
+  log.show(rowsFrom(await readSessions()), watcher.openQuestions, await panel.usageTab());
 }
 
 /** Keeps an OPEN log current while a round runs. Nothing is read when nobody is looking. */
-async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher): Promise<void> {
+async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher, panel: PanelProvider, force = false): Promise<void> {
   if (!log.isOpen) {
     return;
   }
-  log.update(rowsFrom(await readSessions()), watcher.openQuestions);
+  log.update(rowsFrom(await readSessions()), watcher.openQuestions, await panel.usageTab(), force);
 }
 
 /** The server's own session files: its data dir, or `COAI_DATA_DIR` when the person set one. */

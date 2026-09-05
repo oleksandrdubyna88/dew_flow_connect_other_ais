@@ -120,7 +120,8 @@ test('every collapsible header carries a tone, and no section is left grey', () 
   const page = html([vendor('codex')], {});
   const sections = [...page.matchAll(/<details class="section sec-([a-z]+)"/g)].map((m) => m[1]!);
 
-  assert.ok(sections.length >= 8, `only ${sections.length} sections found`);
+  // Seven since 2026-09-05: the spending section moved to the rounds log page.
+  assert.ok(sections.length >= 7, `only ${sections.length} sections found`);
   for (const id of sections) {
     assert.match(
       page,

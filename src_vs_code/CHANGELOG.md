@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.29.10 — 2026-09-05 (server 0.17.3)
+
+**The spending section is a tab of the Review rounds page, and Today means since midnight.** *What
+each AI has used* is no longer in the sidebar: it is the second tab of *Show review rounds*, with the
+same per-vendor rows, the same Today / Week / Month / Year buttons and the same ✕ to forget a vendor.
+The default window is Today, and Today now starts at local midnight — "what did today cost" is a
+question about the calendar day — while Week, Month and Year stay rolling. One section fewer in the
+sidebar; one place for numbers.
+
+**The Review rounds page says so when it fails, and filters by date.** The first release of the
+page came up as a header row over nothing in VS Code's webview, while the same HTML rendered every
+row in node and in headless Chromium — whatever failed, it said nothing. The page now traps its own
+errors and writes them onto the page: what failed, where, and what to do. Two date inputs and a
+*Today* button narrow the table to a range of days, inclusive; every column sorts, both ways.
+
+**Server 0.17.3 — *Work autonomously* is six orders, not a mood.** Ruled by the operator over the
+checkbox: an assistant told only to work autonomously fills in its own idea of the word, and the idea
+that gets filled in is the cheapest one. The order it hands back now says what autonomous means:
+every bug gets a red-green-red test; documentation, README, manifest and module docs are updated
+with every change; ALL the tests run before a release; a release or pull request is made where the
+repository has one, and a pull request's automatic comments are read five minutes later and fixed;
+an automatic deploy is verified against dev, stage or test and its logs read; the code is re-read
+against the repository's rules; and it says that it is working autonomously, and what it is writing
+right now. The batching of questions — non-blocking ones at the end, blocking ones once and all
+together — stays as it was.
+
 ## Server 0.17.2 — 2026-09-05
 
 **A local reasoning model can no longer think inside a JSON string until the token ceiling.**

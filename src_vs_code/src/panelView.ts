@@ -3,7 +3,7 @@ import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { ModelChoice, modelsFor, modelsProvenance } from './models';
 import { ROLES, promptsFor, selectedFor } from './prompts';
-import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, WINDOWS, within } from './usage';
+import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorColour } from './vendorColour';
 import { CliStatus, cliStatusNote, updateAvailable, UNKNOWN_CLI } from './cliVersions';
@@ -119,7 +119,6 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     section('limits', 'Limits', open, limitsBody(state.settings)),
     section('keys', 'Vendor keys', open, keysBody(state)),
     section('server', 'Server', open, serverBody(state)),
-    section('usage', 'What each AI has used', open, usageBody(state)),
     section('rounds', 'Active rounds', open, `<div id="live-rounds">${roundsBody(state.sessions, nowMs)}</div>`),
   ].join('\n');
 
@@ -169,7 +168,6 @@ ${body}
   // five-second tick.
   let lastQuestions = '';
   let lastRounds = '';
-  let lastUsage = '';
   window.addEventListener('message', (event) => {
     const message = event.data;
     if (message?.type !== 'live') {
@@ -177,7 +175,6 @@ ${body}
     }
     const questions = document.getElementById('live-questions');
     const rounds = document.getElementById('live-rounds');
-    const usage = document.getElementById('live-usage');
     if (questions !== null && typeof message.questions === 'string' && message.questions !== lastQuestions) {
       lastQuestions = message.questions;
       questions.innerHTML = message.questions;
@@ -185,10 +182,6 @@ ${body}
     if (rounds !== null && typeof message.rounds === 'string' && message.rounds !== lastRounds) {
       lastRounds = message.rounds;
       rounds.innerHTML = message.rounds;
-    }
-    if (usage !== null && typeof message.usage === 'string' && message.usage !== lastUsage) {
-      lastUsage = message.usage;
-      usage.innerHTML = message.usage;
     }
     // The answer buttons live inside the patched HTML, so they are re-bound here.
     for (const el of document.querySelectorAll('#live-questions [data-command]')) {
@@ -628,27 +621,6 @@ ${code}
 </div>`;
 }
 
-/**
- * What each vendor has consumed, over a window a person picks.
- *
- * <p>Bars rather than a plotted chart: the comparison that matters is BETWEEN vendors in one
- * window, not a shape over time, and a bar made of a div needs no library, no canvas and no
- * network — three things a webview under a strict content policy cannot have anyway.</p>
- *
- * <p>Money is a dash where a vendor does not price its own runs. Rendering that as $0.00 would
- * read as "free", and free and unreported are different facts.</p>
- */
-function usageBody(state: PanelState): string {
-  const tabs = WINDOWS.map(
-    (w) =>
-      `<button class="tab${w.id === state.usageWindow ? ' on' : ''}" data-command="usageWindow" data-id="${w.id}">${escapeHtml(w.label)}</button>`,
-  ).join('');
-
-  // The tabs sit OUTSIDE the patched region on purpose: a button inside one loses its click
-  // listener the next time the region is replaced, and the listener IS the button.
-  return `<div class="tabs">${tabs}</div>
-<div id="live-usage">${usageRows(state)}</div>`;
-}
 
 /**
  * The spending itself, which advances while a round runs, so it travels as a patch rather than a
@@ -669,6 +641,7 @@ function spend(row: { costUsd: number | null; estimatedUsd: number | null }): st
       : '—';
 }
 
+
 /** The total, saying which half is billed and which is worked out. */
 function total(billed: number | null, guessed: number | null): string {
   if (billed === null && guessed === null) {
@@ -679,10 +652,6 @@ function total(billed: number | null, guessed: number | null): string {
   }
 
   return billed === null ? estimated(guessed) : `${money(billed)} + ${estimated(guessed)}`;
-}
-
-function usageRows(state: PanelState): string {
-  return usageRegion(state.usage, state.usageWindow, state.vendors, state.modelPrices);
 }
 
 /**
@@ -797,9 +766,9 @@ ${reviewers}</div>`;
  * a waiting question. Everything else on the panel is a control, and a control only changes when
  * the person changes it.
  */
-export function liveRegions(state: PanelState, nowMs: number = Date.now()): { questions: string; rounds: string; usage: string } {
+export function liveRegions(state: PanelState, nowMs: number = Date.now()): { questions: string; rounds: string } {
   return {
-    usage: usageRows(state), questions: questionsSection(state.questions), rounds: roundsBody(state.sessions, nowMs) };
+    questions: questionsSection(state.questions), rounds: roundsBody(state.sessions, nowMs) };
 }
 
 /**

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
-import { liveRegions, PANEL_COMMANDS, panelHtml, PanelState, staticKey } from '../panelView';
+import { PANEL_COMMANDS, panelHtml, PanelState, staticKey } from '../panelView';
 
 /**
  * What has to repaint, and what must not.
@@ -49,22 +49,6 @@ test('choosing a different window is a repaint, not a silent preference', () => 
 
 test('a newly published server version repaints the Server section', () => {
   assert.notEqual(staticKey(state({ latestServerVersion: '0.7.0' })), staticKey(state()));
-});
-
-test('spending that advanced mid-round does NOT force a repaint', () => {
-  // A repaint reloads the webview and closes an open dropdown. Usage moves every time a reviewer
-  // finishes, so it must travel as a patch — the same treatment the round in flight gets.
-  const busier = [...usage, { ...usage[0]!, provider: 'antigravity' }];
-  assert.equal(staticKey(state({ usage: busier })), staticKey(state()));
-  assert.ok(liveRegions(state({ usage: busier })).usage.includes('antigravity'));
-});
-
-test('the window tabs stay outside the patched region, so a click always lands', () => {
-  const html = panelHtml(state(), 'n0nce');
-  const tabs = html.indexOf('data-command="usageWindow"');
-  const live = html.indexOf('id="live-usage"');
-  assert.ok(tabs > 0 && live > 0);
-  assert.ok(tabs < live, 'a button inside a patched region loses its listener on the next tick');
 });
 
 /**

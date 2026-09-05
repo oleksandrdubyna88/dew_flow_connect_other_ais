@@ -622,6 +622,16 @@ absent is unknown, and printing a zero would be a measurement nobody made. The l
 tall (640px) — a sidebar is usually far taller than 320px, and five rounds filled it with room to
 spare.
 
+**The spending section is the page's second tab, and Today is since midnight (2026-09-05).** *What
+each AI has used* left the sidebar for the second tab of the rounds log page: `usageTabHtml` renders the
+window buttons and the same `usageRegion` rows the sidebar rendered — one renderer for a vendor's
+row — and `RoundsLogPanel` routes the two commands the tab posts (`usageWindow`, `forgetUsage`)
+back to the sidebar's provider, which still owns the window choice, the price cache and the forget
+marks. `within('day')` is since local midnight now, by the operator's ruling; week, month and year
+stay rolling. The page also traps its own errors (`window.onerror` and a guarded first render) and
+writes them into a region at the top — its first release came up empty in the webview and said
+nothing — and filters by an inclusive date range on the UTC day a round started.
+
 **The rounds log is a page with a table (2026-09-05).** `coai.showRounds` opens a `WebviewPanel`
 (`roundsLogPanel.ts`, one per window, `retainContextWhenHidden`) rendered by `roundsLog.ts`: one
 table over every round of every session — when, repository, branch, stage, round, subject, status,

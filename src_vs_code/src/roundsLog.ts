@@ -1,5 +1,8 @@
 import { Escalation } from './escalations';
-import { roundKey } from './panelView';
+import { roundKey, usageRegion } from './panelView';
+import { ModelPrice } from './modelPrices';
+import { UsageEntry, Window, WINDOWS } from './usage';
+import { Vendor } from './vendors';
 import { MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorColour } from './vendorColour';
 import { escapeHtml, jsonForScript } from './webviewHtml';
@@ -68,6 +71,9 @@ export interface LogFilters {
   readonly status?: string;
   readonly verdict?: string;
   readonly vendor?: string;
+  /** `YYYY-MM-DD`, inclusive, against the UTC day the round started (or finished, when it never recorded a start). */
+  readonly from?: string;
+  readonly to?: string;
 }
 
 /** Every round of every session, newest first. */
@@ -192,6 +198,19 @@ export function rowMatches(row: LogRow, filters: LogFilters, search: string): bo
   if (filters.vendor && row.vendors.indexOf(filters.vendor) < 0) {
     return false;
   }
+  // The date range. ISO dates compare as strings, so the day is the first ten characters and the
+  // bounds are inclusive by plain comparison. A round with no date cannot be shown to be inside a
+  // bounded range, so a bound drops it; no bound keeps it.
+  const day = (row.startedUtc || row.completedUtc).slice(0, 10);
+  if ((filters.from || filters.to) && day.length === 0) {
+    return false;
+  }
+  if (filters.from && day < filters.from) {
+    return false;
+  }
+  if (filters.to && day > filters.to) {
+    return false;
+  }
   const needle = search.trim().toLowerCase();
   if (needle.length === 0) {
     return true;
@@ -225,6 +244,26 @@ export function questionsHtml(questions: readonly Escalation[]): string {
   return `<h2>Open questions — a review is waiting on you</h2>\n${items.join('\n')}`;
 }
 
+/**
+ * The spending tab's body: the window buttons and the per-vendor region the sidebar used to carry.
+ *
+ * <p>Moved here from the sidebar on 2026-09-05 — "перенеси отдельной табой в Review rounds и убери из
+ * дерева" — with Today as the default window, since midnight. The region itself is the function the
+ * sidebar rendered, so there is one renderer for a vendor's row.</p>
+ */
+export function usageTabHtml(
+  usage: readonly UsageEntry[],
+  window: Window,
+  vendors: readonly Vendor[],
+  prices: Readonly<Record<string, ModelPrice>>,
+): string {
+  const buttons = WINDOWS
+    .map((w) => `<button type="button" class="tab${w.id === window ? ' on' : ''}" data-command="usageWindow" data-id="${w.id}">${escapeHtml(w.label)}</button>`)
+    .join('');
+
+  return `<div class="windows">${buttons}</div>` + '\n' + `<div class="usage-rows">${usageRegion(usage, window, vendors, prices)}</div>`;
+}
+
 const COLUMNS: ReadonlyArray<{ key: SortKey; label: string; numeric?: boolean }> = [
   { key: 'startedUtc', label: 'When' },
   { key: 'repoName', label: 'Repository' },
@@ -243,7 +282,9 @@ const COLUMNS: ReadonlyArray<{ key: SortKey; label: string; numeric?: boolean }>
   { key: 'answered', label: 'Reviewers' },
 ];
 
-const FACETS: ReadonlyArray<{ key: keyof LogFilters; label: string }> = [
+type Facet = 'repoPath' | 'branch' | 'stage' | 'status' | 'verdict' | 'vendor';
+
+const FACETS: ReadonlyArray<{ key: Facet; label: string }> = [
   { key: 'repoPath', label: 'Repository' },
   { key: 'branch', label: 'Branch' },
   { key: 'stage', label: 'Stage' },
@@ -253,7 +294,7 @@ const FACETS: ReadonlyArray<{ key: keyof LogFilters; label: string }> = [
 ];
 
 /** A select's options for one facet, from the rows themselves — a filter offers only what exists. */
-function facetOptions(rows: readonly LogRow[], key: keyof LogFilters): string {
+function facetOptions(rows: readonly LogRow[], key: Facet): string {
   const values = key === 'vendor'
     ? [...new Set(rows.flatMap((r) => r.vendors))]
     : [...new Set(rows.map((r) => r[key]))];
@@ -273,7 +314,7 @@ function facetOptions(rows: readonly LogRow[], key: keyof LogFilters): string {
  * questions block is rendered here and re-posted as HTML by the same function, so there is one
  * renderer for it.</p>
  */
-export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escalation[], nonce: string): string {
+export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escalation[], nonce: string, usageHtml = ''): string {
   const headers = COLUMNS
     .map((c) => `<th data-sort="${c.key}"${c.numeric ? ' class="num"' : ''}>${c.label}</th>`)
     .join('');
@@ -321,14 +362,35 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
   .badge.interrupted { background: var(--vscode-charts-orange); color: var(--vscode-editor-background); }
   .badge.done { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
   .empty { opacity: .75; padding: 24px 0; }
+  .failed { border: 1px solid var(--vscode-inputValidation-errorBorder, #c33); background: var(--vscode-inputValidation-errorBackground, transparent); padding: 8px 12px; margin: 0 0 12px; white-space: pre-wrap; }
+  .tabs { display: flex; gap: 6px; margin: 4px 0 10px; border-bottom: 1px solid var(--vscode-panel-border); }
+  .tabs .tab, .windows .tab { background: transparent; color: var(--vscode-foreground); border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 10px; opacity: .75; }
+  .tabs .tab.on, .windows .tab.on { opacity: 1; border-bottom-color: var(--vscode-focusBorder); }
+  .windows { display: flex; gap: 6px; margin: 0 0 10px; }
+  .spend { border: 1px solid var(--vscode-panel-border); border-radius: 4px; padding: 8px 12px; margin: 0 0 8px; max-width: 640px; }
+  .spend .head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .spend .name { font-weight: 600; }
+  .spend .cost { margin-left: auto; }
+  .spend .bar { height: 6px; background: var(--vscode-progressBar-background, var(--vscode-panel-border)); border-radius: 3px; margin: 6px 0; overflow: hidden; }
+  .spend .bar span { display: block; height: 100%; background: var(--vscode-charts-blue); }
+  .spend .figures { font-size: .95em; }
+  .spend .hint, .total { margin-top: 2px; }
+  .warn { color: var(--vscode-charts-yellow); }
+  .link { background: none; border: none; color: var(--vscode-textLink-foreground); padding: 0 4px; }
   .hint { opacity: .65; font-size: .9em; margin-top: 10px; }
 </style>
 </head>
 <body>
 <h1>Review rounds</h1>
+<div id="failed" class="failed" hidden></div>
 <div id="questions">${questionsHtml(questions)}</div>
+<div class="tabs"><button type="button" class="tab on" data-tab="rounds">Rounds</button><button type="button" class="tab" data-tab="usage">What each AI has used</button></div>
+<section id="tab-rounds">
 <div class="toolbar">
       <input id="search" type="search" placeholder="Search subject, branch, repository, reviewers…" autocomplete="off">
+      <label>From <input id="from" type="date"></label>
+      <label>To <input id="to" type="date"></label>
+      <button type="button" class="secondary" id="today">Today</button>
       ${filters}
       <button type="button" class="secondary" id="clear">Clear</button>
       <span id="count"></span>
@@ -341,14 +403,33 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
 </div>
 <div id="empty" class="empty"${rows.length === 0 ? '' : ' hidden'}>No rounds yet. A session appears once an AI calls <code>open</code> for a repository and branch.</div>
 <div class="hint">Click a column to sort, a row to see its reviewers. The table advances by itself while a round runs; your sort, filters and search stay.</div>
+</section>
+<section id="tab-usage" hidden><div id="usage-body">${usageHtml}</div></section>
 <script nonce="${nonce}">
 (function () {
+  // A page that fails must say so on the page. The first release of this page came up as a header
+  // row over nothing inside VS Code's webview, while the same HTML rendered every row in node and
+  // in headless Chromium; whatever it was, it said nothing. Now it says what and where.
+  function failed(message) {
+    var box = document.getElementById('failed');
+    if (box) {
+      box.hidden = false;
+      box.textContent = 'This page hit an error and stopped: ' + message + '. Reload the window (Developer: Reload Window); if it comes back, copy this text into an issue.';
+    }
+  }
+  window.onerror = function (message, source, line, column) {
+    failed(String(message) + ' (line ' + line + ':' + column + ')');
+  };
   var vscode = acquireVsCodeApi();
   var ROWS = ${jsonForScript(rows)};
   ${compareRows.toString()}
   ${rowMatches.toString()}
 
   var state = { sortKey: 'startedUtc', dir: 'desc', filters: {}, search: '', expanded: {} };
+  function localDay(d) {
+    var p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
 
   function esc(value) {
     return String(value)
@@ -436,6 +517,17 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
 
   document.addEventListener('click', function (event) {
     var target = event.target;
+    var tab = target.closest('[data-tab]');
+    if (tab) {
+      var which = tab.getAttribute('data-tab');
+      var tabs = document.querySelectorAll('[data-tab]');
+      for (var i = 0; i < tabs.length; i++) {
+        tabs[i].className = tabs[i].getAttribute('data-tab') === which ? 'tab on' : 'tab';
+      }
+      document.getElementById('tab-rounds').hidden = which !== 'rounds';
+      document.getElementById('tab-usage').hidden = which !== 'usage';
+      return;
+    }
     var button = target.closest('[data-command]');
     if (button) {
       vscode.postMessage({ type: 'command', command: button.getAttribute('data-command'), id: button.getAttribute('data-id') });
@@ -467,23 +559,49 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
     state.search = event.target.value;
     render();
   });
+  var fromInput = document.getElementById('from');
+  var toInput = document.getElementById('to');
+  function readDates() {
+    state.filters.from = fromInput.value;
+    state.filters.to = toInput.value;
+    render();
+  }
+  fromInput.addEventListener('change', readDates);
+  toInput.addEventListener('change', readDates);
+  document.getElementById('today').addEventListener('click', function () {
+    var today = localDay(new Date());
+    fromInput.value = today;
+    toInput.value = today;
+    readDates();
+  });
   document.getElementById('clear').addEventListener('click', function () {
     state.filters = {};
     state.search = '';
     document.getElementById('search').value = '';
+    fromInput.value = '';
+    toInput.value = '';
     for (var c = 0; c < selects.length; c++) { selects[c].value = ''; }
     render();
   });
   window.addEventListener('message', function (event) {
     var message = event.data;
-    if (!message || message.type !== 'rows') { return; }
+    if (!message) { return; }
+    if (message.type === 'usage' && typeof message.html === 'string') {
+      document.getElementById('usage-body').innerHTML = message.html;
+      return;
+    }
+    if (message.type !== 'rows') { return; }
     ROWS = message.rows || [];
     if (typeof message.questions === 'string') {
       document.getElementById('questions').innerHTML = message.questions;
     }
-    render();
+    try { render(); } catch (e) { failed(String(e && e.message ? e.message : e)); }
   });
-  render();
+  try {
+    render();
+  } catch (e) {
+    failed(String(e && e.message ? e.message : e));
+  }
 })();
 </script>
 </body>

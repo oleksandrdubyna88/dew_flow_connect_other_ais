@@ -8,6 +8,7 @@ Convention: `.claude/rules/shared/common/planning-docs.md`.
 
 | Plan | What it is for |
 |---|---|
+| [PLAN_local_db.md](PLAN_local_db.md) | A SQLite projection under the rounds log, written by the server as rounds advance: sessions, rounds, reviewers, every finding with its resolution, usage — and FTS search; the extension reads it through sql.js with no native module. Asked for on 2026-09-05: "чтоб поиск был норм и структура была". |
 | [PLAN_findings_in_the_log.md](PLAN_findings_in_the_log.md) | An expanded row of the rounds log lists the findings themselves, not only how many — the one epic of the log-view plan that was not built, and the question of whether the server should keep findings per round. |
 | [PLAN_bench_campaign_after_the_store_fix.md](PLAN_bench_campaign_after_the_store_fix.md) | Six code rounds died today and every fix has a test but none has carried a real round. Two cases sequentially against the recorded 0.15.0 numbers, then five windows on one data directory, then Fable judging what was worth having. |
 | [PLAN_multi_repo_and_uncommitted.md](PLAN_multi_repo_and_uncommitted.md) | A change that spans several repositories is reviewed as one round with one verdict, and work that is not committed yet can be reviewed at all — the working tree snapshotted into a real commit object so nothing downstream changes. |

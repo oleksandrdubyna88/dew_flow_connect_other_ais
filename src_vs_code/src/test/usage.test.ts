@@ -36,14 +36,16 @@ test('a missing cost reads as unknown, not as zero', () => {
   assert.equal(money(parsed[0]!.costUsd), '—');
 });
 
-test('the window counts back from now, so late-evening work stays with its afternoon', () => {
+test('today is since midnight; the longer windows count back from now', () => {
+  // Overruled on 2026-09-05: "what did today cost" is about the calendar day. A review at 13:00
+  // yesterday is yesterday, however few hours ago that was. Week and month stay rolling.
   const entries = [
-    entry({ utc: '2026-09-01T11:00:00Z' }), // an hour ago
-    entry({ utc: '2026-08-31T13:00:00Z' }), // 23 hours ago — a different calendar day
+    entry({ utc: '2026-09-01T11:00:00Z' }), // an hour ago, today
+    entry({ utc: '2026-08-31T13:00:00Z' }), // 23 hours ago — yesterday
     entry({ utc: '2026-08-20T12:00:00Z' }), // twelve days ago
   ];
 
-  assert.equal(within(entries, 'day', NOW).length, 2, 'a calendar boundary is not a unit of work');
+  assert.equal(within(entries, 'day', NOW).length, 1, 'yesterday is not today');
   assert.equal(within(entries, 'week', NOW).length, 2);
   assert.equal(within(entries, 'month', NOW).length, 3);
 });
