@@ -90,13 +90,46 @@ public sealed class AgentLogTests : IDisposable
     }
 
     [Fact]
-    public void WhenNobodyWasStandingThere_EverythingInTheWindowIsKept()
+    public void AnAgentInASubdirectoryIsStillInTheRepository()
     {
-        // The ordinary case: an agent rooted in another folder drives this gate. Taking nothing
-        // would be the wrong answer — what was asked for is everything in the stretch.
-        Transcript("d--rsd-elsewhere", Line("2026-09-05T13:20:00Z", "assistant", "D:/elsewhere", "the actual caller"));
+        // It answered no and swept the whole machine instead. Raised by the gate's security
+        // reviewers, 2026-09-05.
+        Transcript("d--rsd-repo-src", Line("2026-09-05T13:20:00Z", "assistant", "D:/repo/src_vs_code", "working in a subfolder"));
+        Transcript("d--rsd-other", Line("2026-09-05T13:21:00Z", "assistant", "D:/repo-two", "a different repository whose name starts the same"));
 
-        AgentLog.Slice(_dir, Opened, PlanRound, "D:/repo").Should().Contain("the actual caller");
+        var slice = AgentLog.Slice(_dir, Opened, PlanRound, "D:/repo");
+
+        slice.Should().Contain("working in a subfolder");
+        slice.Should().NotContain("a different repository");
+    }
+
+    [Fact]
+    public void WhenNobodyWasStandingThere_ONESessionIsTaken_NotEveryProjectOnTheMachine()
+    {
+        // The ordinary case is an agent rooted in another folder driving this gate, so taking
+        // nothing would lose the record. Taking EVERYTHING would copy other projects' transcripts —
+        // and whatever they contain — into this repository's database, which is what the gate's
+        // security reviewers objected to. The busiest transcript in the window is the one that was
+        // doing the work.
+        Transcript("d--rsd-elsewhere",
+            Line("2026-09-05T13:20:00Z", "assistant", "D:/elsewhere", "the actual caller"),
+            Line("2026-09-05T13:21:00Z", "assistant", "D:/elsewhere", "still the actual caller"));
+        Transcript("d--rsd-unrelated", Line("2026-09-05T13:22:00Z", "assistant", "D:/unrelated", "somebody else's afternoon"));
+
+        var slice = AgentLog.Slice(_dir, Opened, PlanRound, "D:/repo");
+
+        slice.Should().Contain("the actual caller");
+        slice.Should().NotContain("somebody else");
+    }
+
+    [Fact]
+    public void OnlyTheDaysTheWindowTouchesAreEvenLookedAt()
+    {
+        // A transcript is tens of megabytes and a window is usually one afternoon of it, so a line
+        // that does not mention a day in range is skipped before it is parsed.
+        AgentLog.Days(Opened, PlanRound).Should().Equal(["2026-09-05"]);
+        AgentLog.Days(Opened, Opened.AddDays(2)).Should().HaveCount(3);
+        AgentLog.Days(Opened, Opened.AddDays(30)).Should().BeEmpty("a window that wide is not worth listing, so every line is read");
     }
 
     [Fact]

@@ -43,11 +43,15 @@ public static class AgentLog
     /// Everything the agent did between two instants, as a compact JSON array.
     /// </summary>
     /// <remarks>
-    /// When any entry in the window names the repository under review as its working directory, only
-    /// those entries are kept: several agents can be at work at once on one machine, and the one
-    /// standing in this repository is the one that called this gate. When none does — the ordinary
-    /// case of an agent working from a different folder — everything in the window is kept, which is
-    /// what was asked for.
+    /// <para>When any entry in the window is working IN the repository under review — that folder or
+    /// anything under it — only those entries are kept: several agents are at work at once on this
+    /// machine, and the one standing in this repository is the one that called this gate.</para>
+    /// <para>When none is, the fallback is ONE session and not all of them: the busiest transcript in
+    /// the window, which is the one that was doing the work. The gate's own security reviewers
+    /// raised the first version of this, and they were right — sweeping every project's transcript
+    /// into this repository's database copies other people's work, and whatever it contains, into a
+    /// file this one owns. The exact answer is for the caller to name its own transcript, which is a
+    /// protocol change and is written down as one.</para>
     /// </remarks>
     public static string Slice(string projectsDir, DateTime fromUtc, DateTime toUtc, string repoPath)
     {
@@ -56,24 +60,55 @@ public static class AgentLog
             return string.Empty;
         }
 
-        var entries = Read(projectsDir, fromUtc, toUtc);
-        var mine = entries.Where(e => SameRepo(e.Cwd, repoPath)).ToList();
+        var byFile = Read(projectsDir, fromUtc, toUtc);
+        var mine = byFile.SelectMany(f => f.Value).Where(e => InRepo(e.Cwd, repoPath)).ToList();
 
-        return Render(mine.Count > 0 ? mine : entries);
+        return Render(mine.Count > 0 ? Ordered(mine) : Busiest(byFile));
     }
+
+    /// <summary>The one transcript that was doing the most in this window, or nothing.</summary>
+    private static IReadOnlyList<Entry> Busiest(Dictionary<string, List<Entry>> byFile) =>
+        byFile.Count == 0 ? [] : Ordered(byFile.OrderByDescending(f => f.Value.Count).First().Value);
+
+    private static IReadOnlyList<Entry> Ordered(IEnumerable<Entry> entries) => [.. entries.OrderBy(e => e.Utc)];
 
     /// <summary>One line of the transcript, reduced to what is worth keeping.</summary>
     private sealed record Entry(DateTime Utc, string Kind, string Cwd, string Text);
 
-    private static List<Entry> Read(string projectsDir, DateTime fromUtc, DateTime toUtc)
+    private static Dictionary<string, List<Entry>> Read(string projectsDir, DateTime fromUtc, DateTime toUtc)
     {
-        var entries = new List<Entry>();
+        var byFile = new Dictionary<string, List<Entry>>();
+        var days = Days(fromUtc, toUtc);
         foreach (var file in Files(projectsDir, fromUtc))
         {
-            entries.AddRange(ReadFile(file, fromUtc, toUtc));
+            var entries = ReadFile(file, fromUtc, toUtc, days).ToList();
+            if (entries.Count > 0)
+            {
+                byFile[file] = entries;
+            }
         }
 
-        return [.. entries.OrderBy(e => e.Utc)];
+        return byFile;
+    }
+
+    /// <summary>
+    /// The days the window touches, as the text an entry's timestamp starts with.
+    /// </summary>
+    /// <remarks>
+    /// A cheap gate in front of an expensive one: a transcript is tens of megabytes and the window
+    /// is usually one afternoon of it, so a line that does not even mention a day in range is
+    /// skipped by a substring scan rather than parsed as JSON. Empty for a window spanning more days
+    /// than are worth listing, and then every line is parsed as before.
+    /// </remarks>
+    internal static IReadOnlyList<string> Days(DateTime fromUtc, DateTime toUtc)
+    {
+        var span = toUtc.Date - fromUtc.Date;
+        if (span.TotalDays > 7)
+        {
+            return [];
+        }
+
+        return [.. Enumerable.Range(0, (int)span.TotalDays + 1).Select(n => fromUtc.Date.AddDays(n).ToString("yyyy-MM-dd"))];
     }
 
     /// <summary>
@@ -94,16 +129,47 @@ public static class AgentLog
         }
     }
 
-    private static IEnumerable<Entry> ReadFile(string file, DateTime fromUtc, DateTime toUtc)
+    private static IEnumerable<Entry> ReadFile(string file, DateTime fromUtc, DateTime toUtc, IReadOnlyList<string> days)
     {
         foreach (var line in ReadLines(file))
         {
-            var entry = Parse(line);
-            if (entry is not null && entry.Utc >= fromUtc && entry.Utc <= toUtc)
+            if (!Mentions(line, days))
             {
-                yield return entry;
+                continue;
+            }
+
+            var entry = Parse(line);
+            if (entry is null || entry.Utc < fromUtc)
+            {
+                continue;
+            }
+
+            if (entry.Utc > toUtc)
+            {
+                // A transcript is written in order, so the first entry past the window ends the file.
+                yield break;
+            }
+
+            yield return entry;
+        }
+    }
+
+    private static bool Mentions(string line, IReadOnlyList<string> days)
+    {
+        if (days.Count == 0)
+        {
+            return true;
+        }
+
+        foreach (var day in days)
+        {
+            if (line.Contains(day, StringComparison.Ordinal))
+            {
+                return true;
             }
         }
+
+        return false;
     }
 
     /// <summary>
@@ -227,10 +293,26 @@ public static class AgentLog
         return one.Length <= MaxTextPerEntry ? one : one[..MaxTextPerEntry] + "…";
     }
 
-    private static bool SameRepo(string cwd, string repoPath) =>
-        cwd.Length > 0
-        && repoPath.Length > 0
-        && string.Equals(Normalise(cwd), Normalise(repoPath), StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// Whether this entry was working in the repository under review — that folder, or under it.
+    /// </summary>
+    /// <remarks>
+    /// Under it as well as at it: an agent standing in <c>repo/src_vs_code</c> is working in the
+    /// repository, and the first version answered no and fell back to every project on the machine.
+    /// The separator is part of the test, so <c>/repo-two</c> is not inside <c>/repo</c>.
+    /// </remarks>
+    private static bool InRepo(string cwd, string repoPath)
+    {
+        if (cwd.Length == 0 || repoPath.Length == 0)
+        {
+            return false;
+        }
+
+        var (where, repo) = (Normalise(cwd), Normalise(repoPath));
+
+        return where.Equals(repo, StringComparison.OrdinalIgnoreCase)
+            || where.StartsWith(repo + "/", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static string Normalise(string path) => path.Replace('\\', '/').TrimEnd('/');
 

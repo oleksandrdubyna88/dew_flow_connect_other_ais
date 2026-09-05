@@ -62,8 +62,11 @@ public sealed class RoundsDb : IDisposable
 
             return new RoundsDb(db);
         }
-        catch (Exception e) when (e is SqliteException or IOException or UnauthorizedAccessException)
+        catch (Exception e)
         {
+            // ANY exception, not a named few: the contract here is that a database which will not
+            // open changes nothing about the round, and a migration step throwing something
+            // unlisted would otherwise take down the review it is only supposed to record.
             log.Warning(e, "the rounds database could not be opened; rounds are recorded in their session files only");
 
             return null;
@@ -255,9 +258,19 @@ public sealed class RoundsDb : IDisposable
         }
     }
 
+    /// <summary>
+    /// The round's findings, without losing what was already decided about them.
+    /// </summary>
+    /// <remarks>
+    /// It deleted and re-inserted, and the gate caught what that costs: a round re-recorded after
+    /// its decisions were made would take the resolutions with it. An upsert on (round, ordinal)
+    /// leaves `resolution`, `reason` and `resolved_utc` exactly where they were. Findings BEYOND the
+    /// new count are still removed — a round that answered fewer findings than last time must not
+    /// keep the extra ones.
+    /// </remarks>
     private void RecordFindings(long roundId, IReadOnlyList<Finding> findings, RoundContext context)
     {
-        Run(_db, "DELETE FROM findings WHERE round_id = " + roundId);
+        Run(_db, $"DELETE FROM findings WHERE round_id = {roundId} AND ordinal >= {findings.Count}");
         for (var ordinal = 0; ordinal < findings.Count; ordinal++)
         {
             using var write = _db.CreateCommand();
@@ -266,6 +279,11 @@ public sealed class RoundsDb : IDisposable
                                       role, is_gating, providers, re_raised)
                 VALUES ($round, $ordinal, $severity, $category, $file, $line, $title, $why, $fix,
                         $role, $gating, $providers, $reRaised)
+                ON CONFLICT(round_id, ordinal) DO UPDATE SET
+                    severity = excluded.severity, category = excluded.category, file = excluded.file,
+                    line = excluded.line, title = excluded.title, why = excluded.why, fix = excluded.fix,
+                    role = excluded.role, is_gating = excluded.is_gating, providers = excluded.providers,
+                    re_raised = excluded.re_raised
                 """;
             var finding = findings[ordinal];
             Bind(write, "$round", roundId);

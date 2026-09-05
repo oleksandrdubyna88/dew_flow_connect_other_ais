@@ -286,6 +286,35 @@ public sealed class RoundsDbTests : IDisposable
     }
 
     [Fact]
+    public void ReRecordingARound_KeepsTheDecisionsAlreadyMadeAboutItsFindings()
+    {
+        // It deleted and re-inserted, so a round written again after its gate was closed took the
+        // resolutions with it. Caught by the code gate, 2026-09-05.
+        using var db = RoundsDb.Open(_dir, _log)!;
+        var findings = new[] { Found("first"), Found("second") };
+        db.RecordRound(Session, Round(), findings);
+        db.RecordDecisions("s1", "CodeReview", 1,
+            [new Decision.Accepted(findings[0]), new Decision.Rejected(findings[1], "not this time")]);
+
+        db.RecordRound(Session, Round() with { Verdict = "revise" }, findings);
+
+        var rows = Query("SELECT resolution, reason FROM findings ORDER BY ordinal");
+        rows[0]["resolution"].Should().Be("accept");
+        rows[1]["reason"].Should().Be("not this time");
+    }
+
+    [Fact]
+    public void ARoundThatNowHasFewerFindings_DoesNotKeepTheOldExtraOnes()
+    {
+        using var db = RoundsDb.Open(_dir, _log)!;
+        db.RecordRound(Session, Round(), [Found("one"), Found("two"), Found("three")]);
+
+        db.RecordRound(Session, Round(), [Found("only one now")]);
+
+        Query("SELECT title FROM findings").Should().ContainSingle();
+    }
+
+    [Fact]
     public void ADatabaseThatCannotBeOpenedIsNotAnException()
     {
         // Every caller's correct behaviour is to carry on without one: a round is what somebody is
