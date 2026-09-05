@@ -552,16 +552,22 @@ first-boot failure creds recorded — `.env.example` (`ALLOWED_DOMAINS`, `ADMINS
 `LOG_DIR`, `COAI_IMAGE`, the limits), `update.sh` and `backup.sh` copied from creds with the image name
 parameterised.
 
-`src_server/Dockerfile`: the same two-stage Native AOT build, but the runtime stage is
-`runtime-deps:10.0-noble` (not chiseled — it needs a shell) **plus Node 22 copied from the official
-`node:22-bookworm-slim` image as a build stage** (the runtime-deps image carries no Node, and `npm` without
-Node is the first thing a reviewer of this plan caught), then the three CLIs, each followed by `<cli> --version` **during the build** so an image cannot be
-published with a CLI that does not start:
+`src_server/Dockerfile`: the same two-stage Native AOT build, with a runtime stage of
+`runtime-deps:10.0-noble` (not chiseled — it needs a shell and `curl`) and **no Node at all**, then the
+three CLIs through their vendors' own installers, each followed by `<cli> --version` **during the build**
+so an image cannot be published with a CLI that does not start:
 
 ```
-npm i -g @openai/codex @anthropic-ai/claude-code
+curl -fsSL https://chatgpt.com/codex/install.sh      | sh
+curl -fsSL https://claude.ai/install.sh              | bash
 curl -fsSL https://antigravity.google/cli/install.sh | bash
 ```
+
+**Native installers, not npm — and that removes a whole layer.** An earlier draft of this section put
+Node 22 in the image because it assumed `npm i -g @openai/codex @anthropic-ai/claude-code`. The vendors'
+own installers deliver standalone binaries: verified on the VM in a plain `debian:bookworm-slim` with
+**no node on PATH at all**, all three installed and answered `--version`. The runtime image keeps the
+shell and `curl` it already needed and gains nothing else.
 
 **Latest, not pinned — the operator's decision of 2026-09-05, recorded with its cost.** The adapters'
 flags are verified against particular CLI versions (`ReviewerRuntime.cs` names codex 0.147.0, gemini
@@ -571,13 +577,34 @@ that costs nothing: **the server reports the versions it actually has** — read
 startup, carried in `/api/catalog`, shown on the panel's row — so "what is running there" is a question
 with an answer rather than an assumption, and a round that starts failing has somewhere to look first.
 
-**Verified on the VM, 2026-09-05**, in `node:22-bookworm-slim` (which is what the runtime stage borrows
-Node from): `codex-cli 0.153.4` and `2.1.258 (Claude Code)` install from npm and run; `agy` is **not** an
-npm package and its installer takes **no version argument** — it always installs whatever
-`…/manifests/linux_amd64.json` currently names, which was `1.1.27`. That manifest also carries a direct
-tarball URL and its **sha512**, so a pin, if one is ever wanted, is a checksummed artefact rather than a
-flag the installer does not have; extracted, the binary is a single 210 MB file called `antigravity`
-(`agy` is the installer's alias) and it answers `--version` cleanly.
+**Verified on the VM, 2026-09-05**: `codex-cli 0.153.4`, `2.1.261 (Claude Code)` and `agy 1.1.27` all
+install and answer `--version`. None of the three installers takes a version argument — each fetches
+whatever is current, which is what the operator asked for. Antigravity's does publish a pinnable path if
+one is ever wanted: `…/manifests/linux_amd64.json` names a tarball URL **and its sha512**, so a pin there
+would be a checksummed artefact rather than a flag that does not exist.
+
+### The binaries live under a HOME, and the slots depend on that not mattering
+
+The one thing that had to be tested rather than assumed, because the whole slot mechanism rests on it.
+The installers put all three in `$HOME/.local/bin`, but only `agy` is a real file there (210 MB); `claude`
+and `codex` are **symlinks into the installing user's home** — `/root/.local/share/claude/versions/…` and
+`/root/.codex/packages/standalone/current/bin/codex`. A design that hands each launch a different `HOME`
+had every reason to break on that.
+
+Measured, in one container: with `HOME=/slot/a`, `CODEX_HOME=/slot/a/.codex` and
+`CLAUDE_CONFIG_DIR=/slot/a/.claude`, **all three still answer `--version`**. The symlink targets are
+absolute, so the programs resolve wherever `HOME` points, and what the slot variables move is the
+credentials — which is exactly the split the slots need.
+
+Two consequences for the image and the server:
+
+- **Install once, as root, and put the binaries on `PATH` for everyone** (`/root/.local/bin`, or copied
+  to `/usr/local/bin` dereferenced). A per-slot install would be three copies of a 210 MB binary and an
+  update that reaches one slot and not the others.
+- **Create the slot's directories before the first launch.** `codex` warns *"CODEX_HOME points to
+  '/slot/a/.codex', but that path does not exist"* and proceeds — a warning today, and the kind of thing
+  that becomes a failure in a future version. `SlotRegistry` creates `<slot>/.codex` and `<slot>/.claude`
+  when it provisions a slot, so the warning never appears.
 
 A CLI is updated by rebuilding the image, which is what makes an update a deliberate act even without a
 pin; `POST_DEPLOY.md` reads the versions back afterwards, so a rebuild that moved a vendor says so on the
