@@ -12,12 +12,23 @@ namespace CoaiMcp.Server;
 /// <para><see cref="FileShare.Delete"/> belongs in the set as well as <c>ReadWrite</c>: on Windows a
 /// rename over an open file is a delete of that file, so a reader that permits writing but not
 /// deleting still blocks the atomic save every writer here performs.</para>
-/// <para><see cref="SessionStore"/> keeps its own copy of this because its read also takes the
-/// session's turn; everything else in this directory should come through here.</para>
+/// <para><b>Sharing is half of it.</b> Measured in this repository twice over: with the reader
+/// sharing delete and the rename retried ten times over half a second, hot readers still starved
+/// the writer. So a POLLING reader in this directory pairs this with <see cref="SessionTurn"/>,
+/// which <see cref="SessionStore"/> and <c>Escalations</c> both do — this alone shortens the window
+/// and does not close it.</para>
 /// </remarks>
 internal static class SharedRead
 {
-    /// <summary>The file's text, or empty when it cannot be read right now.</summary>
+    /// <summary>
+    /// The file's text.
+    /// </summary>
+    /// <remarks>
+    /// It THROWS — <see cref="IOException"/> when the file is busy, <see cref="UnauthorizedAccessException"/>
+    /// when it is being replaced underneath — and every caller here treats both as "nothing yet, the
+    /// next poll will find it whole". Said plainly because the first version of this summary claimed
+    /// an empty string, and a future reader would have written no catch at all.
+    /// </remarks>
     public static string Text(string path)
     {
         using var stream = new FileStream(
