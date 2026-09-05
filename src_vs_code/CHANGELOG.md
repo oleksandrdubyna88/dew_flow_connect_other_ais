@@ -1,5 +1,22 @@
 # Changelog
 
+## Server 0.17.2 — 2026-09-05
+
+**A local reasoning model can no longer think inside a JSON string until the token ceiling.**
+Observed twice on 2026-09-05: the answer opened as good JSON and then the `why` field became the
+model's chain of thought — *"The plan *is* the instruction… Is there a violation? Maybe… No. Wait"*
+— for thirty kilobytes, until `max_tokens` cut it mid-string; one repair launch, the same again, a
+reviewer lost and three minutes of the GPU with it. The frequency penalty of 0.17.1 cannot touch
+this: it is not a repeated sentence. The grammar can. The schema the LOCAL route sends now bounds
+`title` (200), `why` (1000) and `fix` (1000) characters, and says so in each description.
+
+Measured before release, on Ollama 0.33.3 with `Qwen3.5-35B-A3B-Q5`: a prompt demanding a
+3000-character `why` came back in 16 s with `why` at exactly 1000 characters, `finish_reason: stop`,
+valid JSON. The shared schema is untouched — OpenAI's strict structured outputs, which codex feeds,
+reject `maxLength` with a 400 — and a test holds that line. The same measurement showed why the
+local route defaults `reasoning_effort` to `none`: with the engine's own default, the same model
+spent all 4096 tokens thinking and returned no content at all.
+
 ## 0.29.9 — 2026-09-05 (server 0.17.1)
 
 **The rounds log is a page with a table.** *Show review rounds* used to write `rounds.md` under the
