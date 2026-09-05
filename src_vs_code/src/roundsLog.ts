@@ -324,15 +324,19 @@ export function asInstant(localValue: string, endOfMinute: boolean): string {
 /**
  * What a figure in a money column says, or an em dash where there is no figure.
  *
- * <p>Also embedded into the page, and also self-contained. {@link cost3} and {@link costTitle} carry
- * their own copies of this rather than calling it: a function embedded by its source text cannot
- * reach a module-level binding, because the minifier renames the binding and not the call inside the
- * text. Two copies of four lines is the price of that, and the alternative was a blank page.</p>
+ * <p>Embedded into the page by its source text, like every function below it — so it references
+ * nothing outside itself. {@link cost3} and {@link costTitle} take it as an ARGUMENT rather than
+ * calling it by name: a function embedded by its text lands in a scope where only its own name was
+ * re-declared, so a call to a module-level binding arrives under whatever the minifier called it
+ * (0.29.12 shipped exactly that, and the page died with "R is not defined"). An argument cannot be
+ * renamed out from under it, and there is one copy of the formatter rather than three.</p>
  */
 export function money(value: number | null | undefined): string {
-  return typeof value !== 'number' || !isFinite(value)
-    ? '—'
-    : '$' + value.toFixed(value < 1 ? 3 : 2);
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '—';
+  }
+
+  return '$' + value.toFixed(value < 1 ? 3 : 2);
 }
 
 /**
@@ -346,18 +350,7 @@ export function money(value: number | null | undefined): string {
  * <p>A tilde marks a total worked out from a public price list rather than one a vendor billed; a
  * plus marks a total that had to leave a reviewer out, so it is a floor.</p>
  */
-export function cost3(row: Costed): string {
-  // Its own copy of the money formatter, and that is the rule rather than an oversight: this
-  // function is embedded into the page by its SOURCE TEXT, into a scope where only its own name was
-  // re-declared. A call to a module-level binding arrives there under the name the minifier gave it
-  // - 0.29.12 shipped this calling money() and the page said "R is not defined" the moment a row
-  // asked for its cost. Self-contained is what makes an embedded function survive the bundler.
-  // (And no backticks in here either: this text lands inside a template literal.)
-  var figure = function (value: number | null | undefined): string {
-    return typeof value !== 'number' || !isFinite(value)
-      ? '—'
-      : '$' + value.toFixed(value < 1 ? 3 : 2);
-  };
+export function cost3(row: Costed, figure: Money): string {
   if (typeof row.costTotalUsd !== 'number') {
     return '—';
   }
@@ -368,13 +361,7 @@ export function cost3(row: Costed): string {
 }
 
 /** The same thing in words, for the cell's tooltip — the column is narrow and the marks are one character. */
-export function costTitle(row: Costed): string {
-  // Self-contained, for the reason spelled out on cost3 above.
-  var figure = function (value: number | null | undefined): string {
-    return typeof value !== 'number' || !isFinite(value)
-      ? '—'
-      : '$' + value.toFixed(value < 1 ? 3 : 2);
-  };
+export function costTitle(row: Costed, figure: Money): string {
   if (typeof row.costTotalUsd !== 'number') {
     return 'No price is listed for these models, so this round has no cost figure.';
   }
@@ -388,6 +375,9 @@ export function costTitle(row: Costed): string {
   return 'Input ' + figure(row.costInUsd) + ' + output ' + figure(row.costOutUsd)
     + ' = ' + figure(row.costTotalUsd) + '. ' + how + part;
 }
+
+/** How a figure is written. Passed IN, never reached for — see the remark on {@link money}. */
+export type Money = (value: number | null | undefined) => string;
 
 /** Just the cost fields, because these three run in the page against plain row objects. */
 export type Costed = Pick<LogRow, 'costInUsd' | 'costOutUsd' | 'costTotalUsd' | 'costIsEstimate' | 'costPartial'>;
@@ -724,7 +714,7 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
         + '<td class="num">' + took(r.seconds) + '</td>'
         + '<td class="num">' + num(r.tokensIn) + '</td>'
         + '<td class="num">' + num(r.tokensOut) + '</td>'
-        + '<td class="num cost" title="' + esc(costTitle(r)) + '">' + cost3(r) + '</td>'
+        + '<td class="num cost" title="' + esc(costTitle(r, money)) + '">' + cost3(r, money) + '</td>'
         + '<td class="who-answered" title="' + esc(r.answered) + '">' + esc(r.answered) + '</td>'
         + '</tr>';
       if (state.expanded[r.key]) {
