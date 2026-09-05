@@ -165,15 +165,16 @@ public sealed class RoundsDb : IDisposable
         write.CommandText = """
             INSERT INTO rounds (session_id, stage, number, subject, status, verdict, gating,
                                 started_utc, completed_utc, tokens_in, tokens_out, cost_usd,
-                                plan_text, head_sha, caller)
+                                plan_text, head_sha, caller, agent_log)
             VALUES ($session, $stage, $number, $subject, $status, $verdict, $gating,
                     $started, $completed, $tokensIn, $tokensOut, $cost,
-                    $plan, $sha, $caller)
+                    $plan, $sha, $caller, $agentLog)
             ON CONFLICT(session_id, stage, number) DO UPDATE SET
                 subject = excluded.subject, status = excluded.status, verdict = excluded.verdict,
                 gating = excluded.gating, completed_utc = excluded.completed_utc,
                 tokens_in = excluded.tokens_in, tokens_out = excluded.tokens_out, cost_usd = excluded.cost_usd,
-                plan_text = excluded.plan_text, head_sha = excluded.head_sha, caller = excluded.caller
+                plan_text = excluded.plan_text, head_sha = excluded.head_sha, caller = excluded.caller,
+                agent_log = excluded.agent_log
             RETURNING id
             """;
         Bind(write, "$session", state.SessionId);
@@ -193,6 +194,7 @@ public sealed class RoundsDb : IDisposable
         Bind(write, "$plan", context.PlanText ?? string.Empty);
         Bind(write, "$sha", context.HeadSha ?? string.Empty);
         Bind(write, "$caller", context.Caller ?? string.Empty);
+        Bind(write, "$agentLog", context.AgentLog ?? string.Empty);
 
         return (long)(write.ExecuteScalar() ?? 0L);
     }

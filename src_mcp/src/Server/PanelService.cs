@@ -632,7 +632,8 @@ public sealed class PanelService
                 completed.State,
                 record,
                 merged,
-                new Store.RoundContext(planText, sha, caller, [.. gate.Discounted])));
+                new Store.RoundContext(
+                    planText, sha, caller, [.. gate.Discounted], WhatTheCallerWasDoing(session, record))));
             NotifyIfAPersonMustDecide(completed.Verdict, session, merged);
             return Json(answer, ServerJsonContext.Default.ReviewAnswer);
         }
@@ -1014,6 +1015,28 @@ public sealed class PanelService
     /// "ignore all this" would be an off switch on the gate, and it is deliberately not offered.
     /// <c>Discuss</c> leaves the session exactly where it is: the AI is meant to stop and talk.</para>
     /// </remarks>
+    /// <summary>
+    /// The caller's own work in the stretch this round closes.
+    /// </summary>
+    /// <remarks>
+    /// <para>From the end of the PREVIOUS round to the start of this one — the operator's own
+    /// framing: the session opened at 13:00 and the plan review ran at 13:39, so that stretch is the
+    /// plan round's; the code was written between 13:39 and 15:03, so that stretch is the code
+    /// round's. A first round is bounded by when the session was opened.</para>
+    /// <para>Best-effort like everything else here, and read from the CLI's own transcripts, which
+    /// this server only ever reads.</para>
+    /// </remarks>
+    private string WhatTheCallerWasDoing(PersistedSession session, RoundRecord record)
+    {
+        var previous = session.Rounds.Count > 0 ? session.Rounds[^1].CompletedUtc : DateTime.MinValue;
+        var opened = _store.OpenedUtc(session.State.RepoPath, session.State.Branch);
+        var from = previous > opened ? previous : opened;
+
+        return from == DateTime.MinValue
+            ? string.Empty
+            : Store.AgentLog.Slice(Store.AgentLog.DefaultProjectsDir, from, record.StartedUtc, session.State.RepoPath);
+    }
+
     /// <summary>
     /// A write to the projection, which is never allowed to matter.
     /// </summary>

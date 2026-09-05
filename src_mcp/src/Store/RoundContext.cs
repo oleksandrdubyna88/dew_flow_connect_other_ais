@@ -21,11 +21,16 @@ namespace CoaiMcp.Store;
 /// <param name="HeadSha">The commit the reviewers read, pinned for the round.</param>
 /// <param name="Caller">Which agent session drove the gate, as the server knows it.</param>
 /// <param name="ReRaised">Findings the gate discounted as repeats of a standing rejection.</param>
+/// <param name="AgentLog">
+/// What the caller was doing in the stretch this round closes, from its own transcript — JSON, or
+/// empty. See <see cref="Store.AgentLog"/> for the shape and the trimming.
+/// </param>
 public readonly record struct RoundContext(
     string PlanText = "",
     string HeadSha = "",
     string Caller = "",
-    ImmutableArray<Finding> ReRaised = default)
+    ImmutableArray<Finding> ReRaised = default,
+    string AgentLog = "")
 {
     /// <summary>Whether this finding is one the caller had already rejected.</summary>
     /// <remarks>

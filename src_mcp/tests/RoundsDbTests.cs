@@ -221,6 +221,19 @@ public sealed class RoundsDbTests : IDisposable
     }
 
     [Fact]
+    public void WhatTheAgentWasDoingIsKeptWithTheRoundItPrecedes()
+    {
+        // The operator's framing: the stretch between one gate and the next belongs to the gate it
+        // ends at, so a finding can be read against what was being done when it was missed.
+        using var db = RoundsDb.Open(_dir, _log)!;
+
+        db.RecordRound(Session, Round(), [Found("one")],
+            new RoundContext("SCOPE", "7133c2f", "claude-code", [], "[{\"utc\":\"2026-09-05T13:20:00Z\",\"kind\":\"assistant\",\"said\":\"writing the code\"}]"));
+
+        Query("SELECT agent_log FROM rounds").Single()["agent_log"].Should().Contain("writing the code");
+    }
+
+    [Fact]
     public void ADatabaseThatCannotBeOpenedIsNotAnException()
     {
         // Every caller's correct behaviour is to carry on without one: a round is what somebody is

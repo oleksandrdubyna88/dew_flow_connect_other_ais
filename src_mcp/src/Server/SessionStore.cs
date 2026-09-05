@@ -357,6 +357,22 @@ public sealed class SessionStore(string dataDir)
     private static bool IsOrphaned(RoundRecord round, Func<int, bool> processIsAlive) =>
         round.Status == RoundRecord.Running && (round.RunnerPid == 0 || !processIsAlive(round.RunnerPid));
 
+    /// <summary>
+    /// When this session was first opened, as the file system remembers it.
+    /// </summary>
+    /// <remarks>
+    /// The session record carries no opening instant of its own, and the file's creation time is the
+    /// same fact: `open` writes it once and every later save replaces the contents. It is used to
+    /// bound the first round's window over the caller's own transcript — before that instant there
+    /// is nothing about this session to attach.
+    /// </remarks>
+    public DateTime OpenedUtc(string repoPath, string branch)
+    {
+        var file = FileFor(repoPath, branch);
+
+        return File.Exists(file) ? File.GetCreationTimeUtc(file) : DateTime.MinValue;
+    }
+
     private string FileFor(string repoPath, string branch)
     {
         // The session key is not a valid file name; hash it and keep a readable prefix.

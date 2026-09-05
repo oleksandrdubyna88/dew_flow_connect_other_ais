@@ -43,6 +43,9 @@ internal static class Schema
             -- How the caller closed the gate. Filled by `resolve`; -1 means it never did.
             accepted      INTEGER NOT NULL DEFAULT -1,
             rejected      INTEGER NOT NULL DEFAULT -1,
+            -- What the calling agent was DOING in the stretch this round closes: its own transcript
+            -- between the previous round and this one, trimmed. JSON, and empty when there is none.
+            agent_log     TEXT NOT NULL DEFAULT '',
             UNIQUE (session_id, stage, number)
         );
 
