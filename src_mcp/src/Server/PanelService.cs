@@ -7,6 +7,7 @@ using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Context;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Runners.Accounting;
 using CoaiMcp.Runners.Worktrees;
 
 namespace CoaiMcp.Server;
@@ -132,140 +133,41 @@ public sealed class PanelService
             ServerJsonContext.Default.ProvidersAnswer);
     }
 
+    /// <summary>
+    /// One vendor's health, through the library's probe — the same question the Team server asks of
+    /// the same vendors, asked once rather than twice.
+    /// </summary>
     private async Task<ProviderStatus> ProbeAsync(ProviderSettings provider, CancellationToken ct)
     {
-        if (RuntimeFor(provider) is null)
-        {
-            return new ProviderStatus(provider.Provider, provider.Enabled, false, "",
-                "unavailable", ReviewerRuntimeSelector.Default.RefusalFor(provider.Provider));
-        }
+        var health = await VendorProbe.RunAsync(
+            _launcher,
+            provider.Identity(),
+            provider.Enabled,
+            provider.ExecutablePath,
+            provider.Model,
+            _keys.Keys.ContainsKey(provider.Provider),
+            ct);
 
-        // A retired runtime is answered before the probe, not by it: `gemini --version` exits 0
-        // without ever reaching Google, so a probe built on --version is structurally incapable of
-        // seeing the retirement and reported "own auth" for a vendor that could not sign in at all.
-        if (VendorDiagnosis.ForRuntime(RuntimeNameOf(provider)) is { } retired)
-        {
-            return new ProviderStatus(provider.Provider, provider.Enabled, false, "", "unavailable", retired);
-        }
-
-        // A local engine is not a CLI: there is nothing to run `--version` on, and the version
-        // that matters is the ENGINE's, which the panel already probes over HTTP. Answering here
-        // rather than falling through avoids a probe that would report a working endpoint as a
-        // missing binary — the shape of a defect this file has already had once.
-        if (RuntimeNameOf(provider) == "local")
-        {
-            var endpoint = provider.BaseUrl.Length > 0 ? provider.BaseUrl : LocalRuntime.DefaultEndpoint;
-            // An endpoint cannot know which model nobody named, so the probe has to read the
-            // configuration as well. Without this the vendor reported "own auth" and every reviewer
-            // it ran answered `400 model is required` — three of nine in a code round, gone, with the
-            // health probe saying the vendor was fine. The same blind spot the retired-Gemini
-            // diagnosis exists for: a vendor that answers a probe and cannot answer a round. Found
-            // by this repository's own bench on its first real campaign.
-            if (provider.Model.Length == 0)
-            {
-                return new ProviderStatus(provider.Provider, provider.Enabled, true, "", "unavailable",
-                    $"a local engine at {endpoint} with no model — name one in this vendor's Model "
-                        + "field, or the engine answers 400 to every reviewer");
-            }
-
-            return new ProviderStatus(provider.Provider, provider.Enabled, true, "", "own auth",
-                $"a local engine at {endpoint} — no CLI, no key, no bill");
-        }
-
-        var (auth, authNote) = AuthFor(provider);
-        if (!provider.Enabled)
-        {
-            return new ProviderStatus(provider.Provider, false, false, "", auth, "disabled in settings");
-        }
-
-        var exe = provider.ExecutablePath.Length > 0
-            ? provider.ExecutablePath
-            : RuntimeFor(provider)?.DefaultExecutable ?? provider.Provider;
-        try
-        {
-            var result = await _launcher.RunAsync(
-                new ProcessRequest(exe, ["--version"], Environment.CurrentDirectory) { Timeout = TimeSpan.FromSeconds(30) },
-                ct);
-            if (result.ExitCode == 0)
-            {
-                return new ProviderStatus(provider.Provider, true, true, result.StdOut.Trim(), auth, authNote);
-            }
-
-            // `providers` is the health probe a person reads before trusting a panel, so a known
-            // closed door is named here too rather than only when a round has already failed.
-            var cure = VendorDiagnosis.For(result.StdErr + result.StdOut);
-            return new ProviderStatus(provider.Provider, true, true, "", auth,
-                cure ?? $"--version exited {result.ExitCode}: {result.StdErr.Trim()}");
-        }
-        catch (System.ComponentModel.Win32Exception)
-        {
-            // A missing CLI is the one failure with a one-line answer, so the answer goes here
-            // rather than on a vendor's docs page. This used to be a blanket "antigravity has no
-            // Linux CLI" door in VendorDiagnosis.ForRuntime, which fired BEFORE this probe and so
-            // told a machine with a working `agy` that it had none.
-            var install = VendorDiagnosis.InstallCure(RuntimeNameOf(provider));
-            var note = install is null
-                ? $"'{exe}' was not found on this machine"
-                : $"'{exe}' was not found on this machine — {install}";
-            return new ProviderStatus(provider.Provider, true, false, "", auth, note);
-        }
+        return new ProviderStatus(
+            provider.Provider, health.Enabled, health.CliFound, health.Version, health.Auth, health.Note);
     }
 
+    /// <summary>
+    /// How a vendor authenticates, and therefore whether it may review at all.
+    /// </summary>
+    /// <remarks>
+    /// A delegation, and the tests still call it here because this is where they have always called
+    /// it. The decision itself lives in <see cref="RuntimeResolution"/> — one answer for both
+    /// binaries, after two separate incidents where a second copy of it was the one that was wrong.
+    /// </remarks>
     private (string Auth, string Note) AuthFor(ProviderSettings provider) =>
         AuthOf(provider, _keys.Keys.ContainsKey(provider.Provider));
 
-    /// <summary>
-    /// How a vendor authenticates — and therefore whether it can run at all.
-    /// </summary>
-    /// <remarks>
-    /// <para><b>An "unavailable" answer removes the vendor from the round</b> (`BuildWork` keeps
-    /// only what can run), so this is not a label for the panel. It decides who reviews.</para>
-    /// <para><b>Local is answered through <see cref="RuntimeNameOf"/>, not by re-reading the base
-    /// URL.</b> That is the fix for a real defect: a local vendor IS a vendor with a base URL, and
-    /// this was the one of three readers of those fields that had never been told. It concluded a
-    /// local engine needed a vault key, answered unavailable, and every round opened with zero
-    /// reviewers — while `providers`, which has its own local arm, went on reporting the vendor as
-    /// fine. Three copies of one decision is what allowed two of them to be right.</para>
-    /// <para>Pure and internal so the decision is a unit test rather than a live round: the round
-    /// that would have caught it needs a model, a machine and four minutes.</para>
-    /// </remarks>
     internal static (string Auth, string Note) AuthOf(ProviderSettings provider, bool hasVaultKey) =>
-        hasVaultKey
-            ? ("vault key", "")
-            : RuntimeNameOf(provider) == "local"
-                ? ("own auth", "a local engine needs no key — it is reached over HTTP on this machine")
-                : provider.BaseUrl.Length > 0 || provider.Provider is "deepseek"
-                    ? ("unavailable", $"needs a key under '{provider.Provider}' and the vault holds none — see the creds config entry")
-                    : ("own auth", "the CLI's own sign-in is used");
-
-    /// <summary>
-    /// The runtime for one configured reviewer: a built-in by name, or — when the operator gave it
-    /// a base URL — the generic custom one. A vendor added in the panel is DATA, not a release.
-    /// </summary>
-    /// <summary>Which runtime a vendor actually drives, by the same order the launcher uses.</summary>
-    private static string RuntimeNameOf(ProviderSettings provider) =>
-        // `local` is checked first for the same reason it is in RuntimeFor: a local vendor IS a
-        // vendor with a base url, and the base-url arm means "ride the Codex CLI".
-        provider.Runtime == "local" ? "local"
-        : provider.BaseUrl.Length > 0 ? "codex"
-        : provider.Runtime.Length > 0 ? provider.Runtime
-        : provider.Provider;
+        RuntimeResolution.AuthOf(provider.Identity(), hasVaultKey);
 
     internal static IReviewerRuntime? RuntimeFor(ProviderSettings provider) =>
-        // Through RuntimeNameOf, which is the ONE place that answers "what is this vendor". It used
-        // to ask `provider.Runtime == "local"` here as well, and a third copy of the same question
-        // in AuthFor was never updated — so a local reviewer was silently dropped from every round.
-        RuntimeNameOf(provider) == "local"
-            ? new LocalRuntime(provider.Provider, provider.BaseUrl)
-            : provider.BaseUrl.Length > 0
-            ? new CustomCodexRuntime(provider.Provider, provider.BaseUrl)
-            // An EXPLICIT runtime outranks the id, and that order is the fix for a real defect:
-            // the id was consulted first, so a vendor called `claude` worked by accident while
-            // `my-claude` — same runtime, different name — silently ran the Codex CLI.
-            // The vendor's own id travels with the runtime — see ReviewerRuntimeSelector.Named for
-            // what happened when it did not.
-            : ReviewerRuntimeSelector.Named(provider.Runtime, provider.Provider)
-                ?? ReviewerRuntimeSelector.Default.Find(provider.Provider);
+        RuntimeResolution.For(provider.Identity());
 
     // ---------- open / status ----------
 

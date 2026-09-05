@@ -47,6 +47,7 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 //   FAKECLI_STDOUT       — text for stdout (the gemini path)
 //   FAKECLI_OUTFILE_TEXT — text for the file after `-o` in argv (the codex path)
 //   FAKECLI_STDERR / FAKECLI_EXIT — failure steering
+//   FAKECLI_SLEEP_MS     — answer only after this long (the probe's timeout arm)
 //   FAKECLI_RECORD_DIR   — write each launch's full argv into <guid>.argv there
 if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor")
 {
@@ -71,6 +72,14 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor")
         File.WriteAllText(
             Path.Combine(record, $"{Guid.NewGuid():N}.argv"),
             string.Join('\0', args.Append(stdin)));
+    }
+
+    // A vendor that takes its time. It exists for the health probe's timeout arm: a CLI that
+    // never answers `--version` must be reported as silent rather than as whatever exit code the
+    // kill produced, and that cannot be tested by a stand-in which always answers at once.
+    if (int.TryParse(Environment.GetEnvironmentVariable("FAKECLI_SLEEP_MS"), out var napMs) && napMs > 0)
+    {
+        Thread.Sleep(napMs);
     }
 
     var stderrText = Environment.GetEnvironmentVariable("FAKECLI_STDERR");

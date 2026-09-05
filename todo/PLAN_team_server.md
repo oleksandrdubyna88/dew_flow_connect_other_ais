@@ -383,9 +383,9 @@ suites, the same guard `LocalRuntime.OpenAiBaseOf` / `openAiBaseOf` live under.
 | What | From | Why both need it |
 |---|---|---|
 | ~~`ReviewerExecutor.LaunchAsync`~~ | **done** — public on `ReviewerExecutor`, returning `ReviewerLaunch(Terminal, Answer, Usage, Evidence)`; `ParseAnswer(raw, provider)` is pure beside it | the server launches and classifies; the client parses |
-| `VendorHealth.ProbeAsync` | `PanelService.cs:134` | the catalog's health column |
-| `RuntimeResolution` — `RuntimeNameOf`, `RuntimeFor`, `AuthOf` | `PanelService.cs:231-262` | the "third copy of one decision" that already shipped a defect must not get a fourth |
-| `UsageLedger` | `src_mcp/src/Server/UsageLedger.cs` | it references nothing MCP-shaped today |
+| ~~`VendorHealth.ProbeAsync`~~ | **done** — `VendorProbe.RunAsync`, with the probe timeout an explicit parameter and a hung CLI reported as silent rather than as the kill's exit code | the catalog's health column |
+| ~~`RuntimeResolution`~~ | **done** — `NameOf`/`For`/`AuthOf` over a three-string `VendorIdentity` | the "third copy of one decision" that already shipped a defect must not get a fourth |
+| ~~`UsageLedger`~~ | **done** — `runners/Accounting/`, namespace `Accounting` rather than `Usage`, which would have shadowed the `Usage` TYPE inside the library | it references nothing MCP-shaped today |
 | ~~`RetryLadder`~~ | **done** — shipped separately, `Reviewers/RetryLadder.cs`; `BoundedScheduler` climbs it and `COAI_RATE_LIMIT_BACKOFF_SECONDS` still means one step | the same ladder on both machines |
 
 `PanelService.cs` shrinks to one-line delegations. `CoaiMcp.Tests` must pass **unchanged** after the move —
@@ -718,7 +718,7 @@ The split was made on Fable; stories marked **F** run on Fable because being wro
 | Epic | Story | Delivers | Model |
 |---|---|---|---|
 | **1 · One library for two binaries** | ~~1.1~~ **done** | `ReviewerExecutor.LaunchAsync` out of `RunOnceAsync`, with `ParseAnswer` pure beside it; every existing test passed UNEDITED — which is what "unchanged" meant here, never "no new tests": new behaviour ships with its own, as the testing rule requires. (`RetryLadder` shipped ahead of the epic, on its own — it fixes the local `coai-mcp` today, where a transient 429 got one retry at fifteen seconds and then failed the round.) | Opus |
-| | 1.2 | `RuntimeResolution` + `VendorHealth` out of `PanelService`; `UsageLedger` moved | Opus |
+| | ~~1.2~~ **done** | `RuntimeResolution` + `VendorProbe` out of `PanelService`, `UsageLedger` into `CoaiMcp.Runners.Accounting`; `PanelService` keeps one-line delegations and every existing test passed unedited | Opus |
 | | 1.3 | `RemoteRuntime`, `RemoteAsk`, `TeamServerAuth` (with URL normalisation and the shared vector), `--ask-remote`, every registry point, `ProbeAsync`'s remote arm | Opus |
 | **2 · `coai-server`** | 2.1 | skeleton, logging, guards, the mirrored auth, sessions, `X-Coai-Contract`, the harness | **F** |
 | | 2.2 | `vendors.json` + catalog, slots (selector, environment, cooldown parser, registry with the OS lock), `login` | **F** |
