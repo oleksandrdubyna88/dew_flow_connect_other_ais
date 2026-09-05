@@ -73,17 +73,77 @@ And against 0.15.0, the release that died: 4 of 4 code rounds against 0 of 6.
   leaves behind, and the definition that demanded more could only be true for somebody else's
   session. Re-derived from the recorded fields: every finished round is written `done`, no file torn.
 
-## Epic 2 — five windows, one data directory, server 0.17.1
+## Epic 2 — five windows, one data directory, server 0.17.2
 
-<!-- TABLE: filled after the --parallel 5 run -->
+Run twice, because the first run found a defect in the bench rather than in the server.
 
-_pending_
+### 2a — three repeats of one case on ONE branch (the bench's own mistake)
 
-## Epic 3 — Fable's judgement, and the table the operator asked for
+`--parallel 5 --repeat 3` over two cases. The runner's remark promised a branch per run; the code
+handed the case's commit as the branch, so three lanes reviewing one case shared one session key,
+one session file and one worktree name — and two servers creating the same worktree died:
+`fatal: 'coai-wt-a0fc7e7d-r1' already exists`. Recorded as what it is: five windows hitting ONE
+branch, which is the worst case rather than the asked-for one.
 
-<!-- time · findings · useful findings · tokens, per arm and per run -->
+| case | # | plan | code | reviewers | disk |
+|---|---|---|---|---|---|
+| rounds-collapse | 1 (lane 1) | good_enough · 14 findings · 83 s | proceed · 13 findings · 190 s · 433k / 10.9k | all 9 | clean |
+| rounds-collapse | 2 (lane 2) | good_enough · 14 findings · 100 s | FAILED · 0 findings · 0 s · 0k / 0.0k |  | clean |
+| rounds-collapse | 3 (lane 3) | good_enough · 13 findings · 49 s | proceed · 13 findings · 157 s · 399k / 17.1k | all 9 | clean |
+| split-once | 1 (lane 5) | good_enough · 13 findings · 66 s | FAILED · 0 findings · 0 s · 0k / 0.0k |  | clean |
+| split-once | 2 (lane 4) | good_enough · 14 findings · 47 s | proceed · 14 findings · 115 s · 278k / 18.3k | all 9 | clean |
+| split-once | 3 (lane 5) | good_enough · 12 findings · 50 s | good_enough · 14 findings · 124 s · 289k / 18.7k | all 9 | clean |
 
-_pending_
+Code-round median 140 s (115–190); 4 of 6 rounds ran, 2 died on the worktree collision; every
+session that ran was clean and its resolve accepted.
+
+### 2b — a ref per run (`bench/<case>-r<n>`), five lanes, server 0.17.2
+
+| case | # | plan | code | reviewers | disk |
+|---|---|---|---|---|---|
+| rounds-collapse | 1 (lane 1) | good_enough · 13 findings · 78 s | proceed · 6 findings · 680 s · 351k / 16.8k | 8 of 9 reviewers answered — local/Architecture: exit 69: ine at http://127.0.0.1:11434/v1 did not finish in time - it  | clean |
+| rounds-collapse | 2 (lane 4) | good_enough · 12 findings · 66 s | proceed · 9 findings · 750 s · 431k / 26.4k | 8 of 9 reviewers answered — local/Architecture: unparseable: the answer was not the schema's JSON after one repair att | clean |
+| rounds-collapse | 3 (lane 2) | good_enough · 13 findings · 95 s | proceed · 17 findings · 453 s · 491k / 23.7k | all 9 | clean |
+| split-once | 1 (lane 3) | good_enough · 13 findings · 42 s | proceed · 17 findings · 124 s · 243k / 15.4k | all 9 | clean |
+| split-once | 2 (lane 5) | good_enough · 14 findings · 60 s | good_enough · 18 findings · 460 s · 306k / 28.0k | all 9 | clean |
+| split-once | 3 (lane 3) | good_enough · 11 findings · 535 s | good_enough · 16 findings · 172 s · 263k / 17.8k | all 9 | clean |
+
+**6 of 6 produced verdicts, 6 of 6 clean on disk, 6 of 6 resolves accepted, no worktree collision,
+no `NOTHING RAN`.** That is the store fix holding under five servers on one data directory — the
+question this campaign was for.
+
+Code-round median 457 s (124–750); plan median —. **The prediction written above
+(under three minutes) did not hold here, and the reason is not the bound.** Per reviewer, from the
+session files: codex 13–69 s, gemini 6–106 s, local 13–29 s when it answered — and 95–260 s of
+*"N ahead on this engine"* queueing before it could, because fifteen local reviewers from five
+windows share one GPU through the engine lease. Two local roles were lost: one to the 590-second
+reviewer deadline while queued (`exit 69: did not finish in time`) and one to a **third** failure
+mode — forty-three findings until the token ceiling, the array unbounded where the strings now were
+(fixed as `maxItems` in server 0.17.4, below). The five-window number is a queueing number.
+
+### The prediction, tested where it was made — sequential, server 0.17.3
+
+The same matrix as epic 1, sequential, on 0.17.3 (the string bound of 0.17.2 plus the autonomy
+order of 0.17.3; the array bound came after this run):
+
+| case | # | plan | code | reviewers | disk |
+|---|---|---|---|---|---|
+| rounds-collapse | 1 | good_enough · 15 findings · 48 s | proceed · 11 findings · 108 s · 445k / 13.7k | all 9 | clean |
+| rounds-collapse | 2 | good_enough · 14 findings · 50 s | proceed · 11 findings · 214 s · 405k / 24.3k | 8 of 9 reviewers answered — local/Architecture: unparseable: the answer was not the schema's JSON after one repair att | clean |
+| split-once | 1 | good_enough · 15 findings · 36 s | proceed · 18 findings · 128 s · 266k / 15.3k | all 9 | clean |
+| split-once | 2 | good_enough · 14 findings · 44 s | good_enough · 16 findings · 244 s · 269k / 25.7k | all 9 | clean |
+
+| | 0.17.1 (epic 1) | 0.17.3 (this run) |
+|---|---|---|
+| code-round median (min–max) | 430.9 s (309–506) | 171 s (108–244) |
+| plan-round median (min–max) | 36.2 s (25–54) | — |
+| code rounds with a local reviewer lost | 4 of 4 | 1 of 4 |
+| code findings, median | 12.5 | 13.5 |
+
+**The prediction held where it was made**: no local role lost to the reasoning leak, no repair
+launch for it, and the code round under three minutes at the median — from seven. The one place
+a local reviewer still costs minutes is a queue, and a queue is a different problem with a
+different fix (a second engine, or fewer local roles per round when windows pile up).
 
 ## The two ways the local model fails, and what each needed
 
