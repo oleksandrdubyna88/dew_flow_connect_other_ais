@@ -422,8 +422,13 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
   };
   var vscode = acquireVsCodeApi();
   var ROWS = ${jsonForScript(rows)};
-  ${compareRows.toString()}
-  ${rowMatches.toString()}
+  // Assigned, never declared: the extension ships BUNDLED and minified, and a minifier renames a
+  // function that is not a top-level export — so the declaration this embedded read
+  // "function m(a, b, c, d)" in the VSIX while the page called rowMatches(). It worked from the
+  // unbundled out/ in node and in headless Chromium, and failed only in the installed extension,
+  // which is why the page now reports its own errors (0.29.10 found this one in a minute).
+  var compareRows = ${compareRows.toString()};
+  var rowMatches = ${rowMatches.toString()};
 
   var state = { sortKey: 'startedUtc', dir: 'desc', filters: {}, search: '', expanded: {} };
   function localDay(d) {

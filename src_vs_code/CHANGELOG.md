@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.29.11 — 2026-09-05 (server 0.17.3)
+
+**The Review rounds page draws its rows in the installed extension, not only on a developer's
+machine.** 0.29.10's error trap reported it within a minute of release: *rowMatches is not
+defined*. The page embeds its sort and filter functions by their source text so the tested
+function is the one that runs — and the extension ships bundled and minified, where a function that
+is not a top-level export is renamed: the page received `function m(a, b, c, d)` and called
+`rowMatches()`. The unbundled build in node and in headless Chromium rendered every row, which is
+why no test caught it. The functions are now bound by assignment, and a test refuses a bare
+declaration.
+
 ## 0.29.10 — 2026-09-05 (server 0.17.3)
 
 **The spending section is a tab of the Review rounds page, and Today means since midnight.** *What
