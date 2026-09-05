@@ -81,7 +81,13 @@ export interface LogFilters {
   readonly status?: string;
   readonly verdict?: string;
   readonly vendor?: string;
-  /** `YYYY-MM-DD`, inclusive, against the UTC day the round started (or finished, when it never recorded a start). */
+  /**
+   * Inclusive bounds on WHEN the round started (or finished, when it never recorded a start).
+   *
+   * <p>Either an instant (`2026-09-05T14:30:00.000Z`, what the page sends once a time is picked) or a
+   * bare day (`2026-09-05`). A bare `to` means the END of that day, not its midnight — otherwise
+   * "to today" would exclude everything that happened today, which is the whole of today.</p>
+   */
   readonly from?: string;
   readonly to?: string;
 }
@@ -266,17 +272,19 @@ export function rowMatches(row: LogRow, filters: LogFilters, search: string): bo
   if (filters.vendor && row.vendors.indexOf(filters.vendor) < 0) {
     return false;
   }
-  // The date range. ISO dates compare as strings, so the day is the first ten characters and the
-  // bounds are inclusive by plain comparison. A round with no date cannot be shown to be inside a
-  // bounded range, so a bound drops it; no bound keeps it.
-  const day = (row.startedUtc || row.completedUtc).slice(0, 10);
-  if ((filters.from || filters.to) && day.length === 0) {
+  // The date range. ISO-8601 instants of the same shape compare correctly as plain strings, so the
+  // bounds are inclusive by comparison. A bare day as the UPPER bound means the end of that day: an
+  // upper bound of 2026-09-05 against 2026-09-05T14:30Z would otherwise exclude the whole of today,
+  // which is exactly the range somebody picking today wants. A round with no date at all cannot be
+  // shown to be inside a bounded range, so a bound drops it; no bound keeps it.
+  const at = row.startedUtc || row.completedUtc;
+  if ((filters.from || filters.to) && at.length === 0) {
     return false;
   }
-  if (filters.from && day < filters.from) {
+  if (filters.from && at < filters.from) {
     return false;
   }
-  if (filters.to && day > filters.to) {
+  if (filters.to && at > (filters.to.indexOf('T') < 0 ? filters.to + 'T23:59:59.999Z' : filters.to)) {
     return false;
   }
   const needle = search.trim().toLowerCase();
@@ -461,9 +469,10 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
 <section id="tab-rounds">
 <div class="toolbar">
       <input id="search" type="search" placeholder="Search subject, branch, repository, reviewers…" autocomplete="off">
-      <label>From <input id="from" type="date"></label>
-      <label>To <input id="to" type="date"></label>
+      <label>From <input id="from" type="datetime-local" step="60"></label>
+      <label>To <input id="to" type="datetime-local" step="60"></label>
       <button type="button" class="secondary" id="today">Today</button>
+      <button type="button" class="secondary" id="alldates">All dates</button>
       ${filters}
       <button type="button" class="secondary" id="clear">Clear</button>
       <span id="count"></span>
@@ -475,7 +484,7 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
 </table>
 </div>
 <div id="empty" class="empty"${rows.length === 0 ? '' : ' hidden'}>No rounds yet. A session appears once an AI calls <code>open</code> for a repository and branch.</div>
-<div class="hint">Cost is <b>in / out / total</b> — <code>~</code> means worked out from a public price list rather than billed, <code>+</code> means one reviewer's model had no listed price so the total is a floor. Click a column to sort, a row to see its reviewers. The table advances by itself while a round runs; your sort, filters and search stay.</div>
+<div class="hint">Showing <b>today</b> — <b>All dates</b> clears the range, and the pickers take a time as well as a day. Cost is <b>in / out / total</b> — <code>~</code> means worked out from a public price list rather than billed, <code>+</code> means one reviewer's model had no listed price so the total is a floor. Click a column to sort, a row to see its reviewers. The table advances by itself while a round runs; your sort, filters and search stay.</div>
 </section>
 <section id="tab-usage" hidden><div id="usage-body">${usageHtml}</div></section>
 <script nonce="${nonce}">
@@ -507,6 +516,13 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
   function localDay(d) {
     var p = function (n) { return (n < 10 ? '0' : '') + n; };
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+  // What a datetime-local input holds is WALL CLOCK; what a round records is UTC. Comparing the two
+  // as strings would be wrong by the offset, so the input's value becomes an instant before it filters.
+  function asInstant(localValue) {
+    if (!localValue) { return ''; }
+    var t = new Date(localValue);
+    return isNaN(t.getTime()) ? '' : t.toISOString();
   }
 
   function esc(value) {
@@ -660,16 +676,24 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
   var fromInput = document.getElementById('from');
   var toInput = document.getElementById('to');
   function readDates() {
-    state.filters.from = fromInput.value;
-    state.filters.to = toInput.value;
+    state.filters.from = asInstant(fromInput.value);
+    state.filters.to = asInstant(toInput.value);
     render();
+  }
+  // Today, from its first minute to its last — the range the page opens on, because the question
+  // somebody has when they open it is almost always "what happened today".
+  function setToday() {
+    var now = new Date();
+    fromInput.value = localDay(now) + 'T00:00';
+    toInput.value = localDay(now) + 'T23:59';
+    readDates();
   }
   fromInput.addEventListener('change', readDates);
   toInput.addEventListener('change', readDates);
-  document.getElementById('today').addEventListener('click', function () {
-    var today = localDay(new Date());
-    fromInput.value = today;
-    toInput.value = today;
+  document.getElementById('today').addEventListener('click', setToday);
+  document.getElementById('alldates').addEventListener('click', function () {
+    fromInput.value = '';
+    toInput.value = '';
     readDates();
   });
   document.getElementById('clear').addEventListener('click', function () {
@@ -696,7 +720,8 @@ export function roundsLogHtml(rows: readonly LogRow[], questions: readonly Escal
     try { render(); } catch (e) { failed(String(e && e.message ? e.message : e)); }
   });
   try {
-    render();
+    // Today by default. Everything older is one click away on "All dates"; the hint says so.
+    setToday();
   } catch (e) {
     failed(String(e && e.message ? e.message : e));
   }
