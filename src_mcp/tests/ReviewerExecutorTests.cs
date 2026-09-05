@@ -100,6 +100,31 @@ public sealed class ReviewerExecutorTests
         outcome.Should().BeOfType<ReviewerOutcome.Ok>().Which.Repaired.Should().BeTrue();
     }
 
+    /// <summary>
+    /// A repaired reviewer is billed for BOTH launches, end to end — the failed one included.
+    /// </summary>
+    /// <remarks>
+    /// A characterisation test rather than a bug's: it was written to hold `RunAsync` still while
+    /// the launch was split out from under it, and asked for by name on the story's plan round,
+    /// because the only thing pinning this before was the arithmetic of <c>Usage.Add</c> in
+    /// isolation — which cannot notice a refactor that stops calling it.
+    /// </remarks>
+    [Fact]
+    public async Task ARepairedReviewer_StillCountsTheLaunchThatFailed()
+    {
+        var outcome = await _executor.RunAsync(
+            FakeCliInvocations.Invoke(
+                "gemini",
+                ["emit", """{"note":"prose, not findings","input_tokens":1000,"output_tokens":50}"""]),
+            repair: FakeCliInvocations.Invoke("gemini", ["emit", FakeCliInvocations.CleanReview]),
+            ct: TestContext.Current.CancellationToken);
+
+        var ok = outcome.Should().BeOfType<ReviewerOutcome.Ok>().Which;
+        ok.Repaired.Should().BeTrue();
+        ok.Usage.TokensIn.Should().Be(1000, "the launch that failed cost tokens and they are still owed");
+        ok.Usage.TokensOut.Should().Be(50);
+    }
+
     [Fact]
     public async Task UnparseableAfterTheOneRepair_IsItsOwnOutcome()
     {

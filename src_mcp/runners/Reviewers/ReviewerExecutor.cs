@@ -263,6 +263,34 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
     /// <summary>One launch. A non-null outcome is terminal; a null review means "unparseable".</summary>
     private async Task<(ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Answer, string Evidence)> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
     {
+        var launch = await LaunchAsync(invocation, ct);
+
+        return launch.Terminal is not null
+            ? (launch.Terminal, null, launch.Usage, null, string.Empty)
+            : (null, ParseAnswer(launch.Answer, invocation.Provider), launch.Usage, launch.Answer, launch.Evidence);
+    }
+
+    /// <summary>
+    /// One launch, as far as "what the process said" — and no further.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Public because a second binary needs exactly this half.</b> The Team server runs the
+    /// same vendor CLIs through the same adapters and hands the vendor's RAW answer back over HTTP;
+    /// parsing, the repair launch and de-duplication stay with the client that asked for the review,
+    /// which already does all three for a local reviewer. A copy of this classification in the
+    /// server is how the vendor-set drift in this repository happened twice.</para>
+    /// <para><b><c>Terminal == null</c> means the process ran and exited zero</b> — it is not a
+    /// promise that there is an answer. An adapter whose output file never appeared says so with a
+    /// null <see cref="ReviewerLaunch.Answer"/>, and what that means is the caller's judgement.</para>
+    /// <para>Cancellation and the kill belong to <see cref="IProcessLauncher"/>, which takes the
+    /// token and terminates the whole process tree; a cancelled launch throws out of here and
+    /// <c>BoundedScheduler</c> reports the reviewer as abandoned. Nothing about that changes here.
+    /// A vendor adapter that THROWS out of its own read is a defect in that adapter — every shipped
+    /// one catches its IO and JSON failures and answers with a null answer or
+    /// <see cref="Usage.None"/>.</para>
+    /// </remarks>
+    public async Task<ReviewerLaunch> LaunchAsync(ReviewerInvocation invocation, CancellationToken ct)
+    {
         ProcessResult result;
         try
         {
@@ -279,34 +307,40 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
         catch (System.ComponentModel.Win32Exception e)
         {
             // One reviewer that cannot start is one reviewer's failure, never the round's.
-            return (new ReviewerOutcome.NotStarted($"'{invocation.Request.Executable}' could not be started: {e.Message}"), null, Usage.None, null, string.Empty);
+            return new ReviewerLaunch(
+                new ReviewerOutcome.NotStarted($"'{invocation.Request.Executable}' could not be started: {e.Message}"),
+                null,
+                Usage.None,
+                string.Empty);
         }
 
         if (result.TimedOut)
         {
-            return (new ReviewerOutcome.TimedOut(), null, Usage.None, null, string.Empty);
+            return new ReviewerLaunch(new ReviewerOutcome.TimedOut(), null, Usage.None, string.Empty);
         }
 
         if (RateLimit.Hit(result))
         {
-            return (new ReviewerOutcome.RateLimited(RateLimit.Reason(result)), null, Usage.None, null, string.Empty);
+            return new ReviewerLaunch(new ReviewerOutcome.RateLimited(RateLimit.Reason(result)), null, Usage.None, string.Empty);
         }
 
         if (result.ExitCode != 0)
         {
             var tail = result.StdErr.Length <= StdErrTail ? result.StdErr : result.StdErr[^StdErrTail..];
-            return (new ReviewerOutcome.NonZeroExit(result.ExitCode, tail.Trim()), null, Usage.None, null, string.Empty);
+            return new ReviewerLaunch(new ReviewerOutcome.NonZeroExit(result.ExitCode, tail.Trim()), null, Usage.None, string.Empty);
         }
 
         // Both reads go through the vendor's own adapter: where the answer lands and how the run
         // is billed are vendor knowledge, and keeping them here would have made every new vendor
         // an edit to this class.
         var usage = invocation.Adapter?.ReadUsage(invocation, result) ?? UsageParser.Parse(result.StdOut);
-        var (review, answer, evidence) = Parse(invocation, result);
-        return (null, review, usage, answer, evidence);
+        var (answer, evidence) = Read(invocation, result);
+
+        return new ReviewerLaunch(null, answer, usage, evidence);
     }
 
-    private static (NormalisedReview? Review, string? Answer, string Evidence) Parse(ReviewerInvocation invocation, ProcessResult result)
+    /// <summary>What the vendor said, and what is left to show when it said nothing.</summary>
+    private static (string? Answer, string Evidence) Read(ReviewerInvocation invocation, ProcessResult result)
     {
         var raw = invocation.Adapter is { } adapter
             ? adapter.ReadAnswer(invocation, result)
@@ -314,22 +348,55 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
         // The EVIDENCE is not always the answer. When a vendor's envelope comes back empty there
         // is nothing in the field the adapter reads, and the diagnosis — its status, its error,
         // its own event stream — is sitting in stdout, which was being thrown away. A kept file
-        // of zero bytes is what that looked like from outside.
-        var evidence = string.IsNullOrWhiteSpace(raw) ? Transcript(result) : raw;
+        // of zero bytes is what that looked like from outside. An EMPTY answer takes the same path
+        // as a missing one, which is why the test is `IsNullOrWhiteSpace` and not `is null`.
+        return (raw, string.IsNullOrWhiteSpace(raw) ? Transcript(result) : raw);
+    }
+
+    /// <summary>
+    /// The vendor's answer as findings, or null when it is not findings at all.
+    /// </summary>
+    /// <remarks>
+    /// Pure, and it takes exactly what it reads: the text the adapter produced, and the provider,
+    /// which stamps each finding with where it came from. Every vendor-specific decision — which
+    /// file, which envelope, which NDJSON event — has already happened in the adapter's own
+    /// <c>ReadAnswer</c>, which is why nothing else from the invocation reaches here.
+    /// </remarks>
+    internal static NormalisedReview? ParseAnswer(string? raw, string provider)
+    {
         if (raw is null)
         {
-            return (null, null, evidence);
+            return null;
         }
 
         // Gemini answers through its envelope and its habits; codex's -o file is schema-bound
         // already, but the same balanced extraction costs nothing and forgives a stray banner.
-        if (GeminiPayload.Extract(raw) is not ExtractOutcome.Payload payload)
-        {
-            return (null, raw, evidence);
-        }
-
-        return ReviewParser.Parse(payload.Json, invocation.Provider) is ParseOutcome.Success success
-            ? (success.Review, raw, evidence)
-            : (null, raw, evidence);
+        return GeminiPayload.Extract(raw) is ExtractOutcome.Payload payload
+               && ReviewParser.Parse(payload.Json, provider) is ParseOutcome.Success success
+            ? success.Review
+            : null;
     }
 }
+
+/// <summary>
+/// What ONE launch produced, before anyone reads it as findings.
+/// </summary>
+/// <param name="Terminal">
+/// The outcome when the launch itself decided the answer — <c>NotStarted</c>, <c>TimedOut</c>,
+/// <c>RateLimited</c>, <c>NonZeroExit</c> — and null when the process ran and exited zero.
+/// </param>
+/// <param name="Answer">
+/// The vendor's own answer, as ITS adapter extracts it, unparsed. Null when there was nothing where
+/// this vendor puts one; that is a fact about the run, not a verdict on it.
+/// </param>
+/// <param name="Usage">What the run consumed, from the vendor's own reporting. Never null: an
+/// adapter that cannot read its own numbers answers <see cref="Usage.None"/>.</param>
+/// <param name="Evidence">
+/// The answer, or the process transcript when the envelope came back empty — the diagnosis, for the
+/// one failure whose raw text is the whole story.
+/// </param>
+public sealed record ReviewerLaunch(
+    ReviewerOutcome? Terminal,
+    string? Answer,
+    Usage Usage,
+    string Evidence);

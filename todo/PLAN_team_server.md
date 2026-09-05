@@ -380,7 +380,7 @@ suites, the same guard `LocalRuntime.OpenAiBaseOf` / `openAiBaseOf` live under.
 
 | What | From | Why both need it |
 |---|---|---|
-| `ReviewerExecutor.LaunchAsync` | `ReviewerExecutor.cs:254` (`RunOnceAsync`, the launch + classification, without the parse) | the server launches and classifies; the client parses |
+| ~~`ReviewerExecutor.LaunchAsync`~~ | **done** — public on `ReviewerExecutor`, returning `ReviewerLaunch(Terminal, Answer, Usage, Evidence)`; `ParseAnswer(raw, provider)` is pure beside it | the server launches and classifies; the client parses |
 | `VendorHealth.ProbeAsync` | `PanelService.cs:134` | the catalog's health column |
 | `RuntimeResolution` — `RuntimeNameOf`, `RuntimeFor`, `AuthOf` | `PanelService.cs:231-262` | the "third copy of one decision" that already shipped a defect must not get a fourth |
 | `UsageLedger` | `src_mcp/src/Server/UsageLedger.cs` | it references nothing MCP-shaped today |
@@ -621,7 +621,7 @@ Four of them touch this, and each is a decision rather than a note:
 
 | Open plan | The overlap | The decision |
 |---|---|---|
-| **the local database** under the rounds log (`coai.db`: sessions, rounds, reviewers, findings, usage, FTS) | it projects the LOCAL `usage.jsonl`; this plan adds spending that lives on a server | **A Team server's usage is fetched live and is never written into `coai.db`.** The server is the source of truth precisely because a person has two machines, and a copy in a local projection would disagree with it the moment they use the other one. The rounds log stays a local view; the Team-server block stays a remote one, under its own subheading. If the two are ever wanted in one table, that is a `remote_usage` table the server's numbers are refreshed into, and a plan of its own. |
+| **the local database** under the rounds log (`coai.db`: sessions, rounds, reviewers, findings, usage, FTS — the writing half shipped 2026-09-05, [research/PLAN_local_db.md](../research/PLAN_local_db.md); the reader is [PLAN_local_db_reader.md](PLAN_local_db_reader.md)) | it projects the LOCAL `usage.jsonl`; this plan adds spending that lives on a server | **A Team server's usage is fetched live and is never written into `coai.db`.** The server is the source of truth precisely because a person has two machines, and a copy in a local projection would disagree with it the moment they use the other one. The rounds log stays a local view; the Team-server block stays a remote one, under its own subheading. If the two are ever wanted in one table, that is a `remote_usage` table the server's numbers are refreshed into, and a plan of its own. |
 | **family CI hardening** (`main` PR-only everywhere, required checks with `strict`, semantic titles) | this plan adds a project, a test executable, an `http/` suite and a `server-v*` release | The new CI job runs on **every** PR — never a path filter — because a required check that does not run blocks every merge for ever; its name is added to the required set in the same change that adds the job. This plan ships as PRs into `main` like everything else. |
 | **provider liveness** (three states instead of `--version` exit 0) | the catalog's health column repeats the same question, one hop further away | The catalog answers what it can prove: the CLI is present at a version, the slot has credentials on disk, the last real run's outcome. A slot that has never run is *unknown*, not *healthy* — the same distinction that plan draws, applied per slot rather than per vendor. |
 | **multi-repo / uncommitted** (one round over several repositories, a working tree snapshotted into a commit) | it changes what the CLIENT assembles into the prompt | Nothing here has to change: the server receives an assembled prompt and a schema and never learns which repositories it came from. Recorded because it is the natural next question. |
@@ -640,7 +640,7 @@ The split was made on Fable; stories marked **F** run on Fable because being wro
 
 | Epic | Story | Delivers | Model |
 |---|---|---|---|
-| **1 · One library for two binaries** | 1.1 | `ReviewerExecutor.LaunchAsync` out of `RunOnceAsync`; `CoaiMcp.Tests` unchanged. (`RetryLadder` **shipped ahead of this epic**, on its own — it fixes the local `coai-mcp` today, where a transient 429 gets one retry at fifteen seconds and then fails the round.) | Opus |
+| **1 · One library for two binaries** | ~~1.1~~ **done** | `ReviewerExecutor.LaunchAsync` out of `RunOnceAsync`, with `ParseAnswer` pure beside it; every existing test passed unedited. (`RetryLadder` shipped ahead of the epic, on its own — it fixes the local `coai-mcp` today, where a transient 429 got one retry at fifteen seconds and then failed the round.) | Opus |
 | | 1.2 | `RuntimeResolution` + `VendorHealth` out of `PanelService`; `UsageLedger` moved | Opus |
 | | 1.3 | `RemoteRuntime`, `RemoteAsk`, `TeamServerAuth` (with URL normalisation and the shared vector), `--ask-remote`, every registry point, `ProbeAsync`'s remote arm | Opus |
 | **2 · `coai-server`** | 2.1 | skeleton, logging, guards, the mirrored auth, sessions, `X-Coai-Contract`, the harness | **F** |
