@@ -74,4 +74,25 @@ public sealed class TempDirsAreSwept
         Assert.False(Directory.Exists(repo), "a clone three days old is nobody's working state either");
         Directory.Delete(root, recursive: true);
     }
+
+    [Fact]
+    public void ADownloadedServerIsNotScratch_AndSurvives()
+    {
+        // The sweep matches coai-*, and a downloaded server sits under coai-<version> in the same
+        // folder. Deleting one would cost a download and look like the extension had lost its
+        // install; the gate asked for this check by name.
+        var root = Directory.CreateTempSubdirectory("coai-sweep-cache-").FullName;
+        var cache = Directory.CreateDirectory(Path.Combine(root, "coai-0.17.5")).FullName;
+        var scratch = Directory.CreateDirectory(Path.Combine(root, "coai-panel-whatever")).FullName;
+        foreach (var dir in new[] { cache, scratch })
+        {
+            Directory.SetLastWriteTimeUtc(dir, DateTime.UtcNow.AddDays(-9));
+        }
+
+        PanelService.PruneOldScratchDirs(root, DateTime.UtcNow.AddDays(-1), Prefixes);
+
+        Assert.True(Directory.Exists(cache), "a version is a cache, not scratch");
+        Assert.False(Directory.Exists(scratch), "and the scratch beside it still goes");
+        Directory.Delete(root, recursive: true);
+    }
 }
