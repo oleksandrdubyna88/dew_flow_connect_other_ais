@@ -3,7 +3,6 @@ import { test } from 'node:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { execFileSync } from 'node:child_process';
 
 /**
  * The page is checked as it SHIPS — bundled and minified — not as it compiles.
@@ -31,12 +30,14 @@ function bundledPage(): { html: string; script: string } {
   // A tiny entry so the bundle exports exactly what the assertion needs; `--minify` is what the
   // shipped bundle uses, and the renaming it does is the whole point of this test.
   fs.writeFileSync(entry, `export { roundsLogHtml, rowsFrom } from ${JSON.stringify(path.join(ROOT, 'src', 'roundsLog.ts'))};\n`);
-  execFileSync(
-    process.execPath,
-    [path.join(ROOT, 'node_modules', 'esbuild', 'bin', 'esbuild'), entry,
-      '--bundle', `--outfile=${out}`, '--format=cjs', '--platform=node', '--minify'],
-    { stdio: 'pipe' },
-  );
+  // esbuild's JS API, not its binary: on Linux `node_modules/esbuild/bin/esbuild` is a shell shim,
+  // and running it through node is a SyntaxError — which is exactly how this test passed on Windows
+  // and failed on the CI runner the day it was written.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const esbuild = require('esbuild') as { buildSync: (options: Record<string, unknown>) => void };
+  esbuild.buildSync({
+    entryPoints: [entry], outfile: out, bundle: true, format: 'cjs', platform: 'node', minify: true,
+  });
   const bundle = fs.readFileSync(out, 'utf8');
   // CJS, because minification renames the exported bindings too: the export CLAUSE is what maps them
   // back to their public names, and `module.exports` keeps that map where an ESM bundle loses it to
