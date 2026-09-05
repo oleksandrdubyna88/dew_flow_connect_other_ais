@@ -7,6 +7,7 @@ import {
   unquoted,
   updateAvailable,
   versionSourceFor,
+  registryUrlFor,
 } from '../cliVersions';
 
 /**
@@ -172,4 +173,13 @@ test('a path a shell must not be given yields no command at all', () => {
     '"C:\\a&b^(c)\\codex.cmd" --version',
     'these are literal inside quotes, so a legitimate path with them is not refused',
   );
+});
+
+test('the registry URL escapes every slash of a package name, not the first', () => {
+  // CodeQL js/incomplete-sanitization: `replace('/', …)` handles one occurrence. A scoped name has
+  // exactly one slash, so nothing changes for the real vendors — the assertion is about the shape of
+  // the sanitiser, which must not depend on the input having no second slash.
+  const url = registryUrlFor({ kind: 'npm', package: '@scope/name/extra' });
+
+  assert.equal(url, 'https://registry.npmjs.org/@scope%2fname%2fextra/latest');
 });
