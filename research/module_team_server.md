@@ -229,6 +229,26 @@ sequenceDiagram
   spending.
 - **The server returns the vendor's RAW answer.** Parsing, repair and de-duplication stay in the
   client, so the same parser does not exist twice and drift.
+- **A cancel STOPS the vendor, it does not merely relabel the record.** Each running job registers a
+  cancellation source in the store, and the same call that ends the record fires it. Without that the
+  API reported `cancelled` while the CLI went on running, went on spending against the account, and
+  held the slot the whole time.
+- **A rate-limited account is parked and the review moves to the NEXT one.** Failing outright told a
+  caller "rate limited" while a second signed-in account sat idle, which defeats the point of
+  configuring more than one. Only when no account can take it does the review fail, carrying the
+  vendor's own sentence.
+- **Waiters are per job.** One shared list is woken by every submit and finish anywhere on the
+  server, so a client polling its own queued review returned in milliseconds because a stranger's job
+  moved — a long poll that had quietly become a busy poll, and a busy poll runs into the rate limiter.
+- **An out-of-range `timeoutSeconds` and an unknown role are REFUSED naming the legal values**, not
+  clamped or silently substituted. Somebody who asked for five seconds and got thirty draws the wrong
+  conclusion from the result; a review that ran under a role nobody asked for looks like a normal one.
+- **`lost` requires the whole id shape**, epoch and GUID. `123-typo` has an old-looking prefix, and
+  `lost` is the answer that tells an automated client to resubmit — reporting it for an id nobody
+  ever issued is how a typo turns into duplicate vendor spend.
+- **The pump drains rather than ticking.** Starting one review per vendor per second left nine of ten
+  free accounts idle while a queue backed up; it now keeps starting while the vendor keeps saying yes,
+  and the slot lock is what stops it.
 - **One ledger, not two.** `UsageLedger` gained an email column and a `RecordJob` overload rather
   than `src_server` growing its own JSONL writer — a second writer is how two spending records come
   to disagree.
@@ -238,7 +258,9 @@ sequenceDiagram
 `Coai:AllowedDomains` (required unless `Coai:AllowAnyDomain`), `Coai:Admins`, `Coai:DataDir`,
 `Coai:SessionTtlDays` (7), `Coai:MinimumClientContract`, `Coai:RequireForwardedHttps`,
 `Coai:RateLimit:PermitLimit|WindowSeconds`, `Coai:TrustedProxies`, `Coai:LoginWaitSeconds`,
-`Coai:LoginTimeoutSeconds`, `Coai:PerCallerQueued`, `Coai:PerCallerRunning`;
+`Coai:LoginTimeoutSeconds`, `Coai:PerCallerQueued` (20), `Coai:PerCallerRunning` (3),
+`Coai:QueueWaitMinutes` (10 — how long a review waits for a free account, NOT how long the
+vendor may take, which is the caller's own `timeoutSeconds`);
 `Auth:Microsoft:Tenant|Audiences|ClientScope`,
 `Auth:Google:Enabled|Audiences`, `Auth:Local:SigningKey`. Environment form uses `__`.
 

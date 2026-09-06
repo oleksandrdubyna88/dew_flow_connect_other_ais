@@ -139,7 +139,7 @@ public sealed class JobStoreTests
         store.Submit(second);
         store.Submit(first);
 
-        store.TryClaim("codex", "a", Now.AddSeconds(6))!.Id.Should().Be(first.Id);
+        store.TryClaim("codex", "a", Now.AddSeconds(6))!.Value.Job.Id.Should().Be(first.Id);
     }
 
     [Fact]
@@ -176,7 +176,7 @@ public sealed class JobStoreTests
         store.Submit(Job(email: "other@example.com"));
         store.TryClaim("codex", "a", Now).Should().NotBeNull();
 
-        store.TryClaim("codex", "b", Now)!.Email.Should().Be("other@example.com");
+        store.TryClaim("codex", "b", Now)!.Value.Job.Email.Should().Be("other@example.com");
     }
 
     [Fact]
@@ -222,10 +222,55 @@ public sealed class JobStoreTests
         var store = new JobStore();
         var (job, _, _) = store.Submit(Job());
 
-        var waiting = store.WaitForChangeAsync(TimeSpan.FromSeconds(20), CancellationToken.None);
+        var waiting = store.WaitForChangeAsync(job!.Id, TimeSpan.FromSeconds(20), CancellationToken.None);
         store.Finish(JobTransitions.Succeed(job!, "answer", 0, 0, Now));
 
         await waiting.WaitAsync(TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task ALongPollIsNotWokenBySomebodyElsesJob()
+    {
+        // A single shared waiter is signalled by every submit and finish anywhere on the server, so
+        // a client polling its own queued review returned within milliseconds because a stranger’s
+        // job moved — a long poll that had become a busy poll. Three reviewers found it. (Code round.)
+        var store = new JobStore();
+        var (mine, _, _) = store.Submit(Job());
+        var (theirs, _, _) = store.Submit(Job(email: "other@example.com"));
+
+        var waiting = store.WaitForChangeAsync(mine!.Id, TimeSpan.FromMilliseconds(400), CancellationToken.None);
+        store.Finish(JobTransitions.Succeed(theirs!, "not yours", 0, 0, Now));
+
+        var finishedEarly = await Task.WhenAny(waiting, Task.Delay(120)) == waiting;
+        finishedEarly.Should().BeFalse("the other job moving is not this job moving");
+        await waiting;
+    }
+
+    [Fact]
+    public void CancellingARunningJobFiresItsToken()
+    {
+        // Marking the record terminal is not enough: the CLI goes on running and goes on spending
+        // against the account, and the slot is held the whole time. (Blocking, code round.)
+        var store = new JobStore();
+        store.Submit(Job());
+        var claimed = store.TryClaim("codex", "a", Now)!.Value;
+        claimed.Token.IsCancellationRequested.Should().BeFalse();
+
+        store.Cancel(claimed.Job.Id, claimed.Job.Email, Now);
+
+        claimed.Token.IsCancellationRequested.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ExpiringARunningJobAlsoFiresItsToken()
+    {
+        var store = new JobStore();
+        store.Submit(Job());
+        var claimed = store.TryClaim("codex", "a", Now)!.Value;
+
+        store.Sweep(Now.AddMinutes(5));
+
+        claimed.Token.IsCancellationRequested.Should().BeTrue("a deadline that does not stop the process is not a deadline");
     }
 
     [Fact]
@@ -234,7 +279,7 @@ public sealed class JobStoreTests
         var store = new JobStore();
         var started = DateTimeOffset.UtcNow;
 
-        await store.WaitForChangeAsync(TimeSpan.FromMilliseconds(150), CancellationToken.None);
+        await store.WaitForChangeAsync("any-id", TimeSpan.FromMilliseconds(150), CancellationToken.None);
 
         (DateTimeOffset.UtcNow - started).Should().BeLessThan(TimeSpan.FromSeconds(5));
     }

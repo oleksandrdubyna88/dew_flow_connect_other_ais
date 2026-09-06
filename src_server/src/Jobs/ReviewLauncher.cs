@@ -34,7 +34,7 @@ public interface IReviewLauncher
 }
 
 /// <summary>Runs the vendor's real CLI through the executor both binaries share.</summary>
-public sealed class ReviewLauncher(IProcessLauncher launcher) : IReviewLauncher
+public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exception>? onFailure = null) : IReviewLauncher
 {
     public async Task<ReviewAttempt> RunAsync(
         VendorConfig vendor,
@@ -82,16 +82,10 @@ public sealed class ReviewLauncher(IProcessLauncher launcher) : IReviewLauncher
         }
     }
 
-    /// <summary>The role a client named, or the general one.</summary>
-    /// <remarks>
-    /// An unknown role is not refused: the roles are the CLIENT's vocabulary and it may gain one
-    /// before this server does, and refusing would make a Team server the thing that has to be
-    /// upgraded first. The prompt carries the actual instruction either way.
-    /// </remarks>
+    /// <summary>The role a client named. Validated at the endpoint, so a bad one cannot arrive here.</summary>
     private static ReviewRole RoleOf(string role) =>
         Enum.TryParse<ReviewRole>(role, ignoreCase: true, out var parsed) ? parsed : default;
-
-    private static void Delete(string directory)
+    private void Delete(string directory)
     {
         try
         {
@@ -99,8 +93,10 @@ public sealed class ReviewLauncher(IProcessLauncher launcher) : IReviewLauncher
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // A vendor helper still holding a file here must not fail a review that already
-            // succeeded. The directory is under the system temp root and is swept by the OS.
+            // A vendor helper still holding a file must not fail a review that already succeeded —
+            // but it is REPORTED, naming the directory. A machine quietly filling with job
+            // directories is the kind of thing nobody notices until the disk is full.
+            onFailure?.Invoke($"the working directory {directory} could not be removed", e);
         }
     }
 }

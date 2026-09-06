@@ -138,7 +138,7 @@ var jobRunner = new JobRunner(
     jobs,
     catalog,
     slotRegistry,
-    new ReviewLauncher(new ProcessLauncher()),
+    new ReviewLauncher(new ProcessLauncher(), (message, error) => reportSessionFailure?.Invoke(message, error)),
     new UsageLedger(dataDir),
     (message, error) => reportSessionFailure?.Invoke(message, error));
 builder.Services.AddSingleton(jobs);

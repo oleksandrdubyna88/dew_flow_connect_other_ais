@@ -1,3 +1,5 @@
+using CoaiMcp.Runners.Reviewers;
+
 namespace CoaiServer;
 
 /// <summary>Submit a review, watch it, give up on it.</summary>
@@ -11,6 +13,21 @@ public static class ReviewEndpoints
     /// wait is a <see cref="TaskCompletionSource"/>, so an open poll occupies no thread.
     /// </remarks>
     public static readonly TimeSpan MaxWait = TimeSpan.FromSeconds(25);
+
+    /// <summary>The narrowest and widest vendor budget a caller may ask for.</summary>
+    /// <remarks>
+    /// Below thirty seconds a CLI has barely started; above half an hour one review can hold an
+    /// account longer than most people will wait for the whole round. A request outside the range is
+    /// REFUSED naming it rather than silently clamped — somebody who asked for five seconds and got
+    /// thirty would draw the wrong conclusion from the result. (gemini, code round.)
+    /// </remarks>
+    public static readonly TimeSpan MinBudget = TimeSpan.FromSeconds(30);
+
+    /// <inheritdoc cref="MinBudget"/>
+    public static readonly TimeSpan MaxBudget = TimeSpan.FromMinutes(30);
+
+    /// <summary>What a caller refused for a full queue is told to wait.</summary>
+    private const string RetryAfterSeconds = "30";
 
     public static void MapReviewEndpoints(
         this WebApplication app, JobStore jobs, VendorCatalogHost catalog, CallerFilter gate, TimeSpan? queueWait = null)
@@ -27,7 +44,7 @@ public static class ReviewEndpoints
             }
 
             var now = DateTimeOffset.UtcNow;
-            var budget = TimeSpan.FromSeconds(Math.Clamp(request.TimeoutSeconds, 30, 1800));
+            var budget = TimeSpan.FromSeconds(request.TimeoutSeconds);
             var (job, refused, position) = jobs.Submit(new JobRecord(
                 JobId.New(),
                 caller.Email,
@@ -44,7 +61,7 @@ public static class ReviewEndpoints
             {
                 // A queue nobody drains is just a way to hold other people's turn, so the refusal is
                 // a 429 with a time — not a silent accept that never runs.
-                ctx.Response.Headers.RetryAfter = "30";
+                ctx.Response.Headers.RetryAfter = RetryAfterSeconds;
 
                 return Results.Json(
                     new ErrorDto(
@@ -72,9 +89,19 @@ public static class ReviewEndpoints
             // staring at an answer the server already has. (Plan round.)
             if (job is not null && !job.IsTerminal && wait is > 0)
             {
-                var budget = TimeSpan.FromSeconds(Math.Min(wait.Value, MaxWait.TotalSeconds));
-                await jobs.WaitForChangeAsync(budget, ctx.RequestAborted);
-                job = jobs.Find(id, caller.Email);
+                var deadline = DateTimeOffset.UtcNow
+                    + TimeSpan.FromSeconds(Math.Min(wait.Value, MaxWait.TotalSeconds));
+                var was = job.Status;
+
+                // Loops until THIS job moves or the budget is gone. One wake is not enough: the
+                // waiter can be signalled while the job is still in the same state (a requeue onto
+                // another account is a change, but not the one the caller is waiting for), and
+                // returning then would turn a long poll into a busy poll.
+                while (job is not null && !job.IsTerminal && job.Status == was && DateTimeOffset.UtcNow < deadline)
+                {
+                    await jobs.WaitForChangeAsync(id, deadline - DateTimeOffset.UtcNow, ctx.RequestAborted);
+                    job = jobs.Find(id, caller.Email);
+                }
             }
 
             return job is null
@@ -103,6 +130,23 @@ public static class ReviewEndpoints
         if (string.IsNullOrWhiteSpace(request.Prompt))
         {
             return "a review needs a prompt";
+        }
+
+        var seconds = request.TimeoutSeconds;
+        if (seconds < MinBudget.TotalSeconds || seconds > MaxBudget.TotalSeconds)
+        {
+            return $"timeoutSeconds must be between {MinBudget.TotalSeconds:0} and "
+                + $"{MaxBudget.TotalSeconds:0}; you asked for {seconds}";
+        }
+
+        // An unknown role fails NAMING the legal values rather than quietly becoming the first one.
+        // Silently substituting a role means a reviewer runs with instructions nobody asked for and
+        // the answer looks like an ordinary one. (Two reviewers, code round.)
+        if (!string.IsNullOrWhiteSpace(request.Role)
+            && !Enum.TryParse<ReviewRole>(request.Role, ignoreCase: true, out _))
+        {
+            return $"'{request.Role}' is not a review role. Allowed: "
+                + string.Join(", ", Enum.GetNames<ReviewRole>());
         }
 
         if (catalog.Find(request.Vendor ?? string.Empty) is not { } vendor)

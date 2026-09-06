@@ -240,8 +240,11 @@ public sealed class JobRunnerTests : IDisposable
     }
 
     [Fact]
-    public async Task ARateLimitParksTheAccountAndTheJobSaysWhy()
+    public async Task ARateLimitParksThatAccountAndTriesTheOtherOne()
     {
+        // With a second account signed in and idle, failing the review outright told a caller "rate
+        // limited" while an account that could have run it sat there — which defeats the whole point
+        // of configuring more than one. (codex, code round.)
         var (jobs, runner, _) = Build(
             new ReviewerOutcome.RateLimited("You've hit your session limit · resets 9:30pm (UTC)"));
         jobs.Submit(Job());
@@ -249,12 +252,27 @@ public sealed class JobRunnerTests : IDisposable
         await runner.PumpAsync("codex", CancellationToken.None);
 
         var job = jobs.All().Single();
-        job.Failure.Should().Be(FailureKind.RateLimited);
-        job.Reason.Should().Contain("session limit");
-        new SlotRegistry(_dir, new JsonFileStore()).Read("codex", job.Slot).CooldownUntilUtc.Should()
+        job.Status.Should().Be(JobStatus.Queued, "another account can still serve it");
+        job.Reason.Should().Contain("rate-limited").And.Contain("trying");
+        new SlotRegistry(_dir, new JsonFileStore()).Read("codex", "a").CooldownUntilUtc.Should()
             .NotBeNull("the account that refused must not take the next job straight away");
     }
 
+    [Fact]
+    public async Task WhenEveryAccountIsRateLimitedTheReviewFailsWithTheVendorsWords()
+    {
+        var (jobs, runner, _) = Build(new ReviewerOutcome.RateLimited("session limit reached"));
+        jobs.Submit(Job());
+
+        // Once for slot a, once for slot b. After the second there is nowhere left to rotate to.
+        await runner.PumpAsync("codex", CancellationToken.None);
+        await runner.PumpAsync("codex", CancellationToken.None);
+
+        var job = jobs.All().Single();
+        job.Status.Should().Be(JobStatus.Failed);
+        job.Failure.Should().Be(FailureKind.RateLimited);
+        job.Reason.Should().Contain("session limit reached");
+    }
     [Fact]
     public async Task AVendorThatCrashesEndsTheJobRatherThanLeavingItRunning()
     {

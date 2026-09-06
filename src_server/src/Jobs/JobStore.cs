@@ -15,38 +15,52 @@ public enum SubmitRefusal
 /// poll for an id from the previous epoch answers <c>lost</c>, which costs one resubmit of a prompt
 /// the client still holds. The alternative was a durable store whose recovery scan must decide
 /// whether a job that was Running when the process died is safe to restart, and it is not: the vendor
-/// may already have been charged for it. One resubmit beats paying twice.</para>
-/// <para><b>Claiming is atomic.</b> <see cref="TryClaim"/> moves a job from Queued to Running under
-/// the same lock <see cref="Cancel"/> takes, so a cancel that returns 204 cannot be followed by a
-/// dispatch that launches the vendor anyway. Without that the API could tell somebody their review
-/// was cancelled and then spend the subscription on it — raised on the plan round.</para>
+/// may already have been charged for it.</para>
+/// <para><b>Claiming, cancelling and expiring are atomic with each other.</b> They take the same lock,
+/// so a cancel that returned 204 cannot be followed by a dispatch — the API must never tell somebody
+/// their review was cancelled and then spend the subscription on it.</para>
+/// <para><b>A cancelled or expired RUNNING job has its process stopped.</b> Marking the record
+/// terminal is not enough: the CLI goes on running and goes on spending against the account, and the
+/// slot is held the whole time. Each running job registers a cancellation source here, and the same
+/// call that ends the record fires it. Raised as Blocking on this change's code round.</para>
+/// <para><b>An ordinary <c>lock</c>, not a <c>SemaphoreSlim</c>.</b> Everything under it is a
+/// dictionary operation measured in microseconds and no I/O ever happens inside it, so an async lock
+/// would add a state machine and a heap allocation per call to avoid a contention that cannot occur.
+/// </para>
 /// </remarks>
 public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3, TimeSpan? keepFinished = null)
 {
-    /// <summary>How long a finished job can still be polled for.</summary>
     private readonly TimeSpan _keep = keepFinished ?? TimeSpan.FromHours(1);
-
     private readonly Lock _gate = new();
     private readonly Dictionary<string, JobRecord> _jobs = [];
 
-    /// <summary>Woken whenever any job changes, so a long poll returns on the transition.</summary>
-    private readonly List<TaskCompletionSource> _waiters = [];
-
     /// <summary>
-    /// The two caps, and what each one counts.
+    /// Who is waiting to hear about WHICH job.
     /// </summary>
     /// <remarks>
-    /// The plan round was right that one number called both things is not a rule. They are separate
-    /// and they count different states: <b>Queued</b> is how many of a caller's jobs may be WAITING —
-    /// exceeding it refuses the submission with 429, because a queue nobody drains is just a way to
-    /// hold other people's turn. <b>Running</b> is how many may be on a vendor AT ONCE — exceeding it
-    /// does not refuse anything, it simply leaves the job queued until one of the caller's own
-    /// finishes. So a caller may hold 20 queued and 3 running; the 21st queued is refused, and jobs
-    /// 4..20 are accepted and wait, which is the behaviour the earlier wording left undefined.
+    /// Per job, not one global list. A single shared waiter is woken by every submit, claim and
+    /// finish anywhere on the server, so a client polling its own queued review would return within
+    /// milliseconds because somebody else's job moved — turning a long poll into a busy poll, and a
+    /// busy poll into the rate limiter. Three reviewers found this independently.
+    /// </remarks>
+    private readonly Dictionary<string, List<TaskCompletionSource>> _waiters = new(StringComparer.Ordinal);
+
+    /// <summary>The token that stops the vendor process of a job that is running right now.</summary>
+    private readonly Dictionary<string, CancellationTokenSource> _running = new(StringComparer.Ordinal);
+
+    /// <summary>How many of one person's reviews may WAIT. The next is refused.</summary>
+    /// <remarks>
+    /// Separate from <see cref="PerCallerRunning"/> and counting a different state, which is what the
+    /// plan round found undefined. A queue nobody drains is just a way to hold other people's turn,
+    /// so exceeding this is a 429 rather than a silent accept.
     /// </remarks>
     public int PerCallerQueued { get; } = perCallerQueued;
 
-    /// <inheritdoc cref="PerCallerQueued"/>
+    /// <summary>How many of one person's reviews may be on a vendor AT ONCE.</summary>
+    /// <remarks>
+    /// Exceeding this refuses nothing — it leaves the job queued until one of that caller's own
+    /// finishes. So a caller may hold 20 queued and 3 running, and jobs 4..20 are accepted and wait.
+    /// </remarks>
     public int PerCallerRunning { get; } = perCallerRunning;
 
     /// <summary>Accept a job, or say why not.</summary>
@@ -61,17 +75,14 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
             }
 
             _jobs[job.Id] = job;
-            Wake();
+            Wake(job.Id);
 
-            return (job, SubmitRefusal.None, PositionOf(job));
+            return (job, SubmitRefusal.None, Position(job));
         }
     }
 
     /// <summary>The job, if this caller owns it.</summary>
-    /// <remarks>
-    /// Ownership is checked HERE rather than in the endpoint, so there is no route that can read a
-    /// job without saying whose it is.
-    /// </remarks>
+    /// <remarks>Ownership is checked HERE, so no route can read a job without saying whose it is.</remarks>
     public JobRecord? Find(string id, string email)
     {
         lock (_gate)
@@ -94,28 +105,36 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
     {
         lock (_gate)
         {
-            return job.Status != JobStatus.Queued
-                ? 0
-                : 1 + _jobs.Values.Count(j =>
-                    j.Status == JobStatus.Queued
-                    && j.Vendor == job.Vendor
-                    && j.SubmittedUtc < job.SubmittedUtc);
+            return Position(job);
         }
     }
 
     /// <summary>
     /// Take the next job that may run on <paramref name="vendor"/>, moving it to Running atomically.
     /// </summary>
-    /// <returns>The claimed job, or null when there is nothing to start.</returns>
-    public JobRecord? TryClaim(string vendor, string slot, DateTimeOffset nowUtc)
+    /// <param name="ct">The host's token. The job's own token is linked to it and returned.</param>
+    /// <returns>The claimed job and the token its vendor process must observe, or null.</returns>
+    public (JobRecord Job, CancellationToken Token)? TryClaim(
+        string vendor, string slot, DateTimeOffset nowUtc, CancellationToken ct = default)
     {
         lock (_gate)
         {
+            // Counted ONCE, before filtering, rather than re-scanned for every candidate — the nested
+            // count made a dispatch tick quadratic in the number of jobs, under this lock. (Two
+            // reviewers, code round.)
+            var running = _jobs.Values
+                .Where(j => j.Status == JobStatus.Running)
+                .GroupBy(j => j.Email, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
             var candidate = _jobs.Values
                 .Where(j => j.Status == JobStatus.Queued && j.Vendor == vendor)
                 .Where(j => !JobTransitions.IsExpired(j, nowUtc))
-                .Where(j => _jobs.Values.Count(r => r.Email == j.Email && r.Status == JobStatus.Running) < PerCallerRunning)
+                .Where(j => running.GetValueOrDefault(j.Email) < PerCallerRunning)
                 .OrderBy(j => j.SubmittedUtc)
+                // Two submissions can share a timestamp; without a tie-break the order between them
+                // is whatever the dictionary happens to yield, which is not an order at all.
+                .ThenBy(j => j.Id, StringComparer.Ordinal)
                 .FirstOrDefault();
 
             if (candidate is null)
@@ -125,9 +144,11 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
 
             var started = JobTransitions.Start(candidate, slot, nowUtc);
             _jobs[started.Id] = started;
-            Wake();
+            var source = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            _running[started.Id] = source;
+            Wake(started.Id);
 
-            return started;
+            return (started, source.Token);
         }
     }
 
@@ -138,22 +159,21 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
         {
             if (_jobs.TryGetValue(job.Id, out var current) && current.IsTerminal)
             {
+                Release(job.Id);
+
                 return;
             }
 
             _jobs[job.Id] = job;
-            Wake();
+            Release(job.Id);
+            Wake(job.Id);
         }
     }
 
     /// <summary>
-    /// Withdraw a job. Returns the record if it was cancelled, null if there was nothing to cancel.
+    /// Withdraw a job, and stop it if it is running.
     /// </summary>
-    /// <remarks>
-    /// A QUEUED job is moved to Failed(cancelled) here and under the same lock <see cref="TryClaim"/>
-    /// uses, so it can never be dispatched afterwards. A RUNNING job is marked and its token is
-    /// signalled by the runner; the process dies and the runner writes the terminal state.
-    /// </remarks>
+    /// <returns>The cancelled record, or null if there was nothing to cancel.</returns>
     public JobRecord? Cancel(string id, string email, DateTimeOffset nowUtc)
     {
         lock (_gate)
@@ -165,7 +185,8 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
 
             var cancelled = JobTransitions.Fail(job, FailureKind.Cancelled, "cancelled by the caller", nowUtc);
             _jobs[id] = cancelled;
-            Wake();
+            Stop(id);
+            Wake(id);
 
             return cancelled;
         }
@@ -174,11 +195,12 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
     /// <summary>
     /// Expire what has run out of time, and forget what finished long enough ago.
     /// </summary>
-    /// <returns>The jobs that were expired, so the caller can stop their processes.</returns>
+    /// <returns>The jobs that were expired.</returns>
     /// <remarks>
-    /// Run on a timer rather than only when something happens: an event-driven deadline is only
-    /// checked when there is an event, so a running job whose deadline passes on an otherwise idle
-    /// server would keep going and keep spending. (Plan round.)
+    /// On a timer rather than on an event: an event-driven deadline is only checked when there is an
+    /// event, so a running job whose deadline passes on an otherwise idle server would keep going and
+    /// keep spending. Expiring a RUNNING job also stops its process — the record going terminal while
+    /// the CLI carries on is the failure this exists to prevent.
     /// </remarks>
     public IReadOnlyList<JobRecord> Sweep(DateTimeOffset nowUtc)
     {
@@ -189,6 +211,8 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
             {
                 _jobs[job.Id] = JobTransitions.Fail(
                     job, FailureKind.Cancelled, JobTransitions.ExpiryReason(job), nowUtc);
+                Stop(job.Id);
+                Wake(job.Id);
             }
 
             foreach (var old in _jobs.Values
@@ -196,42 +220,84 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
                 .ToList())
             {
                 _jobs.Remove(old.Id);
-            }
-
-            if (expired.Count > 0)
-            {
-                Wake();
+                _waiters.Remove(old.Id);
             }
 
             return expired;
         }
     }
 
-    /// <summary>Wait until any job changes, or <paramref name="wait"/> passes.</summary>
+    /// <summary>
+    /// Wait until THIS job changes, or <paramref name="wait"/> passes.
+    /// </summary>
     /// <remarks>
-    /// A <see cref="TaskCompletionSource"/>, not a sleep loop: an awaiting request occupies no thread
-    /// on Kestrel, which is what makes a 25-second poll cheap enough to be the normal way a client
-    /// watches a review.
+    /// A <see cref="TaskCompletionSource"/>, so an open poll occupies no thread. The registration and
+    /// the removal are both under the lock, and the removal is in a <c>finally</c> — a cancelled
+    /// request that skipped it left a waiter in the list until the next wake. (gemini, code round.)
     /// </remarks>
-    public async Task WaitForChangeAsync(TimeSpan wait, CancellationToken ct)
+    public async Task WaitForChangeAsync(string id, TimeSpan wait, CancellationToken ct)
     {
-        TaskCompletionSource waiter;
+        var waiter = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_gate)
         {
-            waiter = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            _waiters.Add(waiter);
+            if (!_waiters.TryGetValue(id, out var list))
+            {
+                _waiters[id] = list = [];
+            }
+
+            list.Add(waiter);
         }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(wait);
-        using (timeout.Token.Register(() => waiter.TrySetResult()))
+        try
         {
-            await waiter.Task;
+            using (timeout.Token.Register(() => waiter.TrySetResult()))
+            {
+                await waiter.Task;
+            }
         }
+        finally
+        {
+            lock (_gate)
+            {
+                if (_waiters.TryGetValue(id, out var list))
+                {
+                    list.Remove(waiter);
+                    if (list.Count == 0)
+                    {
+                        _waiters.Remove(id);
+                    }
+                }
+            }
+        }
+    }
 
+    /// <summary>Put a running job back in the queue, so another account can take it.</summary>
+    /// <remarks>
+    /// Used when the account said "rate limited" and a different one is free. The job keeps its
+    /// original queue deadline — a rotation must not extend how long an abandoned review can live —
+    /// and loses its run clock, because the run has not started yet.
+    /// </remarks>
+    public void Requeue(JobRecord job, string note)
+    {
         lock (_gate)
         {
-            _waiters.Remove(waiter);
+            if (!_jobs.TryGetValue(job.Id, out var current) || current.IsTerminal)
+            {
+                return;
+            }
+
+            _jobs[job.Id] = current with
+            {
+                Status = JobStatus.Queued,
+                Slot = string.Empty,
+                StartedUtc = null,
+                RunDeadlineUtc = null,
+                Reason = note,
+            };
+            Release(job.Id);
+            Wake(job.Id);
         }
     }
 
@@ -244,13 +310,46 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
         }
     }
 
-    private void Wake()
+    /// <summary>Called with the lock held.</summary>
+    private int Position(JobRecord job) =>
+        job.Status != JobStatus.Queued
+            ? 0
+            : 1 + _jobs.Values.Count(j =>
+                j.Status == JobStatus.Queued
+                && j.Vendor == job.Vendor
+                && (j.SubmittedUtc < job.SubmittedUtc
+                    || (j.SubmittedUtc == job.SubmittedUtc && string.CompareOrdinal(j.Id, job.Id) < 0)));
+
+    /// <summary>Called with the lock held: stop the vendor process, if there is one.</summary>
+    private void Stop(string id)
     {
-        foreach (var waiter in _waiters)
+        if (_running.Remove(id, out var source))
+        {
+            source.Cancel();
+            source.Dispose();
+        }
+    }
+
+    /// <summary>Called with the lock held: the job ended by itself, so nothing needs stopping.</summary>
+    private void Release(string id)
+    {
+        if (_running.Remove(id, out var source))
+        {
+            source.Dispose();
+        }
+    }
+
+    /// <summary>Called with the lock held.</summary>
+    private void Wake(string id)
+    {
+        if (!_waiters.TryGetValue(id, out var list))
+        {
+            return;
+        }
+
+        foreach (var waiter in list)
         {
             waiter.TrySetResult();
         }
-
-        _waiters.Clear();
     }
 }

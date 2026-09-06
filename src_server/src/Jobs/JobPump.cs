@@ -29,7 +29,7 @@ public sealed class JobPump(
             try
             {
                 Expire();
-                StartWhatCanRun(stoppingToken);
+                await StartWhatCanRunAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -67,16 +67,40 @@ public sealed class JobPump(
     /// given a continuation that logs. Back-pressure comes from the slot lock: while a job holds an
     /// account, the next tick finds nothing free and does nothing.
     /// </remarks>
-    private void StartWhatCanRun(CancellationToken ct)
+    /// <summary>Start everything that CAN start, without waiting for any of it to finish.</summary>
+    /// <remarks>
+    /// <para>Keeps pumping a vendor while it keeps saying yes. Starting one review per vendor per
+    /// tick meant a vendor with ten free accounts and a full queue started one a second and left
+    /// nine accounts idle — the tick became the throughput limit instead of the accounts.</para>
+    /// <para>The runs themselves are not awaited: a ten-minute review would otherwise stop every
+    /// other vendor's queue for ten minutes. Not fire-and-forget, though — each gets a continuation
+    /// that logs, because the one thing that starts work must not fail silently. Back-pressure is
+    /// the slot lock: `PumpAsync` returns false the moment no account is free, which is what ends
+    /// this loop.</para>
+    /// </remarks>
+    private async Task StartWhatCanRunAsync(CancellationToken ct)
     {
         foreach (var vendor in catalog.Current.Vendors)
         {
             var id = vendor.Id;
-            _ = runner.PumpAsync(id, ct).ContinueWith(
-                t => log.LogError(t.Exception, "starting a job for {Vendor} threw", id),
-                CancellationToken.None,
-                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
+            while (!ct.IsCancellationRequested && await CanStartAsync(id, ct))
+            {
+                // The loop body is empty on purpose: CanStartAsync did the starting.
+            }
         }
+    }
+
+    /// <summary>Claim and start one job, and say whether there might be another.</summary>
+    private async Task<bool> CanStartAsync(string vendorId, CancellationToken ct)
+    {
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var run = runner.PumpAsync(vendorId, ct, started);
+        _ = run.ContinueWith(
+            t => log.LogError(t.Exception, "running a job for {Vendor} threw", vendorId),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+        return await started.Task;
     }
 }

@@ -46,9 +46,14 @@ public static class JobId
             return MissingJob.Unknown;
         }
 
+        // The WHOLE shape must be one this server issues, not just a plausible prefix. `123-typo`
+        // has an old-looking epoch and would otherwise be reported as `lost` — the answer that tells
+        // an automated client its review died mid-flight and it should resubmit. Reporting that for
+        // an id nobody ever issued is how a typo turns into duplicate vendor spend. (codex, code round.)
         return long.TryParse(id![..dash], NumberStyles.None, CultureInfo.InvariantCulture, out var epoch)
             && epoch > 0
             && epoch < thisEpoch
+            && Guid.TryParseExact(id[(dash + 1)..], "N", out _)
                 ? MissingJob.Lost
                 : MissingJob.Unknown;
     }
