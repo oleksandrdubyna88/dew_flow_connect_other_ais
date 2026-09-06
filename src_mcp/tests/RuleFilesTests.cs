@@ -269,4 +269,24 @@ public sealed class RuleFilesTests : IDisposable
     /// <summary>Declares a submodule at <paramref name="path"/>, the way a consumer repository does.</summary>
     private void WriteMount(string path) =>
         Write(".gitmodules", $"[submodule \"{path}\"]\n\tpath = {path}\n\turl = https://example.invalid/rules.git\n");
+
+    [Fact]
+    public void ADozenRealRuleFiles_FitTheDefaultBudget()
+    {
+        // Measured on this repository on 2026-09-06: at the old 40 KB the bundle was 8 files with 19
+        // omitted, and the omissions were the rules findings are actually written against - testing,
+        // security, reuse-first, git-workflow, and all four language doctrines. The default is a
+        // budget rather than a promise (the family set is ~199 KB, and what does not fit is NAMED),
+        // but it must at least fit the shape of a real family repository rather than a third of it.
+        Write("CLAUDE.md", Filler("entry", 3_000));
+        for (var n = 0; n < 5; n++)
+        {
+            Write($".claude/rules/shared/common/rule-{n}.md", Filler($"rule {n}", 10_000));
+        }
+
+        var bundle = RuleFiles.Collect(_repo);
+
+        bundle.Files.Should().HaveCount(6, "55 KB of rules is not a big rule set");
+        bundle.Omitted.Should().BeEmpty();
+    }
 }

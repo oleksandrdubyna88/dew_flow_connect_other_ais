@@ -77,8 +77,19 @@ public static class RuleFiles
     private static readonly (string Dir, string Pattern)[] RuleFolders =
         [(".claude/rules", "*.md"), (".cursor/rules", "*.mdc"), (".cursor/rules", "*.md")];
 
-    /// <summary>Rules are text and a prompt is finite; 40 KB is about a dozen real rule files.</summary>
-    public const int DefaultBudgetBytes = 40_000;
+    /// <summary>
+    /// Rules are text and a prompt is finite. 60 KB is about a dozen real rule files.
+    /// </summary>
+    /// <remarks>
+    /// Raised from 40 KB on 2026-09-06, after measuring what this repository actually shows a
+    /// reviewer: at 40 KB it was 8 files and 19 omitted, and the omitted list included `testing.md`,
+    /// `security.md`, `reuse-first.md`, `git-workflow.md` and all four language doctrines — the rules
+    /// most findings are written against. At 60 KB it is 12 files and 15 omitted. The whole family
+    /// set is about 199 KB, so this is a budget, not a fix: what the budget cannot fit is NAMED in
+    /// the prompt (the bundle renders an "omitted for length" note) precisely so a reviewer cannot read an
+    /// absence as compliance.
+    /// </remarks>
+    public const int DefaultBudgetBytes = 60_000;
 
     /// <summary>Somebody else's conventions, vendored or generated, are not this project's rules.</summary>
     private static readonly string[] NotOurs =
