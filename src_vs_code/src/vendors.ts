@@ -30,6 +30,18 @@ export interface Vendor {
   /** OpenAI-compatible endpoint, for a vendor riding the Codex runtime. Empty = the CLI's own. */
   readonly baseUrl: string;
   /**
+   * For a `remote` row: the vendor id the TEAM SERVER knows it by.
+   *
+   * <p><b>Not this row's id, and that is the point.</b> A row is named `<server>-<vendor>` so that two
+   * Team servers each offering `codex` do not collide on one id — the id names the row, its usage
+   * history and its vault key. The server knows only `codex`, so sending the row id would be refused
+   * by every server and reported as a vendor it "does not offer", which reads exactly like a typo.
+   * <p>Optional, and absent means the row's own id — which is what every other runtime uses and
+   * what a hand-written row does. Required would have meant editing every existing fixture to
+   * add a field none of them has a value for.</p>
+   */
+  readonly remoteVendor?: string | undefined;
+  /**
    * Where this vendor's CLI is. Empty = look it up on PATH.
    *
    * <p>PATH is not always able to answer, and WSL is the case that proves it: `codex` resolves
@@ -210,6 +222,12 @@ export function vendorsFrom(value: unknown): Vendor[] {
       plan: v['plan'] !== false,
       code: v['code'] !== false,
       baseUrl: typeof v['baseUrl'] === 'string' ? v['baseUrl'].trim() : '',
+      // Only written when there IS one, so a codex row is byte-identical to what it always was —
+      // `coai.vendors` is JSON a person reads and edits, and a `"remoteVendor": ""` on every row
+      // is noise that means nothing.
+      ...(typeof v['remoteVendor'] === 'string' && v['remoteVendor'].trim().length > 0
+        ? { remoteVendor: v['remoteVendor'].trim().toLowerCase() }
+        : {}),
       executablePath: typeof v['executablePath'] === 'string' ? v['executablePath'].trim() : '',
       pricePerMillionIn: rate(v['pricePerMillionIn']),
       pricePerMillionOut: rate(v['pricePerMillionOut']),

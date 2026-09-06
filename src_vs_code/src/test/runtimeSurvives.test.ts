@@ -85,5 +85,5 @@ test('the runtime list and the runtime type are one declaration', () => {
   const asType: readonly Runtime[] = RUNTIMES;
 
   assert.ok(asType.includes('local'));
-  assert.deepEqual([...RUNTIMES].sort(), ['antigravity', 'claude', 'codex', 'gemini', 'local']);
+  assert.deepEqual([...RUNTIMES].sort(), ['antigravity', 'claude', 'codex', 'gemini', 'local', 'remote']);
 });
