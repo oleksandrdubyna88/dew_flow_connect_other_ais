@@ -9,7 +9,17 @@ namespace CoaiMcp.Runners.Reviewers;
 /// belong to a LAUNCH — <see cref="ReviewerSettings"/> carries those to <c>Build</c> — and widening
 /// an identity past what its consumers use is how a type starts meaning two things.
 /// </remarks>
-public readonly record struct VendorIdentity(string Provider, string Runtime, string BaseUrl);
+/// <param name="RemoteVendor">
+/// For a <c>remote</c> vendor: the id its TEAM SERVER knows it by, which is not this row's id — a row
+/// is <c>&lt;server&gt;-&lt;vendor&gt;</c> so two servers offering the same vendor do not collide.
+/// Empty falls back to <paramref name="Provider"/>, which is also what every non-remote vendor uses.
+/// </param>
+public readonly record struct VendorIdentity(
+    string Provider, string Runtime, string BaseUrl, string RemoteVendor = "")
+{
+    /// <summary>The name to send to a Team server, or to look up in its catalog.</summary>
+    public string VendorOnServer => RemoteVendor.Length > 0 ? RemoteVendor : Provider;
+}
 
 /// <summary>
 /// What a configured vendor IS: which runtime it drives, the adapter for it, and how it
@@ -65,7 +75,7 @@ public static class RuntimeResolution
     public static IReviewerRuntime? For(VendorIdentity vendor) => NameOf(vendor) switch
     {
         "local" => new LocalRuntime(vendor.Provider, vendor.BaseUrl),
-        "remote" => new RemoteRuntime(vendor.Provider, vendor.BaseUrl),
+        "remote" => new RemoteRuntime(vendor.Provider, vendor.BaseUrl, vendor.VendorOnServer),
         "codex" when vendor.BaseUrl.Length > 0 => new CustomCodexRuntime(vendor.Provider, vendor.BaseUrl),
         // An EXPLICIT runtime outranks the id, and that order is the fix for a real defect: the id
         // was consulted first, so a vendor called `claude` worked by accident while `my-claude` —

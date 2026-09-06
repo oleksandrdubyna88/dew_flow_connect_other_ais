@@ -19,6 +19,19 @@ public sealed record ProviderSettings(string Provider)
     /// <summary>An OpenAI-compatible endpoint, for a vendor riding the Codex CLI. Empty = built in.</summary>
     public string BaseUrl { get; init; } = string.Empty;
 
+    /// <summary>
+    /// For a <c>remote</c> row: the vendor id the TEAM SERVER knows it by.
+    /// </summary>
+    /// <remarks>
+    /// <b>Not this row's id, and that is the whole point.</b> A row is named
+    /// <c>&lt;server&gt;-&lt;vendor&gt;</c> so two Team servers each offering <c>codex</c> do not collide on
+    /// one id — the id names the row, its usage history and its vault key. But the SERVER only knows
+    /// <c>codex</c>, so sending the row id as <c>--vendor</c> would be refused by every server, and the
+    /// health probe would report a vendor the server "does not offer". Empty falls back to the row id,
+    /// so a row written by hand still behaves as it reads.
+    /// </remarks>
+    public string RemoteVendor { get; init; } = string.Empty;
+
     /// <summary>Whether this vendor reviews plans.</summary>
     public bool Plan { get; init; } = true;
 
@@ -445,6 +458,7 @@ public sealed record PanelSettings
                         Runtime = RuntimeOf(v.Runtime),
                         Model = v.Model?.Trim() ?? string.Empty,
                         BaseUrl = v.BaseUrl?.Trim() ?? string.Empty,
+                        RemoteVendor = v.RemoteVendor?.Trim().ToLowerInvariant() ?? string.Empty,
                         ExecutablePath = v.ExecutablePath?.Trim() ?? string.Empty,
                         // Absent is TRUE on both, so a vendor list written by an older extension
                         // keeps reviewing both stages rather than silently reviewing neither.
@@ -556,5 +570,5 @@ public sealed record PanelSettings
 public static class ProviderIdentity
 {
     public static Runners.Reviewers.VendorIdentity Identity(this ProviderSettings provider) =>
-        new(provider.Provider, provider.Runtime, provider.BaseUrl);
+        new(provider.Provider, provider.Runtime, provider.BaseUrl, provider.RemoteVendor);
 }

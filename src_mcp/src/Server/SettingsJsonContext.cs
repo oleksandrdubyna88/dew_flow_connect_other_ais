@@ -26,7 +26,9 @@ internal sealed record VendorDto(
     string? BaseUrl,
     string? ExecutablePath = null,
     bool? Plan = null,
-    bool? Code = null);
+    bool? Code = null,
+    /// <summary>For a `remote` row: the vendor id the TEAM SERVER knows, which is not this row's id.</summary>
+    string? RemoteVendor = null);
 
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(List<VendorDto>))]

@@ -58,13 +58,13 @@ public sealed class RemoteProbe(HttpClient http, Func<DateTime>? utcNow = null)
 
         // The token is part of the cache key — as a hash, and only so that signing in again is not
         // held behind a backoff earned by the token that was replaced.
-        var key = $"{server} {vendor.Provider} {TeamServerAuth.Fingerprint(token)}";
+        var key = $"{server} {vendor.VendorOnServer} {TeamServerAuth.Fingerprint(token)}";
         if (Remembered(key) is { } fresh)
         {
             return fresh;
         }
 
-        var (health, ok) = await AskAsync(server, vendor.Provider, token, enabled, ct);
+        var (health, ok) = await AskAsync(server, vendor.VendorOnServer, token, enabled, ct);
 
         return Remember(key, health, ok);
     }
