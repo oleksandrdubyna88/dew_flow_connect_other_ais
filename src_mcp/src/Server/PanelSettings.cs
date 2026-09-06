@@ -458,7 +458,10 @@ public sealed record PanelSettings
                         Runtime = RuntimeOf(v.Runtime),
                         Model = v.Model?.Trim() ?? string.Empty,
                         BaseUrl = v.BaseUrl?.Trim() ?? string.Empty,
-                        RemoteVendor = v.RemoteVendor?.Trim().ToLowerInvariant() ?? string.Empty,
+                        // NOT lower-cased, unlike the row's own id: this is the SERVER's spelling
+                        // of its vendor, and a catalog that says `DeepSeek` matches `DeepSeek`. The
+                        // row id is ours to normalise; this one is not. Caught on the code round.
+                        RemoteVendor = v.RemoteVendor?.Trim() ?? string.Empty,
                         ExecutablePath = v.ExecutablePath?.Trim() ?? string.Empty,
                         // Absent is TRUE on both, so a vendor list written by an older extension
                         // keeps reviewing both stages rather than silently reviewing neither.

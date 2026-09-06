@@ -86,6 +86,7 @@ import {
 import {
   TeamServer,
   canonicalTeamServerUrl,
+  isUsableVendorId,
   newTeamServerId,
   remoteVendorRowId,
   teamServersFrom,
@@ -146,6 +147,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   /** The last catalog each server managed to answer with, and what has gone wrong since. */
   /** When each server was last asked what it offers. */
   private teamCheckedAt = 0;
+
+  /** One refresh at a time: a second would race the first for the same `catalogs` entries. */
+  private refreshing = false;
+
+  /** What each server is in the middle of, so the row can say so and its buttons can stop. */
+  private busy: Readonly<Record<string, string>> = {};
 
   private catalogs: Record<string, {
     catalog?: Catalog | undefined;
@@ -952,6 +959,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // Only an admin is ever shown the control, and the SERVER refuses `company` for anybody
         // else — so this is a display preference, not a permission.
         this.usageScope = this.usageScope === 'me' ? 'company' : 'me';
+        // The cached totals are the OTHER scope's. Without this the button flips, the label says
+        // "the whole company", and the figures underneath are still that one person's — for up to a
+        // minute, with nothing saying so. Caught on the code round.
+        this.teamCheckedAt = 0;
         await this.render();
         break;
       default: {
@@ -1139,6 +1150,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         usage: known?.usage,
         problem: known?.problem ?? '',
         stale: known?.stale ?? false,
+        busy: this.busy[server.id] ?? '',
       };
     });
   }
@@ -1264,14 +1276,28 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    // Sign-in awaits four requests and a Microsoft prompt. Without a visible in-progress state the
+    // row still reads "Not signed in" throughout, the button stays pressable, and a person cannot
+    // tell a slow sign-in from one that did nothing — so they press it again. Caught on the code
+    // round.
+    this.busy = { ...this.busy, [server.id]: 'Signing in…' };
+    await this.render();
+    try {
+      await this.signInAndTell(server);
+    } finally {
+      const { [server.id]: _done, ...rest } = this.busy;
+      this.busy = rest;
+      await this.render();
+    }
+  }
+
+  private async signInAndTell(server: TeamServer): Promise<void> {
     const result = await signIn(server, this.authHost());
     if (result.ok) {
       await this.refreshCatalog(server);
     } else {
       void vscode.window.showWarningMessage(result.message);
     }
-
-    await this.render();
   }
 
   private async signOutTeamServer(id: string): Promise<void> {
@@ -1326,8 +1352,13 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    // Signed out FIRST, so the session is ended ON the server rather than left running there.
-    await signOut(server, this.authHost(), await readToken(coaiDataDir(), server.url));
+    // Signed out FIRST, so the session is ended ON the server rather than left running there. Its
+    // failure is SHOWN: a token file that survived removal is a credential nobody is watching for.
+    const gone = await signOut(server, this.authHost(), await readToken(coaiDataDir(), server.url));
+    if (!gone.ok) {
+      void vscode.window.showWarningMessage(gone.message);
+    }
+
     delete this.catalogs[server.id];
 
     await config.update(
@@ -1345,7 +1376,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   }
 
   /** Ask one server what it offers and what has been spent on it, and remember both. */
-  private async refreshCatalog(server: TeamServer): Promise<void> {
+  private async refreshCatalog(server: TeamServer, renewalProblem = ''): Promise<void> {
     const token = await readToken(coaiDataDir(), server.url);
     if (token.length === 0) {
       return;
@@ -1361,10 +1392,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // sets it is only rendered for one — so this can only ask for what it is allowed.
       this.usageScope,
     );
+    // A renewal that failed is reported even when the catalog call SUCCEEDED, because the old token
+    // stays valid for up to two days: without this the panel looked healthy right until reviews
+    // started failing with a 401 nobody had been warned about. Caught on the code round.
+    const problem = answer.ok ? renewalProblem : answer.message;
     this.catalogs[server.id] = {
       catalog: answer.ok ? answer.value : known?.catalog,
       usage: spent.ok ? spent.value : known?.usage,
-      problem: answer.ok ? '' : answer.message,
+      // A usage call that failed is not silence either — it would otherwise render as "nothing
+      // recorded on this server", which is a measurement, not an absence of one.
+      problem: problem.length > 0 ? problem : (spent.ok ? '' : spent.message),
       stale: answer.ok ? false : known?.catalog !== undefined,
     };
   }
@@ -1382,15 +1419,27 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    this.teamCheckedAt = Date.now();
     const servers = this.teamServers(vscode.workspace.getConfiguration('coai'));
-    if (servers.length === 0) {
+    if (servers.length === 0 || this.refreshing) {
       return;
     }
 
-    for (const server of servers) {
-      await renewIfDue(server, this.authHost());
-      await this.refreshCatalog(server);
+    // Servers are independent, and asked CONCURRENTLY. Serially, one unreachable server spent its
+    // full deadline before the next was even tried, so five of them could keep every healthy one
+    // showing "asking what it offers…" for a minute. `allSettled`, because one server failing is
+    // that server's problem and not the others'.
+    this.refreshing = true;
+    try {
+      await Promise.allSettled(servers.map(async (server) => {
+        const renewal = await renewIfDue(server, this.authHost());
+        await this.refreshCatalog(server, renewal !== undefined && !renewal.ok ? renewal.message : '');
+      }));
+    } finally {
+      // Stamped when the work FINISHED, not when it started. Stamping at entry meant a run that
+      // took longer than the freshness window was immediately fresh-expired by its own closing
+      // render — a refresh loop that never idles. Caught on the code round.
+      this.teamCheckedAt = Date.now();
+      this.refreshing = false;
     }
 
     await this.render();
@@ -1415,7 +1464,20 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return undefined;
     }
 
-    const offered = answer.value.vendors ?? [];
+    // A catalog is a STRANGER'S answer. An id like `../../other` would otherwise be copied verbatim
+    // into a reviewer row id — which names that row's spending history and its vault key — and onto
+    // a command line as `--vendor`. Entries that cannot be an id are dropped and said out loud
+    // rather than silently, because a vendor going missing needs a reason. Caught on the code round.
+    const usable = (answer.value.vendors ?? []).filter((v) => isUsableVendorId(v.id));
+    const refused = (answer.value.vendors ?? []).length - usable.length;
+    if (refused > 0) {
+      void vscode.window.showWarningMessage(
+        `${server.name} offered ${refused} vendor(s) whose name this extension will not use as an `
+          + 'id. They are not listed.',
+      );
+    }
+
+    const offered = usable;
     if (offered.length === 0) {
       void vscode.window.showWarningMessage(
         `${server.name} offers no vendors yet — the operator has not added any accounts to it.`,

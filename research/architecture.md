@@ -34,6 +34,7 @@ C4Container
   Rel(mcp, ext, "loopback: settings, round events, escalation")
   Rel(dev, ext, "configures, answers escalations")
   Rel(ext, srv, "Microsoft sign-in, then a session token")
+  Rel(ext, mcp, "writes the Team server token file the shim reads")
   Rel(mcp, srv, "a review, when the reviewer is a Team server's")
   Rel(srv, codex, "spawn, one signed-in account per slot")
 ```
@@ -47,9 +48,26 @@ C4Container
 | Reviewer runners (worktrees, scheduler, vendors) | [module_runners.md](module_runners.md) | **shipped 2026-08-31** |
 | `coai-mcp` server | [module_server.md](module_server.md) | **shipped 2026-08-31** |
 | VS Code extension | [module_extension.md](module_extension.md) | **shipped 2026-08-31** (escalation loopback deferred) |
-| Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [../todo/PLAN_team_server.md](../todo/PLAN_team_server.md) | **epic 2 complete, 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots, `login`, the job queue with the review endpoints, and per-person usage with the admin company view; every route has an `http/` contract. The panel is epic 3, the container and release epic 4 |
+| Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [../todo/PLAN_team_server.md](../todo/PLAN_team_server.md) | **epics 1–3 complete, 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots, `login`, the job queue with the review endpoints, and per-person usage with the admin company view; every route has an `http/` contract. The client runtime (`remote`, `--ask-remote`) and the panel's *Team servers* section, add-a-reviewer and spending block are in. The container, the host edge and the release are epic 4; the per-PERSON spending view is [../todo/PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md) |
 | Measurement bench (`coai-bench`) | [module_bench.md](module_bench.md) · [../src_bench/README.md](../src_bench/README.md) | **shipped 2026-09-04** — drives the published server over stdio, records whole, judges separately |
 | Tests: the harness, its flows, its gaps | [module_tests.md](module_tests.md) | **recorded 2026-09-06** — three suites in-repo, the flow catalogue derived from the tool registry, and the two gaps named (no extension host, no real vendor in CI) |
+
+## The one interface neither container owns (2026-09-06)
+
+The Team-server **token file** is written by the extension and read by `coai-mcp`, and neither is the
+other's caller — they meet only at a path. Both derive that path independently: TypeScript's `URL`
+in `teamServers.ts`, .NET's `Uri` in `TeamServerAuth.cs`, hashed to
+`<dataDir>/servers/<sha256(canonicalUrl)[..16]>.token`.
+
+Isolated tests on each side cannot see a divergence, because each side is self-consistent. The
+failure appears only as somebody signing in successfully and being told they are not signed in one
+second later. So the vectors live in `shared/team-server-url-vectors.json`, outside both
+implementations, and **both suites assert them** — 38 C# assertions and their TypeScript twins.
+
+The same shape governs `remoteVendor`: the row id is `<serverId>-<vendor>` because it must be unique
+across servers, while `--vendor` must carry the SERVER's own spelling. Two names for one thing, and
+the moment either side normalises the wrong one, every review on that server is refused as a vendor
+it "does not offer".
 
 ## Cross-cutting decisions already in force
 

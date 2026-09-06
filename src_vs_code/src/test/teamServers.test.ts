@@ -6,6 +6,7 @@ import {
   applicationIdOf,
   canonicalTeamServerUrl,
   isSafeAdvertisedScope,
+  isUsableVendorId,
   newTeamServerId,
   noProviderMessage,
   offerableProviders,
@@ -162,4 +163,37 @@ test('a server offering nothing we can do says which ones it offered', () => {
 
   assert.ok(said.includes('google'), 'naming what it offered is what makes it actionable');
   assert.ok(said.includes('microsoft'));
+});
+
+test('a vendor id a SERVER sent is checked before it becomes an id here', () => {
+  // A catalog is a stranger's answer, and this id lands in a reviewer row id — which names that
+  // row's spending history and its vault key — and on a command line as `--vendor`. Caught on the
+  // code round.
+  for (const good of ['codex', 'DeepSeek', 'gpt-oss', 'claude.opus', 'a', 'A1_b-c.d']) {
+    assert.strictEqual(isUsableVendorId(good), true, `refused ${good}`);
+  }
+
+  for (const bad of [
+    '../../other',
+    '..',
+    '/etc/passwd',
+    'a/b',
+    'a\b',
+    'has space',
+    '-leading-dash',
+    '.leading-dot',
+    '',
+    'x'.repeat(65),
+    undefined,
+    42,
+    null,
+  ]) {
+    assert.strictEqual(isUsableVendorId(bad), false, `accepted ${String(bad)}`);
+  }
+});
+
+test('a server’s own spelling of its vendor is kept, not lower-cased', () => {
+  // Both parsers used to lower-case it, so a catalog saying `DeepSeek` produced `--vendor deepseek`
+  // and the server answered that it offers no such vendor. Caught on the code round.
+  assert.strictEqual(isUsableVendorId('DeepSeek'), true);
 });

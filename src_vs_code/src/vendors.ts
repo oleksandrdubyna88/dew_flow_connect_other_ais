@@ -226,7 +226,11 @@ export function vendorsFrom(value: unknown): Vendor[] {
       // `coai.vendors` is JSON a person reads and edits, and a `"remoteVendor": ""` on every row
       // is noise that means nothing.
       ...(typeof v['remoteVendor'] === 'string' && v['remoteVendor'].trim().length > 0
-        ? { remoteVendor: v['remoteVendor'].trim().toLowerCase() }
+        // NOT lower-cased: this is the SERVER's own spelling of its vendor id, and a server whose
+        // catalog says `DeepSeek` matches `DeepSeek`. Lower-casing it here (and again in the C#
+        // parser) would have had every such vendor refused as one the server "does not offer".
+        // Caught on the code round.
+        ? { remoteVendor: v['remoteVendor'].trim() }
         : {}),
       executablePath: typeof v['executablePath'] === 'string' ? v['executablePath'].trim() : '',
       pricePerMillionIn: rate(v['pricePerMillionIn']),

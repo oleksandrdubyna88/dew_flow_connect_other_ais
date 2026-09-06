@@ -98,6 +98,18 @@ export function newTeamServerId(name: string, existing: readonly string[]): stri
   }
 }
 
+/**
+ * Whether a vendor id a SERVER sent may be used as one here.
+ *
+ * <p>The catalog is a stranger's answer. An id like `../../other` would otherwise be copied verbatim
+ * into a reviewer row id — which the panel documents as naming that row's spending history and its
+ * vault key — and into `--vendor` on a command line. So it is checked against the shape a vendor id
+ * can actually have, before it becomes any of those. Raised on the code round.</p>
+ */
+export function isUsableVendorId(id: unknown): id is string {
+  return typeof id === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id);
+}
+
 /** The reviewer row id for one vendor on one server. Both halves matter — see {@link TeamServer.id}. */
 export function remoteVendorRowId(serverId: string, remoteVendor: string): string {
   return `${serverId}-${remoteVendor}`.toLowerCase();

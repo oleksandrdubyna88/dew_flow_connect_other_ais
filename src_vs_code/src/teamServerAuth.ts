@@ -40,6 +40,11 @@ export function signedInKey(serverId: string): string {
   return `${STATE_PREFIX}${serverId}`;
 }
 
+/** Which Microsoft application this machine has approved for one server. */
+export function trustedKey(serverId: string): string {
+  return `${STATE_PREFIX}${serverId}:trusted`;
+}
+
 /**
  * Whether a session is close enough to expiry to renew it quietly.
  *
@@ -66,12 +71,17 @@ export function needsRenewal(expiresUtc: string, nowMs: number): boolean {
 export async function writeToken(dataDir: string, url: string, token: string): Promise<void> {
   const folder = join(dataDir, 'servers');
   await mkdir(folder, { recursive: true });
+  // The DIRECTORY is closed before the token is written into it, not after: restricting it
+  // afterwards leaves a window in which the file exists under a directory anybody could list.
+  if (process.platform !== 'win32') {
+    await chmod(folder, 0o700).catch(() => undefined);
+  }
+
   const path = join(folder, tokenFileName(url));
   await writeFile(path, token, { mode: 0o600 });
   if (process.platform !== 'win32') {
     // `mode` on writeFile only applies when the file is CREATED, so a token replacing an older one
     // would otherwise keep whatever mode that one had.
-    await chmod(folder, 0o700);
     await chmod(path, 0o600);
   }
 }
@@ -154,6 +164,19 @@ export async function signIn(
   }
 
   const scope = config.value.microsoftScope;
+  const trusted = host.state.get<string>(trustedKey(server.id));
+  if (!interactive && trusted !== applicationIdOf(scope)) {
+    // A background renewal must never mint a token for an application the person has not seen. A
+    // server that changed its advertised scope would otherwise have had one minted and posted to it
+    // silently — the confirmation was guarded on `interactive`, so renewal skipped it entirely.
+    // Caught on the code round.
+    return {
+      ok: false,
+      message: `${server.name} is now asking for a different Microsoft application than the one you `
+        + 'approved. Sign in again to review and approve it.',
+    };
+  }
+
   if (interactive && !(await confirmedOnce(server, scope, host))) {
     return { ok: false, message: `${server.name}: sign-in cancelled.` };
   }
@@ -203,7 +226,7 @@ export async function signIn(
  * on every sign-in trains people to click through it.</p>
  */
 async function confirmedOnce(server: TeamServer, scope: string, host: AuthHost): Promise<boolean> {
-  const key = `${signedInKey(server.id)}:trusted`;
+  const key = trustedKey(server.id);
   const application = applicationIdOf(scope);
   if (host.state.get<string>(key) === application) {
     return true;
@@ -240,10 +263,11 @@ export async function signOut(
   host: AuthHost,
   token: string,
 ): Promise<{ readonly ok: boolean; readonly message: string }> {
-  if (token.length > 0) {
-    await deleteSession(server.url, token, host.fetchImpl);
-  }
-
+  // Best effort, and the local half runs regardless: a server that is down must not be able to keep
+  // somebody signed in on this machine. What is NOT swallowed is whether it worked — the caller says
+  // so, because a session left live on the server is a fact the person should hear even though the
+  // remedy is the server's expiry rather than anything they can press.
+  const revoked = token.length === 0 || (await deleteSession(server.url, token, host.fetchImpl)).ok;
   await host.state.update(signedInKey(server.id), undefined);
 
   try {
@@ -259,7 +283,13 @@ export async function signOut(
     };
   }
 
-  return { ok: true, message: `${server.name}: signed out.` };
+  return revoked
+    ? { ok: true, message: `${server.name}: signed out.` }
+    : {
+      ok: false,
+      message: `${server.name}: signed out on this machine, but the server could not be reached to `
+        + 'end the session there. It will expire on its own; nothing on this machine can use it.',
+    };
 }
 
 /**

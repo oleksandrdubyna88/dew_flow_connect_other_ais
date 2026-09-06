@@ -5,6 +5,7 @@ import {
   usageScopeControl,
 } from './teamServerView';
 import { canonicalTeamServerUrl } from './teamServers';
+import { escapeHtml } from './escapeHtml';
 import { CoaiSettings } from './settingsShape';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
@@ -331,7 +332,15 @@ function allowedModelsFor(vendor: Vendor, servers: readonly TeamServerState[]): 
   const server = servers.find((s) => canonicalTeamServerUrl(s.server.url) === url);
   const named = vendor.remoteVendor ?? vendor.id;
 
-  return (server?.catalog?.vendors ?? []).find((v) => v.id === named)?.models ?? [];
+  if (server?.catalog === undefined) {
+    // NOT an empty allowlist. An empty one means "this server no longer offers your model", and
+    // `modelsFor` would then mark every remote row's saved model as withdrawn — on every reload,
+    // before the first fetch has landed, and for as long as a server stays unreachable. A person
+    // would read that as their configuration having been dropped. Caught on the code round.
+    return [vendor.model];
+  }
+
+  return (server.catalog.vendors ?? []).find((v) => v.id === named)?.models ?? [];
 }
 
 function vendorCard(
@@ -911,13 +920,10 @@ function labelled(forId: string, text: string, key: HelpKey): string {
 }
 
 /** Every value here came from a file or a person; none of it may become markup. */
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+// Re-exported so every existing importer keeps working; the function itself lives in its own module
+// now, because `teamServerView` also builds markup and importing it from here would be a cycle —
+// which is exactly why a private fourth copy appeared. See `escapeHtml.ts`.
+export { escapeHtml } from './escapeHtml';
 
 const CSS = `
   /* Everything measures its own border and padding: without this a 100% field plus padding is
