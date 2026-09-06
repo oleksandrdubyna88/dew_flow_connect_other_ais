@@ -164,9 +164,8 @@ internal static class Program
     /// find out what happened must not be the one that dies.
     /// </remarks>
     internal static bool Unreadable(Exception e) =>
-        e is Microsoft.Data.Sqlite.SqliteException or IOException or UnauthorizedAccessException
-            or DllNotFoundException
-        || (e is TypeInitializationException { InnerException: { } inner } && Unreadable(inner));
+        Chain(e).Any(one => one is Microsoft.Data.Sqlite.SqliteException or IOException
+            or UnauthorizedAccessException or DllNotFoundException);
 
     /// <summary>What to say about it — and, for the missing library, what to do about it.</summary>
     internal static string WhyUnreadable(Exception e) =>
@@ -176,12 +175,27 @@ internal static class Program
             : $"the rounds database could not be read: {e.Message}";
 
     /// <summary>The name the loader could not find, or nothing when this is a different fault.</summary>
-    private static string? Missing(Exception e) => e switch
+    private static string? Missing(Exception e) =>
+        Chain(e).Any(one => one is DllNotFoundException) ? "e_sqlite3" : null;
+
+    /// <summary>
+    /// An exception and every one it wraps.
+    /// </summary>
+    /// <remarks>
+    /// The WHOLE chain, because the interesting fault is never on top and the layers between are not
+    /// ours to predict. Measured on the published 0.18.2 binary with its library removed:
+    /// <c>TypeInitializationException</c> wraps <c>TargetInvocationException</c> wraps
+    /// <c>DllNotFoundException</c> - and the first version of this code knew only the first and the
+    /// last, so it recursed into a type it did not recognise, stopped, and let the crash through. The
+    /// test that was supposed to prove otherwise had built the chain by hand without the middle layer.
+    /// </remarks>
+    private static IEnumerable<Exception> Chain(Exception e)
     {
-        DllNotFoundException => "e_sqlite3",
-        TypeInitializationException { InnerException: { } inner } => Missing(inner),
-        _ => null,
-    };
+        for (var one = e; one is not null; one = one.InnerException)
+        {
+            yield return one;
+        }
+    }
 
     /// <summary>`--log --limit 50`, or the default. A number nobody can read is the default too.</summary>
     internal static int Limit(string[] args)
