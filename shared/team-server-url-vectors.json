@@ -1,0 +1,101 @@
+{
+  "$comment": [
+    "Golden vectors for ONE canonical spelling of a Team server URL, and the file its token lives in.",
+    "",
+    "Both halves of this product derive these independently — `TeamServerAuth` in C#",
+    "(src_mcp/runners/Reviewers/TeamServerAuth.cs) and `teamServers.ts` in the extension — because the",
+    "extension WRITES the token file and the MCP shim READS it. They must agree exactly. If they do not,",
+    "a person signs in successfully and is told they are not signed in one second later, signs in again,",
+    "and it happens again: the extension wrote a1b2....token and the shim looked for c3d4....token.",
+    "",
+    "Isolated unit tests on each side cannot catch that, because each side is self-consistent. Only a",
+    "shared fixture can, which is why this file exists outside both of them and is asserted by both",
+    "suites. Raised twice on the plan round of epic 3 (codex and gemini, independently).",
+    "",
+    "`fingerprint` is the first 16 hex characters of sha256(canonical), lower-case. The token file is",
+    "`<dataDir>/servers/<fingerprint>.token`."
+  ],
+  "vectors": [
+    {
+      "why": "the pair that motivated this — the panel saves a trailing slash, a vendor row usually has none",
+      "inputs": [
+        "https://coai.example.com",
+        "https://coai.example.com/",
+        "https://coai.example.com///"
+      ],
+      "canonical": "https://coai.example.com",
+      "fingerprint": "0ac377feb52b33a9"
+    },
+    {
+      "why": "a default port is not part of the identity; the same server written both ways is one server",
+      "inputs": [
+        "https://coai.example.com:443",
+        "https://coai.example.com:443/"
+      ],
+      "canonical": "https://coai.example.com",
+      "fingerprint": "0ac377feb52b33a9"
+    },
+    {
+      "why": "scheme and host are case-insensitive by the URL spec, so two spellings are one server",
+      "inputs": [
+        "HTTPS://COAI.EXAMPLE.COM/",
+        "Https://Coai.Example.Com"
+      ],
+      "canonical": "https://coai.example.com",
+      "fingerprint": "0ac377feb52b33a9"
+    },
+    {
+      "why": "http keeps its own default port rule, and is a DIFFERENT server from the https one",
+      "inputs": [
+        "http://coai.example.com",
+        "http://coai.example.com:80/"
+      ],
+      "canonical": "http://coai.example.com",
+      "fingerprint": "b17688b3937ac17b"
+    },
+    {
+      "why": "a NON-default port is part of the identity: two servers on one host are two servers",
+      "inputs": [
+        "https://coai.example.com:8443",
+        "https://coai.example.com:8443/"
+      ],
+      "canonical": "https://coai.example.com:8443",
+      "fingerprint": "1a6787b12c1436e1"
+    },
+    {
+      "why": "a path is part of the identity — a server may legitimately live under one",
+      "inputs": [
+        "https://host/team",
+        "https://host/team/"
+      ],
+      "canonical": "https://host/team",
+      "fingerprint": "89cd7d95388acac1"
+    },
+    {
+      "why": "surrounding whitespace is a typing artefact, never part of a URL",
+      "inputs": [
+        "  https://coai.example.com  ",
+        "\thttps://coai.example.com\n"
+      ],
+      "canonical": "https://coai.example.com",
+      "fingerprint": "0ac377feb52b33a9"
+    },
+    {
+      "why": "not a URL at all: trimmed and lower-cased rather than thrown, because this runs while building a command line and a bad URL should fail at the REQUEST with a sentence, not here with a stack trace",
+      "inputs": [
+        "not a url at all"
+      ],
+      "canonical": "not a url at all",
+      "fingerprint": "a9cf7bdc1fe733c8"
+    },
+    {
+      "why": "empty stays empty — the caller decides what an unset server URL means",
+      "inputs": [
+        "",
+        "   "
+      ],
+      "canonical": "",
+      "fingerprint": "e3b0c44298fc1c14"
+    }
+  ]
+}
