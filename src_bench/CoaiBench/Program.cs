@@ -225,14 +225,7 @@ public static class Program
     }
 
     /// <summary>One line per run as the judgement walks the file, saying which ones it paid for.</summary>
-    private static void Announce(RunRecord run, bool judgedNow)
-    {
-        var counted = run.Stages.SelectMany(s => s.Findings).ToList();
-        Console.WriteLine(
-            $"{run.Arm,-22} {run.Case.Name,-34} #{run.Repeat} "
-            + $"{counted.Count(f => f.Useful == "yes")}/{counted.Count} worth having"
-            + (judgedNow ? "" : "   (kept - already judged)"));
-    }
+    private static void Announce(RunRecord run, bool judgedNow) => Console.WriteLine(JudgePass.Line(run, judgedNow));
 
     private static async Task<int> TableAsync(Options options, CancellationToken ct)
     {

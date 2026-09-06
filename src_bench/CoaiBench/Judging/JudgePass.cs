@@ -46,6 +46,23 @@ public static class JudgePass
         return judged;
     }
 
+    /// <summary>
+    /// The one line a run gets as the pass walks the file.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than at the call site because it is the only thing a person watching a judgement
+    /// actually reads, and because a pass that skips a run has to SAY so - a silent skip and a fast
+    /// judgement look identical from the outside, and the difference is whether anything was paid for.
+    /// </remarks>
+    public static string Line(RunRecord run, bool judgedNow)
+    {
+        var counted = run.Stages.SelectMany(stage => stage.Findings).ToList();
+
+        return $"{run.Arm,-22} {run.Case.Name,-34} #{run.Repeat} "
+            + $"{counted.Count(finding => finding.Useful == "yes")}/{counted.Count} worth having"
+            + (judgedNow ? "" : "   (kept - already judged)");
+    }
+
     /// <summary>Whether this judge has an opinion on this run yet.</summary>
     public static bool NeedsJudging(RunRecord run, string model) => run.JudgedBy != model;
 }

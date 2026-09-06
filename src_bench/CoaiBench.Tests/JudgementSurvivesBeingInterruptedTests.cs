@@ -2,6 +2,7 @@ using Xunit;
 using FluentAssertions;
 using CoaiBench.Judging;
 using CoaiBench.Model;
+using CoaiBench.Store;
 
 namespace CoaiBench.Tests;
 
@@ -93,5 +94,45 @@ public sealed class JudgementSurvivesBeingInterruptedTests
             TestContext.Current.CancellationToken);
 
         asked.Should().Equal(["codex", "gemini"]);
+    }
+
+    [Fact]
+    public async Task ASaveLeavesNoHalfWrittenFileBehind()
+    {
+        // The file is now rewritten after EVERY run, so there is a reader arriving mid-write where
+        // there was none: the table verb, or a person watching a campaign. It is written beside
+        // itself and moved over, so what a reader opens is always a whole file.
+        var dir = Directory.CreateTempSubdirectory("coai-save-").FullName;
+        var file = Path.Combine(dir, "deeper", "runs.json");
+
+        try
+        {
+            await RunStore.SaveAsync(file, [Run("codex"), Run("gemini")], CancellationToken.None);
+
+            File.Exists(file + ".writing").Should().BeFalse("the temporary file is moved, not left behind");
+            (await RunStore.LoadAsync(file, CancellationToken.None)).Should().HaveCount(2);
+
+            await RunStore.SaveAsync(file, [Run("local", Opus)], CancellationToken.None);
+            var reread = await RunStore.LoadAsync(file, CancellationToken.None);
+
+            reread.Should().ContainSingle().Which.JudgedBy.Should().Be(Opus, "a save replaces the file whole");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TheLineForARunSaysWhetherAnythingWasPaidFor()
+    {
+        // A silent skip and a very fast judgement look identical from the outside, and the difference
+        // is whether the run cost anything. So a kept run says it was kept.
+        var run = Run("codex,gemini");
+
+        JudgePass.Line(run, judgedNow: true).Should().Contain("codex,gemini")
+            .And.Contain("split-once").And.Contain("0/1 worth having")
+            .And.NotContain("kept");
+        JudgePass.Line(run, judgedNow: false).Should().Contain("(kept - already judged)");
     }
 }

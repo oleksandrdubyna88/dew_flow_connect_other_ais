@@ -153,4 +153,33 @@ public sealed class OverlapTests
 
         overlaps.Should().OnlyContain(o => o.Only == 1, "two reviews of two different changes are not agreement");
     }
+
+    // ---------- the table the campaign report prints ----------
+
+    [Fact]
+    public void TheTableCarriesOneRowPerProvider_WithWhatItFoundAlone()
+    {
+        var overlaps = Overlap.Across(
+        [
+            Run("codex,gemini",
+                Found("codex", "src/Panel.cs", 40, "session file opened without FileShare", useful: "yes"),
+                Found("gemini", "src/Panel.cs", 41, "the session file is opened without FileShare"),
+                Found("codex", "src/Store.cs", 12, "the temp directory is never swept", useful: "yes")),
+        ]);
+        var table = Overlap.Table(overlaps);
+
+        table.Should().Contain("| provider |").And.Contain("found by it alone");
+        // codex wrote two, both distinct; one of them gemini also named, one it found alone - and
+        // that one was worth having. This is the number a second provider is bought on.
+        table.Should().Contain("| `codex` | 2 | 2 | 1 (50%) | 1 (50%) | **1** |");
+        table.Should().Contain("| `gemini` | 1 | 1 | 1 (100%) | 0 (0%) | **0** |");
+    }
+
+    [Fact]
+    public void AProviderThatWroteNothingIsAnEmDash_NotADivisionByZero()
+    {
+        var table = Overlap.Table([new ProviderOverlap("local", Raw: 0, Distinct: 0, Shared: 0, Only: 0, OnlyUseful: 0, Useful: 0)]);
+
+        table.Should().Contain("| `local` | 0 | 0 | — | — | **0** |");
+    }
 }
