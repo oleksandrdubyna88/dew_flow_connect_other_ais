@@ -81,31 +81,74 @@ export function companionsOf(entries: readonly (readonly [string, boolean])[], r
   return entries.filter(([name, isFile]) => isFile && name !== binary).map(([name]) => name);
 }
 
+/** What a copy pass did: what landed, and what did not and why. */
+export interface Companions {
+  readonly placed: string[];
+  readonly failed: readonly { readonly name: string; readonly why: string }[];
+}
+
 /**
- * Copies every companion the archive brought, and says which ones landed.
+ * Copies every companion the archive brought, and reports both halves.
  *
  * <p>Separate from the `vscode` calls it drives so that the POLICY has a test: a file that cannot be
- * copied is not fatal — the binary is already in place, and a missing companion degrades a feature
- * rather than stopping the server from starting. That policy is only visible when one of several
- * copies fails, which is exactly the case no manual check performs.</p>
+ * copied is not fatal — the binary is already in place, and a companion that fails degrades a
+ * feature rather than stopping the server. That policy is only visible when one of several copies
+ * fails, which is exactly the case no manual check performs.</p>
+ *
+ * <p>The failures are RETURNED rather than swallowed. The review gate was right that an empty catch
+ * hides which archive entry degraded, and it costs the caller its best sentence: the reason a copy
+ * failed is usually "another process holds this file open", which is the one thing the reader can
+ * act on.</p>
+ *
+ * <p>Each copy gets ONE second attempt after a short pause, because the common failure is transient
+ * by nature — a server shutting down still holds its files for a moment. A second failure is
+ * reported; a third attempt would just be a slower way to report the same thing.</p>
  */
 export async function copyCompanions(
   entries: readonly (readonly [string, boolean])[],
   rid: CoaiRid,
   copy: (name: string) => Thenable<void>,
-): Promise<string[]> {
+  pause: (ms: number) => Promise<void> = (ms) => new Promise((done) => setTimeout(done, ms)),
+): Promise<Companions> {
   const placed: string[] = [];
+  const failed: { name: string; why: string }[] = [];
   for (const name of companionsOf(entries, rid)) {
-    try {
-      await copy(name);
+    const why = await attempt(name, copy, pause);
+    if (why.length === 0) {
       placed.push(name);
-    } catch {
-      // Nothing to do about it here, and the server still starts.
+    } else {
+      failed.push({ name, why });
     }
   }
 
-  return placed;
+  return { placed, failed };
 }
+
+/** Empty when it landed, the reason when it did not — after one retry. */
+async function attempt(
+  name: string,
+  copy: (name: string) => Thenable<void>,
+  pause: (ms: number) => Promise<void>,
+): Promise<string> {
+  try {
+    await copy(name);
+
+    return '';
+  } catch {
+    await pause(RETRY_MS);
+  }
+
+  try {
+    await copy(name);
+
+    return '';
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
+/** Long enough for a process that is exiting to let go, short enough that nobody waits on it. */
+const RETRY_MS = 400;
 
 /**
  * The one companion the server cannot start without, when the archive brought it and it did not land.
