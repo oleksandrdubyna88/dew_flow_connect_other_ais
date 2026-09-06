@@ -20,11 +20,22 @@ internal sealed partial class BenchJson : JsonSerializerContext;
 /// </remarks>
 public static class RunStore
 {
+    /// <summary>
+    /// The whole file, replaced in one step.
+    /// </summary>
+    /// <remarks>
+    /// Written beside the file and moved over it, because a judgement now saves after every run and
+    /// a reader — the table verb, a person watching a campaign — that arrives mid-write would
+    /// otherwise read half a JSON array and call the file corrupt. A move is one operation; a write
+    /// of six hundred kilobytes is not.
+    /// </remarks>
     public static async Task SaveAsync(string file, IReadOnlyList<RunRecord> runs, CancellationToken ct)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(file) ?? ".");
+        var beside = file + ".writing";
         await File.WriteAllTextAsync(
-            file, JsonSerializer.Serialize(runs.ToList(), BenchJson.Default.ListRunRecord), ct);
+            beside, JsonSerializer.Serialize(runs.ToList(), BenchJson.Default.ListRunRecord), ct);
+        File.Move(beside, file, overwrite: true);
     }
 
     public static async Task<IReadOnlyList<RunRecord>> LoadAsync(string file, CancellationToken ct) =>
