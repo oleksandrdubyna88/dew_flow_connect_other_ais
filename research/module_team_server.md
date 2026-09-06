@@ -4,7 +4,7 @@
 > Codex, one Antigravity and one Claude subscription, signs each CLI in once on that machine, and
 > everybody's `coai-mcp` sends its review prompts there instead of running a CLI locally.
 >
-> Plan: [../todo/PLAN_team_server.md](../todo/PLAN_team_server.md). **Stories 2.1 and 2.2 are what
+> Plan: [PLAN_team_server.md](PLAN_team_server.md). **Stories 2.1 and 2.2 are what
 > exists today**: the host, its authentication and its sessions (2.1); the vendor catalog, the
 > account slots and `login` (2.2); the job queue, the runner and the review endpoints (2.3); and what
 > the team is spending, with the admin view (2.4). **Epic 2 is complete.** The panel that drives it

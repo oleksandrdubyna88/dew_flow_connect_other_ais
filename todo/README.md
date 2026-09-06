@@ -8,7 +8,6 @@ Convention: `.claude/rules/shared/common/planning-docs.md`.
 
 | Plan | What it is for |
 |---|---|
-| [PLAN_team_server.md](PLAN_team_server.md) | One subscription per vendor for a whole company: `coai-server` on the CredsForDevs VM runs the signed-in CLIs behind Microsoft/Google sign-in restricted to the company domain; the panel gains *Team servers*, the picker offers the server's vendors and allowed models, every run is accounted to a person, and rate limits are spread across account slots. |
 | [PLAN_team_usage_by_person.md](PLAN_team_usage_by_person.md) | Who on the team is spending it: the per-PERSON breakdown behind the *Company* toggle a Team server's spending tab already has. Extracted from story 3.3 when epic 3 shipped — the server already answers `people[]` and the client renders only the vendor totals. |
 | [PLAN_family_ci_hardening.md](PLAN_family_ci_hardening.md) | Every dew_flow repository: formatting gates in CI, Dependabot, a PR template and semantic titles, release-please, and a branch protection that requires every check with no bypass for admins — the operator's hardening list of 2026-09-05, with the repository settings already applied. |
 | [PLAN_local_db_reader.md](PLAN_local_db_reader.md) | The rounds log page reads `coai.db` instead of flattening session files: findings under an expanded row with their resolutions, FTS search, and the two blind-spot views the data exists for. The writing half shipped 2026-09-05 ([research/PLAN_local_db.md](../research/PLAN_local_db.md)). |

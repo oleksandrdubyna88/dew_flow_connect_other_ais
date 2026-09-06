@@ -48,7 +48,7 @@ C4Container
 | Reviewer runners (worktrees, scheduler, vendors) | [module_runners.md](module_runners.md) | **shipped 2026-08-31** |
 | `coai-mcp` server | [module_server.md](module_server.md) | **shipped 2026-08-31** |
 | VS Code extension | [module_extension.md](module_extension.md) | **shipped 2026-08-31** (escalation loopback deferred) |
-| Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [../todo/PLAN_team_server.md](../todo/PLAN_team_server.md) | **epics 1–3 complete, 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots, `login`, the job queue with the review endpoints, and per-person usage with the admin company view; every route has an `http/` contract. The client runtime (`remote`, `--ask-remote`) and the panel's *Team servers* section, add-a-reviewer and spending block are in. The container, the host edge and the release are epic 4; the per-PERSON spending view is [../todo/PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md) |
+| Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [PLAN_team_server.md](PLAN_team_server.md) | **epics 1–3 complete, 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots, `login`, the job queue with the review endpoints, and per-person usage with the admin company view; every route has an `http/` contract. The client runtime (`remote`, `--ask-remote`) and the panel's *Team servers* section, add-a-reviewer and spending block are in. The container, the host edge and the release are epic 4; the per-PERSON spending view is [../todo/PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md) |
 | Measurement bench (`coai-bench`) | [module_bench.md](module_bench.md) · [../src_bench/README.md](../src_bench/README.md) | **shipped 2026-09-04** — drives the published server over stdio, records whole, judges separately |
 | Tests: the harness, its flows, its gaps | [module_tests.md](module_tests.md) | **recorded 2026-09-06** — three suites in-repo, the flow catalogue derived from the tool registry, and the two gaps named (no extension host, no real vendor in CI) |
 
@@ -68,6 +68,33 @@ The same shape governs `remoteVendor`: the row id is `<serverId>-<vendor>` becau
 across servers, while `--vendor` must carry the SERVER's own spelling. Two names for one thing, and
 the moment either side normalises the wrong one, every review on that server is refused as a vendor
 it "does not offer".
+
+## How the Team server is deployed (2026-09-06)
+
+`coai.remsoft.dev` runs as a **systemd unit on the host**, not as a container, and the reason is the
+host rather than a preference: the three vendor CLIs were already installed there
+(`/root/.local/bin`, symlinked into `/usr/local/bin`) and every account slot under
+`/opt/coai/data/accounts/` was already signed in. An image that installs its own copies adds ~750 MB
+to duplicate binaries that are present, and the credentials live on disk either way.
+
+| | |
+|---|---|
+| `/opt/coai/bin/coai-server` | the Native AOT binary — **21 MB**, holding **19.7 MB** resident |
+| `/opt/coai/data` | `vendors.json`, the signed-in slots, sessions, `usage.jsonl` |
+| `/etc/coai-server.env` | the configuration, `0600` |
+| `/etc/systemd/system/coai-server.service` | `MemoryMax=1500M`, `Restart=on-failure` |
+| `/etc/nginx/sites-enabled/coai` | the host edge, TLS by host certbot, proxying `127.0.0.1:8090` |
+
+Nothing of `dew_flow_creds_for_devs` is touched: it has its own site file and its own certificate,
+and both services are reached on loopback rather than through a shared network.
+
+**The container is kept and is correct for a fresh host** that has none of this —
+`src_server/Dockerfile` installs the CLIs itself and `deploy/docker-compose.yml` runs it bound to
+loopback with the same memory ceiling. Of its 1.27 GB, 750 MB is the three CLIs.
+
+The unit runs as **root**, which is a consequence and not a default: `claude` and `codex` are
+symlinks into `/root`, and the slots were signed in as root. Tightening it means re-installing the
+CLIs and re-signing every slot as a service account.
 
 ## Cross-cutting decisions already in force
 

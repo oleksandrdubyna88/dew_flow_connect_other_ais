@@ -10,7 +10,7 @@ using Serilog;
 
 // coai-server — the Team server: one subscription per vendor, shared by everyone who signs in.
 //
-// Epic 2 of todo/PLAN_team_server.md, complete: the host and its authentication (2.1), the vendor
+// Epic 2 of research/PLAN_team_server.md, complete: the host and its authentication (2.1), the vendor
 // catalog and the account slots (2.2), the job queue and the review endpoints (2.3), and what the
 // team is spending (2.4). The panel that drives it is epic 3.
 //
