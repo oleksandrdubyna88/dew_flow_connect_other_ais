@@ -63,16 +63,24 @@ test('a vendor with no accounts at all points at the operator', () => {
 });
 
 test('the disclosure names the host, because that is the part people read', () => {
-  // "An external endpoint is configured" is a sentence somebody skims.
-  const said = disclosure('https://coai.example.com/');
-
-  assert.ok(said.includes('coai.example.com'));
-  assert.ok(said.includes('diffs'));
+  // "An external endpoint is configured" is a sentence somebody skims. Asserted WHOLE rather than by
+  // looking for the host inside it: the wording is the thing under test, and a substring check for a
+  // hostname is the shape CodeQL flags as an incomplete URL check — correctly, since that pattern is
+  // a real bypass wherever it decides anything.
+  assert.strictEqual(
+    disclosure('https://coai.example.com/'),
+    'Every review sent here — your plan, your diffs and the file contents around them — goes to '
+      + 'coai.example.com.',
+  );
 });
 
 test('the disclosure is shown even for the company’s own server', () => {
-  // Being the company's own server makes it no less true that the code leaves this machine.
-  assert.ok(teamServerRow(state({ email: 'a@b.c' })).includes('coai.example.com'));
+  // Being the company's own server makes it no less true that the code leaves this machine. The row
+  // must carry exactly what `disclosure` produces, which is a stronger claim than "the host appears
+  // somewhere in the markup".
+  const row = teamServerRow(state({ email: 'a@b.c' }));
+
+  assert.ok(row.includes(disclosure(SERVER.url)), 'the row carries the disclosure verbatim');
 });
 
 test('a server nobody signed into says exactly that', () => {
