@@ -258,6 +258,65 @@ public sealed class UsageReaderTests : IDisposable
     }
 }
 
+/// <summary>
+/// What the WRITER produces is what the READER parses.
+/// </summary>
+/// <remarks>
+/// The ledger's shape is declared twice: <c>UsageEntry</c> lives with the writer in Runners, and
+/// <c>UsageEntryDto</c> here with the reader. That is deliberate — the writer's type is that binary's
+/// business and this one is defensive by construction — but it means a rename on either side would
+/// leave the reader silently producing empty groups and zero totals, which is the worst way for a
+/// page about money to be wrong. This test is the seam: it writes through the real ledger and reads
+/// through the real reader, so a drift is a red test rather than a quiet zero. (codex, code round.)
+/// </remarks>
+public sealed class LedgerRoundTripTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "coai-roundtrip-" + Guid.NewGuid().ToString("N"));
+
+    public LedgerRoundTripTests() => Directory.CreateDirectory(_dir);
+
+    public void Dispose() => Directory.Delete(_dir, recursive: true);
+
+    [Fact]
+    public void EveryFieldTheWriterWritesIsAFieldTheReaderReads()
+    {
+        new CoaiMcp.Runners.Reviewers.UsageLedger(_dir).RecordJob(
+            "dev@example.com", "codex", "gpt-5.6-luna", "Architecture", "ok",
+            TimeSpan.FromSeconds(12.5), tokensIn: 4321, tokensOut: 765, costUsd: 0.25);
+
+        var line = new UsageReader(_dir)
+            .Read(new UsageRange(DateTimeOffset.MinValue, DateTimeOffset.MaxValue))
+            .Lines.Should().ContainSingle().Subject;
+
+        line.Email.Should().Be("dev@example.com");
+        line.Vendor.Should().Be("codex");
+        line.Model.Should().Be("gpt-5.6-luna");
+        line.Role.Should().Be("Architecture");
+        line.Outcome.Should().Be("ok");
+        line.Failed.Should().BeFalse();
+        line.Seconds.Should().Be(12.5);
+        line.TokensIn.Should().Be(4321);
+        line.TokensOut.Should().Be(765);
+        line.CostUsd.Should().Be(0.25);
+        line.AtUtc.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1));
+    }
+
+    [Fact]
+    public void AFailedJobRoundTripsAsFailed()
+    {
+        new CoaiMcp.Runners.Reviewers.UsageLedger(_dir).RecordJob(
+            "dev@example.com", "codex", "m", "Architecture", "RateLimited",
+            TimeSpan.FromSeconds(90), tokensIn: 10, tokensOut: 0);
+
+        var totals = UsageTotals.ByVendor(
+            new UsageReader(_dir).Read(new UsageRange(DateTimeOffset.MinValue, DateTimeOffset.MaxValue)).Lines);
+
+        // Ninety seconds and no answer cost the same as ninety seconds and an answer.
+        totals.Single().Failed.Should().Be(1);
+        totals.Single().Seconds.Should().Be(90);
+    }
+}
+
 [Collection(ServerCollection.Name)]
 public sealed class UsageEndpointTests
 {
