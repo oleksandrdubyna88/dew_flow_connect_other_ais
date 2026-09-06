@@ -111,4 +111,65 @@ public sealed class ASessionFromAnOlderBuildStillRunsTests
         session.Should().NotBeNull();
         session!.Rounds.Should().NotBeNull().And.BeEmpty();
     }
+
+    [Fact]
+    public void TheStartupSweepSurvivesTheSameFile()
+    {
+        // The review gate's catch, and the worse half of the defect: `SweepOrphanedRounds`
+        // deserialises separately and then calls `session.Rounds.Any(...)`, so an old file would have
+        // taken down the sweep that runs at STARTUP — every window, not one round. The normalisation
+        // is one method used by both readers now.
+        var dir = Directory.CreateTempSubdirectory("coai-oldsession-sweep-").FullName;
+        var store = new SessionStore(dir);
+        var file = store.FileFor("D:/x", "main");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, """
+            {
+              "state": { "sessionId": "s", "repoPath": "D:/x", "branch": "main", "stage": "PlanReview" },
+              "openedUtc": "2026-09-01T08:00:00Z"
+            }
+            """);
+
+        var sweep = () => store.SweepOrphanedRounds(_ => false);
+
+        sweep.Should().NotThrow().Which.Should().Be(0, "there are no rounds to sweep, which is not the same as a crash");
+    }
+
+    [Fact]
+    public void AnAbsentPendingIsAlsoAnEmptyList()
+    {
+        // The gate asked for the absent case as well as the null one: they take DIFFERENT paths —
+        // `get` answers for the absent member, `init` for the explicit null — and only one of them
+        // was covered.
+        var session = JsonSerializer.Deserialize("""
+            {
+              "state": { "sessionId": "s", "repoPath": "D:/x", "branch": "main", "stage": "PlanReview" },
+              "rounds": []
+            }
+            """, ServerJsonContext.Default.PersistedSession)!;
+
+        session.Pending.Should().NotBeNull().And.BeEmpty();
+        session.UsedPrompts.Should().NotBeNull().And.BeEmpty();
+    }
+
+    [Fact]
+    public void ARoundsReviewerStates_AreEmptyWhetherAbsentOrNull()
+    {
+        // The third normalised collection, and the one a round writes on every repaint: the panel
+        // reads `reviewerStates` to draw who answered, so a null here is a blank card rather than a
+        // crash - which is exactly the kind of quiet wrongness that survives for weeks.
+        var session = JsonSerializer.Deserialize("""
+            {
+              "state": { "sessionId": "s", "repoPath": "D:/x", "branch": "main", "stage": "CodeReview" },
+              "rounds": [
+                { "stage": "CodeReview", "number": 1, "verdict": "proceed", "status": "done" },
+                { "stage": "CodeReview", "number": 2, "verdict": "proceed", "status": "done", "reviewerStates": null }
+              ]
+            }
+            """, ServerJsonContext.Default.PersistedSession)!;
+
+        session.Rounds.Should().HaveCount(2);
+        session.Rounds[0].ReviewerStates.Should().NotBeNull().And.BeEmpty("absent");
+        session.Rounds[1].ReviewerStates.Should().NotBeNull().And.BeEmpty("explicitly null");
+    }
 }
