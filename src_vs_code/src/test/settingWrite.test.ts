@@ -2,7 +2,7 @@ import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { panelHtml } from '../panelView';
-import { DEFAULTS, roleRecordUpdate, settingWrite } from '../settingsShape';
+import { DEFAULTS, OVERLAID_SETTINGS, overlaidReader, roleRecordUpdate, seedOverlay, settingWrite, settingsFrom } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
 
 /**
@@ -158,4 +158,57 @@ test('the number of prompt pickers follows that role\u2019s rounds', () => {
   // of controls for rounds no stage will reach.
   const absurd = html({ ...DEFAULTS.rounds, Architecture: 99 });
   assert.equal(pickers(absurd, 'Architecture'), 6);
+});
+
+// ---------- a side of its own ----------
+
+test('an overlaid setting comes from the side, and everything else from the shared settings', () => {
+  // One machine, two companies: a Windows window on one subscription and a WSL distro on another,
+  // needing different proxies, different CLI paths and different logins. VS Code hands the SAME
+  // settings.json to both extension hosts, so the separation has to happen here.
+  const shared = (section: string) => ({ maxConcurrency: 4, credsKey: 'shared-key' } as Record<string, unknown>)[section];
+  const read = overlaidReader(shared, { credsKey: 'wsl-key' });
+
+  assert.equal(read('credsKey'), 'wsl-key');
+  assert.equal(read('maxConcurrency'), 4, 'what the side did not override is still shared');
+});
+
+test('a setting the overlay sets to a falsy value is still the overlay value', () => {
+  // `?? shared(section)` would have read the shared value for `false`, `0` and `''` - which is
+  // every switch somebody turns OFF on one side only.
+  const shared = () => true;
+  const read = overlaidReader(shared, { autonomous: false, credsKey: '' });
+
+  assert.equal(read('autonomous'), false);
+  assert.equal(read('credsKey'), '');
+});
+
+test('a setting added by a later version falls through instead of turning itself off', () => {
+  // An overlay written by an older build does not mention a new setting; reading undefined for it
+  // would disable a new feature on exactly the machines that had customised anything.
+  const read = overlaidReader((section) => (section === 'splitWithFable' ? true : undefined), { credsKey: 'k' });
+
+  assert.equal(read('splitWithFable'), true);
+});
+
+test('turning the switch on seeds the side with what it reads today, so nothing changes', () => {
+  const shared = (section: string) =>
+    ({ maxConcurrency: 7, credsKey: 'k', vendors: [{ id: 'codex' }] } as Record<string, unknown>)[section];
+
+  const seeded = seedOverlay(shared);
+
+  assert.deepEqual(settingsFrom(overlaidReader(shared, seeded)), settingsFrom(shared));
+  assert.deepEqual(seeded['vendors'], [{ id: 'codex' }]);
+  assert.ok(!('uiScale' in seeded), 'a text size belongs to the person, not to the company');
+});
+
+test('every setting the shape reads is one a side can hold', () => {
+  // The seed copies a NAMED set, so a setting this list forgets stays silently shared - and the
+  // person who set a different proxy on one side finds out when a review runs against the wrong
+  // company's server. This test is the reminder.
+  const asked: string[] = [];
+  settingsFrom((section) => { asked.push(section); return undefined; });
+
+  const missing = asked.filter((section) => !OVERLAID_SETTINGS.includes(section));
+  assert.deepEqual(missing, [], 'these settings are read but cannot be held per side');
 });

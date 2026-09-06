@@ -10,6 +10,9 @@ import {
   copyCompanions,
   requiredCompanionMissing,
   sqliteNameFor,
+  installedKey,
+  overlayKey,
+  sideKey,
   compareVersions,
   entryPathIn,
   ridFor,
@@ -435,4 +438,30 @@ test('the release smoke fails on the message the server actually prints', () => 
       program.includes(sentence),
       `the smoke greps for "${sentence}" and the server does not print it — the check is dead`);
   }
+test('two WSL distros with the same storage path are two different sides', () => {
+  // The reason this identity is not just the storage path, argued in the install record's own
+  // review: every distro mounts /home/<user>/.vscode-server/… at the same place, so one company's
+  // settings would land on another's.
+  const one = { remoteName: 'wsl', distro: 'Ubuntu-24.04', storagePath: '/home/x/.vscode-server/data/User/globalStorage/coai' };
+  const two = { ...one, distro: 'Ubuntu-Work' };
+
+  assert.notEqual(sideKey(one), sideKey(two));
+  assert.notEqual(overlayKey(one), overlayKey(two));
+});
+
+test('a local window and a WSL window are two different sides', () => {
+  const local = { remoteName: undefined, hostname: 'DESKTOP', storagePath: 'C:/Users/x/AppData/Roaming/Code/User/globalStorage/coai' };
+  const wsl = { remoteName: 'wsl', distro: 'Ubuntu-24.04', storagePath: '/home/x/.vscode-server/data/User/globalStorage/coai' };
+
+  assert.notEqual(overlayKey(local), overlayKey(wsl));
+  assert.match(overlayKey(local), /^coai\.settingsOverlay@/);
+});
+
+test('the install record and the settings overlay never share a key', () => {
+  // They are kept in the SAME globalState database, and one overwriting the other would be a
+  // remembered version replacing a company's settings.
+  const side = { remoteName: 'wsl', distro: 'Ubuntu-24.04', storagePath: '/home/x/.vscode-server' };
+
+  assert.notEqual(overlayKey(side), installedKey(side));
+  assert.ok(overlayKey(side).endsWith(sideKey(side)) && installedKey(side).endsWith(sideKey(side)));
 });
