@@ -137,6 +137,14 @@ A reviewer given a repository spends its attention deciding where to look; a rev
 reads the diff. The evidence is in
 [RESULTS_findings_that_are_worth_something.md](research/RESULTS_findings_that_are_worth_something.md).
 
+The prompt is told which of the two it got, and this is not decoration. Eighteen of the twenty-five
+prompt files used to open by claiming a read-only checkout was present — in Fast, the default, it was
+not, and an agentic CLI that goes looking for one runs headless with nobody to grant it permission:
+it refuses itself and returns nothing at all. Measured 2026-09-06 over 71 antigravity reviewer runs,
+15 of them — 21 % — died exactly there. The sentence now comes from `PanelService`, which is the only
+code that knows the mode — and the plan stage counts as no-checkout too, because its working
+directory is an empty scratch. Both no-checkout cases say outright that there is no tool to call.
+
 Full creates **one** detached `git worktree` pinned to a resolved SHA, outside your repository,
 shared by every reviewer in that round: the main AI keeps editing while a review runs, and six
 checkouts of a moving branch would be six different inputs to one comparison. Codex runs

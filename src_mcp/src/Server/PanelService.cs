@@ -790,9 +790,18 @@ public sealed class PanelService
         // works today only because no code round happens to carry PlanCritique — a coincidence, and
         // the review gate said so. The caller knows which stage it is running; it passes it.
         var isPlan = isPlanStage;
-        var launchDir = _settings.CodeWorkspace == "none" && !isPlan
+        var fastCode = _settings.CodeWorkspace == "none" && !isPlan;
+        var launchDir = fastCode
             ? Directory.CreateTempSubdirectory("coai-noworkspace-").FullName
             : worktreePath;
+
+        // What the reviewer is standing in, which is NOT the same question as which directory it
+        // was pointed at. A plan round's `worktreePath` is an empty scratch directory — the stage
+        // checks out nothing at all (RunStageAsync, `needsWorktree: false`) — so a flag derived
+        // from the launch directory alone would tell a plan reviewer a repository was there. That
+        // is the exact lie this change removed from the prompt files; only a mounted worktree is a
+        // checkout.
+        var hasCheckout = !fastCode && !isPlan;
 
         // Only what can actually run: a vendor whose CLI is missing or whose key is absent is
         // reported by `providers` and left out of the deal rather than dealt work it cannot do.
@@ -860,9 +869,15 @@ public sealed class PanelService
                 ReasoningEffort = _settings.LocalReasoningEffort,
                 MaxTokens = _settings.LocalMaxTokens,
             };
-            var prompt = ComposePrompt(choice, context);
+            var prompt = ComposePrompt(choice, context, hasCheckout);
+            // The repair is built before anybody knows which way the first attempt failed, so it
+            // covers both. The second sentence exists because a refused tool produces NO answer at
+            // all, and telling that model its JSON was malformed describes a failure it did not have.
             var repairPrompt = prompt +
-                "\n\nYOUR PREVIOUS ANSWER WAS NOT VALID JSON. Return ONLY the JSON object for the schema — no fences, no prose.";
+                "\n\nYOUR PREVIOUS ATTEMPT DID NOT PRODUCE A USABLE ANSWER."
+                + " If it returned text that was not the schema's JSON: return ONLY the JSON object — no fences, no prose."
+                + " If it returned nothing because a command or a file read was refused: there are no tools here"
+                + " and none are needed — answer from the text above.";
             work.Add(new ReviewerWork(
                 runtime.Build(role, prompt, launchDir, schemaFile, outputDir, settings),
                 runtime.Build(role, repairPrompt, repairDir, schemaFile, outputDir, settings),
@@ -892,8 +907,34 @@ public sealed class PanelService
     private static string CallerFor(PersistedSession session) =>
         CallerIdentity.Current() is { Length: > 0 } id ? id : $"repo:{session.State.RepoPath}";
 
-    private string ComposePrompt(PromptChoice choice, string context) =>
-        $"{_prompts.ForChoice(choice)}\n\n## The finding contract\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{FindingSchema.Json}\n\n{context}";
+    private string ComposePrompt(PromptChoice choice, string context, bool hasCheckout) =>
+        $"{_prompts.ForChoice(choice)}\n\n{WhatYouHave(hasCheckout)}\n\n## The finding contract\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{FindingSchema.Json}\n\n{context}";
+
+    /// <summary>
+    /// What the reviewer actually has — said once, by the only code that knows which it is.
+    /// </summary>
+    /// <remarks>
+    /// <para>Eighteen of the twenty-five shipped prompts opened with "You have the checkout
+    /// read-only and the diff below", unconditionally — and the DEFAULT mode hands a code reviewer
+    /// an empty temp directory and no checkout at all. So the product told the model a repository
+    /// was there, the model went to look, and an agentic CLI running headless has nobody to ask for
+    /// the permission a shell command needs: it refused itself and returned NOTHING. Measured
+    /// 2026-09-06 over 71 antigravity reviewer runs: 15 of them, 21 %, all at that same wall, on two
+    /// different reasoning efforts.</para>
+    /// <para>The claim could never live in the prompt FILES, because there it can only ever be one
+    /// of the two truths — and a prompt somebody has overridden in the catalog needs the sentence
+    /// just as much as a shipped one, which is the second reason it is here.</para>
+    /// </remarks>
+    internal static string WhatYouHave(bool hasCheckout) =>
+        hasCheckout
+            ? "## What you have\n\nA READ-ONLY checkout of the repository in your working "
+                + "directory, and the material below. Review the change, not the codebase."
+            : "## What you have\n\nThe material below — the change, the plan and this "
+                + "project's written rules — and NOTHING else. There is no checkout in your working "
+                + "directory and no tool you can call: do not try to run a command, list a directory "
+                + "or read a file. Answer from what is here.\n\nThat is deliberate: a reviewer "
+                + "given the change alone finds more of what matters than one sent exploring a "
+                + "repository.";
 
     private ReviewAnswer AnswerFor(
         RoundVerdict verdict,
