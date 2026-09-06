@@ -27,7 +27,7 @@ export interface ModelChoice {
  * the one thing the local runtime exists to avoid. The comment beside that check already said the
  * two had to be kept in step, which is the argument for there being only one of them.</p>
  */
-export const RUNTIMES = ['codex', 'gemini', 'claude', 'antigravity', 'local'] as const;
+export const RUNTIMES = ['codex', 'gemini', 'claude', 'antigravity', 'local', 'remote'] as const;
 
 export type Runtime = (typeof RUNTIMES)[number];
 
@@ -97,7 +97,21 @@ export function modelsFor(
   current: string,
   localEngine?: LocalEngine,
   discoveredAgy: readonly ModelChoice[] = [],
+  allowedRemote: readonly string[] = [],
 ): ModelChoice[] {
+  // A Team server's allowlist is as authoritative as an installed-model list, and for the same
+  // reason: it is what this server will actually accept THIS minute. So the dropdown is discovered,
+  // never curated — and a saved model the server no longer allows is kept and MARKED, exactly as a
+  // local engine's is. Dropping it would silently switch the reviewer to another model; showing it
+  // plainly would let a round be sent for one the server will refuse.
+  if (runtime === 'remote') {
+    const offered = allowedRemote.map((id) => ({ id, label: id }));
+
+    return current.length > 0 && !offered.some((m) => m.id === current)
+      ? [{ id: current, label: `${current} — this server does not offer it any more` }, ...offered]
+      : offered;
+  }
+
   // A local engine's list is DISCOVERED, and that is the whole difference from the others: what can
   // be picked is what is installed on this machine this minute. A list compiled when this extension
   // was built would be wrong on every machine, including the one it was built on. An engine that did
