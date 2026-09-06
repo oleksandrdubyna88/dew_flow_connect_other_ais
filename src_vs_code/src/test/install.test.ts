@@ -438,6 +438,8 @@ test('the release smoke fails on the message the server actually prints', () => 
       program.includes(sentence),
       `the smoke greps for "${sentence}" and the server does not print it — the check is dead`);
   }
+});
+
 test('two WSL distros with the same storage path are two different sides', () => {
   // The reason this identity is not just the storage path, argued in the install record's own
   // review: every distro mounts /home/<user>/.vscode-server/… at the same place, so one company's
