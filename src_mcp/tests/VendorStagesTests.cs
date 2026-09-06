@@ -19,13 +19,18 @@ namespace CoaiMcp.Tests;
 /// work list, run no reviewer, merge no findings, and pass the gate — a round that reported
 /// <c>proceed</c> having reviewed nothing at all.</para>
 /// </remarks>
+[Collection("fakecli-env")]
 public sealed class VendorStagesTests
 {
     private static PanelService Service(params ProviderSettings[] providers) =>
+        Service(Path.Combine(Path.GetTempPath(), $"coai-stages-{Guid.NewGuid():N}"), providers);
+
+    /// <summary>Two services over one data directory is how a second round reads the first's session.</summary>
+    private static PanelService Service(string dataDir, params ProviderSettings[] providers) =>
         new(
             new PanelSettings
             {
-                DataDir = Path.Combine(Path.GetTempPath(), $"coai-stages-{Guid.NewGuid():N}"),
+                DataDir = dataDir,
                 Providers = providers,
             },
             VaultKeys.None("no vault"),
@@ -57,7 +62,7 @@ public sealed class VendorStagesTests
     public void TheSameVendor_IsLaunchedForAPlanRound()
     {
         var work = Service(Local(plan: true, code: false))
-            .BuildWork([ReviewRole.PlanCritique], Scratch(), "ctx", round: 1, planPrompts: ["universal"]);
+            .BuildWork([ReviewRole.PlanCritique], Scratch(), "ctx", round: 1, isPlanStage: true);
 
         work.Should().NotBeEmpty("it reviews plans, which is the whole point of the setting");
     }
@@ -66,7 +71,7 @@ public sealed class VendorStagesTests
     public void AVendorNarrowedToCode_IsNotLaunchedForAPlanRound()
     {
         var work = Service(Local(plan: false, code: true))
-            .BuildWork([ReviewRole.PlanCritique], Scratch(), "ctx", round: 1, planPrompts: ["universal"]);
+            .BuildWork([ReviewRole.PlanCritique], Scratch(), "ctx", round: 1, isPlanStage: true);
 
         work.Should().BeEmpty();
     }
@@ -81,7 +86,7 @@ public sealed class VendorStagesTests
 
         Service(both).BuildWork([ReviewRole.Architecture], Scratch(), "ctx", round: 1)
             .Should().NotBeEmpty();
-        Service(both).BuildWork([ReviewRole.PlanCritique], Scratch(), "ctx", round: 1, planPrompts: ["universal"])
+        Service(both).BuildWork([ReviewRole.PlanCritique], Scratch(), "ctx", round: 1, isPlanStage: true)
             .Should().NotBeEmpty();
     }
 
@@ -101,6 +106,61 @@ public sealed class VendorStagesTests
         answer.Should().Contain("no reviewer serves").And.Contain("reviewed nothing");
         answer.Should().NotContain("proceed");
     }
+
+    [Fact]
+    public async Task TheCodeStageIsRefusedTheSameWay_WhichIsTheCaseThisFeatureIsFor()
+    {
+        // The gate asked for this, and it was right: the refusal was proven through review_plan only,
+        // while the PRIMARY use of the feature is the other direction - local serves plans, so a code
+        // round has nobody. Driven through the real tools with a scripted CLI, because reaching the
+        // code stage means a plan round that actually PROCEEDED.
+        var repo = await Repository();
+        var data = Path.Combine(Path.GetTempPath(), $"coai-stages-{Guid.NewGuid():N}");
+        var fake = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
+        Environment.SetEnvironmentVariable("FAKECLI_MODE", "vendor");
+        Environment.SetEnvironmentVariable("FAKECLI_STDOUT", CleanAnswer);
+        Environment.SetEnvironmentVariable("FAKECLI_OUTFILE_TEXT", CleanAnswer);
+        try
+        {
+            var plans = Service(data, new ProviderSettings("codex")
+            {
+                Enabled = true, Plan = true, Code = false, ExecutablePath = fake,
+            });
+            await plans.OpenAsync(repo, "feature");
+
+            var plan = await plans.ReviewPlanAsync(repo, "feature", "PLAN - something to judge");
+            plan.Should().Contain("proceed", "a clean answer from the one vendor that serves plans");
+            // Nothing to decide, and the stage still advances only when a decision is recorded.
+            await plans.ResolveAsync(repo, "feature", "[]");
+
+            var code = await plans.ReviewCodeAsync(repo, "feature", "main", CodeScope);
+
+            code.Should().Contain("no reviewer serves").And.Contain("reviewed nothing");
+            code.Should().NotContain("\"verdict\"");
+        }
+        finally
+        {
+            foreach (var name in (string[])["FAKECLI_MODE", "FAKECLI_STDOUT", "FAKECLI_OUTFILE_TEXT"])
+            {
+                Environment.SetEnvironmentVariable(name, null);
+            }
+        }
+    }
+
+    /// <summary>A reviewer that finds nothing, so the plan round reaches `proceed` in one pass.</summary>
+    private const string CleanAnswer = """{"findings":[]}""";
+
+    /// <summary>The code stage has a floor on its scope, and it is right to: a diff without the
+    /// intent behind it can only be judged as "is this defensible", never as "is this what was
+    /// asked for".</summary>
+    private const string CodeScope = """
+        SCOPE - the vendor stage flags.
+        GOAL: a vendor can be set to review plans, code, or both, and a stage nobody serves is
+        refused rather than passed with nothing reviewed.
+        WHAT MUST BE TRUE: an existing configuration keeps the gate it had; the flags travel inside
+        the vendor list; the stage is told to BuildWork rather than guessed from its arguments.
+        CONSTRAINTS: no new environment variable, and the env block still carries only what differs.
+        """;
 
     /// <summary>A real git repository with a branch, which is the least a round will accept.</summary>
     private static async Task<string> Repository()

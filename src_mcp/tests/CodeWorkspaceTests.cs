@@ -119,7 +119,7 @@ public class CodeWorkspaceTests
         var scratch = Worktree();
 
         var work = Service("none").BuildWork([ReviewRole.PlanCritique], scratch, "ctx", round: 1,
-            planPrompts: ["plan-critique"]);
+            planPrompts: ["plan-critique"], isPlanStage: true);
 
         work[0].Invocation.Request.WorkingDirectory.Should().Be(scratch);
     }

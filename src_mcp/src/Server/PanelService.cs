@@ -237,7 +237,8 @@ public sealed class PanelService
                     session.State.RoundsRunThisStage + 1,
                     seed: StableSeed(session.State.SessionId, session.State.RoundsRunThisStage + 1),
                     planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session) : null,
-                    deal: _settings.DealPlanLenses)),
+                    deal: _settings.DealPlanLenses,
+                    isPlanStage: true)),
             ct);
 
     /// <summary>
@@ -296,7 +297,8 @@ public sealed class PanelService
                 _log.Information("round {Round} runs {Count} role(s): {Roles}", round, roles.Count, string.Join(", ", roles));
                 return BuildWork(roles, workingDir, context, round, rules.HasRules,
                     seed: StableSeed(session.State.SessionId, round),
-                    deal: _settings.DealCodeLenses);
+                    deal: _settings.DealCodeLenses,
+                    isPlanStage: false);
             },
             ct);
     }
@@ -761,7 +763,8 @@ public sealed class PanelService
         bool hasRules = false,
         int seed = 0,
         IReadOnlyList<string>? planPrompts = null,
-        bool deal = false)
+        bool deal = false,
+        bool isPlanStage = false)
     {
         var schemaFile = SchemaFile.Ensure(_settings.DataDir);
         var outputDir = Directory.CreateTempSubdirectory("coai-answers-").FullName;
@@ -778,11 +781,12 @@ public sealed class PanelService
         // above — so `none` removes only the exploring. It exists because the exploring is what
         // makes a hosted CLI cost 200k input tokens where a local reviewer costs 25k, which is a
         // difference in the QUESTION rather than in the models being compared.
-        // The STAGE, from the roles rather than from the prompt list: a plan round only carries
-        // prompts when the lenses are dealt, so `planPrompts` is empty for the ordinary plan round
-        // and deriving the stage from it filtered nothing at all. Caught by a test that drove the
-        // real `review_plan` path instead of calling this method with arguments of its own.
-        var isPlan = roles is [ReviewRole.PlanCritique, ..];
+        // The STAGE is told to this method, not guessed inside it. Two guesses were tried and both
+        // were wrong in a way tests did not see: `planPrompts is { Count: > 0 }` is empty on an
+        // ordinary plan round (the lenses are only dealt when asked for), and reading the ROLES
+        // works today only because no code round happens to carry PlanCritique — a coincidence, and
+        // the review gate said so. The caller knows which stage it is running; it passes it.
+        var isPlan = isPlanStage;
         var launchDir = _settings.CodeWorkspace == "none" && !isPlan
             ? Directory.CreateTempSubdirectory("coai-noworkspace-").FullName
             : worktreePath;
@@ -795,7 +799,7 @@ public sealed class PanelService
         // and 3 % on code while writing more findings than both hosted vendors together, so "on for
         // the plan, off for the code" is a setting somebody actually wants.
         var runnable = _settings.Providers
-            .Where(p => p.Serves(roles is [ReviewRole.PlanCritique, ..]))
+            .Where(p => p.Serves(isPlanStage))
             .Where(p => RuntimeFor(p) is not null && AuthFor(p).Auth != "unavailable")
             .ToList();
         if (runnable.Count == 0)

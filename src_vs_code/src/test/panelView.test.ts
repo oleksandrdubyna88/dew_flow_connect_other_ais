@@ -640,3 +640,16 @@ test('every reviewer row offers the two stages, ticked unless narrowed', () => {
   assert.match(html, /reviews plans/);
   assert.match(html, /reviews code/);
 });
+
+test('a vendor that is off leaves its stage boxes readable but inert', () => {
+  // The review gate's point: leaving them live while the master switch is off invites somebody to
+  // tick one and expect it to mean something. Visible, so the state can be read; disabled, so it
+  // cannot be contradicted.
+  const html = panelHtml(state({
+    vendors: [{ id: 'codex', runtime: 'codex', model: '', enabled: false, plan: true, code: false, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }],
+  }), 'n0nce');
+
+  assert.match(html, /data-setting="plan" data-vendor="codex" checked disabled/);
+  assert.match(html, /data-setting="code" data-vendor="codex" disabled/);
+  assert.match(html, /class="field stages off"/);
+});
