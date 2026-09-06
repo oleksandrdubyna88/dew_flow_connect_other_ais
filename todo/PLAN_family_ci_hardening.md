@@ -58,27 +58,40 @@ PR — and it **does not work**. Observed on PR #48:
 | `07:53:10Z` | `github-actions[bot]` posts `@coderabbitai review` — one second later |
 | result | no review; the `ask CodeRabbit` job is **green** |
 
-Two candidate causes, and they are not yet separated: the ask arrives AFTER the skip decision, or
-CodeRabbit ignores commands from a bot account (`github-actions[bot]`) as most such integrations do,
-to avoid loops. **Not verified** — the cheap experiment is one PR where a human writes the same
-comment by hand; if that reviews, the author is the cause and no amount of retiming will help.
+**The cause is now known, and it is the author.** The experiment this entry asked for was run the
+same morning, by the operator, on PR #45 — the same command text posted twice by different accounts:
 
-What is certain without that experiment: **a green check for a review that did not happen is worse
-than no check**, because green next to the words "ask CodeRabbit" is exactly what a reader takes for
-"a reviewer looked at this". Today the reviewer half of "the PR is the test" is the ConnectOtherAIs
-gate (`review_plan` / `review_code`, three vendors) and the human — not CodeRabbit.
+| | | |
+|---|---|---|
+| `2026-09-05 21:31:12Z` | `github-actions[bot]` posts `@coderabbitai review` | **nothing happens** |
+| `2026-09-06 08:25:13Z` | `oleksandrdubyna88` posts `@coderabbitai review` | CodeRabbit replies in **4 seconds** and reviews the PR |
 
-Three ways out, in the order they cost:
+Identical text, identical repository, identical PR. CodeRabbit ignores the command from a bot account
+— as most such integrations do, to avoid loops — and honours it from a person. So timing was never
+the problem and no amount of retiming would have helped: `coderabbit-review.yml` posts as
+`github-actions[bot]` and therefore cannot work as written, in any repository of this family.
+
+It also means the reviews are NOT gone below ten stars: a human `@coderabbitai review` gets a full
+review, which is how #45's three findings were raised. The threshold removes the *automatic* review,
+not the ability to ask.
+
+And: **a green check for a review that did not happen is worse than no check**, because green next to
+the words "ask CodeRabbit" is exactly what a reader takes for "a reviewer looked at this".
+
+Now that the cause is certain, the options are concrete — and the first two are no longer about the
+stars at all:
 
 | | Costs | Buys |
 |---|---|---|
-| ten stars on each public repository | asking people | automatic review, as the plan assumed |
-| a paid plan that lifts the threshold | money | the same, without the stars |
-| make the job's green conditional on a review actually appearing | a workflow edit + the experiment above | an honest check |
+| post the comment as a PERSON — a PAT in a secret, used by the workflow instead of `GITHUB_TOKEN` | one token to mint and rotate | the workflow does what it was written to do |
+| delete `coderabbit-review.yml` | nothing | one less green check that means nothing; asking becomes a human habit |
+| ten stars, or a paid plan | asking people, or money | automatic review with no comment needed |
 
-The third is not an alternative to the other two — whichever way reviews start arriving, a job named
-`ask CodeRabbit` must not report success when the answer was "skipped". It is not done here because
-the fix depends on which cause it is, and this entry exists so that is measured rather than assumed.
+**Which of the first two is the operator's call** — a PAT in CI is a real credential with a real blast
+radius, and trading it for an automatic comment is a judgement about this repository, not a technical
+fact. What must not survive either way is the present state: a job that reports success for a comment
+that provably does nothing.
+
 ## What must be true when this is done
 
 1. Every repository's CI fails a PR whose code is not formatted to the repository's rules, without
