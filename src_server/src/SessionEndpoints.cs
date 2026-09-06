@@ -1,0 +1,73 @@
+namespace CoaiServer;
+
+/// <summary>
+/// The three routes a person's identity travels through: mint a session, spend it, give it back.
+/// </summary>
+public static class SessionEndpoints
+{
+    public static void MapSessionEndpoints(
+        this WebApplication app,
+        SessionStore sessions,
+        IReadOnlyCollection<string> allowedDomains,
+        bool allowAnyDomain,
+        IReadOnlyCollection<string> admins)
+    {
+        // A session is minted from an IDENTITY PROVIDER's token and never from another session: a
+        // token that could mint its own successor would never expire, which is the one property a
+        // deadline exists to give it.
+        app.MapPost("/api/session", (HttpContext ctx) =>
+        {
+            if (ctx.Items.ContainsKey(Auth.SessionToken))
+            {
+                return Results.BadRequest(
+                    "a session token cannot mint another session — sign in with Microsoft again");
+            }
+
+            if (Auth.RequireCaller(ctx, allowedDomains, allowAnyDomain) is not { } caller)
+            {
+                return Results.Empty; // RequireCaller has set 401 or 403
+            }
+
+            // Persisted BEFORE the token is returned: a caller holding a token this server never
+            // stored has a credential that can only ever be refused, and no way to know it.
+            var (token, record) = sessions.Issue(caller.Email, caller.Name, DateTimeOffset.UtcNow);
+
+            return Results.Json(
+                new SessionDto(token, record.ExpiresUtc, record.Email),
+                ServerJsonContext.Default.SessionDto,
+                statusCode: StatusCodes.Status201Created);
+        });
+
+        // Only a session can be revoked, and saying so matters: answering 204 to somebody who
+        // presented Microsoft's token would tell them a credential was withdrawn when nothing was —
+        // a stateless token cannot be deleted by this server at all. (gemini, plan round.)
+        app.MapDelete("/api/session", (HttpContext ctx) =>
+        {
+            if (Auth.RequireCaller(ctx, allowedDomains, allowAnyDomain) is null)
+            {
+                return Results.Empty;
+            }
+
+            if (ctx.Items[Auth.SessionToken] is not string token)
+            {
+                return Results.BadRequest(
+                    "this endpoint revokes a session token, and you presented an identity provider's "
+                    + "token — which this server cannot withdraw. Sign out in the editor instead.");
+            }
+
+            sessions.Revoke(token);
+
+            return Results.NoContent();
+        });
+
+        app.MapGet("/api/whoami", (HttpContext ctx) =>
+            Auth.RequireCaller(ctx, allowedDomains, allowAnyDomain) is { } caller
+                ? Results.Json(
+                    new WhoAmIDto(
+                        caller.Email,
+                        caller.Name,
+                        admins.Any(a => string.Equals(a, caller.Email, StringComparison.OrdinalIgnoreCase))),
+                    ServerJsonContext.Default.WhoAmIDto)
+                : Results.Empty);
+    }
+}

@@ -21,6 +21,7 @@ C4Container
   System_Boundary(coai, "ConnectOtherAIs") {
     Container(ext, "VS Code extension", "TypeScript", "Settings, rounds view, escalation modal, install button")
     Container(mcp, "coai-mcp", "C# Native AOT, stdio", "Round state machine, CLI fan-out, finding normalisation, verdict")
+    Container(srv, "coai-server", "C# Native AOT, HTTPS", "The Team server: company sign-in, sessions — and, from story 2.2, the vendor CLIs on one VM")
   }
   System_Ext(main, "Main AI (Claude Code)", "Writes the plan and the code")
   System_Ext(codex, "codex exec", "Reviewer CLI")
@@ -32,6 +33,9 @@ C4Container
   Rel(mcp, creds, "creds config <key>, at startup")
   Rel(mcp, ext, "loopback: settings, round events, escalation")
   Rel(dev, ext, "configures, answers escalations")
+  Rel(ext, srv, "Microsoft sign-in, then a session token")
+  Rel(mcp, srv, "a review, when the reviewer is a Team server's")
+  Rel(srv, codex, "spawn, one signed-in account per slot")
 ```
 
 ## Module map
@@ -43,6 +47,7 @@ C4Container
 | Reviewer runners (worktrees, scheduler, vendors) | [module_runners.md](module_runners.md) | **shipped 2026-08-31** |
 | `coai-mcp` server | [module_server.md](module_server.md) | **shipped 2026-08-31** |
 | VS Code extension | [module_extension.md](module_extension.md) | **shipped 2026-08-31** (escalation loopback deferred) |
+| Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [../todo/PLAN_team_server.md](../todo/PLAN_team_server.md) | **story 2.1 shipped 2026-09-06** — the host, company sign-in and sessions; vendors, catalog and jobs are 2.2–2.4 |
 | Measurement bench (`coai-bench`) | [module_bench.md](module_bench.md) · [../src_bench/README.md](../src_bench/README.md) | **shipped 2026-09-04** — drives the published server over stdio, records whole, judges separately |
 
 ## Cross-cutting decisions already in force

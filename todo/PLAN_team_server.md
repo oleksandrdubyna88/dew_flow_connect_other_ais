@@ -720,7 +720,7 @@ The split was made on Fable; stories marked **F** run on Fable because being wro
 | **1 · One library for two binaries** | ~~1.1~~ **done** | `ReviewerExecutor.LaunchAsync` out of `RunOnceAsync`, with `ParseAnswer` pure beside it; every existing test passed UNEDITED — which is what "unchanged" meant here, never "no new tests": new behaviour ships with its own, as the testing rule requires. (`RetryLadder` shipped ahead of the epic, on its own — it fixes the local `coai-mcp` today, where a transient 429 got one retry at fifteen seconds and then failed the round.) | Opus |
 | | ~~1.2~~ **done** | `RuntimeResolution` + `VendorProbe` out of `PanelService`, `UsageLedger` into `CoaiMcp.Runners.Accounting`; `PanelService` keeps one-line delegations and every existing test passed unedited | Opus |
 | | 1.3 | `RemoteRuntime`, `RemoteAsk`, `TeamServerAuth` (with URL normalisation and the shared vector), `--ask-remote`, every registry point, `ProbeAsync`'s remote arm | Opus |
-| **2 · `coai-server`** | 2.1 | skeleton, logging, guards, the mirrored auth, sessions, `X-Coai-Contract`, the harness | **F** |
+| **2 · `coai-server`** | ~~2.1~~ **done** | skeleton, logging, guards, the mirrored auth, sessions, `X-Coai-Contract`, the harness — 28 tests, and the audience guard is STRICTER than the vault's warning: a tenant with no audience refuses to start, because this server mints sessions | **F** |
 | | 2.2 | `vendors.json` + catalog, slots (selector, environment, cooldown parser, registry with the OS lock), `login` | **F** |
 | | 2.3 | jobs — store, runner, `expiresUtc`, the epoch id, the ladder, cancel — and the reviews endpoints | Opus |
 | | 2.4 | usage + admins + the `http/` suite | Opus |
