@@ -49,10 +49,22 @@ Startup.Guard(msTenant, msAudiences, googleEnabled, localEnabled, localKey, allo
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    // The host nginx sets both, and this app is reachable only through it — the two conditions
-    // that make trusting the headers correct.
+    // WHO may claim to be a proxy. An earlier draft cleared both lists, which trusts these headers
+    // from anybody who can reach the socket — and a caller that reached it directly could then send
+    // `X-Forwarded-Proto: https` to walk past the HTTPS check, or forge `X-Forwarded-For` to move
+    // themselves into somebody else's rate-limit partition. Raised by two reviewers on this
+    // change's code round.
+    //
+    // Loopback and the private ranges, and nothing else: this app publishes no public port — the
+    // compose file binds it to 127.0.0.1 and the host nginx is the only thing in front — so a
+    // PUBLIC address appearing here would mean the topology is not what this line assumes. It is
+    // the same restriction the vault's nginx applies with `set_real_ip_from`, for the same reason.
     options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
+    foreach (var network in TrustedProxies.From(config["Coai:TrustedProxies"]))
+    {
+        options.KnownIPNetworks.Add(network);
+    }
 });
 
 builder.Services.AddRateLimiter(options =>
@@ -75,11 +87,21 @@ builder.Services.AddRateLimiter(options =>
 
 Auth.AddSchemes(builder.Services, msTenant, msAudiences, googleEnabled, googleAudiences, localKey, localEnabled);
 
-var sessions = new SessionStore(dataDir, TimeSpan.FromDays(sessionTtlDays));
+// The store is built before the host, so it cannot hold a logger yet — it holds a hop to one.
+// Nothing calls the store before the assignment below, and after it every swallowed filesystem
+// failure reaches the log instead of only a null.
+Action<string, Exception>? reportSessionFailure = null;
+var sessions = new SessionStore(
+    dataDir,
+    TimeSpan.FromDays(sessionTtlDays),
+    (message, error) => reportSessionFailure?.Invoke(message, error));
 builder.Services.AddSingleton(sessions);
 
 var app = builder.Build();
 var log = app.Logger;
+// Wired after Build() because that is when a logger exists; the store holds the delegate, so a
+// failure that happens before this point simply has nowhere to go — and nothing runs before it.
+reportSessionFailure = (message, error) => log.LogWarning(error, "{Message}", message);
 
 var swept = sessions.Sweep(DateTimeOffset.UtcNow);
 if (swept > 0)

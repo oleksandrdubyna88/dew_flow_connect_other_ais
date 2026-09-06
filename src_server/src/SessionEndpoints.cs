@@ -19,8 +19,7 @@ public static class SessionEndpoints
         {
             if (ctx.Items.ContainsKey(Auth.SessionToken))
             {
-                return Results.BadRequest(
-                    "a session token cannot mint another session — sign in with Microsoft again");
+                return Refuse("a session token cannot mint another session — sign in with Microsoft again");
             }
 
             if (Auth.RequireCaller(ctx, allowedDomains, allowAnyDomain) is not { } caller)
@@ -50,14 +49,21 @@ public static class SessionEndpoints
 
             if (ctx.Items[Auth.SessionToken] is not string token)
             {
-                return Results.BadRequest(
+                return Refuse(
                     "this endpoint revokes a session token, and you presented an identity provider's "
                     + "token — which this server cannot withdraw. Sign out in the editor instead.");
             }
 
-            sessions.Revoke(token);
-
-            return Results.NoContent();
+            // 204 over a failed delete would tell a person their credential was withdrawn while a
+            // stolen bearer went on working until it expired. The one lie a revoke must not tell.
+            return sessions.Revoke(token)
+                ? Results.NoContent()
+                : Results.Json(
+                    new ErrorDto(
+                        "the session could not be withdrawn — its file could not be removed, so the "
+                        + "token still works. The server log names the failure."),
+                    ServerJsonContext.Default.ErrorDto,
+                    statusCode: StatusCodes.Status500InternalServerError);
         });
 
         app.MapGet("/api/whoami", (HttpContext ctx) =>
@@ -70,4 +76,17 @@ public static class SessionEndpoints
                     ServerJsonContext.Default.WhoAmIDto)
                 : Results.Empty);
     }
+
+    /// <summary>
+    /// A refusal in the shape every other answer here has.
+    /// </summary>
+    /// <remarks>
+    /// <c>Results.BadRequest(string)</c> writes text/plain, and a client deserialising this API's
+    /// <c>ErrorDto</c> meets a parse error where the sentence should be. (gemini, code round.)
+    /// </remarks>
+    private static IResult Refuse(string because) =>
+        Results.Json(
+            new ErrorDto(because),
+            ServerJsonContext.Default.ErrorDto,
+            statusCode: StatusCodes.Status400BadRequest);
 }

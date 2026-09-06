@@ -73,6 +73,18 @@ sequenceDiagram
 - **`DELETE /api/session` refuses an identity provider's token** rather than answering 204. A
   stateless token is not this server's to withdraw, and saying 204 would tell a person a credential
   was revoked when nothing was.
+- **`DELETE` answers 500 when the file would not go.** A revoke that reports 204 over a failed
+  delete tells a person their credential was withdrawn while a stolen bearer goes on working until
+  it expires — the one lie a revoke endpoint must not tell. `SessionStore.Revoke` returns whether it
+  happened, and "already gone" counts as gone.
+- **`X-Forwarded-*` is trusted from loopback and the private ranges only.** An earlier draft cleared
+  the list, which trusts those headers from anybody who can reach the socket: a direct caller could
+  send `X-Forwarded-Proto: https` and walk past the HTTPS check, or forge `X-Forwarded-For` and move
+  into another person's rate-limit partition. `Coai:TrustedProxies` overrides it, all or nothing —
+  a half-read list is a trust boundary nobody wrote, and it would fail open.
+- **A swallowed filesystem failure is still reported.** An unreadable session and an unknown one are
+  the same 401 to a caller and completely different things to an operator; the store takes a
+  callback and the host logs it.
 - **The raw token is never stored.** The file is named by its SHA-256, so a stolen data directory
   reveals which emails have sessions and nothing anyone could authenticate with.
 
@@ -80,7 +92,7 @@ sequenceDiagram
 
 `Coai:AllowedDomains` (required unless `Coai:AllowAnyDomain`), `Coai:Admins`, `Coai:DataDir`,
 `Coai:SessionTtlDays` (7), `Coai:MinimumClientContract`, `Coai:RequireForwardedHttps`,
-`Coai:RateLimit:PermitLimit|WindowSeconds`; `Auth:Microsoft:Tenant|Audiences|ClientScope`,
+`Coai:RateLimit:PermitLimit|WindowSeconds`, `Coai:TrustedProxies`; `Auth:Microsoft:Tenant|Audiences|ClientScope`,
 `Auth:Google:Enabled|Audiences`, `Auth:Local:SigningKey`. Environment form uses `__`.
 
 **Startup refuses** when no scheme is configured, when a Microsoft tenant has no audiences, when the

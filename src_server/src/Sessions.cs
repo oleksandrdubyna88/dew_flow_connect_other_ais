@@ -34,7 +34,7 @@ public sealed record SessionRecord(
 /// windows can be answering at once, and a half-written session file is a person logged out by a
 /// race. Raised on this story's plan round by two reviewers independently.</para>
 /// </remarks>
-public sealed class SessionStore(string dataDir, TimeSpan ttl)
+public sealed class SessionStore(string dataDir, TimeSpan ttl, Action<string, Exception>? onFailure = null)
 {
     /// <summary>
     /// How coarse <see cref="SessionRecord.LastUsedUtc"/> is allowed to be.
@@ -105,7 +105,16 @@ public sealed class SessionStore(string dataDir, TimeSpan ttl)
         return used;
     }
 
-    public void Revoke(string token) => Delete(FileNameFor(token));
+    /// <summary>
+    /// Withdraw a session. False means the file is still there — the token still works.
+    /// </summary>
+    /// <remarks>
+    /// It RETURNS the outcome instead of swallowing it, and the endpoint answers 500 rather than
+    /// 204 when it is false. Answering 204 over a failed delete tells a person their credential was
+    /// withdrawn while a stolen bearer goes on working until it expires, which is the one lie a
+    /// revoke endpoint must not tell. Raised as Blocking on this change's code round.
+    /// </remarks>
+    public bool Revoke(string token) => Delete(FileNameFor(token));
 
     /// <summary>Every session whose deadline has passed, gone.</summary>
     /// <returns>How many were removed.</returns>
@@ -144,8 +153,12 @@ public sealed class SessionStore(string dataDir, TimeSpan ttl)
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
-            // A session that cannot be read is a session nobody is signed in with. Throwing here
-            // would turn one torn file into every request failing.
+            // A session that cannot be read is a session nobody is signed in with — throwing would
+            // turn one torn file into every request failing. But it is REPORTED: an unreadable
+            // session and an unknown one are the same 401 to the caller and completely different
+            // things to an operator, and only the log can tell them apart.
+            onFailure?.Invoke($"session file '{fileName}' could not be read", e);
+
             return null;
         }
     }
@@ -154,21 +167,33 @@ public sealed class SessionStore(string dataDir, TimeSpan ttl)
     {
         Directory.CreateDirectory(_dir);
         var path = Path.Combine(_dir, fileName);
-        var temporary = path + ".tmp";
+        // A UNIQUE temporary name, not `path + ".tmp"`: two windows of one person can refresh the
+        // same session at once, and a shared temporary name is two writers on one file — the very
+        // race the rename was chosen to avoid. (gemini, code round.)
+        var temporary = Path.Combine(_dir, $"{fileName}.{Path.GetRandomFileName()}.tmp");
         File.WriteAllText(temporary, JsonSerializer.Serialize(record, ServerJsonContext.Default.SessionRecord));
         // Move, not copy-then-delete: a reader sees the old file or the new one, never half of one.
         File.Move(temporary, path, overwrite: true);
     }
 
-    private void Delete(string fileName)
+    /// <summary>True when the file is gone — including when it was never there.</summary>
+    /// <remarks>
+    /// Absent is success: revoking twice is not an error, and a session that does not exist is
+    /// exactly as withdrawn as one that was just removed. Only a filesystem that REFUSED is false.
+    /// </remarks>
+    private bool Delete(string fileName)
     {
         try
         {
             File.Delete(Path.Combine(_dir, fileName));
+
+            return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // Revoking is best-effort against the filesystem; the session expires regardless.
+            onFailure?.Invoke($"session file '{fileName}' could not be deleted", e);
+
+            return false;
         }
     }
 }

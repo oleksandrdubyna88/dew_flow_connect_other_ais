@@ -130,6 +130,60 @@ public sealed class SessionTests
             .StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
+    /// <summary>
+    /// Revoking says whether it actually happened, and revoking twice is not a failure.
+    /// </summary>
+    /// <remarks>
+    /// Raised as Blocking on this story's code round: the endpoint answered 204 whatever the
+    /// filesystem did, so a delete that failed told a person their credential was withdrawn while
+    /// a stolen bearer went on working until it expired. The IO-failure branch itself is not
+    /// portably provokable — a file that refuses deletion is a Windows sharing violation and a
+    /// no-op on Linux — so what is pinned here is the contract the endpoint now reads.
+    /// </remarks>
+    [Fact]
+    public void RevokingSaysWhetherItHappened_AndTwiceIsStillSuccess()
+    {
+        var data = Directory.CreateTempSubdirectory("coai-session-").FullName;
+        var store = new SessionStore(data, TimeSpan.FromDays(7));
+        var (token, _) = store.Issue($"dev@{TeamServer.Domain}", "", DateTimeOffset.UtcNow);
+
+        store.Revoke(token).Should().BeTrue();
+        store.Revoke(token).Should().BeTrue("a session that is already gone is exactly as withdrawn");
+        store.Validate(token, DateTimeOffset.UtcNow).Should().BeNull();
+    }
+
+    /// <summary>
+    /// A read that fails is REPORTED, even though the caller still sees a plain 401: an unreadable
+    /// session and an unknown one are the same answer to a client and completely different things
+    /// to an operator.
+    /// </summary>
+    [Fact]
+    public void ASessionFileThatWillNotParse_IsReported_AndRefused()
+    {
+        var data = Directory.CreateTempSubdirectory("coai-session-").FullName;
+        var reported = new List<string>();
+        var store = new SessionStore(data, TimeSpan.FromDays(7), (message, _) => reported.Add(message));
+        var (token, _) = store.Issue($"dev@{TeamServer.Domain}", "", DateTimeOffset.UtcNow);
+        File.WriteAllText(
+            Path.Combine(data, "sessions", SessionStore.FileNameFor(token)), "{ this is not json");
+
+        store.Validate(token, DateTimeOffset.UtcNow).Should().BeNull();
+
+        reported.Should().ContainSingle().Which.Should().Contain("could not be read");
+    }
+
+    [Fact]
+    public async Task ARefusal_IsJson_LikeEveryOtherAnswerHere()
+    {
+        // A client deserialising this API's ErrorDto must not meet text/plain where the sentence is.
+        using var server = new TeamServer();
+        using var client = server.ClientFor($"dev@{TeamServer.Domain}");
+
+        var response = await client.DeleteAsync("/api/session", TestContext.Current.CancellationToken);
+
+        response.Content.Headers.ContentType!.MediaType.Should().Be("application/json");
+    }
+
     [Fact]
     public void AnExpiredSession_IsRefusedAndSweptOnSight()
     {
