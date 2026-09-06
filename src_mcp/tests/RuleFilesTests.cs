@@ -278,15 +278,16 @@ public sealed class RuleFilesTests : IDisposable
         // security, reuse-first, git-workflow, and all four language doctrines. The default is a
         // budget rather than a promise (the family set is ~199 KB, and what does not fit is NAMED),
         // but it must at least fit the shape of a real family repository rather than a third of it.
+        // Seven rules of 10 KB plus the entry file is 75 KB - inside 80, outside 60.
         Write("CLAUDE.md", Filler("entry", 3_000));
-        for (var n = 0; n < 5; n++)
+        for (var n = 0; n < 7; n++)
         {
             Write($".claude/rules/shared/common/rule-{n}.md", Filler($"rule {n}", 10_000));
         }
 
         var bundle = RuleFiles.Collect(_repo);
 
-        bundle.Files.Should().HaveCount(6, "55 KB of rules is not a big rule set");
+        bundle.Files.Should().HaveCount(8, "75 KB of rules is not a big rule set");
         bundle.Omitted.Should().BeEmpty();
     }
 }

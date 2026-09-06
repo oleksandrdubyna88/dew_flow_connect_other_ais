@@ -78,18 +78,21 @@ public static class RuleFiles
         [(".claude/rules", "*.md"), (".cursor/rules", "*.mdc"), (".cursor/rules", "*.md")];
 
     /// <summary>
-    /// Rules are text and a prompt is finite. 60 KB is about a dozen real rule files.
+    /// Rules are text and a prompt is finite. 80 KB is about a dozen and a half real rule files.
     /// </summary>
     /// <remarks>
     /// Raised from 40 KB on 2026-09-06, after measuring what this repository actually shows a
     /// reviewer: at 40 KB it was 8 files and 19 omitted, and the omitted list included `testing.md`,
     /// `security.md`, `reuse-first.md`, `git-workflow.md` and all four language doctrines — the rules
-    /// most findings are written against. At 60 KB it is 12 files and 15 omitted. The whole family
-    /// set is about 199 KB, so this is a budget, not a fix: what the budget cannot fit is NAMED in
-    /// the prompt (the bundle renders an "omitted for length" note) precisely so a reviewer cannot read an
-    /// absence as compliance.
+    /// most findings are written against. Raised to 80 KB the same day, on the operator's call, and
+    /// measured again there: 12 files, 77 KB, 16 omitted. The extra 20 KB buys ONE file, because
+    /// `development-workflow.md` (14 KB) and `http-contracts.md` (11 KB) are collected first and take a
+    /// quarter of the budget between them — so the honest reading is that the ORDER, not the size, is
+    /// what keeps `testing.md` and `security.md` out. The whole family set is about 199 KB, so this
+    /// stays a budget rather than a fix: what it cannot fit is NAMED in the prompt (the bundle renders
+    /// an "omitted for length" note) precisely so a reviewer cannot read an absence as compliance.
     /// </remarks>
-    public const int DefaultBudgetBytes = 60_000;
+    public const int DefaultBudgetBytes = 80_000;
 
     /// <summary>Somebody else's conventions, vendored or generated, are not this project's rules.</summary>
     private static readonly string[] NotOurs =
