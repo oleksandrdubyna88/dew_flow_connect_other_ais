@@ -7,6 +7,11 @@
 # operator runs rather than a promise this stack makes.
 set -euo pipefail
 
+# The archive holds signed-in vendor credentials and live session tokens. Default permissions make
+# it world-readable, which on a shared host hands every local account the whole team's access.
+# Raised on the code round.
+umask 077
+
 cd "$(dirname "$0")"
 
 # shellcheck disable=SC1091

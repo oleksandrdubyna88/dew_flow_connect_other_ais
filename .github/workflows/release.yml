@@ -22,7 +22,9 @@ on:
         description: 'What to release'
         required: true
         type: choice
-        options: [mcp, extension, server]
+        # `server` is deliberately NOT here: an image is a released artefact, and releases start
+        # from a `server-v*` tag cut on main. A dispatch build would publish one from a branch.
+        options: [mcp, extension]
 
 permissions:
   contents: read
@@ -314,23 +316,20 @@ jobs:
   # x64 runner under emulation either fails to link or takes long enough that it may as
   # well have. This is the same shape creds' release uses, for the same reason.
   # ---------------------------------------------------------------------------
-  server-image:
-    name: coai-server image (${{ matrix.arch }})
-    if: startsWith(github.ref, 'refs/tags/server-v') || inputs.target == 'server'
-    strategy:
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
+  # NOT a matrix, and that is the fix for a real defect rather than a style choice: every leg of a
+  # matrix writes into ONE job-output namespace, so `digest-amd64` and `digest-arm64` would be
+  # whatever the leg that finished LAST happened to set — one of them always empty, and
+  # `imagetools create` then fails on an empty reference. Two jobs have two namespaces. Caught on
+  # the code round; the workflow this was copied from has the same bug.
+  server-image-amd64:
+    name: coai-server image (amd64)
+    if: startsWith(github.ref, 'refs/tags/server-v')
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     outputs:
-      digest-amd64: ${{ steps.export.outputs.digest-amd64 }}
-      digest-arm64: ${{ steps.export.outputs.digest-arm64 }}
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v7
 
@@ -344,12 +343,7 @@ jobs:
 
       - id: ver
         shell: bash
-        run: |
-          if [[ "$GITHUB_REF" == refs/tags/server-v* ]]; then
-            echo "version=${GITHUB_REF_NAME#server-v}" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=0.0.0-manual" >> "$GITHUB_OUTPUT"
-          fi
+        run: echo "version=${GITHUB_REF_NAME#server-v}" >> "$GITHUB_OUTPUT"
 
       - id: build
         uses: docker/build-push-action@v7
@@ -365,15 +359,48 @@ jobs:
           # NO cache for the CLI layers is possible in a useful sense — the installers fetch
           # whatever is current, so a cached layer would pin the very thing the operator
           # decided not to pin. The .NET restore and publish layers cache normally.
-          cache-from: type=gha,scope=server-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=server-${{ matrix.arch }}
+          cache-from: type=gha,scope=server-amd64
+          cache-to: type=gha,mode=max,scope=server-amd64
 
-      - id: export
-        run: echo "digest-${{ matrix.arch }}=${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+  server-image-arm64:
+    name: coai-server image (arm64)
+    if: startsWith(github.ref, 'refs/tags/server-v')
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: ver
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#server-v}" >> "$GITHUB_OUTPUT"
+
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: src_server/Dockerfile
+          build-args: VERSION=${{ steps.ver.outputs.version }}
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/coai-server
+          outputs: type=image,push-by-digest=true,name-canonical=true
+          cache-from: type=gha,scope=server-arm64
+          cache-to: type=gha,mode=max,scope=server-arm64
 
   server-manifest:
     name: publish coai-server manifest
-    needs: server-image
+    needs: [server-image-amd64, server-image-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -387,16 +414,15 @@ jobs:
 
       - name: Stitch and tag
         run: |
+          set -euo pipefail
           IMAGE=ghcr.io/${{ github.repository_owner }}/coai-server
           VERSION="${GITHUB_REF_NAME#server-v}"
-          TAGS="-t $IMAGE:$VERSION"
-          # `latest` moves only on a real tag, so an operator who pinned :latest never picks
-          # up a workflow_dispatch trial build.
-          if [[ "$GITHUB_REF" == refs/tags/server-v* ]]; then
-            TAGS="$TAGS -t $IMAGE:latest"
-          else
-            TAGS="-t $IMAGE:manual-$(date +%Y%m%d%H%M 2>/dev/null || echo run)"
-          fi
-          docker buildx imagetools create $TAGS \
-            "$IMAGE@${{ needs.server-image.outputs.digest-amd64 }}" \
-            "$IMAGE@${{ needs.server-image.outputs.digest-arm64 }}"
+          AMD64="${{ needs.server-image-amd64.outputs.digest }}"
+          ARM64="${{ needs.server-image-arm64.outputs.digest }}"
+          # An empty digest here used to be possible and produced a confusing `invalid reference`
+          # from buildx. Say which one is missing instead.
+          [ -n "$AMD64" ] || { echo "amd64 digest is empty" >&2; exit 1; }
+          [ -n "$ARM64" ] || { echo "arm64 digest is empty" >&2; exit 1; }
+          docker buildx imagetools create -t "$IMAGE:$VERSION" -t "$IMAGE:latest" \
+            "$IMAGE@$AMD64" \
+            "$IMAGE@$ARM64"

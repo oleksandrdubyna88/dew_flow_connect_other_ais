@@ -52,7 +52,13 @@ server {
 
     location / {
         limit_req  zone=coai_req burst=40 nodelay;
-        limit_conn coai_conn 20;
+        # 200, not 20. A whole team shares ONE public address behind an office NAT, and every open
+        # panel holds a long poll for up to 25 s — so a low per-address cap does not throttle an
+        # attacker, it throttles the eleventh colleague, with a 503 that looks like the server being
+        # down. Raised on the code round. The real per-person limits are the SERVER's, where the
+        # caller is a signed-in email rather than an address everybody shares:
+        # Coai__PerCallerRunning, Coai__PerCallerQueued and its rate limiter.
+        limit_conn coai_conn 200;
 
         proxy_pass http://127.0.0.1:8090;
         proxy_http_version 1.1;
