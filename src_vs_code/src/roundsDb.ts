@@ -155,3 +155,22 @@ export function findingsByRound(log: DbLog): Map<string, readonly DbFinding[]> {
 
   return byRound;
 }
+
+/**
+ * What each round's gate CLOSED at, by the same key.
+ *
+ * <p>Separate from the findings because it answers a different question: the findings say what was
+ * raised, and this says whether anybody has decided about them. The server writes -1 until a resolve
+ * lands, which is the only honest way to tell "nothing was accepted" from "nobody has said yet" —
+ * and the log page read neither, so a round with thirteen open findings displayed as `done`.</p>
+ */
+export function decisionsByRound(log: DbLog): Map<string, { accepted: number; rejected: number }> {
+  const byRound = new Map<string, { accepted: number; rejected: number }>();
+  for (const one of log.rounds) {
+    byRound.set(
+      roundKeyOf(one.sessionId, one.repoPath, one.branch, one.stage, one.number),
+      { accepted: one.accepted, rejected: one.rejected });
+  }
+
+  return byRound;
+}

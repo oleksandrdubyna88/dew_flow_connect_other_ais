@@ -71,6 +71,21 @@ const USED = {
   stage: 'CodeReview', seconds: 23, tokensIn: 1_000_000, tokensOut: 200_000, costUsd: null, outcome: 'ok',
 };
 
+/** The same round as the database has it: a gate that was closed, nine accepted and four rejected. */
+const LOG = {
+  rounds: [{
+    repoPath: 'D:/repo', branch: 'main', stage: 'CodeReview', number: 1,
+    startedUtc: '2026-09-05T11:41:00.000Z', sessionId: 's1', accepted: 9, rejected: 4,
+    findings: [{
+      ordinal: 1, severity: 'Major', category: 'Reliability', file: 'src/Panel.cs', line: 40,
+      title: 'a finding', why: '', fix: '', role: 'Architecture', isGating: true,
+      providers: 'codex', resolution: 'accept', reason: '', reRaised: false,
+    }],
+  }],
+  blindSpots: [],
+  defended: [],
+};
+
 const PRICES = (model: string) =>
   model === 'gpt-5.6-sol' ? { inPerMillion: 2, outPerMillion: 10 } : undefined;
 
@@ -97,14 +112,14 @@ function bundledPage(): { html: string; script: string } {
   new Function('module', 'exports', bundle)(shim, shim.exports);
   const module_ = shim.exports as unknown as {
     roundsLogHtml: (rows: unknown[], questions: unknown[], nonce: string, usage?: string) => string;
-    rowsFrom: (sessions: unknown[], now: number, priceOf?: unknown, usage?: unknown[]) => unknown[];
+    rowsFrom: (sessions: unknown[], now: number, priceOf?: unknown, usage?: unknown[], log?: unknown) => unknown[];
   };
   // WITH a row, and a priced one. This helper used to render an empty page, and an empty page never
   // calls the functions that format a row — which is exactly how 0.29.12 shipped "R is not defined":
   // `cost3` is embedded by its source text and CALLED `money`, a module-level binding the minifier
   // had renamed to `R`. The page defines `money`, so nothing looked missing until a row asked for
   // its cost.
-  const html = module_.roundsLogHtml(module_.rowsFrom([SESSION], NOW, PRICES, [USED]), [], 'n0nce');
+  const html = module_.roundsLogHtml(module_.rowsFrom([SESSION], NOW, PRICES, [USED], LOG), [], 'n0nce');
   fs.rmSync(dir, { recursive: true, force: true });
 
   return { html, script: html.slice(html.indexOf('<script'), html.lastIndexOf('</script>')) };
@@ -152,6 +167,12 @@ test('the page script the bundle produces parses and runs', () => {
     seen['rows']?.innerHTML ?? '',
     /<tr/,
     'the page rendered no rows, so nothing that formats a row was ever called');
+  // And that the row went through the cell that reads the database's own counts: a page which
+  // rendered the badge but not this would look right and still hide whether the gate was closed.
+  assert.match(
+    seen['rows']?.innerHTML ?? '',
+    /9 ✓ 4 ✗/,
+    'the status cell did not render what the gate closed at');
 });
 
 test('a function embedded by its source calls nothing the minifier can rename', () => {

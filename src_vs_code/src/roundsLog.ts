@@ -5,7 +5,7 @@ import { UsageEntry, Window, WINDOWS } from './usage';
 import { Vendor } from './vendors';
 import { MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorColour } from './vendorColour';
-import { BlindSpot, DbFinding, DbLog, EMPTY_LOG, findingsByRound, roundKeyOf } from './roundsDb';
+import { BlindSpot, DbFinding, DbLog, decisionsByRound, EMPTY_LOG, findingsByRound, roundKeyOf } from './roundsDb';
 import { escapeHtml, jsonForScript } from './webviewHtml';
 
 /**
@@ -40,7 +40,17 @@ export interface LogRow {
   readonly stage: string;
   readonly number: number;
   readonly subject: string;
-  readonly status: 'running' | 'done' | 'interrupted';
+  /**
+   * `awaiting` is a finished round whose findings nobody has decided about yet — `done` is about the
+   * REVIEWERS having answered, and whether the gate was closed is a different fact.
+   */
+  readonly status: 'running' | 'done' | 'interrupted' | 'awaiting';
+
+  /**
+   * How the gate closed: accepted and rejected counts, or `null` for a round the database has never
+   * heard of. `-1` in either field is the server saying nobody has decided yet.
+   */
+  readonly decided: { readonly accepted: number; readonly rejected: number } | null;
   readonly verdict: string;
   readonly gating: number;
   /** The sum over its reviewers, or null when the file recorded none — absent is not zero. */
@@ -122,9 +132,11 @@ export function rowsFrom(
   log: DbLog = EMPTY_LOG,
 ): LogRow[] {
   const byRound = findingsByRound(log);
+  const decided = decisionsByRound(log);
 
   return sessions
-    .flatMap((session) => session.rounds.map((round) => rowFrom(session, round, nowMs, priceOf, usage, byRound)))
+    .flatMap((session) =>
+      session.rounds.map((round) => rowFrom(session, round, nowMs, priceOf, usage, byRound, decided)))
     .sort((a, b) => (b.startedUtc || b.completedUtc).localeCompare(a.startedUtc || a.completedUtc));
 }
 
@@ -135,9 +147,14 @@ function rowFrom(
   priceOf: PriceOfModel,
   usage: readonly UsageEntry[],
   byRound: Map<string, readonly DbFinding[]> = new Map(),
+  decidedBy: Map<string, { accepted: number; rejected: number }> = new Map(),
 ): LogRow {
   const cost = costOf(round, priceOf, usage, nowMs);
-  const status = round.status === 'running' ? 'running' : round.status === 'interrupted' ? 'interrupted' : 'done';
+  const key = roundKeyOf(
+    session.state.sessionId, session.state.repoPath, session.state.branch, round.stage, round.number);
+  const found = byRound.get(key) ?? [];
+  const decided = decidedBy.get(key) ?? null;
+  const status = statusOf(round, found, decided);
   const states = round.reviewerStates ?? [];
   const rows = reviewerRows(round);
 
@@ -152,6 +169,7 @@ function rowFrom(
     number: round.number,
     subject: round.subject ?? '',
     status,
+    decided,
     verdict: round.verdict,
     gating: round.gatingCount,
     findings: states.length === 0 ? null : states.reduce((sum, s) => sum + s.findings, 0),
@@ -164,9 +182,36 @@ function rowFrom(
     vendors: [...new Set(states.map((s) => s.provider))],
     reviewers: reviewerLines(round),
     reviewerColours: rows.map((r) => vendorColour(r.provider)),
-    found: byRound.get(roundKeyOf(
-      session.state.sessionId, session.state.repoPath, session.state.branch, round.stage, round.number)) ?? [],
+    found,
   };
+}
+
+/**
+ * What the row's Status column says.
+ *
+ * <p>`done` used to be everything that was not running or dead, and that read as finished while the
+ * gate was still open: a screenshot of a round with thirteen `open` findings showed Status `done`,
+ * Verdict `good_enough`. Both were true. Together they said the opposite of what was happening.</p>
+ *
+ * <p>So a fourth state, from the fact the server already records: `accepted` stays −1 until a
+ * resolve lands. A round that raised NOTHING is exempt — there is no resolve to make, so its −1
+ * never moves and it would sit in "awaiting" for ever. A round the database has never heard of is
+ * exempt too: an older server wrote no database, and accusing it of an unclosed gate invents a fact
+ * about a round nobody can resolve any more.</p>
+ */
+function statusOf(
+  round: RoundRecord,
+  found: readonly DbFinding[],
+  decided: { accepted: number; rejected: number } | null,
+): LogRow['status'] {
+  if (round.status === 'running') {
+    return 'running';
+  }
+  if (round.status === 'interrupted') {
+    return 'interrupted';
+  }
+
+  return decided !== null && decided.accepted < 0 && found.length > 0 ? 'awaiting' : 'done';
 }
 
 /**
@@ -671,6 +716,8 @@ export function roundsLogHtml(
   .badge.running { background: var(--vscode-charts-blue); color: var(--vscode-editor-background); }
   .badge.interrupted { background: var(--vscode-charts-orange); color: var(--vscode-editor-background); }
   .badge.done { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
+  .badge.awaiting { background: var(--vscode-charts-purple); color: var(--vscode-editor-background); }
+  .decided { margin-left: 6px; opacity: .85; white-space: nowrap; }
   .empty { opacity: .75; padding: 24px 0; }
   .failed { border: 1px solid var(--vscode-inputValidation-errorBorder, #c33); background: var(--vscode-inputValidation-errorBackground, transparent); padding: 8px 12px; margin: 0 0 12px; white-space: pre-wrap; }
   .tabs { display: flex; gap: 6px; margin: 4px 0 10px; border-bottom: 1px solid var(--vscode-panel-border); }
@@ -789,7 +836,17 @@ export function roundsLogHtml(
   }
 
   function badge(status) {
-    return '<span class="badge ' + esc(status) + '">' + esc(status) + '</span>';
+    var said = status === 'awaiting' ? 'awaiting decisions' : status;
+    return '<span class="badge ' + esc(status) + '">' + esc(said) + '</span>';
+  }
+  function decided(row) {
+    // Nothing for a round the database never saw, and nothing while the gate is still open - the
+    // badge already says that. A closed gate shows what it closed AT, which is the whole reason
+    // these two numbers are recorded.
+    if (!row.decided || row.decided.accepted < 0) { return ''; }
+    var a = row.decided.accepted, r = row.decided.rejected;
+    return '<span class="decided" title="' + a + ' accepted, ' + r + ' rejected">'
+      + a + ' ✓ ' + r + ' ✗</span>';
   }
   function detail(row) {
     if (row.reviewers.length === 0) {
@@ -843,7 +900,7 @@ export function roundsLogHtml(
         + '<td>' + esc(r.stage) + '</td>'
         + '<td class="num">' + r.number + '</td>'
         + '<td class="what" title="' + esc(r.subject) + '">' + esc(r.subject) + '</td>'
-        + '<td>' + badge(r.status) + '</td>'
+        + '<td>' + badge(r.status) + decided(r) + '</td>'
         + '<td>' + esc(r.verdict) + '</td>'
         + '<td class="num">' + r.gating + '</td>'
         + '<td class="num">' + num(r.findings) + '</td>'

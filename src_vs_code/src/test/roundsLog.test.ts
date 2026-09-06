@@ -9,6 +9,7 @@ import {
 } from '../roundsLog';
 import { Escalation } from '../escalations';
 import { RoundRecord, SessionFile } from '../rounds';
+import { DbFinding, DbLog, DbRound } from '../roundsDb';
 
 /**
  * The rounds log: every round of every session, as rows a table can sort, filter and search.
@@ -226,4 +227,74 @@ test('the table offers every column the log has, each sortable, and a filter per
     assert.ok(html.includes(`data-filter="${facet}"`), `filter ${facet}`);
   }
   assert.ok(html.includes('id="search"'));
+});
+
+// ---------- whether anybody has decided yet ----------
+
+function dbFinding(over: Partial<DbFinding> = {}): DbFinding {
+  return {
+    ordinal: 1, severity: 'Major', category: 'Reliability', file: 'src/Panel.cs', line: 40,
+    title: 'the session file is opened without FileShare', why: '…', fix: '…',
+    role: 'Architecture', isGating: true, providers: 'codex', resolution: '', reason: '',
+    reRaised: false,
+    ...over,
+  };
+}
+
+function dbLog(over: Partial<DbRound> = {}): DbLog {
+  return {
+    rounds: [{
+      repoPath: 'D:/rsd/dew_flow_connect_other_ais', branch: 'feat/shared-gate-rule',
+      stage: 'CodeReview', number: 1, startedUtc: '2026-09-05T07:41:00.000Z',
+      sessionId: 'ba0c73a1', accepted: -1, rejected: -1, findings: [dbFinding()],
+      ...over,
+    }],
+    blindSpots: [],
+    defended: [],
+  };
+}
+
+test('a finished round whose findings nobody has decided says so, instead of done', () => {
+  // Asked for over a screenshot: the row read Status `done`, Verdict `good_enough`, and thirteen
+  // findings under it were still `open`. Both fields were true and together they read as finished.
+  // `done` is about the reviewers having answered; whether the gate was CLOSED is a different fact,
+  // and the server already records it — accepted stays -1 until a resolve lands.
+  const [row] = rowsFrom([session([round()])], NOW, () => undefined, [], dbLog()) as [LogRow];
+
+  assert.equal(row.status, 'awaiting');
+  assert.deepEqual(row.decided, { accepted: -1, rejected: -1 });
+});
+
+test('once the decisions are recorded the row shows the split', () => {
+  const [row] = rowsFrom(
+    [session([round()])], NOW, () => undefined, [],
+    dbLog({ accepted: 9, rejected: 4, findings: [dbFinding({ resolution: 'accept' })] })) as [LogRow];
+
+  assert.equal(row.status, 'done');
+  assert.deepEqual(row.decided, { accepted: 9, rejected: 4 });
+});
+
+test('a round that produced no findings has nothing to decide and stays done', () => {
+  // Otherwise every clean round would sit in "awaiting decisions" for ever: there is no resolve to
+  // make, so the server's -1 never moves.
+  const [row] = rowsFrom(
+    [session([round()])], NOW, () => undefined, [], dbLog({ findings: [] })) as [LogRow];
+
+  assert.equal(row.status, 'done');
+});
+
+test('a running round is running, whatever the database has not yet been told', () => {
+  const [row] = rowsFrom(
+    [session([round({ status: 'running', completedUtc: '' })])], NOW, () => undefined, [], dbLog()) as [LogRow];
+
+  assert.equal(row.status, 'running');
+});
+
+test('a round the database has never heard of is done, not awaiting', () => {
+  // An older server wrote no database at all, and a row that accused it of an unclosed gate would
+  // be inventing a fact about a round nobody can resolve any more.
+  const [row] = rowsFrom([session([round()])], NOW) as [LogRow];
+
+  assert.equal(row.status, 'done');
+  assert.equal(row.decided, null);
 });
