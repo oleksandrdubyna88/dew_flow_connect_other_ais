@@ -118,6 +118,10 @@ async function waitForReady(baseUrl, child, seconds) {
 // since CI builds the solution before it runs anything and a developer has just built to get here.
 // What is left is a clear refusal when the binary is not there.
 
+const exe = path.join(
+  ROOT, 'src_server', 'src', 'bin', 'Debug', 'net10.0',
+  process.platform === 'win32' ? 'coai-server.exe' : 'coai-server');
+
 if (!existsSync(exe)) {
   fail(ENVIRONMENT, `${exe} is not there. Build it first: dotnet build src_server/src/CoaiServer.csproj`);
 }
@@ -140,10 +144,6 @@ writeFileSync(
   path.join(dataDir, 'vendors.json'),
   JSON.stringify([{ id: 'codex', runtime: 'codex', models: ['gpt-5.6-luna'], slots: ['a'] }]),
 );
-
-const exe = path.join(
-  ROOT, 'src_server', 'src', 'bin', 'Debug', 'net10.0',
-  process.platform === 'win32' ? 'coai-server.exe' : 'coai-server');
 
 // The server's output goes to a FILE, never to a pipe this script holds.
 //
