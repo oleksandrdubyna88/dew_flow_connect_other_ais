@@ -74,9 +74,10 @@ import {
   TeamServer,
   canonicalTeamServerUrl,
   newTeamServerId,
+  remoteVendorRowId,
   teamServersFrom,
 } from './teamServers';
-import { TeamServerState } from './teamServerView';
+import { TeamServerState, slotSentence } from './teamServerView';
 import { coaiDataDir } from './extension';
 import {
   executableFor,
@@ -1359,19 +1360,94 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     await this.render();
   }
 
+  /**
+   * A reviewer from a Team server: pick the server, then pick from what it OFFERS.
+   *
+   * <p>The catalog is fetched at the moment of the choice rather than read from the cache. A stale
+   * cache would mint a row naming a vendor the server has since dropped, and the failure would then
+   * arrive at the first review reading exactly like a typo. Raised as blocking on the plan round.</p>
+   *
+   * <p>The vendor's id comes from the catalog VERBATIM — never from the label shown to the person —
+   * because that string is what `--vendor` sends and what the server matches.</p>
+   */
+  private async addFromTeamServer(server: TeamServer): Promise<Vendor | undefined> {
+    const token = await readToken(coaiDataDir(), server.url);
+    const answer = await catalogOf(server, token);
+    if (!answer.ok) {
+      void vscode.window.showWarningMessage(`${server.name}: ${answer.message}`);
+
+      return undefined;
+    }
+
+    const offered = answer.value.vendors ?? [];
+    if (offered.length === 0) {
+      void vscode.window.showWarningMessage(
+        `${server.name} offers no vendors yet — the operator has not added any accounts to it.`,
+      );
+
+      return undefined;
+    }
+
+    const picked = await vscode.window.showQuickPick(
+      offered.map((v) => ({ label: v.id, detail: slotSentence(v), vendor: v })),
+      { title: `Add a reviewer from ${server.name}`, placeHolder: 'Which vendor should review?' },
+    );
+    if (picked === undefined) {
+      return undefined;
+    }
+
+    return {
+      id: remoteVendorRowId(server.id, picked.vendor.id),
+      runtime: 'remote',
+      // Verbatim from the catalog: this is what `--vendor` sends and what the server matches.
+      remoteVendor: picked.vendor.id,
+      model: picked.vendor.models[0] ?? '',
+      enabled: true,
+      plan: true,
+      code: true,
+      baseUrl: canonicalTeamServerUrl(server.url),
+      executablePath: '',
+      pricePerMillionIn: 0,
+      pricePerMillionOut: 0,
+    };
+  }
+
   private async addVendor(): Promise<void> {
     const existing = new Set(this.vendorsHere().map((v) => v.id));
     // A preset already in the panel is not offered twice; the blank one (empty id) always is.
     const offered = VENDOR_PRESETS.filter((p) => p.id.length === 0 || !existing.has(p.id));
+    // Only servers this machine is actually SIGNED IN to. One that is merely configured can neither
+    // be asked what it offers nor run a review, so offering it would be a dead entry.
+    const config0 = vscode.workspace.getConfiguration('coai');
+    const teamServers = this.teamServers(config0).filter(
+      (s) => (this.context.globalState.get<SignedIn>(signedInKey(s.id))?.email ?? '').length > 0,
+    );
     const picked = await vscode.window.showQuickPick(
-      offered.map((p) => ({ label: p.label, detail: p.hint, preset: p })),
+      [
+        ...offered.map((p) => ({ label: p.label, detail: p.hint, preset: p, server: undefined })),
+        ...teamServers.map((s) => ({
+          label: `Team server ${s.name}`,
+          detail: `on ${canonicalTeamServerUrl(s.url)} — the company's subscription, nothing to install`,
+          preset: undefined,
+          server: s,
+        })),
+      ],
       { title: 'Add a reviewer', placeHolder: 'Which vendor should review as well?' },
     );
     if (picked === undefined) {
       return;
     }
 
-    let vendor: Vendor = { ...picked.preset };
+    if (picked.server !== undefined) {
+      const fromServer = await this.addFromTeamServer(picked.server);
+      if (fromServer !== undefined) {
+        await this.saveVendor(fromServer);
+      }
+
+      return;
+    }
+
+    let vendor: Vendor = { ...picked.preset! };
     if (vendor.id.length === 0) {
       const name = await vscode.window.showInputBox({
         title: 'Add a reviewer',
@@ -1394,12 +1470,19 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       vendor = { ...vendor, id: normaliseId(name), baseUrl: baseUrl.trim() };
     }
 
+    await this.saveVendor(vendor);
+  }
+
+  /** One place a new reviewer is written, so both routes refuse a duplicate the same way. */
+  private async saveVendor(vendor: Vendor): Promise<void> {
     const config = vscode.workspace.getConfiguration('coai');
     const vendors = vendorsFrom(this.read(config)('vendors'));
     if (vendors.some((v) => v.id === vendor.id)) {
       void vscode.window.showWarningMessage(`${vendor.id} is already a reviewer.`);
+
       return;
     }
+
     await config.update('vendors', [...vendors, vendor], vscode.ConfigurationTarget.Global);
   }
 
