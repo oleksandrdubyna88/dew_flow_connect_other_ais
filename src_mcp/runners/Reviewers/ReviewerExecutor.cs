@@ -213,7 +213,7 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
         if (repair is null)
         {
             return new ReviewerOutcome.Unparseable(
-                Because(Said(answer), "and no repair was configured", Keep(invocation, evidence)), usage);
+                Because(Said(answer, evidence), "and no repair was configured", Keep(invocation, evidence)), usage);
         }
 
         var (repairOutcome, repaired, repairUsage, repairAnswer, repairEvidence) = await RunOnceAsync(repair, ct);
@@ -226,7 +226,10 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
                    // empty: a vendor whose envelope broke leaves nothing to read, and the
                    // evidence file was landing at zero bytes exactly when it was most needed.
                    : new ReviewerOutcome.Unparseable(
-                       Because(Said(repairAnswer ?? answer), "after one repair attempt", Keep(repair, Longer(evidence, repairEvidence))),
+                       Because(
+                           Said(repairAnswer ?? answer, Longer(evidence, repairEvidence)),
+                           "after one repair attempt",
+                           Keep(repair, Longer(evidence, repairEvidence))),
                        usage.Add(repairUsage)));
     }
 
@@ -251,10 +254,45 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
     /// vendor had returned NOTHING — an empty envelope — and the sentence sent the reader looking
     /// for malformed JSON that did not exist.
     /// </remarks>
-    private static string Said(string? raw) =>
+    private static string Said(string? raw, string? evidence) =>
         string.IsNullOrWhiteSpace(raw)
-            ? "the vendor returned an empty answer"
+            ? Explained("the vendor returned an empty answer", Complaint(evidence))
             : "the answer was not the schema's JSON";
+
+    /// <summary>
+    /// The CLI's own sentence, when it produced nothing and said why.
+    /// </summary>
+    /// <remarks>
+    /// Measured on a real round, 2026-09-06: three antigravity reviewers reported "the vendor
+    /// returned an empty answer" and the panel showed nothing more, while the CLI's stderr said
+    /// exactly what happened — a tool wanted the "command" permission, headless mode cannot prompt
+    /// for one, so it auto-denied itself and printed nothing. That sentence was only in the kept
+    /// evidence file, which nobody knows to open; finding it took a quarter of an hour, and reading
+    /// the note should have taken seconds. The transcript is already here — this reads the stderr
+    /// half of it.
+    /// </remarks>
+    private static string Complaint(string? evidence)
+    {
+        const string marker = "--- stderr ---";
+        var at = evidence?.LastIndexOf(marker, StringComparison.Ordinal) ?? -1;
+        if (at < 0)
+        {
+            return string.Empty;
+        }
+
+        var said = evidence![(at + marker.Length)..]
+            .Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault(line => line.Length > 0) ?? string.Empty;
+
+        // One line, capped: a note is read in a table cell, and a vendor's stack trace is not the
+        // sentence a person needs.
+        return said.Length <= ComplaintCap ? said : said[..ComplaintCap] + "…";
+    }
+
+    private static string Explained(string what, string why) =>
+        why.Length == 0 ? what : $"{what} — it said: {why}";
+
+    private const int ComplaintCap = 240;
 
     /// <summary>The launch that actually said something — the repair is often the empty one.</summary>
     private static string? Longer(string? first, string? second) =>
