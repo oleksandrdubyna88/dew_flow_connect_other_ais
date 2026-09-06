@@ -1,5 +1,6 @@
 import { Escalation } from './escalations';
 import { roundKey, usageRegion } from './panelView';
+import { TeamServerState } from './teamServerView';
 import { ModelPrice } from './modelPrices';
 import { UsageEntry, Window, WINDOWS } from './usage';
 import { Vendor } from './vendors';
@@ -525,12 +526,14 @@ export function usageTabHtml(
   window: Window,
   vendors: readonly Vendor[],
   prices: Readonly<Record<string, ModelPrice>>,
+  teamServers: readonly TeamServerState[] = [],
+  usageScope: 'me' | 'company' = 'me',
 ): string {
   const buttons = WINDOWS
     .map((w) => `<button type="button" class="tab${w.id === window ? ' on' : ''}" data-command="usageWindow" data-id="${w.id}">${escapeHtml(w.label)}</button>`)
     .join('');
 
-  return `<div class="windows">${buttons}</div>` + '\n' + `<div class="usage-rows">${usageRegion(usage, window, vendors, prices)}</div>`;
+  return `<div class="windows">${buttons}</div>` + '\n' + `<div class="usage-rows">${usageRegion(usage, window, vendors, prices, teamServers, usageScope)}</div>`;
 }
 
 const COLUMNS: ReadonlyArray<{ key: SortKey; label: string; numeric?: boolean }> = [

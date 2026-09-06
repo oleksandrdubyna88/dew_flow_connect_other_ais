@@ -1,4 +1,4 @@
-import { Catalog, CatalogVendor, SlotSummary } from './teamServerApi';
+import { Catalog, CatalogVendor, SlotSummary, Usage } from './teamServerApi';
 import { TeamServer, canonicalTeamServerUrl } from './teamServers';
 
 /**
@@ -21,6 +21,65 @@ export interface TeamServerState {
   readonly problem: string;
   /** Whether {@link catalog} predates the last failed attempt. */
   readonly stale: boolean;
+  /** What this server says has been spent on it, in the window the panel is showing. */
+  readonly usage?: Usage | undefined;
+}
+
+/** Whether anybody signed in here is an admin — the only people offered *Company*. */
+export function anyAdmin(states: readonly TeamServerState[]): boolean {
+  return states.some((s) => s.catalog?.isAdmin === true);
+}
+
+/**
+ * What one Team server says has been spent on it.
+ *
+ * <p>The server has already done the arithmetic — it keeps the ledger — so this renders what it
+ * said rather than recomputing anything. Failed runs are counted, never filtered: a review that
+ * burned ninety seconds and answered nothing spent the same as one that answered.</p>
+ */
+export function teamUsageBlock(
+  state: TeamServerState,
+  shortNumber: (n: number) => string,
+): string {
+  const rows = state.usage?.vendors ?? [];
+  if (rows.length === 0) {
+    return `<div class="ts-usage"><b>${escape(state.server.name)}</b>`
+      + `<div class="empty">Nothing recorded on this server in this window.</div></div>`;
+  }
+
+  const busiest = Math.max(...rows.map((r) => r.tokensIn + r.tokensOut), 1);
+  const cards = rows.map((r) => {
+    const total = r.tokensIn + r.tokensOut;
+    const failed = r.failed === 0 ? '' : ` · <span class="warn">${r.failed} failed</span>`;
+    const width = Math.max(2, Math.round((total / busiest) * 100));
+
+    return `<div class="spend">
+  <div class="head"><span class="name">${escape(r.vendor)}</span></div>
+  <div class="bar"><span style="width:${width}%"></span></div>
+  <div class="figures">${shortNumber(r.tokensIn)} in · ${shortNumber(r.tokensOut)} out · ${r.runs} run(s)${failed}</div>
+</div>`;
+  }).join('\n');
+
+  return `<div class="ts-usage"><b>${escape(state.server.name)}</b>
+${cards}
+</div>`;
+}
+
+/**
+ * The Me / Company control, and why it is only sometimes there.
+ *
+ * <p>The SERVER refuses `scope=company` for anybody who is not an admin, so rendering the control
+ * for everybody would be offering a button that answers 403. It is shown when a server this machine
+ * is signed in to says this account is an admin.</p>
+ */
+export function usageScopeControl(states: readonly TeamServerState[], scope: 'me' | 'company'): string {
+  if (!anyAdmin(states)) {
+    return '';
+  }
+
+  return `<button class="link" data-command="teamUsageScope">`
+    + `${scope === 'company' ? 'Showing the whole company — show just me' : 'Show the whole company'}`
+    + `</button>`;
 }
 
 /**
