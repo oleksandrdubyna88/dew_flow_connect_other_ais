@@ -10,7 +10,7 @@ import {
   Side,
   assetNameFor,
   binaryNameFor,
-  companionsOf,
+  copyCompanions,
   entryPathIn,
   installedKey,
   ridFor,
@@ -202,7 +202,7 @@ export async function installLatest(
     // executable sits in — so a copy of the binary alone is a server that cannot open its own
     // database, and the failure is silent because that write is best-effort. Copying the archive's
     // contents rather than a named file means the next native dependency needs no change here.
-    await copyCompanions(vscode.Uri.joinPath(scratch, entryPathIn(rid, version).split('/')[0]!), storage, rid);
+    await placeCompanions(vscode.Uri.joinPath(scratch, entryPathIn(rid, version).split('/')[0]!), storage, rid);
     await makeExecutable(target);
     await state.update(installedKey(thisSide(storage)), version);
     // The new file has a new mtime, so the cache would miss anyway — but saying so beats relying on
@@ -276,24 +276,19 @@ async function verify(bytes: Uint8Array, sumUrl: string, asset: string): Promise
  *
  * <p>The binary itself is copied by name because that name is what the panel launches; everything
  * else is copied because the archive would not carry it otherwise. Today that is one native SQLite
- * library per platform (`e_sqlite3.dll`, `libe_sqlite3.so`, `libe_sqlite3.dylib`).</p>
+ * library per platform (`e_sqlite3.dll`, `libe_sqlite3.so`, `libe_sqlite3.dylib`) — copying the
+ * archive's CONTENTS rather than a file known by name means the next native dependency needs no
+ * change here at all.</p>
  *
- * <p>A file that cannot be copied is not fatal: the binary is already in place and a missing
- * companion is a feature that degrades, not a server that will not start.</p>
+ * <p>Which files those are, and what a failed copy means, are decided in `coaiInstall`, where a test
+ * can reach them. This is the `vscode` half and nothing else.</p>
  */
-async function copyCompanions(from: vscode.Uri, storage: vscode.Uri, rid: CoaiRid): Promise<void> {
+async function placeCompanions(from: vscode.Uri, storage: vscode.Uri, rid: CoaiRid): Promise<void> {
   const entries = (await vscode.workspace.fs.readDirectory(from))
     .map(([name, kind]) => [name, kind === vscode.FileType.File] as const);
-  for (const name of companionsOf(entries, rid)) {
-    try {
-      await vscode.workspace.fs.copy(
-        vscode.Uri.joinPath(from, name),
-        vscode.Uri.joinPath(storage, name),
-        { overwrite: true });
-    } catch {
-      // Nothing to do about it here, and the server still starts.
-    }
-  }
+  await copyCompanions(entries, rid, (name) =>
+    vscode.workspace.fs.copy(
+      vscode.Uri.joinPath(from, name), vscode.Uri.joinPath(storage, name), { overwrite: true }));
 }
 
 function extract(archive: vscode.Uri, into: vscode.Uri): Promise<void> {
