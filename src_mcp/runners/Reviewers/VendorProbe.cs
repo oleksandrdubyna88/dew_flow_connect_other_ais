@@ -62,44 +62,81 @@ public static class VendorProbe
         TimeSpan? timeout = null,
         Func<VendorIdentity, bool, CancellationToken, Task<VendorHealth>>? remoteHealth = null)
     {
-        // Resolved once: `For` constructs a runtime, and asking it twice per probe allocated one
-        // per configured vendor per catalog call for nothing.
-        var runtime = RuntimeResolution.For(vendor);
         var runtimeName = RuntimeResolution.NameOf(vendor);
-        if (runtime is null)
+        if (ClosedDoor(vendor, runtimeName, enabled) is { } shut)
+        {
+            return shut;
+        }
+
+        return runtimeName switch
+        {
+            "local" => LocalHealth(vendor, enabled, model),
+            "remote" => await RemoteHealthAsync(vendor, enabled, remoteHealth, ct),
+            _ => await CliHealthAsync(launcher, vendor, runtimeName, enabled, executablePath, hasVaultKey, timeout, ct),
+        };
+    }
+
+    /// <summary>
+    /// The answers that are decided before anything is run.
+    /// </summary>
+    /// <remarks>
+    /// The ORDER is the whole thing, and it is unchanged: a vendor no build knows is refused first,
+    /// and a RETIRED runtime is answered before the probe rather than by it — <c>gemini --version</c>
+    /// exits 0 without ever reaching Google, so a probe built on <c>--version</c> is structurally
+    /// incapable of seeing the retirement and reported "own auth" for a vendor that could not sign in
+    /// at all.
+    /// </remarks>
+    private static VendorHealth? ClosedDoor(VendorIdentity vendor, string runtimeName, bool enabled)
+    {
+        if (RuntimeResolution.For(vendor) is null)
         {
             return new VendorHealth(enabled, false, "", "unavailable",
                 ReviewerRuntimeSelector.Default.RefusalFor(vendor.Provider));
         }
 
-        // A retired runtime is answered before the probe, not by it: `gemini --version` exits 0
-        // without ever reaching Google, so a probe built on --version is structurally incapable of
-        // seeing the retirement and reported "own auth" for a vendor that could not sign in at all.
-        if (VendorDiagnosis.ForRuntime(runtimeName) is { } retired)
-        {
-            return new VendorHealth(enabled, false, "", "unavailable", retired);
-        }
+        return VendorDiagnosis.ForRuntime(runtimeName) is { } retired
+            ? new VendorHealth(enabled, false, "", "unavailable", retired)
+            : null;
+    }
 
-        if (runtimeName == "local")
-        {
-            return LocalHealth(vendor, enabled, model);
-        }
+    /// <summary>
+    /// A Team server vendor is asked over HTTP, by whoever holds the token.
+    /// </summary>
+    /// <remarks>
+    /// Its arm is load-bearing rather than tidy: the executable a remote vendor names is
+    /// <c>coai-mcp</c> ITSELF, so without it the probe would run this binary against itself and report
+    /// whatever it printed as a vendor's health.
+    /// </remarks>
+    private static async Task<VendorHealth> RemoteHealthAsync(
+        VendorIdentity vendor,
+        bool enabled,
+        Func<VendorIdentity, bool, CancellationToken, Task<VendorHealth>>? remoteHealth,
+        CancellationToken ct) =>
+        remoteHealth is null
+            ? new VendorHealth(enabled, false, "", "unavailable",
+                $"'{vendor.Provider}' is a Team server vendor, which this process cannot probe")
+            : await remoteHealth(vendor, enabled, ct);
 
-        if (runtimeName == "remote")
-        {
-            return remoteHealth is null
-                ? new VendorHealth(enabled, false, "", "unavailable",
-                    $"'{vendor.Provider}' is a Team server vendor, which this process cannot probe")
-                : await remoteHealth(vendor, enabled, ct);
-        }
-
+    /// <summary>A vendor with a CLI: ask the CLI what it is.</summary>
+    private static async Task<VendorHealth> CliHealthAsync(
+        IProcessLauncher launcher,
+        VendorIdentity vendor,
+        string runtimeName,
+        bool enabled,
+        string executablePath,
+        bool hasVaultKey,
+        TimeSpan? timeout,
+        CancellationToken ct)
+    {
         var (auth, authNote) = RuntimeResolution.AuthOf(vendor, hasVaultKey);
         if (!enabled)
         {
             return new VendorHealth(false, false, "", auth, "disabled in settings");
         }
 
-        var exe = executablePath.Length > 0 ? executablePath : runtime.DefaultExecutable;
+        var exe = executablePath.Length > 0
+            ? executablePath
+            : RuntimeResolution.For(vendor)!.DefaultExecutable;
 
         return await AskItsVersionAsync(launcher, runtimeName, exe, auth, authNote, timeout ?? DefaultTimeout, ct);
     }

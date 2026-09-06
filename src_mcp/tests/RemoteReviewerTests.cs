@@ -275,6 +275,46 @@ public sealed class RemoteRuntimeTests
     }
 
     [Fact]
+    public void TheVENDORSentIsTheOneTheSERVERKnowsNotTheRowsOwnId()
+    {
+        // The defect this exists to prevent: a row is named `<server>-<vendor>` so that two Team
+        // servers each offering `codex` do not collide on one id — the id names the row, its usage
+        // history and its vault key. But the SERVER only knows `codex`. Sending the row id would be
+        // refused by every server, and the probe would report a vendor the server "does not offer",
+        // which reads exactly like a typo.
+        var output = Path.Combine(Path.GetTempPath(), "coai-remote-" + Guid.NewGuid().ToString("N"));
+        var invocation = new RemoteRuntime("remsoft-dev-codex", "https://coai.example.com", "codex").Build(
+            ReviewRole.Architecture, "review this", output, Path.Combine(output, "s.json"), output,
+            new ReviewerSettings("remsoft-dev-codex") { Model = "m", DataDir = "/data" });
+
+        var args = invocation.Request.Arguments.ToList();
+        args[args.IndexOf("--vendor") + 1].Should().Be("codex");
+        // The row keeps its own name everywhere else — the round files findings under it.
+        invocation.Provider.Should().Be("remsoft-dev-codex");
+    }
+
+    [Fact]
+    public void AVendorWithNoServerNameFallsBackToItsOwnId() =>
+        // Which is what every hand-written row does, and what every non-remote vendor has always
+        // done. A row that names nothing extra behaves as it reads.
+        new RemoteRuntime("codex", "https://s").VendorOnServer.Should().Be("codex");
+
+    [Fact]
+    public void TheIdentityCarriesTheServersNameForTheVendor()
+    {
+        // The one place both the adapter and the probe read it from, so they cannot disagree.
+        new VendorIdentity("remsoft-dev-codex", "remote", "https://s", "codex")
+            .VendorOnServer.Should().Be("codex");
+        new VendorIdentity("codex", "codex", "").VendorOnServer.Should().Be("codex");
+    }
+
+    [Fact]
+    public void ResolvingARemoteVendorHandsTheAdapterTheServersName() =>
+        RuntimeResolution.For(new VendorIdentity("remsoft-dev-codex", "remote", "https://s", "codex"))
+            .Should().BeOfType<RemoteRuntime>()
+            .Which.VendorOnServer.Should().Be("codex");
+
+    [Fact]
     public void ThereIsNoSharedResourceBecauseTheServerHasItsOwnQueue() =>
         // A client-side per-resource semaphore would serialise reviews the server can run at once.
         Build("/data").SharedResource.Should().BeEmpty();

@@ -23,9 +23,21 @@ namespace CoaiMcp.Runners.Reviewers;
 /// accepts, and <see cref="CancelAbandoned"/> reads it and cancels. Raised as Blocking on the plan
 /// round.</para>
 /// </remarks>
-public sealed class RemoteRuntime(string id, string serverUrl) : IReviewerRuntime
+public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnServer = "") : IReviewerRuntime
 {
     public string Provider => id;
+
+    /// <summary>
+    /// What this vendor is called ON THE SERVER — not what the row is called here.
+    /// </summary>
+    /// <remarks>
+    /// A row is named <c>&lt;server&gt;-&lt;vendor&gt;</c> so that two Team servers each offering
+    /// <c>codex</c> do not collide on one id, since the id names the row, its usage history and its
+    /// vault key. The server knows only <c>codex</c>. Sending the row id would be refused by every
+    /// server, and the probe would report a vendor the server "does not offer" — which reads exactly
+    /// like a typo. Empty falls back to the row id, which is what every hand-written row does.
+    /// </remarks>
+    public string VendorOnServer => vendorOnServer.Length > 0 ? vendorOnServer : id;
 
     public string DefaultExecutable => LocalRuntime.SelfInvocation().Executable;
 
@@ -61,7 +73,7 @@ public sealed class RemoteRuntime(string id, string serverUrl) : IReviewerRuntim
                     .. leading,
                     "--ask-remote",
                     "--server", ServerUrl,
-                    "--vendor", id,
+                    "--vendor", VendorOnServer,
                     "--model", settings.Model,
                     "--role", role.ToString(),
                     "--prompt-file", promptFile,
