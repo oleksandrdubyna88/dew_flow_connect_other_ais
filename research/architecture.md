@@ -47,7 +47,7 @@ C4Container
 | Reviewer runners (worktrees, scheduler, vendors) | [module_runners.md](module_runners.md) | **shipped 2026-08-31** |
 | `coai-mcp` server | [module_server.md](module_server.md) | **shipped 2026-08-31** |
 | VS Code extension | [module_extension.md](module_extension.md) | **shipped 2026-08-31** (escalation loopback deferred) |
-| Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [../todo/PLAN_team_server.md](../todo/PLAN_team_server.md) | **stories 2.1–2.3 shipped 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots, `login`, and the job queue with the review endpoints; usage and the admin views are 2.4 |
+| Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [../todo/PLAN_team_server.md](../todo/PLAN_team_server.md) | **epic 2 complete, 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots, `login`, the job queue with the review endpoints, and per-person usage with the admin company view; every route has an `http/` contract. The panel is epic 3, the container and release epic 4 |
 | Measurement bench (`coai-bench`) | [module_bench.md](module_bench.md) · [../src_bench/README.md](../src_bench/README.md) | **shipped 2026-09-04** — drives the published server over stdio, records whole, judges separately |
 | Tests: the harness, its flows, its gaps | [module_tests.md](module_tests.md) | **recorded 2026-09-06** — three suites in-repo, the flow catalogue derived from the tool registry, and the two gaps named (no extension host, no real vendor in CI) |
 

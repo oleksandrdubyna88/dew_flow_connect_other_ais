@@ -1,0 +1,35 @@
+# What this server can run: the operator's allowlist, each CLI's presence, and the accounts.
+
+# @name catalog_lists_vendors_and_says_what_is_wrong
+# @prod
+GET {{baseUrl}}/api/catalog
+Authorization: Bearer {{token}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('vendors is a list and error is a string — never null for either', () => {
+    assert.ok(Array.isArray(response.parsedBody.vendors));
+    assert.strictEqual(typeof response.parsedBody.error, 'string');
+    assert.strictEqual(typeof response.parsedBody.serverVersion, 'string');
+  });
+  test('a server with no vendors.json says which file to create rather than looking healthy', () => {
+    assert.match(response.parsedBody.error, /vendors\.json/);
+  });
+}}
+
+###
+
+# @name catalog_without_a_token_is_unauthorized
+GET {{baseUrl}}/api/catalog
+
+?? status == 401
+
+###
+
+# @name catalog_from_another_domain_is_forbidden
+GET {{baseUrl}}/api/catalog
+Authorization: Bearer {{outsiderToken}}
+
+?? status == 403

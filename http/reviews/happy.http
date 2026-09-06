@@ -1,0 +1,38 @@
+# Submit, watch, cancel. NOTHING here reaches a vendor: the suite's data directory is fresh, so no
+# account has ever been signed in, the runner refuses to start a review on one, and every job stays
+# `queued`. That exercises the whole contract at zero subscription cost — see http/README.md.
+#
+# It needs a vendor in the allowlist, and the allowlist is a file the operator writes. The suite's
+# stack has none, so these requests assert the refusal an unconfigured server gives, which is the
+# state a fresh install is actually in.
+
+# @name submitting_to_a_server_with_no_vendors_says_so
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "vendor": "codex",
+  "model": "gpt-5.6-luna",
+  "prompt": "review this",
+  "role": "Architecture",
+  "timeoutSeconds": 60
+}
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('it names the state rather than blaming the request', () => {
+    assert.match(response.parsedBody.error, /no vendors configured/i);
+  });
+}}
+
+###
+
+# @uncovered 202 POST /api/reviews, 200 GET /api/reviews/{id}, 204 DELETE /api/reviews/{id} —
+#            they need a vendor in vendors.json, which is an operator's file rather than something a
+#            request can create. The same paths are covered end to end over real HTTP by
+#            ReviewEndpointTests, which writes that file into its own data directory.
+# @uncovered `done` and `failed` review outcomes — they need a signed-in paid account and real
+#            vendor spend. Mocking the vendor would prove the mock works.

@@ -1,0 +1,45 @@
+# A session is what `coai-mcp` carries: that process is started by an MCP client and has no Microsoft
+# session of its own, so the panel exchanges an identity-provider token for one of these.
+
+# @name session_is_minted_from_an_identity_token
+POST {{baseUrl}}/api/session
+Authorization: Bearer {{token}}
+
+?? status == 201
+
+{{
+  const assert = require('node:assert');
+  test('the token comes back once, with its deadline and whose it is', () => {
+    assert.ok(response.parsedBody.token.length > 20);
+    assert.strictEqual(response.parsedBody.email, 'dev@example.com');
+    assert.ok(Date.parse(response.parsedBody.expiresUtc) > Date.now());
+  });
+  exports.sessionToken = response.parsedBody.token;
+}}
+
+###
+
+# @name a_session_token_is_accepted_where_an_identity_token_is
+GET {{baseUrl}}/api/whoami
+Authorization: Bearer {{sessionToken}}
+
+?? status == 200
+
+###
+
+# @name a_session_can_be_withdrawn
+DELETE {{baseUrl}}/api/session
+Authorization: Bearer {{sessionToken}}
+
+?? status == 204
+
+###
+
+# The proof the revoke did something. A revoke that reports success over a credential that still
+# works is the one lie this endpoint must not tell.
+
+# @name a_withdrawn_session_no_longer_works
+GET {{baseUrl}}/api/whoami
+Authorization: Bearer {{sessionToken}}
+
+?? status == 401

@@ -10,8 +10,9 @@ using Serilog;
 
 // coai-server — the Team server: one subscription per vendor, shared by everyone who signs in.
 //
-// This build is story 2.1 of todo/PLAN_team_server.md: the host, its authentication and its
-// sessions. No vendors, no catalog, no jobs — those are 2.2 to 2.4, and everything else 404s.
+// Epic 2 of todo/PLAN_team_server.md, complete: the host and its authentication (2.1), the vendor
+// catalog and the account slots (2.2), the job queue and the review endpoints (2.3), and what the
+// team is spending (2.4). The panel that drives it is epic 3.
 //
 // The pipeline's ORDER is the load-bearing part and is mirrored from the vault server, where each
 // step was paid for: the contract version is judged before the token, so an old client is told to
@@ -108,6 +109,20 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
             }));
 });
+
+// Request BINDING needs the source-generated context too, not just the responses.
+//
+// `Results.Json(x, ServerJsonContext.Default.X)` names the shape explicitly, so every response was
+// fine. A `[FromBody] ReviewRequestDto` does not: minimal APIs bind it through the app's default
+// JsonSerializerOptions, and with JsonSerializerIsReflectionEnabledByDefault=false those have no
+// resolver at all. The result was not a bad request — it was every route throwing while the router
+// was being built, so the RELEASED binary answered 500 to everything including /api/health.
+//
+// No in-process test could see it: the test host does not set that MSBuild property, so reflection
+// is on there and binding quietly works. The `http/` contract suite found it on its first cold
+// start, which is the entire reason that tier exists.
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.TypeInfoResolverChain.Insert(0, ServerJsonContext.Default));
 
 Auth.AddSchemes(builder.Services, msTenant, msAudiences, googleEnabled, googleAudiences, localKey, localEnabled);
 
@@ -252,6 +267,7 @@ app.MapGet("/api/client-config", () => Results.Json(
 var gate = new CallerFilter(allowedDomains, allowAnyDomain, admins);
 app.MapSessionEndpoints(sessions, gate);
 app.MapCatalogEndpoints(catalog, slotRegistry, vendorHealth, gate);
+app.MapUsageEndpoints(new UsageReader(dataDir), gate);
 app.MapReviewEndpoints(
     jobs,
     catalog,

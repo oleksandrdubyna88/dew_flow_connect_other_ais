@@ -1,0 +1,109 @@
+# What the team is spending. A read, so every request here is prod-safe.
+
+# @name usage_returns_my_own_spending_and_the_range_it_used
+# @prod
+GET {{baseUrl}}/api/usage
+Authorization: Bearer {{token}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('vendors is a list and the scope says whose answer this is', () => {
+    assert.ok(Array.isArray(response.parsedBody.vendors));
+    assert.strictEqual(response.parsedBody.scope, 'me');
+  });
+  test('the range is named, because "today" is a word and this is the answer', () => {
+    assert.ok(Date.parse(response.parsedBody.fromUtc) <= Date.parse(response.parsedBody.toUtc));
+  });
+  test('a torn line is an operator problem and is not reported to a person', () => {
+    assert.strictEqual(response.parsedBody.unreadableLines, null);
+  });
+}}
+
+###
+
+# @name usage_accepts_each_window_it_documents
+# @prod
+GET {{baseUrl}}/api/usage?window=week
+Authorization: Bearer {{token}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('week is the last seven days, and the answer says so rather than leaving it to the name', () => {
+    const days = (Date.parse(response.parsedBody.toUtc) - Date.parse(response.parsedBody.fromUtc)) / 86400000;
+    assert.ok(days > 6.9 && days < 7.1, `expected about 7 days, got ${days}`);
+  });
+}}
+
+###
+
+# @name an_unknown_window_is_refused_naming_the_legal_ones
+GET {{baseUrl}}/api/usage?window=fortnight
+Authorization: Bearer {{token}}
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('all four names are in the message', () => {
+    for (const name of ['today', 'week', 'month', 'year']) {
+      assert.match(response.parsedBody.error, new RegExp(name));
+    }
+  });
+}}
+
+###
+
+# The company view is the admin one, and the refusal names the setting so somebody can ask the right
+# person for it.
+
+# @name company_scope_is_refused_to_a_non_admin
+GET {{baseUrl}}/api/usage?scope=company
+Authorization: Bearer {{token}}
+
+?? status == 403
+
+{{
+  const assert = require('node:assert');
+  test('it names Coai:Admins', () => {
+    assert.match(response.parsedBody.error, /Coai:Admins/);
+  });
+}}
+
+###
+
+# @name company_scope_answers_an_admin_with_people_and_the_unreadable_count
+# @prod
+GET {{baseUrl}}/api/usage?scope=company
+Authorization: Bearer {{adminToken}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('people is a list rather than null, even when nobody has spent anything', () => {
+    assert.strictEqual(response.parsedBody.scope, 'company');
+    assert.ok(Array.isArray(response.parsedBody.people));
+  });
+  test('an admin IS told how many lines could not be read', () => {
+    assert.strictEqual(typeof response.parsedBody.unreadableLines, 'number');
+  });
+}}
+
+###
+
+# @name usage_without_a_token_is_unauthorized
+GET {{baseUrl}}/api/usage
+
+?? status == 401
+
+###
+
+# @name usage_from_another_domain_is_forbidden
+GET {{baseUrl}}/api/usage
+Authorization: Bearer {{outsiderToken}}
+
+?? status == 403

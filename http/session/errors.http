@@ -1,0 +1,65 @@
+# @name minting_without_a_token_is_unauthorized
+POST {{baseUrl}}/api/session
+
+?? status == 401
+
+###
+
+# @name minting_from_another_domain_is_forbidden
+POST {{baseUrl}}/api/session
+Authorization: Bearer {{outsiderToken}}
+
+?? status == 403
+
+###
+
+# A session that could mint its own successor would never expire, which is the one property a
+# deadline exists to give it.
+
+# @name a_session_cannot_mint_another_session
+POST {{baseUrl}}/api/session
+Authorization: Bearer {{token}}
+
+?? status == 201
+
+{{
+  exports.minted = response.parsedBody.token;
+}}
+
+###
+
+# @name minting_with_a_session_token_is_refused
+POST {{baseUrl}}/api/session
+Authorization: Bearer {{minted}}
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('the refusal is JSON with a sentence, not text/plain a client cannot parse', () => {
+    assert.match(response.parsedBody.error, /sign in with Microsoft/i);
+  });
+}}
+
+###
+
+# Saying 204 to somebody who presented Microsoft's token would tell them a credential was withdrawn
+# when nothing was — a stateless token is not this server's to delete.
+
+# @name deleting_with_an_identity_token_is_refused
+DELETE {{baseUrl}}/api/session
+Authorization: Bearer {{token}}
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('it says what to do instead', () => {
+    assert.match(response.parsedBody.error, /Sign out in the editor/i);
+  });
+}}
+
+###
+
+# @uncovered 500 DELETE /api/session — reached only when the filesystem refuses to remove the
+#            session file. Not provokable from a request, and faking it would prove the fake works.

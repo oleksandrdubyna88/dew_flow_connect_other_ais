@@ -84,6 +84,39 @@ public sealed record ReviewStatusDto(
     string Failure,
     string Reason);
 
+/// <summary>A ledger line as it sits on disk. Mirrors <c>UsageEntry</c> in Runners.</summary>
+/// <remarks>
+/// Read here rather than shared, because the ledger's own type lives with the WRITER and its shape is
+/// that binary's business. Every field is nullable or defaulted so a line written by an older version
+/// — one with no email — parses as valid rather than being reported as damage.
+/// </remarks>
+public sealed record UsageEntryDto(
+    string? Utc = null,
+    string? Provider = null,
+    string? Model = null,
+    string? Role = null,
+    string? Stage = null,
+    double Seconds = 0,
+    long TokensIn = 0,
+    long TokensOut = 0,
+    double? CostUsd = null,
+    string? Outcome = null,
+    string? Email = null);
+
+/// <param name="Scope">"me" or "company", so a client cannot mistake one answer for the other.</param>
+/// <param name="People">Empty unless the scope is company.</param>
+/// <param name="UnreadableLines">
+/// Null unless the scope is company. A torn line is an operator's problem, and showing it on a
+/// person's own page tells them their record is damaged about something they cannot fix.
+/// </param>
+public sealed record UsageDto(
+    DateTimeOffset FromUtc,
+    DateTimeOffset ToUtc,
+    string Scope,
+    IReadOnlyList<VendorTotal> Vendors,
+    IReadOnlyList<PersonTotal> People,
+    int? UnreadableLines);
+
 /// <summary>One account's persisted state, in its own directory.</summary>
 /// <param name="CooldownUntilUtc">Null when it is not rate-limited.</param>
 /// <param name="NeedsSignIn">Set when a CLI said so; cleared only by a successful `login`.</param>
@@ -119,4 +152,6 @@ public sealed record SlotStateDto(
 [JsonSerializable(typeof(ReviewRequestDto))]
 [JsonSerializable(typeof(ReviewAcceptedDto))]
 [JsonSerializable(typeof(ReviewStatusDto))]
+[JsonSerializable(typeof(UsageEntryDto))]
+[JsonSerializable(typeof(UsageDto))]
 public sealed partial class ServerJsonContext : JsonSerializerContext;

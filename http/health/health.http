@@ -1,0 +1,27 @@
+# The container's own probe. No token, no proxy — see the HTTPS exemption in Program.cs.
+
+# @name health_answers_ok_and_a_version
+# @prod
+GET {{baseUrl}}/api/health
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('ok is true and the version is a string, not null', () => {
+    assert.strictEqual(response.parsedBody.ok, true);
+    assert.strictEqual(typeof response.parsedBody.version, 'string');
+  });
+}}
+
+###
+
+# Every response carries the server's contract version, so a client learns it from a call it was
+# already making rather than from a special one.
+
+# @name health_carries_the_contract_header
+# @prod
+GET {{baseUrl}}/api/health
+
+?? status == 200
+?? header x-coai-contract isString
