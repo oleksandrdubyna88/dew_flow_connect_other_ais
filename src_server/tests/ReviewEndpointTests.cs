@@ -274,6 +274,25 @@ public sealed class JobRunnerTests : IDisposable
         job.Reason.Should().Contain("session limit reached");
     }
     [Fact]
+    public async Task AJobIsNeverRotatedBackOntoAnAccountThatAlreadyRefusedIt()
+    {
+        // Without this the job cycles a and b for the whole ten-minute queue window, re-asking
+        // accounts it already knows are exhausted, and fails anyway — the only difference being how
+        // long the caller waited to be told. (Two reviewers, second code round.)
+        var (jobs, runner, launcher) = Build(new ReviewerOutcome.RateLimited("limit"));
+        jobs.Submit(Job());
+
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            await runner.PumpAsync("codex", CancellationToken.None);
+        }
+
+        launcher.SlotsUsed.Should().HaveCount(2, "two accounts, so two attempts and then it stops");
+        launcher.SlotsUsed.Should().OnlyHaveUniqueItems();
+        jobs.All().Single().Failure.Should().Be(FailureKind.RateLimited);
+    }
+
+    [Fact]
     public async Task AVendorThatCrashesEndsTheJobRatherThanLeavingItRunning()
     {
         var (jobs, runner, _) = Build(new ReviewerOutcome.NonZeroExit(3, "it exploded"));

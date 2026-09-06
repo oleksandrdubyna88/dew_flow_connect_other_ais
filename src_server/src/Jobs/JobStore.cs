@@ -279,7 +279,7 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
     /// original queue deadline — a rotation must not extend how long an abandoned review can live —
     /// and loses its run clock, because the run has not started yet.
     /// </remarks>
-    public void Requeue(JobRecord job, string note)
+    public void Requeue(JobRecord job, string refusedBy, string note)
     {
         lock (_gate)
         {
@@ -295,7 +295,9 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
                 StartedUtc = null,
                 RunDeadlineUtc = null,
                 Reason = note,
+                Refused = new HashSet<string>(current.RefusedBy, StringComparer.Ordinal) { refusedBy },
             };
+            // The RUN is over even though the job is not: the next account gets a fresh token.
             Release(job.Id);
             Wake(job.Id);
         }
@@ -320,17 +322,24 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
                 && (j.SubmittedUtc < job.SubmittedUtc
                     || (j.SubmittedUtc == job.SubmittedUtc && string.CompareOrdinal(j.Id, job.Id) < 0)));
 
-    /// <summary>Called with the lock held: stop the vendor process, if there is one.</summary>
+    /// <summary>Called with the lock held: fire the token, and LEAVE the source alone.</summary>
+    /// <remarks>
+    /// Cancelling and disposing in one breath was a real bug and both vendors caught it: the runner
+    /// is at that moment awaiting on this source's token, and a token whose source has been disposed
+    /// throws <see cref="ObjectDisposedException"/> the next time anything registers on it — which
+    /// turns an ordinary cancellation into an infrastructure exception the runner reports as
+    /// "the server could not run this review". The source stays until the runner reaches a terminal
+    /// state and <see cref="Release"/> disposes it.
+    /// </remarks>
     private void Stop(string id)
     {
-        if (_running.Remove(id, out var source))
+        if (_running.TryGetValue(id, out var source))
         {
             source.Cancel();
-            source.Dispose();
         }
     }
 
-    /// <summary>Called with the lock held: the job ended by itself, so nothing needs stopping.</summary>
+    /// <summary>Called with the lock held: the runner is done with this job's token.</summary>
     private void Release(string id)
     {
         if (_running.Remove(id, out var source))
@@ -338,7 +347,6 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
             source.Dispose();
         }
     }
-
     /// <summary>Called with the lock held.</summary>
     private void Wake(string id)
     {

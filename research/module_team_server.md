@@ -249,6 +249,18 @@ sequenceDiagram
 - **The pump drains rather than ticking.** Starting one review per vendor per second left nine of ten
   free accounts idle while a queue backed up; it now keeps starting while the vendor keeps saying yes,
   and the slot lock is what stops it.
+- **A job's cancellation source is fired on cancel and disposed on FINISH, never both at once.**
+  Cancelling and disposing in one breath meant the runner was awaiting on a token whose source had
+  gone, so an ordinary cancellation surfaced as an `ObjectDisposedException` and was reported as
+  "the server could not run this review".
+- **Rotation is bounded by the accounts that have already refused**, not by the queue clock alone. A
+  job whose vendor is saturated would otherwise cycle its accounts for the whole ten-minute window,
+  re-asking ones it already knew were exhausted — failing either way, the only difference being how
+  long the caller waited to be told.
+- **The drain is bounded by the account count.** One tick starts at most as many reviews as the
+  vendor has accounts, because that is the most that can run at once. A bare `while` was correct in
+  principle and is the kind of correct that stops being true after somebody edits the claim path, in
+  a loop that runs once a second for ever.
 - **One ledger, not two.** `UsageLedger` gained an email column and a `RecordJob` overload rather
   than `src_server` growing its own JSONL writer — a second writer is how two spending records come
   to disagree.

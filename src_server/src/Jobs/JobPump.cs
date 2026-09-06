@@ -83,9 +83,15 @@ public sealed class JobPump(
         foreach (var vendor in catalog.Current.Vendors)
         {
             var id = vendor.Id;
-            while (!ct.IsCancellationRequested && await CanStartAsync(id, ct))
+            // Bounded by the number of accounts this vendor HAS: one tick can start at most that
+            // many, because that is the most that can be running at once. A bare `while` was correct
+            // in principle — a claim is progress and the queue is finite — but it is the kind of
+            // correct that stops being true after somebody edits the claim path, and this loop runs
+            // once a second for ever. (Second code round.)
+            var starts = Math.Max(vendor.Slots.Count, 1);
+            while (starts-- > 0 && !ct.IsCancellationRequested && await CanStartAsync(id, ct))
             {
-                // The loop body is empty on purpose: CanStartAsync did the starting.
+                // The body is empty on purpose: CanStartAsync did the starting.
             }
         }
     }

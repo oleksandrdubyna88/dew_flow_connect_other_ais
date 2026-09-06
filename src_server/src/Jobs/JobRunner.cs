@@ -165,10 +165,15 @@ public sealed class JobRunner(
         // time in it still parks the account, or the next job lands on it a second later.
         slots.MarkCoolingDown(slot, limited.Reason.Length > 0 ? limited.Reason : "rate limited", now);
 
-        var another = SlotSelector.Pick(slots.SlotsOf(vendor).Where(s => s.Name != slot.Name).ToList(), now);
+        // Only an account that has NOT already refused this job. Rotating back onto one that has is
+        // how a saturated vendor spends the whole queue window re-asking the same exhausted accounts
+        // before failing anyway.
+        var refused = new HashSet<string>(job.RefusedBy, StringComparer.Ordinal) { slot.Name };
+        var another = SlotSelector.Pick(
+            slots.SlotsOf(vendor).Where(s => !refused.Contains(s.Name)).ToList(), now);
         if (another is not null && !JobTransitions.IsExpired(job, now))
         {
-            jobs.Requeue(job, $"{slot.Name} is rate-limited; trying {another.Name}");
+            jobs.Requeue(job, slot.Name, $"{slot.Name} is rate-limited; trying {another.Name}");
 
             return null;
         }

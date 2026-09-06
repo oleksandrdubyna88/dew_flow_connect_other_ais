@@ -63,9 +63,21 @@ public sealed record JobRecord(
     FailureKind Failure = FailureKind.None,
     string Reason = "",
     long TokensIn = 0,
-    long TokensOut = 0)
+    long TokensOut = 0,
+
+    /// <summary>The accounts that have already refused this job with a rate limit.</summary>
+    /// <remarks>
+    /// Rotation is bounded by this rather than by the queue clock alone. Without it a job whose
+    /// vendor is saturated cycles its accounts for the whole ten-minute queue window, re-asking the
+    /// same exhausted ones — the review fails either way, and the difference is whether the caller
+    /// waits ten minutes to be told. (Two reviewers, second code round.)
+    /// </remarks>
+    IReadOnlySet<string>? Refused = null)
 {
     public bool IsTerminal => Status is JobStatus.Done or JobStatus.Failed;
+
+    /// <summary>The accounts that have refused it, never null.</summary>
+    public IReadOnlySet<string> RefusedBy => Refused ?? new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>How long the vendor actually ran, or zero while it is still queued.</summary>
     public TimeSpan Elapsed =>
