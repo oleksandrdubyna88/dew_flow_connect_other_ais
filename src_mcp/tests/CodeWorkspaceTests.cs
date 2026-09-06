@@ -62,11 +62,11 @@ public class CodeWorkspaceTests
             .Unrecognised.Should().BeEmpty();
     }
 
-    private static PanelService Service(string workspace)
+    private static PanelService Service(string workspace, string dataDir = "")
     {
         var settings = new PanelSettings
         {
-            DataDir = Path.Combine(Path.GetTempPath(), $"coai-ws-{Guid.NewGuid():N}"),
+            DataDir = dataDir.Length > 0 ? dataDir : Path.Combine(Path.GetTempPath(), $"coai-ws-{Guid.NewGuid():N}"),
             CodeWorkspace = workspace,
             Providers = [new ProviderSettings("local") { Enabled = true, Runtime = "local", Model = "m" }],
         };
@@ -109,6 +109,68 @@ public class CodeWorkspaceTests
         var work = Service("worktree").BuildWork([ReviewRole.Architecture], worktree, "ctx", round: 1, isPlanStage: false);
 
         work[0].Invocation.Request.WorkingDirectory.Should().Be(worktree);
+    }
+
+    [Fact]
+    public void TheRepairLaunch_IsToldItHasNoCheckout_EvenWhenTheReviewWasGivenOne()
+    {
+        // The repair launch has ALWAYS run in an empty directory, and the remark beside it says why:
+        // it is not asking for a better review, it is asking for the answer in the schema, and an
+        // agentic CLI handed a checkout goes exploring instead. Its PROMPT, though, was composed for
+        // the review's mode — so in worktree mode it opened by telling the model it had a read-only
+        // checkout and then told it there were no tools. One prompt, two contradictory sentences,
+        // sent to the reviewer that had already failed once. Found by codex at this change's own
+        // code round; its diagnosis was that the repair should promise the checkout, and reading the
+        // code says the opposite: the repair never has one.
+        var worktree = Worktree();
+
+        var work = Service("worktree").BuildWork([ReviewRole.Architecture], worktree, "ctx", round: 1, isPlanStage: false);
+
+        Sent(work[0].Repair!).Should().Contain("no tool you can call",
+            "the repair launch runs in an empty temp directory whatever the review got");
+        Sent(work[0].Repair!).Should().NotContain("READ-ONLY checkout");
+        Sent(work[0].Invocation).Should().Contain("READ-ONLY checkout",
+            "the REVIEW launch really was given the tree, and must still be told so");
+    }
+
+    [Fact]
+    public void APromptSomebodyOverrodeBeforeTheClaimWasRemoved_DoesNotArriveWithBothSentences()
+    {
+        // The catalog is editable, and an override written before 2026-09-06 still opens with "You
+        // have the checkout read-only and the diff below." Composing the true sentence underneath it
+        // hands the model two opposite instructions in one prompt — raised by gemini at the plan gate
+        // and again at the code gate. Editing the shipped files cannot reach a person's own copy.
+        var dataDir = Path.Combine(Path.GetTempPath(), $"coai-override-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.Combine(dataDir, "prompts"));
+        File.WriteAllText(
+            Path.Combine(dataDir, "prompts", "architecture.md"),
+            "You are an independent ARCHITECTURE reviewer of a change written by another AI. You have the\n"
+            + "repository checkout read-only and the diff below. Review the change, not the whole codebase.\n");
+
+        var work = Service("none", dataDir)
+            .BuildWork([ReviewRole.Architecture], Worktree(), "ctx", round: 1, isPlanStage: false);
+
+        Sent(work[0].Invocation).Should().NotContain("checkout read-only",
+            "a person's own copy of a prompt cannot know which mode is running either");
+        Sent(work[0].Invocation).Should().Contain("no tool you can call");
+        Sent(work[0].Invocation).Should().Contain("independent ARCHITECTURE reviewer",
+            "only the false sentence is removed, never the person's prompt");
+    }
+
+    /// <summary>
+    /// Everything the child is actually given, by whichever door this runtime uses: a vendor CLI
+    /// takes the prompt on stdin (cmd.exe truncates an argument at its first newline), and the local
+    /// engine takes a --prompt-file. Reading only stdin made both tests here fail against correct
+    /// code, which is the cheapest possible reminder to assert on what is SENT, not on where.
+    /// </summary>
+    private static string Sent(ReviewerInvocation invocation)
+    {
+        var args = invocation.Request.Arguments;
+        var at = args.ToList().IndexOf("--prompt-file");
+        var file = at >= 0 && at + 1 < args.Count && File.Exists(args[at + 1])
+            ? File.ReadAllText(args[at + 1])
+            : string.Empty;
+        return string.Join("\n", [invocation.Request.StdIn, file, string.Join(" ", args)]);
     }
 
     [Fact]

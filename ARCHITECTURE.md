@@ -141,7 +141,13 @@ The prompt is told which of the two it got, and this is not decoration. Eighteen
 prompt files used to open by claiming a read-only checkout was present — in Fast, the default, it was
 not, and an agentic CLI that goes looking for one runs headless with nobody to grant it permission:
 it refuses itself and returns nothing at all. Measured 2026-09-06 over 71 antigravity reviewer runs,
-15 of them — 21 % — died exactly there. The sentence now comes from `PanelService`, which is the only
+15 of them — 21 % — died exactly there. The one repair launch a reviewer is allowed is composed the
+same way but always as no-checkout, because it always runs in an empty temp directory whatever the
+review was given — promising it a tree was the same defect one layer down. And a prompt somebody
+overrode in the catalog before this changed has the old sentence stripped as it is composed: their own
+copy cannot know the mode either, and two opposite sentences in one prompt is worse than either.
+
+The sentence comes from `PanelService`, which is the only
 code that knows the mode — and the plan stage counts as no-checkout too, because its working
 directory is an empty scratch. Both no-checkout cases say outright that there is no tool to call.
 

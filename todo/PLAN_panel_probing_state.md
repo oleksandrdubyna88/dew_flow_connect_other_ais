@@ -64,16 +64,46 @@ starting a process each, and a probe's outcome — failure included — is cache
   Whatever shape this takes should be able to say which of them is outstanding, or deliberately say
   nothing about the others — but that choice should be made, not fallen into.
 
+## What the gate found, 2026-09-06 (all three reviewers answered; four findings taken)
+
+1. **The test plan contradicted requirement 3.** Requirement 3 says the probing state can never
+   outlive its probe; the test plan then asserted "a render whose probe never resolves publishes the
+   probing state and no final state" — a test FOR the permanent spinner requirement 3 forbids, and a
+   promise that never settles never reaches the `finally` either. The probe needs its own deadline
+   that resolves to a diagnosis. Found independently by codex and gemini, both Blocking.
+2. **A generation token per render.** Press reprobe while a probe is in flight and the older render's
+   `finally` can clear the NEWER probing state, or publish its stale diagnosis over it. Nothing in the
+   plan knew which render was current.
+3. **Every awaited source, named.** The constraints say the choice about `cliVersions`, the price
+   tables and the GitHub check "should be made, not fallen into" — and then the build order and the
+   tests covered only the local-engine probe. This change was given ownership of every probe when the
+   server-version round rejected the same finding, so each needs a timeout and a failure state, or
+   the scope has to be narrowed out loud.
+4. **Publishing `probing` before the await is not enough.** The awaited work is still inside `render`,
+   so a settings edit arriving mid-probe waits behind the same timeout. Painting the settings
+   immediately and letting the probe dispatch its own update when it finishes is a different shape
+   from step 2 below, and it is the shape this needs.
+
 ## Build order
 
-1. The state itself in `PanelState`, with `staticKey`/`liveRegions` deciding repaint-or-patch.
-2. `render()` publishing it before the await and clearing it in a `finally`.
-3. The markup, and a test that the state is reachable and always cleared.
+1. The state itself in `PanelState`, with `staticKey`/`liveRegions` deciding repaint-or-patch, plus a
+   generation token so only the current render may publish or clear it (finding 2).
+2. `render()` paints immediately and never awaits a probe: each probe runs behind its own bounded
+   deadline and dispatches its result back, so a settings edit is never queued behind a wedged binary
+   (finding 4). A deadline that expires publishes a diagnosis, not a cleared spinner (finding 1).
+3. The awaited sources this covers, each with its deadline: the local-engine probe, the server
+   `--version`, the vendor CLI versions, the GitHub check (finding 3).
+4. The markup, and a test that the state is reachable and always cleared.
 
 ## Test plan
 
-- A render whose probe never resolves publishes the probing state and no final state.
+- A probe that never resolves publishes the probing state and then, at its deadline, a TIMEOUT
+  diagnosis — never a spinner that outlives it. (The earlier version of this line asserted the
+  opposite and was the gate's Blocking finding.)
 - A probe that fails clears it and publishes the failure diagnosis.
+- Reprobe pressed while a probe is in flight: the older render neither clears the newer probing state
+  nor publishes its own result.
+- A settings change made during a probe is visible before the probe's deadline.
 - `staticKey` does not change between probing and settled, so the transition is a patch and not a
   full repaint.
 
