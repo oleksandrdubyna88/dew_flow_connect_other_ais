@@ -59,7 +59,20 @@ import {
   wslconfigWith,
 } from './wslNetwork';
 import { normaliseId, Vendor, VENDOR_PRESETS, vendorsFrom } from './vendors';
-import { Catalog, fetchClientConfig } from './teamServerApi';
+import { Catalog, Usage, fetchClientConfig, fetchUsage } from './teamServerApi';
+
+/**
+ * The panel's window names, as the server's `/api/usage` spells them.
+ *
+ * <p>The server's windows are trailing and half-open rather than calendar ones, so `week` is the
+ * last seven days. The names differ because the panel's own `day` predates the server entirely.</p>
+ */
+const WINDOW_ON_THE_WIRE: Readonly<Record<Window, string>> = {
+  day: 'today',
+  week: 'week',
+  month: 'month',
+  year: 'year',
+};
 import {
   AuthHost,
   SignedIn,
@@ -136,6 +149,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
   private catalogs: Record<string, {
     catalog?: Catalog | undefined;
+    usage?: Usage | undefined;
     problem: string;
     stale: boolean;
   }> = {};
@@ -292,7 +306,17 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   async usageTab(): Promise<string> {
     const vendors = this.vendorsHere();
 
-    return usageTabHtml(this.remembered(await this.readUsage()), this.usageWindow, vendors, await this.modelPrices(vendors));
+    return usageTabHtml(
+      this.remembered(await this.readUsage()),
+      this.usageWindow,
+      vendors,
+      await this.modelPrices(vendors),
+      // What each Team server says was spent ON IT. This machine's ledger has no line for a
+      // review that ran there, so the two are shown beside each other rather than summed into
+      // a number neither of them holds.
+      this.teamServerStates(vscode.workspace.getConfiguration('coai')),
+      this.usageScope,
+    );
   }
 
   /** Re-read everything and repaint: the configuration, the sessions, the ledger and the probes. */
@@ -1112,6 +1136,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         server,
         email: signedInAs?.email ?? '',
         catalog: known?.catalog,
+        usage: known?.usage,
         problem: known?.problem ?? '',
         stale: known?.stale ?? false,
       };
@@ -1319,7 +1344,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     await this.render();
   }
 
-  /** Ask one server what it offers, and remember it — marked STALE when it could not be asked. */
+  /** Ask one server what it offers and what has been spent on it, and remember both. */
   private async refreshCatalog(server: TeamServer): Promise<void> {
     const token = await readToken(coaiDataDir(), server.url);
     if (token.length === 0) {
@@ -1328,9 +1353,20 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
     const answer = await catalogOf(server, token);
     const known = this.catalogs[server.id];
-    this.catalogs[server.id] = answer.ok
-      ? { catalog: answer.value, problem: '', stale: false }
-      : { catalog: known?.catalog, problem: answer.message, stale: known?.catalog !== undefined };
+    const spent = await fetchUsage(
+      server.url,
+      token,
+      WINDOW_ON_THE_WIRE[this.usageWindow],
+      // `company` is refused by the server for anybody who is not an admin, and the control that
+      // sets it is only rendered for one — so this can only ask for what it is allowed.
+      this.usageScope,
+    );
+    this.catalogs[server.id] = {
+      catalog: answer.ok ? answer.value : known?.catalog,
+      usage: spent.ok ? spent.value : known?.usage,
+      problem: answer.ok ? '' : answer.message,
+      stale: answer.ok ? false : known?.catalog !== undefined,
+    };
   }
 
 /**

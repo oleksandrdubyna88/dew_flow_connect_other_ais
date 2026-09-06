@@ -1,4 +1,9 @@
-import { TeamServerState, teamServersBody } from './teamServerView';
+import {
+  TeamServerState,
+  teamServersBody,
+  teamUsageBlock,
+  usageScopeControl,
+} from './teamServerView';
 import { canonicalTeamServerUrl } from './teamServers';
 import { CoaiSettings } from './settingsShape';
 import { Escalation } from './escalations';
@@ -754,10 +759,21 @@ export function usageRegion(
   window: Window,
   vendors: readonly Vendor[],
   prices: Readonly<Record<string, ModelPrice>>,
+  teamServers: readonly TeamServerState[] = [],
+  usageScope: 'me' | 'company' = 'me',
 ): string {
+  // What each Team server says was spent ON IT, under this machine's own totals. The server keeps
+  // that ledger — a review that ran there left no line in this machine's — so the two are shown
+  // beside each other rather than summed into a number neither of them holds.
+  const team = teamServers
+    .filter((s) => s.email.length > 0)
+    .map((s) => teamUsageBlock(s, shortNumber))
+    .join('\n');
+  const scope = usageScopeControl(teamServers, usageScope);
   const rows = totalsByVendor(within(usage, window, new Date()), vendors, (modelId) => prices[modelId]);
   if (rows.length === 0) {
-    return '<div class="empty">Nothing recorded in this window yet.</div>';
+    return `<div class="empty">Nothing recorded on this machine in this window yet.</div>
+${team}${scope}`;
   }
 
   const busiest = Math.max(...rows.map((r) => r.tokensIn + r.tokensOut));
