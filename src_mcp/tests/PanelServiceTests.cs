@@ -342,6 +342,35 @@ public sealed class PanelServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ThePlanStage_IsToldItHasNoCheckout_NotMerelyGivenNone()
+    {
+        // The other half of the test above, and the one the prompts got wrong for months: taking the
+        // checkout away is not the same as SAYING so. A plan reviewer stood in an empty scratch
+        // directory while its prompt claimed a read-only checkout was under it — and an agentic CLI
+        // that believes that goes looking, is refused the permission headlessly, and answers nothing.
+        var record = Directory.CreateTempSubdirectory("coai-plan-said-").FullName;
+        Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", record);
+        try
+        {
+            var service = Service();
+            await service.OpenAsync(_repo, "feature");
+            await service.ReviewPlanAsync(_repo, "feature", "the plan");
+
+            var prompts = Directory.GetFiles(record, "*.argv")
+                .Select(f => File.ReadAllText(f).Split('\0')[^1])
+                .ToList();
+
+            prompts.Should().NotBeEmpty("the round has to have launched something to have said anything");
+            prompts.Should().OnlyContain(p => p.Contains("no tool you can call"));
+            prompts.Should().OnlyContain(p => !p.Contains("READ-ONLY checkout"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKECLI_RECORD_DIR", null);
+        }
+    }
+
+    [Fact]
     public async Task MaxRoundsExhausted_YieldsCallHuman_WithTheOpenCount()
     {
         SetAnswer(OneMajor);
