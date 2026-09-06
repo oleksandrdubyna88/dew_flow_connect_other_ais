@@ -144,15 +144,44 @@ internal static class Program
                 Store.RoundsQuery.Read(settings.DataDir, Limit(args)),
                 Server.ServerJsonContext.Default.LoggedLog));
         }
-        catch (Exception e) when (e is Microsoft.Data.Sqlite.SqliteException or IOException or UnauthorizedAccessException)
+        catch (Exception e) when (Unreadable(e))
         {
-            Note($"the rounds database could not be read: {e.Message}");
+            Note(WhyUnreadable(e));
             Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
                 new Store.LoggedLog([], [], []), Server.ServerJsonContext.Default.LoggedLog));
         }
 
         return 0;
     }
+
+    /// <summary>
+    /// Whether this fault is the database being unreadable, rather than a fault of ours.
+    /// </summary>
+    /// <remarks>
+    /// The missing native library belongs here and was not: it arrives as a TypeInitializationException
+    /// wrapping DllNotFoundException, thrown from SQLite's type initializer, so the original filter
+    /// never saw it and 0.18.1 answered `--log` with a stack trace. The one command a person runs to
+    /// find out what happened must not be the one that dies.
+    /// </remarks>
+    internal static bool Unreadable(Exception e) =>
+        e is Microsoft.Data.Sqlite.SqliteException or IOException or UnauthorizedAccessException
+            or DllNotFoundException
+        || (e is TypeInitializationException { InnerException: { } inner } && Unreadable(inner));
+
+    /// <summary>What to say about it — and, for the missing library, what to do about it.</summary>
+    internal static string WhyUnreadable(Exception e) =>
+        Missing(e) is { } absent
+            ? $"the SQLite library ({absent}) is not beside the executable, so no round can be read or "
+                + "recorded. Reinstall the server from the panel; a release archive carries it."
+            : $"the rounds database could not be read: {e.Message}";
+
+    /// <summary>The name the loader could not find, or nothing when this is a different fault.</summary>
+    private static string? Missing(Exception e) => e switch
+    {
+        DllNotFoundException => "e_sqlite3",
+        TypeInitializationException { InnerException: { } inner } => Missing(inner),
+        _ => null,
+    };
 
     /// <summary>`--log --limit 50`, or the default. A number nobody can read is the default too.</summary>
     internal static int Limit(string[] args)

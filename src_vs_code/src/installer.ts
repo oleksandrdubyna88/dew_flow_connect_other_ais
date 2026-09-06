@@ -11,6 +11,7 @@ import {
   assetNameFor,
   binaryNameFor,
   copyCompanions,
+  requiredCompanionMissing,
   entryPathIn,
   installedKey,
   ridFor,
@@ -202,6 +203,9 @@ export async function installLatest(
     // executable sits in — so a copy of the binary alone is a server that cannot open its own
     // database, and the failure is silent because that write is best-effort. Copying the archive's
     // contents rather than a named file means the next native dependency needs no change here.
+    // The SQLite library itself is REQUIRED: this throws rather than leave a server that cannot
+    // record anything — on an upgrade the running server holds the old file open, the copy fails,
+    // and the new binary beside the old library is the original incident again.
     await placeCompanions(vscode.Uri.joinPath(scratch, entryPathIn(rid, version).split('/')[0]!), storage, rid);
     await makeExecutable(target);
     await state.update(installedKey(thisSide(storage)), version);
@@ -286,9 +290,16 @@ async function verify(bytes: Uint8Array, sumUrl: string, asset: string): Promise
 async function placeCompanions(from: vscode.Uri, storage: vscode.Uri, rid: CoaiRid): Promise<void> {
   const entries = (await vscode.workspace.fs.readDirectory(from))
     .map(([name, kind]) => [name, kind === vscode.FileType.File] as const);
-  await copyCompanions(entries, rid, (name) =>
+  const placed = await copyCompanions(entries, rid, (name) =>
     vscode.workspace.fs.copy(
       vscode.Uri.joinPath(from, name), vscode.Uri.joinPath(storage, name), { overwrite: true }));
+  const missing = requiredCompanionMissing(entries, placed, rid);
+  if (missing.length > 0) {
+    throw new Error(
+      `${missing} could not be placed beside the server. It is what the server opens its database `
+      + 'through, and the release before this one shipped without it — so the install stops here '
+      + 'rather than leaving a server that silently records nothing. Close a running server and retry.');
+  }
 }
 
 function extract(archive: vscode.Uri, into: vscode.Uri): Promise<void> {
