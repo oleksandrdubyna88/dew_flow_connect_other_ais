@@ -424,6 +424,19 @@ public sealed class PanelService
             var workingDir = lease?.Path ?? scratch!.Path;
             var work = await makeWork(session, workingDir, sha);
 
+            // A stage nobody serves is a REFUSAL, not an empty round. With no reviewer the round
+            // runs nothing, merges nothing, and passes the gate — reporting `proceed` having
+            // reviewed exactly nothing, which is worse than any verdict it could have given. Now
+            // reachable on purpose: a vendor can be set to review plans and not code.
+            if (work.Count == 0)
+            {
+                return Error(
+                    $"no reviewer serves the {session.State.Stage} stage — every configured vendor is "
+                    + "either disabled, set not to review this stage, or missing its CLI or key. A round "
+                    + "with no reviewer would pass the gate having reviewed nothing, so it is refused. "
+                    + "Tick a vendor's stage box in the panel, or enable one that can run.");
+            }
+
             // The round exists on disk BEFORE the first CLI starts: the panel shows "running" for
             // its whole duration instead of nothing at all, and a crash leaves something to sweep.
             // What the round is about, derived from the plan the caller passed — a file name if
@@ -765,14 +778,24 @@ public sealed class PanelService
         // above — so `none` removes only the exploring. It exists because the exploring is what
         // makes a hosted CLI cost 200k input tokens where a local reviewer costs 25k, which is a
         // difference in the QUESTION rather than in the models being compared.
-        var launchDir = _settings.CodeWorkspace == "none" && planPrompts is null or { Count: 0 }
+        // The STAGE, from the roles rather than from the prompt list: a plan round only carries
+        // prompts when the lenses are dealt, so `planPrompts` is empty for the ordinary plan round
+        // and deriving the stage from it filtered nothing at all. Caught by a test that drove the
+        // real `review_plan` path instead of calling this method with arguments of its own.
+        var isPlan = roles is [ReviewRole.PlanCritique, ..];
+        var launchDir = _settings.CodeWorkspace == "none" && !isPlan
             ? Directory.CreateTempSubdirectory("coai-noworkspace-").FullName
             : worktreePath;
 
         // Only what can actually run: a vendor whose CLI is missing or whose key is absent is
         // reported by `providers` and left out of the deal rather than dealt work it cannot do.
+        //
+        // And only what serves THIS stage. Measured over fourteen judged runs
+        // (research/RESULTS_vendor_overlap_2026-09-06.md): a local model was 19 % useful on a plan
+        // and 3 % on code while writing more findings than both hosted vendors together, so "on for
+        // the plan, off for the code" is a setting somebody actually wants.
         var runnable = _settings.Providers
-            .Where(p => p.Enabled)
+            .Where(p => p.Serves(roles is [ReviewRole.PlanCritique, ..]))
             .Where(p => RuntimeFor(p) is not null && AuthFor(p).Auth != "unavailable")
             .ToList();
         if (runnable.Count == 0)

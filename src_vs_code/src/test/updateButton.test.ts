@@ -24,6 +24,8 @@ function vendor(id: string, runtime = id as Runtime): Vendor {
     baseUrl: '',
     executablePath: '',
     enabled: true,
+    plan: true,
+    code: true,
     pricePerMillionIn: 0,
     pricePerMillionOut: 0,
   };

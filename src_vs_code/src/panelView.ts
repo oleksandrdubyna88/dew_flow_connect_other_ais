@@ -357,6 +357,10 @@ ${local ? remoteNotice(vendor.baseUrl) : ''}
       ${modelOptions(models, vendor.model, local ? 'whatever the engine answers with' : "the CLI's default")}
     </select>
     <div class="hint">${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(vendor.runtime, codexModels, localEngine, agyModels))}</div>
+  </div>
+  <div class="field stages">
+    <label class="check"><input type="checkbox" data-setting="plan" data-vendor="${id}"${vendor.plan ? ' checked' : ''}> reviews plans${help('vendorStages')}</label>
+    <label class="check"><input type="checkbox" data-setting="code" data-vendor="${id}"${vendor.code ? ' checked' : ''}> reviews code</label>
   </div>${endpoint}${executable}
 </div>`;
 }
@@ -886,6 +890,8 @@ const CSS = `
   .sec-limits    > summary { color: var(--tone-limits); }
   .sec-keys      > summary { color: var(--tone-keys); }
   .sec-side      > summary { color: var(--tone-keys); }
+  /* The two stage boxes sit on one line under the model: they are one decision about this vendor. */
+  .vendor .stages { display: flex; gap: 12px; flex-wrap: wrap; }
   .sec-server    > summary { color: var(--tone-uxdx); }
   .sec-usage     > summary { color: var(--tone-arch); }
   .sec-rounds    > summary { color: var(--tone-plan); }
