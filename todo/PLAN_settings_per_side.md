@@ -5,7 +5,7 @@
 > read path every setting goes through.
 >
 > Related: [module_extension.md](../research/module_extension.md),
-> [PLAN_two_sides_one_record.md](../research/PLAN_two_sides_one_record.md) — the same identity
+> [PLAN_server_version_per_side.md](../research/PLAN_server_version_per_side.md) — the same identity
 > problem solved once already, for the installed-version record.
 
 ## The symptom
