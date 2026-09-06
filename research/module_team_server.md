@@ -80,6 +80,40 @@ sequenceDiagram
 
 ## The decisions a reader needs
 
+### Story 1.3 — the client half, and the two failures only a real server showed
+
+The client is `coai-mcp` speaking to the server as an ordinary vendor. `RemoteRuntime` builds a command
+line, `--ask-remote` does the HTTP, and everything above the adapter — the round, the scheduler, the
+ledger, the panel — sees a reviewer like any other. The shape is `LocalRuntime`'s, reused rather than
+invented; the decisions specific to it live in [module_runners.md](module_runners.md).
+
+What this story changed about the SERVER's contract: nothing. What it proved about it: two things, and
+neither was visible from either side alone.
+
+- **The two clocks are a contract, not an implementation detail.** `POST /api/reviews` clamps
+  `timeoutSeconds` to 30–1800 — the VENDOR's budget, per story 2.3's split of the queue clock from the
+  run clock. The shim's own deadline is a different, shorter number, and sending it as the vendor's
+  budget asked the server for an eight-second review and earned a `400` naming the range. The two are
+  now separate flags on the shim's command line.
+- **A client that is killed must still be able to cancel.** `DELETE /api/reviews/{id}` was built in 2.3
+  for a client that changes its mind; the case that actually matters is a client that never gets the
+  chance. The executor kills an abandoned reviewer, a killed process runs no cleanup, and the review
+  then runs to completion on the company's subscription for an answer nobody will collect. The shim
+  writes its job id to a file the moment the server accepts, and the parent cancels from that file
+  afterwards.
+
+`GET /api/catalog` turns out to answer a second question for free. It was specified as the allowlist
+feed for *Add a reviewer*; it is also the only honest health probe a remote vendor has, because the
+server already counts its slots for its own queue. So a Team-server vendor's row in `providers` reads
+*2 of 3 accounts ready on the Team server at …* — and, when nothing is ready, says whether the accounts
+are **signed out** (the operator must act) or **rate-limited** (they return by themselves). A client
+cannot compute either, and both were already on the wire.
+
+**Deferred deliberately:** the extension's declaration points (`models.ts` RUNTIMES, `vendors.ts`, the
+`package.json` enum) are story 3.1's. Shipping them now would put a `remote` option in the panel that
+nobody can configure — no server URL field, no sign-in, no token — so every reviewer it created would
+exit `77 not signed in`. An accepted finding from the code round said so.
+
 ### Story 2.1 — identity and sessions
 
 - **A session is minted from an identity provider's token and never from another session.** A token

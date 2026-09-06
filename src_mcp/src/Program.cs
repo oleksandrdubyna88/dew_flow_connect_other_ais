@@ -61,6 +61,9 @@ internal static class Program
         /// </remarks>
         AskLocal,
 
+        /// <summary>One review, sent to a Team server instead of a CLI on this machine.</summary>
+        AskRemote,
+
         /// <summary>
         /// Print the rounds database as JSON and leave.
         /// </summary>
@@ -80,6 +83,7 @@ internal static class Program
             : args[0] is "--help" or "-h" or "help" ? Startup.Help
             : args[0] is "--version" or "-v" or "version" ? Startup.Version
             : args[0] == "--ask-local" ? Startup.AskLocal
+            : args[0] == "--ask-remote" ? Startup.AskRemote
             : args[0] == "--log" ? Startup.Log
             : Startup.Usage;
 
@@ -104,6 +108,9 @@ internal static class Program
 
             case Startup.AskLocal:
                 return await AskLocalAsync(args);
+
+            case Startup.AskRemote:
+                return await AskRemote.RunAsync(Flags(args), Note, Console.Out);
 
             case Startup.Log:
                 return LogJson(args);

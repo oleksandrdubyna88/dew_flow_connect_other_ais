@@ -41,6 +41,16 @@ public static class VendorProbe
     /// </remarks>
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
 
+    /// <param name="remoteHealth">
+    /// How to answer for a <c>remote</c> vendor, which is an HTTP call to a Team server rather than a
+    /// process. Supplied by the MCP server, which is the side that holds the token; omitted by the
+    /// Team server binary, which has no remote vendors of its own.
+    /// </param>
+    /// <remarks>
+    /// Without this arm a remote vendor would reach the version probe, and the executable a remote
+    /// vendor names is THIS binary — so the probe would have run coai-mcp against itself and reported
+    /// whatever that printed as a vendor's health.
+    /// </remarks>
     public static async Task<VendorHealth> RunAsync(
         IProcessLauncher launcher,
         VendorIdentity vendor,
@@ -49,7 +59,8 @@ public static class VendorProbe
         string model,
         bool hasVaultKey,
         CancellationToken ct = default,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null,
+        Func<VendorIdentity, bool, CancellationToken, Task<VendorHealth>>? remoteHealth = null)
     {
         // Resolved once: `For` constructs a runtime, and asking it twice per probe allocated one
         // per configured vendor per catalog call for nothing.
@@ -72,6 +83,14 @@ public static class VendorProbe
         if (runtimeName == "local")
         {
             return LocalHealth(vendor, enabled, model);
+        }
+
+        if (runtimeName == "remote")
+        {
+            return remoteHealth is null
+                ? new VendorHealth(enabled, false, "", "unavailable",
+                    $"'{vendor.Provider}' is a Team server vendor, which this process cannot probe")
+                : await remoteHealth(vendor, enabled, ct);
         }
 
         var (auth, authNote) = RuntimeResolution.AuthOf(vendor, hasVaultKey);

@@ -34,6 +34,7 @@ public sealed partial class PanelService
     private readonly UsageLedger _ledger;
     private readonly CallerSessions _callers;
     private readonly Runners.Processes.ProcessTracking _tracking;
+    private readonly RemoteProbe _remote;
 
     public PanelService(PanelSettings settings, VaultKeys keys, DateTime vaultReadUtc, IProcessLauncher launcher, Serilog.ILogger log)
     {
@@ -58,6 +59,10 @@ public sealed partial class PanelService
         _escalations = new Escalations(settings.DataDir);
         _ledger = new UsageLedger(settings.DataDir);
         _callers = new CallerSessions(settings.DataDir);
+
+        // One client for every Team server this configuration names. A probe and a cancellation are
+        // both short requests to the same handful of hosts, so a shared handler is the whole point.
+        _remote = new RemoteProbe(new HttpClient());
 
         // Rounds this server never finished cannot be running any more, whatever their file says.
         // A round left at "running" would sit in the panel forever; sweeping only rounds whose
@@ -146,7 +151,11 @@ public sealed partial class PanelService
             provider.ExecutablePath,
             provider.Model,
             _keys.Keys.ContainsKey(provider.Provider),
-            ct);
+            ct,
+            // A Team server vendor is asked over HTTP, and only this binary can ask: the token is
+            // on this machine. Passed as a delegate so the probe itself stays a process probe.
+            remoteHealth: (vendor, enabled, token) =>
+                _remote.RunAsync(vendor, enabled, _settings.DataDir, token));
 
         return new ProviderStatus(
             provider.Provider, health.Enabled, health.CliFound, health.Version, health.Auth, health.Note);
@@ -161,10 +170,26 @@ public sealed partial class PanelService
     /// binaries, after two separate incidents where a second copy of it was the one that was wrong.
     /// </remarks>
     private (string Auth, string Note) AuthFor(ProviderSettings provider) =>
-        AuthOf(provider, _keys.Keys.ContainsKey(provider.Provider));
+        AuthOf(provider, _keys.Keys.ContainsKey(provider.Provider), HasServerToken(provider));
 
-    internal static (string Auth, string Note) AuthOf(ProviderSettings provider, bool hasVaultKey) =>
-        RuntimeResolution.AuthOf(provider.Identity(), hasVaultKey);
+    /// <param name="hasServerToken">
+    /// Whether this machine has signed into the Team server this vendor points at. Only a
+    /// <c>remote</c> vendor consults it, and it is a PARAMETER rather than a lookup so this stays
+    /// static and pure — which is also why the tests that predate Team servers still call it with
+    /// two arguments and still pass unedited.
+    /// </param>
+    internal static (string Auth, string Note) AuthOf(
+        ProviderSettings provider, bool hasVaultKey, bool hasServerToken = false) =>
+        RuntimeResolution.AuthOf(provider.Identity(), hasVaultKey, hasServerToken);
+
+    /// <summary>Has this machine signed into the Team server this vendor points at?</summary>
+    /// <remarks>
+    /// A file check rather than a request: `providers` must answer whether or not a server is
+    /// reachable, and "am I signed in" is a fact about this machine that no network call improves.
+    /// </remarks>
+    internal bool HasServerToken(ProviderSettings provider) =>
+        TeamServerAuth.ReadToken(
+            TeamServerAuth.TokenPath(_settings.DataDir, provider.BaseUrl)).Length > 0;
 
     internal static IReviewerRuntime? RuntimeFor(ProviderSettings provider) =>
         RuntimeResolution.For(provider.Identity());
@@ -869,6 +894,8 @@ public sealed partial class PanelService
                 Timeout = _settings.ReviewerTimeout,
                 ReasoningEffort = _settings.LocalReasoningEffort,
                 MaxTokens = _settings.LocalMaxTokens,
+                // Only RemoteRuntime uses it, to find this machine's token for its Team server.
+                DataDir = _settings.DataDir,
             };
             var prompt = ComposePrompt(choice, context, hasCheckout);
             // The repair is composed with hasCheckout: FALSE always, because the repair launch always

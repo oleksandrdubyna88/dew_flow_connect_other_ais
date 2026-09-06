@@ -38,6 +38,7 @@ public class VendorRuntimeSurvivesParsingTests
     [InlineData("claude")]
     [InlineData("antigravity")]
     [InlineData("local")]
+    [InlineData("remote")]
     public void EveryRuntimeThisBuildKnowsSurvivesParsing(string runtime)
     {
         Parse(runtime).Runtime.Should().Be(runtime, "a vendor that arrives as another runtime runs the wrong thing");
@@ -63,6 +64,20 @@ public class VendorRuntimeSurvivesParsingTests
 
         PanelService.AuthOf(vendor, hasVaultKey: false).Auth
             .Should().NotBe("unavailable", "this is what emptied the round");
+    }
+
+    [Fact]
+    public void ARemoteVendorParsedFromTheListIsRunnableONCEThisMachineHasSignedIn()
+    {
+        // The same two layers, for the runtime added by the Team server work. A remote vendor HAS a
+        // base URL — the server's — which is the shape that used to mean "a custom OpenAI endpoint
+        // needing a vault key", so this is the exact ground the `local` defect was found on.
+        var vendor = Parse("remote", "https://coai.example.com");
+
+        PanelService.AuthOf(vendor, hasVaultKey: false, hasServerToken: true).Auth
+            .Should().Be("server token");
+        PanelService.AuthOf(vendor, hasVaultKey: true, hasServerToken: false).Auth
+            .Should().Be("unavailable", "a vault key is not what a Team server authenticates with");
     }
 
     [Fact]
