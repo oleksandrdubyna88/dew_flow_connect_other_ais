@@ -28,10 +28,7 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
     public void NoShippedPrompt_ClaimsACheckoutItCannotKnowIsThere()
     {
         var prompts = new RolePrompts(Path.GetTempPath());
-        var claiming = PromptCatalog.All
-            .Where(c => prompts.ForChoice(c).Contains("checkout", StringComparison.OrdinalIgnoreCase))
-            .Select(c => c.Id)
-            .ToList();
+        var claiming = PromptCatalog.All.Where(c => Claims(prompts.ForChoice(c))).Select(c => c.Id).ToList();
 
         // The guard on the guard: a typo in the catalog would make the query above pass by finding
         // nothing at all, which is how a test of an emptied collection stays green for ever.
@@ -39,6 +36,28 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
         claiming.Should().BeEmpty(
             "a prompt file cannot know whether a checkout was mounted — only PanelService does");
     }
+
+    [Fact]
+    public void TheScanItself_StillFindsTheClaimWhenItIsThere()
+    {
+        // The companion the project's own rule demands for a structural scan: a prohibition that
+        // would pass over EMPTY text proves nothing, and the catalog above is loaded through a call
+        // that could start returning empty strings without failing anything else. So this asserts
+        // the two things that would make the scan vacuous — that the search matches the sentence it
+        // forbids, and that every prompt it searched is real text.
+        Claims("You have the checkout read-only and the diff below.").Should().BeTrue(
+            "the search used by the prohibition must actually match the sentence it forbids");
+
+        var prompts = new RolePrompts(Path.GetTempPath());
+        foreach (var choice in PromptCatalog.All)
+        {
+            prompts.ForChoice(choice).Length.Should().BeGreaterThan(200,
+                $"{choice.Id} must be real text, or the scan over it means nothing");
+        }
+    }
+
+    /// <summary>The one search, used by the prohibition and by its own control.</summary>
+    private static bool Claims(string text) => text.Contains("checkout", StringComparison.OrdinalIgnoreCase);
 
     [Fact]
     public void InFastMode_TheReviewerIsToldThereIsNothingToLookAt()

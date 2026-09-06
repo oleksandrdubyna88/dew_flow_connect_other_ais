@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using CoaiMcp.Core.Context;
 using CoaiMcp.Core.Findings;
@@ -16,7 +17,7 @@ namespace CoaiMcp.Server;
 /// this class carries data between the wire, the runners and the state machine — and answers
 /// every failure as a sentence in JSON, never as an exception up the stdio stack.
 /// </summary>
-public sealed class PanelService
+public sealed partial class PanelService
 {
     private readonly PanelSettings _settings;
     private readonly VaultKeys _keys;
@@ -870,10 +871,18 @@ public sealed class PanelService
                 MaxTokens = _settings.LocalMaxTokens,
             };
             var prompt = ComposePrompt(choice, context, hasCheckout);
-            // The repair is built before anybody knows which way the first attempt failed, so it
-            // covers both. The second sentence exists because a refused tool produces NO answer at
-            // all, and telling that model its JSON was malformed describes a failure it did not have.
-            var repairPrompt = prompt +
+            // The repair is composed with hasCheckout: FALSE always, because the repair launch always
+            // runs in repairDir — an empty temp directory, whatever the review was given (see above).
+            // Composing it with the REVIEW's mode is what shipped on 2026-09-06: in worktree mode the
+            // repair opened by promising a read-only checkout and closed by saying there were no
+            // tools, in one prompt, to the reviewer that had already failed once. Found by codex at
+            // that change's own code round — which diagnosed it the other way round, as a repair that
+            // should promise the tree. The code says otherwise: the repair never has one.
+            //
+            // The paragraph itself is built before anybody knows which way the first attempt failed,
+            // so it covers both. Its second sentence exists because a refused tool produces NO answer
+            // at all, and telling that model its JSON was malformed describes a failure it never had.
+            var repairPrompt = ComposePrompt(choice, context, hasCheckout: false) +
                 "\n\nYOUR PREVIOUS ATTEMPT DID NOT PRODUCE A USABLE ANSWER."
                 + " If it returned text that was not the schema's JSON: return ONLY the JSON object — no fences, no prose."
                 + " If it returned nothing because a command or a file read was refused: there are no tools here"
@@ -908,7 +917,7 @@ public sealed class PanelService
         CallerIdentity.Current() is { Length: > 0 } id ? id : $"repo:{session.State.RepoPath}";
 
     private string ComposePrompt(PromptChoice choice, string context, bool hasCheckout) =>
-        $"{_prompts.ForChoice(choice)}\n\n{WhatYouHave(hasCheckout)}\n\n## The finding contract\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{FindingSchema.Json}\n\n{context}";
+        $"{WithoutTheStaleClaim(_prompts.ForChoice(choice))}\n\n{WhatYouHave(hasCheckout)}\n\n## The finding contract\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{FindingSchema.Json}\n\n{context}";
 
     /// <summary>
     /// What the reviewer actually has — said once, by the only code that knows which it is.
@@ -925,6 +934,27 @@ public sealed class PanelService
     /// of the two truths — and a prompt somebody has overridden in the catalog needs the sentence
     /// just as much as a shipped one, which is the second reason it is here.</para>
     /// </remarks>
+    /// <summary>
+    /// The old claim, removed from a prompt that still carries it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The prompt catalog is EDITABLE: a prompt somebody overrode before 2026-09-06 sits in
+    /// their own data directory still opening with "You have the checkout read-only and the diff
+    /// below", and no edit to the shipped files can reach it. Composing the true sentence underneath
+    /// it hands the model two opposite instructions in one prompt — which is worse than either
+    /// sentence alone, and is the shape that made a headless CLI go looking for a tool in the first
+    /// place. Raised by gemini at the plan gate of the change that removed the claim, and again by
+    /// the local reviewer at its code gate.</para>
+    /// <para>Only that one sentence is removed. A person's own prompt is theirs; this strips the
+    /// line the product used to put in it and nothing else.</para>
+    /// </remarks>
+    internal static string WithoutTheStaleClaim(string prompt) => StaleClaim().Replace(prompt, string.Empty);
+
+    [GeneratedRegex(
+        @"\s*You\s+have\s+the\s+(?:repository\s+)?checkout\s+read-only\s+and\s+the\s+diff\s+below\.",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex StaleClaim();
+
     internal static string WhatYouHave(bool hasCheckout) =>
         hasCheckout
             ? "## What you have\n\nA READ-ONLY checkout of the repository in your working "
