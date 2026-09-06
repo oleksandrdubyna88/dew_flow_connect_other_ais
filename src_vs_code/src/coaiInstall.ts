@@ -107,6 +107,33 @@ export async function copyCompanions(
   return placed;
 }
 
+/**
+ * The one companion the server cannot start without, when the archive brought it and it did not land.
+ *
+ * <p>The copy policy is best-effort for a reason: the binary is already in place, and a companion
+ * that fails to copy should degrade a feature rather than stop the server. The SQLite library is the
+ * exception, and the gate was right about it — a silently skipped copy on an UPGRADE (the running
+ * server holds the old file open on Windows) leaves the new binary beside the old library, which is
+ * the original incident all over again and just as silent.</p>
+ *
+ * <p>So: nothing to say when the archive carried no library, or when the one it carried landed. A
+ * library that was brought and did not land is an install that failed, reported as one.</p>
+ */
+export function requiredCompanionMissing(
+  entries: readonly (readonly [string, boolean])[],
+  placed: readonly string[],
+  rid: CoaiRid,
+): string {
+  const sqlite = companionsOf(entries, rid).find(isSqlite);
+
+  return sqlite !== undefined && !placed.includes(sqlite) ? sqlite : '';
+}
+
+/** `e_sqlite3.dll`, `libe_sqlite3.so`, `libe_sqlite3.dylib` — one name per platform, one shape. */
+function isSqlite(name: string): boolean {
+  return name.toLowerCase().includes('e_sqlite3');
+}
+
 /** `mcp-v0.1.0` → `0.1.0`; any other tag line yields nothing rather than a wrong version. */
 export function versionFromTag(tag: string): string | undefined {
   return tag.startsWith(TAG_PREFIX) && tag.length > TAG_PREFIX.length

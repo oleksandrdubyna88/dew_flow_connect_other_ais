@@ -176,10 +176,24 @@ jobs:
             cp out/coai-mcp.exe "$NAME/"
             7z a "$NAME.zip" "$NAME" > /dev/null
             echo "ASSET=$NAME.zip" >> "$GITHUB_ENV"
+            LISTING=$(7z l "$NAME.zip")
           else
             cp out/coai-mcp "$NAME/"
             tar czf "$NAME.tar.gz" "$NAME"
             echo "ASSET=$NAME.tar.gz" >> "$GITHUB_ENV"
+            LISTING=$(tar tzf "$NAME.tar.gz")
+          fi
+          # The ARCHIVE, not the directory it was made from. Checking the publish output proves the
+          # library was BUILT; what ships is this file, and an include filter or a copy that silently
+          # did nothing sits between the two. Raised by the review gate, and it is right: the check
+          # that reproduces the incident is the one performed on the artifact itself.
+          # At the archive's TOP LEVEL, beside the binary — the only place the OS loader looks. A
+          # library nested in a subdirectory would satisfy a bare name match and still ship a server
+          # that cannot open its database.
+          if ! printf '%s' "$LISTING" | grep -Eq "(^|[/\])$NAME[/\][^/\]*e_sqlite3"; then
+            echo "the archive does not contain the SQLite library — the shipped server could not open its own database"
+            printf '%s' "$LISTING"
+            exit 1
           fi
 
       # A checksum beside each archive, written by the job that BUILT it — four small files have

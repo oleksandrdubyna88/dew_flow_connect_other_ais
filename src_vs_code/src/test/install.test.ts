@@ -8,6 +8,7 @@ import {
   binaryNameFor,
   companionsOf,
   copyCompanions,
+  requiredCompanionMissing,
   compareVersions,
   entryPathIn,
   ridFor,
@@ -149,6 +150,11 @@ test('the release carries the native library the binary opens its database throu
     workflow,
     /COAI_DATA_DIR="\$DB" "\$EXE" --log/,
     'the smoke makes the published binary actually open one — the check that would have caught it');
+  assert.match(
+    workflow,
+    /the archive does not contain the SQLite library/,
+    'and the ARCHIVE is inspected after it is made: the publish output proves the library was built, '
+    + 'not that the file being shipped carries it');
 });
 
 test('an unsupported platform is refused rather than guessed at', () => {
@@ -323,4 +329,29 @@ test('what the archive holds is what gets copied, in its order', async () => {
 
   assert.deepEqual(copied, ['e_sqlite3.dll']);
   assert.deepEqual(placed, ['e_sqlite3.dll']);
+});
+
+test('a SQLite library the archive brought and the installer could not place fails the install', () => {
+  // The gate was right about this one. Best-effort is correct for a companion in general, and wrong
+  // for THIS companion on an upgrade: the running server holds the old e_sqlite3 open on Windows, the
+  // copy fails, and the new binary is left beside the old library - the original incident again, and
+  // just as silent.
+  const archive = [['coai-mcp.exe', true], ['e_sqlite3.dll', true]] as const;
+
+  assert.equal(requiredCompanionMissing(archive, [], 'win-x64'), 'e_sqlite3.dll');
+  assert.equal(requiredCompanionMissing(archive, ['e_sqlite3.dll'], 'win-x64'), '', 'it landed');
+});
+
+test('a companion that is not the SQLite library still fails nothing', () => {
+  const archive = [['coai-mcp', true], ['libe_sqlite3.so', true], ['README.md', true]] as const;
+
+  assert.equal(
+    requiredCompanionMissing(archive, ['libe_sqlite3.so'], 'linux-x64'), '',
+    'the README not landing is a feature degrading, which is what best-effort is for');
+});
+
+test('an archive that brought no SQLite library asks nothing of the installer', () => {
+  // The server would not work, but that is the release job's failure and it is checked there; the
+  // installer must not invent a requirement the archive never carried.
+  assert.equal(requiredCompanionMissing([['coai-mcp', true]] as const, [], 'osx-arm64'), '');
 });

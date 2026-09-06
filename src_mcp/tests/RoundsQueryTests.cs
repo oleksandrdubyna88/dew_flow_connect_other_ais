@@ -219,4 +219,35 @@ public sealed class RoundsQueryTests : IDisposable
             // A leftover temp directory is not a failing test.
         }
     }
+
+    [Fact]
+    public void AMissingNativeLibrary_IsAnEmptyLogAndAnExplanation_NotACrash()
+    {
+        // 0.18.1 shipped without e_sqlite3 beside the binary, and `--log` died with a
+        // TypeInitializationException wrapping DllNotFoundException - from the type initializer, so
+        // the handler's filter (SqliteException, IOException, UnauthorizedAccessException) never saw
+        // it. The one command a person runs to find out what happened was the one that crashed.
+        var missing = new TypeInitializationException(
+            "SQLitePCL.raw", new DllNotFoundException("Unable to load DLL 'e_sqlite3'"));
+
+        Program.Unreadable(missing).Should().BeTrue("an empty log beats a stack trace");
+        Program.WhyUnreadable(missing).Should().Contain("e_sqlite3")
+            .And.Contain("beside", "the fix is to put the library next to the executable");
+    }
+
+    [Fact]
+    public void AnOrdinaryDatabaseProblem_StillReadsAsItself()
+    {
+        var empty = new Microsoft.Data.Sqlite.SqliteException("no such table: findings", 1);
+
+        Program.Unreadable(empty).Should().BeTrue();
+        Program.WhyUnreadable(empty).Should().Contain("no such table");
+    }
+
+    [Fact]
+    public void SomethingThatIsNotADatabaseProblem_IsNotSwallowed()
+    {
+        Program.Unreadable(new InvalidOperationException("a bug of ours")).Should().BeFalse(
+            "a fault that has nothing to do with the database must not come back as an empty log");
+    }
 }
