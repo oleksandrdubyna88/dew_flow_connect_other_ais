@@ -385,7 +385,13 @@ internal static class Program
     private static async Task<int> ServeAsync()
     {
         // stdio host → the console sink goes to stderr (logging-serilog.md, stdio hosts).
-        using var log = ServiceDefaults.CoaiLogging.CreateDewFlowLogger(AppName, consoleToStdErr: true);
+        using var log = ServiceDefaults.CoaiLogging.CreateDewFlowLogger(
+            AppName,
+            consoleToStdErr: true,
+            // Beside the sessions and the database, not beside the binary: the data directory is the
+            // one place a person is told about, and the binary's is inside the extension's storage.
+            logsRoot: ServiceDefaults.CoaiLogPath.RootFor(
+                SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable)));
         try
         {
             // The file the extension writes is the base; the client config env overrides it — a

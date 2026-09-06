@@ -14,6 +14,19 @@ namespace CoaiMcp.ServiceDefaults;
 /// </remarks>
 public static class CoaiLogPath
 {
+    /// <summary>
+    /// Where a host's logs live: <c>logs/</c> under the directory it already keeps its data in.
+    /// </summary>
+    /// <remarks>
+    /// It used to be <c>logs/</c> beside the BINARY, and for an installed VS Code extension that is
+    /// <c>…/globalStorage/&lt;publisher&gt;.&lt;extension&gt;/logs</c> — a path nobody would think to
+    /// open. On 2026-09-06 a reported "the MCP server is dead" took a quarter of an hour to answer,
+    /// and the answer was one line in a log file found by guessing where a Native-AOT binary puts its
+    /// working directory. The data directory is the one place a person is TOLD about: the sessions,
+    /// the settings file and <c>coai.db</c> are already there.
+    /// </remarks>
+    public static string RootFor(string dataDir) => Path.Combine(dataDir, "logs");
+
     public static string For(string logsRoot, string appName, DateTime utcNow, int pid) =>
         Path.Combine(
             logsRoot,

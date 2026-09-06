@@ -22,4 +22,19 @@ public sealed class LogPathTests
 
         CoaiLogPath.For("logs", "a", now, 1).Should().NotBe(CoaiLogPath.For("logs", "a", now, 2));
     }
+
+    [Fact]
+    public void TheLogLivesUnderTheDataDirectory_NotBesideTheBinary()
+    {
+        // Reported on 2026-09-06 as "the MCP server is dead". Answering it took a quarter of an hour,
+        // and the answer was one line in a log file whose location had to be GUESSED: `logs/` beside
+        // the binary, which for an installed extension is
+        // …/globalStorage/<publisher>.<extension>/logs. The data directory is the one place a person
+        // is told about - the sessions, settings.json and coai.db are already there.
+        var root = CoaiLogPath.RootFor(Path.Combine("C:", "Users", "ada", "AppData", "Local", "coai-mcp"));
+
+        root.Should().Be(Path.Combine("C:", "Users", "ada", "AppData", "Local", "coai-mcp", "logs"));
+        CoaiLogPath.For(root, "coai-mcp", new DateTime(2026, 9, 6, 11, 48, 18, DateTimeKind.Utc), 18756)
+            .Should().EndWith(Path.Combine("coai-mcp", "logs", "2026-09-06", "coai-mcp-11-48-18-18756.log"));
+    }
 }
