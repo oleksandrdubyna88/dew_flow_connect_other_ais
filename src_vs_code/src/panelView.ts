@@ -325,11 +325,14 @@ function allowedModelsFor(vendor: Vendor, servers: readonly TeamServerState[]): 
     return [];
   }
 
-  // Compared CANONICALLY, never as typed: the row stores the address one way and the server entry
-  // holds whatever the person entered. Matching the strings is the exact mistake this whole feature
-  // has a shared test fixture to prevent.
+  // By ID first, because an address is CORRECTABLE and an id is not: fixing a typo in a hostname
+  // would otherwise orphan every row that matched the old string. The address is the fallback, for
+  // rows written before the id was recorded — and it is compared CANONICALLY, never as typed, since
+  // the row stores one spelling and the server entry holds whatever the person entered.
   const url = canonicalTeamServerUrl(vendor.baseUrl);
-  const server = servers.find((s) => canonicalTeamServerUrl(s.server.url) === url);
+  const server = servers.find((s) => (vendor.teamServerId !== undefined && vendor.teamServerId.length > 0)
+    ? s.server.id === vendor.teamServerId
+    : canonicalTeamServerUrl(s.server.url) === url);
   const named = vendor.remoteVendor ?? vendor.id;
 
   if (server?.catalog === undefined) {

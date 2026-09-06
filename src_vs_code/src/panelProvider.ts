@@ -92,7 +92,7 @@ import {
   teamServersFrom,
 } from './teamServers';
 import { TeamServerState, slotSentence } from './teamServerView';
-import { coaiDataDir } from './extension';
+import { coaiDataDir } from './dataDir';
 import {
   executableFor,
   Platform,
@@ -897,6 +897,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         this.latestCheckedAt = 0;
         break;
       case 'usageWindow':
+        // The cached Team-server totals are the OTHER window's — the same staleness the scope toggle
+        // had, one control along. Caught on the code round.
+        this.teamCheckedAt = 0;
         if (id !== undefined) {
           this.usageWindow = id as Window;
         }
@@ -1266,6 +1269,19 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     return answer === anyway;
   }
 
+  /**
+   * Whether a reviewer row belongs to this server.
+   *
+   * <p>By id when the row records one, because an address is correctable and an id is not: fixing a
+   * typo in a hostname would otherwise leave rows nothing would ever match again — their model list
+   * frozen, and removal quietly finding none of them. Caught on the code round.</p>
+   */
+  private static rowBelongsTo(vendor: Vendor, server: TeamServer): boolean {
+    return (vendor.teamServerId ?? '').length > 0
+      ? vendor.teamServerId === server.id
+      : canonicalTeamServerUrl(vendor.baseUrl) === canonicalTeamServerUrl(server.url);
+  }
+
   private serverNamed(id: string): TeamServer | undefined {
     return this.teamServers(vscode.workspace.getConfiguration('coai')).find((s) => s.id === id);
   }
@@ -1332,8 +1348,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
 
     const rows = vendorsFrom(this.read(config)('vendors')).filter(
-      (v) => v.runtime === 'remote'
-        && canonicalTeamServerUrl(v.baseUrl) === canonicalTeamServerUrl(server.url),
+      (v) => v.runtime === 'remote' && PanelProvider.rowBelongsTo(v, server),
     );
     const both = rows.length === 1 ? 'Remove it and 1 reviewer' : `Remove it and ${rows.length} reviewers`;
     const answer = await vscode.window.showWarningMessage(
@@ -1384,13 +1399,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
     const answer = await catalogOf(server, token);
     const known = this.catalogs[server.id];
+    // `company` is asked for ONLY where THIS server's catalog said this account is an admin. The
+    // control is global but the permission is not: an admin on one server and an ordinary user on
+    // another would otherwise have the second refuse every request and go stale. Caught on the code
+    // round.
+    const scope = this.usageScope === 'company' && (known?.catalog?.isAdmin === true) ? 'company' : 'me';
     const spent = await fetchUsage(
       server.url,
       token,
       WINDOW_ON_THE_WIRE[this.usageWindow],
-      // `company` is refused by the server for anybody who is not an admin, and the control that
-      // sets it is only rendered for one — so this can only ask for what it is allowed.
-      this.usageScope,
+      scope,
     );
     // A renewal that failed is reported even when the catalog call SUCCEEDED, because the old token
     // stays valid for up to two days: without this the panel looked healthy right until reviews
@@ -1497,6 +1515,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     return {
       id: remoteVendorRowId(server.id, picked.vendor.id),
       runtime: 'remote',
+      // Which server, by its permanent id — see `Vendor.teamServerId`.
+      teamServerId: server.id,
       // Verbatim from the catalog: this is what `--vendor` sends and what the server matches.
       remoteVendor: picked.vendor.id,
       model: picked.vendor.models[0] ?? '',
