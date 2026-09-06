@@ -42,6 +42,16 @@ export interface Vendor {
    */
   readonly remoteVendor?: string | undefined;
   /**
+   * For a `remote` row: which Team server entry it belongs to.
+   *
+   * <p>The row also stores that server's address, but an address is CORRECTABLE — somebody fixes a
+   * typo in the hostname and every row that matched on the old string is orphaned: its model list
+   * stops updating and removing the server no longer finds it. The server id is generated once and
+   * never rewritten, which is the whole reason it exists. Absent on rows written before this field,
+   * which fall back to matching by address. Caught on the code round.</p>
+   */
+  readonly teamServerId?: string | undefined;
+  /**
    * Where this vendor's CLI is. Empty = look it up on PATH.
    *
    * <p>PATH is not always able to answer, and WSL is the case that proves it: `codex` resolves
@@ -231,6 +241,9 @@ export function vendorsFrom(value: unknown): Vendor[] {
         // parser) would have had every such vendor refused as one the server "does not offer".
         // Caught on the code round.
         ? { remoteVendor: v['remoteVendor'].trim() }
+        : {}),
+      ...(typeof v['teamServerId'] === 'string' && v['teamServerId'].trim().length > 0
+        ? { teamServerId: v['teamServerId'].trim().toLowerCase() }
         : {}),
       executablePath: typeof v['executablePath'] === 'string' ? v['executablePath'].trim() : '',
       pricePerMillionIn: rate(v['pricePerMillionIn']),

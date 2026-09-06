@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { coaiDataDir } from './dataDir';
 import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
 import { pastedSnippetStatus } from './snippetInWorkspace';
@@ -134,21 +135,7 @@ async function writeSettingsFile(json: string): Promise<void> {
   );
 }
 
-/**
- * Where `coai-mcp` keeps its state — its default, or `COAI_DATA_DIR`.
- *
- * <p>Exported because the Team-server token file lives under it and BOTH binaries must agree on
- * where: the extension writes it and the MCP shim reads it. Two answers to this question is two
- * halves that cannot find each other.</p>
- */
-export function coaiDataDir(): string {
-  const configured = process.env['COAI_DATA_DIR'];
-  const localAppData = process.env['LOCALAPPDATA'] ?? `${process.env['HOME'] ?? '.'}/.local/share`;
-
-  return configured ?? `${localAppData}/coai-mcp`;
-}
-
-/** The same place, as the Uri the rest of this file wants. */
+/** The one answer, as the Uri the rest of this file wants. It lives in `dataDir.ts`. */
 function dataDir(): vscode.Uri {
   return vscode.Uri.file(coaiDataDir());
 }

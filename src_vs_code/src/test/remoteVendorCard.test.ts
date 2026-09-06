@@ -99,3 +99,25 @@ test('an ordinary vendor still gets its endpoint and price fields', () => {
   assert.ok(html.includes('data-setting="baseUrl" data-vendor="mistral"'));
   assert.ok(html.includes('data-setting="pricePerMillionIn" data-vendor="mistral"'));
 });
+
+test('a row follows its server by ID, so correcting a typo in the URL does not orphan it', () => {
+  // The id is generated once and never rewritten; the address is correctable. Matching on the
+  // address meant that fixing a hostname froze every row's model list and made removal find none of
+  // them. Caught on the code round.
+  const moved: TeamServerState = {
+    ...TEAM,
+    server: { ...TEAM.server, url: 'https://coai-corrected.example.com' },
+  };
+  const row: Vendor = { ...ROW, teamServerId: 'remsoft-dev' };
+
+  const html = page({ vendors: [row], teamServers: [moved] });
+
+  assert.ok(html.includes('gpt-5.6-mini'), 'the row still finds its server after the URL changed');
+});
+
+test('a row written before ids existed still finds its server by address', () => {
+  // Absent is not wrong — it is what every row saved before this field looks like.
+  const html = page({ vendors: [{ ...ROW }], teamServers: [TEAM] });
+
+  assert.ok(html.includes('gpt-5.6-mini'));
+});
