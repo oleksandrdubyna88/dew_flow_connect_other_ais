@@ -6,10 +6,18 @@
 # The repository's own rules are the review standard: CLAUDE.md and .claude/rules/**. The shared
 # family rules are a git SUBMODULE at .claude/rules/shared and may not be checked out for the
 # reviewer, so the ones that matter most are restated per path below.
-language: "ru-RU"
+language: "en-US"
 
 reviews:
-  profile: "chill"
+  # ASSERTIVE, on evidence rather than taste. Five findings over two manually-triggered reviews on
+  # 2026-09-06, five of them true — including two about code written an hour earlier and believed
+  # finished. A precision of 100 % at the quiet default says we are under-asking, not over-asking.
+  # If precision falls under ~70 % over the next few pull requests, this goes back to "chill" and the
+  # measurement goes in the commit message, the same way every other setting here is decided.
+  profile: "assertive"
+  # Left off: this repository already blocks a merge until every review conversation is resolved
+  # (branch protection), which is the same gate one layer up. Turning it on would add a second
+  # approval that nothing requires.
   request_changes_workflow: false
   high_level_summary: true
   poem: false
@@ -20,6 +28,58 @@ reviews:
     drafts: false
     base_branches:
       - "main"
+  # What must be TRUE of a pull request, not merely mentioned in it. Every one of these was bought by
+  # a defect in this repository, and the date says which: they are the reviewer's half of the rules
+  # the humans here are already held to. All start in `warning` — a check nobody has watched behave
+  # is not a check to block a merge with.
+  pre_merge_checks:
+    description:
+      mode: "warning"
+    docstrings:
+      mode: "off"
+    custom_checks:
+      - name: "A measurement states its sample size"
+        mode: "warning"
+        instructions: |
+          Pass/fail criteria: if the pull request description or the code comments quote a NUMBER as
+          evidence — a percentage, a count of findings, a token figure, a latency — the same sentence
+          or the one beside it must say what it was measured over: how many runs, how many commits,
+          how many models. A number without its sample is an advertisement. Bought on 2026-09-06,
+          when a fast-mode measurement of one commit was nearly published as a general claim.
+          Not applicable to a version number, a line number, a test count, or a size in bytes.
+      - name: "A release-only check has a test that runs on every push"
+        mode: "warning"
+        instructions: |
+          Pass/fail criteria: if the diff adds or changes logic that executes ONLY while a release is
+          being cut — a shell condition in a release workflow, a packaging step, a version comparison,
+          a tag-triggered job — the same pull request must add or change a test that exercises that
+          logic in the ordinary suite. Bought on 2026-09-06: an archive check written to protect the
+          release passed on `tar` output and failed on `7z` output, and would have broken both Windows
+          builds at the last step of the release. Its only execution was the release itself.
+      - name: "A bug fix carries a test that reproduces the defect"
+        mode: "warning"
+        instructions: |
+          Pass/fail criteria: if the pull request describes fixing a defect — wrong output, a crash, a
+          regression, a silent failure — it must also add or change a test that fails without the fix.
+          The description or a comment should say what the failing test reported. Not applicable to a
+          rename, a comment, a formatting change, or a documentation-only pull request.
+      - name: "No dotnet test"
+        mode: "error"
+        instructions: |
+          Pass/fail criteria: no file in the diff may run `dotnet test`. Every test project here is
+          xUnit v3 on Microsoft Testing Platform and builds into its own executable; `dotnet test`
+          aborts with a testhost error, which is a tooling mismatch reported as a test failure.
+          Flag any workflow step, script, documentation line or comment that tells somebody to run it.
+      - name: "A test does not read the wall clock"
+        mode: "warning"
+        instructions: |
+          Pass/fail criteria: a test added or changed by this pull request must not depend on the
+          current date or time. `DateTime.Now`, `DateTime.UtcNow`, `Date.now()`, `new Date()` with no
+          argument inside a test, or a fixture with a hard-coded date compared against code that asks
+          what day it is — all fail this check unless the clock is frozen or injected. Bought twice on
+          2026-09-06: a guard against an empty page was green the day it was written and red the next
+          morning, with a message about the page and a cause in the calendar.
+
   path_filters:
     - "!**/bin/**"
     - "!**/obj/**"
@@ -29,6 +89,8 @@ reviews:
     - "!artifacts/**"
     - "!**/package-lock.json"
     - "!research/data/**"
+    - "!assets/**"
+    - "!**/*.png"
   path_instructions:
     - path: "src_mcp/**/*.cs"
       instructions: |
@@ -65,6 +127,13 @@ reviews:
       instructions: |
         Tests run as executables (xUnit v3 / MTP): a step running `dotnet test` is a defect. The bench is
         built and tested in CI but never packaged into a release.
+        A check that executes ONLY while a release is cut has never actually run: a shell condition, a
+        packaging filter, a version comparison. Flag one that has no test in the ordinary suite, and
+        read the shell as shell — on 2026-09-06 a valid, well-formed pattern matched `tar` output and
+        not `7z` output, which would have failed both Windows builds at the last step of the release.
+        A delivery check must USE the capability, not merely start the binary: `--version` and `--help`
+        pass with a native dependency missing, which is how a server shipped unable to open its own
+        database with every check green.
   tools:
     gitleaks:
       enabled: true
@@ -75,6 +144,16 @@ reviews:
     yamllint:
       enabled: true
     eslint:
+      enabled: false
+
+# OFF, deliberately. All four are ON by default, and all four write code: a repository where every
+# change goes through a measured gate, a red test and a review round does not want a second author
+# proposing commits nobody planned. Docstrings and tests here are written where the reasoning is,
+# which is the point of them.
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
       enabled: false
 
 chat:
