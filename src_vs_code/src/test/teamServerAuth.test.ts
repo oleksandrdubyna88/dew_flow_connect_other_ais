@@ -14,6 +14,7 @@ import {
   signIn,
   signOut,
   signedInKey,
+  trustedKey,
   writeToken,
 } from '../teamServerAuth';
 import { TeamServer, tokenFileName } from '../teamServers';
@@ -176,6 +177,9 @@ test('a renewal that is due is attempted WITHOUT asking the person anything', as
   try {
     const state = store({
       [signedInKey(SERVER.id)]: { email: 'a@b.c', expiresUtc: '2026-09-06T13:00:00Z' } satisfies SignedIn,
+      // Approved earlier, by a person. A renewal for an application nobody approved is refused
+      // before it reaches the identity provider — see the test below.
+      [trustedKey(SERVER.id)]: '3afb5834-1111-2222-3333-444455556666',
     });
     const asked: boolean[] = [];
     const spy: AuthHost = {
@@ -380,8 +384,67 @@ test('a server that is down cannot keep somebody signed in on this machine', asy
 
     const result = await signOut(SERVER, host(dir, state, [], down), 'server-token');
 
-    assert.strictEqual(result.ok, true, 'the local half must succeed regardless');
+    // The LOCAL half succeeds regardless — that is the point — and the record is gone, so nothing
+    // on this machine can use the session. What changed on the code round is that the caller is
+    // told the server was never reached, instead of being handed a plain success.
     assert.strictEqual(state.all[signedInKey(SERVER.id)], undefined);
+    assert.strictEqual(result.ok, false);
+    assert.ok(result.message.includes('expire on its own'));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a renewal for an application nobody approved is REFUSED, not minted silently', async () => {
+  // The hole this closes: the confirmation was guarded on `interactive`, so a background renewal
+  // skipped it entirely. A server that changed its advertised scope would have had a Microsoft
+  // token minted for the new application and posted to it, with nobody ever seeing it. Caught on
+  // the code round.
+  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  try {
+    const state = store({
+      [signedInKey(SERVER.id)]: { email: 'a@b.c', expiresUtc: '2026-09-06T13:00:00Z' } satisfies SignedIn,
+      // Approved a DIFFERENT application than the server now advertises.
+      [trustedKey(SERVER.id)]: '00000000-0000-0000-0000-000000000000',
+    });
+    let minted = 0;
+    const spy: AuthHost = {
+      ...host(dir, state),
+      getSession: async () => {
+        minted += 1;
+
+        return 'idp-token';
+      },
+    };
+
+    const result = await renewIfDue(SERVER, spy, Date.parse('2026-09-06T12:00:00Z'));
+
+    assert.strictEqual(result?.ok, false);
+    assert.strictEqual(minted, 0, 'nothing may be minted for an application nobody has seen');
+    assert.ok(result?.ok === false && result.message.includes('different Microsoft application'));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a bearer token cannot travel over plain http, whatever the call', async () => {
+  // The check used to live only in the client-config call, so a server URL edited to plain http
+  // after signing in would have had the catalog and usage calls carry the token in the clear. Two
+  // reviewers found it; it now lives on the one road in.
+  const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
+  try {
+    let sent = 0;
+    const counting = (async () => {
+      sent += 1;
+
+      return { ok: true, status: 200, text: async () => '{}' } as Response;
+    }) as typeof fetch;
+    const insecure = { ...SERVER, url: 'http://coai.example.com' };
+
+    const result = await signOut(insecure, host(dir, store(), [], counting), 'a-token');
+
+    assert.strictEqual(sent, 0, 'nothing may be sent to a plain-http host');
+    assert.ok(result.ok === false || result.ok === true, 'and it must not throw');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

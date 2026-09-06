@@ -12,6 +12,10 @@ import { canonicalTeamServerUrl, isSafeAdvertisedScope, teamServerEndpoint } fro
  * spinner that outlives the person's patience. Raised on the plan round.</p>
  */
 
+/** Why a URL was refused before anything was sent. */
+export const INSECURE = 'a Team server must be https, or http on this machine — a token sent in the '
+  + 'clear over a network is a token anybody on it can take';
+
 /** How long any single request may take before it is abandoned. */
 export const REQUEST_TIMEOUT_MS = 10_000;
 
@@ -94,6 +98,14 @@ export async function ask<T>(
   route: string,
   attempt: Attempt = {},
 ): Promise<ServerResult<T>> {
+  // Checked HERE rather than at the call sites, which is the whole point: it used to live only in
+  // `fetchClientConfig`, so a server URL edited to plain http in settings.json after signing in
+  // would have had the catalog and usage calls carry the bearer token in the clear. Two reviewers
+  // found it. The measure belongs on the road in, not at each door.
+  if (!isHttpsOrLoopback(url)) {
+    return { ok: false, status: 0, message: INSECURE };
+  }
+
   const controller = new AbortController();
   const deadline = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const headers: Record<string, string> = { [CONTRACT_HEADER]: String(CONTRACT_VERSION) };
@@ -106,7 +118,16 @@ export async function ask<T>(
 
   try {
     const send = attempt.fetchImpl ?? fetch;
-    const request: RequestInit = { method: attempt.method ?? 'GET', headers, signal: controller.signal };
+    const request: RequestInit = {
+      method: attempt.method ?? 'GET',
+      headers,
+      signal: controller.signal,
+      // A configured server could otherwise redirect `/api/catalog` to an origin it does not own and
+      // `fetch` would forward the Authorization header there — or, from `/api/session`, the Microsoft
+      // token in the body. There is no legitimate redirect on this API, so any redirect is refused
+      // rather than followed to a host nobody confirmed.
+      redirect: 'error',
+    };
     if (attempt.body !== undefined) {
       request.body = JSON.stringify(attempt.body);
     }
@@ -166,15 +187,6 @@ export async function fetchClientConfig(
   url: string,
   fetchImpl?: typeof fetch,
 ): Promise<ServerResult<ClientConfig>> {
-  if (!isHttpsOrLoopback(url)) {
-    return {
-      ok: false,
-      status: 0,
-      message: 'a Team server must be https, or http on this machine — a token sent in the clear '
-        + 'over a network is a token anybody on it can take',
-    };
-  }
-
   const answer = await ask<ClientConfig>(url, 'api/client-config', { fetchImpl });
   if (!answer.ok) {
     return answer;

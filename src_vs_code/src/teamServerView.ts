@@ -1,5 +1,9 @@
 import { Catalog, CatalogVendor, SlotSummary, Usage } from './teamServerApi';
 import { TeamServer, canonicalTeamServerUrl } from './teamServers';
+// The ONE escaper, imported rather than copied. A private second copy is the anti-pattern the
+// security rule names by example — "three byte-identical private copies | hardening one left the
+// other two behind" — and byte-identical is exactly what this one was. Caught on the code round.
+import { escapeHtml as escape } from './escapeHtml';
 
 /**
  * The *Team servers* section, as markup.
@@ -23,6 +27,14 @@ export interface TeamServerState {
   readonly stale: boolean;
   /** What this server says has been spent on it, in the window the panel is showing. */
   readonly usage?: Usage | undefined;
+  /**
+   * What this server is in the middle of right now, or empty.
+   *
+   * <p>Sign-in awaits four requests and a Microsoft prompt. Without this the row read "Not signed
+   * in" the whole time and its button stayed pressable, so a person could not tell a slow sign-in
+   * from one that did nothing — and pressed it again. Caught on the code round.</p>
+   */
+  readonly busy?: string | undefined;
 }
 
 /** Whether anybody signed in here is an admin — the only people offered *Company*. */
@@ -143,6 +155,9 @@ export function disclosure(url: string): string {
 
 /** What to say about a server nobody has signed into, or one that would not answer. */
 export function statusSentence(state: TeamServerState): string {
+  if ((state.busy ?? '').length > 0) {
+    return state.busy!;
+  }
   if (state.email.length === 0) {
     return 'Not signed in.';
   }
@@ -158,18 +173,13 @@ export function statusSentence(state: TeamServerState): string {
   return `Signed in. Server ${state.catalog.serverVersion}.`;
 }
 
-function escape(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 /** One server's rows. */
 export function teamServerRow(state: TeamServerState): string {
   const signedIn = state.email.length > 0;
   const id = escape(state.server.id);
+  // A button that cannot help while something is already in flight is disabled rather than left
+  // pressable — pressing it again is what a person does when nothing appears to be happening.
+  const stop = (state.busy ?? '').length > 0 ? ' disabled' : '';
   const slots = (state.catalog?.vendors ?? []).map((v) => escape(slotSentence(v))).join('; ');
 
   return `<div class="ts-row" data-server="${id}">
@@ -183,9 +193,9 @@ export function teamServerRow(state: TeamServerState): string {
   <div class="hint ts-warn">${escape(disclosure(state.server.url))}</div>
   <div class="ts-buttons">
     ${signedIn
-      ? `<button class="run" data-command="signOutTeamServer" data-id="${id}">Sign out</button>`
-      : `<button class="run" data-command="signInTeamServer" data-id="${id}">Sign in</button>`}
-    <button class="run" data-command="removeTeamServer" data-id="${id}">Remove</button>
+      ? `<button class="run" data-command="signOutTeamServer" data-id="${id}"${stop}>Sign out</button>`
+      : `<button class="run" data-command="signInTeamServer" data-id="${id}"${stop}>Sign in</button>`}
+    <button class="run" data-command="removeTeamServer" data-id="${id}"${stop}>Remove</button>
   </div>
 </div>`;
 }
