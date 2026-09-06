@@ -227,8 +227,16 @@ public sealed class RoundsQueryTests : IDisposable
         // TypeInitializationException wrapping DllNotFoundException - from the type initializer, so
         // the handler's filter (SqliteException, IOException, UnauthorizedAccessException) never saw
         // it. The one command a person runs to find out what happened was the one that crashed.
+        // The REAL chain, taken from the published 0.18.2 binary with its library removed. The first
+        // version of this test built it by hand as TypeInitializationException wrapping
+        // DllNotFoundException, and the fix then agreed with the fixture rather than with reality:
+        // the runtime puts a TargetInvocationException between them, the recursion stopped at a type
+        // it did not know, and the shipped binary crashed exactly as before. A fixture the code
+        // accepts proves nothing about the fault it was written for.
         var missing = new TypeInitializationException(
-            "SQLitePCL.raw", new DllNotFoundException("Unable to load DLL 'e_sqlite3'"));
+            "SQLitePCL.raw",
+            new System.Reflection.TargetInvocationException(
+                new DllNotFoundException("Unable to load DLL 'e_sqlite3' or one of its dependencies")));
 
         Program.Unreadable(missing).Should().BeTrue("an empty log beats a stack trace");
         Program.WhyUnreadable(missing).Should().Contain("e_sqlite3")
