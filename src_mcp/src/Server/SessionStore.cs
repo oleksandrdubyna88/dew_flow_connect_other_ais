@@ -219,13 +219,8 @@ public sealed class SessionStore(string dataDir)
 
         try
         {
-            var session = JsonSerializer.Deserialize(ReadShared(file), ServerJsonContext.Default.PersistedSession);
-
-            // `Rounds` is a CONSTRUCTOR parameter, so an absent member passes null straight in and no
-            // property initializer can catch it. Every other collection normalises where it is
-            // declared; this one can only be normalised here, at the single place a session comes off
-            // disk.
-            return session is null or { Rounds: not null } ? session : session with { Rounds = [] };
+            return Normalised(
+                JsonSerializer.Deserialize(ReadShared(file), ServerJsonContext.Default.PersistedSession));
         }
         catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
         {
@@ -370,7 +365,8 @@ public sealed class SessionStore(string dataDir)
             PersistedSession? session;
             try
             {
-                session = JsonSerializer.Deserialize(ReadShared(file), ServerJsonContext.Default.PersistedSession);
+                session = Normalised(
+                    JsonSerializer.Deserialize(ReadShared(file), ServerJsonContext.Default.PersistedSession));
             }
             catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
             {
@@ -393,6 +389,21 @@ public sealed class SessionStore(string dataDir)
 
         return swept;
     }
+
+    /// <summary>
+    /// A session as read from disk, with the one collection a property initializer cannot reach.
+    /// </summary>
+    /// <remarks>
+    /// <para>`Rounds` is a CONSTRUCTOR parameter, so an absent member passes null straight in — the
+    /// `field`-normalised properties on the record cover every other collection, and this one can
+    /// only be covered where the JSON is read.</para>
+    /// <para>Used by BOTH readers, which is the review gate's point: it was in `Load` alone, and
+    /// `SweepOrphanedRounds` deserialises separately and then calls `session.Rounds.Any(...)` — so an
+    /// old file would have taken down the startup sweep with a NullReferenceException instead of one
+    /// round. One normaliser, every reader.</para>
+    /// </remarks>
+    private static PersistedSession? Normalised(PersistedSession? session) =>
+        session is null or { Rounds: not null } ? session : session with { Rounds = [] };
 
     private static bool IsOrphaned(RoundRecord round, Func<int, bool> processIsAlive) =>
         round.Status == RoundRecord.Running && (round.RunnerPid == 0 || !processIsAlive(round.RunnerPid));
