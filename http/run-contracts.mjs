@@ -153,32 +153,34 @@ const exe = path.join(
 const serverLog = path.join(dataDir, 'server.log');
 const serverLogFd = openSync(serverLog, 'a');
 
+// The child's environment, built as a value so PATH can be REMOVED rather than blanked.
+//
+// /api/catalog probes each configured vendor by LAUNCHING its CLI to ask its version. With the
+// developer's real PATH the suite starts `codex`, which on a signed-in machine waits for a human and
+// hangs the run. The suite asserts that `cliFound` is a BOOLEAN, not that it is true, so a probe
+// that resolves nothing is exactly as good a test and is the same on every machine.
+//
+// Deleted rather than set to an empty string, and rather than set to a temporary directory: a search
+// path made of somewhere writable is a place to drop an executable that then gets run, and "no PATH
+// at all" is what is actually meant here. The server needs none — it is started by absolute path.
+const childEnv = {
+  ...process.env,
+  ASPNETCORE_URLS: baseUrl,
+  Coai__DataDir: dataDir,
+  Coai__AllowedDomains: DOMAIN,
+  Coai__Admins: ADMIN,
+  // The proxy that would set X-Forwarded-Proto is not in front of anything here.
+  Coai__RequireForwardedHttps: 'false',
+  Auth__Local__SigningKey: SIGNING_KEY,
+  Auth__Microsoft__Tenant: '',
+  Auth__Microsoft__Audiences: '',
+  Auth__Google__Enabled: 'false',
+};
+delete childEnv.PATH;
+delete childEnv.Path;
+
 const server = spawn(exe, [], {
-  env: {
-    ...process.env,
-    ASPNETCORE_URLS: baseUrl,
-    Coai__DataDir: dataDir,
-    Coai__AllowedDomains: DOMAIN,
-    Coai__Admins: ADMIN,
-    // The proxy that would set X-Forwarded-Proto is not in front of anything here.
-    Coai__RequireForwardedHttps: 'false',
-    Auth__Local__SigningKey: SIGNING_KEY,
-    Auth__Microsoft__Tenant: '',
-    Auth__Microsoft__Audiences: '',
-    Auth__Google__Enabled: 'false',
-    // A PATH with no vendor CLIs on it, deliberately.
-    //
-    // /api/catalog probes each configured vendor by LAUNCHING its CLI to ask its version. With the
-    // developer's real PATH the suite starts codex, which on a signed-in machine waits. A contract
-    // suite must not depend on which CLIs a machine happens to have: it asserts that `cliFound` is a
-    // BOOLEAN, not that it is true, so a probe that fails at once is the same test everywhere.
-    //
-    // EMPTY rather than a temporary directory: a search path made of somewhere writable is a place to
-    // drop an executable that then gets run, which is a real hazard in general even though this
-    // process lives for six seconds. Empty resolves nothing at all, which is the actual intent.
-    PATH: '',
-    Path: '',
-  },
+  env: childEnv,
   stdio: ['ignore', serverLogFd, serverLogFd],
 });
 
