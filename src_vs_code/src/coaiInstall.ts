@@ -81,6 +81,32 @@ export function companionsOf(entries: readonly (readonly [string, boolean])[], r
   return entries.filter(([name, isFile]) => isFile && name !== binary).map(([name]) => name);
 }
 
+/**
+ * Copies every companion the archive brought, and says which ones landed.
+ *
+ * <p>Separate from the `vscode` calls it drives so that the POLICY has a test: a file that cannot be
+ * copied is not fatal — the binary is already in place, and a missing companion degrades a feature
+ * rather than stopping the server from starting. That policy is only visible when one of several
+ * copies fails, which is exactly the case no manual check performs.</p>
+ */
+export async function copyCompanions(
+  entries: readonly (readonly [string, boolean])[],
+  rid: CoaiRid,
+  copy: (name: string) => Thenable<void>,
+): Promise<string[]> {
+  const placed: string[] = [];
+  for (const name of companionsOf(entries, rid)) {
+    try {
+      await copy(name);
+      placed.push(name);
+    } catch {
+      // Nothing to do about it here, and the server still starts.
+    }
+  }
+
+  return placed;
+}
+
 /** `mcp-v0.1.0` → `0.1.0`; any other tag line yields nothing rather than a wrong version. */
 export function versionFromTag(tag: string): string | undefined {
   return tag.startsWith(TAG_PREFIX) && tag.length > TAG_PREFIX.length

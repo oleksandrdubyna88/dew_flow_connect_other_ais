@@ -7,6 +7,7 @@ import {
   assetNameFor,
   binaryNameFor,
   companionsOf,
+  copyCompanions,
   compareVersions,
   entryPathIn,
   ridFor,
@@ -292,4 +293,34 @@ test('the binary itself is not a companion, and neither is a directory', () => {
 
 test('an archive of nothing but the binary leaves nothing behind to copy', () => {
   assert.deepEqual(companionsOf([['coai-mcp.exe', true]], 'win-arm64'), []);
+});
+
+test('a companion that cannot be copied does not stop the ones after it', () => {
+  // The policy, and the only part of this that no manual check performs: the binary is already in
+  // place by the time companions are copied, so a failure here degrades a feature rather than
+  // stopping the server from starting.
+  const tried: string[] = [];
+  const copy = (name: string) => {
+    tried.push(name);
+
+    return name === 'libe_sqlite3.so' ? Promise.reject(new Error('EACCES')) : Promise.resolve();
+  };
+
+  return copyCompanions(
+    [['coai-mcp', true], ['libe_sqlite3.so', true], ['README.md', true]] as const, 'linux-x64', copy)
+    .then((placed) => {
+      assert.deepEqual(tried, ['libe_sqlite3.so', 'README.md'], 'the failure did not end the loop');
+      assert.deepEqual(placed, ['README.md'], 'and only what landed is reported as placed');
+    });
+});
+
+test('what the archive holds is what gets copied, in its order', async () => {
+  const copied: string[] = [];
+  const placed = await copyCompanions(
+    [['e_sqlite3.dll', true], ['coai-mcp.exe', true], ['runtimes', false]] as const,
+    'win-x64',
+    (name) => { copied.push(name); return Promise.resolve(); });
+
+  assert.deepEqual(copied, ['e_sqlite3.dll']);
+  assert.deepEqual(placed, ['e_sqlite3.dll']);
 });
