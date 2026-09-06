@@ -235,10 +235,10 @@ public sealed class PanelService
             (session, workingDir, _) => Task.FromResult<IReadOnlyList<ReviewerWork>>(
                 BuildWork([ReviewRole.PlanCritique], workingDir, $"## The plan under review\n\n{planText}",
                     session.State.RoundsRunThisStage + 1,
+                    isPlanStage: true,
                     seed: StableSeed(session.State.SessionId, session.State.RoundsRunThisStage + 1),
                     planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session) : null,
-                    deal: _settings.DealPlanLenses,
-                    isPlanStage: true)),
+                    deal: _settings.DealPlanLenses)),
             ct);
 
     /// <summary>
@@ -295,10 +295,9 @@ public sealed class PanelService
                     .Select(Enum.Parse<ReviewRole>)
                     .ToList();
                 _log.Information("round {Round} runs {Count} role(s): {Roles}", round, roles.Count, string.Join(", ", roles));
-                return BuildWork(roles, workingDir, context, round, rules.HasRules,
+                return BuildWork(roles, workingDir, context, round, isPlanStage: false, rules.HasRules,
                     seed: StableSeed(session.State.SessionId, round),
-                    deal: _settings.DealCodeLenses,
-                    isPlanStage: false);
+                    deal: _settings.DealCodeLenses);
             },
             ct);
     }
@@ -760,11 +759,15 @@ public sealed class PanelService
         string worktreePath,
         string context,
         int round,
+        // REQUIRED, and deliberately not last: the review gate pointed out that an optional stage
+        // defaults a future caller into code-stage routing with no compile error, which is exactly
+        // the class of silent mistake this parameter was introduced to end. A caller that forgets it
+        // does not compile.
+        bool isPlanStage,
         bool hasRules = false,
         int seed = 0,
         IReadOnlyList<string>? planPrompts = null,
-        bool deal = false,
-        bool isPlanStage = false)
+        bool deal = false)
     {
         var schemaFile = SchemaFile.Ensure(_settings.DataDir);
         var outputDir = Directory.CreateTempSubdirectory("coai-answers-").FullName;
