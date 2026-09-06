@@ -61,26 +61,29 @@ internal static class AskRemote
         var deadline = int.TryParse(flags.GetValueOrDefault("--timeout-seconds", ""), out var seconds)
             ? TimeSpan.FromSeconds(seconds)
             : TimeSpan.FromMinutes(10);
-        var vendorBudget = int.TryParse(flags.GetValueOrDefault("--vendor-timeout-seconds", ""), out var budget)
-            ? budget
-            : (int)Math.Ceiling(deadline.TotalSeconds);
+        // Clamped here as well as in the adapter, because this shim is also runnable by hand and a
+        // budget outside the server's 30..1800 is refused before the review starts.
+        var vendorBudget = RemoteRuntime.VendorBudgetSeconds(
+            int.TryParse(flags.GetValueOrDefault("--vendor-timeout-seconds", ""), out var budget)
+                ? TimeSpan.FromSeconds(budget)
+                : deadline);
 
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(RemoteAsk.LongPollSeconds + 15) };
         http.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
         http.DefaultRequestHeaders.Add(RemoteAsk.ContractHeader, RemoteAsk.ContractVersion.ToString());
 
         return await ReviewAsync(
-            new Job(server, vendor, model, role, promptFile, outFile, jobFile, deadline, vendorBudget),
+            new Job(server, vendor, model, role, promptFile, outFile, jobFile, tokenFile, deadline, vendorBudget),
             http, note, output);
     }
 
     private sealed record Job(
         string Server, string Vendor, string Model, string Role,
-        string PromptFile, string OutFile, string JobFile, TimeSpan Deadline, int VendorBudgetSeconds);
+        string PromptFile, string OutFile, string JobFile, string TokenFile,
+        TimeSpan Deadline, int VendorBudgetSeconds);
 
     private static async Task<int> ReviewAsync(Job job, HttpClient http, Action<string> note, TextWriter output)
     {
-        var waited = Stopwatch.StartNew();
         string prompt;
         try
         {
@@ -93,6 +96,10 @@ internal static class AskRemote
             return RemoteAsk.BadUsage;
         }
 
+        // Started AFTER the prompt is read, so a large file on a slow disk is not later reported as
+        // time the server spent thinking.
+        var waited = Stopwatch.StartNew();
+
         var submitted = await SubmitAsync(job, prompt, http, note);
         if (submitted.Exit is { } refused)
         {
@@ -100,7 +107,14 @@ internal static class AskRemote
         }
 
         // Claimed BEFORE the first poll: from here on, a kill leaves a file that can still cancel it.
-        RemoteRuntime.Claim(job.JobFile, job.Server, submitted.Id);
+        var unclaimed = RemoteRuntime.Claim(job.JobFile, job.Server, submitted.Id, job.TokenFile);
+        if (unclaimed.Length > 0)
+        {
+            // Not fatal — the server's queue deadline still ends the job — but said out loud, because
+            // the consequence is a bill nobody can later explain.
+            note($"this review could not be recorded as cancellable ({unclaimed}); if it is abandoned "
+                + "it will run to completion on the Team server");
+        }
 
         return await PollAsync(job, submitted.Id, waited, http, note, output);
     }
@@ -112,9 +126,13 @@ internal static class AskRemote
 
         try
         {
+            // The submit gets the review's own deadline, so a stalled server cannot spend more of it
+            // than the person allowed for the whole review.
+            using var budget = new CancellationTokenSource(job.Deadline);
             using var content = new StringContent(body, Encoding.UTF8, "application/json");
-            using var response = await http.PostAsync(TeamServerAuth.Endpoint(job.Server, "api/reviews"), content);
-            var text = await response.Content.ReadAsStringAsync();
+            using var response = await http.PostAsync(
+                TeamServerAuth.Endpoint(job.Server, "api/reviews"), content, budget.Token);
+            var text = await response.Content.ReadAsStringAsync(budget.Token);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -133,7 +151,7 @@ internal static class AskRemote
 
             return (id, null);
         }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+        catch (Exception e) when (e is HttpRequestException or OperationCanceledException)
         {
             note(RemoteAsk.UnreachableMessage(job.Server, e.Message));
 
@@ -145,6 +163,11 @@ internal static class AskRemote
         Job job, string id, Stopwatch waited, HttpClient http, Action<string> note, TextWriter output)
     {
         var position = 0;
+        var said = string.Empty;
+        // A long poll across a proxy or a laptop's wifi drops for reasons that have nothing to do with
+        // the review. Aborting on the FIRST one abandoned reviews that were running perfectly, so a
+        // blip is tolerated and only a run of them is a failure. Raised on the code round.
+        var consecutiveFailures = 0;
         while (waited.Elapsed < job.Deadline)
         {
             // The long poll never asks for longer than what is LEFT. Asking for the full 25 seconds
@@ -152,23 +175,60 @@ internal static class AskRemote
             // of this deadline being the shorter one is that reaching it produces a sentence instead
             // of the executor killing the process. Found by running it against a real server.
             var remaining = job.Deadline - waited.Elapsed;
-            var poll = await PollOnceAsync(job, id, WaitSecondsFor(remaining), http, note);
+            var poll = await PollOnceAsync(job, id, WaitSecondsFor(remaining), remaining, http, note);
             if (poll.Exit is { } stopped)
             {
+                // A refusal the server MEANT — a bad token, a contract that is too old. Retrying it
+                // would only repeat it, and the job is cancelled so nothing is left running.
+                await CancelAsync(job, id, http);
                 RemoteRuntime.Forget(job.JobFile);
 
                 return stopped;
             }
 
+            if (poll.Transient)
+            {
+                consecutiveFailures++;
+                if (consecutiveFailures >= MaxConsecutiveFailures)
+                {
+                    note(RemoteAsk.UnreachableMessage(
+                        job.Server, $"{consecutiveFailures} polls in a row failed"));
+                    await CancelAsync(job, id, http);
+                    RemoteRuntime.Forget(job.JobFile);
+
+                    return RemoteAsk.Unreachable;
+                }
+            }
+
             if (poll.Answer is { } state)
             {
+                consecutiveFailures = 0;
                 position = state.Position;
+                said = Progress(job, state, said, note);
                 if (state.State is RemoteState.Done or RemoteState.Failed)
                 {
                     RemoteRuntime.Forget(job.JobFile);
 
                     return await FinishAsync(job, state, note, output);
                 }
+
+                if (state.State == RemoteState.Unknown)
+                {
+                    // Not folded into "still queued": a status this client cannot read is a reason to
+                    // stop and say so, not to wait out the deadline and blame the server for slowness.
+                    note(RemoteAsk.UnknownStateMessage(job.Server, state.RawStatus));
+                    await CancelAsync(job, id, http);
+                    RemoteRuntime.Forget(job.JobFile);
+
+                    return RemoteAsk.TooOld;
+                }
+            }
+
+            // Never sleep past the deadline: the gap used to run unconditionally, so the loop could
+            // notice its own deadline a second late.
+            if (job.Deadline - waited.Elapsed <= RemoteAsk.PollGap)
+            {
+                break;
             }
 
             await Task.Delay(RemoteAsk.PollGap);
@@ -181,25 +241,65 @@ internal static class AskRemote
         RemoteRuntime.Forget(job.JobFile);
         note(RemoteAsk.TooSlowMessage(job.Server, waited.Elapsed, position));
 
-        return RemoteAsk.Unreachable;
+        return RemoteAsk.TooSlow;
+    }
+
+    /// <summary>How many failed polls in a row mean the server is gone rather than the network blinked.</summary>
+    private const int MaxConsecutiveFailures = 3;
+
+    /// <summary>
+    /// Say what changed, once per change.
+    /// </summary>
+    /// <remarks>
+    /// A queued review can wait minutes behind other people's work, and the shim used to say nothing
+    /// at all until it finished or gave up — so the queue position was first mentioned in the sentence
+    /// announcing that the review had been cancelled. Reported on CHANGE rather than per poll, because
+    /// a line every second is the same silence with more scrolling.
+    /// </remarks>
+    private static string Progress(Job job, RemotePoll state, string said, Action<string> note)
+    {
+        var now = state.State == RemoteState.Queued
+            ? $"queued on the Team server at {job.Server}, {state.Position} ahead of it"
+            : state.State == RemoteState.Running
+                ? $"running on the Team server at {job.Server}"
+                : string.Empty;
+
+        if (now.Length > 0 && now != said)
+        {
+            note($"{job.Vendor}: {now}");
+        }
+
+        return now;
     }
 
     /// <summary>How long to ask the server to hold this poll: the smaller of its cap and what is left.</summary>
     private static int WaitSecondsFor(TimeSpan remaining) =>
         Math.Clamp((int)remaining.TotalSeconds, 1, RemoteAsk.LongPollSeconds);
 
-    private static async Task<(RemotePoll? Answer, int? Exit)> PollOnceAsync(
-        Job job, string id, int waitSeconds, HttpClient http, Action<string> note)
+    /// <param name="Transient">
+    /// The poll failed for a reason that may not repeat — a dropped connection, a server that did not
+    /// answer this one long poll. The caller counts these; one is a blip, several in a row is an
+    /// outage. It is NOT an exit, which is what a single dropped connection used to be.
+    /// </param>
+    private readonly record struct PollAttempt(RemotePoll? Answer, int? Exit, bool Transient);
+
+    private static async Task<PollAttempt> PollOnceAsync(
+        Job job, string id, int waitSeconds, TimeSpan remaining, HttpClient http, Action<string> note)
     {
+        // Bounded by what is LEFT of the review's own deadline, not only by the client's fixed
+        // timeout. Without this a stalled server held each request for the full HttpClient timeout,
+        // so a 10-second review could sit for 40 — long enough for the executor to kill it first, and
+        // the person then sees nothing at all. Raised by two reviewers on the code round.
+        using var budget = new CancellationTokenSource(remaining + RemoteAsk.PollGap);
         try
         {
             var url = TeamServerAuth.Endpoint(job.Server, $"api/reviews/{id}?wait={waitSeconds}");
-            using var response = await http.GetAsync(url);
-            var text = await response.Content.ReadAsStringAsync();
+            using var response = await http.GetAsync(url, budget.Token);
+            var text = await response.Content.ReadAsStringAsync(budget.Token);
 
             if (!response.IsSuccessStatusCode)
             {
-                return (null, Refuse(job.Server, (int)response.StatusCode, text, note));
+                return new PollAttempt(null, Refuse(job.Server, (int)response.StatusCode, text, note), false);
             }
 
             var poll = RemoteAsk.ReadPoll(text);
@@ -207,22 +307,22 @@ internal static class AskRemote
             {
                 note(RemoteAsk.UnreadableMessage(job.Server, text));
 
-                return (null, RemoteAsk.Unreachable);
+                return new PollAttempt(null, RemoteAsk.Unreachable, false);
             }
 
-            return (poll, null);
+            return new PollAttempt(poll, null, false);
         }
-        catch (TaskCanceledException)
+        catch (OperationCanceledException)
         {
-            // The long poll's own timeout, which is ordinary: it means nothing changed. The loop's
-            // deadline is what decides when to stop, not this.
-            return (null, null);
+            // Either this poll's own budget or the client timeout. Both mean the server did not answer
+            // a long poll it should have answered within its 25 seconds — which is a symptom, not the
+            // "nothing changed" this used to be read as. Transient: the loop's deadline still decides
+            // when to stop, but a server that never answers is now noticed rather than waited out.
+            return new PollAttempt(null, null, true);
         }
-        catch (HttpRequestException e)
+        catch (HttpRequestException)
         {
-            note(RemoteAsk.UnreachableMessage(job.Server, e.Message));
-
-            return (null, RemoteAsk.Unreachable);
+            return new PollAttempt(null, null, true);
         }
     }
 
@@ -257,14 +357,21 @@ internal static class AskRemote
     {
         try
         {
-            using var response = await http.DeleteAsync(TeamServerAuth.Endpoint(job.Server, $"api/reviews/{id}"));
+            // Its OWN short budget, not the client's 40 seconds: this runs after the review has
+            // already failed or timed out, and the person is waiting on the sentence that follows it.
+            using var budget = new CancellationTokenSource(CancelBudget);
+            using var response = await http.DeleteAsync(
+                TeamServerAuth.Endpoint(job.Server, $"api/reviews/{id}"), budget.Token);
         }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+        catch (Exception e) when (e is HttpRequestException or OperationCanceledException)
         {
             // Nothing to add: the sentence about giving up is printed either way, and the server's
             // queue deadline ends the job.
         }
     }
+
+    /// <summary>How long the courtesy cancellation may take before the person's message is printed.</summary>
+    private static readonly TimeSpan CancelBudget = TimeSpan.FromSeconds(10);
 
     /// <summary>The exit for a status the server gave, with the sentence that belongs to it.</summary>
     private static int Refuse(string server, int status, string body, Action<string> note)

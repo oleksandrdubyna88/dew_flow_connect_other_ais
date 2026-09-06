@@ -422,17 +422,60 @@ Four things about it are not obvious from the shape:
   the executor killing the process. Sending the first as the second asked the server for an
   eight-second review and got a `400` naming its allowed range — found by running it against a real
   server, not by a test.
-- **A killed shim can still cancel its job.** The executor kills an abandoned child, and a killed
-  process runs no cleanup, so the polite `DELETE` on the way out never happens and the review runs to
-  completion on the team's subscription for an answer nobody will collect. The shim therefore writes
-  `<server> <id>` to a job file the moment the server accepts, and `RemoteRuntime.CancelAbandonedAsync`
-  reads it afterwards. This was the plan round's blocking finding.
+- **A killed shim can still cancel its job — and something actually does it.** The executor kills an
+  abandoned child, and a killed process runs no cleanup, so the polite `DELETE` on the way out never
+  happens and the review runs to completion on the team's subscription for an answer nobody will
+  collect. The shim writes a claim to a job file the moment the server accepts, and the executor calls
+  `IReviewerRuntime.AbandonAsync` on **both** kill paths — its own timeout, and cancellation — which
+  is where `RemoteRuntime` reads that claim and sends the `DELETE`.
+
+  The seam is on the interface with a `Task.CompletedTask` default, so no CLI adapter changed: a
+  vendor process dies with its tree and has nothing to clean up. `ReviewerExecutor.LaunchAsync` is the
+  one place every launch passes through, which is the only reason this could be wired once instead of
+  in each adapter.
+
+  Three details are load-bearing, and each is a mistake this made first:
+
+  - **The claim is self-contained** — server, job id, and the path to the token that authenticates the
+    cancellation. The parent resolves the adapter from a vendor row, which has no data directory in
+    it, so a claim that could not authenticate itself would need something its only reader lacks.
+  - **The claim is KEPT when the cancellation fails**, and forgotten only on success or a `404`. It
+    was first deleted in a `finally`, so a laptop briefly offline at the wrong moment lost the job id
+    for ever and the review ran to completion anyway — precisely the outcome the mechanism exists to
+    prevent.
+  - **The cancellation carries `X-Coai-Contract`.** The server judges that header before it looks at
+    the token and answers `426` without it, so the first version would have been refused by every
+    server it was ever sent to: wired, and working on nothing.
+
+- **The vendor budget is clamped to what the server accepts.** `POST /api/reviews` refuses anything
+  outside 30..1800 seconds, so a person who set an eight-second reviewer timeout would have had every
+  remote review answered `400` before it started — a configuration mistake rendered as a server error.
+  Clamping beats refusing because the shim's own deadline still honours the shorter setting: the
+  review is still abandoned when the person said, and only what the SERVER is told changes.
 - **No `SharedResource`.** The server has its own queue and its own per-account exclusion, so a
   client-side semaphore would serialise reviews the server can run at once. The global and per-provider
   caps still apply, because those are about what this machine is willing to have in flight.
-- **The long poll never asks for longer than what is left.** Asking for the full 25 seconds with 6 to
-  go meant a 6-second deadline took 26 seconds to notice, which defeats the point of the shim's clock
-  being the shorter one.
+- **The long poll never asks for longer than what is left**, and every request is bounded by the
+  review's own deadline rather than only by a fixed client timeout. Asking for the full 25 seconds
+  with 6 to go meant a 6-second deadline took 26 seconds to notice; and a stalled server held each
+  request for the client's 40 seconds, so a 10-second review could sit for 40 — long enough for the
+  executor to kill it first, which is the case where the person sees nothing at all. The courtesy
+  `DELETE` gets its own short budget for the same reason: it runs while somebody waits for the
+  sentence after it.
+- **A dropped poll is a blip; three in a row is an outage.** A long poll held open across a proxy or
+  a laptop's wifi drops for reasons that have nothing to do with the review, and aborting on the first
+  one abandoned reviews that were running perfectly.
+- **A status this client cannot read stops the review instead of being waited out.** An unrecognised
+  status used to fall through to "queued", so a terminal state from a newer server was read as "still
+  waiting" and the shim polled a finished review until its own deadline, then reported it as too slow
+  — a wrong sentence about the wrong thing.
+- **Giving up has its own exit code.** It used to return the one for "unreachable" while printing
+  "did not finish within 90s", so anybody reading the code rather than the text went to check their
+  network for a problem whose cure is a longer timeout or more accounts.
+- **The queue position is said while it still matters.** The shim used to say nothing at all until it
+  finished or gave up, so the position was first mentioned in the sentence announcing the
+  cancellation. It is now reported when it CHANGES — a line every second is the same silence with
+  more scrolling.
 
 ### A failing server must not be polled harder than a healthy one (2026-09-06)
 
@@ -457,6 +500,20 @@ queue: *2 of 3 accounts ready* rather than "healthy", and — the distinction th
 themselves). `401`, `403`, `426` and an outage are four different sentences for the same reason: one is
 fixed by signing in again, one cannot be fixed by that person at all, one needs an update, and only the
 last means the server is down.
+
+### A token that could not be protected must not report success (2026-09-06)
+
+`TeamServerAuth.WriteToken` sets the file owner-only and then **verifies** it, returning a sentence
+when it is not. It first set the mode inside a swallowed `try`, so on a filesystem that ignores modes
+— a CIFS mount, a container volume owned by another uid — sign-in reported success over a
+world-readable bearer token, and anybody with an account on that machine could sign in as that person.
+Three reviewers raised it, two of them as blocking.
+
+Signing in still SUCCEEDS there, and that part is deliberate: refusing would strand anybody whose home
+directory is on such a mount, over a machine they already share with the people who could read it.
+What changed is that it can no longer happen silently. Windows reports owner-only — the Unix mode API
+does not apply, the profile directory is already ACL-protected, and answering "no" would print a
+warning on every Windows machine that nobody could act on.
 
 A remote vendor never reaches the `--version` probe, and that arm is load-bearing rather than tidy: the
 executable a remote vendor names is `coai-mcp` **itself**, so without it the probe would have run this

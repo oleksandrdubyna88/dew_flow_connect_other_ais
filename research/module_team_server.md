@@ -100,7 +100,14 @@ neither was visible from either side alone.
   chance. The executor kills an abandoned reviewer, a killed process runs no cleanup, and the review
   then runs to completion on the company's subscription for an answer nobody will collect. The shim
   writes its job id to a file the moment the server accepts, and the parent cancels from that file
-  afterwards.
+  afterwards. **Two things about that `DELETE` are contract facts, not client details:** it must carry
+  `X-Coai-Contract`, which the server judges before the token and without which it answers `426`; and
+  a client that cannot reach the server must KEEP its claim, because the server's queue deadline is
+  slow and the claim is the only thing that can stop the job sooner.
+- **`timeoutSeconds` is clamped by the client to the server's own 30..1800.** The range is the
+  server's, and a person setting an eight-second reviewer timeout is not asking for a broken review —
+  they are asking to wait less. So the client sends a budget the server will accept and enforces the
+  shorter wait itself.
 
 `GET /api/catalog` turns out to answer a second question for free. It was specified as the allowlist
 feed for *Add a reviewer*; it is also the only honest health probe a remote vendor has, because the

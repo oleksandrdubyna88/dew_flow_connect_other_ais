@@ -299,6 +299,37 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
         (second?.Trim().Length ?? 0) >= (first?.Trim().Length ?? 0) ? second : first;
 
     /// <summary>One launch. A non-null outcome is terminal; a null review means "unparseable".</summary>
+    /// <summary>
+    /// Let the adapter clean up after a run we killed — and never let that cleanup fail the round.
+    /// </summary>
+    /// <remarks>
+    /// It runs on a path where something has ALREADY gone wrong, so an exception here would replace a
+    /// reviewer's real failure with a cleanup's. The token is deliberately NOT the round's: the round's
+    /// is usually the reason we are here, and a cancelled token would abort the very request that stops
+    /// the work.
+    /// </remarks>
+    private static async Task AbandonAsync(ReviewerInvocation invocation)
+    {
+        if (invocation.Adapter is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var budget = new CancellationTokenSource(AbandonBudget);
+            await invocation.Adapter.AbandonAsync(invocation, budget.Token);
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            // Deliberately broad: this is a courtesy call on a failure path, and the vendor's own
+            // failure is the one the caller must still see.
+        }
+    }
+
+    /// <summary>How long a courtesy cleanup may take before the round stops waiting for it.</summary>
+    private static readonly TimeSpan AbandonBudget = TimeSpan.FromSeconds(10);
+
     private async Task<(ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Answer, string Evidence)> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
     {
         var launch = await LaunchAsync(invocation, ct);
@@ -342,6 +373,16 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
             };
             result = await launcher.RunAsync(request, ct);
         }
+        catch (OperationCanceledException)
+        {
+            // The round was abandoned and the tree was killed. A killed process runs no cleanup of
+            // its own, so anything it started ELSEWHERE is still running — for a Team server
+            // reviewer, on the company's subscription, for an answer nobody will now collect. This
+            // is the only moment anybody still knows the job existed.
+            await AbandonAsync(invocation);
+
+            throw;
+        }
         catch (System.ComponentModel.Win32Exception e)
         {
             // One reviewer that cannot start is one reviewer's failure, never the round's.
@@ -354,6 +395,10 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
 
         if (result.TimedOut)
         {
+            // Same reasoning as the cancellation above: the tree was killed on our deadline, so the
+            // shim never reached its own polite DELETE.
+            await AbandonAsync(invocation);
+
             return new ReviewerLaunch(new ReviewerOutcome.TimedOut(), null, Usage.None, string.Empty);
         }
 

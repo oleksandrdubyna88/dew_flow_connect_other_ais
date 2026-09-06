@@ -70,6 +70,11 @@ public sealed record ReviewerSettings(string Provider)
 /// cancelled at 590 s having produced nothing while the third answered in 30.6 s. The cap that
 /// prevents it cannot be per VENDOR — two vendor ids can name one card — so it is per endpoint.</para>
 /// </param>
+/// <param name="JobFile">
+/// Where an adapter may record work that outlives this process, so the PARENT can clean up after a
+/// child it killed. Empty for every adapter whose work dies with its process — which is all of them
+/// except <see cref="RemoteRuntime"/>, whose review goes on running on a Team server.
+/// </param>
 public sealed record ReviewerInvocation(
     string Provider,
     ReviewRole Role,
@@ -77,7 +82,8 @@ public sealed record ReviewerInvocation(
     string OutputFile = "",
     IReviewerRuntime? Adapter = null,
     string SharedResource = "",
-    string Model = "");
+    string Model = "",
+    string JobFile = "");
 
 /// <summary>
 /// THE vendor adapter: everything one AI vendor needs to plug into the panel, in one interface —
@@ -95,6 +101,20 @@ public interface IReviewerRuntime
     string Provider { get; }
 
     ReviewerInvocation Build(ReviewRole role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings);
+
+    /// <summary>
+    /// Clean up after a run this machine ABANDONED — killed on its timeout, or cancelled.
+    /// </summary>
+    /// <remarks>
+    /// <para>Nothing to do for a vendor CLI: the launcher kills the process tree and the work stops
+    /// with it. It exists for work that OUTLIVES the process that started it — a review handed to a
+    /// Team server keeps running on the company's subscription, for an answer nobody will collect,
+    /// unless somebody tells the server to stop.</para>
+    /// <para>A default implementation, so no existing adapter changes and a new one only overrides it
+    /// if it has something to clean up. It must never throw and never block for long: it runs on the
+    /// failure path of a reviewer that has already gone wrong.</para>
+    /// </remarks>
+    Task AbandonAsync(ReviewerInvocation invocation, CancellationToken ct = default) => Task.CompletedTask;
 
     /// <summary>
     /// The command to start when the operator configured no path — and what `providers` probes.

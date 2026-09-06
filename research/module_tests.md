@@ -64,7 +64,18 @@ fails that test until the tool is covered here or declared uncovered with a reas
 | `review_code` | yes | `EndToEndTests`, `StageGateTests` (refused before a plan reaches `proceed`) |
 | `resolve` | yes | `EndToEndTests`, `RoundAuditTests` — a decision is recorded for every finding |
 | `status` | yes | `McpContractTests`, `CallerSessionsTests` |
+| The remote reviewer (a Team server vendor) | yes | `RemoteShimScenarioTests` — the REAL `coai-mcp --ask-remote` binary, in its own process, against a real `HttpListener` on a real socket. It is not an MCP tool, so it is not in the registry this table is derived from; it is here because the wiring between an adapter's argv and a separate process is exactly what in-process tests cannot see, and this repository has shipped that break twice |
 | `ask_human` | **no** | It BLOCKS until a person answers in the panel or on their phone, and the wait is the behaviour; a scenario that answered it from a fake surface would be exercising the fake. Its pieces are covered by `EscalationsTests` and `HumanDecisionTests`. |
+
+A note on why the remote row exists at all. The catalogue is derived from the TOOL registry, and a
+vendor runtime is not a tool — so nothing would have failed had the remote flow gone uncovered. What
+makes it worth a row is the shape of its failures: the adapter builds a command line, a different
+process reads it, and the two agree only until somebody edits one of them. The same shape produced
+this repository's two most expensive misses — a released server binary that could not serve a single
+request under `PublishAot`, and a page whose minified binding was renamed — and in both cases every
+unit test was green. `RemoteShimScenarioTests` runs the real binary end to end, including the two
+cancellation paths: the shim reaching its own deadline (it cancels and says so), and the shim being
+KILLED (it leaves a claim the parent acts on).
 
 ### The extension's flows
 

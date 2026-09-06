@@ -120,6 +120,58 @@ public sealed class RemoteAskTests
         poll.TokensOut.Should().Be(11);
     }
 
+    [Theory]
+    [InlineData("cancelled")]
+    [InlineData("something-a-newer-server-invented")]
+    [InlineData("")]
+    public void AStatusThisClientDoesNotKnowIsUnknownAndNotQueued(string status)
+    {
+        // It used to fall through to Queued, so a terminal status this client could not read was
+        // treated as "still waiting": the shim polled a finished review until its own deadline and
+        // then reported it as too slow — a wrong sentence about the wrong thing. Raised on the code
+        // round. (The server sends none of these today; its statuses are queued/running/done/failed
+        // and a CANCELLED job arrives as failed with failure "cancelled". This is about the server
+        // that ships next.)
+        var poll = RemoteAsk.ReadPoll($$"""{"id":"1","status":"{{status}}","position":0}""")!;
+
+        poll.State.Should().Be(RemoteState.Unknown);
+        poll.RawStatus.Should().Be(status, "the sentence names what the server actually said");
+    }
+
+    [Fact]
+    public void GivingUpHasItsOwnExitCodeAndItIsNotUnreachable() =>
+        // The sentence said "did not finish within 90s" while the exit code said the server could not
+        // be reached, so anybody reading the code went to check their network for a problem whose
+        // cure is a longer timeout. Raised on the code round.
+        RemoteAsk.TooSlow.Should().NotBe(RemoteAsk.Unreachable);
+
+    [Fact]
+    public void ATokenWrittenOwnerOnlyReportsNothingToWorryAbout()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "coai-mode-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var path = TeamServerAuth.TokenPath(dir, "https://s");
+
+            // On a filesystem that takes the mode this is silence; the warning path is what a CIFS
+            // mount or a foreign-uid volume produces, and cannot be reproduced on this runner —
+            // `IsOwnerOnly` is the seam that decides it, and it is asserted directly below.
+            TeamServerAuth.WriteToken(path, "t").Should().BeEmpty();
+            TeamServerAuth.IsOwnerOnly(path).Should().BeTrue();
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void AFileThatCannotBeInspectedIsNotClaimedToBeSafe() =>
+        // "Cannot be read" must never render as "owner-only" — that is the answer that would print
+        // reassurance over an exposed token.
+        TeamServerAuth.IsOwnerOnly(Path.Combine(Path.GetTempPath(), "coai-none-" + Guid.NewGuid()))
+            .Should().Be(OperatingSystem.IsWindows());
+
     [Fact]
     public void ARubbishBodyIsNullRatherThanAnException() =>
         RemoteAsk.ReadPoll("not json").Should().BeNull();
@@ -247,13 +299,18 @@ public sealed class RemoteRuntimeTests
         var file = Path.Combine(Path.GetTempPath(), "coai-claim-" + Guid.NewGuid().ToString("N") + ".job");
         try
         {
-            RemoteRuntime.Claim(file, "https://coai.example.com/", "123-abc");
+            RemoteRuntime.Claim(file, "https://coai.example.com/", "123-abc", "/data/servers/abc.token")
+                .Should().BeEmpty("a written claim reports no failure");
 
             // The parent reads this after killing the child, because a killed process runs no
             // cleanup and this file is the only thing left that can stop the job.
-            var (server, id) = RemoteRuntime.ReadClaim(file);
-            server.Should().Be("https://coai.example.com");
-            id.Should().Be("123-abc");
+            var claim = RemoteRuntime.ReadClaim(file);
+            claim.Server.Should().Be("https://coai.example.com");
+            claim.JobId.Should().Be("123-abc");
+            // It carries its own token path: the parent resolves the adapter from a vendor row, which
+            // has no data directory in it, so a claim that could not authenticate itself would need
+            // something its reader does not have.
+            claim.TokenFile.Should().Be("/data/servers/abc.token");
         }
         finally
         {
@@ -262,9 +319,42 @@ public sealed class RemoteRuntimeTests
     }
 
     [Fact]
+    public void AClaimThatCannotBeWrittenSaysSoRatherThanFailingSilently()
+    {
+        // Losing the claim costs a cancellation, not a review — so it must not throw. But a silent
+        // loss means somebody is later billed for work nobody can explain.
+        var impossible = Path.Combine(
+            Path.GetTempPath(), "coai-no-such-dir-" + Guid.NewGuid().ToString("N"), "nested", "x.job");
+
+        RemoteRuntime.Claim(impossible, "https://s", "1", "/t").Should().NotBeEmpty();
+    }
+
+    [Fact]
     public void NoClaimIsEmptyRatherThanAnException() =>
         RemoteRuntime.ReadClaim(Path.Combine(Path.GetTempPath(), "coai-none-" + Guid.NewGuid()))
-            .Should().Be((string.Empty, string.Empty));
+            .Should().Be(RemoteRuntime.RemoteClaim.None);
+
+    [Theory]
+    // Below the server's floor: clamped UP, because the server refuses anything under 30 and every
+    // review would otherwise be answered 400 before it started.
+    [InlineData(8, RemoteRuntime.MinVendorSeconds)]
+    [InlineData(29, RemoteRuntime.MinVendorSeconds)]
+    [InlineData(600, 600)]
+    // Above its ceiling: clamped DOWN for the same reason.
+    [InlineData(3600, RemoteRuntime.MaxVendorSeconds)]
+    public void TheVendorBudgetIsAlwaysOneTheServerWillAccept(int configured, int expected) =>
+        RemoteRuntime.VendorBudgetSeconds(TimeSpan.FromSeconds(configured)).Should().Be(expected);
+
+    [Fact]
+    public void TheInvocationCarriesTheJobFileSoTheParentCanCancelAfterAKill()
+    {
+        // The mechanism existed and nothing called it: `Claim` wrote a file only a test ever read,
+        // because the path never left `Build`. Caught on the code round.
+        var invocation = Build("/data");
+
+        invocation.JobFile.Should().NotBeEmpty();
+        invocation.Adapter.Should().BeOfType<RemoteRuntime>();
+    }
 
     [Fact]
     public void ForgettingAClaimThatIsNotThereIsNotAnError()
