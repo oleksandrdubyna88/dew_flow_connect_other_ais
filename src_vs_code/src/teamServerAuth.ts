@@ -1,4 +1,4 @@
-import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   Catalog,
@@ -73,6 +73,20 @@ export async function writeToken(dataDir: string, url: string, token: string): P
     // would otherwise keep whatever mode that one had.
     await chmod(folder, 0o700);
     await chmod(path, 0o600);
+  }
+}
+
+/**
+ * The token this machine holds for one server, or empty when it has never signed in.
+ *
+ * <p>Empty rather than an exception: "not signed in" is an ordinary state with its own sentence and
+ * its own exit code, not a fault — the same rule the C# side follows.</p>
+ */
+export async function readToken(dataDir: string, url: string): Promise<string> {
+  try {
+    return (await readFile(join(dataDir, 'servers', tokenFileName(url)), 'utf8')).trim();
+  } catch {
+    return '';
   }
 }
 

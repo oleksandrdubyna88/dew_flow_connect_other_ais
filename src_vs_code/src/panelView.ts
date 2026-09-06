@@ -1,3 +1,4 @@
+import { TeamServerState, teamServersBody } from './teamServerView';
 import { CoaiSettings } from './settingsShape';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
@@ -32,6 +33,27 @@ import { Vendor } from './vendors';
 
 export interface PanelState {
   readonly settings: CoaiSettings;
+  /**
+   * The Team servers this machine knows, with whatever their catalogs last said.
+   *
+   * <p>It is IN {@link staticKey} rather than a live region: `liveRegions` returns exactly two
+   * (`questions` and `rounds`), so everything else reaches the screen by the repaint. A section that
+   * was patched instead would be a section that stops updating the day somebody reorders the DOM.</p>
+   */
+  /**
+   * <p><b>Optional deliberately.</b> The provider always supplies it; a TEST fixture does not, and
+   * making it required would have meant editing sixteen of them. That is not a style preference
+   * here: these files are stored with CRLF under `core.autocrlf=true`, so any commit that touches
+   * one rewrites every line of it — sixteen unreviewable whole-file diffs to add one field nobody's
+   * assertions care about. Absent means none, which is what a panel with no Team servers has.</p>
+   */
+  readonly teamServers?: readonly TeamServerState[] | undefined;
+  /**
+   * Whose spending the usage section is showing. `company` is offered only to an admin.
+   *
+   * <p>Optional, like {@link teamServers}, and absent means the same as `me`.</p>
+   */
+  readonly usageScope?: 'me' | 'company' | undefined;
   readonly vendors: readonly Vendor[];
   readonly codexModels: readonly ModelChoice[];
   /** What `agy models` lists on this machine, or none when it could not be asked. */
@@ -128,6 +150,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     section('gate', 'The gate', open, gateBody(state.settings)),
     section('limits', 'Limits', open, limitsBody(state.settings)),
     section('keys', 'Vendor keys', open, keysBody(state)),
+    section('teamServers', 'Team servers', open, teamServersBody(state.teamServers ?? [])),
     section('side', 'This side', open, sideBody(state)),
     section('server', 'Server', open, serverBody(state)),
     section('rounds', 'Active rounds', open, `<div id="live-rounds">${roundsBody(state.sessions, nowMs)}</div>`),
@@ -1118,6 +1141,15 @@ export const PANEL_COMMANDS = [
   'fixWslNetwork',
   // Posted by the model picker rather than by a button: "another model…" is a request to type one.
   'customModel',
+  // Team servers. Each is a button in the section above, and the provider's switch is checked for
+  // exhaustiveness — a command added here without a case is a COMPILE error, not a dead button.
+  'addTeamServer',
+  'signInTeamServer',
+  'signOutTeamServer',
+  'removeTeamServer',
+  // The Company/Me control on the spending section, which only an admin is shown. Without it that
+  // control would be a button wired to nothing, which is the exact trap this list exists to prevent.
+  'teamUsageScope',
 ] as const;
 
 export type PanelCommand = (typeof PANEL_COMMANDS)[number];
@@ -1153,5 +1185,10 @@ export function staticKey(state: PanelState): string {
     state.latestServerVersion,
     state.usageWindow,
     state.openSections,
+    // The Team-server rows, their slot lines and the usage scope reach the screen by being HERE.
+    // Left out, the section would be frozen for the life of the panel while the fetch underneath it
+    // worked perfectly — which is exactly what happened to the local model list.
+    state.teamServers,
+    state.usageScope,
   ]);
 }

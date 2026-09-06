@@ -134,11 +134,23 @@ async function writeSettingsFile(json: string): Promise<void> {
   );
 }
 
-/** Where `coai-mcp` keeps its sessions and escalations — its default, or `COAI_DATA_DIR`. */
-function dataDir(): vscode.Uri {
+/**
+ * Where `coai-mcp` keeps its state — its default, or `COAI_DATA_DIR`.
+ *
+ * <p>Exported because the Team-server token file lives under it and BOTH binaries must agree on
+ * where: the extension writes it and the MCP shim reads it. Two answers to this question is two
+ * halves that cannot find each other.</p>
+ */
+export function coaiDataDir(): string {
   const configured = process.env['COAI_DATA_DIR'];
   const localAppData = process.env['LOCALAPPDATA'] ?? `${process.env['HOME'] ?? '.'}/.local/share`;
-  return vscode.Uri.file(configured ?? `${localAppData}/coai-mcp`);
+
+  return configured ?? `${localAppData}/coai-mcp`;
+}
+
+/** The same place, as the Uri the rest of this file wants. */
+function dataDir(): vscode.Uri {
+  return vscode.Uri.file(coaiDataDir());
 }
 
 /** Answer an open question by hand — the same path the modal's button takes. */
