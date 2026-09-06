@@ -49,6 +49,7 @@ C4Container
 | VS Code extension | [module_extension.md](module_extension.md) | **shipped 2026-08-31** (escalation loopback deferred) |
 | Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [../todo/PLAN_team_server.md](../todo/PLAN_team_server.md) | **story 2.1 shipped 2026-09-06** — the host, company sign-in and sessions; vendors, catalog and jobs are 2.2–2.4 |
 | Measurement bench (`coai-bench`) | [module_bench.md](module_bench.md) · [../src_bench/README.md](../src_bench/README.md) | **shipped 2026-09-04** — drives the published server over stdio, records whole, judges separately |
+| Tests: the harness, its flows, its gaps | [module_tests.md](module_tests.md) | **recorded 2026-09-06** — three suites in-repo, the flow catalogue derived from the tool registry, and the two gaps named (no extension host, no real vendor in CI) |
 
 ## Cross-cutting decisions already in force
 
