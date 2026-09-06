@@ -14,12 +14,19 @@ namespace CoaiMcp.Server;
 /// against a Windows install and dies on a missing native dependency, while the native Linux one
 /// sits in <c>~/.npm-global/bin</c> with nothing able to point at it.
 /// </remarks>
+/// <param name="Plan">Whether this vendor reviews PLANS. Absent means yes.</param>
+/// <param name="Code">
+/// Whether this vendor reviews CODE. Absent means yes, which is what keeps an existing
+/// configuration reviewing exactly what it reviewed before an update.
+/// </param>
 internal sealed record VendorDto(
     string? Id,
     string? Runtime,
     string? Model,
     string? BaseUrl,
-    string? ExecutablePath = null);
+    string? ExecutablePath = null,
+    bool? Plan = null,
+    bool? Code = null);
 
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(List<VendorDto>))]

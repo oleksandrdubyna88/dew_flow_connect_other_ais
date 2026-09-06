@@ -65,7 +65,7 @@ test('the file the panel writes is the shape the server parses', () => {
 
 test('a vendor added in the panel travels with its runtime and model', () => {
   const written = JSON.parse(
-    serverSettingsJson(DEFAULTS, [{ id: 'antigravity', runtime: 'antigravity', model: 'gemini-3.7-flash-high', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }]),
+    serverSettingsJson(DEFAULTS, [{ id: 'antigravity', runtime: 'antigravity', model: 'gemini-3.7-flash-high', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }]),
   ) as Record<string, string>;
 
   const vendors = JSON.parse(written['COAI_VENDORS']!) as { id: string; runtime: string; model: string }[];
@@ -78,7 +78,7 @@ test('a stored vendor keeps its runtime through the parser, not only through the
   // This is the path that actually runs: VS Code hands back whatever JSON is stored, and
   // `vendorsFrom` decides what it means. A runtime the parser does not recognise falls back to
   // codex — which silently runs the wrong vendor's model under the right vendor's name.
-  const stored = [{ id: 'antigravity', runtime: 'antigravity', model: 'gemini-3.7-flash-high', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }];
+  const stored = [{ id: 'antigravity', runtime: 'antigravity', model: 'gemini-3.7-flash-high', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }];
 
   const parsed = vendorsFrom(stored);
 

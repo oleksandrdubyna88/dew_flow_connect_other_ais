@@ -18,7 +18,7 @@ import { Vendor } from '../vendors';
  */
 
 const vendor = (over: Partial<Vendor> = {}): Vendor => ({
-  id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '',
+  id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '',
   pricePerMillionIn: 0, pricePerMillionOut: 0, ...over,
 });
 

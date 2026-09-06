@@ -57,10 +57,10 @@ test('a stored vendor list that names nothing runnable is an accident, not a con
 
 test('a vendor is read with its runtime, model, endpoint and switch', () => {
   const vendors = vendorsFrom([
-    { id: 'Mistral', runtime: 'codex', model: 'mistral-large', enabled: false, baseUrl: 'https://api.mistral.ai/v1', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+    { id: 'Mistral', runtime: 'codex', model: 'mistral-large', enabled: false, plan: true, code: true, baseUrl: 'https://api.mistral.ai/v1', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
   ]);
   assert.deepEqual(vendors, [
-    { id: 'mistral', runtime: 'codex', model: 'mistral-large', enabled: false, baseUrl: 'https://api.mistral.ai/v1', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+    { id: 'mistral', runtime: 'codex', model: 'mistral-large', enabled: false, plan: true, code: true, baseUrl: 'https://api.mistral.ai/v1', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
   ]);
 });
 
@@ -100,8 +100,8 @@ test('only what differs from the defaults reaches the env block', () => {
 
 test('a changed reviewer list travels as JSON, which a comma list could not carry', () => {
   const vendors: Vendor[] = [
-    { id: 'gemini', runtime: 'gemini', model: 'gemini-pro-latest', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
-    { id: 'mistral', runtime: 'codex', model: '', enabled: true, baseUrl: 'https://api.mistral.ai/v1', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+    { id: 'gemini', runtime: 'gemini', model: 'gemini-pro-latest', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+    { id: 'mistral', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: 'https://api.mistral.ai/v1', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
   ];
   const env = envBlock(settingsFrom(reader({})), vendors);
   const parsed = JSON.parse(env['COAI_VENDORS'] ?? '[]') as { id: string; runtime: string; baseUrl: string }[];
@@ -115,8 +115,8 @@ test('a changed reviewer list travels as JSON, which a comma list could not carr
 test('a switched-off reviewer is not sent at all', () => {
   const parsed = JSON.parse(
     vendorsEnv([
-      { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
-      { id: 'gemini', runtime: 'gemini', model: '', enabled: false, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+      { id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+      { id: 'gemini', runtime: 'gemini', model: '', enabled: false, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
     ]),
   ) as { id: string }[];
   assert.deepEqual(

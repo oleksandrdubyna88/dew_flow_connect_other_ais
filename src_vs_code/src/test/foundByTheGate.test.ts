@@ -95,7 +95,7 @@ test('a vendor somebody named themselves can be given the endpoint it exists for
   // RED: Expected the HTML to contain a baseUrl input for "mycompany", found none.
   const html = panelHtml(
     state({
-      vendors: [{ id: 'mycompany', runtime: 'codex', model: '', enabled: true, baseUrl: '',
+      vendors: [{ id: 'mycompany', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '',
                   executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }],
     }),
     'n0nce',
@@ -128,9 +128,9 @@ test('two local reviewers on two engines show two different model lists', () => 
   const html = panelHtml(
     state({
       vendors: [
-        { id: 'local-a', runtime: 'local', model: '', enabled: true, baseUrl: 'http://127.0.0.1:11434/v1',
+        { id: 'local-a', runtime: 'local', model: '', enabled: true, plan: true, code: true, baseUrl: 'http://127.0.0.1:11434/v1',
           executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
-        { id: 'local-b', runtime: 'local', model: '', enabled: true, baseUrl: 'http://127.0.0.1:8000/v1',
+        { id: 'local-b', runtime: 'local', model: '', enabled: true, plan: true, code: true, baseUrl: 'http://127.0.0.1:8000/v1',
           executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
       ],
       localEngines: {

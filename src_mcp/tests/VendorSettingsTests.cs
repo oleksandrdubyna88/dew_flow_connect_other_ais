@@ -79,4 +79,50 @@ public sealed class VendorSettingsTests
     [InlineData("z.ai", "Z_AI_API_KEY")]
     public void TheKeyVariable_IsDerivedFromTheId_SoNothingHasToBeKeptInStep(string id, string variable) =>
         CustomCodexRuntime.KeyVariableFor(id).Should().Be(variable);
+
+    // ---------- a vendor per STAGE ----------
+
+    [Fact]
+    public void AVendorListWithoutTheFlags_ReviewsBothStages()
+    {
+        // The update path. A list written by an older extension says nothing about stages, and a
+        // vendor that silently stopped reviewing either would be a gate that quietly got weaker.
+        var vendors = PanelSettings.ParseVendors(
+            """[{"id":"codex","runtime":"codex","model":"gpt-5.6"}]""");
+
+        vendors.Should().ContainSingle();
+        vendors[0].Serves(isPlan: true).Should().BeTrue();
+        vendors[0].Serves(isPlan: false).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AVendorNarrowedToPlans_DoesNotServeTheCodeStage()
+    {
+        // The setting the measurement asked for: local was 19 % useful on a plan and 3 % on code.
+        var vendors = PanelSettings.ParseVendors(
+            """[{"id":"local","runtime":"local","model":"qwen","plan":true,"code":false}]""");
+
+        vendors[0].Serves(isPlan: true).Should().BeTrue();
+        vendors[0].Serves(isPlan: false).Should().BeFalse();
+    }
+
+    [Fact]
+    public void TheMasterSwitchBeatsBothStageFlags()
+    {
+        // Otherwise "off" and "on for plans" would contradict each other and a reader could not tell
+        // which the gate obeyed.
+        var off = new ProviderSettings("codex") { Enabled = false, Plan = true, Code = true };
+
+        off.Serves(isPlan: true).Should().BeFalse();
+        off.Serves(isPlan: false).Should().BeFalse();
+    }
+
+    [Fact]
+    public void AVendorServingNeitherStage_ServesNothing()
+    {
+        var neither = new ProviderSettings("codex") { Plan = false, Code = false };
+
+        neither.Serves(isPlan: true).Should().BeFalse();
+        neither.Serves(isPlan: false).Should().BeFalse();
+    }
 }

@@ -14,6 +14,19 @@ export interface Vendor {
   readonly runtime: Runtime;
   readonly model: string;
   readonly enabled: boolean;
+  /**
+   * Which STAGES this vendor reviews. Both by default, and absent means both.
+   *
+   * <p>Measured over fourteen judged runs (`research/RESULTS_vendor_overlap_2026-09-06.md`): `local`
+   * was 19 % useful on a plan and 3 % on code, while writing more findings than codex and gemini
+   * together. So the useful setting is not "local on or off" — it is on for the plan and off for the
+   * code, and until these two flags existed that could not be expressed anywhere.</p>
+   *
+   * <p>`enabled` stays the master switch: off means off everywhere, and these two are then
+   * irrelevant rather than contradictory.</p>
+   */
+  readonly plan: boolean;
+  readonly code: boolean;
   /** OpenAI-compatible endpoint, for a vendor riding the Codex runtime. Empty = the CLI's own. */
   readonly baseUrl: string;
   /**
@@ -52,8 +65,8 @@ export const ANTIGRAVITY_DEFAULT_MODEL = 'gemini-3.7-flash-high';
  * DEFAULTING to it are different changes, and only the first one had been made.</p>
  */
 export const DEFAULT_VENDORS: readonly Vendor[] = [
-  { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
-  { id: 'antigravity', runtime: 'antigravity', model: ANTIGRAVITY_DEFAULT_MODEL, enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+  { id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+  { id: 'antigravity', runtime: 'antigravity', model: ANTIGRAVITY_DEFAULT_MODEL, enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
 ];
 
 /**
@@ -76,7 +89,7 @@ export const LOCAL_PRESET: Vendor & { label: string; hint: string } = {
   id: 'local',
   runtime: 'local',
   model: '',
-  enabled: true,
+  enabled: true, plan: true, code: true,
   baseUrl: '',
   executablePath: '',
   pricePerMillionIn: 0,
@@ -90,7 +103,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     id: 'codex',
     runtime: 'codex',
     model: '',
-    enabled: true,
+    enabled: true, plan: true, code: true,
     baseUrl: '',
     executablePath: '',
     pricePerMillionIn: 0,
@@ -102,7 +115,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     id: 'antigravity',
     runtime: 'antigravity',
     model: ANTIGRAVITY_DEFAULT_MODEL,
-    enabled: true,
+    enabled: true, plan: true, code: true,
     baseUrl: '',
     executablePath: '',
     pricePerMillionIn: 0,
@@ -114,7 +127,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     id: 'gemini',
     runtime: 'gemini',
     model: '',
-    enabled: true,
+    enabled: true, plan: true, code: true,
     baseUrl: '',
     executablePath: '',
     pricePerMillionIn: 0,
@@ -126,7 +139,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     id: 'claude',
     runtime: 'claude',
     model: 'haiku',
-    enabled: true,
+    enabled: true, plan: true, code: true,
     baseUrl: '',
     executablePath: '',
     pricePerMillionIn: 0,
@@ -138,7 +151,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     id: 'deepseek',
     runtime: 'codex',
     model: 'deepseek-chat',
-    enabled: true,
+    enabled: true, plan: true, code: true,
     baseUrl: 'https://api.deepseek.com/v1',
     executablePath: '',
     pricePerMillionIn: 0,
@@ -150,7 +163,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     id: 'openrouter',
     runtime: 'codex',
     model: '',
-    enabled: true,
+    enabled: true, plan: true, code: true,
     baseUrl: 'https://openrouter.ai/api/v1',
     executablePath: '',
     pricePerMillionIn: 0,
@@ -162,7 +175,7 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     id: '',
     runtime: 'codex',
     model: '',
-    enabled: true,
+    enabled: true, plan: true, code: true,
     baseUrl: '',
     executablePath: '',
     pricePerMillionIn: 0,
@@ -192,6 +205,10 @@ export function vendorsFrom(value: unknown): Vendor[] {
         : ('codex' as const),
       model: typeof v['model'] === 'string' ? v['model'].trim() : '',
       enabled: v['enabled'] !== false,
+      // Absent is BOTH, which is what makes an existing configuration keep the gate it had after an
+      // update. Only an explicit `false` narrows a vendor to one stage.
+      plan: v['plan'] !== false,
+      code: v['code'] !== false,
       baseUrl: typeof v['baseUrl'] === 'string' ? v['baseUrl'].trim() : '',
       executablePath: typeof v['executablePath'] === 'string' ? v['executablePath'].trim() : '',
       pricePerMillionIn: rate(v['pricePerMillionIn']),
@@ -255,6 +272,11 @@ export function vendorsEnv(vendors: readonly Vendor[]): string {
         model: v.model,
         baseUrl: v.baseUrl,
         executablePath: v.executablePath,
+        // Written only when NARROWED, like every other value in the env block: a vendor that
+        // reviews both stages says nothing, and the server reads an absent flag as both. So the
+        // block a person opens still carries only what differs from the defaults.
+        ...(v.plan ? {} : { plan: false }),
+        ...(v.code ? {} : { code: false }),
       })),
   );
 }

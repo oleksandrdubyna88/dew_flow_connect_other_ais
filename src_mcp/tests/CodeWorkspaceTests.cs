@@ -91,7 +91,7 @@ public class CodeWorkspaceTests
     {
         var worktree = Worktree();
 
-        var work = Service("none").BuildWork([ReviewRole.Architecture], worktree, "ctx", round: 1);
+        var work = Service("none").BuildWork([ReviewRole.Architecture], worktree, "ctx", round: 1, isPlanStage: false);
 
         work.Should().NotBeEmpty();
         work[0].Invocation.Request.WorkingDirectory.Should().NotBe(worktree,
@@ -106,7 +106,7 @@ public class CodeWorkspaceTests
     {
         var worktree = Worktree();
 
-        var work = Service("worktree").BuildWork([ReviewRole.Architecture], worktree, "ctx", round: 1);
+        var work = Service("worktree").BuildWork([ReviewRole.Architecture], worktree, "ctx", round: 1, isPlanStage: false);
 
         work[0].Invocation.Request.WorkingDirectory.Should().Be(worktree);
     }
@@ -118,7 +118,7 @@ public class CodeWorkspaceTests
         // The setting must not reach into it and hand it a second, different empty directory.
         var scratch = Worktree();
 
-        var work = Service("none").BuildWork([ReviewRole.PlanCritique], scratch, "ctx", round: 1,
+        var work = Service("none").BuildWork([ReviewRole.PlanCritique], scratch, "ctx", round: 1, isPlanStage: true,
             planPrompts: ["plan-critique"]);
 
         work[0].Invocation.Request.WorkingDirectory.Should().Be(scratch);

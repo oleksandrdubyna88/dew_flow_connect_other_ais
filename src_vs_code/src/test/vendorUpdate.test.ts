@@ -31,6 +31,8 @@ function vendor(runtime: Runtime, over: Partial<Vendor> = {}): Vendor {
     baseUrl: '',
     executablePath: '',
     enabled: true,
+    plan: true,
+    code: true,
     pricePerMillionIn: 0,
     pricePerMillionOut: 0,
     ...over,

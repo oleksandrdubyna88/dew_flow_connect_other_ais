@@ -7,7 +7,7 @@ const vendor = (over: Partial<Vendor> = {}): Vendor => ({
   id: 'codex',
   runtime: 'codex',
   model: '',
-  enabled: true,
+  enabled: true, plan: true, code: true,
   baseUrl: '',
   executablePath: '',
   pricePerMillionIn: 0,
@@ -55,7 +55,7 @@ test('an antigravity reviewer opens agy, not codex', () => {
   // The runtime fell through to `codex` for anything it did not recognise, so the row migrated to
   // Antigravity opened a terminal running a different vendor's CLI — the same wrong-model defect
   // the server side had, on the button a person presses to sign that vendor in.
-  const term = vendorTerminal({ id: 'gemini', runtime: 'antigravity', model: 'gemini-3.7-flash-high', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 });
+  const term = vendorTerminal({ id: 'gemini', runtime: 'antigravity', model: 'gemini-3.7-flash-high', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 });
   assert.match(term.command, /^agy\b/);
   assert.match(term.command, /--model gemini-3\.7-flash-high/);
 });
@@ -68,14 +68,14 @@ test('each npm-published CLI offers the exact command that installs it', () => {
     ['gemini', '@google/gemini-cli'],
     ['claude', '@anthropic-ai/claude-code'],
   ] as const) {
-    const install = vendorInstall({ id: runtime, runtime, model: '', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }, 'linux');
+    const install = vendorInstall({ id: runtime, runtime, model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }, 'linux');
     assert.equal(install.command, `npm install -g ${pkg}`);
   }
 });
 
 test('the npm command is the same on every platform, because npm does not care', () => {
-  const linux = vendorInstall({ id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }, 'linux');
-  const windows = vendorInstall({ id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }, 'win32');
+  const linux = vendorInstall({ id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }, 'linux');
+  const windows = vendorInstall({ id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }, 'win32');
   assert.equal(linux.command, windows.command);
 });
 
@@ -87,7 +87,7 @@ test('antigravity installs from Google’s own script, one per shell family', ()
   // exit 0. The operator found these by reading the vendor's site — this file had claimed twice that
   // no official Linux install existed.
   const on = (platform: 'win32' | 'linux' | 'darwin'): string =>
-    vendorInstall({ id: 'gemini', runtime: 'antigravity', model: '', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }, platform).command;
+    vendorInstall({ id: 'gemini', runtime: 'antigravity', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }, platform).command;
 
   assert.equal(on('linux'), 'curl -fsSL https://antigravity.google/cli/install.sh | bash');
   assert.equal(on('darwin'), on('linux'), 'one script serves both — it branches on uname itself');
@@ -98,7 +98,7 @@ test('a piped installer says that it is one', () => {
   // curl | bash is a supply-chain shape. It is the vendor's own documented installer on the
   // vendor's own domain, which is what official means here — and a person may still want to read it
   // first, so the note says so rather than hiding it.
-  const note = vendorInstall({ id: 'gemini', runtime: 'antigravity', model: '', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }, 'linux').note;
+  const note = vendorInstall({ id: 'gemini', runtime: 'antigravity', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }, 'linux').note;
 
   assert.match(note, /piped script|read it first/i);
   assert.match(note, /sign.?in|agy` once/i, 'and that one interactive sign-in follows');
@@ -112,7 +112,7 @@ test('an install command may only come from a source the vendor itself publishes
   const runtimes = ['codex', 'gemini', 'claude', 'antigravity'] as const;
   for (const runtime of runtimes) {
     for (const p of ['win32', 'linux', 'darwin'] as const) {
-      const command = vendorInstall({ id: runtime, runtime, model: '', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }, p).command;
+      const command = vendorInstall({ id: runtime, runtime, model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }, p).command;
       if (command.length === 0) {
         continue;
       }
@@ -125,7 +125,7 @@ test('an install command may only come from a source the vendor itself publishes
 });
 
 test('a vendor on somebody else’s endpoint installs the CLI it actually rides', () => {
-  const install = vendorInstall({ id: 'deepseek', runtime: 'codex', model: '', enabled: true, baseUrl: 'https://api.deepseek.com/v1', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }, 'linux');
+  const install = vendorInstall({ id: 'deepseek', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: 'https://api.deepseek.com/v1', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }, 'linux');
   assert.equal(install.command, 'npm install -g @openai/codex');
 });
 
@@ -135,7 +135,7 @@ test('the run button uses the CLI path when one is set', () => {
   // The whole point of the field: PATH could not answer, so somebody said where the binary is.
   // A button that then runs the bare name ignores the one thing they told it.
   const term = vendorTerminal({
-    id: 'gemini', runtime: 'antigravity', model: 'gemini-3.7-flash-high', enabled: true, baseUrl: '',
+    id: 'gemini', runtime: 'antigravity', model: 'gemini-3.7-flash-high', enabled: true, plan: true, code: true, baseUrl: '',
     executablePath: '/mnt/c/Users/strug/AppData/Local/agy/bin/agy.exe', pricePerMillionIn: 0, pricePerMillionOut: 0,
   });
 
@@ -145,7 +145,7 @@ test('the run button uses the CLI path when one is set', () => {
 
 test('a path with a space survives being put on a command line', () => {
   const term = vendorTerminal({
-    id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '',
+    id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '',
     executablePath: '/home/jinx/my tools/codex', pricePerMillionIn: 0, pricePerMillionOut: 0,
   });
 
@@ -159,7 +159,7 @@ test('the install prerequisite is the one for THIS operating system', () => {
     ['darwin', /brew/],
   ] as const) {
     const install = vendorInstall(
-      { id: 'codex', runtime: 'codex', model: '', enabled: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+      { id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
       platform,
     );
     assert.match(install.prerequisite, marker, `${platform} needs its own way to get node`);

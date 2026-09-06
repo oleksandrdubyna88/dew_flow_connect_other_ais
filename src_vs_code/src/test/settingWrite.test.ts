@@ -2,7 +2,16 @@ import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { panelHtml } from '../panelView';
-import { DEFAULTS, OVERLAID_SETTINGS, overlaidReader, roleRecordUpdate, seedOverlay, settingWrite, settingsFrom } from '../settingsShape';
+import {
+  DEFAULTS,
+  OVERLAID_SETTINGS,
+  envBlock,
+  overlaidReader,
+  roleRecordUpdate,
+  seedOverlay,
+  settingWrite,
+  settingsFrom,
+} from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
 
 /**
@@ -214,4 +223,31 @@ test('every setting the shape reads is one a side can hold', () => {
 
   const missing = asked.filter((section) => !OVERLAID_SETTINGS.includes(section));
   assert.deepEqual(missing, [], 'these settings are read but cannot be held per side');
+});
+
+// ---------- which stages a vendor serves ----------
+
+test('a vendor that reviews both stages says nothing about them in the env block', () => {
+  // The block carries only what DIFFERS from the defaults, so a pristine configuration stays
+  // readable and returning a box to ticked removes the key rather than pinning it.
+  const both = DEFAULT_VENDORS.map((v) => ({ ...v, model: 'x' }));
+
+  const written = envBlock(DEFAULTS, both)['COAI_VENDORS'] ?? '';
+
+  assert.doesNotMatch(written, /"plan"/);
+  assert.doesNotMatch(written, /"code"/);
+});
+
+test('a vendor narrowed to plans carries exactly that, and the other vendors stay silent', () => {
+  const vendors = [
+    { ...DEFAULT_VENDORS[0]!, model: 'gpt' },
+    { id: 'local', runtime: 'local' as const, model: 'qwen', enabled: true, plan: true, code: false, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+  ];
+
+  const written = JSON.parse(envBlock(DEFAULTS, vendors)['COAI_VENDORS'] ?? '[]') as Record<string, unknown>[];
+
+  assert.deepEqual(written.map((v) => v['id']), ['codex', 'local']);
+  assert.equal('plan' in written[0]!, false, 'codex reviews both, so it says nothing');
+  assert.equal(written[1]!['code'], false);
+  assert.equal('plan' in written[1]!, false, 'and it still reviews plans, so that stays silent too');
 });

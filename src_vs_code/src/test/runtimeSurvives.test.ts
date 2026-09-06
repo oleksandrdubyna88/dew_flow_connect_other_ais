@@ -64,7 +64,7 @@ test('every preset the panel offers survives being saved and read back', () => {
 
 test('a local reviewer keeps its runtime, which is what keeps it off the Codex CLI', () => {
   const [vendor] = vendorsFrom([
-    { id: 'local', runtime: 'local', model: 'qwen3:32b', enabled: true, baseUrl: 'http://127.0.0.1:11434/v1' },
+    { id: 'local', runtime: 'local', model: 'qwen3:32b', enabled: true, plan: true, code: true, baseUrl: 'http://127.0.0.1:11434/v1' },
   ]);
 
   assert.equal(vendor.runtime, 'local');

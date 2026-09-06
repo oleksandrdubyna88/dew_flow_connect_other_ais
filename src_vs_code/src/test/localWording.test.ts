@@ -36,12 +36,21 @@ function html(vendors: readonly Vendor[]): string {
 }
 
 /** The markup of one vendor's row, so another row's wording cannot satisfy an assertion. */
+/**
+ * One vendor's row, from its own `<div class="vendor">` to the next one.
+ *
+ * <p>It used to slice 2500 characters past the remove button, and adding two checkboxes to the row
+ * pushed the price inputs out of that window — two tests failed for a reason that had nothing to do
+ * with what they assert. A magic offset is a test that breaks when the markup grows; a boundary is
+ * one that does not.</p>
+ */
 function rowOf(page: string, id: string): string {
-  const start = page.indexOf(`data-setting="enabled" data-vendor="${id}"`);
-  assert.notEqual(start, -1, `${id} has no row`);
-  const end = page.indexOf(`data-command="removeVendor" data-id="${id}"`);
+  const anchor = page.indexOf(`data-setting="enabled" data-vendor="${id}"`);
+  assert.notEqual(anchor, -1, `${id} has no row`);
+  const start = page.lastIndexOf('<div class="vendor">', anchor);
+  const next = page.indexOf('<div class="vendor">', anchor);
 
-  return page.slice(start - 300, page.indexOf('</div>', end + 2500) + 6);
+  return page.slice(start, next === -1 ? undefined : next);
 }
 
 test('a local row does not offer "the CLI\'s default"', () => {

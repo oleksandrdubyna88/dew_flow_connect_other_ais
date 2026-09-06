@@ -22,7 +22,7 @@ const GEMINI: ModelPrice = { inPerMillion: 0.75, outPerMillion: 3.75, source: 'o
 function vendor(over: Partial<Vendor> = {}): Vendor {
   return {
     id: 'antigravity', runtime: 'antigravity', model: 'gemini-3.7-flash-high', baseUrl: '',
-    executablePath: '', enabled: true, pricePerMillionIn: 0, pricePerMillionOut: 0, ...over,
+    executablePath: '', enabled: true, plan: true, code: true, pricePerMillionIn: 0, pricePerMillionOut: 0, ...over,
   };
 }
 

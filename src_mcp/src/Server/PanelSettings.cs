@@ -18,6 +18,23 @@ public sealed record ProviderSettings(string Provider)
 
     /// <summary>An OpenAI-compatible endpoint, for a vendor riding the Codex CLI. Empty = built in.</summary>
     public string BaseUrl { get; init; } = string.Empty;
+
+    /// <summary>Whether this vendor reviews plans.</summary>
+    public bool Plan { get; init; } = true;
+
+    /// <summary>Whether this vendor reviews code.</summary>
+    public bool Code { get; init; } = true;
+
+    /// <summary>
+    /// Whether this vendor serves the stage being run.
+    /// </summary>
+    /// <remarks>
+    /// Measured over fourteen judged runs (`research/RESULTS_vendor_overlap_2026-09-06.md`): a local
+    /// model was 19 % useful on a plan and 3 % on code, while writing more findings than the two
+    /// hosted vendors together. So the useful setting was never "local on or off" — and until these
+    /// two flags existed it could not be expressed at all. `Enabled` remains the master switch.
+    /// </remarks>
+    public bool Serves(bool isPlan) => Enabled && (isPlan ? Plan : Code);
 }
 
 /// <summary>
@@ -429,6 +446,10 @@ public sealed record PanelSettings
                         Model = v.Model?.Trim() ?? string.Empty,
                         BaseUrl = v.BaseUrl?.Trim() ?? string.Empty,
                         ExecutablePath = v.ExecutablePath?.Trim() ?? string.Empty,
+                        // Absent is TRUE on both, so a vendor list written by an older extension
+                        // keeps reviewing both stages rather than silently reviewing neither.
+                        Plan = v.Plan != false,
+                        Code = v.Code != false,
                     })
                     // One id, one vendor — the extension already refuses a duplicate row, and a
                     // hand-edited settings file is how one reaches the server. The id is the
