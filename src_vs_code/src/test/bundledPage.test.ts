@@ -26,7 +26,33 @@ const ROOT = process.cwd();
 /** Every function the page embeds by its SOURCE TEXT, and therefore every one this file guards. */
 const EMBEDDED = ['compareRows', 'rowMatches', 'money', 'cost3', 'costTitle', 'asInstant'];
 
-const NOW = Date.parse('2026-09-05T08:00:00.000Z');
+/**
+ * The fixture's day is TODAY, taken from the real clock, and that is load-bearing rather than lazy.
+ *
+ * <p>The page opens on today's range — `setToday()` reads `new Date()`, because the question
+ * somebody has when they open it is almost always "what happened today". A fixture pinned to a
+ * literal date therefore renders rows on exactly ONE day and an empty table on every day after it,
+ * which is what this file did: written on 2026-09-05, green that afternoon, red from the next
+ * morning onwards with "the page rendered no rows" — a failure that says nothing about the page and
+ * everything about the calendar.</p>
+ *
+ * <p>Local NOON, not midnight and not a UTC literal: the page's range is built from the LOCAL day
+ * while a round's stamp is UTC, so an instant near either edge lands on the neighbouring local day
+ * under some offsets and the bomb comes back wearing a timezone. Noon is the only hour no offset on
+ * earth can move out of its own day.</p>
+ */
+function todayAtLocal(hours: number, minutes: number, seconds = 0): Date {
+  const day = new Date();
+  day.setHours(hours, minutes, seconds, 0);
+
+  return day;
+}
+
+const STARTED = todayAtLocal(12, 0);
+const COMPLETED = todayAtLocal(12, 2, 10);
+const PRICED = todayAtLocal(12, 1);
+/** After the round finished, so the row has an age — and still the same local day. */
+const NOW = todayAtLocal(12, 17).getTime();
 
 /** One finished round, priced from one ledger line — enough to exercise every cell of a row. */
 const SESSION = {
@@ -34,14 +60,14 @@ const SESSION = {
   rounds: [{
     stage: 'CodeReview', number: 1, verdict: 'proceed', gatingCount: 1,
     reviewers: 'all 2 reviewers answered', status: 'done',
-    startedUtc: '2026-09-05T07:41:00.000Z', completedUtc: '2026-09-05T07:43:10.000Z',
+    startedUtc: STARTED.toISOString(), completedUtc: COMPLETED.toISOString(),
     subject: 'SCOPE - something', tokensIn: 1_000_000, tokensOut: 200_000,
     reviewerStates: [{ provider: 'codex', role: 'Architecture', status: 'done', findings: 1, note: '', seconds: 23 }],
   }],
 };
 
 const USED = {
-  utc: '2026-09-05T07:42:00.000Z', provider: 'codex', model: 'gpt-5.6-sol', role: 'Architecture',
+  utc: PRICED.toISOString(), provider: 'codex', model: 'gpt-5.6-sol', role: 'Architecture',
   stage: 'CodeReview', seconds: 23, tokensIn: 1_000_000, tokensOut: 200_000, costUsd: null, outcome: 'ok',
 };
 
@@ -175,3 +201,19 @@ function strangers(body: string, name: string): string[] {
       .map((m) => m[1] as string)
       .filter((called) => !mine.has(called)))];
 }
+
+test('the fixture lands on the local day the page opens on', () => {
+  // The dependency the file used to carry silently, stated as a check. The two tests above assert
+  // on RENDERED rows, so anything that puts the fixture outside the page's opening range empties
+  // the table and they fail claiming the page formats no rows - a sentence that sends the next
+  // reader into the bundler. This one fails first and names the calendar instead.
+  const localDay = (at: Date) =>
+    `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`;
+  const today = localDay(new Date());
+
+  for (const [what, when] of [['started', STARTED], ['completed', COMPLETED], ['priced', PRICED]] as const) {
+    assert.equal(
+      localDay(when), today,
+      `the fixture's ${what} stamp is not on today's local day, so the page opens with it filtered out`);
+  }
+});
