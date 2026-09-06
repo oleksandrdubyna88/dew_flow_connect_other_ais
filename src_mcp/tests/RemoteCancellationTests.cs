@@ -126,6 +126,48 @@ public sealed class RemoteCancellationTests : IDisposable
     }
 
     [Fact]
+    public async Task AnInvocationWithNoJobFileAsksNobodyAnything()
+    {
+        // Every reviewer launch reaches the abandon hook, including the ones that never claimed
+        // anything — a remote review refused before the server accepted it, for instance.
+        var invocation = new ReviewerInvocation(
+            "codex", ReviewRole.Architecture, new ProcessRequest("x", [], "."),
+            Adapter: new RemoteRuntime("codex", "https://s"));
+
+        var abandon = async () => await invocation.Adapter!.AbandonAsync(invocation);
+
+        await abandon.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public void UsageThatCannotBeReadIsZeroRatherThanACrash()
+    {
+        // The shim prints its usage line on stdout; a shim that died before printing leaves whatever
+        // it managed to write. The round must still get its answer.
+        var invocation = new ReviewerInvocation(
+            "codex", ReviewRole.Architecture, new ProcessRequest("x", [], "."));
+
+        var usage = new RemoteRuntime("codex", "https://s").ReadUsage(
+            invocation, new ProcessResult(0, "not json at all", "", false));
+
+        usage.TokensIn.Should().Be(0);
+        usage.TokensOut.Should().Be(0);
+    }
+
+    [Fact]
+    public void UsageIsReadOffTheShimsOwnLine()
+    {
+        var invocation = new ReviewerInvocation(
+            "codex", ReviewRole.Architecture, new ProcessRequest("x", [], "."));
+
+        var usage = new RemoteRuntime("codex", "https://s").ReadUsage(
+            invocation, new ProcessResult(0, RemoteAsk.UsageLine(31, 41), "", false));
+
+        usage.TokensIn.Should().Be(31);
+        usage.TokensOut.Should().Be(41);
+    }
+
+    [Fact]
     public async Task AnAdapterWithNothingToCleanUpDoesNothing()
     {
         // The default on the interface, which is what keeps every CLI adapter unchanged.

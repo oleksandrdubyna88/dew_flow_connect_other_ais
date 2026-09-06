@@ -33,21 +33,12 @@ internal static class AskRemote
         var tokenFile = flags.GetValueOrDefault("--token-file", string.Empty);
         var jobFile = flags.GetValueOrDefault("--job-file", string.Empty);
 
-        if (server.Length == 0 || vendor.Length == 0 || promptFile.Length == 0 || outFile.Length == 0)
-        {
-            note("--ask-remote needs --server, --vendor, --prompt-file and --out");
-
-            return RemoteAsk.BadUsage;
-        }
-
         var token = TeamServerAuth.ReadToken(tokenFile);
-        if (token.Length == 0)
+        if (Refusal(server, vendor, promptFile, outFile, token) is { } refused)
         {
-            // Not a failure of the server or the network: this machine has never signed in, or the
-            // token was removed. It has its own exit code so the panel can offer the right button.
-            note(RemoteAsk.NotSignedInMessage(server));
+            note(refused.Message);
 
-            return RemoteAsk.NotSignedIn;
+            return refused.Exit;
         }
 
         // TWO clocks, and they are not the same one — the lesson story 2.3 paid for on the server.
@@ -77,7 +68,25 @@ internal static class AskRemote
             http, note, output);
     }
 
-    private sealed record Job(
+    /// <summary>Why this shim will not even try — or null when it will.</summary>
+    /// <remarks>
+    /// Extracted so <c>RunAsync</c> stays inside the repository's complexity rule, and because the two
+    /// refusals are genuinely different things: one is a command line nobody could have meant, the
+    /// other is an ordinary state with its own exit code so the panel can offer the right button.
+    /// </remarks>
+    internal static (int Exit, string Message)? Refusal(
+        string server, string vendor, string promptFile, string outFile, string token) =>
+        (server.Length == 0 || vendor.Length == 0 || promptFile.Length == 0 || outFile.Length == 0, token.Length == 0)
+        switch
+        {
+            (true, _) => (RemoteAsk.BadUsage, "--ask-remote needs --server, --vendor, --prompt-file and --out"),
+            // Not a failure of the server or the network: this machine has never signed in, or the
+            // token was removed.
+            (false, true) => (RemoteAsk.NotSignedIn, RemoteAsk.NotSignedInMessage(server)),
+            _ => null,
+        };
+
+    internal sealed record Job(
         string Server, string Vendor, string Model, string Role,
         string PromptFile, string OutFile, string JobFile, string TokenFile,
         TimeSpan Deadline, int VendorBudgetSeconds);
@@ -162,12 +171,7 @@ internal static class AskRemote
     private static async Task<int> PollAsync(
         Job job, string id, Stopwatch waited, HttpClient http, Action<string> note, TextWriter output)
     {
-        var position = 0;
-        var said = string.Empty;
-        // A long poll across a proxy or a laptop's wifi drops for reasons that have nothing to do with
-        // the review. Aborting on the FIRST one abandoned reviews that were running perfectly, so a
-        // blip is tolerated and only a run of them is a failure. Raised on the code round.
-        var consecutiveFailures = 0;
+        var seen = PollTracker.Start;
         while (waited.Elapsed < job.Deadline)
         {
             // The long poll never asks for longer than what is LEFT. Asking for the full 25 seconds
@@ -175,63 +179,19 @@ internal static class AskRemote
             // of this deadline being the shorter one is that reaching it produces a sentence instead
             // of the executor killing the process. Found by running it against a real server.
             var remaining = job.Deadline - waited.Elapsed;
-            var poll = await PollOnceAsync(job, id, WaitSecondsFor(remaining), remaining, http, note);
-            if (poll.Exit is { } stopped)
-            {
-                // A refusal the server MEANT — a bad token, a contract that is too old. Retrying it
-                // would only repeat it, and the job is cancelled so nothing is left running.
-                await CancelAsync(job, id, http);
-                RemoteRuntime.Forget(job.JobFile);
+            var attempt = await PollOnceAsync(job, id, WaitSecondsFor(remaining), remaining, http, note);
+            seen = seen.After(attempt, job, note);
 
-                return stopped;
+            var step = Decide(attempt, seen.Failures, job.Server);
+            if (step.Verdict != PollVerdict.KeepWaiting)
+            {
+                return await EndAsync(job, id, step, http, note, output);
             }
 
-            if (poll.Transient)
-            {
-                consecutiveFailures++;
-                if (consecutiveFailures >= MaxConsecutiveFailures)
-                {
-                    note(RemoteAsk.UnreachableMessage(
-                        job.Server, $"{consecutiveFailures} polls in a row failed"));
-                    await CancelAsync(job, id, http);
-                    RemoteRuntime.Forget(job.JobFile);
-
-                    return RemoteAsk.Unreachable;
-                }
-            }
-
-            if (poll.Answer is { } state)
-            {
-                consecutiveFailures = 0;
-                position = state.Position;
-                said = Progress(job, state, said, note);
-                if (state.State is RemoteState.Done or RemoteState.Failed)
-                {
-                    RemoteRuntime.Forget(job.JobFile);
-
-                    return await FinishAsync(job, state, note, output);
-                }
-
-                if (state.State == RemoteState.Unknown)
-                {
-                    // Not folded into "still queued": a status this client cannot read is a reason to
-                    // stop and say so, not to wait out the deadline and blame the server for slowness.
-                    note(RemoteAsk.UnknownStateMessage(job.Server, state.RawStatus));
-                    await CancelAsync(job, id, http);
-                    RemoteRuntime.Forget(job.JobFile);
-
-                    return RemoteAsk.TooOld;
-                }
-            }
-
-            // Never sleep past the deadline: the gap used to run unconditionally, so the loop could
-            // notice its own deadline a second late.
-            if (job.Deadline - waited.Elapsed <= RemoteAsk.PollGap)
+            if (!await WaitAsync(job, waited))
             {
                 break;
             }
-
-            await Task.Delay(RemoteAsk.PollGap);
         }
 
         // The polite path: cancel before giving up, so an answer nobody will collect stops being
@@ -239,13 +199,112 @@ internal static class AskRemote
         // instead of reaching here.
         await CancelAsync(job, id, http);
         RemoteRuntime.Forget(job.JobFile);
-        note(RemoteAsk.TooSlowMessage(job.Server, waited.Elapsed, position));
+        note(RemoteAsk.TooSlowMessage(job.Server, waited.Elapsed, seen.Position));
 
         return RemoteAsk.TooSlow;
     }
 
     /// <summary>How many failed polls in a row mean the server is gone rather than the network blinked.</summary>
     private const int MaxConsecutiveFailures = 3;
+
+    internal enum PollVerdict
+    {
+        KeepWaiting,
+        Finish,
+        Stop,
+    }
+
+    /// <param name="Note">What to tell the person before stopping, when there is something to say.</param>
+    internal readonly record struct PollStep(PollVerdict Verdict, int Exit, RemotePoll? Answer, string Note)
+    {
+        public static readonly PollStep KeepWaiting = new(PollVerdict.KeepWaiting, 0, null, "");
+
+        public static PollStep Finish(RemotePoll answer) => new(PollVerdict.Finish, RemoteAsk.Ok, answer, "");
+
+        public static PollStep Stop(int exit, string note = "") => new(PollVerdict.Stop, exit, null, note);
+    }
+
+    /// <summary>
+    /// What one poll means for the loop.
+    /// </summary>
+    /// <remarks>
+    /// Pure, and separated from the loop so every branch is a unit test rather than something only a
+    /// real server can produce. The loop above then does one thing: ask, and act on the answer.
+    /// </remarks>
+    internal static PollStep Decide(PollAttempt attempt, int failures, string server) => attempt switch
+    {
+        // A refusal the server MEANT — a bad token, a contract too old. Retrying only repeats it.
+        { Exit: { } refused } => PollStep.Stop(refused),
+        // A blip is tolerated; a run of them is an outage. Aborting on the first one abandoned
+        // reviews that were running perfectly.
+        { Transient: true } when failures >= MaxConsecutiveFailures =>
+            PollStep.Stop(RemoteAsk.Unreachable, RemoteAsk.UnreachableMessage(server, $"{failures} polls in a row failed")),
+        { Answer: null } => PollStep.KeepWaiting,
+        { Answer: { State: RemoteState.Done or RemoteState.Failed } done } => PollStep.Finish(done),
+        // Not folded into "still queued": a status this client cannot read is a reason to stop and
+        // say so, not to wait out the deadline and then blame the server for being slow.
+        { Answer: { State: RemoteState.Unknown } unknown } =>
+            PollStep.Stop(RemoteAsk.TooOld, RemoteAsk.UnknownStateMessage(server, unknown.RawStatus)),
+        _ => PollStep.KeepWaiting,
+    };
+
+    /// <summary>Leave the loop: say why, stop the job unless it stopped itself, and exit.</summary>
+    private static async Task<int> EndAsync(
+        Job job, string id, PollStep step, HttpClient http, Action<string> note, TextWriter output)
+    {
+        if (step.Verdict == PollVerdict.Finish)
+        {
+            RemoteRuntime.Forget(job.JobFile);
+
+            return await FinishAsync(job, step.Answer!, note, output);
+        }
+
+        Say(step.Note, note);
+        await CancelAsync(job, id, http);
+        RemoteRuntime.Forget(job.JobFile);
+
+        return step.Exit;
+    }
+
+    private static void Say(string message, Action<string> note)
+    {
+        if (message.Length > 0)
+        {
+            note(message);
+        }
+    }
+
+    /// <summary>The gap between polls — skipped when it would overrun the deadline.</summary>
+    /// <returns>False when there is no time left for another attempt.</returns>
+    /// <remarks>
+    /// The delay used to run unconditionally, so the loop could notice its own deadline a second
+    /// late — small, but the deadline exists precisely so that the shim beats the executor's kill.
+    /// </remarks>
+    private static async Task<bool> WaitAsync(Job job, Stopwatch waited)
+    {
+        if (job.Deadline - waited.Elapsed <= RemoteAsk.PollGap)
+        {
+            return false;
+        }
+
+        await Task.Delay(RemoteAsk.PollGap);
+
+        return true;
+    }
+
+    /// <summary>
+    /// What the loop has learned so far: how many polls failed in a row, where the review sits, and
+    /// what the person has already been told.
+    /// </summary>
+    internal readonly record struct PollTracker(int Failures, int Position, string Said)
+    {
+        public static readonly PollTracker Start = new(0, 0, "");
+
+        public PollTracker After(PollAttempt attempt, Job job, Action<string> note) =>
+            attempt.Answer is { } state
+                ? new PollTracker(0, state.Position, Progress(job, state, Said, note))
+                : this with { Failures = attempt.Transient ? Failures + 1 : Failures };
+    }
 
     /// <summary>
     /// Say what changed, once per change.
@@ -258,22 +317,20 @@ internal static class AskRemote
     /// </remarks>
     private static string Progress(Job job, RemotePoll state, string said, Action<string> note)
     {
-        var now = state.State == RemoteState.Queued
-            ? $"queued on the Team server at {job.Server}, {state.Position} ahead of it"
-            : state.State == RemoteState.Running
-                ? $"running on the Team server at {job.Server}"
-                : string.Empty;
-
-        if (now.Length > 0 && now != said)
+        var now = state.State switch
         {
-            note($"{job.Vendor}: {now}");
-        }
+            RemoteState.Queued => $"queued on the Team server at {job.Server}, {state.Position} ahead of it",
+            RemoteState.Running => $"running on the Team server at {job.Server}",
+            _ => string.Empty,
+        };
+
+        Say(now.Length > 0 && now != said ? $"{job.Vendor}: {now}" : string.Empty, note);
 
         return now;
     }
 
     /// <summary>How long to ask the server to hold this poll: the smaller of its cap and what is left.</summary>
-    private static int WaitSecondsFor(TimeSpan remaining) =>
+    internal static int WaitSecondsFor(TimeSpan remaining) =>
         Math.Clamp((int)remaining.TotalSeconds, 1, RemoteAsk.LongPollSeconds);
 
     /// <param name="Transient">
@@ -281,7 +338,7 @@ internal static class AskRemote
     /// answer this one long poll. The caller counts these; one is a blip, several in a row is an
     /// outage. It is NOT an exit, which is what a single dropped connection used to be.
     /// </param>
-    private readonly record struct PollAttempt(RemotePoll? Answer, int? Exit, bool Transient);
+    internal readonly record struct PollAttempt(RemotePoll? Answer, int? Exit, bool Transient);
 
     private static async Task<PollAttempt> PollOnceAsync(
         Job job, string id, int waitSeconds, TimeSpan remaining, HttpClient http, Action<string> note)
