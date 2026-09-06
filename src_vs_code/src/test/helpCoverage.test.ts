@@ -61,6 +61,7 @@ const SELF_EVIDENT: Record<string, string> = {
 
 const SETTING_ALIAS: Record<string, string> = {
   'coai.vendors': 'each row is one vendor',
+  'coai.teamServers': 'a team server is the other way to get a reviewer',
   'coai.onExhausted': 'when the rounds run out',
   'coai.maxConcurrency': 'reviewers at once',
   'coai.maxPerProvider': 'per vendor',

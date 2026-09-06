@@ -117,6 +117,33 @@
           "minimum": 1,
           "description": "How long a question waits for you before the AI is told to ask in the chat instead."
         },
+        "coai.teamServers": {
+          "type": "array",
+          "default": [],
+          "scope": "application",
+          "markdownDescription": "Team servers \u2014 one company subscription per vendor, running the CLIs on one machine. Add them in the **ConnectOtherAIs** panel; signing in uses your work Microsoft account and the token is kept in a file only you can read, never here.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "url"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Generated once when the server is added, and never rewritten \u2014 reviewer rows are named after it, so changing it would orphan them and their spending history."
+              },
+              "name": {
+                "type": "string",
+                "description": "What you call it. Display only; safe to change."
+              },
+              "url": {
+                "type": "string",
+                "description": "Its address. https, or http only on this machine."
+              }
+            }
+          }
+        },
         "coai.vendors": {
           "type": "array",
           "default": [
@@ -161,8 +188,16 @@
                 "type": "string",
                 "enum": [
                   "codex",
-                  "gemini"
+                  "gemini",
+                  "claude",
+                  "antigravity",
+                  "local",
+                  "remote"
                 ]
+              },
+              "remoteVendor": {
+                "type": "string",
+                "description": "For a Team server reviewer: the vendor id THAT SERVER knows it by, which is not this row's id."
               },
               "model": {
                 "type": "string",

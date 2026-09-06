@@ -59,6 +59,25 @@ import {
   wslconfigWith,
 } from './wslNetwork';
 import { normaliseId, Vendor, VENDOR_PRESETS, vendorsFrom } from './vendors';
+import { Catalog, fetchClientConfig } from './teamServerApi';
+import {
+  AuthHost,
+  SignedIn,
+  catalogOf,
+  readToken,
+  renewIfDue,
+  signIn,
+  signOut,
+  signedInKey,
+} from './teamServerAuth';
+import {
+  TeamServer,
+  canonicalTeamServerUrl,
+  newTeamServerId,
+  teamServersFrom,
+} from './teamServers';
+import { TeamServerState } from './teamServerView';
+import { coaiDataDir } from './extension';
 import {
   executableFor,
   Platform,
@@ -80,6 +99,9 @@ import {
  * prefers the Settings UI gets the same values, and this panel is a face on them rather than a
  * second source of truth.</p>
  */
+/** How long a Team server's catalog stands before it is asked again. */
+const TEAM_SERVER_FRESH_MS = 60 * 1000;
+
 export class PanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'coai.panel';
 
@@ -104,6 +126,18 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private openSections: string[] = [...OPEN_BY_DEFAULT];
   /** Which window the spending chart shows. A view preference, so it lives here, not in config. */
   private usageWindow: Window = 'day';
+
+  private usageScope: 'me' | 'company' = 'me';
+
+  /** The last catalog each server managed to answer with, and what has gone wrong since. */
+  /** When each server was last asked what it offers. */
+  private teamCheckedAt = 0;
+
+  private catalogs: Record<string, {
+    catalog?: Catalog | undefined;
+    problem: string;
+    stale: boolean;
+  }> = {};
   /** The newest published server version, and when GitHub last answered. */
   private latestServer = '';
   private latestCheckedAt = 0;
@@ -292,6 +326,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       modelPrices: await this.modelPrices(vendors),
       snippetStatus: await pastedSnippetStatus(),
       localEngines: await this.probeLocalEngines(vendors),
+      teamServers: this.teamServerStates(config),
+      usageScope: this.usageScope,
     };
 
     // Two update paths, and which one runs is the whole fix for the pickers.
@@ -308,8 +344,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     if (key !== this.paintedKey) {
       this.paintedKey = key;
       this.view.webview.html = panelHtml(state, this.nonce);
+      void this.refreshTeamServers();
+
       return;
     }
+
+    // Never awaited: the section draws from what is already known, and this repaints when it
+    // lands. A render that waited on a Team server would be a panel that hangs when one is slow.
+    void this.refreshTeamServers();
 
     void this.view.webview.postMessage({ type: 'live', ...liveRegions(state) });
   }
@@ -863,6 +905,30 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // and its own failure. The button's job is only to reach it.
         await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.installServer);
         break;
+      case 'addTeamServer':
+        await this.addTeamServer();
+        break;
+      case 'signInTeamServer':
+        if (id !== undefined) {
+          await this.signInTeamServer(id);
+        }
+        break;
+      case 'signOutTeamServer':
+        if (id !== undefined) {
+          await this.signOutTeamServer(id);
+        }
+        break;
+      case 'removeTeamServer':
+        if (id !== undefined) {
+          await this.removeTeamServer(id);
+        }
+        break;
+      case 'teamUsageScope':
+        // Only an admin is ever shown the control, and the SERVER refuses `company` for anybody
+        // else — so this is a display preference, not a permission.
+        this.usageScope = this.usageScope === 'me' ? 'company' : 'me';
+        await this.render();
+        break;
       default: {
         // A PanelCommand with no case above lands here and fails to compile. That is the whole
         // guard: the Update button was posting a command nobody handled, and nothing said so.
@@ -1023,6 +1089,276 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   }
 
   /** A preset, or a name and an endpoint typed in — the list is not meant to stay at two. */
+  // ---------- Team servers ----------
+
+  private teamServers(config: vscode.WorkspaceConfiguration): TeamServer[] {
+    return teamServersFrom(this.read(config)('teamServers'));
+  }
+
+  /**
+   * What the panel draws each server from.
+   *
+   * <p>Never awaits a network call: the section renders from what was last learned, and a fetch
+   * started elsewhere repaints when it lands. A panel that waited would be a panel that hangs
+   * whenever a server is slow.</p>
+   */
+  private teamServerStates(config: vscode.WorkspaceConfiguration): TeamServerState[] {
+    return this.teamServers(config).map((server) => {
+      const known = this.catalogs[server.id];
+      const signedInAs = this.context.globalState.get<SignedIn>(signedInKey(server.id));
+
+      return {
+        server,
+        email: signedInAs?.email ?? '',
+        catalog: known?.catalog,
+        problem: known?.problem ?? '',
+        stale: known?.stale ?? false,
+      };
+    });
+  }
+
+  private authHost(): AuthHost {
+    return {
+      dataDir: coaiDataDir(),
+      state: {
+        get: <T,>(key: string) => this.context.globalState.get<T>(key),
+        update: async (key: string, value: unknown) => {
+          await this.context.globalState.update(key, value);
+        },
+      },
+      getSession: async (scope, interactive) => {
+        try {
+          // `clearSessionPreference` ONLY when a person asked for this. Paired with
+          // `createIfNone: false` it forces a prompt that is simultaneously forbidden, so a renewal
+          // could only ever return nothing — and the extension would read that as an expired
+          // identity session and sign them out. Weekly. See `renewIfDue`.
+          const session = await vscode.authentication.getSession(
+            'microsoft',
+            [scope],
+            interactive ? { createIfNone: true, clearSessionPreference: true } : { createIfNone: false },
+          );
+
+          return session?.accessToken;
+        } catch {
+          // A cancelled or failed sign-in is an answer, not a crash in a command handler.
+          return undefined;
+        }
+      },
+      confirmApplication: async (server, applicationId) => {
+        const go = 'Sign in';
+        const answer = await vscode.window.showWarningMessage(
+          `Sign in to ${server.name}?`,
+          {
+            modal: true,
+            detail: `${canonicalTeamServerUrl(server.url)} is asking for a token for Microsoft `
+              + `application ${applicationId}. Only continue if that is your company's `
+              + `ConnectOtherAIs server — a token minted here can be used by whoever runs it.`,
+          },
+          go,
+        );
+
+        return answer === go;
+      },
+      say: (message) => void vscode.window.showInformationMessage(message),
+    };
+  }
+
+  /**
+   * Add a server: verify it BEFORE saving, so a mistake is caught now rather than at the first review.
+   *
+   * <p>Raised on the plan round — a URL that is merely syntactically valid buys nothing, and the
+   * failure would otherwise surface as a broken reviewer days later. A server that is simply DOWN is
+   * not a mistake, so saving is still offered after the warning.</p>
+   */
+  private async addTeamServer(): Promise<void> {
+    const name = await vscode.window.showInputBox({
+      title: 'Add a Team server',
+      prompt: 'A short name for it — yours, and only for display',
+      placeHolder: 'RemSoft Dev',
+      validateInput: (v) => (v.trim().length === 0 ? 'A name is needed' : undefined),
+    });
+    if (name === undefined) {
+      return;
+    }
+
+    const url = await vscode.window.showInputBox({
+      title: `Add ${name.trim()}`,
+      prompt: 'Its address',
+      placeHolder: 'https://coai.example.com',
+      validateInput: (v) => (v.trim().startsWith('http') ? undefined : 'An https address is needed'),
+    });
+    if (url === undefined) {
+      return;
+    }
+
+    const config = vscode.workspace.getConfiguration('coai');
+    const existing = this.teamServers(config);
+    const server: TeamServer = {
+      id: newTeamServerId(name, existing.map((s) => s.id)),
+      name: name.trim(),
+      url: url.trim(),
+    };
+
+    if (!(await this.reachable(server))) {
+      return;
+    }
+
+    await config.update('teamServers', [...existing, server], vscode.ConfigurationTarget.Global);
+    await this.render();
+  }
+
+  /** Ask the server what it wants, and let the person decide what to do when it will not say. */
+  private async reachable(server: TeamServer): Promise<boolean> {
+    const config = await fetchClientConfig(server.url);
+    if (config.ok) {
+      return true;
+    }
+
+    const anyway = 'Add it anyway';
+    const answer = await vscode.window.showWarningMessage(
+      `${server.name} could not be checked: ${config.message}`,
+      {
+        modal: true,
+        detail: 'A server that is only down right now is not a mistake — but a wrong address is, '
+          + 'and it would otherwise surface as a broken reviewer days from now.',
+      },
+      anyway,
+    );
+
+    return answer === anyway;
+  }
+
+  private serverNamed(id: string): TeamServer | undefined {
+    return this.teamServers(vscode.workspace.getConfiguration('coai')).find((s) => s.id === id);
+  }
+
+  private async signInTeamServer(id: string): Promise<void> {
+    const server = this.serverNamed(id);
+    if (server === undefined) {
+      return;
+    }
+
+    const result = await signIn(server, this.authHost());
+    if (result.ok) {
+      await this.refreshCatalog(server);
+    } else {
+      void vscode.window.showWarningMessage(result.message);
+    }
+
+    await this.render();
+  }
+
+  private async signOutTeamServer(id: string): Promise<void> {
+    const server = this.serverNamed(id);
+    if (server === undefined) {
+      return;
+    }
+
+    const result = await signOut(server, this.authHost(), await readToken(coaiDataDir(), server.url));
+    if (!result.ok) {
+      void vscode.window.showWarningMessage(result.message);
+    }
+
+    delete this.catalogs[server.id];
+    await this.render();
+  }
+
+  /**
+   * Remove a server, and deal with everything that pointed at it.
+   *
+   * <p>Raised twice on the plan round: removing a server used to leave its token file on disk and
+   * its reviewer rows in the settings, so a credential stayed behind and the panel showed reviewers
+   * that could only fail. The rows are NAMED and the person decides — they carry spending history,
+   * so deleting them silently is not reversible.</p>
+   */
+  private async removeTeamServer(id: string): Promise<void> {
+    const config = vscode.workspace.getConfiguration('coai');
+    const servers = this.teamServers(config);
+    const server = servers.find((s) => s.id === id);
+    if (server === undefined) {
+      return;
+    }
+
+    const rows = vendorsFrom(this.read(config)('vendors')).filter(
+      (v) => v.runtime === 'remote'
+        && canonicalTeamServerUrl(v.baseUrl) === canonicalTeamServerUrl(server.url),
+    );
+    const both = rows.length === 1 ? 'Remove it and 1 reviewer' : `Remove it and ${rows.length} reviewers`;
+    const answer = await vscode.window.showWarningMessage(
+      `Remove ${server.name}?`,
+      {
+        modal: true,
+        detail: rows.length === 0
+          ? 'You will be signed out of it and its token deleted from this machine.'
+          : `You will be signed out of it and its token deleted. These reviewers point at it and `
+            + `cannot work without it: ${rows.map((r) => r.id).join(', ')}. Their spending history `
+            + `is kept either way.`,
+      },
+      ...(rows.length === 0 ? ['Remove'] : [both, 'Remove the server only']),
+    );
+    if (answer === undefined) {
+      return;
+    }
+
+    // Signed out FIRST, so the session is ended ON the server rather than left running there.
+    await signOut(server, this.authHost(), await readToken(coaiDataDir(), server.url));
+    delete this.catalogs[server.id];
+
+    await config.update(
+      'teamServers',
+      servers.filter((s) => s.id !== server.id),
+      vscode.ConfigurationTarget.Global,
+    );
+    if (answer === both) {
+      const ids = new Set(rows.map((r) => r.id));
+      const kept = vendorsFrom(this.read(config)('vendors')).filter((v) => !ids.has(v.id));
+      await config.update('vendors', kept, vscode.ConfigurationTarget.Global);
+    }
+
+    await this.render();
+  }
+
+  /** Ask one server what it offers, and remember it — marked STALE when it could not be asked. */
+  private async refreshCatalog(server: TeamServer): Promise<void> {
+    const token = await readToken(coaiDataDir(), server.url);
+    if (token.length === 0) {
+      return;
+    }
+
+    const answer = await catalogOf(server, token);
+    const known = this.catalogs[server.id];
+    this.catalogs[server.id] = answer.ok
+      ? { catalog: answer.value, problem: '', stale: false }
+      : { catalog: known?.catalog, problem: answer.message, stale: known?.catalog !== undefined };
+  }
+
+/**
+   * Renew quietly, then re-ask, for every server this machine is signed into.
+   *
+   * <p>Started by a render and never awaited by one — the panel draws from what is already known and
+   * this repaints when it lands. The freshness check is what stops a repaint loop: a render kicks
+   * this off, it renders once at the end, and that render finds the answer fresh and starts
+   * nothing.</p>
+   */
+  private async refreshTeamServers(): Promise<void> {
+    if (Date.now() - this.teamCheckedAt < TEAM_SERVER_FRESH_MS) {
+      return;
+    }
+
+    this.teamCheckedAt = Date.now();
+    const servers = this.teamServers(vscode.workspace.getConfiguration('coai'));
+    if (servers.length === 0) {
+      return;
+    }
+
+    for (const server of servers) {
+      await renewIfDue(server, this.authHost());
+      await this.refreshCatalog(server);
+    }
+
+    await this.render();
+  }
+
   private async addVendor(): Promise<void> {
     const existing = new Set(this.vendorsHere().map((v) => v.id));
     // A preset already in the panel is not offered twice; the blank one (empty id) always is.
