@@ -3,7 +3,7 @@
 > Status: **plan only, nothing implemented yet.** Scope: the *Company* view of a Team server's
 > spending, in the extension's spending tab.
 >
-> Extracted from story 3.3 of [PLAN_team_server.md](PLAN_team_server.md) when epic 3 shipped: the
+> Extracted from story 3.3 of [../research/PLAN_team_server.md](../research/PLAN_team_server.md) when epic 3 shipped: the
 > per-server totals and the *Company* toggle are built and tested; the per-PERSON breakdown behind
 > that toggle is not, and half-building it would have put a control on screen that answers a question
 > it cannot show.

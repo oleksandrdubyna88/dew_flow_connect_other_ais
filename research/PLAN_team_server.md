@@ -1,16 +1,39 @@
 # PLAN — a Team server: one subscription per vendor, shared by everyone who signs in
 
-> Status: **plan only, nothing implemented yet, 2026-09-04.** Scope: a new `src_server/` (the
+> Status: **IMPLEMENTED, 2026-09-06.** All four epics shipped and `coai.remsoft.dev` is running.
+>
+> **What shipped differently** — each epic's row in *Epics and stories* carries its own deviations;
+> the four that changed the SHAPE of the result:
+>
+> 1. **A `remote` row needed `remoteVendor`.** A row is `<serverId>-<vendor>` so two servers offering
+>    `codex` do not collide, but the SERVER knows only `codex` — sending the row id was refused by
+>    every server and reported as a vendor it "does not offer", which reads exactly like a typo.
+> 2. **The client's cancel-an-abandoned-review machinery existed and nothing called it.** A killed
+>    reviewer ran to completion on the company's subscription for an answer nobody would collect,
+>    until `IReviewerRuntime.AbandonAsync` was wired into the executor's two kill paths.
+> 3. **The deployment is a systemd unit, not the container this plan describes.** The target host
+>    already had the three CLIs installed and every slot signed in; the container is kept and is
+>    correct for a fresh machine. See [deploy/README.md](../deploy/README.md).
+> 4. **The HTTPS gate refused every request on a correctly configured host** — `UseForwardedHeaders`
+>    consumes `X-Forwarded-Proto` from a trusted proxy, and the gate read the raw header. Found by
+>    deploying, not by 165 tests, every one of which set `RequireForwardedHttps=false`.
+>
+> **The open tail**, extracted rather than left implied:
+> [PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md) — the per-PERSON breakdown
+> behind the *Company* toggle. The server already answers a `people[]` array the client does not
+> render. Help text is English only; the other four languages are a translation pass.
+>
+> Original scope: a new `src_server/` (the
 > `coai-server` host + tests + `http/` suite + `deploy/`), `src_mcp/runners` (a `remote` runtime, the
 > `--ask-remote` shim, three extractions), `src_vs_code/` (a *Team servers* section, sign-in identical
 > to CredsForDevs, the reviewer picker, the usage section), and two host-level steps on the VM — a site
 > file beside the vault's and a certificate of its own. **No change to `dew_flow_creds_for_devs`**: the
 > machine's edge turned out to be a host nginx rather than the vault's container (see *Deployment*).
 >
-> Related docs: [architecture.md](../research/architecture.md),
-> [module_runners.md](../research/module_runners.md), [module_server.md](../research/module_server.md),
-> [module_extension.md](../research/module_extension.md), and the local-model record this design is
-> modelled on, [PLAN_local_models.md](../research/PLAN_local_models.md).
+> Related docs: [architecture.md](architecture.md),
+> [module_runners.md](module_runners.md), [module_server.md](module_server.md),
+> [module_extension.md](module_extension.md), and the local-model record this design is
+> modelled on, [PLAN_local_models.md](PLAN_local_models.md).
 >
 > Every `file:line` below was verified against **`main` at `6551979`** (2026-09-05). The first draft was
 > written against a feature branch 77 commits behind it, and nine of the cited files had moved — which
@@ -698,7 +721,7 @@ Four of them touch this, and each is a decision rather than a note:
 
 | Open plan | The overlap | The decision |
 |---|---|---|
-| **the local database** under the rounds log (`coai.db`: sessions, rounds, reviewers, findings, usage, FTS — the writing half shipped 2026-09-05, [research/PLAN_local_db.md](../research/PLAN_local_db.md); the reader is [PLAN_local_db_reader.md](PLAN_local_db_reader.md)) | it projects the LOCAL `usage.jsonl`; this plan adds spending that lives on a server | **A Team server's usage is fetched live and is never written into `coai.db`.** The server is the source of truth precisely because a person has two machines, and a copy in a local projection would disagree with it the moment they use the other one. The rounds log stays a local view; the Team-server block stays a remote one, under its own subheading. If the two are ever wanted in one table, that is a `remote_usage` table the server's numbers are refreshed into, and a plan of its own. |
+| **the local database** under the rounds log (`coai.db`: sessions, rounds, reviewers, findings, usage, FTS — the writing half shipped 2026-09-05, [research/PLAN_local_db.md](PLAN_local_db.md); the reader is [PLAN_local_db_reader.md](../todo/PLAN_local_db_reader.md)) | it projects the LOCAL `usage.jsonl`; this plan adds spending that lives on a server | **A Team server's usage is fetched live and is never written into `coai.db`.** The server is the source of truth precisely because a person has two machines, and a copy in a local projection would disagree with it the moment they use the other one. The rounds log stays a local view; the Team-server block stays a remote one, under its own subheading. If the two are ever wanted in one table, that is a `remote_usage` table the server's numbers are refreshed into, and a plan of its own. |
 | **family CI hardening** (`main` PR-only everywhere, required checks with `strict`, semantic titles) | this plan adds a project, a test executable, an `http/` suite and a `server-v*` release | The new CI job runs on **every** PR — never a path filter — because a required check that does not run blocks every merge for ever; its name is added to the required set in the same change that adds the job. This plan ships as PRs into `main` like everything else. |
 | **provider liveness** (three states instead of `--version` exit 0) | the catalog's health column repeats the same question, one hop further away | The catalog answers what it can prove: the CLI is present at a version, the slot has credentials on disk, the last real run's outcome. A slot that has never run is *unknown*, not *healthy* — the same distinction that plan draws, applied per slot rather than per vendor. |
 | **multi-repo / uncommitted** (one round over several repositories, a working tree snapshotted into a commit) | it changes what the CLIENT assembles into the prompt | Nothing here has to change: the server receives an assembled prompt and a schema and never learns which repositories it came from. Recorded because it is the natural next question. |
@@ -786,6 +809,6 @@ CI. The one manual verification is step 8, and the record says so.
   `POST https://auth.openai.com/oauth/token {client_id, grant_type: refresh_token, refresh_token}` with
   **rotation** (both tokens rewritten every time, or the next call is `invalid_grant`); Google
   `POST https://oauth2.googleapis.com/token` form-encoded, access token valid 3600 s, refresh token stable.
-- **Liveness** — [PLAN_provider_liveness.md](PLAN_provider_liveness.md)'s three states apply to the
+- **Liveness** — [PLAN_provider_liveness.md](../todo/PLAN_provider_liveness.md)'s three states apply to the
   catalog's health column as they do to `providers`.
 - **Per-person search server-side** (`?person=`) if a company outgrows the client-side filter.
