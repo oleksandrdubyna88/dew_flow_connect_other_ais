@@ -17,8 +17,21 @@ import { escapeHtml as escape } from './escapeHtml';
 /** What the panel knows about one server right now. */
 export interface TeamServerState {
   readonly server: TeamServer;
-  /** The signed-in account, or empty when this machine has not signed in. */
+  /**
+   * The account THIS SIDE holds a token for, or empty when it holds none.
+   *
+   * <p>The token file, never a shared record: `coaiDataDir()` is a path on the extension host that
+   * is running, so a WSL window and a Windows one hold different files. A record that described the
+   * machine is what let this row read "Signed in" in a distro where no token existed at all.</p>
+   */
   readonly email: string;
+  /**
+   * The account signed in on ANOTHER side of this machine, when this side has none.
+   *
+   * <p>Empty whenever {@link email} is set — the two never both apply. It exists so the row can
+   * offer the one button that fixes the situation instead of reading like nobody ever signed in.</p>
+   */
+  readonly elsewhere?: string | undefined;
   /** The last catalog this machine managed to fetch, or undefined when it never has. */
   readonly catalog?: Catalog | undefined;
   /** Why the last attempt failed, or empty when it did not. */
@@ -159,7 +172,7 @@ export function statusSentence(state: TeamServerState): string {
     return state.busy!;
   }
   if (state.email.length === 0) {
-    return 'Not signed in.';
+    return notSignedInHere(state);
   }
   if (state.problem.length > 0) {
     return state.stale
@@ -171,6 +184,81 @@ export function statusSentence(state: TeamServerState): string {
   }
 
   return `Signed in. Server ${state.catalog.serverVersion}.`;
+}
+
+/**
+ * Not signed in HERE — and whether that is because nobody has, or because it was somebody else's
+ * window.
+ *
+ * <p>The middle case is the one that used to be invisible: a session signed in on Windows, a WSL
+ * window that could not mint its own, and a row that said nothing about either. Saying which account
+ * is waiting, and why this side could not take it, is the difference between a button somebody
+ * presses and a panel somebody gives up on.</p>
+ */
+function notSignedInHere(state: TeamServerState): string {
+  const elsewhere = state.elsewhere ?? '';
+  if (elsewhere.length === 0) {
+    return 'Not signed in.';
+  }
+
+  return state.problem.length > 0
+    ? `${elsewhere} is signed in on another side of this machine, and this side could not sign `
+      + `itself in: ${state.problem}`
+    : `${elsewhere} is signed in on another side of this machine — press Sign in to use it here.`;
+}
+
+/**
+ * The Team server, in the *Server* section: the address, read-only, and what is answering on it.
+ *
+ * <p>The address is SHOWN and not editable on purpose — pointing a live session somewhere else is a
+ * sign-out, not a text edit — and it is here because this is the section a person opens to ask what
+ * this side is talking to. The other half of that question, `coai-mcp`, is already above it.</p>
+ *
+ * <p>One block per configured server rather than one for "the" server: the panel has always allowed
+ * several, and choosing one of them to display would be right only by luck.</p>
+ */
+export function teamServerHere(states: readonly TeamServerState[], perSide: boolean): string {
+  return states.map((state) => hereBlock(state, perSide)).join('\n');
+}
+
+function hereBlock(state: TeamServerState, perSide: boolean): string {
+  const id = escape(state.server.id);
+
+  return `<div class="field">
+  <label for="ts-here-${id}">Team server — ${escape(state.server.name)}</label>
+  <input id="ts-here-${id}" type="text" data-server-url="${id}" readonly aria-readonly="true"
+         value="${escape(canonicalTeamServerUrl(state.server.url))}">
+  <div class="status">${escape(hereSentence(state))}</div>
+  <div class="hint">${escape(sideSentence(perSide))} To point this side somewhere else, sign out
+  under <b>Team servers</b> first.</div>
+</div>`;
+}
+
+/** What is answering on this side, in one line — the version being the point of it. */
+export function hereSentence(state: TeamServerState): string {
+  if (state.email.length === 0) {
+    return notSignedInHere(state);
+  }
+  if (state.catalog === undefined) {
+    return state.problem.length > 0
+      ? `Signed in as ${state.email} — ${state.problem}`
+      : `Signed in as ${state.email} — connecting…`;
+  }
+
+  // A version that goes silently stale is a number that makes a dead connection look healthy, so a
+  // catalog older than the last failed attempt says so rather than standing there on its own.
+  const stale = state.stale ? ' (last known — it is not answering now)' : '';
+
+  return `coai-server ${state.catalog.serverVersion}${stale} — signed in as ${state.email}.`;
+}
+
+/** Which of the two arrangements this machine is in, said rather than implied. */
+export function sideSentence(perSide: boolean): string {
+  return perSide
+    ? 'This side keeps its own sign-in — your Windows window and each WSL distro can be signed '
+      + 'in to different accounts.'
+    : 'Every side of this machine shares this sign-in — a WSL window signs itself in with the '
+      + 'same account, without asking.';
 }
 
 /** One server's rows. */

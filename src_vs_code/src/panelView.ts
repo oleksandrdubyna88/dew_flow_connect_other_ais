@@ -1,5 +1,6 @@
 import {
   TeamServerState,
+  teamServerHere,
   teamServersBody,
   teamUsageBlock,
   usageScopeControl,
@@ -579,8 +580,14 @@ function serverBody(state: PanelState): string {
   const snippet = snippetNote(state.snippetStatus);
   const stale = snippet.length === 0 ? '' : `<div class="stale">${escapeHtml(snippet)}</div>`;
 
+  // The other server this side talks to. Empty for somebody who has no Team server, so the section
+  // is exactly what it was for them — and beneath the coai-mcp lines for everybody else, because
+  // the question "what am I talking to" is one question with two answers.
+  const team = teamServerHere(state.teamServers ?? [], state.perSide);
+
   return `${installed}${stale}
 ${published}
+${team}
 <div class="hint">Changes here are saved for the server straight away; it reads them when your MCP client next starts it. The config block in the ⋯ menu is pasted once, when you first set it up.</div>
 <button class="link" data-command="checkForUpdate">Check again</button>`;
 }

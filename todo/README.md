@@ -8,6 +8,7 @@ Convention: `.claude/rules/shared/common/planning-docs.md`.
 
 | Plan | What it is for |
 |---|---|
+| [PLAN_team_server_side_and_url.md](PLAN_team_server_side_and_url.md) | The Server section shows the Team server address read-only and its version once connected, and a sign-in belongs to a SIDE: shared, the WSL window signs itself in with the same account; separated, each side can hold a different one. |
 | [PLAN_team_server_unprivileged.md](PLAN_team_server_unprivileged.md) | The deployed Team server stops running as root. A review executes three third-party agentic CLIs, and under root a compromised or prompt-driven one reaches the Entra config, every shared vendor account and the rest of a box that also runs CredsForDevs. The difficulty is not the unit file: the CLIs are symlinks into `/root` and every slot was signed in as root, so the accounts must be re-installed and re-signed. |
 | [PLAN_team_usage_by_person.md](PLAN_team_usage_by_person.md) | Who on the team is spending it: the per-PERSON breakdown behind the *Company* toggle a Team server's spending tab already has. Extracted from story 3.3 when epic 3 shipped — the server already answers `people[]` and the client renders only the vendor totals. |
 | [PLAN_family_ci_hardening.md](PLAN_family_ci_hardening.md) | Every dew_flow repository: formatting gates in CI, Dependabot, a PR template and semantic titles, release-please, and a branch protection that requires every check with no bypass for admins — the operator's hardening list of 2026-09-05, with the repository settings already applied. |

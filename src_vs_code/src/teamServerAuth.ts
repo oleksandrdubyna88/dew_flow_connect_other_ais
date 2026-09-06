@@ -25,10 +25,30 @@ import {
  * owner can read, and remembering who is signed in.</p>
  */
 
-/** What this machine remembers about one server, beside the token file. */
+/**
+ * The INTENT: which account this machine — or this side of it — should be signed in as.
+ *
+ * <p>An intention, never evidence. What a review can actually use is a token FILE, and the two
+ * disagree whenever a mint failed, the machine was offline, or another side holds another account's
+ * token. {@link TokenFact} is the other half, and the panel renders THAT.</p>
+ */
 export interface SignedIn {
   readonly email: string;
   readonly expiresUtc: string;
+}
+
+/**
+ * The FACT: whose token file THIS side is holding, and since when.
+ *
+ * <p>Always per side, in every mode, because a token file always is: `coaiDataDir()` is a path on
+ * the extension host that is running, which for a WSL window is inside the distro. A record that
+ * described "this machine" is what let the panel claim a session the shim had no token for.</p>
+ */
+export interface TokenFact {
+  readonly email: string;
+  readonly expiresUtc: string;
+  /** When it was minted — compared against a sign-out elsewhere, which is why it is a number. */
+  readonly mintedAtMs: number;
 }
 
 /** When to renew without asking anybody. Two days is enough slack for a weekend. */
@@ -36,11 +56,41 @@ export const RENEW_WITHIN_MS = 2 * 24 * 60 * 60 * 1000;
 
 const STATE_PREFIX = 'teamServer:';
 
-export function signedInKey(serverId: string): string {
-  return `${STATE_PREFIX}${serverId}`;
+/**
+ * Where the intent lives: shared by every side, or this side's own.
+ *
+ * <p>`side` empty is the SHARED record — the mode where one login serves every window of the
+ * machine, which is what *Separate settings for each side* being off means for a Team server too.</p>
+ */
+export function signedInKey(serverId: string, side = ''): string {
+  return side.length === 0 ? `${STATE_PREFIX}${serverId}` : `${STATE_PREFIX}${serverId}@${side}`;
 }
 
-/** Which Microsoft application this machine has approved for one server. */
+/** Where the fact lives. Side-scoped in EVERY mode — see {@link TokenFact}. */
+export function tokenFactKey(serverId: string, side: string): string {
+  return `${STATE_PREFIX}${serverId}#${side}`;
+}
+
+/**
+ * When this scope was last signed out, in ms.
+ *
+ * <p>Scoped with the intent, so a sign-out reaches exactly the sides that shared that login: with
+ * sharing on it reaches all of them, and with each side on its own account it reaches only the one
+ * that pressed the button. Without it, signing out on Windows left a live, usable token inside the
+ * WSL distro and a session still running on the server.</p>
+ */
+export function revokedKey(serverId: string, side = ''): string {
+  return `${signedInKey(serverId, side)}:revoked`;
+}
+
+/**
+ * Which Microsoft application this machine has approved for one server.
+ *
+ * <p>SHARED in every mode, deliberately: approving an application is a fact about the SERVER, not
+ * about a side, and one person approving it twice for the same server teaches them to click through
+ * the dialog. It is also what makes an unattended mint acceptable — a server that changes its
+ * advertised application cannot get a token minted for it silently on any side.</p>
+ */
 export function trustedKey(serverId: string): string {
   return `${STATE_PREFIX}${serverId}:trusted`;
 }
@@ -119,6 +169,20 @@ export interface StateStore {
 export interface AuthHost {
   readonly dataDir: string;
   readonly state: StateStore;
+  /**
+   * This side of the machine, as a key component — `sideKey(thisSide(...))`.
+   *
+   * <p>Always this side's own identity, whatever the settings say. The token file is per side in
+   * every mode, so the record that DESCRIBES it has to be too.</p>
+   */
+  readonly side?: string | undefined;
+  /**
+   * Whether each side keeps its own sign-in — the *Separate settings for each side* switch.
+   *
+   * <p>Off (the default), one intent is shared by every side and a side without a token mints its
+   * own from it, so Windows and WSL end up on one account without anybody signing in twice.</p>
+   */
+  readonly perSide?: boolean | undefined;
   getSession(scope: string, interactive: boolean): Promise<string | undefined>;
   confirmApplication(server: TeamServer, applicationId: string): Promise<boolean>;
   say(message: string): void;
@@ -147,11 +211,18 @@ export type SignInOutcome =
  * <p><b>A half-finished sign-in is undone.</b> If the session is created but the token cannot be
  * written, the session is deleted again — otherwise a live session exists on the server that this
  * machine has no way to use, and no way to end. Raised on the plan round.</p>
+ *
+ * <p><b>`expectedEmail` is the guard on a SILENT mint.</b> `getSession` is asked for an account, not
+ * for a particular one, so a machine signed in to both a personal and a work Microsoft account can
+ * hand back whichever is active on this side. Reconciling a shared intent therefore says whose
+ * session it is minting, and a session that comes back as somebody else is ended again before any
+ * token is written. Raised on the plan round.</p>
  */
 export async function signIn(
   server: TeamServer,
   host: AuthHost,
   interactive = true,
+  expectedEmail = '',
 ): Promise<SignInOutcome> {
   const config = await fetchClientConfig(server.url, host.fetchImpl);
   if (!config.ok) {
@@ -196,6 +267,11 @@ export async function signIn(
     return { ok: false, message: `${server.name}: ${refusal(session)}` };
   }
 
+  const wrongAccount = await refusedForWrongAccount(server, host, session.value, expectedEmail);
+  if (wrongAccount.length > 0) {
+    return { ok: false, message: wrongAccount };
+  }
+
   try {
     await writeToken(host.dataDir, server.url, session.value.token);
   } catch (e) {
@@ -213,9 +289,52 @@ export async function signIn(
   }
 
   const signedIn: SignedIn = { email: session.value.email, expiresUtc: session.value.expiresUtc };
-  await host.state.update(signedInKey(server.id), signedIn);
+  await host.state.update(intentKey(host, server.id), signedIn);
+  // Both halves, in the same breath: what this scope INTENDS, and what this side now actually holds.
+  // The panel reads the second one, so a mint that never happened cannot render as a session.
+  const fact: TokenFact = { ...signedIn, mintedAtMs: Date.now() };
+  await host.state.update(tokenFactKey(server.id, host.side ?? ''), fact);
 
   return { ok: true, signedIn };
+}
+
+/**
+ * Where THIS host reads and writes the intent: the shared record, or this side's own.
+ *
+ * <p>One place decides it, so that a sign-in, a sign-out and a repaint cannot disagree about which
+ * record they are talking about.</p>
+ */
+function intentKey(host: AuthHost, serverId: string): string {
+  return signedInKey(serverId, host.perSide === true ? (host.side ?? '') : '');
+}
+
+/** The sign-out stamp for the same scope the intent lives in. */
+function revocationKey(host: AuthHost, serverId: string): string {
+  return revokedKey(serverId, host.perSide === true ? (host.side ?? '') : '');
+}
+
+/**
+ * A session that came back as somebody else, ended again before it can be used.
+ *
+ * <p>Empty when there is nothing to check or the account matches — the interactive flow passes no
+ * expectation, because there the person chose the account themselves and choosing a different one is
+ * the point.</p>
+ */
+async function refusedForWrongAccount(
+  server: TeamServer,
+  host: AuthHost,
+  session: { readonly token: string; readonly email: string },
+  expectedEmail: string,
+): Promise<string> {
+  if (expectedEmail.length === 0 || session.email === expectedEmail) {
+    return '';
+  }
+
+  await deleteSession(server.url, session.token, host.fetchImpl);
+
+  return `${server.name}: the Microsoft account active on this side is ${session.email}, not `
+    + `${expectedEmail} — nothing was signed in here. Sign in explicitly to use ${session.email} on `
+    + 'this side, or separate the sides in the panel to keep an account per side.';
 }
 
 /**
@@ -257,6 +376,12 @@ function refusal(result: ServerResult<unknown>): string {
  * <p>Best effort against the SERVER — one that is down must not be able to keep somebody signed in
  * locally for ever. Not best effort against the DISK: a token left behind is a usable credential, so
  * a failure to delete it is said out loud with the path in it.</p>
+ *
+ * <p><b>It reaches the other sides too.</b> Only this side's token file can be deleted from here —
+ * the others are on filesystems this extension host cannot write. So the moment is STAMPED, and each
+ * of them signs itself out on its next refresh (see {@link sessionAction}). Without that, signing
+ * out on Windows left a usable token inside the WSL distro and a live session on the server. Raised
+ * on the plan round.</p>
  */
 export async function signOut(
   server: TeamServer,
@@ -268,7 +393,9 @@ export async function signOut(
   // so, because a session left live on the server is a fact the person should hear even though the
   // remedy is the server's expiry rather than anything they can press.
   const revoked = token.length === 0 || (await deleteSession(server.url, token, host.fetchImpl)).ok;
-  await host.state.update(signedInKey(server.id), undefined);
+  await host.state.update(intentKey(host, server.id), undefined);
+  await host.state.update(revocationKey(host, server.id), Date.now());
+  await host.state.update(tokenFactKey(server.id, host.side ?? ''), undefined);
 
   try {
     await deleteToken(host.dataDir, server.url);
@@ -292,26 +419,108 @@ export async function signOut(
     };
 }
 
+/** What this side should do about its session, given the intent and what it actually holds. */
+export type SessionAction = 'mint' | 'signOut' | 'nothing';
+
 /**
- * Renew quietly when a session is nearly out, without ever showing a prompt.
+ * The whole rule, as one pure table.
  *
- * <p><b>`clearSessionPreference` must be off here.</b> It forces the provider to ignore the cached
- * account and ask, which `createIfNone: false` forbids — so the pair can only ever return nothing,
- * and the extension would conclude the identity session was gone and sign the person out. Weekly.
- * That is exactly what silent renewal exists to prevent, and the plan round caught it before it was
- * written.</p>
+ * <p>Pure so it is TESTED rather than trusted: every state below is one a person can reach by
+ * opening a second window, and the version of this that lived scattered across the provider is what
+ * let the panel report a session the shim had no token for.</p>
+ *
+ * <ul>
+ *   <li>no intent, a fact minted BEFORE a sign-out → sign this side out too;</li>
+ *   <li>an intent, no fact → mint (this is a WSL window opened after a Windows sign-in);</li>
+ *   <li>an intent, a fact for a DIFFERENT account → mint (the sides were just merged);</li>
+ *   <li>an intent, a fact nearly expired → mint, which is the old silent renewal;</li>
+ *   <li>anything else → nothing.</li>
+ * </ul>
  */
-export async function renewIfDue(
+export function sessionAction(
+  intent: SignedIn | undefined,
+  fact: TokenFact | undefined,
+  revokedAtMs: number,
+  nowMs: number,
+): SessionAction {
+  if (intent === undefined) {
+    return fact !== undefined && revokedAtMs > fact.mintedAtMs ? 'signOut' : 'nothing';
+  }
+
+  return mintDue(intent, fact, nowMs) ? 'mint' : 'nothing';
+}
+
+function mintDue(intent: SignedIn, fact: TokenFact | undefined, nowMs: number): boolean {
+  return fact === undefined || fact.email !== intent.email || needsRenewal(fact.expiresUtc, nowMs);
+}
+
+/** What a reconciliation did, for the row that has to explain itself. */
+export interface Reconciled {
+  /** Why this side is not usable, in a sentence, or empty. */
+  readonly problem: string;
+  /** Whether anything on disk or in the records changed — the panel repaints on true. */
+  readonly changed: boolean;
+}
+
+/**
+ * Bring this side's session into line with what it is supposed to be, without ever asking anybody.
+ *
+ * <p>Replaces the old `renewIfDue`, which asked one question — is the session nearly out — of a
+ * record that described the machine rather than the side. The mint here is the same silent
+ * `signIn(…, interactive: false)`: it shows no prompt, refuses unless the person has already
+ * approved this server's Microsoft application, and now also refuses a session that comes back as a
+ * different account than the intent names.</p>
+ *
+ * <p><b>`clearSessionPreference` must stay off in that path.</b> It forces the provider to ignore
+ * the cached account and ask, which `createIfNone: false` forbids — so the pair can only ever return
+ * nothing, and the extension would conclude the identity session was gone and sign the person out.
+ * Weekly. The plan round caught that before it was written.</p>
+ */
+export async function reconcile(
   server: TeamServer,
   host: AuthHost,
   nowMs: number = Date.now(),
-): Promise<SignInOutcome | undefined> {
-  const current = host.state.get<SignedIn>(signedInKey(server.id));
-  if (current === undefined || !needsRenewal(current.expiresUtc, nowMs)) {
+): Promise<Reconciled> {
+  const intent = host.state.get<SignedIn>(intentKey(host, server.id));
+  const fact = await factHere(server, host);
+  const revokedAtMs = host.state.get<number>(revocationKey(host, server.id)) ?? 0;
+  const action = sessionAction(intent, fact, revokedAtMs, nowMs);
+
+  if (action === 'mint' && intent !== undefined) {
+    const outcome = await signIn(server, host, false, intent.email);
+
+    return outcome.ok ? { problem: '', changed: true } : { problem: outcome.message, changed: false };
+  }
+
+  if (action === 'signOut') {
+    const gone = await signOut(server, host, await readToken(host.dataDir, server.url));
+
+    return { problem: gone.ok ? '' : gone.message, changed: true };
+  }
+
+  return { problem: '', changed: false };
+}
+
+/**
+ * What this side holds, with the FILE as the arbiter.
+ *
+ * <p>A record describing a token somebody deleted by hand is discarded here rather than believed —
+ * otherwise the panel keeps offering a session that cannot be used, and nothing ever re-mints it.</p>
+ */
+async function factHere(server: TeamServer, host: AuthHost): Promise<TokenFact | undefined> {
+  const key = tokenFactKey(server.id, host.side ?? '');
+  const recorded = host.state.get<TokenFact>(key);
+  if (recorded === undefined) {
     return undefined;
   }
 
-  return signIn(server, host, false);
+  if ((await readToken(host.dataDir, server.url)).length > 0) {
+    return recorded;
+  }
+
+  await host.state.update(key, undefined);
+
+  return undefined;
 }
 
 /** What one server's catalog says right now, or why it could not be asked. */
