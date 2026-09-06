@@ -1,5 +1,37 @@
 # Changelog
 
+## Extension 0.31.1 — 2026-09-06
+
+**Team servers.** A company buys ONE subscription per vendor, installs the CLIs on ONE machine, and
+everybody reviews through it with their work account. Nobody needs codex, claude or agy installed,
+and nobody needs their own subscription.
+
+The panel gains a **Team servers** section: add a server by name and address, sign in with Microsoft,
+and it shows the account you signed in as, the server's version, and — per vendor — how many accounts
+are free. That last line distinguishes the two states that need different people: *all signed out*
+is the operator's job, *all rate-limited* comes back by itself.
+
+**＋ Add a reviewer** then offers each signed-in server, and picking one lists the vendors that server
+actually has, with their free accounts beside them. The models offered are the ones that server
+allows — discovered from it, never a list shipped in this extension — and a model it stops allowing
+is kept and marked rather than silently swapped. A Team-server row asks for no endpoint, no CLI path
+and no price: all three are decided on the server.
+
+Your spending page gains a block per server, beside this machine's own totals rather than added to
+them — the two ledgers are separate and a combined figure would be a number neither of them holds.
+An admin additionally sees the whole company's.
+
+**Where your code goes is said on every row.** Being the company's own server makes it no less true
+that the plan, the diffs and the file contents around them leave this machine, so the same disclosure
+a remote local engine gets is shown here too.
+
+The sign-in is your work Microsoft account, restricted to the domain the server allows; an account
+outside it is told that, rather than told to try again. The session renews itself before it expires,
+without asking. The token is kept in a file only you can read — never in `settings.json`, never in a
+command line, never in a log.
+
+*Requires a Team server: `coai-server`, deployed by whoever runs your company's subscriptions.*
+
 ## Server 0.18.4 — 2026-09-06
 
 **Every `review_code` in every repository was failing.** It threw
