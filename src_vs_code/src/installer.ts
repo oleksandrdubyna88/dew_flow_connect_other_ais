@@ -290,15 +290,27 @@ async function verify(bytes: Uint8Array, sumUrl: string, asset: string): Promise
 async function placeCompanions(from: vscode.Uri, storage: vscode.Uri, rid: CoaiRid): Promise<void> {
   const entries = (await vscode.workspace.fs.readDirectory(from))
     .map(([name, kind]) => [name, kind === vscode.FileType.File] as const);
-  const placed = await copyCompanions(entries, rid, (name) =>
+  const { placed, failed } = await copyCompanions(entries, rid, (name) =>
     vscode.workspace.fs.copy(
       vscode.Uri.joinPath(from, name), vscode.Uri.joinPath(storage, name), { overwrite: true }));
+
   const missing = requiredCompanionMissing(entries, placed, rid);
   if (missing.length > 0) {
+    const why = failed.find((one) => one.name === missing)?.why ?? 'the archive did not carry it';
+
     throw new Error(
-      `${missing} could not be placed beside the server. It is what the server opens its database `
-      + 'through, and the release before this one shipped without it — so the install stops here '
-      + 'rather than leaving a server that silently records nothing. Close a running server and retry.');
+      `${missing} could not be placed beside the server: ${why}. It is what the server opens its `
+      + 'database through, and the release before this one shipped without it — so the install stops '
+      + 'here rather than leaving a server that silently records nothing. Quit whatever is running '
+      + 'the server and press Update again.');
+  }
+
+  // The rest stay best-effort, and are NAMED. A companion nobody hears about is a feature that
+  // quietly is not there, which is the shape of the defect this whole change exists to undo.
+  if (failed.length > 0) {
+    void vscode.window.showWarningMessage(
+      `coai-mcp is installed, but ${failed.map((one) => one.name).join(', ')} could not be copied `
+      + `beside it (${failed[0]!.why}). The server runs; anything that needed those files will not.`);
   }
 }
 

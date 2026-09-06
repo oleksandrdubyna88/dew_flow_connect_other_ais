@@ -190,8 +190,14 @@ jobs:
           # At the archive's TOP LEVEL, beside the binary — the only place the OS loader looks. A
           # library nested in a subdirectory would satisfy a bare name match and still ship a server
           # that cannot open its database.
-          if ! printf '%s' "$LISTING" | grep -Eq "(^|[/\])$NAME[/\][^/\]*e_sqlite3"; then
-            echo "the archive does not contain the SQLite library — the shipped server could not open its own database"
+          #
+          # Separators are normalised first, because the two listings do not agree: `tar tzf` prints
+          # `NAME/lib...` at the start of a line, while `7z l` prints a table whose last column is
+          # `NAME\e_sqlite3.dll` AFTER whitespace. The first version of this check allowed only a
+          # line start or a separator before NAME, so it passed on tar and failed on both windows
+          # RIDs - a release blocked at its last step. The review gate raised it; a test holds it now.
+          if ! printf '%s' "$LISTING" | tr '\134' '/' | grep -Eq "(^|[[:space:]/])$NAME/[^/]*e_sqlite3"; then
+            echo "the archive does not carry the SQLite library beside the binary — the shipped server could not open its own database"
             printf '%s' "$LISTING"
             exit 1
           fi

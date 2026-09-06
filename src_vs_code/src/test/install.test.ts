@@ -152,7 +152,7 @@ test('the release carries the native library the binary opens its database throu
     'the smoke makes the published binary actually open one — the check that would have caught it');
   assert.match(
     workflow,
-    /the archive does not contain the SQLite library/,
+    /the archive does not carry the SQLite library beside the binary/,
     'and the ARCHIVE is inspected after it is made: the publish output proves the library was built, '
     + 'not that the file being shipped carries it');
 });
@@ -301,35 +301,44 @@ test('an archive of nothing but the binary leaves nothing behind to copy', () =>
   assert.deepEqual(companionsOf([['coai-mcp.exe', true]], 'win-arm64'), []);
 });
 
-test('a companion that cannot be copied does not stop the ones after it', () => {
+test('a companion that cannot be copied does not stop the ones after it, and is named', () => {
   // The policy, and the only part of this that no manual check performs: the binary is already in
   // place by the time companions are copied, so a failure here degrades a feature rather than
-  // stopping the server from starting.
+  // stopping the server from starting. The gate was right that swallowing it silently costs the
+  // caller its best sentence - the reason is usually "another process holds this file open".
   const tried: string[] = [];
   const copy = (name: string) => {
     tried.push(name);
 
-    return name === 'libe_sqlite3.so' ? Promise.reject(new Error('EACCES')) : Promise.resolve();
+    return name === 'libe_sqlite3.so' ? Promise.reject(new Error('EBUSY: resource busy')) : Promise.resolve();
   };
 
   return copyCompanions(
-    [['coai-mcp', true], ['libe_sqlite3.so', true], ['README.md', true]] as const, 'linux-x64', copy)
-    .then((placed) => {
-      assert.deepEqual(tried, ['libe_sqlite3.so', 'README.md'], 'the failure did not end the loop');
-      assert.deepEqual(placed, ['README.md'], 'and only what landed is reported as placed');
+    [['coai-mcp', true], ['libe_sqlite3.so', true], ['README.md', true]] as const,
+    'linux-x64', copy, noPause)
+    .then(({ placed, failed }) => {
+      assert.deepEqual(tried, ['libe_sqlite3.so', 'libe_sqlite3.so', 'README.md'], 'one retry, then on');
+      assert.deepEqual(placed, ['README.md'], 'only what landed is reported as placed');
+      assert.deepEqual(failed, [{ name: 'libe_sqlite3.so', why: 'EBUSY: resource busy' }]);
     });
 });
 
-test('what the archive holds is what gets copied, in its order', async () => {
-  const copied: string[] = [];
-  const placed = await copyCompanions(
-    [['e_sqlite3.dll', true], ['coai-mcp.exe', true], ['runtimes', false]] as const,
-    'win-x64',
-    (name) => { copied.push(name); return Promise.resolve(); });
+test('a copy that fails once and then works is not a failure', async () => {
+  // The common case is transient by nature: a server that is exiting still holds its files for a
+  // moment. Retrying once turns the usual failure into a successful install.
+  let attempts = 0;
+  const { placed, failed } = await copyCompanions(
+    [['coai-mcp.exe', true], ['e_sqlite3.dll', true]] as const, 'win-x64',
+    () => (++attempts === 1 ? Promise.reject(new Error('EBUSY')) : Promise.resolve()),
+    noPause);
 
-  assert.deepEqual(copied, ['e_sqlite3.dll']);
+  assert.equal(attempts, 2);
   assert.deepEqual(placed, ['e_sqlite3.dll']);
+  assert.deepEqual(failed, []);
 });
+
+/** The retry's pause, taken out of the test's way. */
+const noPause = () => Promise.resolve();
 
 test('a SQLite library the archive brought and the installer could not place fails the install', () => {
   // The gate was right about this one. Best-effort is correct for a companion in general, and wrong
@@ -354,4 +363,35 @@ test('an archive that brought no SQLite library asks nothing of the installer', 
   // The server would not work, but that is the release job's failure and it is checked there; the
   // installer must not invent a requirement the archive never carried.
   assert.equal(requiredCompanionMissing([['coai-mcp', true]] as const, [], 'osx-arm64'), '');
+});
+
+test('the archive check accepts what tar and 7z actually print, and refuses a nested library', () => {
+  // The pattern is written once, in bash, and only runs while a release is being cut - so its first
+  // version shipped a check that passed on `tar tzf` and failed on BOTH windows RIDs, because 7z
+  // prints a TABLE whose last column is `NAME\\e_sqlite3.dll` after whitespace while tar prints
+  // `NAME/lib...` at the start of a line. The review gate caught it; this test is what holds it,
+  // by extracting the real pattern from the workflow and running it against both listings.
+  const workflow = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', '.github', 'workflows', 'release.yml'),
+    'utf8',
+  );
+  const written = /grep -Eq "([^"]*e_sqlite3)"/.exec(workflow);
+  assert.ok(written, 'the archive check is not in the workflow at all');
+  const name = 'coai-mcp-0.18.2-win-x64';
+  // POSIX ERE to JavaScript: the one class this pattern uses, and $NAME as bash would expand it.
+  const pattern = new RegExp(written[1]!.replace('[[:space:]/]', String.raw`[\s/]`).replace('$NAME', name), 'm');
+  const normalise = (listing: string) => listing.split('\\').join('/');
+
+  assert.ok(
+    pattern.test(normalise(`   Date      Time    Attr         Size   Compressed  Name
+2026-09-06 09:00:00 ....A       1234567      500000  ${name}\\e_sqlite3.dll`)),
+    'a 7z listing of an archive that DOES carry the library must pass - it did not, and that failed every windows release');
+  assert.ok(
+    pattern.test(normalise(`${name}/
+${name}/e_sqlite3.dll
+${name}/coai-mcp.exe`)),
+    'and so must a tar listing');
+  assert.ok(
+    !pattern.test(normalise(`${name}/native/e_sqlite3.dll`)),
+    'a library in a subdirectory is not beside the binary, which is the only place the loader looks');
 });
