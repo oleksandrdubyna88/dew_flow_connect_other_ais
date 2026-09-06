@@ -10,8 +10,8 @@ import { showHelp } from './helpPanel';
 import { parseSession, SessionFile } from './rounds';
 import { blindSpotsHtml, rowsFrom } from './roundsLog';
 import { RoundsLogPanel } from './roundsLogPanel';
-import { envBlock, settingsFrom } from './settingsShape';
 import { ServerSettingsSync } from './serverSettingsSync';
+import { settingsFrom } from './settingsShape';
 import { vendorsFrom } from './vendors';
 
 /**
@@ -165,10 +165,6 @@ async function answerQuestion(watcher: EscalationWatcher): Promise<void> {
   }
 }
 
-function settings(): ReturnType<typeof settingsFrom> {
-  const config = vscode.workspace.getConfiguration('coai');
-  return settingsFrom((section) => config.get(section));
-}
 
 /** One install at a time: the panel button and the ⋯ menu are two doors to the same work. */
 const installing = new SingleFlight<void>();
@@ -183,7 +179,7 @@ async function install(context: vscode.ExtensionContext): Promise<void> {
       { location: vscode.ProgressLocation.Notification, title: 'Installing coai-mcp…' },
       () => installLatest(context.globalStorageUri, context.globalState),
     );
-    await vscode.env.clipboard.writeText(mcpServerBlock(target.fsPath, envBlock(settings())));
+    await vscode.env.clipboard.writeText(mcpServerBlock(target.fsPath));
     const targets = clientTargetsLine(CLIENT_TARGETS);
     void vscode.window.showInformationMessage(`${installedMessage(target.fsPath)} Paste it into: ${targets}`);
   } catch (error) {
@@ -206,7 +202,7 @@ async function copyConfigBlock(context: vscode.ExtensionContext): Promise<void> 
   // that did not exist and called it installed. `stat` answers it; asking for the full status would
   // launch a `--version` process to learn something the stat already knew.
   const installed = await serverExists(context.globalStorageUri);
-  await vscode.env.clipboard.writeText(mcpServerBlock(path.fsPath, envBlock(settings())));
+  await vscode.env.clipboard.writeText(mcpServerBlock(path.fsPath));
   void vscode.window.showInformationMessage(
     installed
       ? 'The MCP config block is on your clipboard — paste it into your client and restart it.'
