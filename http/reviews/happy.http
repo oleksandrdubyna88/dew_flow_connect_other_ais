@@ -1,0 +1,150 @@
+# Submit, watch, cancel — for real, and NOTHING reaches a vendor.
+#
+# The suite's stack has one vendor in the allowlist and no account signed in for it. So the request
+# is accepted, the job is queued, and the runner refuses to start it because there is nobody to run
+# it as. 202, 200 and 204 are real answers from real state, at zero subscription cost.
+
+# @name a_review_is_accepted_and_queued
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "vendor": "codex",
+  "model": "gpt-5.6-luna",
+  "prompt": "review this",
+  "role": "Architecture",
+  "timeoutSeconds": 60
+}
+
+?? status == 202
+
+{{
+  const assert = require('node:assert');
+  test('it comes back with an id and a queue position', () => {
+    assert.match(response.parsedBody.id, /^\d+-[0-9a-f]{32}$/);
+    assert.ok(Number.isInteger(response.parsedBody.position));
+  });
+  exports.reviewId = response.parsedBody.id;
+}}
+
+###
+
+# @name a_queued_review_can_be_polled
+GET {{baseUrl}}/api/reviews/{{reviewId}}
+Authorization: Bearer {{token}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('every field of the status is present and typed, not null', () => {
+    assert.strictEqual(response.parsedBody.status, 'queued');
+    assert.strictEqual(typeof response.parsedBody.answer, 'string');
+    assert.strictEqual(typeof response.parsedBody.failure, 'string');
+    assert.strictEqual(typeof response.parsedBody.reason, 'string');
+    assert.ok(Number.isInteger(response.parsedBody.tokensIn));
+  });
+}}
+
+###
+
+# A poll of an unfinished job with a short wait returns when the wait runs out, not never.
+
+# @name polling_with_a_wait_returns_within_its_budget
+GET {{baseUrl}}/api/reviews/{{reviewId}}?wait=2
+Authorization: Bearer {{token}}
+
+?? status == 200
+
+###
+
+# @name another_person_may_not_read_it
+GET {{baseUrl}}/api/reviews/{{reviewId}}
+Authorization: Bearer {{adminToken}}
+
+?? status == 403
+
+{{
+  const assert = require('node:assert');
+  test('the refusal says whose it is rather than pretending it does not exist', () => {
+    assert.match(response.parsedBody.error, /somebody else/i);
+  });
+}}
+
+###
+
+# @name a_review_can_be_cancelled
+DELETE {{baseUrl}}/api/reviews/{{reviewId}}
+Authorization: Bearer {{token}}
+
+?? status == 204
+
+###
+
+# The proof the cancel did something, and that a cancelled job says WHY rather than just stopping.
+
+# @name a_cancelled_review_reports_itself_as_cancelled
+GET {{baseUrl}}/api/reviews/{{reviewId}}
+Authorization: Bearer {{token}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('it is failed, with cancelled as the reason', () => {
+    assert.strictEqual(response.parsedBody.status, 'failed');
+    assert.strictEqual(response.parsedBody.failure, 'cancelled');
+  });
+}}
+
+###
+
+# @name cancelling_a_second_time_is_not_found
+DELETE {{baseUrl}}/api/reviews/{{reviewId}}
+Authorization: Bearer {{token}}
+
+?? status == 404
+
+###
+
+# @name a_model_the_allowlist_does_not_have_is_refused_naming_what_it_does
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "vendor": "codex", "model": "gpt-9-expensive", "prompt": "p" }
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('both the rejected name and the allowed one are in the message', () => {
+    assert.match(response.parsedBody.error, /gpt-9-expensive/);
+    assert.match(response.parsedBody.error, /gpt-5\.6-luna/);
+  });
+}}
+
+###
+
+# @name a_vendor_this_server_does_not_have_is_refused_naming_the_ones_it_does
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "vendor": "nope", "model": "gpt-5.6-luna", "prompt": "p" }
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('it lists what is available', () => {
+    assert.match(response.parsedBody.error, /codex/);
+  });
+}}
+
+###
+
+# @uncovered `done` and `failed(non_zero_exit | rate_limited | timed_out)` outcomes — they need a
+#            signed-in paid account and real vendor spend. Mocking the vendor would prove the mock
+#            works. The outcome mapping is covered by JobRunnerTests against a fake launcher.

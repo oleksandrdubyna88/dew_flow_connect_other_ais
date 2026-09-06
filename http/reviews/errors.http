@@ -1,0 +1,130 @@
+# The refusals a caller meets before anything is queued. These are branches in the handler and are
+# exactly the ones nobody exercises by hand.
+
+# @name submitting_without_a_token_is_unauthorized
+POST {{baseUrl}}/api/reviews
+Content-Type: application/json
+
+{ "vendor": "codex", "model": "m", "prompt": "p" }
+
+?? status == 401
+
+###
+
+# @name submitting_from_another_domain_is_forbidden
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{outsiderToken}}
+Content-Type: application/json
+
+{ "vendor": "codex", "model": "m", "prompt": "p" }
+
+?? status == 403
+
+###
+
+# @name a_review_with_no_prompt_is_refused
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "vendor": "codex", "model": "m", "prompt": "" }
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('it says a prompt is what is missing', () => {
+    assert.match(response.parsedBody.error, /prompt/i);
+  });
+}}
+
+###
+
+# Out of range is REFUSED naming the range, not silently clamped: somebody who asked for five seconds
+# and got thirty would draw the wrong conclusion from the result.
+
+# @name a_timeout_outside_the_allowed_range_is_refused_naming_it
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "vendor": "codex", "model": "m", "prompt": "p", "timeoutSeconds": 5 }
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('the legal range is in the message', () => {
+    assert.match(response.parsedBody.error, /between 30 and 1800/);
+  });
+}}
+
+###
+
+# An unknown role would otherwise quietly become the first one, and a review that ran under
+# instructions nobody asked for looks like an ordinary one.
+
+# @name an_unknown_role_is_refused_naming_the_legal_ones
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "vendor": "codex", "model": "m", "prompt": "p", "role": "Astrologer" }
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('the roles that do exist are listed', () => {
+    assert.match(response.parsedBody.error, /Architecture/);
+  });
+}}
+
+###
+
+# `lost` is the answer that tells an automated client its review died mid-flight and it should
+# resubmit, so an id nobody ever issued must NOT produce it.
+
+# @name a_made_up_id_is_unknown_rather_than_lost
+GET {{baseUrl}}/api/reviews/123-not-a-real-id
+Authorization: Bearer {{token}}
+
+?? status == 404
+
+{{
+  const assert = require('node:assert');
+  test('it says unknown, not that the server restarted', () => {
+    assert.match(response.parsedBody.error, /no review with that id/i);
+  });
+}}
+
+###
+
+# @name an_id_from_an_earlier_run_is_reported_as_lost
+GET {{baseUrl}}/api/reviews/1-0f0e0d0c0b0a09080706050403020100
+Authorization: Bearer {{token}}
+
+?? status == 404
+
+{{
+  const assert = require('node:assert');
+  test('an epoch older than this run means the server restarted underneath it', () => {
+    assert.match(response.parsedBody.error, /restarted/i);
+  });
+}}
+
+###
+
+# @name cancelling_an_unknown_review_is_not_found
+DELETE {{baseUrl}}/api/reviews/123-not-a-real-id
+Authorization: Bearer {{token}}
+
+?? status == 404
+
+###
+
+# @uncovered 403 GET /api/reviews/{id} (somebody else's review) — it needs a job that exists, which
+#            needs a configured vendor. Covered over real HTTP by
+#            ReviewEndpointTests.AnotherPersonsReviewIsForbiddenRatherThanHidden.
+# @uncovered 429 POST /api/reviews — needs twenty-one queued reviews and a vendor that will not
+#            drain. Machinery, not a request.

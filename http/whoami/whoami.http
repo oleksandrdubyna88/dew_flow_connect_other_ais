@@ -1,0 +1,58 @@
+# Who the server thinks you are, and whether you are an admin.
+
+# @name whoami_returns_the_caller_and_their_admin_flag
+# @prod
+GET {{baseUrl}}/api/whoami
+Authorization: Bearer {{token}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('the email is the caller and isAdmin is a boolean, not absent', () => {
+    assert.strictEqual(response.parsedBody.email, 'dev@example.com');
+    assert.strictEqual(response.parsedBody.isAdmin, false);
+  });
+}}
+
+###
+
+# @name whoami_marks_an_admin_as_one
+# @prod
+GET {{baseUrl}}/api/whoami
+Authorization: Bearer {{adminToken}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('an email in Coai:Admins comes back as an admin', () => {
+    assert.strictEqual(response.parsedBody.isAdmin, true);
+  });
+}}
+
+###
+
+# @name whoami_without_a_token_is_unauthorized
+GET {{baseUrl}}/api/whoami
+
+?? status == 401
+
+###
+
+# A correctly SIGNED token from outside the company. This is the one that keeps another company off
+# these subscriptions, and it is a different failure from a missing token.
+
+# @name whoami_from_another_domain_is_forbidden
+GET {{baseUrl}}/api/whoami
+Authorization: Bearer {{outsiderToken}}
+
+?? status == 403
+
+###
+
+# @name whoami_with_a_rubbish_token_is_unauthorized
+GET {{baseUrl}}/api/whoami
+Authorization: Bearer not.a.token
+
+?? status == 401

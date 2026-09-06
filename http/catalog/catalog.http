@@ -1,0 +1,51 @@
+# What this server can run: the operator's allowlist, each CLI's presence, and the accounts.
+
+# @name catalog_lists_vendors_and_says_what_is_wrong
+# @prod
+GET {{baseUrl}}/api/catalog
+Authorization: Bearer {{token}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('vendors is a list and error is a string — never null for either', () => {
+    assert.ok(Array.isArray(response.parsedBody.vendors));
+    assert.strictEqual(typeof response.parsedBody.error, 'string');
+    assert.strictEqual(typeof response.parsedBody.serverVersion, 'string');
+  });
+}}
+
+###
+
+# The suite's stack HAS a vendor (the reviews suite needs one), so this asserts the loaded shape
+# rather than the empty-install message. The empty case is covered by
+# CatalogEndpointTests.AnEmptyCatalogSaysWhichFileToCreate, which owns its own data directory.
+
+# @name a_configured_vendor_appears_with_its_models_and_slot_counts
+GET {{baseUrl}}/api/catalog
+Authorization: Bearer {{token}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('the vendor is there with its allowlist and its accounts counted', () => {
+    const codex = response.parsedBody.vendors.find((v) => v.id === 'codex');
+    assert.ok(codex, 'the configured vendor is missing from the catalog');
+    assert.deepStrictEqual(codex.models, ['gpt-5.6-luna']);
+    assert.strictEqual(codex.slots.total, 1);
+  });
+  test('nothing is signed in, and the counts say so rather than claiming ready', () => {
+    const codex = response.parsedBody.vendors.find((v) => v.id === 'codex');
+    assert.strictEqual(codex.slots.ready, 0);
+    assert.strictEqual(codex.slots.needsSignIn, 1);
+  });
+  test('health speaks only about the BINARY, and says so as a boolean', () => {
+    const codex = response.parsedBody.vendors.find((v) => v.id === 'codex');
+    assert.strictEqual(typeof codex.health.cliFound, 'boolean');
+  });
+  test('a loaded catalog reports no error', () => {
+    assert.strictEqual(response.parsedBody.error, '');
+  });
+}}

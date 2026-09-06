@@ -6,8 +6,9 @@
 >
 > Plan: [../todo/PLAN_team_server.md](../todo/PLAN_team_server.md). **Stories 2.1 and 2.2 are what
 > exists today**: the host, its authentication and its sessions (2.1); the vendor catalog, the
-> account slots and `login` (2.2); the job queue, the runner and the review endpoints (2.3).
-> Usage aggregation and the admin views are 2.4.
+> account slots and `login` (2.2); the job queue, the runner and the review endpoints (2.3); and what
+> the team is spending, with the admin view (2.4). **Epic 2 is complete.** The panel that drives it
+> is epic 3; the container and the release are epic 4.
 
 ## Purpose
 
@@ -54,7 +55,7 @@ sequenceDiagram
 | `POST /api/reviews` | any | `202 {id, position}` · `400` naming the allowed vendors/models · `429 + Retry-After` over the queued cap |
 | `GET /api/reviews/{id}?wait=<=25` | owner | the status, and the vendor's RAW answer · `403` somebody else's · `404` unknown or lost |
 | `DELETE /api/reviews/{id}` | owner | `204` |
-| `GET /api/usage` | — | **404 until story 2.4** |
+| `GET /api/usage?window=&scope=` | any / **admins for `company`** | per-vendor totals for the caller, or for everyone plus per person · `400` unknown window · `403` company as a non-admin |
 
 ## Core entities
 
@@ -265,13 +266,90 @@ sequenceDiagram
   than `src_server` growing its own JSONL writer — a second writer is how two spending records come
   to disagree.
 
+### Story 2.4 — the money, and the contract suite
+
+- **The ledger IS the source.** `usage.jsonl` already exists, is append-only, and a scan of a year is
+  milliseconds at this deployment's ceiling. A table would mean a schema, a migration and two places
+  that disagree about what a review cost. Aggregation is pure functions over parsed lines.
+- **An unknown price is never zero.** Most lines have no price at all — these are subscription CLIs,
+  not metered APIs — so summing null as zero would render "we do not know" as "this was free", the
+  most expensive possible lie for a page about money. A mixed group reports `costIsFloor` AND
+  `unpricedRuns`, because a bare flag cannot tell "one of forty is missing" from "thirty-nine are".
+- **Failed runs are counted, never filtered.** A review that burned ninety seconds and answered
+  nothing spent the same as one that answered.
+- **Windows are half-open, `[from, to)`.** With both ends inclusive a run on the boundary belongs to
+  two adjacent windows; with both exclusive it belongs to neither. The upper bound sits a second past
+  now so a review that finished during the request is in `today`.
+- **`week` is the last seven days, not the ISO week** — a calendar week shows a near-empty box every
+  Monday morning, which reads as "we spent almost nothing" exactly when somebody looks. The cost is
+  that the name is approximate, so the answer always carries the range it used.
+- **Emails match case-insensitively.** An identity provider may return `Alice@Example.com` where the
+  ledger holds `alice@example.com`; matching exactly shows that person an empty page and splits them
+  into two rows in the company view.
+- **`unreadableLines` is reported to an ADMIN only.** One torn line from months ago would otherwise
+  sit on every person's own page for ever, telling them their record is damaged about something they
+  cannot see, fix, or have caused.
+- **The reader shares the file with the writer.** A read's default share mode forbids writers, so a
+  review finishing while somebody looked at the usage page would fail to append its line and the
+  spending record would silently lose a row.
+
+### The `http/` suite — and the bug only it could find
+
+`http/` covers all ten routes; `node http/run-contracts.mjs` builds the server, starts it on a free
+port with a throwaway data directory, mints three personas through the `Local` scheme, runs httpyac
+and tears everything down. The verdict is the exit code.
+
+**It found a defect on its first cold start that 160 in-process tests could not see.** Request BODY
+binding goes through the app's default `JsonSerializerOptions`, and with
+`JsonSerializerIsReflectionEnabledByDefault=false` those have no resolver — so building the router
+threw and the RELEASED binary answered 500 to everything, `/api/health` included. The tests never saw
+it because the test host does not set that MSBuild property, so reflection is on there and binding
+quietly works. `ConfigureHttpJsonOptions` now puts `ServerJsonContext` in the resolver chain.
+
+That is the whole argument for this tier, and it arrived on the day it was written.
+
+**The suite exercises the review flow for real** — 202, 200, 204 and the 403 for somebody else's —
+because the stack has a vendor in the allowlist and no account signed in for it. The allowlist
+accepts, the job queues, and the runner refuses to start it because there is nobody to run it as.
+Without that fixture every submission was a 400 and those statuses were never exercised at all, so a
+regression in queue acceptance or cancellation could ship with the suite green.
+
+**The runner's own failures are classified as carefully as the API's.** Exit **1** is a contract
+regression and nothing else; **3** is the machine (the build failed, the server never answered, the
+harness was killed); **4** is a misconfigured suite. Reporting a missing httpyac as exit 1 would tell
+whoever reads it that the API is broken when the harness is. A server that comes up and answers 500
+to `/api/health` is reported as a CONTRACT failure at once, rather than being polled for forty
+seconds and called an environment problem — which is what happened the first time, for the very
+defect above.
+
+**Three things about the runner cost an afternoon and are written down where they happened.** The
+server writes to a FILE, never to a pipe: `spawnSync` blocks Node's event loop, so nothing drains a
+piped stdout — the server fills it, blocks writing, stops answering, and the run wedges with every
+assertion already passed. httpyac is a pinned local devDependency spawned as plain Node, because npx
+on Windows puts a `cmd.exe` in between that does not exit. And the stack runs with a PATH holding no
+vendor CLIs, so the catalog probe cannot start a `codex` that waits — the suite asserts `cliFound` is
+a BOOLEAN, not that it is true, which is the same test on every machine. The whole run takes about
+six seconds.
+
+**An unknown `scope` is refused, not defaulted.** `?scope=compnay` used to answer 200 with the
+caller's OWN total, and an admin reading that as the company's would decide from one person's
+numbers. An empty `?window=` still means today: that is a client saying nothing, not naming something
+wrong.
+
+**No review ever reaches a vendor.** The suite's data directory is fresh, so no account is signed in,
+the runner refuses to start a review on one, and every job stays queued — the submit/poll/cancel
+contract is exercised at zero subscription cost. What that cannot reach is declared with
+`# @uncovered` rather than faked: a review that actually ran, the queue-cap `429`, a failed session
+delete, and the `426` — which is unreachable while `ContractVersion.Current` and the minimum are both
+1, and gets its request the day the minimum is raised.
+
 ## Configuration
 
 `Coai:AllowedDomains` (required unless `Coai:AllowAnyDomain`), `Coai:Admins`, `Coai:DataDir`,
 `Coai:SessionTtlDays` (7), `Coai:MinimumClientContract`, `Coai:RequireForwardedHttps`,
 `Coai:RateLimit:PermitLimit|WindowSeconds`, `Coai:TrustedProxies`, `Coai:LoginWaitSeconds`,
 `Coai:LoginTimeoutSeconds`, `Coai:PerCallerQueued` (20), `Coai:PerCallerRunning` (3),
-`Coai:QueueWaitMinutes` (10 — how long a review waits for a free account, NOT how long the
+`Coai:MinimumClientContract` (1), `Coai:QueueWaitMinutes` (10 — how long a review waits for a free account, NOT how long the
 vendor may take, which is the caller's own `timeoutSeconds`);
 `Auth:Microsoft:Tenant|Audiences|ClientScope`,
 `Auth:Google:Enabled|Audiences`, `Auth:Local:SigningKey`. Environment form uses `__`.

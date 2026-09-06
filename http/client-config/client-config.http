@@ -1,0 +1,27 @@
+# Anonymous by necessity: the caller has no token yet and this is what tells them how to get one.
+# Safe because a client id is public by construction — it is in every authorization URL.
+
+# @name client_config_names_the_providers_that_exist
+# @prod
+GET {{baseUrl}}/api/client-config
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('providers is a list, not null — a client offers exactly these and no others', () => {
+    assert.ok(Array.isArray(response.parsedBody.providers));
+    assert.strictEqual(typeof response.parsedBody.microsoftScope, 'string');
+  });
+}}
+
+###
+
+# @uncovered 426 — unreachable as this server is configured, and that is a fact about the numbers
+#            rather than about the suite. `ContractVersion.Current` is 1 and
+#            `DefaultMinimumSupported` is 1, so a client must claim >= 1 to be judged at all and
+#            anything >= 1 is >= the minimum; a claim of 0 or an absent header is the "released
+#            before this mechanism existed" branch, which is SERVED on purpose. The 426 becomes
+#            provokable the day `Coai:MinimumClientContract` is raised above 1, and this file gets
+#            its request in that same change. The judgement itself is covered in
+#            AuthenticationTests, which calls Judge directly.
