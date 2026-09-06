@@ -1,5 +1,23 @@
 # Changelog
 
+## Server 0.18.4 — 2026-09-06
+
+**Every `review_code` in every repository was failing.** It threw
+`Value cannot be null. (Parameter 'first')` while `review_plan`, `status`, `resolve`, `open` and
+`providers` all answered normally — which made it look like a regression in the code path. It was
+data: the `usedPrompts` field arrived on 2026-09-01, a session file written before that has no such
+member, and the deserializer does not run a property initializer for an absent one. So an old
+session loaded with a null list and the next round over it died. New sessions were fine, which is
+why the plan stage looked healthy — it had just created one.
+
+Every collection that comes off disk is normalised where it is declared now, an absent member and an
+explicit null alike, and the startup sweep — which reads the same files through its own
+deserialisation — normalises them through the same method. That one would have taken down the sweep
+in every window rather than one round.
+
+If you hit this before updating: deleting the session file for the branch and calling `open` again
+was the way through, because a new session is written with the field.
+
 ## 0.31.0 — 2026-09-06 (server 0.18.3)
 
 **A reviewer can now be set per STAGE, and a stage nobody serves is refused.** Each vendor row has
