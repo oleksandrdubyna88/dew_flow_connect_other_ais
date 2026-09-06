@@ -1,4 +1,5 @@
 import { TeamServerState, teamServersBody } from './teamServerView';
+import { canonicalTeamServerUrl } from './teamServers';
 import { CoaiSettings } from './settingsShape';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
@@ -292,7 +293,7 @@ function updateLabel(id: string, cli: CliStatus): string {
 }
 
 function reviewersBody(state: PanelState): string {
-  return `${state.vendors.map((v) => vendorCard(v, state.codexModels, state.cliStatus[v.id] ?? UNKNOWN_CLI, state.modelPrices[v.model], state.localEngines[v.id], state.agyModels)).join('\n')}
+  return `${state.vendors.map((v) => vendorCard(v, state.codexModels, state.cliStatus[v.id] ?? UNKNOWN_CLI, state.modelPrices[v.model], state.localEngines[v.id], state.agyModels, allowedModelsFor(v, state.teamServers ?? []))).join('\n')}
 <button class="add" data-command="addVendor" title="${escapeHtml(HELP.addVendor)}">＋&nbsp; Add a reviewer</button>`;
 }
 
@@ -306,6 +307,28 @@ function reviewersBody(state: PanelState): string {
  */
 const KNOWS_ITS_OWN_ENDPOINT: ReadonlySet<string> = new Set(['codex', 'claude', 'gemini', 'antigravity']);
 
+/**
+ * What a Team server still allows for one of its vendors.
+ *
+ * <p>Empty for every other runtime, and empty for a remote row whose server has not been asked yet
+ * — a guessed list would let somebody pick a model that was never going to be accepted. The row's
+ * own saved model is added back by `modelsFor`, marked, so a selection never silently vanishes.</p>
+ */
+function allowedModelsFor(vendor: Vendor, servers: readonly TeamServerState[]): readonly string[] {
+  if (vendor.runtime !== 'remote') {
+    return [];
+  }
+
+  // Compared CANONICALLY, never as typed: the row stores the address one way and the server entry
+  // holds whatever the person entered. Matching the strings is the exact mistake this whole feature
+  // has a shared test fixture to prevent.
+  const url = canonicalTeamServerUrl(vendor.baseUrl);
+  const server = servers.find((s) => canonicalTeamServerUrl(s.server.url) === url);
+  const named = vendor.remoteVendor ?? vendor.id;
+
+  return (server?.catalog?.vendors ?? []).find((v) => v.id === named)?.models ?? [];
+}
+
 function vendorCard(
   vendor: Vendor,
   codexModels: readonly ModelChoice[],
@@ -313,17 +336,22 @@ function vendorCard(
   price: ModelPrice | undefined,
   localEngine?: LocalEngine,
   agyModels: readonly ModelChoice[] = [],
+  allowedRemote: readonly string[] = [],
 ): string {
   const id = escapeHtml(vendor.id);
   const local = vendor.runtime === 'local';
-  const models = modelsFor(vendor.runtime, codexModels, vendor.model, localEngine, agyModels);
+  // A Team server row is configured ON THE SERVER, not here: its endpoint is the server's address,
+  // its CLI runs there, and its price is the company's subscription rather than this person's. Three
+  // fields that could only be filled in wrongly.
+  const remote = vendor.runtime === 'remote';
+  const models = modelsFor(vendor.runtime, codexModels, vendor.model, localEngine, agyModels, allowedRemote);
   // Who is asked for an endpoint: everybody except the shipped vendors that already know where
   // they go. It used to be "everybody with a baseUrl already set, plus local" — which hid the field
   // from the one preset whose entire purpose is to be given a base URL ("Another OpenAI-compatible
   // endpoint" ships with an empty one), so it could never be filled in. Found by Gemma4 26B,
   // 2026-09-02, and it is the only defect in that campaign no hosted model found.
   const endpoint =
-    KNOWS_ITS_OWN_ENDPOINT.has(vendor.id) && vendor.baseUrl.length === 0
+    remote || (KNOWS_ITS_OWN_ENDPOINT.has(vendor.id) && vendor.baseUrl.length === 0)
       ? ''
       : `
   <div class="field">
@@ -339,7 +367,7 @@ ${local ? remoteNotice(vendor.baseUrl) : ''}
   // Shown for EVERY vendor, not only a custom endpoint. PATH is not always able to answer: in WSL
   // `codex` and `gemini` resolve to the WINDOWS npm shims through the interop PATH and die on a
   // missing Linux binary, and until this field existed nothing could point at the native one.
-  const executable = `
+  const executable = remote ? '' : `
   <div class="field">
     <input type="text" data-setting="executablePath" data-vendor="${id}" title="${escapeHtml(HELP.vendorExecutablePath)}"
            placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(vendor.executablePath)}">
