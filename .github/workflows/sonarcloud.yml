@@ -63,6 +63,11 @@ jobs:
           mkdir -p coverage
           dotnet-coverage collect -f xml -o coverage/server.xml -- ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests
           dotnet-coverage collect -f xml -o coverage/bench.xml -- ./src_bench/CoaiBench.Tests/bin/Release/net10.0/CoaiBench.Tests
+          # Every .NET test project this repository has must be collected here, or the projects it
+          # covers arrive at the gate as 0 % coverage of new code and the gate fails for a reason
+          # that is about the analysis rather than about the change. That is exactly what
+          # `coai-server` did on the PR that introduced it: 37 passing tests, new_coverage 0.0.
+          dotnet-coverage collect -f xml -o coverage/coai-server.xml -- ./src_server/tests/bin/Release/net10.0/CoaiServer.Tests
       # The extension is TypeScript and the .NET scanner does not run its tests, so every change to
       # src_vs_code arrived at the gate as 0 % coverage of new code — a number about the analysis
       # rather than about the change. Node's own runner writes lcov.

@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <AssemblyName>coai-server</AssemblyName>
+    <RootNamespace>CoaiServer</RootNamespace>
+    <!-- The release tag names this; a local build says so rather than claiming 1.0.0. -->
+    <Version>0.0.0</Version>
+    <!-- Native AOT, the same choice as coai-mcp and the vault server: the trim and AOT analyzers
+         then run on every ordinary build, so an incompatible pattern is a compile error rather
+         than a discovery on a release runner. -->
+    <PublishAot>true</PublishAot>
+    <StripSymbols>true</StripSymbols>
+    <!-- An accidental reflective serialization call is a compile error, not a runtime surprise. -->
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <!-- IL2104 comes from Serilog CORE's internals (reflection inside `@` destructuring, which no
+         call site here uses). A library-internal warning we cannot fix; scoped here, never
+         solution-wide. Same exemption, same reason, as the vault server. -->
+    <NoWarn>$(NoWarn);IL2104</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Serilog.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ServiceDefaults only, because it is the only one this story USES: the family's
+         logging. Core and Runners are what the server will RUN — the vendor adapters, the
+         executor, the resolution both binaries share — and they arrive with story 2.2,
+         which is the first code here that calls them. An unused reference is not free: it
+         pulls those assemblies into this binary's trim and AOT closure, so a change over
+         there can break a build over here before anything here uses it. (codex, code round.) -->
+    <ProjectReference Include="..\..\src_mcp\service_defaults\CoaiMcp.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CoaiServer.Tests" />
+  </ItemGroup>
+
+</Project>

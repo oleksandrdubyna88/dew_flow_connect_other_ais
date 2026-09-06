@@ -5,10 +5,12 @@
     <Project Path="src_mcp/runners/CoaiMcp.Runners.csproj" />
     <Project Path="src_mcp/service_defaults/CoaiMcp.ServiceDefaults.csproj" />
     <Project Path="src_bench/CoaiBench/CoaiBench.csproj" />
+    <Project Path="src_server/src/CoaiServer.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="src_mcp/tests/CoaiMcp.Tests.csproj" />
     <Project Path="src_mcp/tests_fakecli/FakeCli.csproj" />
     <Project Path="src_bench/CoaiBench.Tests/CoaiBench.Tests.csproj" />
+    <Project Path="src_server/tests/CoaiServer.Tests.csproj" />
   </Folder>
 </Solution>

@@ -720,10 +720,10 @@ The split was made on Fable; stories marked **F** run on Fable because being wro
 | **1 · One library for two binaries** | ~~1.1~~ **done** | `ReviewerExecutor.LaunchAsync` out of `RunOnceAsync`, with `ParseAnswer` pure beside it; every existing test passed UNEDITED — which is what "unchanged" meant here, never "no new tests": new behaviour ships with its own, as the testing rule requires. (`RetryLadder` shipped ahead of the epic, on its own — it fixes the local `coai-mcp` today, where a transient 429 got one retry at fifteen seconds and then failed the round.) | Opus |
 | | ~~1.2~~ **done** | `RuntimeResolution` + `VendorProbe` out of `PanelService`, `UsageLedger` into `CoaiMcp.Runners.Accounting`; `PanelService` keeps one-line delegations and every existing test passed unedited | Opus |
 | | 1.3 | `RemoteRuntime`, `RemoteAsk`, `TeamServerAuth` (with URL normalisation and the shared vector), `--ask-remote`, every registry point, `ProbeAsync`'s remote arm | Opus |
-| **2 · `coai-server`** | 2.1 | skeleton, logging, guards, the mirrored auth, sessions, `X-Coai-Contract`, the harness | **F** |
-| | 2.2 | `vendors.json` + catalog, slots (selector, environment, cooldown parser, registry with the OS lock), `login` | **F** |
+| **2 · `coai-server`** | ~~2.1~~ **done** | skeleton, logging, guards, the mirrored auth, sessions, `X-Coai-Contract`, the harness — 37 tests, and the audience guard is STRICTER than the vault's warning: a tenant with no audience refuses to start, because this server mints sessions | **F** |
+| | 2.2 | `vendors.json` + catalog, slots (selector, environment, cooldown parser, registry with the OS lock), `login`. **Carried from 2.1’s code round:** with the catalog and `login` routes added, hand-written `RequireCaller` calls stop being three and an *endpoint filter* starts paying for itself — do it here, once, rather than at each new route. | **F** |
 | | 2.3 | jobs — store, runner, `expiresUtc`, the epoch id, the ladder, cancel — and the reviews endpoints | Opus |
-| | 2.4 | usage + admins + the `http/` suite | Opus |
+| | 2.4 | usage + admins + the `http/` suite. **Carried from 2.1’s code round:** this is the first story where an admin AUTHORISES anything (the Company-wide view), so the admin list becomes a role claim here — in 2.1 `isAdmin` is one boolean on `/api/whoami` that no route reads, and a claim nothing reads is a claim nothing tests. | Opus |
 | **3 · The panel** | 3.1 | *Team servers* section, sign-in (Microsoft), the token file, silent renewal, sign-out | **F** |
 | | 3.2 | *Add a reviewer* from a Team server, the `remote` row, the catalog-fed model dropdown, help in five languages | Opus |
 | | 3.3 | usage per server, *Company*, the person search | Opus |

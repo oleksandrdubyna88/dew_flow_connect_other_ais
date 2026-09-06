@@ -13,6 +13,19 @@
          warnings and answers a real initialize/tools-list exchange. MIT. -->
     <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
 
+    <!-- The Team server's HTTP surface. JwtBearer validates the identity provider's tokens;
+         Serilog.AspNetCore is what puts the host's own logging on the family's sinks. Both are the
+         versions dew_flow_creds_for_devs runs, because the server mirrors its authentication and a
+         pair that disagreed would be a difference nobody chose. -->
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <!-- Drives the server in-process for its tests: no port, no container, no network. -->
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
+    <!-- Must not trail what JwtBearer 10.0.11 pulls in transitively: the test project mints its
+         own tokens with this, and two versions of the same handler in one process is the kind of
+         mismatch that only shows up as a signature nobody can validate. -->
+    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
+
     <!-- The one logging stack, per .claude/rules/shared/common/logging-serilog.md.
          The console sink is our own AnsiConsoleSink (the packaged themes emit nothing
          once stdout is redirected - measured, see the rule); only the core pipeline
