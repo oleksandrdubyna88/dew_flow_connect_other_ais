@@ -32,6 +32,14 @@ public sealed record ReviewerSettings(string Provider)
     /// <summary>Empty = the CLI's own authentication (the normal case for codex and gemini).</summary>
     public string ApiKey { get; init; } = string.Empty;
 
+    /// <summary>Where this machine keeps its own state — sessions, tokens, the rounds log.</summary>
+    /// <remarks>
+    /// Only <see cref="RemoteRuntime"/> uses it, to find the Team server token file. It is a
+    /// DIRECTORY rather than the token itself so that nothing here ever holds a credential: the
+    /// adapter builds a path, the shim reads the file.
+    /// </remarks>
+    public string DataDir { get; init; } = string.Empty;
+
     public TimeSpan Timeout { get; init; } = TimeSpan.FromMinutes(10);
 
     /// <summary>
@@ -293,7 +301,7 @@ public sealed class ReviewerRuntimeSelector(IEnumerable<IReviewerRuntime> runtim
     public static readonly IReadOnlySet<string> RuntimeNames =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "codex", "gemini", "claude", "antigravity", "local",
+            "codex", "gemini", "claude", "antigravity", "local", "remote",
         };
 
     public IReadOnlyCollection<string> Providers => _byProvider.Keys;
@@ -312,6 +320,11 @@ public sealed class ReviewerRuntimeSelector(IEnumerable<IReviewerRuntime> runtim
         "antigravity" => new AntigravityRuntime(vendorId),
         "codex" => new CodexRuntime(vendorId),
         "local" => new LocalRuntime(vendorId, string.Empty),
+        // `remote` is absent DELIBERATELY, and this comment is the guard against somebody adding it
+        // to match the set. A Team server vendor cannot be built from a name: it needs the server's
+        // URL, which only the full identity carries, so `RuntimeResolution.For` constructs it before
+        // this lookup is ever reached. An arm here could only pass an empty URL, producing an adapter
+        // that builds a command line no shim can use.
         _ => null,
     };
 

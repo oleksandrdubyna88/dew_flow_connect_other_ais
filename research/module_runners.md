@@ -46,6 +46,10 @@ sequenceDiagram
 | `BoundedScheduler`, `ReviewerWork`, `ReviewerSummaryFactory` | `Reviewers/BoundedScheduler.cs` | global + per-provider semaphores; a rate limit climbs the ladder below |
 | `VendorIdentity`, `RuntimeResolution` | `Reviewers/RuntimeResolution.cs` | the ONE answer to "what is this vendor": which runtime it drives, the adapter for it, and how it authenticates — asked by both binaries, after two incidents where a second copy of it was the one that was wrong |
 | `VendorHealth`, `VendorProbe` | `Reviewers/VendorProbe.cs` | the `--version` health probe behind `providers` and the Team server's catalog; a retired runtime is answered BEFORE the probe, a local engine instead of it, and a CLI that never answers says so rather than reporting the kill's exit code |
+| `RemoteRuntime` | `Reviewers/RemoteRuntime.cs` | the adapter for a vendor whose reviews run on a **Team server**: builds `--ask-remote` against THIS binary (the `LocalRuntime` shim shape), carries no `SharedResource` because the server owns the queue, and holds the cancel-an-abandoned-job half (`Claim` / `ReadClaim` / `CancelAbandonedAsync`) |
+| `RemoteAsk`, `RemotePoll`, `RemoteState` | `Reviewers/RemoteAsk.cs` | the PURE half of the shim: the request body, the poll parse, every exit code and every sentence a person will see — so each failure path is tested without a server |
+| `TeamServerAuth` | `Reviewers/TeamServerAuth.cs` | one canonical spelling of a server URL, the fingerprint that names its token file, and the owner-only read/write of that file. The same normalised value builds the request URLs, not just the hash |
+| `RemoteProbe`, `RemoteCatalog` | `Reviewers/RemoteProbe.cs` | a remote vendor's health over `GET /api/catalog`: the server's own slot counts as the note, 401/403/426/outage told apart, and a cache whose FAILURE wait is never shorter than its success wait |
 | `UsageLedger`, `UsageEntry`, `LedgerJsonContext` | `Reviewers/UsageLedger.cs` | one JSON line per reviewer run, unindented because the reader is line-based; moved here so the server appends the same shape |
 | `RetryLadder` | `Reviewers/RetryLadder.cs` | the waits and when to stop: four steps, jittered, bounded by the reviewer's own deadline; pure, so the jitter is a table rather than a stopwatch |
 
@@ -401,3 +405,59 @@ distinction the WSL work drew when it refused to probe for an engine
 Why it is measured rather than argued: three reviewers on one Ollama, one answered in 30.6 s and two
 were cancelled at 590 s. See *One local engine serves one reviewer* in
 [module_server.md](module_server.md).
+
+### A Team server is a vendor like any other (2026-09-06)
+
+`remote` is the second runtime that is not a CLI, and it is deliberately built on the shape `local`
+already proved: the adapter emits a command line that launches **this binary** in a shim mode
+(`--ask-remote`), and the shim does the HTTP. Nothing above the adapter learns that a reviewer ran on
+somebody else's machine — the round, the scheduler, the ledger and the panel all see an ordinary
+vendor. `LocalRuntime.SelfInvocation` answers the dotnet-host case for both and is reused, not copied.
+
+Four things about it are not obvious from the shape:
+
+- **Two clocks, and they are not the same one.** `--timeout-seconds` is how long the shim waits before
+  it cancels and reports; `--vendor-timeout-seconds` is how long the VENDOR may take, which is what the
+  server is told. The shim's is deliberately the shorter, so reaching it produces a sentence instead of
+  the executor killing the process. Sending the first as the second asked the server for an
+  eight-second review and got a `400` naming its allowed range — found by running it against a real
+  server, not by a test.
+- **A killed shim can still cancel its job.** The executor kills an abandoned child, and a killed
+  process runs no cleanup, so the polite `DELETE` on the way out never happens and the review runs to
+  completion on the team's subscription for an answer nobody will collect. The shim therefore writes
+  `<server> <id>` to a job file the moment the server accepts, and `RemoteRuntime.CancelAbandonedAsync`
+  reads it afterwards. This was the plan round's blocking finding.
+- **No `SharedResource`.** The server has its own queue and its own per-account exclusion, so a
+  client-side semaphore would serialise reviews the server can run at once. The global and per-provider
+  caps still apply, because those are about what this machine is willing to have in flight.
+- **The long poll never asks for longer than what is left.** Asking for the full 25 seconds with 6 to
+  go meant a 6-second deadline took 26 seconds to notice, which defeats the point of the shim's clock
+  being the shorter one.
+
+### A failing server must not be polled harder than a healthy one (2026-09-06)
+
+`RemoteProbe` caches a vendor's health for 60 s. The first draft cached a FAILURE for 15 s — which
+inverts backoff: a server that is down gets asked four times as often as one that is up, and the
+moment it comes under load is the moment every client starts polling it hardest. Raised twice on the
+plan round, and the fix is that a failure now waits at least as long as a success and then doubles,
+60 s → 10 min, cleared by one good answer.
+
+Two details make the cache honest rather than merely cheap:
+
+- **"Not signed in" is never cached.** It is a fact about a file on this machine, and it changes the
+  instant somebody signs in. A cached one would leave the panel telling a person to sign in for a
+  minute after they just did.
+- **The token is part of the cache key**, as a hash. Otherwise the cure for a `401` appears not to
+  work — a person signs in again and the panel keeps showing the rejection for up to ten minutes,
+  so they sign in a third time.
+
+The note a person reads comes from the server's own slot counts, which it had already computed for its
+queue: *2 of 3 accounts ready* rather than "healthy", and — the distinction that decides who acts —
+*all signed out* (the operator must do something) told apart from *all rate-limited* (they come back by
+themselves). `401`, `403`, `426` and an outage are four different sentences for the same reason: one is
+fixed by signing in again, one cannot be fixed by that person at all, one needs an update, and only the
+last means the server is down.
+
+A remote vendor never reaches the `--version` probe, and that arm is load-bearing rather than tidy: the
+executable a remote vendor names is `coai-mcp` **itself**, so without it the probe would have run this
+binary against itself and reported whatever it printed as a vendor's health.

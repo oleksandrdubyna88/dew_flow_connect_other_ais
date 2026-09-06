@@ -37,6 +37,11 @@ public static class RuntimeResolution
     /// </remarks>
     public static string NameOf(VendorIdentity vendor) =>
         vendor.Runtime == "local" ? "local"
+        // `remote` is decided HERE, before the base-URL arm, for the same reason `local` is: a remote
+        // row HAS a base URL — it is the Team server's — so falling through would classify every
+        // Team server vendor as a custom codex endpoint. This file's own remarks below predicted
+        // exactly that split before the name existed.
+        : vendor.Runtime == "remote" ? "remote"
         : vendor.BaseUrl.Length > 0 ? "codex"
         : vendor.Runtime.Length > 0 ? vendor.Runtime
         : vendor.Provider;
@@ -60,6 +65,7 @@ public static class RuntimeResolution
     public static IReviewerRuntime? For(VendorIdentity vendor) => NameOf(vendor) switch
     {
         "local" => new LocalRuntime(vendor.Provider, vendor.BaseUrl),
+        "remote" => new RemoteRuntime(vendor.Provider, vendor.BaseUrl),
         "codex" when vendor.BaseUrl.Length > 0 => new CustomCodexRuntime(vendor.Provider, vendor.BaseUrl),
         // An EXPLICIT runtime outranks the id, and that order is the fix for a real defect: the id
         // was consulted first, so a vendor called `claude` worked by accident while `my-claude` —
@@ -76,12 +82,35 @@ public static class RuntimeResolution
     /// An "unavailable" answer REMOVES the vendor from the round, so this is not a label for a
     /// panel. It decides who reviews.
     /// </remarks>
-    public static (string Auth, string Note) AuthOf(VendorIdentity vendor, bool hasVaultKey) =>
-        hasVaultKey
+    /// <param name="hasServerToken">
+    /// Whether this machine has signed into the Team server this vendor points at. Only consulted
+    /// for a <c>remote</c> vendor, and passed in rather than read here so this stays pure.
+    /// </param>
+    public static (string Auth, string Note) AuthOf(
+        VendorIdentity vendor, bool hasVaultKey, bool hasServerToken = false) =>
+        // `remote` is decided BEFORE the vault key, because a Team server's authentication is not
+        // a key at all — it is a session this machine holds. Saying "vault key" for a vendor that
+        // uses none would send somebody to configure the wrong thing entirely.
+        NameOf(vendor) == "remote" ? TeamServerAuthOf(vendor, hasServerToken)
+        : hasVaultKey
             ? ("vault key", "")
             : NameOf(vendor) == "local"
                 ? ("own auth", "a local engine needs no key — it is reached over HTTP on this machine")
                 : vendor.BaseUrl.Length > 0 || vendor.Provider is "deepseek"
                     ? ("unavailable", $"needs a key under '{vendor.Provider}' and the vault holds none — see the creds config entry")
                     : ("own auth", "the CLI's own sign-in is used");
+
+    /// <summary>
+    /// A Team server vendor authenticates with the SESSION this machine holds, not with a key.
+    /// </summary>
+    /// <remarks>
+    /// Extracted so <see cref="AuthOf"/> stays readable, and so the "not signed in" sentence has ONE
+    /// author: <see cref="RemoteAsk.NotSignedInMessage"/> already says it to the person whose review
+    /// just refused to run, and a hand-written second copy here would drift from it the first time
+    /// either was reworded.
+    /// </remarks>
+    private static (string Auth, string Note) TeamServerAuthOf(VendorIdentity vendor, bool hasServerToken) =>
+        hasServerToken
+            ? ("server token", $"signed in to the Team server at {TeamServerAuth.Normalise(vendor.BaseUrl)}")
+            : ("unavailable", RemoteAsk.NotSignedInMessage(TeamServerAuth.Normalise(vendor.BaseUrl)));
 }
