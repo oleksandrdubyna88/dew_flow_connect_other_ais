@@ -57,6 +57,58 @@ render it triggers finds the answer fresh and starts nothing. A catalog that cou
 is shown as stale rather than as absent, because last week's slot counts are more useful than a blank
 row and saying they are old is what keeps that honest.
 
+### A Team-server sign-in belongs to a SIDE (2026-09-06)
+
+The panel shipped reading ONE record per server out of `globalState` — the client's database, which
+VS Code hands to every window of the profile. The token it describes is not shared at all:
+`coaiDataDir()` is a path on whichever extension host is running, so a Windows window and a WSL one
+hold different files. Sign in on Windows, open WSL, and the panel said *Signed in as you@company*
+over a distro with no token in it.
+
+So the intention and the evidence are now two records, and **the panel renders the evidence**:
+
+| Record | Scope | What it is |
+|---|---|---|
+| `teamServer:<id>` | shared | the INTENT, with *Separate settings for each side* off |
+| `teamServer:<id>@<sideKey>` | per side | the INTENT, with it on |
+| `teamServer:<id>#<sideKey>` | per side, **always** | the FACT: whose token file this side holds, and since when |
+| `teamServer:<id>:trusted` | shared, always | the Microsoft application the person approved — a fact about the SERVER, not a side |
+| `<intent>:revoked` | follows the intent | when this scope was last signed out |
+
+One pure function decides everything from those — `sessionAction(intent, fact, revokedAtMs, nowMs)`:
+an intent with no fact MINTS (silently, `createIfNone: false`, no prompt); a fact for a different
+account or one nearly expired mints too; no intent over a fact older than the revocation SIGNS OUT;
+anything else does nothing. The file is the arbiter — a fact whose token was deleted by hand is
+discarded before the rule runs.
+
+That one table is both of the behaviours the operator asked for. **Sharing on**, the WSL window finds
+the shared intent and mints its own token without asking, so both sides end up on one account and no
+token ever crosses between the two filesystems. **Sharing off**, a fresh side has no intent, mints
+nothing, and its *Sign in* runs the interactive flow — which already passes
+`clearSessionPreference: true`, so a different account can be chosen. And a sign-out now REACHES the
+other sides: only this side's token file can be deleted from here, so the moment is stamped and each
+other side signs itself out on its next refresh.
+
+Three guards on the silent mint, each of which was a plan-round finding: the application must already
+be approved; the identity provider must still answer, and when it does not the row says so instead of
+claiming a session; and the account that comes back must be the one the intent names — a machine
+signed in to a personal and a work account otherwise gets a token for whichever is active on that
+side. A failed mint is not retried for ten minutes, because the refresh runs every sixty seconds.
+
+Toggling the switch carries the sign-in either way rather than dropping it: on, this side's record is
+seeded from the shared one; off, this side's is promoted to the shared one when there is none. Other
+sides need nothing — their token then disagrees with the intent, and the rule re-mints it.
+
+### The Server section says what this side is talking to (2026-09-06)
+
+`teamServerHere` renders, under the `coai-mcp` lines, one block per configured Team server: the
+address as a **read-only** input and `coai-server <version> — signed in as <email>` once a catalog has
+answered. Read-only on purpose — pointing a live session somewhere else is a sign-out, not a text
+edit — and the section names where to go instead. Before a catalog answers it says *connecting*; a
+catalog older than the last failed attempt is marked as the last known one, because a version that
+goes silently stale is what makes a dead connection look healthy. Empty for a person with no Team
+server, so that section is exactly what it was for them.
+
 **`teamServers` and `usageScope` are OPTIONAL on `PanelState`,** which is an accommodation and worth
 naming as one: the test fixtures are stored with CRLF under `core.autocrlf=true`, so any commit that
 touches one rewrites every line of it. Making the fields required cost sixteen unreviewable

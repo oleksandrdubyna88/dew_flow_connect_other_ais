@@ -143,6 +143,16 @@ row, its spending history and its vault key. The server knows only `codex`. `rem
 that, all the way to `--vendor`. Without it every Team-server review would have been refused on
 arrival and reported as a vendor the server "does not offer" — which reads exactly like a typo.
 
+**A sign-in belongs to a SIDE of the machine, not to the machine.** The token file is per side
+already — `coaiDataDir()` is a path on whichever extension host is running — so the record that
+describes it is too, and the panel renders THAT rather than the shared intention. With settings
+shared, a WSL window opened after a Windows sign-in mints its own token from the shared record
+without asking anybody, and no token crosses between the two filesystems; with the sides separated,
+each can hold a different account. A sign-out stamps the moment, and every other side under the same
+record signs itself out on its next refresh — otherwise signing out on Windows left a usable token
+inside the distro and a live session on the server. The whole rule is one pure function,
+`sessionAction`; see [module_extension.md](module_extension.md).
+
 **The server id is generated once and never rewritten.** Not the display name, which is editable, and
 not the URL, which can be corrected after a typo: either would orphan every reviewer row the first
 time somebody changed it.

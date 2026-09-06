@@ -28,7 +28,7 @@ import { thisSide } from './installer';
 import { latestServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog, EMPTY_LOG } from './roundsDb';
 import { readLog } from './roundsDbRead';
-import { sideLabel } from './coaiInstall';
+import { sideKey, sideLabel } from './coaiInstall';
 import {
   fetchTable,
   LITELLM_PRICES,
@@ -76,12 +76,14 @@ const WINDOW_ON_THE_WIRE: Readonly<Record<Window, string>> = {
 import {
   AuthHost,
   SignedIn,
+  TokenFact,
   catalogOf,
   readToken,
-  renewIfDue,
+  reconcile,
   signIn,
   signOut,
   signedInKey,
+  tokenFactKey,
 } from './teamServerAuth';
 import {
   TeamServer,
@@ -116,6 +118,17 @@ import {
  */
 /** How long a Team server's catalog stands before it is asked again. */
 const TEAM_SERVER_FRESH_MS = 60 * 1000;
+
+/**
+ * How long a FAILED silent sign-in is left alone before it is tried again.
+ *
+ * <p>Ten minutes against the sixty seconds of the refresh above, because the two are answering
+ * different questions. An identity provider that will not answer here — no cached Microsoft session
+ * in this WSL distro, a network that is down — would otherwise be asked once a minute for as long as
+ * the window is open. Pressing <i>Sign in</i> is always immediate; this only paces the attempts
+ * nobody asked for. Raised on the plan round.</p>
+ */
+const MINT_BACKOFF_MS = 10 * 60 * 1000;
 
 export class PanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'coai.panel';
@@ -153,6 +166,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
   /** What each server is in the middle of, so the row can say so and its buttons can stop. */
   private busy: Readonly<Record<string, string>> = {};
+
+  /**
+   * The last silent sign-in that failed, per server: when, and what it said.
+   *
+   * <p>In memory rather than in `globalState`, deliberately — reloading the window is a person
+   * saying "try again", and a backoff that survived that would be a backoff they cannot clear.</p>
+   */
+  private mintFailure: Readonly<Record<string, { readonly at: number; readonly message: string }>> = {};
 
   private catalogs: Record<string, {
     catalog?: Catalog | undefined;
@@ -804,11 +825,41 @@ export class PanelProvider implements vscode.WebviewViewProvider {
             thisSide(this.context.globalStorageUri),
             (section) => config.get(section));
         }
+        if (write.key === 'perSideSettings') {
+          await this.carryTeamLogins(write.value === true);
+        }
         return;
       default: {
         // Every kind is handled, and the compiler is what says so.
         const unhandled: never = write;
         return unhandled;
+      }
+    }
+  }
+
+  /**
+   * Carry the Team-server sign-ins across the switch, so neither direction signs anybody out.
+   *
+   * <p>Symmetric, and the same idea as {@link seedIfEmpty} one layer over: turning the switch ON
+   * copies the shared record into this side's, so this side keeps the session it had and only
+   * DIVERGES when somebody signs in again; turning it OFF promotes this side's record to the shared
+   * one when there is none, so the side that merged the sides is the one whose account they share.
+   * Never overwrites — a record that already exists is a decision somebody made.</p>
+   *
+   * <p>The other sides need nothing here. Their tokens now disagree with the intent that applies to
+   * them, and `reconcile` re-mints them as the shared account on their next refresh — which is what
+   * stops a WSL window from quietly going on reviewing as the account it happened to hold. Both
+   * directions were raised on the plan round.</p>
+   */
+  private async carryTeamLogins(perSide: boolean): Promise<void> {
+    const side = this.sideKeyHere();
+    const state = this.context.globalState;
+    for (const server of this.teamServers(vscode.workspace.getConfiguration('coai'))) {
+      const from = signedInKey(server.id, perSide ? '' : side);
+      const to = signedInKey(server.id, perSide ? side : '');
+      const carried = state.get<SignedIn>(from);
+      if (carried !== undefined && state.get<SignedIn>(to) === undefined) {
+        await state.update(to, carried);
       }
     }
   }
@@ -1142,25 +1193,52 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * whenever a server is slow.</p>
    */
   private teamServerStates(config: vscode.WorkspaceConfiguration): TeamServerState[] {
+    const side = this.sideKeyHere();
+    const scope = this.intentScope(config);
+
     return this.teamServers(config).map((server) => {
       const known = this.catalogs[server.id];
-      const signedInAs = this.context.globalState.get<SignedIn>(signedInKey(server.id));
+      // The FACT, not the intent. `email` is whose token file THIS side holds, so a WSL window that
+      // has not minted one yet reads "not signed in here" instead of claiming the Windows session —
+      // which is the whole defect this change is about. `elsewhere` is the intent, and only when
+      // there is no token here, so the row can offer the one button that fixes it.
+      const here = this.context.globalState.get<TokenFact>(tokenFactKey(server.id, side));
+      const intent = this.context.globalState.get<SignedIn>(signedInKey(server.id, scope));
+      const failed = this.mintFailure[server.id];
 
       return {
         server,
-        email: signedInAs?.email ?? '',
+        email: here?.email ?? '',
+        elsewhere: here === undefined ? (intent?.email ?? '') : '',
         catalog: known?.catalog,
         usage: known?.usage,
-        problem: known?.problem ?? '',
+        problem: known?.problem ?? (here === undefined ? (failed?.message ?? '') : ''),
         stale: known?.stale ?? false,
         busy: this.busy[server.id] ?? '',
       };
     });
   }
 
+  /** This side of the machine, as a key component. Always this side's own — see `TokenFact`. */
+  private sideKeyHere(): string {
+    return sideKey(thisSide(this.context.globalStorageUri));
+  }
+
+  /**
+   * Which sign-in record applies: the shared one, or this side's own.
+   *
+   * <p>Derived from the SAME switch that decides whether this side keeps its own settings, so
+   * "does this side keep its own things" has one answer rather than two that can disagree.</p>
+   */
+  private intentScope(config: vscode.WorkspaceConfiguration): string {
+    return this.perSide(config) ? this.sideKeyHere() : '';
+  }
+
   private authHost(): AuthHost {
     return {
       dataDir: coaiDataDir(),
+      side: this.sideKeyHere(),
+      perSide: this.perSide(vscode.workspace.getConfiguration('coai')),
       state: {
         get: <T,>(key: string) => this.context.globalState.get<T>(key),
         update: async (key: string, value: unknown) => {
@@ -1296,6 +1374,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // row still reads "Not signed in" throughout, the button stays pressable, and a person cannot
     // tell a slow sign-in from one that did nothing — so they press it again. Caught on the code
     // round.
+    // A person pressing the button is a person saying "try again now": whatever the last silent
+    // attempt decided, it must not delay this one or keep its sentence on the row afterwards.
+    this.mintFailure = PanelProvider.without(this.mintFailure, server.id);
     this.busy = { ...this.busy, [server.id]: 'Signing in…' };
     await this.render();
     try {
@@ -1449,8 +1530,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     this.refreshing = true;
     try {
       await Promise.allSettled(servers.map(async (server) => {
-        const renewal = await renewIfDue(server, this.authHost());
-        await this.refreshCatalog(server, renewal !== undefined && !renewal.ok ? renewal.message : '');
+        await this.refreshCatalog(server, await this.reconcileHere(server));
       }));
     } finally {
       // Stamped when the work FINISHED, not when it started. Stamping at entry meant a run that
@@ -1461,6 +1541,38 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
 
     await this.render();
+  }
+
+  /**
+   * Bring this side's session into line, and remember a failure instead of repeating it.
+   *
+   * <p>Returns the sentence the row should show, or empty. A silent sign-in that failed is not
+   * retried for ten minutes: the refresh runs every sixty seconds, and an identity provider that
+   * cannot answer in this window would otherwise be asked sixty times an hour. The remembered
+   * message keeps the row explaining itself while nothing is being tried.</p>
+   */
+  private async reconcileHere(server: TeamServer): Promise<string> {
+    const failed = this.mintFailure[server.id];
+    if (failed !== undefined && Date.now() - failed.at < MINT_BACKOFF_MS) {
+      return failed.message;
+    }
+
+    const done = await reconcile(server, this.authHost());
+    this.mintFailure = done.problem.length > 0
+      ? { ...this.mintFailure, [server.id]: { at: Date.now(), message: done.problem } }
+      : PanelProvider.without(this.mintFailure, server.id);
+
+    return done.problem;
+  }
+
+  /** One entry dropped, the rest kept — a copy, because nothing here is mutated in place. */
+  private static without<T>(
+    map: Readonly<Record<string, T>>,
+    key: string,
+  ): Readonly<Record<string, T>> {
+    const { [key]: _gone, ...rest } = map;
+
+    return rest;
   }
 
   /**
@@ -1534,11 +1646,13 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const existing = new Set(this.vendorsHere().map((v) => v.id));
     // A preset already in the panel is not offered twice; the blank one (empty id) always is.
     const offered = VENDOR_PRESETS.filter((p) => p.id.length === 0 || !existing.has(p.id));
-    // Only servers this machine is actually SIGNED IN to. One that is merely configured can neither
-    // be asked what it offers nor run a review, so offering it would be a dead entry.
+    // Only servers THIS SIDE holds a token for. One that is merely configured — or one signed in on
+    // another side of this machine — can neither be asked what it offers nor run a review here, so
+    // offering it would be a dead entry.
     const config0 = vscode.workspace.getConfiguration('coai');
+    const side = this.sideKeyHere();
     const teamServers = this.teamServers(config0).filter(
-      (s) => (this.context.globalState.get<SignedIn>(signedInKey(s.id))?.email ?? '').length > 0,
+      (s) => this.context.globalState.get<TokenFact>(tokenFactKey(s.id, side)) !== undefined,
     );
     const picked = await vscode.window.showQuickPick(
       [

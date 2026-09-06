@@ -9,11 +9,13 @@ import {
   SignedIn,
   StateStore,
   deleteToken,
+  TokenFact,
   needsRenewal,
-  renewIfDue,
+  reconcile,
   signIn,
   signOut,
   signedInKey,
+  tokenFactKey,
   trustedKey,
   writeToken,
 } from '../teamServerAuth';
@@ -142,26 +144,30 @@ test('an unreadable expiry is treated as due rather than as never', () => {
   assert.strictEqual(needsRenewal('', Date.now()), true);
 });
 
-test('renewal does nothing at all when nobody is signed in', async () => {
+test('reconciling does nothing at all when nobody is signed in', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
   try {
-    const result = await renewIfDue(SERVER, host(dir, store()), Date.now());
+    const done = await reconcile(SERVER, host(dir, store()), Date.now());
 
-    assert.strictEqual(result, undefined, 'a server nobody signed into has nothing to renew');
+    assert.deepStrictEqual(done, { problem: '', changed: false });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('renewal does nothing while the session is still comfortable', async () => {
+test('reconciling does nothing while THIS SIDE holds a comfortable session', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'coai-auth-'));
   try {
     const signedIn: SignedIn = { email: 'a@b.c', expiresUtc: '2027-01-01T00:00:00Z' };
-    const state = store({ [signedInKey(SERVER.id)]: signedIn });
+    const state = store({
+      [signedInKey(SERVER.id)]: signedIn,
+      [tokenFactKey(SERVER.id, '')]: { ...signedIn, mintedAtMs: 1 } satisfies TokenFact,
+    });
+    await writeToken(dir, SERVER.url, 'the-token');
 
-    const result = await renewIfDue(SERVER, host(dir, state), Date.parse('2026-09-06T12:00:00Z'));
+    const done = await reconcile(SERVER, host(dir, state), Date.parse('2026-09-06T12:00:00Z'));
 
-    assert.strictEqual(result, undefined);
+    assert.deepStrictEqual(done, { problem: '', changed: false });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -180,7 +186,11 @@ test('a renewal that is due is attempted WITHOUT asking the person anything', as
       // Approved earlier, by a person. A renewal for an application nobody approved is refused
       // before it reaches the identity provider — see the test below.
       [trustedKey(SERVER.id)]: '3afb5834-1111-2222-3333-444455556666',
+      [tokenFactKey(SERVER.id, '')]: {
+        email: 'a@b.c', expiresUtc: '2026-09-06T13:00:00Z', mintedAtMs: 1,
+      } satisfies TokenFact,
     });
+    await writeToken(dir, SERVER.url, 'the-old-token');
     const asked: boolean[] = [];
     const spy: AuthHost = {
       ...host(dir, state),
@@ -191,7 +201,7 @@ test('a renewal that is due is attempted WITHOUT asking the person anything', as
       },
     };
 
-    await renewIfDue(SERVER, spy, Date.parse('2026-09-06T12:00:00Z'));
+    await reconcile(SERVER, spy, Date.parse('2026-09-06T12:00:00Z'));
 
     assert.deepStrictEqual(asked, [false], 'a renewal must never be able to raise a prompt');
   } finally {
@@ -220,9 +230,9 @@ test('a server this build cannot sign into never reaches the identity provider',
 
     // The server cannot be reached, so it never says what it wants — and a token must not be minted
     // for a server that has not said.
-    const result = await renewIfDue(SERVER, spy, Date.parse('2026-09-06T12:00:00Z'));
+    const done = await reconcile(SERVER, spy, Date.parse('2026-09-06T12:00:00Z'));
 
-    assert.strictEqual(result?.ok, false);
+    assert.ok(done.problem.length > 0, 'a refusal is a sentence the row can show');
     assert.strictEqual(minted, 0, 'nothing is minted before the server is trusted');
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -417,11 +427,11 @@ test('a renewal for an application nobody approved is REFUSED, not minted silent
       },
     };
 
-    const result = await renewIfDue(SERVER, spy, Date.parse('2026-09-06T12:00:00Z'));
+    const done = await reconcile(SERVER, spy, Date.parse('2026-09-06T12:00:00Z'));
 
-    assert.strictEqual(result?.ok, false);
+    assert.ok(done.problem.length > 0, 'a refusal is a sentence the row can show');
     assert.strictEqual(minted, 0, 'nothing may be minted for an application nobody has seen');
-    assert.ok(result?.ok === false && result.message.includes('different Microsoft application'));
+    assert.ok(done.problem.includes('different Microsoft application'));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

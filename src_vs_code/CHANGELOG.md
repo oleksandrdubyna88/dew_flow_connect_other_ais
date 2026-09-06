@@ -30,6 +30,22 @@ outside it is told that, rather than told to try again. The session renews itsel
 without asking. The token is kept in a file only you can read — never in `settings.json`, never in a
 command line, never in a log.
 
+**The Server section now says what this side is talking to — both halves of it.** Under the
+`coai-mcp` lines it shows your Team server's address, read-only, and `coai-server <version> — signed
+in as you@company` once it answers. Read-only because pointing a live session somewhere else is a
+sign-out rather than a text edit; the section says where to do that instead.
+
+**A sign-in belongs to one SIDE of your machine, and behaves the way the side switch says.** A
+Windows window and each WSL distro keep their own token file — they always did — so the panel now
+reports what THIS side actually holds rather than a record shared between them. With
+*Separate settings for each side* off, a WSL window opened after a Windows sign-in signs itself in
+with the same account, without a prompt and without the token ever leaving the side that minted it.
+With it on, each side starts signed out and can hold a different account. Either way a sign-out
+reaches the other sides: until now, signing out in Windows left a working token inside the distro.
+
+If a side cannot sign itself in — no Microsoft session there, or the account active on it is a
+different one — it says so and offers the button, instead of showing an account no review can use.
+
 *Requires a Team server: `coai-server`, deployed by whoever runs your company's subscriptions.*
 
 ## Server 0.18.4 — 2026-09-06
