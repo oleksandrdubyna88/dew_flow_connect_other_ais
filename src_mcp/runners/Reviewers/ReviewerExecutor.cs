@@ -213,7 +213,7 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
         if (repair is null)
         {
             return new ReviewerOutcome.Unparseable(
-                Because(Said(answer, evidence), "and no repair was configured", Keep(invocation, evidence)), usage);
+                Because(Said(answer, Complaint(evidence)), "and no repair was configured", Keep(invocation, evidence)), usage);
         }
 
         var (repairOutcome, repaired, repairUsage, repairAnswer, repairEvidence) = await RunOnceAsync(repair, ct);
@@ -227,7 +227,12 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
                    // evidence file was landing at zero bytes exactly when it was most needed.
                    : new ReviewerOutcome.Unparseable(
                        Because(
-                           Said(repairAnswer ?? answer, Longer(evidence, repairEvidence)),
+                           // The complaint comes from whichever launch actually explained itself,
+                           // starting with the repair — its answer is the one being described. Picking
+                           // by SIZE was wrong and the gate said so: a first attempt that returned a
+                           // large malformed answer beats a repair that returned nothing plus a
+                           // permission refusal on stderr, and the refusal is the whole point.
+                           Said(repairAnswer ?? answer, FirstComplaint(repairEvidence, evidence)),
                            "after one repair attempt",
                            Keep(repair, Longer(evidence, repairEvidence))),
                        usage.Add(repairUsage)));
@@ -254,10 +259,31 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
     /// vendor had returned NOTHING — an empty envelope — and the sentence sent the reader looking
     /// for malformed JSON that did not exist.
     /// </remarks>
-    private static string Said(string? raw, string? evidence) =>
+    private static string Said(string? raw, string complaint) =>
         string.IsNullOrWhiteSpace(raw)
-            ? Explained("the vendor returned an empty answer", Complaint(evidence))
+            ? Explained("the vendor returned an empty answer", complaint)
             : "the answer was not the schema's JSON";
+
+    /// <summary>The first transcript that carries an explanation, in the order given.</summary>
+    /// <remarks>
+    /// The KEEP path still saves the LONGER transcript deliberately — a repair whose envelope broke
+    /// leaves a zero-byte file, and that was landing exactly when it was most needed. Which file to
+    /// save and which stream explained the failure are two different questions, and answering them
+    /// with one rule dropped the explanation.
+    /// </remarks>
+    internal static string FirstComplaint(params string?[] transcripts)
+    {
+        foreach (var transcript in transcripts)
+        {
+            var said = Complaint(transcript);
+            if (said.Length > 0)
+            {
+                return said;
+            }
+        }
+
+        return string.Empty;
+    }
 
     /// <summary>
     /// The CLI's own sentence, when it produced nothing and said why.
@@ -271,7 +297,7 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
     /// the note should have taken seconds. The transcript is already here — this reads the stderr
     /// half of it.
     /// </remarks>
-    private static string Complaint(string? evidence)
+    internal static string Complaint(string? evidence)
     {
         const string marker = "--- stderr ---";
         var at = evidence?.LastIndexOf(marker, StringComparison.Ordinal) ?? -1;

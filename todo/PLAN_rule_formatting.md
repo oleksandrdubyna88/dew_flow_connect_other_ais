@@ -40,6 +40,36 @@ the rule as prose changes nothing.
 
 These make opposite predictions, which is what makes the measurement worth running.
 
+## What the gate found, 2026-09-06: the premise is refuted (three reviewers, eight findings taken)
+
+**The seeded item is not a violation, so nothing was missed.** Two vendors said it independently and
+they are right: the row's `Correct` column offers `return [];` / `return string.Empty;`, which are
+remedies for a COLLECTION or a string — neither compiles for a method returning `AccountView?`. And
+the same rule's own list of allowed nullables contains *"`LocationSettings?` returned from
+`GetDefaultAsync()` — legitimate 'not found'"*, which is exactly what a `Find` returning null for a
+missing account is. All eight cells passed over it because passing over it was correct.
+
+So H1 cannot be tested with this input at all, and the observation that started this plan was a
+misreading of the rule rather than a miss by the reviewers. **Before any cell runs:** seed a method
+returning a collection or a string with `return null;`, which the row genuinely forbids, and state the
+rule's scope in the plan so the next reader does not repeat the mistake.
+
+The rest, taken in order:
+
+- **Both blocks need matched repetitions**, not just the winner — repeating only the winner measures
+  the winner's stability rather than the difference between the blocks.
+- **The second table-row rule is only a control if it is prose in P and a table in T**, and it needs
+  its own seeded violation: step 1 pins the input to the same 58-line diff, which has none.
+- **Seven cells, not six**: two blocks by two vendors is four, plus three repeats.
+- **A tie is the likely outcome if H0 holds**, and the plan then has no next step. T takes the repeats.
+- **The prompt line must be written down before it is measured**, or the thing measured is not the
+  thing proposed.
+
+Rejected: that the 2026-09-01 variance control is itself unverified (it IS the control, and what it
+cannot establish is whether the seeded item is a violation — which is the finding above), that "six
+models" in H0 needs to match the cells (it is an aside, not a cell list), and a rollback procedure for
+a rule rewrite (the rules are in git).
+
 ## Build order
 
 1. **Two rule blocks, one diff.** The same 58-line diff and the same prompt. Block P has the no-null

@@ -34,6 +34,23 @@ know WHICH four still means opening the session file, or the resolve step's answ
    server change with its own tests, and this plan says so before touching the file format: a record
    that grows without bound is a session file that stops being small.
 
+## What the gate found, 2026-09-06 (three reviewers, six findings taken)
+
+1. **`pending` belongs to the CURRENT round**, so exposing it from any row would show round B's
+   findings under round A and contradict A's own count. Until findings are kept per round, only the
+   newest round may render them.
+2. **Absent, empty and non-empty are THREE states** and the plan collapsed the first two: a clean
+   round would be told its findings were "not kept". Model it as a tri-state and assert all three.
+3. **Resolving empties `pending`** — so an expanded row would show two findings under a header that
+   says four, or none at all. Either the round record keeps them, or the section is labelled
+   *unresolved* and explains the difference. This is the defect that would have shipped.
+4. **The size decision needs a budget**, not a look: name the worst case (findings per round times the
+   length of a why/fix pair) and the threshold, so the answer is a number.
+5. **That decision moves to step 1.** If it says the findings belong in the round record, steps 1 and
+   2 have built a row model against the wrong source.
+6. **"Not kept" needs its own visible element.** A model returning undefined and a renderer that draws
+   nothing for undefined produce a blank that reads as "clean".
+
 ## Build order
 
 1. RED: `rowsFrom` exposes `findingsList` for a round whose session carries `pending`, and an honest

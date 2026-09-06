@@ -115,6 +115,29 @@ silently review the first third of the diff. The shim can detect it: `usage.prom
 back far below a tokens-per-character estimate of what was sent is truncation, and the round must
 refuse with the sizes rather than return findings about a fragment.
 
+## What the gate found, 2026-09-06 (three reviewers, seven findings taken)
+
+1. **Nobody can say yes.** The plan refuses an unacknowledged host and never says how the
+   acknowledgement is collected — so a non-loopback endpoint would be permanently blocked, which is a
+   different product decision than the one being made. It needs a prompt or a row action.
+2. **Key the consent by the full normalised origin**, not the host: `https://review.example:443`
+   becoming `http://review.example:8080` is a different destination.
+3. **A timestamp is not freshness.** The model list needs a rule and a refresh trigger, or the person
+   is told the list is old and still allowed to submit against an evicted model.
+4. **The probe must reuse the review's credentials** and base-URL normalisation, or an authenticated
+   vLLM answers 401 and a usable engine is marked unavailable.
+5. **Transport and process failures are missing** from the error-class item: a timeout, a DNS failure,
+   a closed connection, malformed JSON, a runtime killed mid-review — which is most of what a local
+   engine actually does.
+6. **A 400 is as often a context-length error as a wrong model id.** Show the body's own message
+   rather than prescribing a model change.
+7. **Check before promising a key.** Telling somebody a key is missing is only useful if one can be
+   supplied; whether the local path forwards one has to be verified, or the message says authenticated
+   endpoints are unsupported.
+
+Rejected: that the review path itself is Ollama-specific — it is already OpenAI-compatible (the engine
+is addressed at `.../v1`), and only the model-list PROBE is not, which is what item 3 above changes.
+
 ## Build order
 
 1. §4's race test first, against today's code — it is a test for behaviour that already exists and
