@@ -110,15 +110,17 @@ async function waitForReady(baseUrl, child, seconds) {
   return 'timeout';
 }
 
-const build = spawnSync(
-  'dotnet',
-  ['build', path.join(ROOT, 'src_server', 'src', 'CoaiServer.csproj'), '-c', 'Debug'],
-  { stdio: 'inherit', shell: process.platform === 'win32' },
-);
-if (build.status !== 0) {
-  fail(ENVIRONMENT, 'coai-server did not build — nothing to send requests to.');
-}
+// The server is BUILT by whoever runs this, not by this.
+//
+// It used to run `dotnet build` itself, which meant resolving `dotnet` through PATH — the thing this
+// script is otherwise careful to remove, and a real one: a process started by name is whichever
+// binary happens to be first on the path. Building is the caller's job in both places that call it,
+// since CI builds the solution before it runs anything and a developer has just built to get here.
+// What is left is a clear refusal when the binary is not there.
 
+if (!existsSync(exe)) {
+  fail(ENVIRONMENT, `${exe} is not there. Build it first: dotnet build src_server/src/CoaiServer.csproj`);
+}
 const port = await freePort();
 const baseUrl = `http://127.0.0.1:${port}`;
 // A throwaway data directory per run: no vendors, no accounts, no sessions. That emptiness is

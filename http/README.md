@@ -17,7 +17,9 @@ the server would not start) · **4** configuration.
 
 It does the whole lifecycle itself, so a fresh checkout needs nothing prepared:
 
-1. builds `coai-server`;
+1. checks `coai-server` is built, and refuses with exit 3 naming the build command if not — it does
+   NOT build it, because resolving `dotnet` through PATH is the one thing this script is otherwise
+   careful to avoid, and both callers have just built anyway;
 2. makes a **throwaway data directory** and starts the server on a free loopback port with
    `Auth__Local__SigningKey` set and `boss@example.com` in `Coai__Admins`;
 3. polls `/api/health` until it answers, and gives up with exit 3 rather than running requests
