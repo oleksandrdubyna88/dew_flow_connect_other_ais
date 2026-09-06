@@ -58,7 +58,12 @@ public sealed record RoundRecord(
     public int RunnerPid { get; init; }
 
     /// <summary>Per-reviewer progress — the live part of a running round.</summary>
-    public List<ReviewerState> ReviewerStates { get; init; } = [];
+    /// <remarks>Normalised on the way in, for the reason spelled out on PersistedSession.UsedPrompts.</remarks>
+    public List<ReviewerState> ReviewerStates
+    {
+        get => field ??= [];
+        init => field = value ?? [];
+    }
 
     /// <summary>
     /// What this round was ABOUT — the plan's file name or its title.
@@ -93,7 +98,12 @@ public sealed record PersistedSession(SessionState State, List<RoundRecord> Roun
     public DateTime OpenedUtc { get; init; }
 
     /// <summary>The last round's merged findings — what `resolve`'s indices point into.</summary>
-    public List<Finding> Pending { get; init; } = [];
+    /// <remarks>Normalised on the way in, for the reason spelled out on <see cref="UsedPrompts"/>.</remarks>
+    public List<Finding> Pending
+    {
+        get => field ??= [];
+        init => field = value ?? [];
+    }
 
     /// <summary>
     /// The scope: what this change was supposed to achieve, as the plan stage stated it.
@@ -114,7 +124,19 @@ public sealed record PersistedSession(SessionState State, List<RoundRecord> Roun
     /// the pool in two rounds rather than asking the universal question twice. Without this the deal
     /// would be random with replacement, which asks the same lens again while another goes unasked.
     /// </remarks>
-    public List<string> UsedPrompts { get; init; } = [];
+    /// <remarks>
+    /// Normalised where it is DECLARED, not at the call site. A session file written before this
+    /// field existed has no such member, and the source-generated deserializer does not run the
+    /// property initializer for an absent one — so `= []` was a promise nobody could rely on, and on
+    /// 2026-09-06 every `review_code` in every repository threw
+    /// <c>Value cannot be null. (Parameter 'first')</c> from the `Union` that spends a lens. An
+    /// explicit `null` is covered too, because one build had already written one.
+    /// </remarks>
+    public List<string> UsedPrompts
+    {
+        get => field ??= [];
+        init => field = value ?? [];
+    }
 }
 
 /// <summary>
@@ -197,7 +219,13 @@ public sealed class SessionStore(string dataDir)
 
         try
         {
-            return JsonSerializer.Deserialize(ReadShared(file), ServerJsonContext.Default.PersistedSession);
+            var session = JsonSerializer.Deserialize(ReadShared(file), ServerJsonContext.Default.PersistedSession);
+
+            // `Rounds` is a CONSTRUCTOR parameter, so an absent member passes null straight in and no
+            // property initializer can catch it. Every other collection normalises where it is
+            // declared; this one can only be normalised here, at the single place a session comes off
+            // disk.
+            return session is null or { Rounds: not null } ? session : session with { Rounds = [] };
         }
         catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
         {
@@ -369,7 +397,11 @@ public sealed class SessionStore(string dataDir)
     private static bool IsOrphaned(RoundRecord round, Func<int, bool> processIsAlive) =>
         round.Status == RoundRecord.Running && (round.RunnerPid == 0 || !processIsAlive(round.RunnerPid));
 
-    private string FileFor(string repoPath, string branch)
+    /// <summary>
+    /// Where one session lives. Internal so a test can plant a file written by an OLDER build — the
+    /// compatibility this store owns cannot be checked without writing the old shape to disk.
+    /// </summary>
+    internal string FileFor(string repoPath, string branch)
     {
         // The session key is not a valid file name; hash it and keep a readable prefix.
         var key = SessionKey.For(repoPath, branch);
