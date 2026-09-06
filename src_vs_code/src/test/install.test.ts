@@ -467,3 +467,45 @@ test('the install record and the settings overlay never share a key', () => {
   assert.notEqual(overlayKey(side), installedKey(side));
   assert.ok(overlayKey(side).endsWith(sideKey(side)) && installedKey(side).endsWith(sideKey(side)));
 });
+
+test('the block the panel copies is a path and nothing else, whatever the settings say', () => {
+  // Reported on 2026-09-06 as "we fixed the settings applying immediately several times" — and that
+  // was true, and true only for the keys nobody had pasted. The block used to carry every setting
+  // that differed from the defaults, sixteen keys at full stretch, and a variable in the client's
+  // config beats the settings file KEY BY KEY and on purpose. So each pasted key was frozen at its
+  // pasted value: change it in the panel, the panel saves it and shows the new number, and the
+  // server keeps using the old one without a word.
+  //
+  // The env block predates the settings file. Nobody trimmed it when the file landed.
+  const parsed = JSON.parse(mcpServerBlock('/home/ada/.local/coai-mcp')) as {
+    mcpServers: { coai: Record<string, unknown> };
+  };
+
+  assert.deepEqual(Object.keys(parsed.mcpServers.coai), ['command'],
+    'anything else in here freezes that setting for this client, silently');
+});
+
+test('a scripted run can still be handed environment variables', () => {
+  // The channel is not removed, only unused by the panel: a containerised or CI run has no panel
+  // and no shared data directory, and env is the only way to configure it.
+  const parsed = JSON.parse(mcpServerBlock('/bin/coai-mcp', { COAI_ON_EXHAUSTED: 'good_enough' })) as {
+    mcpServers: { coai: { env?: Record<string, string> } };
+  };
+
+  assert.equal(parsed.mcpServers.coai.env?.['COAI_ON_EXHAUSTED'], 'good_enough');
+});
+
+test('and the extension passes it nothing — the call site, not just the default', () => {
+  // The first version of this guard asserted the FUNCTION's default and let the call site do as it
+  // pleased: putting the env back in extension.ts left every test green. The call site lives behind
+  // `vscode`, which this suite cannot import, so the source is what it reads — and it asserts it
+  // FOUND the calls, because a structural test that matches nothing passes for ever.
+  const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'extension.ts'), 'utf8');
+  const calls = [...source.matchAll(/mcpServerBlock\(([^)]*)\)/g)].map((m) => m[1]!.trim());
+
+  assert.ok(calls.length >= 2, `expected the two clipboard writes, found ${calls.length}`);
+  for (const args of calls) {
+    assert.doesNotMatch(args, /,/,
+      `mcpServerBlock(${args}) passes an env: every key in it freezes that setting for the client`);
+  }
+});

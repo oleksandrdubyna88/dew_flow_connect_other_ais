@@ -40,7 +40,24 @@ export function clientTargetsLine(targets: readonly { label: string; path: strin
  * `mcp__coai__…`, which is why it is short. `env` is omitted when empty: a field that does
  * nothing invites the question of what it is for.
  */
-export function mcpServerBlock(binaryPath: string, env: Readonly<Record<string, string>>): string {
+/**
+ * The block a person pastes into their MCP client: a path to a binary, and nothing else.
+ *
+ * <p>It used to carry every setting that differed from the defaults — sixteen keys at full stretch —
+ * and that was right when the env block was the ONLY channel to the server. Then the settings moved
+ * into a file in the data directory that the server re-reads live, and nobody trimmed the block.</p>
+ *
+ * <p><b>What that cost.</b> A variable in the client's config beats the file, key by key and on
+ * purpose (`SettingsFile.Layer`: a variable is more specific than a file any window may rewrite,
+ * and it is what a scripted run has). So every key a person had pasted was FROZEN at its pasted
+ * value: change it in the panel, the panel saves it, the panel shows the new number — and the server
+ * keeps using the old one, silently. Reported on 2026-09-06 as "we fixed the settings applying
+ * immediately several times", which was true, and true only for the keys nobody had pasted.</p>
+ *
+ * <p>An `env` argument is still accepted, because a containerised or scripted run has no panel and
+ * no data directory to share — that caller passes what it needs. The panel passes nothing.</p>
+ */
+export function mcpServerBlock(binaryPath: string, env: Readonly<Record<string, string>> = {}): string {
   const server =
     Object.keys(env).length === 0 ? { command: binaryPath } : { command: binaryPath, env };
   return JSON.stringify({ mcpServers: { coai: server } }, null, 2);
