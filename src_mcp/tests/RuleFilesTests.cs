@@ -259,7 +259,7 @@ public sealed class RuleFilesTests : IDisposable
     [Fact]
     public void ACodeSubmodule_IsNotReportedAsMissingRules()
     {
-        Write(".gitmodules", "[submodule \"external/dew_flow_mcp\"]\n\tpath = external/dew_flow_mcp\n");
+        WriteMount("external/dew_flow_mcp");
         Directory.CreateDirectory(Path.Combine(_repo, "external", "dew_flow_mcp"));
         Write("CLAUDE.md", "the entry point");
 
@@ -269,4 +269,91 @@ public sealed class RuleFilesTests : IDisposable
     /// <summary>Declares a submodule at <paramref name="path"/>, the way a consumer repository does.</summary>
     private void WriteMount(string path) =>
         Write(".gitmodules", $"[submodule \"{path}\"]\n\tpath = {path}\n\turl = https://example.invalid/rules.git\n");
+
+    [Fact]
+    public void ADozenRealRuleFiles_FitTheDefaultBudget()
+    {
+        // Measured on this repository on 2026-09-06: at the old 40 KB the bundle was 8 files with 19
+        // omitted, and the omissions were the rules findings are actually written against - testing,
+        // security, reuse-first, git-workflow, and all four language doctrines. The default is a
+        // budget rather than a promise (the family set is ~199 KB, and what does not fit is NAMED),
+        // but it must at least fit the shape of a real family repository rather than a third of it.
+        // Seven rules of 10 KB plus the entry file is 75 KB - inside 80, outside 60.
+        Write("CLAUDE.md", Filler("entry", 3_000));
+        for (var n = 0; n < 7; n++)
+        {
+            Write($".claude/rules/shared/common/rule-{n}.md", Filler($"rule {n}", 10_000));
+        }
+
+        var bundle = RuleFiles.Collect(_repo);
+
+        bundle.Files.Should().HaveCount(8, "75 KB of rules is not a big rule set");
+        bundle.Omitted.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TwoRoundsSeeTwoDifferentHalvesOfTheFamilyRules()
+    {
+        // The measurement that asked for this: 199 KB of family rules against an 80 KB budget, and in
+        // enumeration order the same twelve files won every time - so testing.md, security.md,
+        // reuse-first.md and all four language doctrines had never been shown to any reviewer.
+        Write("CLAUDE.md", Filler("entry", 1_000));
+        WriteMount(".claude/rules/shared");
+        for (var n = 0; n < 20; n++)
+        {
+            Write($".claude/rules/shared/common/rule-{n:00}.md", Filler($"rule {n}", 10_000));
+        }
+
+        var first = RuleFiles.Collect(_repo, budgetBytes: 40_000, seed: 1);
+        var second = RuleFiles.Collect(_repo, budgetBytes: 40_000, seed: 2);
+
+        first.Files.Select(f => f.Path).Should().NotBeEquivalentTo(
+            second.Files.Select(f => f.Path), "two rounds that show the same rules leave the rest unread for ever");
+    }
+
+    [Fact]
+    public void AcrossEnoughRounds_EveryFamilyRuleGetsRead()
+    {
+        Write("CLAUDE.md", Filler("entry", 1_000));
+        WriteMount(".claude/rules/shared");
+        for (var n = 0; n < 20; n++)
+        {
+            Write($".claude/rules/shared/common/rule-{n:00}.md", Filler($"rule {n}", 10_000));
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var round = 0; round < 60; round++)
+        {
+            foreach (var file in RuleFiles.Collect(_repo, budgetBytes: 40_000, seed: round).Files)
+            {
+                seen.Add(file.Path);
+            }
+        }
+
+        // Sixty FIXED seeds, so this is a deterministic statement about the draw rather than a
+        // coin-flip that fails once a fortnight in somebody else's CI.
+        seen.Should().HaveCount(21, "a rule that is never drawn is a rule that is never applied");
+    }
+
+    [Fact]
+    public void TheEntryFileAndTheRepositorysOwnRules_AreNeverInTheDraw()
+    {
+        // They are few, they are the entry points, and they are the rules a diff in THIS repository
+        // can break. A round that rolled them out of its own budget would be worse than one that
+        // never varied at all.
+        Write("CLAUDE.md", Filler("entry", 1_000));
+        WriteMount(".claude/rules/shared");
+        Write(".claude/rules/common/ours.md", Filler("ours", 2_000));
+        for (var n = 0; n < 20; n++)
+        {
+            Write($".claude/rules/shared/common/rule-{n:00}.md", Filler($"rule {n}", 10_000));
+        }
+
+        for (var round = 0; round < 6; round++)
+        {
+            var paths = RuleFiles.Collect(_repo, budgetBytes: 25_000, seed: round).Files.Select(f => f.Path);
+
+            paths.Should().Contain("CLAUDE.md").And.Contain(".claude/rules/common/ours.md");
+        }
+    }
 }

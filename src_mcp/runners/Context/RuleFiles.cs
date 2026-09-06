@@ -77,8 +77,22 @@ public static class RuleFiles
     private static readonly (string Dir, string Pattern)[] RuleFolders =
         [(".claude/rules", "*.md"), (".cursor/rules", "*.mdc"), (".cursor/rules", "*.md")];
 
-    /// <summary>Rules are text and a prompt is finite; 40 KB is about a dozen real rule files.</summary>
-    public const int DefaultBudgetBytes = 40_000;
+    /// <summary>
+    /// Rules are text and a prompt is finite. 80 KB is about a dozen and a half real rule files.
+    /// </summary>
+    /// <remarks>
+    /// Raised from 40 KB on 2026-09-06, after measuring what this repository actually shows a
+    /// reviewer: at 40 KB it was 8 files and 19 omitted, and the omitted list included `testing.md`,
+    /// `security.md`, `reuse-first.md`, `git-workflow.md` and all four language doctrines — the rules
+    /// most findings are written against. Raised to 80 KB the same day, on the operator's call, and
+    /// measured again there: 12 files, 77 KB, 16 omitted. The extra 20 KB buys ONE file, because
+    /// `development-workflow.md` (14 KB) and `http-contracts.md` (11 KB) are collected first and take a
+    /// quarter of the budget between them — so the honest reading is that the ORDER, not the size, is
+    /// what keeps `testing.md` and `security.md` out. The whole family set is about 199 KB, so this
+    /// stays a budget rather than a fix: what it cannot fit is NAMED in the prompt (the bundle renders
+    /// an "omitted for length" note) precisely so a reviewer cannot read an absence as compliance.
+    /// </remarks>
+    public const int DefaultBudgetBytes = 80_000;
 
     /// <summary>Somebody else's conventions, vendored or generated, are not this project's rules.</summary>
     private static readonly string[] NotOurs =
@@ -123,7 +137,11 @@ public static class RuleFiles
         AttributesToSkip = FileAttributes.ReparsePoint | FileAttributes.Hidden | FileAttributes.System,
     };
 
-    public static RuleBundle Collect(string repoPath, int budgetBytes = DefaultBudgetBytes)
+    /// <param name="seed">
+    /// Fixes the draw, for a test. Left alone in production, so two rounds see two different halves
+    /// of the family rules.
+    /// </param>
+    public static RuleBundle Collect(string repoPath, int budgetBytes = DefaultBudgetBytes, int? seed = null)
     {
         if (!Directory.Exists(repoPath))
         {
@@ -135,7 +153,7 @@ public static class RuleFiles
         var omitted = new List<string>();
         var used = 0;
 
-        foreach (var relative in Candidates(repoPath, mounts))
+        foreach (var relative in Candidates(repoPath, mounts, seed))
         {
             var full = Path.Combine(repoPath, relative.Replace('/', Path.DirectorySeparatorChar));
             if (Read(full) is not { } text)
@@ -167,7 +185,8 @@ public static class RuleFiles
     /// rules would be read first and the repository's own rule dropped. The rules a diff in THIS
     /// repository can break come first; the family's are the same in six checkouts.
     /// </remarks>
-    private static IEnumerable<string> Candidates(string repoPath, IReadOnlyList<SubmoduleMount> mounts)
+    private static IEnumerable<string> Candidates(
+        string repoPath, IReadOnlyList<SubmoduleMount> mounts, int? seed)
     {
         foreach (var file in InstructionFiles)
         {
@@ -180,11 +199,52 @@ public static class RuleFiles
             yield return path;
         }
 
-        foreach (var path in folders.Where(p => UnderAnyMount(p, mounts)))
+        foreach (var path in Shuffled(folders.Where(p => UnderAnyMount(p, mounts)).ToList(), seed))
         {
             yield return path;
         }
     }
+
+    /// <summary>
+    /// The mounted family rules, in a different order every round.
+    /// </summary>
+    /// <remarks>
+    /// <para>Measured 2026-09-06: the family set is ~199 KB against an 80 KB budget, and in
+    /// enumeration order the first two files take a quarter of it — so `testing.md`, `security.md`,
+    /// `reuse-first.md` and all four language doctrines were never shown to any reviewer, ever. Not
+    /// because the budget was small: because they were last in line, and the line never changed.</para>
+    /// <para>Raising the budget cannot fix that; a different draw each round can. At 80 KB of 199 a
+    /// round sees about two fifths of the family rules, so a given rule is shown roughly every second
+    /// or third round — and across the rounds of one change, with several reviewers each, most of the
+    /// set gets read. The operator's call, and the right one: a rule shown sometimes is infinitely
+    /// more than a rule shown never.</para>
+    /// <para>What is NOT shuffled: the instruction files and the repository's OWN rules. They are few,
+    /// they are the entry points, and they are the rules a diff in this repository can break — they
+    /// come first and they always fit.</para>
+    /// <para>The omitted list still names everything that did not fit, so a round says which rules it
+    /// did not see rather than implying it saw them all.</para>
+    /// </remarks>
+    // CA1859: the array IS the concrete type the caller foreaches over, and returning it as one
+    // costs nothing here.
+    // S2245 wants a cryptographic generator. It is wrong about this call: nothing here guards a
+    // secret, and the draw decides only WHICH rule files a reviewer is shown when they do not all
+    // fit. The `seed` parameter is the tell — it exists so a test can assert an exact order, which
+    // a cryptographic generator cannot give at all. Swapping it would break the tests and protect
+    // nothing.
+#pragma warning disable S2245 // Random is not used for security here — see above.
+    private static string[] Shuffled(IReadOnlyList<string> paths, int? seed)
+    {
+        var random = seed is { } fixed_ ? new Random(fixed_) : Random.Shared;
+        var drawn = paths.ToArray();
+        for (var index = drawn.Length - 1; index > 0; index--)
+        {
+            var swap = random.Next(index + 1);
+            (drawn[index], drawn[swap]) = (drawn[swap], drawn[index]);
+        }
+
+        return drawn;
+    }
+#pragma warning restore S2245
 
     /// <summary>Every rule file under the rule folders, de-duplicated and in a stable order.</summary>
     private static IReadOnlyList<string> FolderFiles(string repoPath, IReadOnlyList<SubmoduleMount> mounts) =>
