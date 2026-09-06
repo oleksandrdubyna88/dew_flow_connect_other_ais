@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.30.4 — 2026-09-05 (server 0.18.2)
+## 0.30.4 — 2026-09-06 (server 0.18.2)
 
 **The server shipped unable to open its own database, on every platform.** 0.18.1 carried the
 executable alone. Native AOT compiles managed code; the call into SQLite still resolves at run time
@@ -12,14 +12,29 @@ recorded, and the log page had nothing to show.
 It answered `--version`, `--help` and a full `tools/list` exchange throughout, which is why every
 check passed. Found by running the installed build against a real round rather than by reading it.
 
-Three fixes: the release archive carries the native library and the job **fails** if the publish
-output has none; the release smoke makes the published binary actually open a database, which is the
-check that would have caught this; and the installer copies everything the archive brought rather
-than the one file it knows by name.
+What ships in the fix:
 
-## Server 0.18.2 — 2026-09-05
+- **The release archive carries the native library**, the job fails when the publish output has none,
+  and — the part the review gate added — the **archive itself** is listed after it is made and the
+  library must be at its top level, beside the binary. A publish directory proves the library was
+  built; an include filter sits between that and what ships.
+- **The release smoke makes the published binary open a database** for every RID whose binary its
+  runner can execute. That is the check that would have caught this.
+- **The installer copies everything the archive brought**, rather than the one file it knows by name,
+  so the next native dependency needs no change there. The SQLite library itself is **required**: one
+  the archive brought and the installer could not place stops the install with a message naming the
+  reason, because on an upgrade a running server holds the old file open, the copy fails, and a new
+  binary beside an old library is this same incident again. Every copy gets one retry after 400 ms,
+  since that failure is transient by nature.
+- **`--log` no longer dies when the library is missing.** The fault arrives as a
+  `TypeInitializationException` wrapping `DllNotFoundException`, thrown from SQLite's type
+  initializer, which the handler's filter never saw — so the one command a person runs to find out
+  what happened was the one that crashed. It answers with an empty log and names the missing library.
 
-Ships `e_sqlite3` beside the binary, for win-x64/arm64, linux-x64/arm64 and osx-x64/arm64.
+Also: the rounds log page had a guard against rendering an empty page, and that guard was green only
+on the day it was written — the page opens on **today**, the fixture was dated, and the row fell out
+of the default filter the next morning. The page's clock is frozen in the test now, so what is
+asserted is the page rather than the calendar.
 
 ## 0.30.3 — 2026-09-05 (server 0.18.1)
 
