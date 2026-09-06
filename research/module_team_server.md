@@ -121,6 +121,58 @@ cannot compute either, and both were already on the wire.
 nobody can configure — no server URL field, no sign-in, no token — so every reviewer it created would
 exit `77 not signed in`. An accepted finding from the code round said so.
 
+### Epic 3 — the panel, and the three things it had to be told
+
+The extension's half: a **Team servers** section, adding a reviewer from a server's catalog, and
+what each server says was spent on it. `teamServers.ts` is pure, `teamServerApi.ts` is the wire,
+`teamServerAuth.ts` is the half that touches `vscode` and the disk, `teamServerView.ts` is the
+markup. Everything except the last is testable in plain Node, which is why the security decisions
+below are assertions rather than comments.
+
+**One URL, one token file — asserted from both languages.** The extension WRITES the token and the
+MCP shim READS it, each deriving the path independently: TypeScript's `URL` here, .NET's `Uri`
+there. Isolated tests on each side cannot see a divergence, because each side is self-consistent;
+the failure appears only as somebody signing in successfully and being told they are not signed in
+one second later. So the vectors live in `shared/team-server-url-vectors.json` and BOTH suites
+assert them — 38 C# assertions and their TypeScript twins. Two reviewers raised it independently on
+the plan round, and the two languages turned out to already agree on every vector.
+
+**A row's id and the server's name for a vendor are two different things.** Rows are
+`<serverId>-<vendor>` so two Team servers each offering `codex` do not collide, and the id names the
+row, its spending history and its vault key. The server knows only `codex`. `remoteVendor` carries
+that, all the way to `--vendor`. Without it every Team-server review would have been refused on
+arrival and reported as a vendor the server "does not offer" — which reads exactly like a typo.
+
+**The server id is generated once and never rewritten.** Not the display name, which is editable, and
+not the URL, which can be corrected after a typo: either would orphan every reviewer row the first
+time somebody changed it.
+
+**An advertised scope is a trust boundary, not a shape.** A person adds a server by typing a URL, so
+a hostile one could otherwise advertise any scope and have the extension mint a Microsoft token for
+it and post it straight back. Two things are pinned: the resource must be `api://<guid>` — never a
+Graph scope — and the permission must be exactly `coai.access`. The application id is still the
+server's to choose, so the first sign-in to a given server asks the person to confirm it, once.
+Entra's own consent screen is the second backstop, not a substitute.
+
+**Silent renewal is silent.** `clearSessionPreference` forces an account prompt and `createIfNone:
+false` forbids showing one, so the pair the plan originally specified could only ever return
+nothing — and the extension would have read that as an expired identity session and signed people
+out. Weekly. Which is the exact thing silent renewal exists to prevent.
+
+**A sign-in that half worked is undone.** If the session is created but the token cannot be written,
+the session is DELETED again: otherwise a live session exists on the server that this machine can
+neither use nor revoke. Signing out is best effort against the SERVER — one that is down must not
+keep somebody signed in locally — and NOT best effort against the disk, where a surviving token is a
+usable credential and its path is named.
+
+**Removing a server deals with what pointed at it**: it signs out first, then names the reviewer rows
+that cannot work without it and lets the person choose, because those rows carry spending history.
+
+**Nothing renders from the network.** The panel draws from what was last learned and a fetch
+repaints when it lands; every request carries an `AbortController` deadline, and a refusal, a
+timeout and a dropped connection are all answers rather than exceptions thrown into a render. A
+catalog that could not be re-fetched is shown as STALE rather than as absent.
+
 ### Story 2.1 — identity and sessions
 
 - **A session is minted from an identity provider's token and never from another session.** A token

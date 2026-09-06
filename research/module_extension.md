@@ -33,6 +33,36 @@ switch on seeds this side from what it reads today, so nothing changes until som
 the seed is idempotent so switching off and on again keeps what a side had. `uiScale` and
 `helpLanguage` stay shared deliberately: a text size belongs to the person, not to the company.
 
+### Team servers, and the four modules they are split into (2026-09-06)
+
+A **Team server** runs the vendor CLIs on one machine, on one company subscription, and everybody
+signs in to it with their work account. The extension's half is deliberately four files, split by
+what can be TESTED rather than by topic:
+
+| File | What it holds | Testable without |
+|---|---|---|
+| `teamServers.ts` | the canonical URL, the token filename, the server id, the scope rules | anything |
+| `teamServerApi.ts` | every request, each with a deadline | a server (stubbed `fetch`) |
+| `teamServerAuth.ts` | sign in / out / renew, the token file | an extension host (`AuthHost`, `StateStore`) |
+| `teamServerView.ts` | the section's markup, the slot line, the usage block | a webview |
+
+Only the last needs a browser, and it is pure. That split is why the security decisions in this
+feature are assertions rather than comments: the compensation path when a token cannot be saved, the
+refusal of a Graph scope, and the flag silent renewal passes are all reachable from a plain Node
+test.
+
+**The panel never renders from the network.** `refreshTeamServers` is STARTED by a render and never
+awaited by one; it repaints when it lands, and its freshness check is what stops the loop — the
+render it triggers finds the answer fresh and starts nothing. A catalog that could not be re-fetched
+is shown as stale rather than as absent, because last week's slot counts are more useful than a blank
+row and saying they are old is what keeps that honest.
+
+**`teamServers` and `usageScope` are OPTIONAL on `PanelState`,** which is an accommodation and worth
+naming as one: the test fixtures are stored with CRLF under `core.autocrlf=true`, so any commit that
+touches one rewrites every line of it. Making the fields required cost sixteen unreviewable
+whole-file diffs to add a field none of those assertions read. Absent means none — which is what a
+panel with no Team servers has.
+
 ## Commands
 
 | Command | Does |
