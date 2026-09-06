@@ -54,6 +54,10 @@ public sealed class VendorCatalogTests : IDisposable
     [InlineData("""[{ "id": "x", "runtime": "codex", "models": ["m"], "slots": [] }]""", "slots")]
     [InlineData("""[{ "id": "x", "runtime": "codex", "models": ["m"], "slots": ["../etc"] }]""", "../etc")]
     [InlineData("""[{ "id": "x", "runtime": "local", "models": ["m"], "slots": ["a"] }]""", "local")]
+    // An id becomes a directory under <DataDir>/accounts, so an id that can climb out of it is the
+    // same defect as a slot name that can — and only the slot name was checked at first.
+    [InlineData("""[{ "id": "../shared", "runtime": "codex", "models": ["m"], "slots": ["a"] }]""", "../shared")]
+    [InlineData("""[{ "id": "a/b", "runtime": "codex", "models": ["m"], "slots": ["a"] }]""", "a/b")]
     public void EachBadEntryIsRefusedByName(string json, string mentioned)
     {
         WriteFile(json);

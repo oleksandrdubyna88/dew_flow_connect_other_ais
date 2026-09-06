@@ -30,6 +30,13 @@ public static partial class CooldownParser
     public static readonly TimeSpan MaxGuess = TimeSpan.FromHours(5);
 
     /// <summary>A limit described as weekly, with no date to work from.</summary>
+    /// <remarks>
+    /// A day, not a week. The vendor said "weekly" but not WHEN the week turns, so the honest range is
+    /// anywhere from minutes to seven days — and a seven-day guess would park a paid account for a
+    /// week over a sentence, which is the one outcome worse than retrying slightly early. A day is the
+    /// smallest wait that can plausibly cross a reset boundary, and the next refusal doubles from
+    /// there anyway. (local, code round, asking why this number.)
+    /// </remarks>
     public static readonly TimeSpan WeeklyWithoutDate = TimeSpan.FromHours(24);
 
     /// <summary>

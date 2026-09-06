@@ -1,5 +1,3 @@
-using CoaiMcp.Runners.Processes;
-
 namespace CoaiServer;
 
 /// <summary>
@@ -23,12 +21,23 @@ public static class VendorLogin
     /// <summary>The command line was wrong, or the vendor/slot is not configured.</summary>
     public const int UsageExitCode = 64;
 
+    /// <summary>Nobody finished the sign-in before the timeout, and the CLI was stopped.</summary>
+    public const int TimedOutExitCode = 73;
+
+    /// <summary>How long a person is given to finish a device sign-in.</summary>
+    /// <remarks>
+    /// Bounded, because a CLI waiting on a browser nobody opened waits for ever otherwise and the
+    /// operator's terminal is held with it. Fifteen minutes is generous for "open a URL and paste a
+    /// code"; `Coai:LoginTimeoutSeconds` moves it. (local, code round.)
+    /// </remarks>
+    public static readonly TimeSpan DefaultSignInTimeout = TimeSpan.FromMinutes(15);
+
     public static async Task<int> RunAsync(
         string[] args,
         string dataDir,
-        IProcessLauncher launcher,
         TextWriter output,
         TimeSpan? wait = null,
+        TimeSpan? signInTimeout = null,
         CancellationToken ct = default)
     {
         if (args is not [_, var vendorId, var slotName, ..])
@@ -42,8 +51,14 @@ public static class VendorLogin
         if (catalog.Find(vendorId) is not { } vendor)
         {
             await output.WriteLineAsync(
-                $"'{vendorId}' is not a configured vendor. vendors.json has: "
-                + (catalog.Vendors.Count > 0 ? string.Join(", ", catalog.Vendors.Select(v => v.Id)) : "nothing"));
+                $"'{vendorId}' is not a configured vendor. "
+                + (catalog.Vendors.Count > 0
+                    ? $"vendors.json has: {string.Join(", ", catalog.Vendors.Select(v => v.Id))}"
+                    // Naming the DIRECTORY, not just the file: the commonest cause of an empty catalog
+                    // here is `login` run without Coai__DataDir, so it read a different data directory
+                    // from the server's and found nothing. (local, code round.)
+                    : $"no vendors are configured — this command read {dataDir}, and the server's "
+                        + "Coai:DataDir must be the same directory"));
 
             return UsageExitCode;
         }
@@ -56,23 +71,28 @@ public static class VendorLogin
             return UsageExitCode;
         }
 
-        return await SignInAsync(vendor, slotName, dataDir, launcher, output, wait, ct);
+        return await SignInAsync(vendor, slotName, dataDir, output, wait, signInTimeout, ct);
     }
 
     private static async Task<int> SignInAsync(
         VendorConfig vendor,
         string slotName,
         string dataDir,
-        IProcessLauncher launcher,
         TextWriter output,
         TimeSpan? wait,
+        TimeSpan? signInTimeout,
         CancellationToken ct)
     {
         var registry = new SlotRegistry(dataDir, new JsonFileStore());
         var slot = registry.Read(vendor.Id, slotName);
 
         await output.WriteLineAsync($"taking {vendor.Id}/{slotName}…");
-        using var lease = await registry.AcquireAsync(slot, wait, ct);
+        using var lease = await registry.AcquireAsync(
+            slot,
+            wait,
+            budget => output.WriteLine(
+                $"{vendor.Id}/{slotName} is in use by a review — waiting up to {budget.TotalSeconds:0}s…"),
+            ct);
         if (lease is null)
         {
             // The bounded wait the plan round asked for, twice. An unbounded one is worse than a
@@ -85,15 +105,22 @@ public static class VendorLogin
             return BusyExitCode;
         }
 
-        ProcessResult result;
+        await output.WriteLineAsync(
+            $"running `{SignInCommand(vendor.Runtime)} {string.Join(" ", SignInArguments(vendor.Runtime))}` "
+            + "— follow its instructions below.");
+
+        int? exitCode;
         try
         {
-            result = await launcher.RunAsync(
-                new ProcessRequest(SignInCommand(vendor.Runtime), SignInArguments(vendor.Runtime), slot.Directory)
-                {
-                    Environment = SlotEnvironment.For(vendor.Runtime, slot.Directory, registry.TokenFor(slot, vendor.Runtime)),
-                    Timeout = TimeSpan.FromMinutes(15),
-                },
+            // Attached to this terminal, NOT captured: the CLI prints a URL and a code and waits for
+            // the person. Capturing that output is what made the one interactive command in this
+            // product the one command that could not be used.
+            exitCode = await InteractiveProcess.RunAsync(
+                SignInCommand(vendor.Runtime),
+                SignInArguments(vendor.Runtime),
+                slot.Directory,
+                SlotEnvironment.For(vendor.Runtime, slot.Directory, registry.TokenFor(slot, vendor.Runtime)),
+                signInTimeout ?? DefaultSignInTimeout,
                 ct);
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
@@ -107,18 +134,28 @@ public static class VendorLogin
             return UsageExitCode;
         }
 
-        return await ReportAsync(result, registry, slot, vendor, slotName, output);
+        return await ReportAsync(exitCode, registry, slot, vendor, slotName, output);
     }
 
     private static async Task<int> ReportAsync(
-        ProcessResult result,
+        int? exitCode,
         SlotRegistry registry,
         AccountSlot slot,
         VendorConfig vendor,
         string slotName,
         TextWriter output)
     {
-        if (result.ExitCode == 0)
+        if (exitCode is null)
+        {
+            await output.WriteLineAsync(
+                $"{vendor.Id}/{slotName}: the sign-in did not finish in time and was stopped. "
+                + "The account is unchanged and still needs signing in — run this again and complete "
+                + "the URL the CLI prints.");
+
+            return TimedOutExitCode;
+        }
+
+        if (exitCode == 0)
         {
             registry.MarkSignedIn(slot);
             await output.WriteLineAsync($"{vendor.Id}/{slotName} is signed in.");
@@ -128,11 +165,13 @@ public static class VendorLogin
 
         // Left marked needs-sign-in: a sign-in that failed has not fixed anything, and clearing the
         // flag because somebody TRIED would put the account back in rotation to fail every job.
+        // The CLI already printed its own reason to this terminal — repeating a captured copy is
+        // not possible here and would be noise if it were.
         await output.WriteLineAsync(
-            $"{vendor.Id}/{slotName} was NOT signed in (exit {result.ExitCode}). "
-            + (result.StdErr.Length > 0 ? result.StdErr.Trim() : result.StdOut.Trim()));
+            $"{vendor.Id}/{slotName} was NOT signed in (the CLI exited {exitCode}). It is still "
+            + "marked as needing sign-in.");
 
-        return result.ExitCode;
+        return exitCode.Value;
     }
 
     /// <summary>The executable that signs this runtime in.</summary>

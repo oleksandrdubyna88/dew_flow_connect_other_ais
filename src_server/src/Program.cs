@@ -33,13 +33,17 @@ if (args is ["login", ..])
     return await VendorLogin.RunAsync(
         args,
         Environment.GetEnvironmentVariable("Coai__DataDir") ?? "/data",
-        new ProcessLauncher(),
         Console.Out,
         // How long to wait for a review that is using the account. Configurable because the right
         // answer depends on how long this deployment's reviews run, and because an operator who
         // knows the box is idle should not be made to wait the default.
         int.TryParse(Environment.GetEnvironmentVariable("Coai__LoginWaitSeconds"), out var seconds)
             ? TimeSpan.FromSeconds(seconds)
+            : null,
+        // And how long the PERSON is given to finish the sign-in the CLI starts. A device flow that
+        // nobody completes would otherwise hold the operator's terminal indefinitely.
+        int.TryParse(Environment.GetEnvironmentVariable("Coai__LoginTimeoutSeconds"), out var signIn)
+            ? TimeSpan.FromSeconds(signIn)
             : null);
 }
 
@@ -121,7 +125,7 @@ builder.Services.AddSingleton(sessions);
 // registry owns the cross-process lock that keeps two launches off one account.
 var files = new JsonFileStore((message, error) => reportSessionFailure?.Invoke(message, error));
 var catalog = new VendorCatalogHost(dataDir, message => reportCatalog?.Invoke(message));
-var slotRegistry = new SlotRegistry(dataDir, files);
+var slotRegistry = new SlotRegistry(dataDir, files, (message, error) => reportSessionFailure?.Invoke(message, error));
 var vendorHealth = new VendorHealthCache(new ProcessLauncher());
 
 var app = builder.Build();

@@ -21,17 +21,22 @@ public static class CatalogEndpoints
             var caller = ctx.CallerOf();
             var now = DateTimeOffset.UtcNow;
             var current = catalog.Current;
-            var vendors = new List<CatalogVendorDto>(current.Vendors.Count);
+            // Probed in PARALLEL, and by runtime rather than by vendor. Sequentially, a catalog with
+            // ten vendors waited for ten process launches one after another before answering; the
+            // cache is keyed per runtime, so several vendors on one CLI also collapse to one probe.
+            // (Three reviewers, code round.)
+            var health_ = await Task.WhenAll(
+                current.Vendors.Select(async v => (v.Id, Health: await health.OfAsync(v.Runtime, ct))));
+            var byVendor = health_.ToDictionary(h => h.Id, h => h.Health, StringComparer.OrdinalIgnoreCase);
 
-            foreach (var vendor in current.Vendors)
-            {
-                vendors.Add(new CatalogVendorDto(
+            var vendors = current.Vendors
+                .Select(vendor => new CatalogVendorDto(
                     vendor.Id,
                     vendor.Runtime,
                     vendor.Models,
-                    await health.OfAsync(vendor.Runtime, ct),
-                    Summarise(slots.SlotsOf(vendor), now)));
-            }
+                    byVendor[vendor.Id],
+                    Summarise(slots.SlotsOf(vendor), now)))
+                .ToList();
 
             return Results.Json(
                 new CatalogDto(Startup.Version, caller.IsAdmin, vendors, ErrorFor(current, catalog)),
@@ -77,23 +82,41 @@ public static class CatalogEndpoints
 public sealed class VendorHealthCache(IProcessLauncher launcher, TimeSpan? ttl = null)
 {
     private readonly TimeSpan _ttl = ttl ?? TimeSpan.FromSeconds(60);
-    private readonly Dictionary<string, (DateTimeOffset AtUtc, VendorHealthDto Health)> _seen = new(StringComparer.OrdinalIgnoreCase);
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTimeOffset AtUtc, VendorHealthDto Health)> _seen =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>One gate PER RUNTIME, not one for the whole cache.</summary>
+    /// <remarks>
+    /// A single semaphore made every catalog request wait behind whichever probe happened to be
+    /// running — including requests for a different vendor, and including ones whose answer was
+    /// already cached. Per runtime, a slow <c>codex --version</c> delays only codex, and it still
+    /// collapses a burst of simultaneous first-requests into one launch. (codex and gemini, code round.)
+    /// </remarks>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> _gates =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>How many times the CLI has actually been launched. Test-visible on purpose.</summary>
-    internal int Probes { get; private set; }
+    internal int Probes;
 
     public async Task<VendorHealthDto> OfAsync(string runtime, CancellationToken ct = default)
     {
-        await _gate.WaitAsync(ct);
+        if (Fresh(runtime) is { } cached)
+        {
+            return cached;
+        }
+
+        var gate = _gates.GetOrAdd(runtime, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct);
         try
         {
-            if (_seen.TryGetValue(runtime, out var cached) && DateTimeOffset.UtcNow - cached.AtUtc < _ttl)
+            // Checked again inside the gate: several callers can miss the cache at once, and only
+            // the first of them should start a process.
+            if (Fresh(runtime) is { } arrived)
             {
-                return cached.Health;
+                return arrived;
             }
 
-            Probes += 1;
+            Interlocked.Increment(ref Probes);
             // The vendor's PROVIDER and RUNTIME are both the runtime name here, and the base URL is
             // empty: a Team server runs the vendor's own CLI with the vendor's own sign-in, which is
             // exactly the identity `RuntimeResolution.NameOf` resolves to that CLI's adapter. No
@@ -113,7 +136,12 @@ public sealed class VendorHealthCache(IProcessLauncher launcher, TimeSpan? ttl =
         }
         finally
         {
-            _gate.Release();
+            gate.Release();
         }
     }
+
+    private VendorHealthDto? Fresh(string runtime) =>
+        _seen.TryGetValue(runtime, out var cached) && DateTimeOffset.UtcNow - cached.AtUtc < _ttl
+            ? cached.Health
+            : null;
 }

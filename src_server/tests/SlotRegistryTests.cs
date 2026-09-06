@@ -188,6 +188,8 @@ public sealed class SlotRegistryTests : IDisposable
         start.Environment["Coai__DataDir"] = _dir;
         // Otherwise the busy case waits the two-minute default and this test takes two minutes.
         start.Environment["Coai__LoginWaitSeconds"] = "1";
+        // And a short sign-in timeout, so the free-slot case does not sit on a real device flow.
+        start.Environment["Coai__LoginTimeoutSeconds"] = "2";
 
         using var process = Process.Start(start)!;
         var stdout = await process.StandardOutput.ReadToEndAsync();

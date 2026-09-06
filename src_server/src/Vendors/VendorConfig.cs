@@ -53,6 +53,17 @@ public sealed record VendorConfig(
             return "a vendor has no 'id'";
         }
 
+        // The id becomes a DIRECTORY under <DataDir>/accounts, so it is checked exactly as a slot
+        // name is. Without this, `"id": "../shared"` passes validation and then `DirectoryFor` and
+        // `login` build paths outside the data root — creating directories and writing OAuth
+        // credentials somewhere nobody will look for them. Raised on this change's code round; the
+        // slot names were checked from the start and the id simply was not.
+        if (!IsSafeSegment(Id))
+        {
+            return $"vendor id '{Id}' is not usable as a directory name: an id is letters, digits, "
+                + "'-' or '_', because it names a folder under the data directory";
+        }
+
         if (!KnownRuntimes.Contains(Runtime ?? string.Empty))
         {
             return $"vendor '{Id}' names runtime '{Runtime}', which is not one of "

@@ -154,6 +154,35 @@ sequenceDiagram
   too early spends quota against a live limit, which on some plans extends it. So an unzoned time is
   never allowed to resolve to less than the 30-minute fallback, repeats double to a 5 h ceiling, and
   every pattern in the parser matches a line somebody actually captured from the VM.
+- **`login` is attached to the terminal, and is the ONE thing here that does not use
+  `ProcessLauncher`.** That launcher redirects stdout, stderr and stdin, which is right for
+  everything that wants output as a string — and fatal for a sign-in, which prints a URL and a code
+  and then waits for a person. Captured, the operator saw nothing and the CLI read EOF from a closed
+  stdin: the one interactive command in the product was the one command that could not be used.
+  `InteractiveProcess` starts the child with every redirection off. Widening `ProcessLauncher` with a
+  "do not redirect" flag was the alternative and is worse — its whole return type is
+  `StdOut`/`StdErr`, and a mode where both are empty by construction is a shape that lies.
+- **The lease writes state BEFORE it releases the lock.** The other order leaves a window in which
+  another process takes the account, reads the state and writes it back while this lease is still
+  about to write its own — and the later write silently overwrites whatever the other just recorded,
+  which could be a fresh cooldown or a needs-sign-in. The account would then look ready and be picked
+  again immediately: the exact outcome the lock exists to prevent. The release is in a `finally`, and
+  the state write cannot throw out of a `Dispose`.
+- **The vendor `id` is validated as a path segment, exactly as a slot name is.** It becomes a
+  directory under `accounts/`, so `"id": "../shared"` would have created directories and written
+  OAuth credentials outside the data root. The slot names were checked from the first draft and the
+  id simply was not.
+- **Every swallowed filesystem failure is reported.** A chmod that could not be applied still leaves
+  credentials readable by other users on the host; a token file that exists but cannot be read is
+  indistinguishable from an absent one unless somebody says so — and `login` would start an
+  interactive sign-in for an account that already had a perfectly good token. Both now name the path
+  in the log. Refusing to SERVE over a failed chmod was proposed and declined: this process may not
+  own the mode of a bind-mounted volume, and a server that will not start is worse than a loud one.
+- **Probes are cached per RUNTIME and run in parallel.** One global semaphore made every catalog
+  request wait behind whichever probe was running — including requests for other vendors and ones
+  whose answer was already cached — and the vendors were probed one after another, so ten vendors
+  meant ten sequential process launches before the endpoint answered.
+
 - **A handler needs a second parameter.** A lambda whose only parameter is `HttpContext` is treated
   as a `RequestDelegate`, whose return value is discarded — the catalog answered 200 with an empty
   body until it took a `CancellationToken` too. Found by its own tests.

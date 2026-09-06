@@ -57,71 +57,88 @@ public sealed class VendorCatalogHost
     {
         _path = Path.Combine(dataDir, "vendors.json");
         _log = log ?? (_ => { });
-        var (token, catalog) = Load(VendorCatalog.Empty);
+        var (token, bytes, failure) = ReadOnce();
         _token = token;
-        _current = catalog;
+        _current = failure.Length > 0 ? Refuse(VendorCatalog.Empty, failure) : Parse(bytes, VendorCatalog.Empty);
     }
 
     /// <summary>The file this host reads, so a message can name the thing to create.</summary>
     public string FilePath => _path;
 
-    /// <summary>The catalog to answer this call with — re-read only when the file actually moved.</summary>
+    /// <summary>The catalog to answer this call with — re-parsed only when the file actually moved.</summary>
+    /// <remarks>
+    /// ONE read of the file per access, hashed and compared before anything is parsed. The first
+    /// draft peeked with a hash and then read again inside <c>Load</c>, which is two reads on every
+    /// change and a window in which the two could see different content. Reading once removes both.
+    /// (codex and gemini, code round.)
+    /// </remarks>
     public VendorCatalog Current
     {
         get
         {
             lock (_gate)
             {
-                var token = TokenOf(_path);
+                var (token, bytes, failure) = ReadOnce();
                 if (token == _token)
                 {
                     return _current;
                 }
 
-                var (newToken, catalog) = Load(_current);
-                _token = newToken;
-                _current = catalog;
+                _token = token;
+                _current = failure.Length > 0 ? Refuse(_current, failure) : Parse(bytes, _current);
 
                 return _current;
             }
         }
     }
 
-    /// <summary>
-    /// The identity of the file's CONTENT, or empty when there is no file.
-    /// </summary>
-    /// <remarks>
-    /// A read failure returns a token that cannot equal the previous one, so the next access tries
-    /// again rather than caching a transient error as the steady state — a file being written by the
-    /// operator's editor is exactly when this races.
-    /// </remarks>
-    private static string TokenOf(string path)
+    /// <summary>The file's bytes and their identity, or the reason it could not be read.</summary>
+    private (string Token, byte[] Bytes, string Failure) ReadOnce()
     {
         try
         {
-            return File.Exists(path)
-                ? Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)))
-                : string.Empty;
+            if (!File.Exists(_path))
+            {
+                // Absent is not an error. A fresh install has no vendors until somebody writes the
+                // file, and the catalog names the file to write rather than reporting a fault.
+                return (string.Empty, [], string.Empty);
+            }
+
+            var bytes = File.ReadAllBytes(_path);
+
+            return (Convert.ToHexString(SHA256.HashData(bytes)), bytes, string.Empty);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return Unrepeatable();
+            return (Unrepeatable(), [], $"{Path.GetFileName(_path)} could not be read: {e.Message}");
         }
     }
 
-    /// <summary>Read the file ONCE, and report the identity of exactly the bytes that were parsed.</summary>
-    /// <remarks>
-    /// Hashing the file in one call and parsing it in another would let the operator's save land
-    /// between them: the host would then remember a token for content it never loaded, and the edit
-    /// would be invisible until the NEXT one. One read, one hash of those bytes.
-    /// </remarks>
+    private VendorCatalog Parse(byte[] bytes, VendorCatalog previous)
+    {
+        if (bytes.Length == 0)
+        {
+            return VendorCatalog.Empty;
+        }
+
+        try
+        {
+            var entries = JsonSerializer.Deserialize(WithoutBom(bytes), ServerJsonContext.Default.VendorConfigArray) ?? [];
+
+            return Validate(entries, previous);
+        }
+        catch (JsonException e)
+        {
+            return Refuse(previous, $"{Path.GetFileName(_path)} is not valid JSON: {e.Message}");
+        }
+    }
     /// <summary>The bytes without a UTF-8 byte-order mark, which the JSON reader refuses.</summary>
     /// <remarks>
     /// This file is edited by hand on a server, and several editors write a BOM by default — Windows
     /// Notepad among them. <c>JsonSerializer</c> does not skip one, so the operator's reward for using
     /// the wrong editor was <c>'0xEF' is an invalid start of a value</c>, a message that says nothing
-    /// about what to do. Found by this story's own catalog tests, which wrote the file the way a person
-    /// would.
+    /// about what to do. Found by this story's own catalog tests, which wrote the file the way a
+    /// person would.
     /// </remarks>
     private static ReadOnlySpan<byte> WithoutBom(ReadOnlySpan<byte> bytes) =>
         bytes.StartsWith(Bom) ? bytes[Bom.Length..] : bytes;
@@ -129,39 +146,12 @@ public sealed class VendorCatalogHost
     private static ReadOnlySpan<byte> Bom => [0xEF, 0xBB, 0xBF];
 
     /// <summary>A token that cannot equal any other, so the next access retries instead of caching a failure.</summary>
+    /// <remarks>
+    /// A file being written by the operator's editor is exactly when a read races. Returning a token
+    /// nothing can match means the next request tries again rather than remembering the error as the
+    /// steady state.
+    /// </remarks>
     private static string Unrepeatable() => "unreadable:" + Guid.NewGuid().ToString("N");
-
-    private (string Token, VendorCatalog Catalog) Load(VendorCatalog previous)
-    {
-        byte[] bytes;
-        try
-        {
-            if (!File.Exists(_path))
-            {
-                // Absent is not an error. A fresh install has no vendors until somebody writes the
-                // file, and the catalog names the file to write rather than reporting a fault.
-                return (string.Empty, VendorCatalog.Empty);
-            }
-
-            bytes = File.ReadAllBytes(_path);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return (Unrepeatable(), Refuse(previous, $"{Path.GetFileName(_path)} could not be read: {e.Message}"));
-        }
-
-        var token = Convert.ToHexString(SHA256.HashData(bytes));
-        try
-        {
-            var entries = JsonSerializer.Deserialize(WithoutBom(bytes), ServerJsonContext.Default.VendorConfigArray) ?? [];
-
-            return (token, Validate(entries, previous));
-        }
-        catch (JsonException e)
-        {
-            return (token, Refuse(previous, $"{Path.GetFileName(_path)} is not valid JSON: {e.Message}"));
-        }
-    }
     private VendorCatalog Validate(VendorConfig[] entries, VendorCatalog previous)
     {
         var refusal = FirstRefusal(entries);
