@@ -3,6 +3,20 @@
 > `src_vs_code` — the human surface. Four commands, zero runtime dependencies, no background work
 > and **no port**: the review itself lives in `coai-mcp`, which an MCP client owns and starts.
 
+### The copied block is a path, and nothing else (2026-09-06)
+
+`envBlock` used to fill the pasted `mcpServers` block with every setting that differed from the
+defaults — sixteen keys at full stretch. That was right while the env block was the only channel to
+the server; it stopped being right when the settings moved into `settings.json` in the data directory,
+and nobody trimmed it. Since `SettingsFile.Layer` gives the ENVIRONMENT precedence key by key (a
+variable is more specific than a file any window may rewrite, and it is what a scripted run has),
+every pasted key was frozen: the panel saved a change, showed it, and the server kept the old value.
+
+The panel passes no env now. `mcpServerBlock` still takes one, for a containerised or scripted run
+with no panel and no shared data directory. A guard reads `extension.ts` as SOURCE and fails if a call
+site passes an env again — the earlier tests asserted the function's default, and putting the env back
+at the call site left every one of them green.
+
 ### Settings a side keeps to itself (2026-09-06)
 
 VS Code resolves `window`-scoped settings from the CLIENT's `settings.json` and hands the same values

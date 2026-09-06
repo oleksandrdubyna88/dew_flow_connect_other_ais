@@ -1,12 +1,16 @@
 # PLAN — a vendor can be chosen per STAGE, from the panel
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/vendors.ts`,
-> `settingsShape.ts` (the env block), the panel's Reviewers section, and on the server
-> `PanelSettings.ProviderSettings` plus wherever a round picks its providers.
+> Status: **IMPLEMENTED, 2026-09-06.** A vendor is set per stage from the panel — two checkboxes per
+> row — and a stage no vendor serves is refused rather than passed with nothing reviewed. Merged as
+> #59 and released in server 0.18.3.
 >
-> Related: [RESULTS_vendor_overlap_2026-09-06.md](../research/RESULTS_vendor_overlap_2026-09-06.md) —
-> the measurement that asks for this; [PLAN_settings_per_side.md](PLAN_settings_per_side.md), which
-> this must compose with.
+> Deviations. The flags travel INSIDE the existing `COAI_VENDORS` JSON and only when a vendor is
+> narrowed, rather than in the new `COAI_<VENDOR>_STAGES` variable this plan proposed: the list is
+> already there and a second encoding of one fact is a format nobody can read. The stage is passed to
+> `BuildWork` as a REQUIRED argument — two attempts to derive it were both wrong in ways the tests
+> could not see (`planPrompts` is empty on an ordinary plan round; reading the roles works only
+> because no code round happens to carry `PlanCritique`), and the review gate asked for the explicit
+> parameter rather than the second guess.
 
 ## Why — measured, not guessed
 

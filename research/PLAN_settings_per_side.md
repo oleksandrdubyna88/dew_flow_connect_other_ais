@@ -1,12 +1,18 @@
 # PLAN — settings of their own for each side of the machine
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/settingsShape.ts`,
-> `coaiInstall.ts` (the side identity), `panelProvider.ts` + `panelView.ts` (a new section), and the
-> read path every setting goes through.
+> Status: **IMPLEMENTED, 2026-09-06.** Each side of the machine can keep its own settings —
+> `coai.perSideSettings`, off by default, with a **This side** section in the panel that names the
+> side it is editing. Merged as #56 and released in extension 0.31.0.
 >
-> Related: [module_extension.md](../research/module_extension.md),
-> [PLAN_server_version_per_side.md](../research/PLAN_server_version_per_side.md) — the same identity
-> problem solved once already, for the installed-version record.
+> Deviations, all deliberate. The switch is ONE shared flag, seeded per side when it is turned on —
+> the operator chose that over a per-side flag, because a side whose flag is off follows a shared
+> value another side can no longer see. The overlay stores a WHOLE value per key rather than merging
+> field by field, which is why two sides' vendor arrays cannot dilute each other (a review-gate
+> finding on the vendor-stage change worried about exactly that merge; there is none). And `sideKey`
+> was EXTRACTED from `installedKey` rather than written anew: that identity — remote kind, distro or
+> hostname, storage path — had already been argued through review once, for the two-sides install
+> record, and two WSL distros mounting the same `/home/<user>/.vscode-server/…` is the collision both
+> features have to survive.
 
 ## The symptom
 
