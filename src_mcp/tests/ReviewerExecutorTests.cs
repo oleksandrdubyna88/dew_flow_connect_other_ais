@@ -139,6 +139,31 @@ public sealed class ReviewerExecutorTests
     }
 
     [Fact]
+    public async Task AnEmptyAnswerCarriesTheCliOwnSentence_NotJustTheWordEmpty()
+    {
+        // Measured on a real round, 2026-09-06: three antigravity reviewers in one round reported
+        // "the vendor returned an empty answer" and the panel showed nothing else. The CLI had said
+        // exactly why on stderr - a tool wanted the "command" permission, headless mode cannot
+        // prompt for one, so it auto-denied and produced nothing - and that sentence was only in the
+        // kept evidence file, which nobody knows to open. Finding it took a quarter of an hour; it
+        // should have taken reading the note.
+        var launcher = new CountingLauncher(new ProcessResult(
+            ExitCode: 0,
+            StdOut: string.Empty,
+            StdErr: "jetski: no output produced - a tool required the \"command\" permission that "
+                + "headless mode cannot prompt for, so it was auto-denied.",
+            TimedOut: false));
+        var executor = new ReviewerExecutor(launcher);
+
+        var outcome = await executor.RunAsync(
+            FakeCliInvocations.Invoke("gemini", ["emit", ""]), ct: TestContext.Current.CancellationToken);
+
+        outcome.Should().BeOfType<ReviewerOutcome.Unparseable>()
+            .Which.Reason.Should().Contain("empty answer")
+            .And.Contain("auto-denied", "the CLI explained itself and the note must carry that");
+    }
+
+    [Fact]
     public async Task ExitZeroButNoOutputFile_IsUnparseable_NotOk()
     {
         var outcome = await _executor.RunAsync(
