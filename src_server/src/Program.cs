@@ -221,9 +221,22 @@ if (requireHttps)
     // a plaintext one. (The vault shipped the other way round once, and omitting the header was a
     // one-line bypass.) Health is the one exemption: the container's own probe has no proxy in
     // front of it and carries no secret.
+    //
+    // TWO places are checked, and the first one is the fix for a defect this shipped with:
+    // `UseForwardedHeaders` CONSUMES `X-Forwarded-Proto` when the request comes from a TRUSTED
+    // proxy — that is its job, it moves the value into `Request.Scheme` and strips the header so
+    // nothing downstream can be fooled twice. Reading only the raw header therefore refused every
+    // request on a correctly configured host, and configuring `Coai:TrustedProxies` properly was
+    // what BROKE it. Found by deploying: health answered and everything else said "HTTPS required."
+    // behind an nginx that was setting the header exactly right.
+    //
+    // The raw header is still honoured, for the deployment that has not set `TrustedProxies` yet:
+    // there the middleware leaves the header alone and this is the only evidence there is.
     app.Use(async (ctx, next) =>
     {
         if (ctx.Request.Path.StartsWithSegments("/api/health")
+            || ctx.Request.IsHttps
+            || ctx.Request.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase)
             || ctx.Request.Headers["X-Forwarded-Proto"].ToString().Equals("https", StringComparison.OrdinalIgnoreCase))
         {
             await next();
