@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Threading.RateLimiting;
+using CoaiMcp.Runners.Processes;
 using CoaiServer;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -22,6 +23,28 @@ using Serilog;
 if (args is ["--healthcheck"])
 {
     return await HealthProbe.RunAsync();
+}
+
+// `login` is a SUBCOMMAND of the same binary, run as `docker compose exec coai-server login codex a`.
+// It never starts the web host: an interactive sign-in waits on a human at a terminal, and the one
+// thing it must share with the running server is the account lock — which is a file, so it does.
+if (args is ["login", ..])
+{
+    return await VendorLogin.RunAsync(
+        args,
+        Environment.GetEnvironmentVariable("Coai__DataDir") ?? "/data",
+        Console.Out,
+        // How long to wait for a review that is using the account. Configurable because the right
+        // answer depends on how long this deployment's reviews run, and because an operator who
+        // knows the box is idle should not be made to wait the default.
+        int.TryParse(Environment.GetEnvironmentVariable("Coai__LoginWaitSeconds"), out var seconds)
+            ? TimeSpan.FromSeconds(seconds)
+            : null,
+        // And how long the PERSON is given to finish the sign-in the CLI starts. A device flow that
+        // nobody completes would otherwise hold the operator's terminal indefinitely.
+        int.TryParse(Environment.GetEnvironmentVariable("Coai__LoginTimeoutSeconds"), out var signIn)
+            ? TimeSpan.FromSeconds(signIn)
+            : null);
 }
 
 var builder = WebApplication.CreateBuilder(args);
@@ -91,23 +114,42 @@ Auth.AddSchemes(builder.Services, msTenant, msAudiences, googleEnabled, googleAu
 // Nothing calls the store before the assignment below, and after it every swallowed filesystem
 // failure reaches the log instead of only a null.
 Action<string, Exception>? reportSessionFailure = null;
+Action<string>? reportCatalog = null;
 var sessions = new SessionStore(
     dataDir,
     TimeSpan.FromDays(sessionTtlDays),
     (message, error) => reportSessionFailure?.Invoke(message, error));
 builder.Services.AddSingleton(sessions);
 
+// The vendor catalog and the accounts. The catalog re-reads vendors.json when it changes; the
+// registry owns the cross-process lock that keeps two launches off one account.
+var files = new JsonFileStore((message, error) => reportSessionFailure?.Invoke(message, error));
+var catalog = new VendorCatalogHost(dataDir, message => reportCatalog?.Invoke(message));
+var slotRegistry = new SlotRegistry(dataDir, files, (message, error) => reportSessionFailure?.Invoke(message, error));
+var vendorHealth = new VendorHealthCache(new ProcessLauncher());
+
 var app = builder.Build();
 var log = app.Logger;
 // Wired after Build() because that is when a logger exists; the store holds the delegate, so a
 // failure that happens before this point simply has nowhere to go — and nothing runs before it.
 reportSessionFailure = (message, error) => log.LogWarning(error, "{Message}", message);
+reportCatalog = message => log.LogInformation("{Message}", message);
 
 var swept = sessions.Sweep(DateTimeOffset.UtcNow);
 if (swept > 0)
 {
     log.LogInformation("swept {Count} expired session(s) at startup", swept);
 }
+
+// The catalog was built before the logger existed, so its first load had nowhere to report. Say
+// what it holds now — a server whose vendors.json was refused at boot must not look identical in
+// the log to one that loaded three vendors.
+var loaded = catalog.Current;
+log.LogInformation(
+    "vendors: {Count} loaded from {Path}{Problem}",
+    loaded.Vendors.Count,
+    catalog.FilePath,
+    loaded.Error.Length > 0 ? $" — REFUSED: {loaded.Error}" : string.Empty);
 
 app.UseForwardedHeaders();
 
@@ -188,7 +230,11 @@ app.MapGet("/api/client-config", () => Results.Json(
     new ClientConfigDto(msClientScope, Auth.ProvidersEnabled(msTenant, googleEnabled)),
     ServerJsonContext.Default.ClientConfigDto));
 
-app.MapSessionEndpoints(sessions, allowedDomains, allowAnyDomain, admins);
+// One gate for every authorised route, replacing the hand-written check story 2.1 repeated in each
+// handler. A route that is not registered with it cannot ask who is calling — see CallerFilter.
+var gate = new CallerFilter(allowedDomains, allowAnyDomain, admins);
+app.MapSessionEndpoints(sessions, gate);
+app.MapCatalogEndpoints(catalog, slotRegistry, vendorHealth, gate);
 
 // Anything that is not the API does not exist here.
 app.MapFallback(() => Results.NotFound());

@@ -5,12 +5,7 @@ namespace CoaiServer;
 /// </summary>
 public static class SessionEndpoints
 {
-    public static void MapSessionEndpoints(
-        this WebApplication app,
-        SessionStore sessions,
-        IReadOnlyCollection<string> allowedDomains,
-        bool allowAnyDomain,
-        IReadOnlyCollection<string> admins)
+    public static void MapSessionEndpoints(this WebApplication app, SessionStore sessions, CallerFilter gate)
     {
         // A session is minted from an IDENTITY PROVIDER's token and never from another session: a
         // token that could mint its own successor would never expire, which is the one property a
@@ -22,10 +17,7 @@ public static class SessionEndpoints
                 return Refuse("a session token cannot mint another session — sign in with Microsoft again");
             }
 
-            if (Auth.RequireCaller(ctx, allowedDomains, allowAnyDomain) is not { } caller)
-            {
-                return Results.Empty; // RequireCaller has set 401 or 403
-            }
+            var caller = ctx.CallerOf();
 
             // Persisted BEFORE the token is returned: a caller holding a token this server never
             // stored has a credential that can only ever be refused, and no way to know it.
@@ -35,18 +27,13 @@ public static class SessionEndpoints
                 new SessionDto(token, record.ExpiresUtc, record.Email),
                 ServerJsonContext.Default.SessionDto,
                 statusCode: StatusCodes.Status201Created);
-        });
+        }).RequireCaller(gate);
 
         // Only a session can be revoked, and saying so matters: answering 204 to somebody who
         // presented Microsoft's token would tell them a credential was withdrawn when nothing was —
         // a stateless token cannot be deleted by this server at all. (gemini, plan round.)
         app.MapDelete("/api/session", (HttpContext ctx) =>
         {
-            if (Auth.RequireCaller(ctx, allowedDomains, allowAnyDomain) is null)
-            {
-                return Results.Empty;
-            }
-
             if (ctx.Items[Auth.SessionToken] is not string token)
             {
                 return Refuse(
@@ -64,17 +51,16 @@ public static class SessionEndpoints
                         + "token still works. The server log names the failure."),
                     ServerJsonContext.Default.ErrorDto,
                     statusCode: StatusCodes.Status500InternalServerError);
-        });
+        }).RequireCaller(gate);
 
         app.MapGet("/api/whoami", (HttpContext ctx) =>
-            Auth.RequireCaller(ctx, allowedDomains, allowAnyDomain) is { } caller
-                ? Results.Json(
-                    new WhoAmIDto(
-                        caller.Email,
-                        caller.Name,
-                        admins.Any(a => string.Equals(a, caller.Email, StringComparison.OrdinalIgnoreCase))),
-                    ServerJsonContext.Default.WhoAmIDto)
-                : Results.Empty);
+        {
+            var caller = ctx.CallerOf();
+
+            return Results.Json(
+                new WhoAmIDto(caller.Email, caller.Name, caller.IsAdmin),
+                ServerJsonContext.Default.WhoAmIDto);
+        }).RequireCaller(gate);
     }
 
     /// <summary>

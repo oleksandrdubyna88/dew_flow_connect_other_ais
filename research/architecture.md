@@ -21,7 +21,7 @@ C4Container
   System_Boundary(coai, "ConnectOtherAIs") {
     Container(ext, "VS Code extension", "TypeScript", "Settings, rounds view, escalation modal, install button")
     Container(mcp, "coai-mcp", "C# Native AOT, stdio", "Round state machine, CLI fan-out, finding normalisation, verdict")
-    Container(srv, "coai-server", "C# Native AOT, HTTPS", "The Team server: company sign-in, sessions — and, from story 2.2, the vendor CLIs on one VM")
+    Container(srv, "coai-server", "C# Native AOT, HTTPS", "The Team server: company sign-in, sessions, the vendor allowlist and the account slots on one VM")
   }
   System_Ext(main, "Main AI (Claude Code)", "Writes the plan and the code")
   System_Ext(codex, "codex exec", "Reviewer CLI")
@@ -47,7 +47,7 @@ C4Container
 | Reviewer runners (worktrees, scheduler, vendors) | [module_runners.md](module_runners.md) | **shipped 2026-08-31** |
 | `coai-mcp` server | [module_server.md](module_server.md) | **shipped 2026-08-31** |
 | VS Code extension | [module_extension.md](module_extension.md) | **shipped 2026-08-31** (escalation loopback deferred) |
-| Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [../todo/PLAN_team_server.md](../todo/PLAN_team_server.md) | **story 2.1 shipped 2026-09-06** — the host, company sign-in and sessions; vendors, catalog and jobs are 2.2–2.4 |
+| Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [../todo/PLAN_team_server.md](../todo/PLAN_team_server.md) | **stories 2.1 and 2.2 shipped 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots and `login`; jobs and reviews are 2.3, usage 2.4 |
 | Measurement bench (`coai-bench`) | [module_bench.md](module_bench.md) · [../src_bench/README.md](../src_bench/README.md) | **shipped 2026-09-04** — drives the published server over stdio, records whole, judges separately |
 | Tests: the harness, its flows, its gaps | [module_tests.md](module_tests.md) | **recorded 2026-09-06** — three suites in-repo, the flow catalogue derived from the tool registry, and the two gaps named (no extension host, no real vendor in CI) |
 

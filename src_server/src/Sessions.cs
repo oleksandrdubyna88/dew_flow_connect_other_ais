@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 
 namespace CoaiServer;
 
@@ -47,6 +46,7 @@ public sealed class SessionStore(string dataDir, TimeSpan ttl, Action<string, Ex
     public static readonly TimeSpan LastUsedResolution = TimeSpan.FromHours(1);
 
     private readonly string _dir = Path.Combine(dataDir, "sessions");
+    private readonly JsonFileStore _files = new(onFailure);
 
     /// <summary>The file a token lives in: its hash, never itself.</summary>
     public static string FileNameFor(string token) =>
@@ -141,59 +141,16 @@ public sealed class SessionStore(string dataDir, TimeSpan ttl, Action<string, Ex
         return swept;
     }
 
-    private SessionRecord? Read(string fileName)
-    {
-        try
-        {
-            var path = Path.Combine(_dir, fileName);
+    // The three below are the shared store with this class's naming applied. They were this class's
+    // OWN implementation until story 2.2 needed the identical atomic write for the slot state; the
+    // answer was to extract it rather than copy it, so there is one write path and the next fix
+    // reaches both. Behaviour is unchanged, which is what this story's session tests prove by
+    // passing unedited.
+    private SessionRecord? Read(string fileName) =>
+        _files.Read(Path.Combine(_dir, fileName), ServerJsonContext.Default.SessionRecord);
 
-            return File.Exists(path)
-                ? JsonSerializer.Deserialize(File.ReadAllText(path), ServerJsonContext.Default.SessionRecord)
-                : null;
-        }
-        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
-        {
-            // A session that cannot be read is a session nobody is signed in with — throwing would
-            // turn one torn file into every request failing. But it is REPORTED: an unreadable
-            // session and an unknown one are the same 401 to the caller and completely different
-            // things to an operator, and only the log can tell them apart.
-            onFailure?.Invoke($"session file '{fileName}' could not be read", e);
+    private void Write(string fileName, SessionRecord record) =>
+        _files.Write(Path.Combine(_dir, fileName), record, ServerJsonContext.Default.SessionRecord);
 
-            return null;
-        }
-    }
-
-    private void Write(string fileName, SessionRecord record)
-    {
-        Directory.CreateDirectory(_dir);
-        var path = Path.Combine(_dir, fileName);
-        // A UNIQUE temporary name, not `path + ".tmp"`: two windows of one person can refresh the
-        // same session at once, and a shared temporary name is two writers on one file — the very
-        // race the rename was chosen to avoid. (gemini, code round.)
-        var temporary = Path.Combine(_dir, $"{fileName}.{Path.GetRandomFileName()}.tmp");
-        File.WriteAllText(temporary, JsonSerializer.Serialize(record, ServerJsonContext.Default.SessionRecord));
-        // Move, not copy-then-delete: a reader sees the old file or the new one, never half of one.
-        File.Move(temporary, path, overwrite: true);
-    }
-
-    /// <summary>True when the file is gone — including when it was never there.</summary>
-    /// <remarks>
-    /// Absent is success: revoking twice is not an error, and a session that does not exist is
-    /// exactly as withdrawn as one that was just removed. Only a filesystem that REFUSED is false.
-    /// </remarks>
-    private bool Delete(string fileName)
-    {
-        try
-        {
-            File.Delete(Path.Combine(_dir, fileName));
-
-            return true;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            onFailure?.Invoke($"session file '{fileName}' could not be deleted", e);
-
-            return false;
-        }
-    }
+    private bool Delete(string fileName) => _files.Delete(Path.Combine(_dir, fileName));
 }

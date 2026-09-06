@@ -24,12 +24,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- ServiceDefaults only, because it is the only one this story USES: the family's
-         logging. Core and Runners are what the server will RUN — the vendor adapters, the
-         executor, the resolution both binaries share — and they arrive with story 2.2,
-         which is the first code here that calls them. An unused reference is not free: it
-         pulls those assemblies into this binary's trim and AOT closure, so a change over
-         there can break a build over here before anything here uses it. (codex, code round.) -->
+    <!-- Runners arrives with story 2.2, which is the first code here that CALLS it: the vendor
+         probe, the not-signed-in diagnosis, and the one true list of runtime names that
+         vendors.json is validated against. Story 2.1 removed it precisely because nothing used it
+         yet, and an unused reference is not free under PublishAot — it pulls the assembly into this
+         binary's trim and AOT closure, so a change over there can break a build over here before
+         anything here uses it. Core is still absent for that reason; 2.3 brings it with the jobs. -->
+    <ProjectReference Include="..\..\src_mcp\runners\CoaiMcp.Runners.csproj" />
     <ProjectReference Include="..\..\src_mcp\service_defaults\CoaiMcp.ServiceDefaults.csproj" />
   </ItemGroup>
 
