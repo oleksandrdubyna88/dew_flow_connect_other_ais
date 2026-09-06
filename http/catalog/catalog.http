@@ -14,11 +14,27 @@ Authorization: Bearer {{token}}
     assert.strictEqual(typeof response.parsedBody.error, 'string');
     assert.strictEqual(typeof response.parsedBody.serverVersion, 'string');
   });
-  test('a server with no vendors.json says which file to create rather than looking healthy', () => {
+}}
+
+###
+
+# The empty-catalog message, which is what a FRESH install answers. Not @prod: a real deployment has
+# a vendors.json, so asserting this against one would report a healthy server as a regression — the
+# tag means "safe AND true against something live", and this is only the second half here.
+# (codex, code round.)
+
+# @name a_server_with_no_vendors_says_which_file_to_create
+GET {{baseUrl}}/api/catalog
+Authorization: Bearer {{token}}
+
+?? status == 200
+
+{{
+  const assert = require('node:assert');
+  test('it names the file rather than looking healthy with nothing configured', () => {
     assert.match(response.parsedBody.error, /vendors\.json/);
   });
 }}
-
 ###
 
 # @name catalog_without_a_token_is_unauthorized

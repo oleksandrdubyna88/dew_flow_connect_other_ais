@@ -16,7 +16,7 @@ Authorization: Bearer {{outsiderToken}}
 # A session that could mint its own successor would never expire, which is the one property a
 # deadline exists to give it.
 
-# @name a_session_cannot_mint_another_session
+# @name a_session_is_minted_so_the_next_request_has_one_to_try_with
 POST {{baseUrl}}/api/session
 Authorization: Bearer {{token}}
 

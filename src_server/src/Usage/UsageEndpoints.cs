@@ -21,7 +21,16 @@ public static class UsageEndpoints
                     StatusCodes.Status400BadRequest);
             }
 
-            var company = CompanyScope.Equals(scope, StringComparison.OrdinalIgnoreCase);
+            if (Scope(scope) is not { } company)
+            {
+                // `scope=compnay` used to answer 200 with the PERSONAL total. An admin reading that
+                // as the company's would make a spending decision from one person's numbers.
+                // (codex, code round.)
+                return Refuse(
+                    $"'{scope}' is not a scope. Use 'me' or '{CompanyScope}'.",
+                    StatusCodes.Status400BadRequest);
+            }
+
             if (company && !caller.IsAdmin)
             {
                 // 403 rather than 404: the caller is authenticated and the route exists, so the honest
@@ -63,6 +72,19 @@ public static class UsageEndpoints
                 UsageTotals.ByVendorFor(scan.Lines, caller.Email),
                 [],
                 null);
+
+    /// <summary>True for company, false for me, null when it is neither.</summary>
+    /// <remarks>
+    /// Absent means "me" — that is a default, not a fallback. A VALUE that is neither is a typo, and
+    /// answering it with somebody's personal total is how the wrong number ends up in a decision.
+    /// </remarks>
+    private static bool? Scope(string? scope) => scope switch
+    {
+        null or "" => false,
+        _ when CompanyScope.Equals(scope, StringComparison.OrdinalIgnoreCase) => true,
+        _ when "me".Equals(scope, StringComparison.OrdinalIgnoreCase) => false,
+        _ => null,
+    };
 
     private static IResult Refuse(string because, int status) =>
         Results.Json(new ErrorDto(because), ServerJsonContext.Default.ErrorDto, statusCode: status);

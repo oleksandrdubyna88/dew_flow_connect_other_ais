@@ -38,7 +38,9 @@ public static class UsageWindow
         // very request must be in "today", and a half-open range ending exactly at now would drop it.
         var end = nowUtc.AddSeconds(1);
 
-        return (name ?? "today").ToLowerInvariant() switch
+        // `?window=` sends an empty string, which is a client saying nothing rather than a client
+        // naming something wrong — the same as leaving the parameter off. (local, code round.)
+        return (string.IsNullOrWhiteSpace(name) ? "today" : name).ToLowerInvariant() switch
         {
             "today" => new UsageRange(new DateTimeOffset(nowUtc.UtcDateTime.Date, TimeSpan.Zero), end),
             "week" => new UsageRange(end.AddDays(-7), end),
@@ -117,20 +119,47 @@ public static class UsageTotals
 
     private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>One pass over the group, because three were three passes for no reason.</summary>
+    /// <remarks>
+    /// The first version called <c>Where().ToList()</c> and then <c>Count</c>, <c>Sum</c>, <c>Sum</c>
+    /// on the original grouping — four traversals and a copy per vendor, on every company request.
+    /// (Two reviewers, code round.)
+    /// </remarks>
     private static VendorTotal Fold(IGrouping<string, UsageLine> group)
     {
-        var priced = group.Where(l => l.CostUsd is not null).ToList();
-        var unpriced = group.Count() - priced.Count;
+        var runs = 0;
+        var failed = 0;
+        long tokensIn = 0;
+        long tokensOut = 0;
+        var seconds = 0d;
+        var priced = 0;
+        var cost = 0d;
+
+        foreach (var line in group)
+        {
+            runs += 1;
+            failed += line.Failed ? 1 : 0;
+            tokensIn += line.TokensIn;
+            tokensOut += line.TokensOut;
+            seconds += line.Seconds;
+            if (line.CostUsd is { } known)
+            {
+                priced += 1;
+                cost += known;
+            }
+        }
+
+        var unpriced = runs - priced;
 
         return new VendorTotal(
             group.Key,
-            group.Count(),
-            group.Count(l => l.Failed),
-            group.Sum(l => l.TokensIn),
-            group.Sum(l => l.TokensOut),
-            Math.Round(group.Sum(l => l.Seconds), 1),
-            priced.Count > 0 ? Math.Round(priced.Sum(l => l.CostUsd!.Value), 4) : null,
-            priced.Count > 0 && unpriced > 0,
+            runs,
+            failed,
+            tokensIn,
+            tokensOut,
+            Math.Round(seconds, 1),
+            priced > 0 ? Math.Round(cost, 4) : null,
+            priced > 0 && unpriced > 0,
             unpriced);
     }
 }

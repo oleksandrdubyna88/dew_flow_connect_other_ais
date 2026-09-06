@@ -336,6 +336,40 @@ public sealed class UsageEndpointTests
     }
 
     [Fact]
+    public async Task AMistypedScopeIsRefusedRatherThanAnsweredWithThePersonalTotal()
+    {
+        using var server = new TeamServer();
+
+        // `scope=compnay` used to answer 200 with the caller’s OWN numbers. An admin reading that as
+        // the company’s total would make a spending decision from one person’s data. (codex, code round.)
+        var refused = await server.ClientFor($"boss@{TeamServer.Domain}").GetAsync("/api/usage?scope=compnay");
+
+        refused.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await refused.Content.ReadFromJsonAsync<ErrorDto>())!.Error.Should().Contain("company");
+    }
+
+    [Fact]
+    public async Task AnEmptyWindowMeansTodayRatherThanAnUnknownName()
+    {
+        using var server = new TeamServer();
+
+        // `?window=` is a client saying nothing, not naming something wrong.
+        var answer = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .GetFromJsonAsync<UsageDto>("/api/usage?window=");
+
+        answer!.FromUtc.Should().Be(new DateTimeOffset(DateTime.UtcNow.Date, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public async Task ScopeMeIsAcceptedExplicitlyAsWellAsByOmission()
+    {
+        using var server = new TeamServer();
+
+        (await server.ClientFor($"dev@{TeamServer.Domain}")
+            .GetFromJsonAsync<UsageDto>("/api/usage?scope=me"))!.Scope.Should().Be("me");
+    }
+
+    [Fact]
     public async Task ATornLineIsReportedToAnAdminAndToNobodyElse()
     {
         using var server = new TeamServer();

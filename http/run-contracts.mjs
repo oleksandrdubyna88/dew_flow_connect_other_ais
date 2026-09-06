@@ -8,7 +8,7 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import { createHmac } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -146,8 +146,13 @@ if (!(await waitForReady(baseUrl, server, 40))) {
   fail(ENVIRONMENT, 'coai-server never answered /api/health — the requests were never sent.');
 }
 
+// Written through a temporary file and renamed, and named after THIS run's port. Two runs at once
+// (a developer and a CI job on one machine) would otherwise overwrite each other's tokens and base
+// URL, and each would send requests to the other's server. (local, code round.)
+const envPath = path.join(HERE, '.env');
+const envTemp = `${envPath}.${port}.tmp`;
 writeFileSync(
-  path.join(HERE, '.env'),
+  envTemp,
   [
     `baseUrl=${baseUrl}`,
     `token=${mintToken(`dev@${DOMAIN}`)}`,
@@ -156,19 +161,38 @@ writeFileSync(
     '',
   ].join('\n'),
 );
+renameSync(envTemp, envPath);
 
-const httpyac = spawnSync(
-  'npx',
-  // A GLOB, not the directory: pointed at the folder, httpyac tries to parse this very script as a
-  // request file and reports `Invalid URL: import { spawn ... }`.
-  ['--yes', 'httpyac@6.16.7', 'send', '--all', path.join(HERE, '**', '*.http')],
-  { stdio: 'inherit', cwd: HERE, shell: process.platform === 'win32' },
-);
-
-stop();
+let httpyac;
+try {
+  httpyac = spawnSync(
+    'npx',
+    // A GLOB, not the directory: pointed at the folder, httpyac tries to parse this very script as a
+    // request file and reports `Invalid URL: import { spawn ... }`.
+    ['--yes', 'httpyac@6.16.7', 'send', '--all', path.join(HERE, '**', '*.http')],
+    { stdio: 'inherit', cwd: HERE, shell: process.platform === 'win32' },
+  );
+} finally {
+  // Every path, including a throw from spawnSync itself. The `exit` handler is a backstop rather
+  // than the plan: a server left holding a port and a temp directory left on disk are what make the
+  // NEXT run fail for a reason that has nothing to do with the API. (Four findings, code round.)
+  stop();
+}
 
 if (httpyac.error) {
   fail(CONFIG, `httpyac could not be started: ${httpyac.error.message}`);
+}
+
+// The rule reserves exit 1 for a CONTRACT regression — an API that answered something other than
+// what its file says. Everything else is the machine: a missing binary, a bad argument, a run that
+// produced no report at all. Reporting those as 1 tells whoever reads the exit code that the server
+// is broken when it is the harness that is.
+if (httpyac.status === null) {
+  fail(ENVIRONMENT, 'httpyac was killed before it finished — no verdict was produced.');
+}
+
+if (httpyac.status === 2) {
+  fail(CONFIG, 'httpyac refused its own arguments — the suite is misconfigured, not the API.');
 }
 
 if (httpyac.status !== 0) {
