@@ -128,6 +128,18 @@ jobs:
               cat "$DB/err"
               exit 1
             fi
+          # A ZERO exit is not enough any more, and this is the review gate's catch on this very
+          # change: `--log` now answers a MISSING library with an empty log, a note on stderr and
+          # exit 0 — so the graceful failure defeated the check added to catch it. The exit code
+          # cannot distinguish them; the message can.
+          #
+          # Not "stderr is empty" either: a run against an EMPTY database legitimately prints
+          # `no such table: findings` and exits 0, which is SQLite answering through the loaded
+          # library — exactly what this smoke wants to see. Measured before writing the condition.
+          elif grep -q 'is not beside the executable' "$DB/err"; then
+            echo "the published binary could not load the SQLite library:"
+            cat "$DB/err"
+            exit 1
           fi
           if ! OUT=$("$EXE" --help 2>&1); then
             if [ "${{ matrix.rid }}" = "osx-x64" ] && printf '%s' "$OUT" | grep -q 'Bad CPU type'; then
