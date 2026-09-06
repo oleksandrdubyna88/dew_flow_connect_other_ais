@@ -115,6 +115,50 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
         source.Should().Contain("refused", "the second failure shape has to be named to be answered");
     }
 
+    /// <summary>
+    /// The strip removes the product's own sentence and nothing that resembles it.
+    /// </summary>
+    /// <remarks>
+    /// Every case here was named by a reviewer at the gate round on the change that introduced the
+    /// strip: unanchored it ate a person's own words, and with \s* in front it ate a paragraph
+    /// separator. The last case is the one that matters most — a prompt somebody wrote is theirs.
+    /// </remarks>
+    [Theory]
+    // The two forms that actually shipped, including the line wrap the prompt files were written with.
+    [InlineData(
+        "You are a reviewer. You have the checkout read-only and the diff below. Review the change.",
+        "You are a reviewer. Review the change.")]
+    [InlineData(
+        "You are a reviewer. You have the\nrepository checkout read-only and the diff below.\nReview the change.",
+        "You are a reviewer. Review the change.")]
+    // Standing alone on its own line, indented, between two paragraphs: the separators survive.
+    [InlineData(
+        "Opening guidance.\n\n  You have the checkout read-only and the diff below.\n\nReturn JSON.",
+        "Opening guidance.\n\n\nReturn JSON.")]
+    // Inside somebody's OWN sentence it is not the product's claim, and must not be touched.
+    [InlineData(
+        "I know you have the checkout read-only and the diff below. Ignore that.",
+        "I know you have the checkout read-only and the diff below. Ignore that.")]
+    // Quoted, as a person explaining the old wording to a reviewer.
+    [InlineData(
+        "Do not say \"You have the checkout read-only and the diff below.\" to me.",
+        "Do not say \"You have the checkout read-only and the diff below.\" to me.")]
+    public void TheStripTakesTheProductsSentence_AndLeavesEverythingElse(string given, string expected)
+    {
+        PanelService.WithoutTheStaleClaim(given).Should().Be(expected);
+    }
+
+    [Fact]
+    public void APromptThatIsNothingBUTTheClaim_IsNotEmptied()
+    {
+        // An empty prompt produces the silent empty answer this whole change exists to stop, so a
+        // strip that would leave nothing keeps the original and lets the composed sentence disagree
+        // with it. Blank is the one outcome worse than contradictory.
+        const string onlyTheClaim = "You have the checkout read-only and the diff below.";
+
+        PanelService.WithoutTheStaleClaim(onlyTheClaim).Should().Be(onlyTheClaim);
+    }
+
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

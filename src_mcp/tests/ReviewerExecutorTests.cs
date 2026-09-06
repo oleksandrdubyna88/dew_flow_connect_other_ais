@@ -241,6 +241,31 @@ public sealed class ReviewerExecutorTests
             return Task.FromResult(answer);
         }
     }
+
+    /// <summary>
+    /// The same defect through the real code path, because the helper alone has no teeth.
+    /// </summary>
+    /// <remarks>
+    /// A unit test of FirstComplaint stays green if somebody puts Longer() back at the call site,
+    /// which is exactly the defect. This drives two real processes: a first launch that returns a
+    /// large prose answer (the bigger transcript) and a repair that returns NOTHING with a refusal
+    /// on stderr — and asserts the refusal reaches the reason.
+    /// </remarks>
+    [Fact]
+    public async Task ARepairThatOnlyExplainedItself_StillReachesTheReason()
+    {
+        var outcome = await _executor.RunAsync(
+            FakeCliInvocations.Invoke("gemini", ["emit", new string('x', 4000)]),
+            repair: FakeCliInvocations.Invoke(
+                "gemini",
+                ["stderr-exit", "Tool 'command' requires permission and headless mode cannot ask.", "0"]),
+            ct: TestContext.Current.CancellationToken);
+
+        outcome.Should().BeOfType<ReviewerOutcome.Unparseable>()
+            .Which.Reason.Should().Contain("requires permission",
+                "the explanation was in the SHORTER transcript, which is what Longer() dropped");
+    }
+
 }
 
 /// <summary>
@@ -348,5 +373,51 @@ public sealed class StdInBytesTests
             Environment.SetEnvironmentVariable("FAKECLI_MODE", null);
             Environment.SetEnvironmentVariable("FAKECLI_RECORD_STDIN_BYTES", null);
         }
+    }
+
+    /// <summary>
+    /// Which launch's stderr explains the failure, and the three shapes of stderr that do not.
+    /// </summary>
+    /// <remarks>
+    /// The first of these is a defect the gate found in the change that added the complaint: the
+    /// evidence was chosen by SIZE, so a first attempt that returned a large malformed answer beat a
+    /// repair that returned nothing plus a permission refusal — and the refusal was the one sentence
+    /// worth showing.
+    /// </remarks>
+    [Fact]
+    public void TheExplanationComesFromTheLaunchThatGaveOne_NotTheBiggerTranscript()
+    {
+        var first = "--- stdout ---\n" + new string('x', 4000) + "\n--- stderr ---\n";
+        var repair = "--- stdout ---\n\n--- stderr ---\nTool 'command' requires permission and headless mode cannot ask.";
+
+        ReviewerExecutor.FirstComplaint(repair, first)
+            .Should().Be("Tool 'command' requires permission and headless mode cannot ask.");
+    }
+
+    [Fact]
+    public void WithNothingToSayAnywhere_TheComplaintIsEmpty_SoTheOldSentenceStands()
+    {
+        ReviewerExecutor.FirstComplaint("--- stdout ---\n\n--- stderr ---\n", null)
+            .Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("--- stdout ---\n\n--- stderr ---\n   \n\t\n", "whitespace-only stderr is not an explanation")]
+    [InlineData("no marker anywhere in this transcript", "a transcript without the marker yields nothing")]
+    [InlineData(null, "a missing transcript cannot throw")]
+    public void StderrThatExplainsNothing_YieldsNothing(string? transcript, string because)
+    {
+        ReviewerExecutor.Complaint(transcript).Should().BeEmpty(because);
+    }
+
+    [Fact]
+    public void AStackTraceIsCappedForTheTableCell_AndSaysItWasCut()
+    {
+        var long_ = new string('e', 400);
+
+        var said = ReviewerExecutor.Complaint($"--- stdout ---\n\n--- stderr ---\n{long_}");
+
+        said.Should().HaveLength(241, "240 characters and the ellipsis that says there was more");
+        said.Should().EndWith("\u2026");
     }
 }

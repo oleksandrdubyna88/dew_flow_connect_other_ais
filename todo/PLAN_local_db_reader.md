@@ -36,6 +36,29 @@ make those two queries first-class rather than something a person exports and pi
 - a round's `agent_log` beside its findings, which is what makes "what was being done when this was
   missed" answerable at all.
 
+## What the gate found, 2026-09-06 (three reviewers, eight findings taken)
+
+1. **WAL.** SQLite in write-ahead mode keeps committed transactions in `coai.db-wal`, and `sql.js`
+   over a byte snapshot can neither take a read lock nor see that file — so the page would silently
+   miss the newest findings and can hit `SQLITE_CORRUPT` on a torn read. Checkpoint before reading,
+   copy under a lock, or read through the server. **This is a prerequisite, not a detail.**
+2. **The fallback condition is too narrow.** "While a database does not exist yet" leaves out a
+   zero-byte, corrupt, locked or newer-schema file — all present, all unusable. Open, schema-check and
+   query failures all route to the JSON path, and the UI says which source it is showing.
+3. **Pushing every filter into SQL breaks the fallback**, which has no engine. The filters live behind
+   a provider abstraction with a predicate implementation for JSON.
+4. **FTS returns findings; the table renders rounds.** The search must return the distinct rounds that
+   matched, with the matching findings flagged for expansion.
+5. **`agent_log` is not in the database** — Epic 1 put findings, resolutions and reasons there. Either
+   it joins the schema in an explicit step or it is read from the session file on expansion.
+6. **The blind-spot views are the PURPOSE and the least specified part**: they need inputs, a provider
+   method, an empty state and their own Definition-of-Done lines, or a build ticks every box without
+   them.
+7. **One row-equality test proves the table, not the detail.** Findings, resolutions, reasons,
+   spending, ordering and row identity are what the change is for.
+8. **The filter contract needs writing down**: date inclusivity, nulls, how filters combine, whether
+   the search respects them, what clearing does.
+
 ## Build order
 
 1. RED: `roundsFromDb` over a database the server tests produced (checked into `src_vs_code/src/test/fixtures`).

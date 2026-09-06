@@ -17,6 +17,8 @@ namespace CoaiMcp.Server;
 /// this class carries data between the wire, the runners and the state machine — and answers
 /// every failure as a sentence in JSON, never as an exception up the stdio stack.
 /// </summary>
+// `partial` for exactly one reason: to host a source-generated regex. Native AOT cannot compile a
+// regex at runtime, so [GeneratedRegex] does it at build time and needs a partial method to fill in.
 public sealed partial class PanelService
 {
     private readonly PanelSettings _settings;
@@ -975,11 +977,29 @@ public sealed partial class PanelService
     /// <para>Only that one sentence is removed. A person's own prompt is theirs; this strips the
     /// line the product used to put in it and nothing else.</para>
     /// </remarks>
-    internal static string WithoutTheStaleClaim(string prompt) => StaleClaim().Replace(prompt, string.Empty);
+    internal static string WithoutTheStaleClaim(string prompt)
+    {
+        var stripped = StaleClaim().Replace(prompt, string.Empty).TrimStart();
 
+        // An override consisting ONLY of that sentence would become an empty prompt, and an empty
+        // prompt to a reviewer is worse than a contradictory one: it produces the silent empty
+        // answer this whole change exists to stop. Keep their text and let the composed sentence
+        // disagree with it — visible beats blank. (Raised at the code gate, 2026-09-06.)
+        return stripped.Length > 0 ? stripped : prompt;
+    }
+
+    // ANCHORED, and only to horizontal whitespace. Both halves were bought at the same gate round:
+    // unanchored, "I know you have the checkout read-only and the diff below." inside somebody's own
+    // sentence would be stripped and leave "I know"; with \s* instead of [ \t]*, a claim standing
+    // between two paragraphs took a paragraph separator with it. So the match must begin a line or
+    // follow a sentence end, and it may only eat the indentation in front of itself. The \s+ BETWEEN
+    // the words stays — that is what tolerates the line wrap the prompt files were written with.
+    // The TAIL matters as much: eat the line's own terminator when the claim stood on its own line,
+    // otherwise eat the space after it. Without that, removing a mid-sentence claim left two spaces
+    // and removing a whole line left a blank one.
     [GeneratedRegex(
-        @"\s*You\s+have\s+the\s+(?:repository\s+)?checkout\s+read-only\s+and\s+the\s+diff\s+below\.",
-        RegexOptions.IgnoreCase)]
+        @"(?:(?<=^)|(?<=[.!?][ \t]))[ \t]*You\s+have\s+the\s+(?:repository\s+)?checkout\s+read-only\s+and\s+the\s+diff\s+below\.(?:[ \t]*\r?\n)?[ \t]*",
+        RegexOptions.IgnoreCase | RegexOptions.Multiline)]
     private static partial Regex StaleClaim();
 
     internal static string WhatYouHave(bool hasCheckout) =>

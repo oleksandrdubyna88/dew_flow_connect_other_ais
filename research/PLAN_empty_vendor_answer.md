@@ -1,9 +1,22 @@
 # PLAN — an empty vendor answer says why, instead of saying it was empty
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_mcp/runners/Reviewers/ReviewerExecutor.cs`
-> and its tests.
+> Status: **IMPLEMENTED, 2026-09-06.** An empty answer now carries the vendor's own first stderr line,
+> capped at 240 characters with the evidence path still appended; whitespace-only stderr and a
+> transcript with no stderr section both keep the original sentence, which is then the whole truth.
 >
-> Related docs: [module_runners.md](../research/module_runners.md).
+> Deviations. The classification question was answered by KEEPING `Unparseable`: a refusal that printed
+> a sentence has produced an answer we could not use, the repair attempt is still worth one launch (its
+> prompt now names the refused-tool case explicitly), and splitting the outcome would have changed what
+> every caller counts. Reviewers at the plan gate asked for that rule to be stated rather than left to
+> a remark — it is stated here.
+>
+> One defect was found later, by this product's own gate, and fixed the same day: the evidence was
+> chosen by SIZE (`Longer`), so a first attempt that returned a large malformed answer beat a repair
+> that returned nothing plus a permission refusal — and the refusal was the whole point. The complaint
+> now comes from whichever launch explained itself, starting with the repair; the KEEP path still saves
+> the longer transcript on purpose, because a broken envelope leaves a zero-byte file.
+>
+> Related docs: [module_runners.md](module_runners.md).
 
 ## The symptom, observed rather than imagined
 
