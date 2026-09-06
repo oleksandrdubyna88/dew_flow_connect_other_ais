@@ -1,11 +1,15 @@
 # PLAN — a README that sells in five seconds, and a deep-dive that keeps the engineering
 
-> Status: **plan only, nothing implemented yet.** Scope: `README.md`, a new `ARCHITECTURE.md`, one
-> screenshot, and the badge row. No code.
+> Status: **IMPLEMENTED, 2026-09-06.** `README.md` is the shop window and the whole engineering text
+> lives on in `ARCHITECTURE.md`, linked from it. Merged as #54.
 >
-> Related: [RESULTS_findings_that_are_worth_something.md](../research/RESULTS_findings_that_are_worth_something.md)
-> — the Fast-mode measurement every claim below rests on. The overlap measurement that answers "why a
-> second vendor" is `research/RESULTS_vendor_overlap_2026-09-06.md`, landing with the bench branch.
+> Deviations, and the useful one is a correction. The plan's first open question — whether the
+> extension is on the Marketplace — was answered by checking the listing rather than by asking:
+> `remsoftdev.connect-other-ais` is published, so the quickstart's first line is real. The draft's
+> install command named a publisher that does not exist. "Zero ports" became "no listening ports on
+> YOUR machine", because the team server ships an HTTP service. A still screenshot was used rather
+> than a GIF, on the operator's call, with six taken from a real machine; the GIF is still owed and
+> is a recording, not a change.
 
 ## The symptom
 
