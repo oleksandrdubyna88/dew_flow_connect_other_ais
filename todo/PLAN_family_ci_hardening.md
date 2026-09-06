@@ -42,6 +42,43 @@ No `.editorconfig` anywhere; no Python (ruff is not applicable).
   private and GitHub refuses it there (422) — it needs Advanced Security or the repository made public.
 - **Dependabot alerts + automated security fixes**: enabled on all seven.
 
+## Measured since — CodeRabbit does not review these repositories, and the workflow built to fix that does not work either (2026-09-06)
+
+The plan above counts CodeRabbit as one of the three things a PR is tested by. On every PR opened
+since, it answers instead:
+
+> This repository does not receive automatic reviews because it has **fewer than 10 stars**.
+
+`coderabbit-review.yml` exists precisely for this — it posts `@coderabbitai review` on every opened
+PR — and it **does not work**. Observed on PR #48:
+
+| | |
+|---|---|
+| `07:53:09Z` | `coderabbitai[bot]` posts the skip notice and a *Trigger review* checkbox |
+| `07:53:10Z` | `github-actions[bot]` posts `@coderabbitai review` — one second later |
+| result | no review; the `ask CodeRabbit` job is **green** |
+
+Two candidate causes, and they are not yet separated: the ask arrives AFTER the skip decision, or
+CodeRabbit ignores commands from a bot account (`github-actions[bot]`) as most such integrations do,
+to avoid loops. **Not verified** — the cheap experiment is one PR where a human writes the same
+comment by hand; if that reviews, the author is the cause and no amount of retiming will help.
+
+What is certain without that experiment: **a green check for a review that did not happen is worse
+than no check**, because green next to the words "ask CodeRabbit" is exactly what a reader takes for
+"a reviewer looked at this". Today the reviewer half of "the PR is the test" is the ConnectOtherAIs
+gate (`review_plan` / `review_code`, three vendors) and the human — not CodeRabbit.
+
+Three ways out, in the order they cost:
+
+| | Costs | Buys |
+|---|---|---|
+| ten stars on each public repository | asking people | automatic review, as the plan assumed |
+| a paid plan that lifts the threshold | money | the same, without the stars |
+| make the job's green conditional on a review actually appearing | a workflow edit + the experiment above | an honest check |
+
+The third is not an alternative to the other two — whichever way reviews start arriving, a job named
+`ask CodeRabbit` must not report success when the answer was "skipped". It is not done here because
+the fix depends on which cause it is, and this entry exists so that is measured rather than assumed.
 ## What must be true when this is done
 
 1. Every repository's CI fails a PR whose code is not formatted to the repository's rules, without
