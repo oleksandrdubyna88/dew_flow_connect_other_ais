@@ -172,11 +172,15 @@ public sealed class JobStoreTests
     public void AnotherCallerIsNotBlockedByOneBusyPerson()
     {
         var store = new JobStore(perCallerRunning: 1);
-        store.Submit(Job());
-        store.Submit(Job(email: "other@example.com"));
-        store.TryClaim("codex", "a", Now).Should().NotBeNull();
+        // Distinct submission times, because the point of this test is that the SECOND caller is not
+        // blocked by the first — which needs a defined first. Submitted in the same tick, the order
+        // falls to the id tie-break, and ids are random: the test then passed about half the time.
+        // Found by running the suite repeatedly rather than once.
+        store.Submit(Job(at: Now));
+        store.Submit(Job(email: "other@example.com", at: Now.AddSeconds(1)));
+        store.TryClaim("codex", "a", Now.AddSeconds(2)).Should().NotBeNull();
 
-        store.TryClaim("codex", "b", Now)!.Value.Job.Email.Should().Be("other@example.com");
+        store.TryClaim("codex", "b", Now.AddSeconds(2))!.Value.Job.Email.Should().Be("other@example.com");
     }
 
     [Fact]
