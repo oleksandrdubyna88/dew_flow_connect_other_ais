@@ -83,19 +83,61 @@ public static class TeamServerAuth
         }
     }
 
-    /// <summary>Write the token, readable by its owner and nobody else.</summary>
+    /// <summary>
+    /// Write the token, readable by its owner and nobody else.
+    /// </summary>
+    /// <returns>
+    /// Empty when the file is owner-only. Otherwise a sentence saying it is NOT — the caller must show
+    /// it, because a bearer token another local user can read is a login they can take.
+    /// </returns>
     /// <remarks>
-    /// A bearer token on a shared machine is worth exactly as much to the next user as to this one,
-    /// and keeping it out of settings, argv and logs does nothing about the file itself. No-op on
-    /// Windows, where the API does not apply. (codex, plan round.)
+    /// <para>A bearer token on a shared machine is worth exactly as much to the next user as to this
+    /// one, and keeping it out of settings, argv and logs does nothing about the file itself.</para>
+    /// <para><b>The mode is VERIFIED, not merely requested.</b> It used to be set inside a swallowed
+    /// try, so on a filesystem that ignores modes — a CIFS mount, a container volume owned by another
+    /// uid — sign-in reported success over a world-readable token. Three reviewers raised it, two as
+    /// blocking. Signing in still SUCCEEDS there, because refusing would strand anybody whose home is
+    /// on such a mount; what changed is that it can no longer do so silently.</para>
     /// </remarks>
-    public static void WriteToken(string path, string token)
+    public static string WriteToken(string path, string token)
     {
         var directory = Path.GetDirectoryName(path) ?? ".";
         Directory.CreateDirectory(directory);
         Restrict(directory);
         File.WriteAllText(path, token.Trim());
         Restrict(path);
+
+        return IsOwnerOnly(path)
+            ? string.Empty
+            : $"the token file {path} could not be made readable only by you — anybody with an "
+                + "account on this machine can read it and sign in to the Team server as you";
+    }
+
+    /// <summary>Is the file actually owner-only, whatever the write attempted?</summary>
+    /// <remarks>
+    /// Windows is reported as owner-only: the Unix mode API does not apply there, a user profile
+    /// directory is already ACL-protected, and answering "no" would print a warning on every Windows
+    /// machine that nobody could act on.
+    /// </remarks>
+    public static bool IsOwnerOnly(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return true;
+        }
+
+        try
+        {
+            var group = UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute;
+            var other = UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
+
+            return (File.GetUnixFileMode(path) & (group | other)) == UnixFileMode.None;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            // Cannot be read, so cannot be claimed to be safe.
+            return false;
+        }
     }
 
     private static void Restrict(string path)
@@ -114,9 +156,8 @@ public static class TeamServerAuth
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
         {
-            // A filesystem that will not take a mode — a mounted share, a container volume owned by
-            // another uid. Refusing to sign in over it would be worse than a token another local user
-            // could read on a machine they already share.
+            // Not swallowed any more — WriteToken verifies the result and tells the caller. This
+            // catch only keeps a filesystem that refuses modes from throwing out of a sign-in.
         }
     }
 }

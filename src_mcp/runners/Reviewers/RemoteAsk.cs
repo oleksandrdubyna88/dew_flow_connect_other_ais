@@ -10,6 +10,17 @@ public enum RemoteState
     Running,
     Done,
     Failed,
+
+    /// <summary>
+    /// A status this client has no branch for.
+    /// </summary>
+    /// <remarks>
+    /// It is NOT folded into <see cref="Queued"/>, which is what it used to be. A newer server adding
+    /// a terminal status would then have been read as "still waiting", and the shim would have polled
+    /// a finished review until its own deadline and reported it as too slow — a wrong sentence about
+    /// the wrong thing. Raised on the code round.
+    /// </remarks>
+    Unknown,
 }
 
 /// <summary>One poll's answer, parsed.</summary>
@@ -17,6 +28,7 @@ public enum RemoteState
 /// <param name="Answer">The vendor's RAW text. This shim does not parse it — the round does.</param>
 public sealed record RemotePoll(
     RemoteState State,
+    string RawStatus,
     int Position,
     string Answer,
     string Failure,
@@ -43,6 +55,17 @@ public static class RemoteAsk
     public const int VendorFailed = 70;
     public const int TooOld = 76;
     public const int NotSignedIn = 77;
+
+    /// <summary>
+    /// The review did not finish in time, and has been cancelled.
+    /// </summary>
+    /// <remarks>
+    /// Its own code rather than <see cref="Unreachable"/>, which is what it used to return. The
+    /// sentence said "did not finish within 90s" while the exit code said the server could not be
+    /// reached — so anybody reading the code rather than the text went to check their network for a
+    /// problem whose cure is a longer timeout or more accounts. Raised on the code round.
+    /// </remarks>
+    public const int TooSlow = 78;
 
     /// <summary>How long to leave between polls while a review is queued or running.</summary>
     /// <remarks>
@@ -99,6 +122,7 @@ public static class RemoteAsk
                 ? null
                 : new RemotePoll(
                     StateOf(status.Status),
+                    status.Status ?? string.Empty,
                     status.Position,
                     status.Answer ?? string.Empty,
                     status.Failure ?? string.Empty,
@@ -170,6 +194,11 @@ public static class RemoteAsk
         + ". It has been cancelled, so nothing is still running. Raise COAI_REVIEWER_TIMEOUT_MINUTES, "
         + "or ask the operator for more accounts on that vendor.";
 
+    /// <summary>A status from a server this client is too old to understand.</summary>
+    public static string UnknownStateMessage(string serverUrl, string status) =>
+        $"the Team server at {serverUrl} reported a review status this client does not know "
+        + $"('{Trim(status, 60)}') — update coai-mcp from the panel's Server section";
+
     /// <summary>The vendor itself failed, in its own words.</summary>
     public static string FailedMessage(string vendor, string failure, string reason) =>
         $"the Team server's {vendor} reviewer failed ({(failure.Length > 0 ? failure : "no reason given")})"
@@ -194,7 +223,8 @@ public static class RemoteAsk
         "done" => RemoteState.Done,
         "failed" => RemoteState.Failed,
         "running" => RemoteState.Running,
-        _ => RemoteState.Queued,
+        "queued" => RemoteState.Queued,
+        _ => RemoteState.Unknown,
     };
 
     private static string Trim(string text, int max)

@@ -80,7 +80,7 @@ public sealed class RemoteRuntime(string id, string serverUrl) : IReviewerRuntim
                     // How long the VENDOR may take, which is a different clock from the one above —
                     // that one is how long this client waits before it cancels and reports.
                     "--vendor-timeout-seconds",
-                    ((int)Math.Ceiling(settings.Timeout.TotalSeconds)).ToString(),
+                    VendorBudgetSeconds(settings.Timeout).ToString(),
                 ],
                 worktreePath)
             {
@@ -90,7 +90,10 @@ public sealed class RemoteRuntime(string id, string serverUrl) : IReviewerRuntim
             this,
             // No SharedResource on purpose — see the remarks.
             string.Empty,
-            settings.Model);
+            settings.Model,
+            // The parent reads this after killing the child. It is the only thing left that can stop
+            // a review still running on the team's subscription.
+            jobFile);
     }
 
     /// <summary>The usage the shim printed, as <see cref="LocalRuntime.ReadUsage"/> reads its own.</summary>
@@ -113,27 +116,76 @@ public sealed class RemoteRuntime(string id, string serverUrl) : IReviewerRuntim
     }
 
     /// <summary>
+    /// The vendor's budget, as the SERVER will accept it.
+    /// </summary>
+    /// <remarks>
+    /// `POST /api/reviews` refuses anything outside 30..1800 seconds, so a person who set an
+    /// eight-second reviewer timeout would have had every remote review answered `400` before it
+    /// started — a configuration mistake rendered as a server error. Clamping is right rather than
+    /// refusing: the shim's OWN deadline still honours the shorter setting, so the review is still
+    /// abandoned when the person said, and the only thing the clamp changes is what the server is
+    /// told about the vendor. Raised by two reviewers on the code round.
+    /// </remarks>
+    public static int VendorBudgetSeconds(TimeSpan timeout) =>
+        Math.Clamp((int)Math.Ceiling(timeout.TotalSeconds), MinVendorSeconds, MaxVendorSeconds);
+
+    /// <summary>The server's own range, restated here because the two binaries ship separately.</summary>
+    public const int MinVendorSeconds = 30;
+
+    /// <inheritdoc cref="MinVendorSeconds"/>
+    public const int MaxVendorSeconds = 1800;
+
+    /// <summary>One client for the courtesy cancellations; they are rare and short.</summary>
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
+
+    /// <summary>
+    /// Stop a review whose shim we killed — the executor's abandon hook.
+    /// </summary>
+    /// <remarks>
+    /// This is the half that made the job file worth writing. Without it the mechanism existed and
+    /// nothing called it, which a reviewer caught on the code round: `Claim` wrote a file that only a
+    /// test ever read.
+    /// </remarks>
+    public async Task AbandonAsync(ReviewerInvocation invocation, CancellationToken ct = default)
+    {
+        if (invocation.JobFile.Length == 0)
+        {
+            return;
+        }
+
+        await CancelAbandonedAsync(invocation.JobFile, Http, ct);
+    }
+
+    /// <summary>
     /// Cancel a review whose shim was killed rather than allowed to finish.
     /// </summary>
-    /// <returns>True when a job was found and the server was told; false when there was nothing to do.</returns>
+    /// <returns>True when the server was told; false when there was nothing to do, or it could not be told.</returns>
     /// <remarks>
-    /// The shim writes <c>&lt;server&gt; &lt;id&gt;</c> to its job file as soon as the server accepts,
-    /// and deletes the file when it reaches a terminal state by itself. So a file that still exists
-    /// names a review the server may still be running, and this is the only thing left that can stop
-    /// it — the shim is already dead.
+    /// <para>The shim writes <c>&lt;server&gt; &lt;id&gt;</c> to its job file as soon as the server
+    /// accepts, and deletes the file when it reaches a terminal state by itself. So a file that still
+    /// exists names a review the server may still be running, and this is the only thing left that can
+    /// stop it — the shim is already dead.</para>
+    /// <para><b>The claim is kept when the cancellation FAILED.</b> It used to be deleted in a
+    /// `finally`, so a client that was briefly offline at exactly the wrong moment lost the job id for
+    /// ever and the review ran to completion anyway — the one outcome the whole mechanism exists to
+    /// prevent. It is forgotten on success, and on a `404`, which means the server has no such job and
+    /// never will. Raised on the code round.</para>
     /// </remarks>
     public static async Task<bool> CancelAbandonedAsync(
-        string jobFile, string dataDir, HttpClient http, CancellationToken ct = default)
+        string jobFile, HttpClient http, CancellationToken ct = default)
     {
-        var (server, jobId) = ReadClaim(jobFile);
-        if (jobId.Length == 0)
+        var claim = ReadClaim(jobFile);
+        if (claim.JobId.Length == 0)
         {
             return false;
         }
 
-        var token = TeamServerAuth.ReadToken(TeamServerAuth.TokenPath(dataDir, server));
+        var (server, jobId) = (claim.Server, claim.JobId);
+        var token = TeamServerAuth.ReadToken(claim.TokenFile);
         if (token.Length == 0)
         {
+            // Signed out since the review started. The claim STAYS: signing in again is what makes
+            // this cancellable, and deleting it now would throw away the only way to do so.
             return false;
         }
 
@@ -142,53 +194,85 @@ public sealed class RemoteRuntime(string id, string serverUrl) : IReviewerRuntim
             using var request = new HttpRequestMessage(
                 HttpMethod.Delete, TeamServerAuth.Endpoint(server, $"api/reviews/{jobId}"));
             request.Headers.Add("Authorization", "Bearer " + token);
+            // The server judges this BEFORE the token, and answers 426 without it — so a cancellation
+            // that omitted it was refused by every server it was sent to. Caught on the code round.
+            request.Headers.Add(RemoteAsk.ContractHeader, RemoteAsk.ContractVersion.ToString());
             using var response = await http.SendAsync(request, ct);
+
+            if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                Forget(jobFile);
+            }
 
             return response.IsSuccessStatusCode;
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
         {
-            // The server's own queue deadline is the backstop. This is the polite path, and a polite
-            // path that throws would fail a round that had already produced its answer.
+            // The server's own queue deadline is the backstop, and the claim is kept so a later
+            // attempt can still succeed. A polite path that threw would fail a round that had
+            // already produced its answer.
             return false;
-        }
-        finally
-        {
-            Forget(jobFile);
         }
     }
 
-    /// <summary>The server and job id a shim claimed, or empty when there is no claim.</summary>
-    public static (string Server, string JobId) ReadClaim(string jobFile)
+    /// <summary>
+    /// One outstanding review: everything needed to stop it, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// It carries the TOKEN FILE rather than a data directory because the reader is the parent
+    /// process, which resolves the adapter through <c>RuntimeResolution.For</c> — from a vendor row,
+    /// which has no data directory in it. A claim that describes how to authenticate against itself
+    /// needs nothing from whoever finds it.
+    /// </remarks>
+    public sealed record RemoteClaim(string Server, string JobId, string TokenFile)
+    {
+        public static readonly RemoteClaim None = new(string.Empty, string.Empty, string.Empty);
+    }
+
+    /// <summary>The claim a shim left, or <see cref="RemoteClaim.None"/> when there is none.</summary>
+    public static RemoteClaim ReadClaim(string jobFile)
     {
         try
         {
             if (!File.Exists(jobFile))
             {
-                return (string.Empty, string.Empty);
+                return RemoteClaim.None;
             }
 
-            var parts = File.ReadAllText(jobFile).Trim().Split(' ', 2);
-
-            return parts.Length == 2 ? (parts[0], parts[1]) : (string.Empty, string.Empty);
+            return JsonSerializer.Deserialize(File.ReadAllText(jobFile), RemoteClaimContext.Default.RemoteClaim)
+                ?? RemoteClaim.None;
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
         {
-            return (string.Empty, string.Empty);
+            return RemoteClaim.None;
         }
     }
 
-    /// <summary>Record that this server is running this job, so a kill is still cancellable.</summary>
-    public static void Claim(string jobFile, string serverUrl, string jobId)
+    /// <summary>
+    /// Record that this server is running this job, so a kill is still cancellable.
+    /// </summary>
+    /// <returns>Empty when the claim was written; otherwise why it could not be.</returns>
+    /// <remarks>
+    /// The failure is RETURNED rather than swallowed. Losing the claim costs a cancellation, not a
+    /// review — the server's queue deadline still ends the job eventually — so this must not fail the
+    /// review; but a silent loss means a person is later billed for work nobody can explain, with
+    /// nothing anywhere saying why. The shim prints it. Raised twice on the code round.
+    /// </remarks>
+    public static string Claim(string jobFile, string serverUrl, string jobId, string tokenFile)
     {
         try
         {
-            File.WriteAllText(jobFile, $"{TeamServerAuth.Normalise(serverUrl)} {jobId}");
+            File.WriteAllText(
+                jobFile,
+                JsonSerializer.Serialize(
+                    new RemoteClaim(TeamServerAuth.Normalise(serverUrl), jobId, tokenFile),
+                    RemoteClaimContext.Default.RemoteClaim));
+
+            return string.Empty;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // Losing the claim costs a cancellation, not a review: the server's queue deadline still
-            // ends the job. Failing the review over it would trade something small for something big.
+            return e.Message;
         }
     }
 
@@ -206,3 +290,8 @@ public sealed class RemoteRuntime(string id, string serverUrl) : IReviewerRuntim
         }
     }
 }
+
+[System.Text.Json.Serialization.JsonSourceGenerationOptions(
+    PropertyNamingPolicy = System.Text.Json.Serialization.JsonKnownNamingPolicy.CamelCase)]
+[System.Text.Json.Serialization.JsonSerializable(typeof(RemoteRuntime.RemoteClaim))]
+internal sealed partial class RemoteClaimContext : System.Text.Json.Serialization.JsonSerializerContext;
