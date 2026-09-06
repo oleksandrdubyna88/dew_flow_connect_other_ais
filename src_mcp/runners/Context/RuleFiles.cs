@@ -224,7 +224,15 @@ public static class RuleFiles
     /// <para>The omitted list still names everything that did not fit, so a round says which rules it
     /// did not see rather than implying it saw them all.</para>
     /// </remarks>
-    private static IReadOnlyList<string> Shuffled(IReadOnlyList<string> paths, int? seed)
+    // CA1859: the array IS the concrete type the caller foreaches over, and returning it as one
+    // costs nothing here.
+    // S2245 wants a cryptographic generator. It is wrong about this call: nothing here guards a
+    // secret, and the draw decides only WHICH rule files a reviewer is shown when they do not all
+    // fit. The `seed` parameter is the tell — it exists so a test can assert an exact order, which
+    // a cryptographic generator cannot give at all. Swapping it would break the tests and protect
+    // nothing.
+#pragma warning disable S2245 // Random is not used for security here — see above.
+    private static string[] Shuffled(IReadOnlyList<string> paths, int? seed)
     {
         var random = seed is { } fixed_ ? new Random(fixed_) : Random.Shared;
         var drawn = paths.ToArray();
@@ -236,6 +244,7 @@ public static class RuleFiles
 
         return drawn;
     }
+#pragma warning restore S2245
 
     /// <summary>Every rule file under the rule folders, de-duplicated and in a stable order.</summary>
     private static IReadOnlyList<string> FolderFiles(string repoPath, IReadOnlyList<SubmoduleMount> mounts) =>
