@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using CoaiMcp.Runners.Processes;
+using CoaiMcp.Runners.Reviewers;
 using CoaiServer;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -128,6 +129,22 @@ var catalog = new VendorCatalogHost(dataDir, message => reportCatalog?.Invoke(me
 var slotRegistry = new SlotRegistry(dataDir, files, (message, error) => reportSessionFailure?.Invoke(message, error));
 var vendorHealth = new VendorHealthCache(new ProcessLauncher());
 
+// The jobs, and the loop that runs them. The pump is a hosted service so it starts with the host and
+// stops with it; an in-flight review dies with the container, which is what `lost` exists to report.
+var jobs = new JobStore(
+    config.GetValue("Coai:PerCallerQueued", 20),
+    config.GetValue("Coai:PerCallerRunning", 3));
+var jobRunner = new JobRunner(
+    jobs,
+    catalog,
+    slotRegistry,
+    new ReviewLauncher(new ProcessLauncher(), (message, error) => reportSessionFailure?.Invoke(message, error)),
+    new UsageLedger(dataDir),
+    (message, error) => reportSessionFailure?.Invoke(message, error));
+builder.Services.AddSingleton(jobs);
+builder.Services.AddHostedService(sp => new JobPump(
+    jobs, catalog, jobRunner, sp.GetRequiredService<ILogger<JobPump>>()));
+
 var app = builder.Build();
 var log = app.Logger;
 // Wired after Build() because that is when a logger exists; the store holds the delegate, so a
@@ -235,6 +252,14 @@ app.MapGet("/api/client-config", () => Results.Json(
 var gate = new CallerFilter(allowedDomains, allowAnyDomain, admins);
 app.MapSessionEndpoints(sessions, gate);
 app.MapCatalogEndpoints(catalog, slotRegistry, vendorHealth, gate);
+app.MapReviewEndpoints(
+    jobs,
+    catalog,
+    gate,
+    // How long a review may WAIT for a free account before giving up, having spent nothing. Not how
+    // long the vendor may take — that is the caller's own timeoutSeconds, and the two are separate
+    // clocks on purpose.
+    TimeSpan.FromMinutes(config.GetValue("Coai:QueueWaitMinutes", 10)));
 
 // Anything that is not the API does not exist here.
 app.MapFallback(() => Results.NotFound());

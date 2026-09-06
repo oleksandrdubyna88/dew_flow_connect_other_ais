@@ -6,8 +6,8 @@
 >
 > Plan: [../todo/PLAN_team_server.md](../todo/PLAN_team_server.md). **Stories 2.1 and 2.2 are what
 > exists today**: the host, its authentication and its sessions (2.1); the vendor catalog, the
-> account slots and `login` (2.2). No jobs and no reviews — that is 2.3, and `POST /api/reviews`
-> still 404s.
+> account slots and `login` (2.2); the job queue, the runner and the review endpoints (2.3).
+> Usage aggregation and the admin views are 2.4.
 
 ## Purpose
 
@@ -51,7 +51,10 @@ sequenceDiagram
 | `DELETE /api/session` | any | `204`; `400` for an IdP token, `500` when the file would not go |
 | `GET /api/whoami` | any | `{email, name, isAdmin}` |
 | `GET /api/catalog` | any | the allowlist, each CLI's presence, and the account counts |
-| `POST /api/reviews` … | — | **404 until story 2.3** |
+| `POST /api/reviews` | any | `202 {id, position}` · `400` naming the allowed vendors/models · `429 + Retry-After` over the queued cap |
+| `GET /api/reviews/{id}?wait=<=25` | owner | the status, and the vendor's RAW answer · `403` somebody else's · `404` unknown or lost |
+| `DELETE /api/reviews/{id}` | owner | `204` |
+| `GET /api/usage` | — | **404 until story 2.4** |
 
 ## Core entities
 
@@ -187,11 +190,89 @@ sequenceDiagram
   as a `RequestDelegate`, whose return value is discarded — the catalog answered 200 with an empty
   body until it took a `CancellationToken` too. Found by its own tests.
 
+### Story 2.3 — the jobs
+
+- **Queueing and running are different clocks, and conflating them was a real bug.** The draft
+  stamped one deadline at submit. With a global concurrency of one, the second job of a pair then
+  arrived at its account with almost no time left — or expired having never run at all. So a queued
+  job is judged on how long it has WAITED (`Coai:QueueWaitMinutes`, 10 by default) and a running one
+  on how long it has RUN, from the moment it started.
+- **The server owns both deadlines, not the client.** A client that is killed, sleeps or loses its
+  network stops costing anything: its queued job is discarded BEFORE it is ever handed an account.
+  Without that, an abandoned review wins a slot ten minutes later and spends the team's subscription
+  on an answer nobody collects. `DELETE` is the polite path; the deadline is the one that holds when
+  the client is gone.
+- **Cancelling is atomic with dispatch.** `Cancel` and `TryClaim` take the same lock, so a `204` can
+  never be followed by a launch. Telling somebody their review was cancelled and then paying for it
+  is the one outcome a cancel must not produce.
+- **The id carries the server run**, so a poll after a restart says `lost` rather than `unknown` —
+  opposite instructions for a client. An epoch that does not parse, or is not strictly earlier than
+  this run's, is `unknown`: `lost` is what makes automated clients start recovery, so a typo or a
+  skewed clock must not produce it.
+- **Somebody else's review answers 403, not 404.** Hiding existence was the first draft and two
+  reviewers argued the same thing against it: every caller is an authenticated member of one company
+  and an id is an unguessable `<epoch>-<guid>`, so confirming existence leaks nothing worth having,
+  while hiding it left a person chasing a missing review unable to tell a mistyped id from a dropped
+  job.
+- **Two caps, counting different things.** `Coai:PerCallerQueued` (20) is how many of your reviews
+  may WAIT — the next is refused with `429` and a `Retry-After`, because a queue nobody drains just
+  holds other people's turn. `Coai:PerCallerRunning` (3) is how many may be on a vendor at once —
+  exceeding it refuses nothing, it leaves the job queued.
+- **A poll of a FINISHED review returns at once**, whatever `wait` says. Waiting for a change that
+  already happened is how a client reconnecting after a blip stares at an answer the server already
+  has for twenty-five seconds.
+- **Every path ends in a terminal state.** The six vendor outcomes describe what the VENDOR does; a
+  broad catch covers what the machinery does, because a job stuck `Running` is a caller polling for
+  ever and an account nobody releases.
+- **The sweep is on a timer, not an event.** An event-driven deadline is only checked when something
+  happens, so a running job whose deadline passes on an idle server would keep going and keep
+  spending.
+- **The server returns the vendor's RAW answer.** Parsing, repair and de-duplication stay in the
+  client, so the same parser does not exist twice and drift.
+- **A cancel STOPS the vendor, it does not merely relabel the record.** Each running job registers a
+  cancellation source in the store, and the same call that ends the record fires it. Without that the
+  API reported `cancelled` while the CLI went on running, went on spending against the account, and
+  held the slot the whole time.
+- **A rate-limited account is parked and the review moves to the NEXT one.** Failing outright told a
+  caller "rate limited" while a second signed-in account sat idle, which defeats the point of
+  configuring more than one. Only when no account can take it does the review fail, carrying the
+  vendor's own sentence.
+- **Waiters are per job.** One shared list is woken by every submit and finish anywhere on the
+  server, so a client polling its own queued review returned in milliseconds because a stranger's job
+  moved — a long poll that had quietly become a busy poll, and a busy poll runs into the rate limiter.
+- **An out-of-range `timeoutSeconds` and an unknown role are REFUSED naming the legal values**, not
+  clamped or silently substituted. Somebody who asked for five seconds and got thirty draws the wrong
+  conclusion from the result; a review that ran under a role nobody asked for looks like a normal one.
+- **`lost` requires the whole id shape**, epoch and GUID. `123-typo` has an old-looking prefix, and
+  `lost` is the answer that tells an automated client to resubmit — reporting it for an id nobody
+  ever issued is how a typo turns into duplicate vendor spend.
+- **The pump drains rather than ticking.** Starting one review per vendor per second left nine of ten
+  free accounts idle while a queue backed up; it now keeps starting while the vendor keeps saying yes,
+  and the slot lock is what stops it.
+- **A job's cancellation source is fired on cancel and disposed on FINISH, never both at once.**
+  Cancelling and disposing in one breath meant the runner was awaiting on a token whose source had
+  gone, so an ordinary cancellation surfaced as an `ObjectDisposedException` and was reported as
+  "the server could not run this review".
+- **Rotation is bounded by the accounts that have already refused**, not by the queue clock alone. A
+  job whose vendor is saturated would otherwise cycle its accounts for the whole ten-minute window,
+  re-asking ones it already knew were exhausted — failing either way, the only difference being how
+  long the caller waited to be told.
+- **The drain is bounded by the account count.** One tick starts at most as many reviews as the
+  vendor has accounts, because that is the most that can run at once. A bare `while` was correct in
+  principle and is the kind of correct that stops being true after somebody edits the claim path, in
+  a loop that runs once a second for ever.
+- **One ledger, not two.** `UsageLedger` gained an email column and a `RecordJob` overload rather
+  than `src_server` growing its own JSONL writer — a second writer is how two spending records come
+  to disagree.
+
 ## Configuration
 
 `Coai:AllowedDomains` (required unless `Coai:AllowAnyDomain`), `Coai:Admins`, `Coai:DataDir`,
 `Coai:SessionTtlDays` (7), `Coai:MinimumClientContract`, `Coai:RequireForwardedHttps`,
-`Coai:RateLimit:PermitLimit|WindowSeconds`, `Coai:TrustedProxies`, `Coai:LoginWaitSeconds`;
+`Coai:RateLimit:PermitLimit|WindowSeconds`, `Coai:TrustedProxies`, `Coai:LoginWaitSeconds`,
+`Coai:LoginTimeoutSeconds`, `Coai:PerCallerQueued` (20), `Coai:PerCallerRunning` (3),
+`Coai:QueueWaitMinutes` (10 — how long a review waits for a free account, NOT how long the
+vendor may take, which is the caller's own `timeoutSeconds`);
 `Auth:Microsoft:Tenant|Audiences|ClientScope`,
 `Auth:Google:Enabled|Audiences`, `Auth:Local:SigningKey`. Environment form uses `__`.
 

@@ -52,6 +52,38 @@ public sealed record CatalogDto(
     IReadOnlyList<CatalogVendorDto> Vendors,
     string Error);
 
+/// <summary>What a client asks this server to run.</summary>
+/// <param name="TimeoutSeconds">
+/// How long the VENDOR may take, clamped to 30..1800. It is not how long the job may wait for a free
+/// account — that is the server's queue clock, and conflating the two was the plan round's blocking
+/// finding: a single deadline stamped at submit burns down while the job queues.
+/// </param>
+public sealed record ReviewRequestDto(
+    string Vendor,
+    string Model,
+    string Prompt,
+    string? Role = null,
+    int TimeoutSeconds = 600);
+
+/// <param name="Position">Where it sits in its vendor's queue, 1-based; 0 once it is running.</param>
+public sealed record ReviewAcceptedDto(string Id, int Position);
+
+/// <param name="Answer">
+/// The vendor's RAW text. Parsing, repair and de-duplication stay in the client, so the same parser
+/// does not exist in two places and drift.
+/// </param>
+/// <param name="Failure">The wire name of the failure, or empty. <param name="Reason">its own words.</param></param>
+public sealed record ReviewStatusDto(
+    string Id,
+    string Status,
+    int Position,
+    string Answer,
+    double Seconds,
+    long TokensIn,
+    long TokensOut,
+    string Failure,
+    string Reason);
+
 /// <summary>One account's persisted state, in its own directory.</summary>
 /// <param name="CooldownUntilUtc">Null when it is not rate-limited.</param>
 /// <param name="NeedsSignIn">Set when a CLI said so; cleared only by a successful `login`.</param>
@@ -84,4 +116,7 @@ public sealed record SlotStateDto(
 [JsonSerializable(typeof(CatalogVendorDto))]
 [JsonSerializable(typeof(CatalogDto))]
 [JsonSerializable(typeof(SlotStateDto))]
+[JsonSerializable(typeof(ReviewRequestDto))]
+[JsonSerializable(typeof(ReviewAcceptedDto))]
+[JsonSerializable(typeof(ReviewStatusDto))]
 public sealed partial class ServerJsonContext : JsonSerializerContext;

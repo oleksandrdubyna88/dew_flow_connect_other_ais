@@ -17,7 +17,15 @@ public sealed record UsageEntry(
     long TokensIn,
     long TokensOut,
     double? CostUsd,
-    string Outcome);
+    string Outcome,
+
+    /// <summary>Who spent it, on a Team server.</summary>
+    /// <remarks>
+    /// Empty for a local run, where there is exactly one person and asking would be theatre.
+    /// Trailing and defaulted, so every existing construction still compiles and every line
+    /// already on disk stays valid — an old line simply has no email, which is the truth about it.
+    /// </remarks>
+    string Email = "");
 
 /// <summary>
 /// The append-only record of what every reviewer has consumed.
@@ -70,7 +78,43 @@ public sealed class UsageLedger(string dataDir)
             usage.CostUsd,
             outcome is ReviewerOutcome.Ok ? "ok" : ReviewerSummaryFactory.Describe(outcome));
 
-        try
+        Append(entry);
+    }
+
+    /// <summary>Records one job a Team server ran on somebody's behalf.</summary>
+    /// <remarks>
+    /// The same file and the same shape as a local run — ONE ledger, not two — with the email filled
+    /// in. By the time the server records a job it no longer holds a <c>ReviewerInvocation</c>: the
+    /// job outlived it and the outcome has already been mapped to the wire vocabulary. So this takes
+    /// what the server actually has. Widening the ledger was the alternative to a second JSONL writer
+    /// in <c>src_server</c>, and a second writer is how two spending records come to disagree.
+    /// </remarks>
+    public void RecordJob(
+        string email,
+        string provider,
+        string model,
+        string role,
+        string outcome,
+        TimeSpan elapsed,
+        long tokensIn,
+        long tokensOut,
+        double? costUsd = null) =>
+        Append(new UsageEntry(
+            DateTime.UtcNow.ToString("O"),
+            provider,
+            model,
+            role,
+            "TeamServer",
+            Math.Round(elapsed.TotalSeconds, 1),
+            tokensIn,
+            tokensOut,
+            costUsd,
+            outcome,
+            email));
+
+    /// <summary>Never throws: a spending record that can fail a review is worse than one with a gap.</summary>
+    private void Append(UsageEntry entry)
+    {        try
         {
             Directory.CreateDirectory(dataDir);
             var line = System.Text.Encoding.UTF8.GetBytes(
