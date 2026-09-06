@@ -366,7 +366,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       setup:
         'Nothing to set up. A change in the panel is in effect for the NEXT round; there is no restart and nothing to re-paste.',
       usage:
-        'A variable set in your assistant\'s own config still outranks the file — a variable there is more specific than a file any window may rewrite.\n\nThe panel writes only what DIFFERS from the defaults, so returning a setting to its default removes it from the file rather than pinning it.',
+        'A variable set in your assistant\'s own config still outranks the file — a variable there is more specific than a file any window may rewrite.\n\nThe panel writes only what DIFFERS from the defaults, so returning a setting to its default removes it from the file rather than pinning it.\n\nSeparate settings for each side: one machine can hold several working environments - a local window and one or more WSL distros - and VS Code hands the SAME settings file to all of them. Turn the switch on and each side keeps its own values, seeded from what it had at that moment, so nothing changes until you edit something. For one person working for two companies on one machine that is a different proxy, a different CLI path and a different vault key per side. Your text size and help language stay shared, because they belong to you rather than to the work.',
       whatCanGoWrong:
         'A half-written file leaves the last good configuration in place. A torn read that produced an empty vendor list would fail every reviewer and then report a panel that agreed with itself.',
     },

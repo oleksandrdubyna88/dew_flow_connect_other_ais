@@ -80,6 +80,7 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.autonomous': 'work autonomously',
   'coai.splitPlan': 'split the plan into epics and stories',
   'coai.splitWithFable': 'split with fable',
+  'coai.perSideSettings': 'separate settings for each side',
 };
 
 test('every command is described in the help, or declared self-evident with a reason', () => {

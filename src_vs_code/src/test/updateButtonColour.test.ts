@@ -30,6 +30,7 @@ function css(): string {
     localEngines: {},
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
     side: '',
+    perSide: false,
     latestServerVersion: '',
     questions: [],
     sessions: [],

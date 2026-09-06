@@ -10,6 +10,14 @@
  * a compile error rather than a blank tooltip.</p>
  */
 export const HELP = {
+  perSideSettings:
+    'One machine can hold several working environments - a local window, and each WSL distro or '
+    + 'remote host. VS Code resolves these settings from the settings.json of the CLIENT and hands '
+    + 'the same values to every one of them, so without this switch three companies share one proxy, '
+    + 'one set of CLI paths and one vault key. On, each side keeps its own values, seeded from what '
+    + 'it had when you switched it on - so nothing changes until you edit something, and switching '
+    + 'off and on again does not discard what a side had configured. Your text size and help language '
+    + 'stay shared: they belong to you rather than to the work.',
   autonomous:
     'The gate tells the assistant to work without interrupting you: a question that does not block it is written down and asked at the END, all of them together; a question that does block it is asked at once — but only after it has re-read what it has written and gathered every other blocking question, so you are interrupted once with all of them instead of five times with one each.',
   splitPlan:

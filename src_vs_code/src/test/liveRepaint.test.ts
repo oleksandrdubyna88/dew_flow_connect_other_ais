@@ -27,6 +27,7 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   localEngines: {},
   server: { kind: 'known', version: '0.6.0', remembered: false, updateOffered: true },
   side: '',
+  perSide: false,
   latestServerVersion: '0.6.0',
   questions: [],
   openSections: ['usage'],

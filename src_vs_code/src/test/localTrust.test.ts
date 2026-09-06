@@ -29,7 +29,8 @@ function html(vendor: Vendor): string {
   return panelHtml({
     settings: DEFAULTS, vendors: [vendor], codexModels: [], agyModels: [], localEngines: { [vendor.id]: LOCAL },
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
-    side: '', latestServerVersion: '', questions: [], sessions: [],
+    side: '',
+    perSide: false, latestServerVersion: '', questions: [], sessions: [],
     openSections: ['reviewers'],
     usage: [], usageWindow: 'week', cliStatus: {}, modelPrices: {},
     snippetStatus: { kind: 'current', current: SNIPPET_VERSION },

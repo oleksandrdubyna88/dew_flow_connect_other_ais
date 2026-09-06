@@ -57,7 +57,7 @@ export function serverPath(storage: vscode.Uri): vscode.Uri | undefined {
  * <p>`remoteAuthority` would have been one field instead of three, and it is not public API — so
  * the three that ARE public are folded together. See {@link installedKey}.</p>
  */
-function thisSide(storage: vscode.Uri): Side {
+export function thisSide(storage: vscode.Uri): Side {
   return {
     remoteName: vscode.env.remoteName,
     distro: process.env['WSL_DISTRO_NAME'],

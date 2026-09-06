@@ -23,6 +23,8 @@ import {
   versionSourceFor,
 } from './cliVersions';
 import { askVersion, capture } from './versionProbe';
+import { readOverlay, seedIfEmpty, writeOverlay } from './sideSettings';
+import { thisSide } from './installer';
 import { latestServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog, EMPTY_LOG } from './roundsDb';
 import { readLog } from './roundsDbRead';
@@ -37,7 +39,15 @@ import {
   PriceTable,
   priceFor,
 } from './modelPrices';
-import { roleRecordUpdate, SettingMessage, settingsFrom, settingWrite } from './settingsShape';
+import {
+  ConfigReader,
+  OVERLAID_SETTINGS,
+  overlaidReader,
+  roleRecordUpdate,
+  SettingMessage,
+  settingsFrom,
+  settingWrite,
+} from './settingsShape';
 import {
   mirroredLines,
   NetworkingMode,
@@ -174,7 +184,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // spending tab uses rather than a second copy of the rule. It is the only thing that can price
     // a local engine at all: no public list has ever heard of one, so its rounds read as a floor
     // until somebody says what it costs them.
-    const vendors = vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors'));
+    const vendors = this.vendorsHere();
     // Looked up once per DISTINCT model and remembered, rather than re-derived inside the loop that
     // prices a hundred rounds — the gate's performance finding, and it costs nothing to honour.
     // The whole price list is searched, not only the models the vendors are set to now, because a
@@ -245,7 +255,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * — everything the sidebar section used to show, rendered by the same function, for the page.
    */
   async usageTab(): Promise<string> {
-    const vendors = vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors'));
+    const vendors = this.vendorsHere();
 
     return usageTabHtml(this.remembered(await this.readUsage()), this.usageWindow, vendors, await this.modelPrices(vendors));
   }
@@ -257,7 +267,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
     const config = vscode.workspace.getConfiguration('coai');
     const settings = settingsFrom((section) => config.get(section));
-    const vendors = vendorsFrom(config.get('vendors'));
+    const vendors = vendorsFrom(this.read(config)('vendors'));
     this.codexModels = await this.readCodexModels();
     this.agyModels = await this.readAgyModels(vendors);
     // The published version is read FIRST because the server's status is stated against it — and
@@ -271,6 +281,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       agyModels: this.agyModels,
       server: await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published),
       side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),
+      perSide: this.perSide(config),
       questions: this.watcher.openQuestions,
       openSections: this.openSections,
       sessions,
@@ -365,7 +376,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // The endpoint may have changed WHILE this probe was in flight; the answer then belongs to a
     // configuration nobody is looking at any more, and showing it would be worse than showing
     // nothing. The next repaint probes the current one.
-    const current = vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors'))
+    const current = this.vendorsHere()
       .find((v) => v.id === vendor.id);
     const currentWanted = current === undefined ? ''
       : current.baseUrl.length > 0 ? openAiBaseOf(current.baseUrl) : '';
@@ -561,7 +572,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * that.</p>
    */
   private async runVendor(id: string): Promise<void> {
-    const vendor = vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors')).find((v) => v.id === id);
+    const vendor = this.vendorsHere().find((v) => v.id === id);
     if (vendor === undefined) {
       return;
     }
@@ -610,7 +621,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     verb: 'install' | 'update',
     commandFor: (vendor: Vendor, platform: Platform) => VendorInstall,
   ): Promise<void> {
-    const vendor = vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors')).find((v) => v.id === id);
+    const vendor = this.vendorsHere().find((v) => v.id === id);
     if (vendor === undefined) {
       return;
     }
@@ -694,7 +705,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const config = vscode.workspace.getConfiguration('coai');
     switch (write.kind) {
       case 'vendor': {
-        const vendors = vendorsFrom(config.get('vendors')).map((v) =>
+        const vendors = vendorsFrom(this.read(config)('vendors')).map((v) =>
           v.id === write.vendor ? { ...v, [write.key]: write.value } : v,
         );
         await this.save(config, 'vendors', vendors);
@@ -709,6 +720,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       }
       case 'plain':
         await this.save(config, write.key, write.value);
+        // Turning the per-side switch ON seeds this side with what it reads today, so nothing
+        // changes until something is edited. An empty overlay looks identical - until the first
+        // shared edit on another side silently changes this one, which is the surprise this feature
+        // exists to remove. Idempotent, so switching off and on again keeps what was configured.
+        if (write.key === 'perSideSettings' && write.value === true) {
+          await seedIfEmpty(
+            this.context.globalState,
+            thisSide(this.context.globalStorageUri),
+            (section) => config.get(section));
+        }
         return;
       default: {
         // Every kind is handled, and the compiler is what says so.
@@ -716,6 +737,31 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         return unhandled;
       }
     }
+  }
+
+  /** Whether this side keeps its own settings. Shared by every side, deliberately: one switch. */
+  private perSide(config: vscode.WorkspaceConfiguration): boolean {
+    return config.get<boolean>('perSideSettings') === true;
+  }
+
+  /**
+   * How this side reads a setting: its own value first, the shared one otherwise.
+   *
+   * <p>One accessor, because a read that goes around it is a setting that silently stays shared —
+   * and the person who set a different proxy on one side would find out when a review ran against
+   * the wrong company's server.</p>
+   */
+  private read(config: vscode.WorkspaceConfiguration): ConfigReader {
+    const shared: ConfigReader = (section) => config.get(section);
+
+    return this.perSide(config)
+      ? overlaidReader(shared, readOverlay(this.context.globalState, thisSide(this.context.globalStorageUri)))
+      : shared;
+  }
+
+  /** The vendors as THIS side has them. */
+  private vendorsHere(): readonly Vendor[] {
+    return vendorsFrom(this.read(vscode.workspace.getConfiguration('coai'))('vendors'));
   }
 
   /**
@@ -729,6 +775,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * the fix; this is what makes the NEXT one loud instead of silent.</p>
    */
   private async save(config: vscode.WorkspaceConfiguration, key: string, value: unknown): Promise<void> {
+    // A setting this side keeps to itself never reaches settings.json: that file is the CLIENT's, and
+    // VS Code hands it to every extension host, which is the whole reason the per-side switch exists.
+    if (this.perSide(config) && OVERLAID_SETTINGS.includes(key)) {
+      await writeOverlay(this.context.globalState, thisSide(this.context.globalStorageUri), key, value);
+
+      return;
+    }
+
     try {
       await config.update(key, value, vscode.ConfigurationTarget.Global);
     } catch (error) {
@@ -970,7 +1024,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
   /** A preset, or a name and an endpoint typed in — the list is not meant to stay at two. */
   private async addVendor(): Promise<void> {
-    const existing = new Set(vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors')).map((v) => v.id));
+    const existing = new Set(this.vendorsHere().map((v) => v.id));
     // A preset already in the panel is not offered twice; the blank one (empty id) always is.
     const offered = VENDOR_PRESETS.filter((p) => p.id.length === 0 || !existing.has(p.id));
     const picked = await vscode.window.showQuickPick(
@@ -1005,7 +1059,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
 
     const config = vscode.workspace.getConfiguration('coai');
-    const vendors = vendorsFrom(config.get('vendors'));
+    const vendors = vendorsFrom(this.read(config)('vendors'));
     if (vendors.some((v) => v.id === vendor.id)) {
       void vscode.window.showWarningMessage(`${vendor.id} is already a reviewer.`);
       return;
@@ -1020,7 +1074,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    */
   private async removeVendor(id: string): Promise<void> {
     const config = vscode.workspace.getConfiguration('coai');
-    const vendors = vendorsFrom(config.get('vendors'));
+    const vendors = vendorsFrom(this.read(config)('vendors'));
     if (vendors.length <= 1) {
       void vscode.window.showWarningMessage('A review panel needs at least one reviewer.');
       return;
