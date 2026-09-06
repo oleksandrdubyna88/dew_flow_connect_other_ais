@@ -76,3 +76,11 @@ http/.env
 # The contract suite: its installed packages are noise, but the LOCK FILE is committed — it is what
 # makes the pinned httpyac version real, and ignoring it defeats the reason it was pinned.
 http/node_modules
+
+# The deployment stack keeps its real configuration and its state on the machine that runs it.
+# `.env.example` is committed; `.env` is the one file an operator fills in and it never leaves
+# the host. `data/` holds signed-in vendor accounts and the spending ledger.
+deploy/.env
+deploy/data/
+deploy/logs/
+deploy/backup/

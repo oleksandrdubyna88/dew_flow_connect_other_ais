@@ -1,0 +1,110 @@
+# ConnectOtherAIs Team server — one-command deployment.
+#
+#   cp .env.example .env      # edit it: this is the only file you configure
+#   docker compose up -d
+#
+# Everything that must survive an update lives OUTSIDE the containers, under the paths named
+# by DATA_DIR / LOG_DIR (bind mounts, default ./data and ./logs). Updating is `./update.sh`,
+# which pulls a new image and recreates the containers; the bind mounts are untouched, which
+# is the whole point of not using anonymous volumes.
+#
+# THIS STACK TERMINATES NO TLS AND PUBLISHES NOTHING PUBLICLY. The host's nginx is the edge
+# — see deploy/README.md — and the app is bound to loopback only.
+
+name: coai
+
+services:
+  # ---------------------------------------------------------------------------
+  # One-shot: give the bind-mounted host directories to the unprivileged uid the app runs
+  # as, then exit.
+  #
+  # Without this, `docker compose up -d` fails on first boot on any normal Linux host: a
+  # freshly created ./data belongs to root, the app runs as uid 10001, and it cannot create
+  # its own subdirectories. (Invisible on Docker Desktop for Windows and macOS, whose bind
+  # mounts are permissive — which is exactly how such a bug ships.) CredsForDevs hit this
+  # on its own first boot; this is its fix, copied.
+  #
+  # BOTH directories, not just /data: a root-owned /logs is a server that cannot write its
+  # first log line and exits before it has said why.
+  # ---------------------------------------------------------------------------
+  init:
+    image: alpine:3.20
+    # List form on purpose: a folded string here is re-split by the shell and the `&&`
+    # arrives as a bare argument ("sh: syntax error: unexpected &&").
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        mkdir -p /data /logs
+        chown -R 10001:10001 /data /logs
+        echo "coai: data and log directories prepared"
+    volumes:
+      - ${DATA_DIR:-./data}:/data
+      - ${LOG_DIR:-./logs}:/logs
+    network_mode: none
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
+  # The server. Bound to LOOPBACK, never 0.0.0.0: the host nginx is the only thing that may
+  # reach it, and a container that published on every interface would be a company's whole
+  # AI subscription answering the open internet on a high port.
+  #
+  # 8090 was checked free on the target machine. Taken there today: 5000, 5001, 5432
+  # (postgres), 1431 (mssql), 8081 and 8443 (the vault's own nginx).
+  # ---------------------------------------------------------------------------
+  coai:
+    image: ${COAI_IMAGE:-ghcr.io/oleksandrdubyna88/coai-server:latest}
+    build:
+      context: ..
+      dockerfile: src_server/Dockerfile
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${COAI_PORT:-8090}:8080"
+    environment:
+      Coai__DataDir: /data
+      Coai__AllowedDomains: ${ALLOWED_DOMAINS:?set ALLOWED_DOMAINS in .env}
+      Coai__Admins: ${ADMINS:-}
+      # ONE at a time on a small machine. Double underscore, not a colon: a colon is not a
+      # valid shell or .env variable name, and ASP.NET Core's environment provider wants `__`
+      # for hierarchy — so `Coai:MaxConcurrency` would have been dropped in silence and the
+      # server would have run the default of 4. On 1.9 GB with no swap that is not a slow
+      # round, it is the OOM killer choosing among SQL Server, postgres and the vault.
+      Coai__MaxConcurrency: ${MAX_CONCURRENCY:-1}
+      Coai__SessionTtlDays: ${SESSION_TTL_DAYS:-7}
+      Coai__QueueWaitMinutes: ${QUEUE_WAIT_MINUTES:-30}
+      Coai__PerCallerQueued: ${PER_CALLER_QUEUED:-10}
+      Coai__PerCallerRunning: ${PER_CALLER_RUNNING:-2}
+      Coai__RateLimit__PermitLimit: ${RATE_LIMIT_PERMITS:-120}
+      Coai__RateLimit__WindowSeconds: ${RATE_LIMIT_WINDOW_SECONDS:-10}
+      # nginx always sets X-Forwarded-Proto, and this port is unreachable except through
+      # nginx — the two conditions that make trusting the header correct.
+      Coai__RequireForwardedHttps: ${REQUIRE_HTTPS:-true}
+      Coai__TrustedProxies: ${TRUSTED_PROXIES:-172.16.0.0/12}
+      Auth__Microsoft__Tenant: ${MS_TENANT:-}
+      Auth__Microsoft__Audiences: ${MS_AUDIENCES:-}
+      Auth__Microsoft__ClientScope: ${MS_CLIENT_SCOPE:-}
+      # Wired but OFF in v1. A scheme that is configured-and-disabled is a .env line away;
+      # a scheme that was never written is a release.
+      Auth__Google__Enabled: ${GOOGLE_ENABLED:-false}
+      Auth__Google__Audiences: ${GOOGLE_AUDIENCES:-}
+      Auth__Local__SigningKey: ${LOCAL_SIGNING_KEY:-}
+      Serilog__MinimumLevel__Default: ${LOG_LEVEL:-Information}
+    volumes:
+      - ${DATA_DIR:-./data}:/data
+      - ${LOG_DIR:-./logs}:/logs
+    # NOT read_only, unlike the vault's: the vendor CLIs write caches and transcripts under
+    # the HOME the slot gives them, which is a directory under /data — but they also touch
+    # paths in the image that a read-only root filesystem would refuse.
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # So that the thing which dies when this is wrong is OURS, and the vault beside it keeps
+    # serving. See deploy/README.md for the arithmetic on this machine.
+    mem_limit: ${MEM_LIMIT:-1500m}

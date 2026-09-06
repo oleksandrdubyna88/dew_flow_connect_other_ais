@@ -1,0 +1,75 @@
+# /etc/nginx/sites-available/coai — the ConnectOtherAIs Team server's edge.
+#
+# ---------------------------------------------------------------------------
+# THIS FILE IS PORT 80 ONLY, AND THAT IS DELIBERATE.
+#
+# The obvious thing is to copy the neighbouring `credsfordevs` site whole, TLS listener and
+# all. That file cannot be installed first: it names
+# `/etc/letsencrypt/live/coai.remsoft.dev/fullchain.pem`, which does not exist until certbot
+# has run — and `certbot --nginx` runs `nginx -t` BEFORE it issues. So the config is
+# invalid, certbot aborts, nothing is issued, and nginx will not reload either. A circular
+# dependency that costs an afternoon.
+#
+# So this ships as the HTTP vhost, which is what `certbot --nginx` wants to find: it uses
+# this `server_name` to prove the domain, then EDITS this file in place — adding
+# `listen 443 ssl`, the certificate paths, and a 301 from :80 — and reloads. After that the
+# file on the machine is no longer byte-identical to this one, which is expected and is why
+# deploy/README.md says what it should look like afterwards.
+# ---------------------------------------------------------------------------
+#
+# Modelled on `credsfordevs`, which already carries what a container template would have.
+# It differs from that one in exactly three values, each for a reason:
+#   * client_max_body_size 4m   — a code round's prompt carries a diff and the file contents
+#                                 around it; 1m truncates real reviews.
+#   * proxy_read_timeout 60s    — a poll holds the connection for at most 25s, so 60 is
+#                                 generous; the vault's 120 would hide a hung upstream.
+#   * proxy_pass 127.0.0.1:8090 — a LITERAL loopback address, never a name. nginx resolves
+#                                 names at config load, so a hostname would make a stopped
+#                                 coai container break `nginx -t` for every site on this
+#                                 box, the vault included. A literal cannot: a stopped
+#                                 container answers 502 on its own name and nothing else
+#                                 notices.
+
+# Partitioned on the REAL client address. `X-Forwarded-*` is SET below rather than appended,
+# so a caller cannot forge the identity this partitions on by sending its own header.
+limit_req_zone  $binary_remote_addr zone=coai_req:10m rate=20r/s;
+limit_conn_zone $binary_remote_addr zone=coai_conn:10m;
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name coai.remsoft.dev;
+
+    server_tokens off;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'" always;
+
+    # A code round's prompt is a diff plus the file contents around it.
+    client_max_body_size 4m;
+
+    location / {
+        limit_req  zone=coai_req burst=40 nodelay;
+        limit_conn coai_conn 20;
+
+        proxy_pass http://127.0.0.1:8090;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        # SET, not appended: `$proxy_add_x_forwarded_for` would carry whatever the caller
+        # sent, and the server partitions its per-caller rate limit on this.
+        proxy_set_header X-Forwarded-For   $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # A poll holds the connection up to 25s server-side.
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_connect_timeout 5s;
+
+        # Nothing here streams; buffering keeps a slow client from occupying an upstream slot.
+        proxy_buffering on;
+    }
+}

@@ -5,6 +5,9 @@ name: release
 #   extension-v0.8.0 → the .vsix, attached to the release AND published to the Marketplace
 #                      when the VSCE_PAT secret exists (without it, the publish step skips
 #                      OUT LOUD and the .vsix still lands on the release for a manual upload).
+#   server-v0.5.1    → a multi-arch `coai-server` image on ghcr.io. The Team server, which is
+#                      deployed rather than downloaded, so there is nothing to attach to a
+#                      release — the artefact IS the image.
 # (The guard-without-a-trigger trap is documented in creds' release.yml — a job's `if` is not a
 # workflow trigger, so every tag shape is listed here.)
 on:
@@ -12,13 +15,14 @@ on:
     tags:
       - 'mcp-v*'
       - 'extension-v*'
+      - 'server-v*'
   workflow_dispatch:
     inputs:
       target:
         description: 'What to release'
         required: true
         type: choice
-        options: [mcp, extension]
+        options: [mcp, extension, server]
 
 permissions:
   contents: read
@@ -301,3 +305,98 @@ jobs:
             exit 0
           fi
           npx @vscode/vsce publish --no-dependencies --packagePath *.vsix -p "$VSCE_PAT"
+
+  # ---------------------------------------------------------------------------
+  # The Team server, as a multi-arch image.
+  #
+  # One job per architecture on a NATIVE runner, then a manifest stitched from the two
+  # digests. Native AOT does not cross-compile inside qemu — an arm64 image built on an
+  # x64 runner under emulation either fails to link or takes long enough that it may as
+  # well have. This is the same shape creds' release uses, for the same reason.
+  # ---------------------------------------------------------------------------
+  server-image:
+    name: coai-server image (${{ matrix.arch }})
+    if: startsWith(github.ref, 'refs/tags/server-v') || inputs.target == 'server'
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest-amd64: ${{ steps.export.outputs.digest-amd64 }}
+      digest-arm64: ${{ steps.export.outputs.digest-arm64 }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: ver
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/server-v* ]]; then
+            echo "version=${GITHUB_REF_NAME#server-v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0-manual" >> "$GITHUB_OUTPUT"
+          fi
+
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          # The repository ROOT: central package management, the SDK pin and the feed list
+          # live there, and a build that cannot see them resolves different versions than CI.
+          context: .
+          file: src_server/Dockerfile
+          build-args: VERSION=${{ steps.ver.outputs.version }}
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/coai-server
+          outputs: type=image,push-by-digest=true,name-canonical=true
+          # NO cache for the CLI layers is possible in a useful sense — the installers fetch
+          # whatever is current, so a cached layer would pin the very thing the operator
+          # decided not to pin. The .NET restore and publish layers cache normally.
+          cache-from: type=gha,scope=server-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=server-${{ matrix.arch }}
+
+      - id: export
+        run: echo "digest-${{ matrix.arch }}=${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+
+  server-manifest:
+    name: publish coai-server manifest
+    needs: server-image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Stitch and tag
+        run: |
+          IMAGE=ghcr.io/${{ github.repository_owner }}/coai-server
+          VERSION="${GITHUB_REF_NAME#server-v}"
+          TAGS="-t $IMAGE:$VERSION"
+          # `latest` moves only on a real tag, so an operator who pinned :latest never picks
+          # up a workflow_dispatch trial build.
+          if [[ "$GITHUB_REF" == refs/tags/server-v* ]]; then
+            TAGS="$TAGS -t $IMAGE:latest"
+          else
+            TAGS="-t $IMAGE:manual-$(date +%Y%m%d%H%M 2>/dev/null || echo run)"
+          fi
+          docker buildx imagetools create $TAGS \
+            "$IMAGE@${{ needs.server-image.outputs.digest-amd64 }}" \
+            "$IMAGE@${{ needs.server-image.outputs.digest-arm64 }}"
