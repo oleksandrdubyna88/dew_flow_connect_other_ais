@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.31.0 — 2026-09-06 (server 0.18.3)
+
+**A reviewer can now be set per STAGE, and a stage nobody serves is refused.** Each vendor row has
+two boxes — *reviews plans*, *reviews code* — ticked unless you untick one, with the master switch
+above them still turning the vendor off everywhere. Asked for by a measurement rather than by taste:
+over fourteen judged runs a local model was **19 % useful on a plan and 3 % on code**, while writing
+more findings than codex and gemini together. So "on for the plan, off for the code" is a setting
+somebody actually wants, and until now there was nowhere to say it.
+
+An existing configuration keeps exactly the gate it had — absent means both, everywhere — and the
+flags ride inside the vendor list, so a pristine configuration still writes no extra configuration
+at all.
+
+And the dangerous half: a stage no vendor serves used to build an empty work list, run no reviewer,
+merge nothing and **pass the gate** — a round reporting `proceed` having reviewed nothing. It is
+refused now, at both stages, with a sentence naming the stage.
+
+**Each side of the machine can keep its own settings.** `coai.perSideSettings` (off by default) gives
+a local window, and each WSL distro or remote host, its own vendors, models, proxies, CLI paths and
+vault key — seeded from what that side had when you switched it on, so nothing changes until you edit
+something. One machine, several companies, is what this is for. VS Code hands the same
+`settings.json` to every extension host, which is why it could not be configured before. Your text
+size and help language stay shared: they belong to you, not to the work.
+
+**A round says whether anybody has decided about its findings.** The rounds log's Status column had
+`done` next to a `good_enough` verdict while thirteen findings underneath were still open — both true,
+and together they read as finished. `done` is about the reviewers having answered; whether the gate
+was closed is a different fact, and the server already recorded it. The column now shows **awaiting
+decisions** until a resolve lands, and `9 ✓ 4 ✗` once it has.
+
+**`--log` no longer dies when the SQLite library is missing.** 0.18.2 claimed this and did not do it:
+the real exception chain has a layer the fix did not know about (`TypeInitializationException` →
+`TargetInvocationException` → `DllNotFoundException`), and the test had built the chain by hand
+without it, so the code agreed with the fixture rather than with reality. Found by deleting the
+library from the published archive and running it.
+
 ## 0.30.4 — 2026-09-06 (server 0.18.2)
 
 **The server shipped unable to open its own database, on every platform.** 0.18.1 carried the
@@ -77,6 +113,16 @@ module per platform, to ask questions of a file the server already writes and wh
 The server answers `--log` with JSON instead. A server older than the flag answers nothing, which
 reads to the page exactly like a machine that has run no rounds — everything built from the session
 files carries on as before.
+
+## Server 0.18.3 — 2026-09-06
+
+Per-stage vendor selection (the flags travel inside `COAI_VENDORS`, only when a vendor is narrowed),
+a refusal when no reviewer serves the stage being run, and `--log` explaining a missing SQLite
+library instead of crashing — which 0.18.2 promised and did not deliver.
+
+## Server 0.18.2 — 2026-09-06
+
+Ships `e_sqlite3` beside the binary, for win-x64/arm64, linux-x64/arm64 and osx-x64/arm64.
 
 ## Server 0.18.1 — 2026-09-05
 
