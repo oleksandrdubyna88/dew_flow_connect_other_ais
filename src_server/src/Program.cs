@@ -222,22 +222,26 @@ if (requireHttps)
     // one-line bypass.) Health is the one exemption: the container's own probe has no proxy in
     // front of it and carries no secret.
     //
-    // TWO places are checked, and the first one is the fix for a defect this shipped with:
-    // `UseForwardedHeaders` CONSUMES `X-Forwarded-Proto` when the request comes from a TRUSTED
-    // proxy — that is its job, it moves the value into `Request.Scheme` and strips the header so
-    // nothing downstream can be fooled twice. Reading only the raw header therefore refused every
-    // request on a correctly configured host, and configuring `Coai:TrustedProxies` properly was
-    // what BROKE it. Found by deploying: health answered and everything else said "HTTPS required."
-    // behind an nginx that was setting the header exactly right.
+    // `Request.IsHttps` and NOTHING ELSE, which is the whole point rather than a simplification.
     //
-    // The raw header is still honoured, for the deployment that has not set `TrustedProxies` yet:
-    // there the middleware leaves the header alone and this is the only evidence there is.
+    // `UseForwardedHeaders` ran above. When the request comes from a TRUSTED proxy it consumes
+    // `X-Forwarded-Proto`, moves the value into `Request.Scheme`, and strips the header so nothing
+    // downstream can be fooled twice. So `IsHttps` is the middleware's verdict — reached only for a
+    // proxy `Coai:TrustedProxies` actually names.
+    //
+    // This shipped reading the RAW header instead, which refused every request on a correctly
+    // configured host: configuring the trusted proxy properly was what BROKE it. The first repair
+    // added `IsHttps` and KEPT the raw header as a fallback "for a deployment that has not set
+    // TrustedProxies yet" — and that fallback is a bypass, which two reviewers said in the same
+    // round: anyone who can reach this server over plaintext can send the header themselves and be
+    // served. A gate that any caller can satisfy by asserting it is not a gate.
+    //
+    // The cost is real and is the right cost: a deployment whose `TrustedProxies` does not name its
+    // proxy now gets 403 instead of working by accident. That is why `127.0.0.1/32` is in the
+    // shipped defaults — the loopback proxy is what every deployment here actually has.
     app.Use(async (ctx, next) =>
     {
-        if (ctx.Request.Path.StartsWithSegments("/api/health")
-            || ctx.Request.IsHttps
-            || ctx.Request.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase)
-            || ctx.Request.Headers["X-Forwarded-Proto"].ToString().Equals("https", StringComparison.OrdinalIgnoreCase))
+        if (ctx.Request.Path.StartsWithSegments("/api/health") || ctx.Request.IsHttps)
         {
             await next();
 

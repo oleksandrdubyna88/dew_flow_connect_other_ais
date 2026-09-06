@@ -40,7 +40,10 @@ public sealed class ForwardedHttpsTests
         // The one that was red: the proxy is trusted, so the header is consumed before the gate
         // reads it, and every route but health answered 403 on a correctly configured machine.
         using var server = Strict();
-        using var client = server.CreateClient();
+        // FROM the trusted proxy, not from nowhere: with a null remote address the middleware has
+        // nothing to check and applies the header regardless, so the test would pass without ever
+        // exercising the decision it is named after.
+        using var client = server.ClientFrom(System.Net.IPAddress.Loopback);
         client.DefaultRequestHeaders.Add("X-Forwarded-Proto", "https");
 
         var response = await client.GetAsync("/api/client-config");
@@ -87,22 +90,32 @@ public sealed class ForwardedHttpsTests
     }
 
     [Fact]
-    public async Task AnUNTRUSTEDProxyIsStillHonouredOnItsRawHeader()
+    public async Task AnUNTRUSTEDProxysHeaderIsREFUSED()
     {
-        // The configuration that accidentally worked, and must keep working: with no trusted proxy
-        // the middleware leaves the header alone, so the gate reads it directly. Asserting it stops
-        // the fix from becoming "only trusted proxies may reach this server", which would refuse
-        // every deployment that has not set TrustedProxies yet.
+        // The first repair of the gate kept the raw header as a fallback, and this test asserted
+        // that fallback. Two reviewers called it in the same round and they were right: a caller
+        // who can reach this server over plaintext can send `X-Forwarded-Proto: https` itself, so
+        // honouring it makes the gate something any caller can satisfy by asserting it.
+        //
+        // The header is now believed only when `UseForwardedHeaders` believed it — which is only
+        // for a proxy `Coai:TrustedProxies` names. This proxy is not named, so its claim is worth
+        // nothing.
         using var server = new TeamServer(new Dictionary<string, string?>
         {
             ["Coai__RequireForwardedHttps"] = "true",
             ["Coai__TrustedProxies"] = "10.255.255.0/32",
         });
-        using var client = server.CreateClient();
+        // A REAL remote address, because that is the whole question. `TestServer` leaves
+        // `RemoteIpAddress` null by default and `UseForwardedHeaders` then has nothing to check the
+        // proxy against, so it applies the header — which would make this test pass for the wrong
+        // reason, or fail for one. Giving the connection an address that `TrustedProxies` does not
+        // name is what actually exercises the decision.
+        using var client = server.ClientFrom(System.Net.IPAddress.Parse("203.0.113.7"));
         client.DefaultRequestHeaders.Add("X-Forwarded-Proto", "https");
 
         var response = await client.GetAsync("/api/client-config");
 
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden,
+            "a header the middleware did not trust is a claim the caller made about itself");
     }
 }

@@ -23,10 +23,21 @@ echo "waiting for healthy…"
 container="$(docker compose ps -q coai)"
 for _ in $(seq 1 90); do
   status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container")"
+  running="$(docker inspect -f '{{.State.Running}}' "$container")"
   case "$status" in
     healthy) echo "healthy"; docker compose ps; exit 0 ;;
     none)    echo "this image declares no healthcheck; not waiting" >&2; exit 0 ;;
   esac
+
+  # A container that has EXITED, or one the probe has already given up on, is not going to become
+  # healthy — and making the operator watch a spinner for the remaining three minutes tells them
+  # nothing they do not already know. Say it now, with the logs. Raised on the code round.
+  if [ "$running" != "true" ] || [ "$status" = "unhealthy" ]; then
+    echo "the container is $status and running=$running — the last 50 log lines follow" >&2
+    docker compose logs --tail 50 coai >&2
+    exit 1
+  fi
+
   sleep 2
 done
 

@@ -83,7 +83,9 @@ services:
       # nginx always sets X-Forwarded-Proto, and this port is unreachable except through
       # nginx — the two conditions that make trusting the header correct.
       Coai__RequireForwardedHttps: ${REQUIRE_HTTPS:-true}
-      Coai__TrustedProxies: ${TRUSTED_PROXIES:-172.16.0.0/12}
+      # Loopback first: the HTTPS gate believes X-Forwarded-Proto ONLY from a proxy named here,
+      # so a list that omits the real one is 403 on every route but health. See .env.example.
+      Coai__TrustedProxies: ${TRUSTED_PROXIES:-127.0.0.1/32,::1/128,172.16.0.0/12}
       Auth__Microsoft__Tenant: ${MS_TENANT:-}
       Auth__Microsoft__Audiences: ${MS_AUDIENCES:-}
       Auth__Microsoft__ClientScope: ${MS_CLIENT_SCOPE:-}

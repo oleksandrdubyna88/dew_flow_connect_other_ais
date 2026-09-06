@@ -63,6 +63,21 @@ internal sealed class TeamServer : WebApplicationFactory<Program>
         }
     }
 
+    /// <summary>
+    /// A client whose requests arrive FROM <paramref name="remote"/>.
+    /// </summary>
+    /// <remarks>
+    /// `TestServer` leaves `RemoteIpAddress` null, so anything that decides on the caller's address —
+    /// `UseForwardedHeaders` checking a request against `Coai:TrustedProxies`, above all — cannot be
+    /// exercised without this. A test that omits it is testing the null case.
+    /// </remarks>
+    public HttpClient ClientFrom(System.Net.IPAddress remote)
+    {
+        var handler = Server.CreateHandler(ctx => ctx.Connection.RemoteIpAddress = remote);
+
+        return new HttpClient(handler) { BaseAddress = new Uri("http://localhost") };
+    }
+
     /// <summary>A client that presents <paramref name="email"/>'s token on every call.</summary>
     public HttpClient ClientFor(string email, string? name = null) =>
         WithToken(Tokens.For(email, LocalSigningKey, name));
