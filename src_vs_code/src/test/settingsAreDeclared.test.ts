@@ -27,6 +27,7 @@ const state = (): PanelState => ({
   localEngines: {},
   server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
   side: '',
+  perSide: false,
   questions: [],
   sessions: [],
   openSections: ['reviewers', 'language', 'prompts', 'gate', 'limits', 'keys', 'server', 'usage', 'rounds'],

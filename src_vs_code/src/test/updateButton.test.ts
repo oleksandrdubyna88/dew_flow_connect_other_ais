@@ -37,6 +37,7 @@ function html(vendors: readonly Vendor[], cliStatus: Record<string, CliStatus>):
     localEngines: {},
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
     side: '',
+    perSide: false,
     latestServerVersion: '',
     questions: [],
     sessions: [],

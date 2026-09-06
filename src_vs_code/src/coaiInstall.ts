@@ -309,12 +309,37 @@ export interface Side {
  * reports either.</p>
  */
 export function installedKey(side: Side): string {
+  return `coai.installedVersion@${sideKey(side)}`;
+}
+
+/**
+ * One side of a machine, as a key component — shared by everything that must be kept per side.
+ *
+ * <p>Extracted from {@link installedKey} rather than written twice. Its three ingredients were each
+ * argued for in review, and the argument holds for any per-side record: two WSL distros with the
+ * same user name mount the same `/home/<user>/.vscode-server/…`, so the storage path alone would
+ * merge two companies' settings, which is the same defect as merging two installed versions.</p>
+ */
+export function sideKey(side: Side): string {
   const remote = (side.remoteName ?? '').trim();
   const target = ((side.distro ?? '').trim().length > 0 ? side.distro : side.hostname) ?? '';
   const parts = remote.length === 0 ? ['local', side.storagePath] : [remote, target, side.storagePath];
 
-  return `coai.installedVersion@${parts.map(escapeComponent).join('|')}`;
+  return parts.map(escapeComponent).join('|');
 }
+
+/**
+ * Where this side's own settings live in `globalState`, when the per-side switch is on.
+ *
+ * <p>`globalState` is the CLIENT's storage, one database shared by every window of the profile —
+ * which is why the key has to name the side, and why this is the only storage available: VS Code
+ * resolves `window`-scoped settings from the client's `settings.json` and hands the same values to
+ * every extension host, and there is no API that writes a remote host's machine settings.</p>
+ */
+export function overlayKey(side: Side): string {
+  return `coai.settingsOverlay@${sideKey(side)}`;
+}
+
 
 /**
  * One identity component, escaped so that no two different components can produce one key.

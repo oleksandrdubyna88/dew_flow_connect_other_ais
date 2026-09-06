@@ -19,6 +19,7 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   localEngines: {},
   server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
   side: '',
+  perSide: false,
   questions: [],
   sessions: [],
   openSections: ['reviewers', 'language', 'prompts', 'gate', 'limits', 'keys', 'server', 'usage', 'rounds'],
@@ -598,4 +599,23 @@ test('a disabled vendor is not counted in the arithmetic', () => {
   );
 
   assert.match(html, /1 vendor × 3 roles = 3 reviewers/, 'a reviewer that will not run is not one');
+});
+
+test('the panel names the side it is about to keep settings for', () => {
+  // Somebody with a Windows window and two WSL distros is about to keep three sets of settings, and
+  // the only way to be sure which one is being edited is to read it off the panel doing the editing.
+  const page = panelHtml(state({ side: 'WSL: Ubuntu-24.04', perSide: true }), 'nonce');
+
+  assert.match(page, /Separate settings for each side/);
+  assert.match(page, /This side is <b>WSL: Ubuntu-24\.04<\/b>/);
+  assert.match(page, /data-setting="perSideSettings"[^>]* checked/);
+  assert.match(page, /keeps its own vendors, models, proxies/);
+});
+
+test('with the switch off the panel says the settings are shared, and does not tick the box', () => {
+  const page = panelHtml(state({ side: '', perSide: false }), 'nonce');
+
+  assert.match(page, /This side is <b>this machine<\/b>/, 'a local window has one side and no word for it');
+  assert.match(page, /shares its settings with every other side/);
+  assert.doesNotMatch(page, /data-setting="perSideSettings"[^>]* checked/);
 });

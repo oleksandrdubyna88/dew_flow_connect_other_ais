@@ -46,6 +46,14 @@ export interface PanelState {
    * local window — where there is one side and no need for a word for it.
    */
   readonly side: string;
+  /**
+   * Whether this side keeps its own settings.
+   *
+   * <p>Its own field rather than part of {@link CoaiSettings}, because it is the one setting that
+   * must NOT be per side: it is the switch, shared by every side, and a switch that could differ
+   * per side would let one side hold values another side cannot see.</p>
+   */
+  readonly perSide: boolean;
   readonly questions: readonly Escalation[];
   readonly sessions: readonly SessionFile[];
   /** Which collapsible sections are open. Empty falls back to {@link OPEN_BY_DEFAULT}. */
@@ -120,6 +128,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     section('gate', 'The gate', open, gateBody(state.settings)),
     section('limits', 'Limits', open, limitsBody(state.settings)),
     section('keys', 'Vendor keys', open, keysBody(state)),
+    section('side', 'This side', open, sideBody(state)),
     section('server', 'Server', open, serverBody(state)),
     section('rounds', 'Active rounds', open, `<div id="live-rounds">${roundsBody(state.sessions, nowMs)}</div>`),
   ].join('\n');
@@ -352,6 +361,27 @@ ${local ? remoteNotice(vendor.baseUrl) : ''}
 </div>`;
 }
 
+
+/**
+ * One switch, and the words for the side it applies to.
+ *
+ * <p>The side is NAMED rather than implied. Somebody with a Windows window and two WSL distros is
+ * about to keep three sets of settings, and the only way to be sure which one is being edited is to
+ * read it off the panel that is editing it.</p>
+ */
+function sideBody(state: PanelState): string {
+  const here = state.side.length === 0 ? 'this machine' : state.side;
+
+  return `<div class="field">
+  <div class="hint">One machine can hold several working environments — a local window, and each WSL
+  distro or remote host. VS Code hands the same settings file to all of them, so this is what keeps
+  them apart. Off, every window shares one set of settings, exactly as before.</div>
+  <label class="check"><input type="checkbox" data-setting="perSideSettings"${state.perSide ? ' checked' : ''}> Separate settings for each side${help('perSideSettings')}</label>
+  <div class="hint">This side is <b>${escapeHtml(here)}</b>. ${state.perSide
+    ? 'It keeps its own vendors, models, proxies, CLI paths and vault key; your text size and help language stay shared.'
+    : 'It shares its settings with every other side.'}</div>
+</div>`;
+}
 
 function gateBody(s: CoaiSettings): string {
   // Rounds and threshold moved INTO each role's box, beside that role's prompts: they were two
@@ -855,6 +885,7 @@ const CSS = `
   .sec-gate      > summary { color: var(--tone-sec); }
   .sec-limits    > summary { color: var(--tone-limits); }
   .sec-keys      > summary { color: var(--tone-keys); }
+  .sec-side      > summary { color: var(--tone-keys); }
   .sec-server    > summary { color: var(--tone-uxdx); }
   .sec-usage     > summary { color: var(--tone-arch); }
   .sec-rounds    > summary { color: var(--tone-plan); }

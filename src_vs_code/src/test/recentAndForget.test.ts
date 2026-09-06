@@ -72,6 +72,7 @@ function html(over: {
     localEngines: {},
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
     side: '',
+    perSide: false,
     latestServerVersion: '',
     questions: [],
     sessions: over.sessions ?? [],

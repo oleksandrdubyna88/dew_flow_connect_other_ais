@@ -3,6 +3,22 @@
 > `src_vs_code` — the human surface. Four commands, zero runtime dependencies, no background work
 > and **no port**: the review itself lives in `coai-mcp`, which an MCP client owns and starts.
 
+### Settings a side keeps to itself (2026-09-06)
+
+VS Code resolves `window`-scoped settings from the CLIENT's `settings.json` and hands the same values
+to every extension host, so a Windows window and two WSL distros on one machine share one proxy, one
+set of CLI paths and one vault key. `coai.perSideSettings` (off by default, one switch shared by every
+side) makes each side keep its own: the values live in `globalState` under `overlayKey(side)`, which
+reuses the identity `installedKey` already folds from `remoteName` + distro-or-hostname + storage path
+— two distros mount the same `/home/<user>/.vscode-server/…`, so the storage path alone would merge
+two companies' settings.
+
+Every read goes through one accessor (`PanelProvider.read`) and every write through one funnel
+(`save`), because a read that goes around them is a setting that silently stays shared. Turning the
+switch on seeds this side from what it reads today, so nothing changes until something is edited, and
+the seed is idempotent so switching off and on again keeps what a side had. `uiScale` and
+`helpLanguage` stay shared deliberately: a text size belongs to the person, not to the company.
+
 ## Commands
 
 | Command | Does |

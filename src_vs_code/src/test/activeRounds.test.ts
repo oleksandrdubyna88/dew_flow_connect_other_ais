@@ -55,6 +55,7 @@ function state(sessions: readonly SessionFile[]): PanelState {
     localEngines: {},
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
     side: '',
+    perSide: false,
     latestServerVersion: '',
     questions: [],
     sessions: [...sessions],

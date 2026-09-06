@@ -175,6 +175,57 @@ export const DEFAULTS: CoaiSettings = {
 /** A raw configuration reader: `get(section)` returns whatever the host stored, if anything. */
 export type ConfigReader = (section: string) => unknown;
 
+/** One side's own values, by setting name. Absent means "use the shared one". */
+export type SettingsOverlay = Readonly<Record<string, unknown>>;
+
+/**
+ * Every `coai.*` setting a side can hold on its own.
+ *
+ * <p>Named rather than derived, because seeding an overlay has to copy a KNOWN set: a setting this
+ * list forgets is one that silently stays shared, and a person who set a different proxy on one
+ * side would not find out until a review ran against the wrong company's server.</p>
+ */
+export const OVERLAID_SETTINGS: readonly string[] = [
+  'vendors', 'rounds', 'thresholds', 'onExhausted', 'maxConcurrency', 'maxPerProvider',
+  'reviewerTimeoutMinutes', 'credsKey', 'escalationMinutes', 'promptsPerRound',
+  'dealPlanLenses', 'dealCodeLenses', 'autonomous', 'splitPlan', 'splitWithFable', 'codeWorkspace',
+];
+
+/**
+ * A reader that answers from this side's overlay first, and from the shared settings otherwise.
+ *
+ * <p>The fallback is what keeps a forked side working after an update: a setting added by a new
+ * version is not in an overlay written by the old one, and reading `undefined` for it would turn a
+ * new feature off on exactly the machines that had customised anything.</p>
+ *
+ * <p>`uiScale` and `helpLanguage` are deliberately NOT overlaid — they are about the person reading
+ * the panel, not about the company the work belongs to, and a person who sets a text size wants it
+ * in every window.</p>
+ */
+export function overlaidReader(shared: ConfigReader, overlay: SettingsOverlay): ConfigReader {
+  return (section) =>
+    Object.prototype.hasOwnProperty.call(overlay, section) ? overlay[section] : shared(section);
+}
+
+/**
+ * The overlay a side starts with when the switch is turned on: exactly what it reads today.
+ *
+ * <p>So enabling the switch changes NOTHING until something is edited. The alternative — an empty
+ * overlay that falls through to the shared values — looks identical until the first shared edit on
+ * another side silently changes this one, which is the surprise this feature exists to remove.</p>
+ */
+export function seedOverlay(shared: ConfigReader): SettingsOverlay {
+  const seeded: Record<string, unknown> = {};
+  for (const section of OVERLAID_SETTINGS) {
+    const value = shared(section);
+    if (value !== undefined) {
+      seeded[section] = value;
+    }
+  }
+
+  return seeded;
+}
+
 /** VS Code config → a validated `CoaiSettings`; anything malformed falls back to the default. */
 export function settingsFrom(read: ConfigReader): CoaiSettings {
   return {
