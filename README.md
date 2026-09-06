@@ -1,231 +1,158 @@
 # ConnectOtherAIs
 
-A multi-model review gate. Your main AI writes the plan and the code; **other vendors' models** —
-Codex, Antigravity (Gemini/Claude/GPT-OSS), a second Claude, DeepSeek — review both in rounds,
-until the findings that matter drop under a
-threshold, or a human is called.
+**Your coding agent cannot see its own assumptions. This puts the plan and the diff in front of
+other vendors' models — before either reaches you.**
 
-The value is not "more review". It is **review by a model that cannot see the author's reasoning**,
-which is the only kind that catches the author's assumptions.
+[![CI](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/actions/workflows/ci.yml/badge.svg)](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/actions/workflows/ci.yml)
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/remsoftdev.connect-other-ais?label=marketplace)](https://marketplace.visualstudio.com/items?itemName=remsoftdev.connect-other-ais)
+[![Native AOT](https://img.shields.io/badge/server-Native%20AOT%20·%20.NET%2010-512BD4)](ARCHITECTURE.md)
+[![No listening ports](https://img.shields.io/badge/transport-stdio%20·%20no%20open%20ports-2ea043)](#no-ports-nothing-listening)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Two halves, the shape CredsForDevs proved:
+> **The value is not more review. It is review by a model that cannot see the author's reasoning —
+> the only kind that catches the author's assumptions.**
 
-| | What it is |
+![The rounds log: every round, every finding, who found it, what was accepted and what it cost](assets/rounds-log-with-findings.png)
+
+*Every round, every finding, which vendor raised it, whether it was accepted or rejected and why —
+and what it cost. That table is the product.*
+
+## The problem
+
+You already review your agent's work with your agent. It reads the diff it just wrote, with the
+reasoning that produced it still in the context, and agrees with itself.
+
+| Reviewing with one vendor | With ConnectOtherAIs |
 |---|---|
-| `coai-mcp` | A Native-AOT MCP server over stdio. An MCP client starts it; it runs the rounds. |
-| ConnectOtherAIs | A VS Code extension: settings, the install button, the rounds view. |
+| The model that wrote it also judges it | Other vendors read it with no memory of the reasoning that produced it |
+| Formatting nits arrive as findings | Only `Blocking` and `Major` count toward the gate — [one line of code](src_mcp/core/Findings/Finding.cs) |
+| Three bots raise one defect three times | Same file, lines within ±5, same remark → one finding ([`LineSlack = 5`](src_mcp/core/Gate/FindingDedup.cs)) |
+| The whole repository in every prompt | The diff alone: **more** useful defects at two to three times fewer input tokens |
 
-## The protocol
+## What no other tool does
+
+CodeRabbit, Greptile and Qodo review a **pull request** — after the code exists. Three things here
+are different:
+
+**1. The plan is gated before the code is written.** `review_code` is *refused* until a plan round
+reached `proceed`. Skipping a stage is impossible, not discouraged:
 
 ```
-open → review_plan → resolve → (revise, repeat) → proceed
-     → implement
-     → review_code → resolve → (fix, repeat) → proceed
+open ─→ review_plan ─→ resolve ─→ (revise, repeat) ─→ PROCEED
+                                                        │
+   ┌────────────────────────────────────────────────────┘
+   ▼
+implement ─→ review_code ─→ resolve ─→ (fix, repeat) ─→ PROCEED ─→ ship
 ```
 
-`review_code` **refuses** until a plan round has reached `proceed`. Skipped stages are impossible,
-not discouraged — the honest limit of a design with no hooks: the server cannot make a model call
-it, but it can make a skipped stage impossible to fake.
+**2. It lives in your agent's loop, not in GitHub.** Claude Code, Cursor and Codex call it
+themselves, over MCP, before a commit exists. Nothing to install into a repository, no bot on your
+pull requests.
 
-Seven tools, unprefixed (the client's `coai` id is the namespace): `providers`, `open`,
-`review_plan`, `review_code`, `resolve`, `status`, `ask_human`.
+**3. It records the blind spots.** Every finding, and every accept and reject with its reason, in a
+local SQLite database — grouped by category, by role and by vendor. Nobody else hands you the shape
+of your own agent's blind spots.
 
-## When it needs a person
+## What the measurements say
 
-`ask_human` — and a `call_human` verdict — put the question in front of you **in VS Code**: a
-dialog, a status-bar item so a dismissed dialog loses nothing, and an open-questions section at the
-top of the rounds view. The call blocks until you answer; after 30 minutes it comes back
-`no_answer_yet` telling the AI to ask you in the chat instead, and the question stays open.
+Numbers from this repository's own campaigns, with their sample sizes, because a benchmark without
+one is an advertisement:
 
-Still no port on either side: the server writes the question as a file into the data directory the
-extension already reads, and your answer is a file beside it.
+**A second vendor is not a second opinion — it is different findings.** Fourteen judged runs, three
+vendors, two cases: the overlap between vendors is **5–9 %**. Three reviewers reading the same diff
+almost never name the same defect
+([RESULTS_vendor_overlap_2026-09-06.md](research/RESULTS_vendor_overlap_2026-09-06.md)).
 
-You answer with one of three buttons — **keep going** (another set of rounds), **stop and act on the
-findings**, or **stop and talk to me** — and each says what it will cause. None of them ships a change
-over open findings: an override meaning "ignore all this" is an off switch on a gate. The questions
-are English; there used to be a translator, and three buttons removed the prose it existed for.
+| provider | findings written | found by it alone | of those, worth having |
+|---|---|---|---|
+| codex | 75 | 55 (92 %) | 22 |
+| gemini | 52 | 39 (91 %) | 19 |
+| local | 118 | 56 (95 %) | 5 |
 
-## What makes "fewer than 2 remarks" mean something
+**The diff alone beats the whole checkout.** Useful findings, and input tokens, on one commit with
+three hosted models ([RESULTS_findings_that_are_worth_something.md](research/RESULTS_findings_that_are_worth_something.md)):
 
-Without a rule, three verbose reviewers guarantee escalation forever. So:
-
-1. Only `blocking` and `major` count; minors and nits are reported and never gate.
-2. **De-duplication happens first** — same file, lines within ±5, same category, same remark → one
-   finding listing every provider that raised it. Two vendors agreeing is stronger evidence, not
-   twice the work.
-3. A finding you rejected **with a reason**, re-raised with the same argument, does not count again.
-   Re-raised with a genuinely new argument, it counts in full.
-4. **Each ROLE has its own rounds and its own threshold**, and a finding is counted against the
-   threshold of the role that raised it. Architecture may be worth two passes with different lenses
-   while performance is worth one; a shared budget forces the cheapest role to pay for the most
-   expensive. A stage passes when every role is at or under its own number — not when one total is
-   small enough — and it revises only for roles that still have rounds to spend.
-
-Defaults: the plan role gets 3 rounds at a threshold of 2; each code role 2 rounds at 3. When the
-rounds run out there are four answers: ask a human, continue and say so, **good enough** (read the
-findings, apply the ones that are true, move on), or climb the escalation ladder.
-
-## Install
-
-1. **The server**: *ConnectOtherAIs: Install the MCP Server…* downloads the release asset for your
-   platform into the extension's storage (never onto `PATH`), verifies its `sha256`, and puts the
-   `mcpServers` block on your clipboard. Paste it into `~/.claude.json`, a project `.mcp.json`, or
-   `.vscode/mcp.json`, and restart the client.
-2. **The instructions**: *ConnectOtherAIs: Copy the CLAUDE.md snippet* gives the text that teaches a
-   repository's main AI when to call the tools.
-
-Codex, Antigravity and Claude authenticate themselves — if their CLIs are signed in, no key is
-needed. DeepSeek
-rides the Codex CLI's custom-provider config and needs a key, which comes from **one CredsForDevs
-`config` entry** read once at startup. That is the only key path: a `credential` entry cannot serve
-it, because nothing in the vault's read routes returns a secret. A **local** reviewer needs neither:
-there is no CLI to sign in and no account to bill.
-
-## A model on your own machine
-
-*＋ Add a reviewer → Local model (Ollama / vLLM)* adds a row called `local` whose model dropdown is
-what THIS machine has installed — each with its parameter size, quantisation and disk size, read from
-the engine rather than from a list shipped here. Nothing found says where it looked and why, because
-an empty dropdown with no reason is indistinguishable from "you have no models".
-
-It is **not** the Codex CLI pointed at a local endpoint. That was tried first and it answers, but
-codex's own system prompt is 21k tokens before any review content — measured — so a small-context
-model is refused outright and a large one pays for a prompt unrelated to the review. A local reviewer
-is a direct call: `coai-mcp --ask-local` POSTs to the engine's OpenAI-compatible endpoint with the
-finding schema, `temperature` and `seed` pinned in the request, and prints the answer where the
-executor already looks. It is a process like every other reviewer, so the timeouts, the kill, the
-usage parsing and the unparseable handling are the ones that were already there.
-
-Three things worth knowing before using one:
-
-- **Two structured-output modes exist and only one works.** `response_format: {"type":"json_schema"}`
-  returns well-formed findings; the weaker `json_object` answers with a shape it invented. There is
-  no fallback to it, because a fallback would buy a full generation and an unusable round.
-- **An endpoint that is not on this machine is announced in the row**, naming the host and saying
-  that the plan, the diffs and the file contents around them are sent to it. `localhost`, `::1` and
-  the whole 127.0.0.0/8 block are this machine, decided by PARSING the host — `127.0.0.1.evil.test`
-  is somebody else's.
-- **Tokens are counted, money is a dash.** The engine reports `prompt_tokens` and
-  `completion_tokens`, so a local round appears in the spending chart with real numbers. Cost stays
-  null rather than 0, because free and unpriced are different facts: what a local run costs is
-  electricity and a busy card, and this product can see neither.
-
-## Fast or Full: what a reviewer is given
-
-Every reviewer runs in an **empty directory** by default — plan stage and code stage alike. The
-diff, the plan and this project's written rules are assembled **by the server** and handed over in
-the prompt; what changes between the two positions is only whether there is a repository to explore.
-
-| | what the reviewer gets | when |
+| model | with the checkout | diff only |
 |---|---|---|
-| **Fast** *(default)* | the composed prompt, in an empty directory | almost always |
-| **Full** | the same prompt, plus one read-only checkout of the commit | when the meaning of a change depends on callers the diff does not show |
+| Gemini 3.7 Flash | 4 · 610k tokens | **8** · 266k |
+| GPT-5.6-Luna | 6 · 515k | **10** · 300k |
+| Claude Sonnet 5 | 6 · 1 952k | **7** · 579k |
 
-**Fast is the default because it was measured, not preferred.** On one commit, taking the checkout
-away made every hosted model find MORE useful defects — Gemini 3.7 Flash 4→8, GPT-5.6-Luna
-6→10, Claude Sonnet 5 6→7 — at a half to a third of the input tokens, with no wrong
-finding from any of the three. Three real defects surfaced that no run WITH a checkout had reached.
-A reviewer given a repository spends its attention deciding where to look; a reviewer given a diff
-reads the diff. The evidence is in
-[RESULTS_findings_that_are_worth_something.md](research/RESULTS_findings_that_are_worth_something.md).
+*One commit, three models, 19 findings — a single commit's worth of evidence, and it is why Fast is
+the default rather than the only mode.*
 
-Full creates **one** detached `git worktree` pinned to a resolved SHA, outside your repository,
-shared by every reviewer in that round: the main AI keeps editing while a review runs, and six
-checkouts of a moving branch would be six different inputs to one comparison. Codex runs
-`-s read-only --ephemeral`, Gemini `--approval-mode plan`. The tree is removed in a `finally`, and
-an orphan from a killed session is pruned by the next `open`.
+**A local model earns its place per stage, not per repository.** The same judged campaign: `local`
+was 19 % useful on a plan and **3 %** on code — it writes more than codex and gemini together, and
+two of its seventy code-stage findings were worth having.
 
-## Build and test
+## Reviewers you can use
+
+![The Reviewers section: codex, gemini and a local model, each with its model, price and CLI path](assets/reviewers-three-vendors.png)
+
+- **Codex CLI**, **Antigravity** (Gemini / Claude / GPT-OSS) — signed in as themselves, no API key.
+- **A model on your own machine** — Ollama, vLLM, or **any OpenAI-compatible endpoint (DeepSeek,
+  vLLM, Ollama)**. Called directly with a strict `json_schema`, not through a vendor CLI that spends
+  20k tokens on a system prompt before it reads your diff.
+- The model list is what *your* machine and *your* subscription actually have, asked for rather than
+  shipped as a constant.
+
+## <a id="no-ports-nothing-listening"></a>No ports, nothing listening
+
+The server is a Native-AOT binary speaking MCP over **stdio**. Escalations to a person are atomic
+files in a local state directory. No daemon, no localhost port, no network listener on your machine.
+(A company-wide *team server* is a separate, opt-in deployment — that one is an HTTP service behind
+your own sign-in.)
+
+## Quickstart
 
 ```bash
-dotnet build dew_flow_connect_other_ais.slnx -c Debug
-./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe     # never `dotnet test` — MTP, no VSTest host
-cd src_vs_code && npm ci && npm test
-node .claude/rules/shared/tools/plan-lifecycle.mjs
+code --install-extension remsoftdev.connect-other-ais
 ```
 
-The process-level suite drives a scriptable **fake CLI**, so CI touches no vendor and needs no
-network. The wire contract is checked against the built binary and, in the release workflow,
-against the **published** one.
+1. **Install the server.** Command Palette → **ConnectOtherAIs: Install the MCP Server…** — it
+   downloads the Native-AOT binary for your platform into the extension's own storage and copies a
+   config block to your clipboard.
+2. **Paste the block** into `~/.claude.json`, `.mcp.json` or `.vscode/mcp.json`:
 
-## Documentation
+   ```json
+   {
+     "mcpServers": {
+       "coai": { "command": "/path/from/the/clipboard/coai-mcp", "args": [] }
+     }
+   }
+   ```
+3. **Tell your agent the gate exists.** Command Palette → **Copy the CLAUDE.md snippet**, paste it
+   into `CLAUDE.md`, `AGENTS.md` or your rules file. That paragraph is what makes the agent call the
+   gate on its own.
+4. **Pick your reviewers** in the panel, and set what happens when the rounds run out.
 
-`research/architecture.md` is the entry point; `module_core`, `module_runners`, `module_server` and
-`module_extension` deep-dive each half. Plans live in `todo/` while open and move to `research/`
-with an `IMPLEMENTED` status when they ship — a rule this repository's CI enforces.
+![The gate: what happens when the rounds run out, and the three orders it hands back](assets/the-gate-and-its-orders.png)
 
-## Prompts: a universal question, and twenty narrow lenses
+Everything has a `?` beside it, and the help is a page of its own — in English, Russian, Ukrainian,
+German and Spanish.
 
-Each reviewer role ships a **universal** prompt and five narrow ones, and the panel can pick which
-prompt each ROUND uses.
+![The help page, in five languages](assets/help-in-five-languages.png)
 
-**Round 1 of every code role is the conventions pass**: it judges the diff against the rules this
-project has written down — `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.claude/rules`, read from the
-commit under review **by the server** and put in the prompt, so the pass works in Fast too — and
-nothing else. A finding there must quote the sentence it
-breaks; a convention the reviewer believes in but the project never wrote is not a finding. Pick
-something else for round 1 and that wins.
+## When the rounds run out
 
-**Dealing the lenses** is a switch per stage, off by default. Off, every vendor answers every
-question and two vendors agreeing on a finding is a fact the gate can use. On, the round's prompts
-are dealt out one per vendor: every lens gets asked once at half the launches, and that agreement is
-gone. It is a real trade and the default is the conservative half of it.
+Four honest answers, and you choose which one this repository gets: **ask a human** (the gate stops
+and puts the decision in front of you), **continue anyway** (it proceeds and says out loud that
+findings remain), **good enough** (the agent applies what is true, rejects the rest *with reasons*,
+and proceeds), or **escalate** (more reviewer effort, then a stronger model, then a stronger
+arbiter). A rejection needs a reason, and a reasoned rejection is discounted in later rounds unless
+a reviewer re-raises it with a genuinely new argument.
 
-| Role | Universal | Lenses |
-|---|---|---|
-| Plan | the whole plan | assumptions & verification · the human path · data loss & recovery · operability · scope & budget |
-| Architecture | boundaries + evolution | boundaries & duplication · cost of the next change · coupling & knowledge · names & the shape they imply · testability of the seams |
-| Security & reliability | the whole surface | what it holds and leaves · attack surface · blast radius · two at once · what this change trusts |
-| Performance & UX-DX | both | cost at scale · ergonomics & waiting · the first run and the empty case · work done twice · what cannot be taken back |
+## Deeper
 
-**The last twelve were measured before they shipped**, and the measurement found something better
-than a winning sentence. Each was drafted three times, and the three drafts turned out to be three
-SHAPES held constant across all twelve — a question list, a task to enact, a rule with exceptions.
-Seventy-two runs later ([RESULTS_focused_prompts.md](research/RESULTS_focused_prompts.md)): the
-shapes find the same AMOUNT (6.6–6.9 findings, 79–82 % gating, flat) and differ in whether they find
-the same thing TWICE — **42 % against 32 %**. So a lens here is written as a task to perform wherever
-its subject has a sequence to enact, and as a question list only where it does not. Five of the
-twelve picks were decided by that measurement; seven were inside its noise and took the shape result
-as a prior, which the document says rather than presenting twelve winners.
+**Want the protocol as it is enforced, the prompt-shape measurements, the local-model path and the
+token accounting? → [ARCHITECTURE.md](ARCHITECTURE.md).**
 
-**What is still not claimed.** Whether a lens finds what the universal prompt MISSES is a different
-question, and the campaign that asks it compares the two arms over one real change. Over three plans
-the union of all lenses found roughly twice what any single one did — and that result does not
-survive its own control: the SAME prompt on the SAME text three times produced 6, 4 and 5 findings
-whose overlaps were 3, 1 and **0**. Run-to-run variance alone explains the spread, which is exactly
-why repeatability, not yield, is what the shape measurement was scored on.
+- [research/architecture.md](research/architecture.md) — the system as it is, module by module
+- [research/module_tests.md](research/module_tests.md) — the harness, the flows it covers, and the
+  gaps it does not
+- [research/](research/) — every measurement campaign, with its raw data under `research/data/`
+- [todo/](todo/) — what is planned and not yet built
 
-The measurement that matters for a gate is a different one: a finding raised by two vendors
-independently is stronger evidence than one raised twice by the same prompt, and every finding
-carries the `providers` that raised it.
+## License
 
-## What each AI has used
-
-The server appends one line per reviewer to `usage.jsonl` — vendor, model, role, stage, seconds,
-tokens, cost, outcome — and the panel charts it per vendor over a day, week, month or year.
-Failed reviewers are recorded too: a run that burned ninety seconds and answered nothing is
-exactly what a spending record must not hide. A vendor that does not price its own runs shows a
-dash rather than `$0.00`, because free and unreported are different facts.
-
-Token accounting is each vendor's own, because a shared rule is wrong for at least one of them:
-codex folds cached tokens INTO its input count, claude reports them BESIDE it, and antigravity's
-thinking tokens sit inside its output count. Claude reports one run twice and the two disagree —
-`usage` is the last message, `modelUsage` is the session — and the ledger reads the second.
-
-## The help, in the panel
-
-The yellow **?** in the panel's title bar opens a searchable help page. It carries one article per
-control and per setting, plus the machinery you cannot see from the panel — where a reviewer
-actually runs, what happens when one fails, how a setting reaches the server, and what the audit
-trail holds.
-
-The first four articles are the first four things a person does: install the server, choose the
-reviewers, tell your AI to use the gate, and set the gate itself. Search runs over the full text,
-the language switch and the ± text size are real settings so they sync, and **The prompts, in
-full** prints every prompt verbatim — held byte-for-byte against the server's own files by a test,
-so the page cannot describe a question the product no longer asks.
-
-Two tests keep it honest. One fails the build when a command or a setting has nothing written
-about it — a new button either gets an article, or an alias naming the words the help uses, or a
-written reason why it needs none; there is no fourth way and no silent default. The other holds the
-printed prompts against the shipped ones.
+MIT.
