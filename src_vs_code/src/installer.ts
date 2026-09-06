@@ -197,16 +197,12 @@ export async function installLatest(
     await extract(archive, scratch);
     const extracted = vscode.Uri.joinPath(scratch, ...entryPathIn(rid, version).split('/'));
     const target = binaryPath(storage, rid);
-    await vscode.workspace.fs.copy(extracted, target, { overwrite: true });
-    // And whatever else the archive carried, beside it. The server is Native AOT and still
-    // dlopens SQLite at run time, through the OS loader, which searches the directory the
-    // executable sits in — so a copy of the binary alone is a server that cannot open its own
-    // database, and the failure is silent because that write is best-effort. Copying the archive's
-    // contents rather than a named file means the next native dependency needs no change here.
-    // The SQLite library itself is REQUIRED: this throws rather than leave a server that cannot
-    // record anything — on an upgrade the running server holds the old file open, the copy fails,
-    // and the new binary beside the old library is the original incident again.
+    // The COMPANIONS first, then the binary. The gate found the order: placing the binary first and
+    // then throwing on a missing SQLite library left the new executable in place with the old
+    // library beside it and the recorded version untouched, so the next launch ran a new server
+    // against a library it was not built with — a worse state than either version alone.
     await placeCompanions(vscode.Uri.joinPath(scratch, entryPathIn(rid, version).split('/')[0]!), storage, rid);
+    await vscode.workspace.fs.copy(extracted, target, { overwrite: true });
     await makeExecutable(target);
     await state.update(installedKey(thisSide(storage)), version);
     // The new file has a new mtime, so the cache would miss anyway — but saying so beats relying on
@@ -294,7 +290,7 @@ async function placeCompanions(from: vscode.Uri, storage: vscode.Uri, rid: CoaiR
     vscode.workspace.fs.copy(
       vscode.Uri.joinPath(from, name), vscode.Uri.joinPath(storage, name), { overwrite: true }));
 
-  const missing = requiredCompanionMissing(entries, placed, rid);
+  const missing = requiredCompanionMissing(placed, rid);
   if (missing.length > 0) {
     const why = failed.find((one) => one.name === missing)?.why ?? 'the archive did not carry it';
 

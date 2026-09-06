@@ -9,6 +9,7 @@ import {
   companionsOf,
   copyCompanions,
   requiredCompanionMissing,
+  sqliteNameFor,
   compareVersions,
   entryPathIn,
   ridFor,
@@ -340,29 +341,42 @@ test('a copy that fails once and then works is not a failure', async () => {
 /** The retry's pause, taken out of the test's way. */
 const noPause = () => Promise.resolve();
 
-test('a SQLite library the archive brought and the installer could not place fails the install', () => {
-  // The gate was right about this one. Best-effort is correct for a companion in general, and wrong
-  // for THIS companion on an upgrade: the running server holds the old e_sqlite3 open on Windows, the
-  // copy fails, and the new binary is left beside the old library - the original incident again, and
-  // just as silent.
-  const archive = [['coai-mcp.exe', true], ['e_sqlite3.dll', true]] as const;
-
-  assert.equal(requiredCompanionMissing(archive, [], 'win-x64'), 'e_sqlite3.dll');
-  assert.equal(requiredCompanionMissing(archive, ['e_sqlite3.dll'], 'win-x64'), '', 'it landed');
+test('a SQLite library that did not land fails the install', () => {
+  // Best-effort is correct for a companion in general, and wrong for THIS companion on an upgrade:
+  // the running server holds the old e_sqlite3 open on Windows, the copy fails, and the new binary
+  // is left beside the old library - the original incident again, and just as silent.
+  assert.equal(requiredCompanionMissing([], 'win-x64'), 'e_sqlite3.dll');
+  assert.equal(requiredCompanionMissing(['e_sqlite3.dll'], 'win-x64'), '', 'it landed');
 });
 
 test('a companion that is not the SQLite library still fails nothing', () => {
-  const archive = [['coai-mcp', true], ['libe_sqlite3.so', true], ['README.md', true]] as const;
-
   assert.equal(
-    requiredCompanionMissing(archive, ['libe_sqlite3.so'], 'linux-x64'), '',
-    'the README not landing is a feature degrading, which is what best-effort is for');
+    requiredCompanionMissing(['libe_sqlite3.so'], 'linux-x64'), '',
+    'a README that did not land is a feature degrading, which is what best-effort is for');
 });
 
-test('an archive that brought no SQLite library asks nothing of the installer', () => {
-  // The server would not work, but that is the release job's failure and it is checked there; the
-  // installer must not invent a requirement the archive never carried.
-  assert.equal(requiredCompanionMissing([['coai-mcp', true]] as const, [], 'osx-arm64'), '');
+test('an archive that carries no SQLite library at all is REFUSED, not installed', () => {
+  // This test asserted the opposite until the review gate took the reasoning apart. The first
+  // version required only what the archive HAPPENED to carry, on the grounds that a library missing
+  // from the archive is the release job's failure and checked there. It is - for archives not yet
+  // built. The 0.18.1 archive was already published without it, so requiring only what was given
+  // installs that archive successfully and leaves a server that throws DllNotFoundException the
+  // first time anything touches the database, silently. The requirement comes from the PLATFORM now.
+  assert.equal(requiredCompanionMissing([], 'osx-arm64'), 'libe_sqlite3.dylib');
+  assert.equal(requiredCompanionMissing([], 'linux-arm64'), 'libe_sqlite3.so');
+  assert.equal(requiredCompanionMissing([], 'win-arm64'), 'e_sqlite3.dll');
+});
+
+test('the name the installer requires is the name the loader looks for', () => {
+  // Three platforms, three names, and no third opinion: the OS loader accepts exactly one of them.
+  for (const rid of COAI_RIDS) {
+    const needed = sqliteNameFor(rid);
+    const expected = rid.startsWith('win-')
+      ? 'e_sqlite3.dll'
+      : rid.startsWith('osx-') ? 'libe_sqlite3.dylib' : 'libe_sqlite3.so';
+
+    assert.equal(needed, expected, `${rid} would look for the wrong file`);
+  }
 });
 
 test('the archive check accepts what tar and 7z actually print, and refuses a nested library', () => {
@@ -394,4 +408,31 @@ ${name}/coai-mcp.exe`)),
   assert.ok(
     !pattern.test(normalise(`${name}/native/e_sqlite3.dll`)),
     'a library in a subdirectory is not beside the binary, which is the only place the loader looks');
+});
+
+test('the release smoke fails on the message the server actually prints', () => {
+  // The gate caught this on the very change that caused it: `--log` now answers a MISSING library
+  // with an empty log, a note on stderr and exit 0, so the graceful failure defeated the smoke that
+  // was added to catch it. The smoke greps for a SENTENCE, so the sentence and the grep are one
+  // fact in two files - this is what keeps them the same fact.
+  const workflow = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', '.github', 'workflows', 'release.yml'),
+    'utf8',
+  );
+  const program = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'src_mcp', 'src', 'Program.cs'),
+    'utf8',
+  );
+
+  // Every sentence the smoke greps OUR stderr for, minus the one macOS prints about its own CPU.
+  const ours = [...workflow.matchAll(/grep -q '([^']+)' "\$DB\/err"/g)]
+    .map((match) => match[1]!)
+    .filter((sentence) => !sentence.includes('Bad CPU type'));
+
+  assert.ok(ours.length > 0, 'the smoke no longer inspects stderr after a successful run');
+  for (const sentence of ours) {
+    assert.ok(
+      program.includes(sentence),
+      `the smoke greps for "${sentence}" and the server does not print it — the check is dead`);
+  }
 });

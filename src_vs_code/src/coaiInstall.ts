@@ -151,30 +151,31 @@ async function attempt(
 const RETRY_MS = 400;
 
 /**
- * The one companion the server cannot start without, when the archive brought it and it did not land.
+ * The SQLite library this platform needs, when it is not in place beside the binary.
  *
- * <p>The copy policy is best-effort for a reason: the binary is already in place, and a companion
- * that fails to copy should degrade a feature rather than stop the server. The SQLite library is the
- * exception, and the gate was right about it — a silently skipped copy on an UPGRADE (the running
- * server holds the old file open on Windows) leaves the new binary beside the old library, which is
- * the original incident all over again and just as silent.</p>
+ * <p>Derived from the RID rather than from what the archive happened to carry, and that distinction is
+ * the whole point: the 0.18.1 archive was PUBLISHED without the library, so an installer that required
+ * only what it was given would install that archive successfully and leave a server that throws
+ * `DllNotFoundException` the first time anything touches the database — silently, because that write
+ * is best-effort by design. Raised by the review gate on this very change, and it was right: the
+ * release job's check protects future archives and can do nothing for one that already exists.</p>
  *
- * <p>So: nothing to say when the archive carried no library, or when the one it carried landed. A
- * library that was brought and did not land is an install that failed, reported as one.</p>
+ * <p>Everything else the archive brings stays best-effort: a missing extra degrades a feature, while
+ * this one is the difference between a server that records and a server that only appears to.</p>
  */
-export function requiredCompanionMissing(
-  entries: readonly (readonly [string, boolean])[],
-  placed: readonly string[],
-  rid: CoaiRid,
-): string {
-  const sqlite = companionsOf(entries, rid).find(isSqlite);
+export function requiredCompanionMissing(placed: readonly string[], rid: CoaiRid): string {
+  const needed = sqliteNameFor(rid);
 
-  return sqlite !== undefined && !placed.includes(sqlite) ? sqlite : '';
+  return placed.includes(needed) ? '' : needed;
 }
 
-/** `e_sqlite3.dll`, `libe_sqlite3.so`, `libe_sqlite3.dylib` — one name per platform, one shape. */
-function isSqlite(name: string): boolean {
-  return name.toLowerCase().includes('e_sqlite3');
+/** One name per platform, and the loader will accept no other. */
+export function sqliteNameFor(rid: CoaiRid): string {
+  if (rid.startsWith('win-')) {
+    return 'e_sqlite3.dll';
+  }
+
+  return rid.startsWith('osx-') ? 'libe_sqlite3.dylib' : 'libe_sqlite3.so';
 }
 
 /** `mcp-v0.1.0` → `0.1.0`; any other tag line yields nothing rather than a wrong version. */
