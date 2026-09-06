@@ -175,43 +175,52 @@ public sealed class RemoteRuntime(string id, string serverUrl) : IReviewerRuntim
         string jobFile, HttpClient http, CancellationToken ct = default)
     {
         var claim = ReadClaim(jobFile);
-        if (claim.JobId.Length == 0)
-        {
-            return false;
-        }
-
-        var (server, jobId) = (claim.Server, claim.JobId);
         var token = TeamServerAuth.ReadToken(claim.TokenFile);
-        if (token.Length == 0)
+        if (claim.JobId.Length == 0 || token.Length == 0)
         {
-            // Signed out since the review started. The claim STAYS: signing in again is what makes
-            // this cancellable, and deleting it now would throw away the only way to do so.
+            // No claim, or signed out since the review started. The claim STAYS in the second case:
+            // signing in again is what makes this cancellable, and deleting it now would throw away
+            // the only way to do so.
             return false;
         }
 
+        var status = await DeleteAsync(claim, token, http, ct);
+        // Forgotten on success, and on a 404 — which means the server has no such job and never will.
+        if (status is System.Net.HttpStatusCode.NotFound || Succeeded(status))
+        {
+            Forget(jobFile);
+        }
+
+        return Succeeded(status);
+    }
+
+    private static bool Succeeded(System.Net.HttpStatusCode? status) =>
+        status is { } answered && (int)answered is >= 200 and < 300;
+
+    /// <summary>The DELETE itself, or null when the server could not be reached.</summary>
+    /// <remarks>
+    /// Null rather than an exception: the claim is then KEPT, because a client that was briefly
+    /// offline must still be able to try again. A polite path that threw would fail a round that had
+    /// already produced its answer.
+    /// </remarks>
+    private static async Task<System.Net.HttpStatusCode?> DeleteAsync(
+        RemoteClaim claim, string token, HttpClient http, CancellationToken ct)
+    {
         try
         {
             using var request = new HttpRequestMessage(
-                HttpMethod.Delete, TeamServerAuth.Endpoint(server, $"api/reviews/{jobId}"));
+                HttpMethod.Delete, TeamServerAuth.Endpoint(claim.Server, $"api/reviews/{claim.JobId}"));
             request.Headers.Add("Authorization", "Bearer " + token);
             // The server judges this BEFORE the token, and answers 426 without it — so a cancellation
             // that omitted it was refused by every server it was sent to. Caught on the code round.
             request.Headers.Add(RemoteAsk.ContractHeader, RemoteAsk.ContractVersion.ToString());
             using var response = await http.SendAsync(request, ct);
 
-            if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                Forget(jobFile);
-            }
-
-            return response.IsSuccessStatusCode;
+            return response.StatusCode;
         }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or OperationCanceledException)
         {
-            // The server's own queue deadline is the backstop, and the claim is kept so a later
-            // attempt can still succeed. A polite path that threw would fail a round that had
-            // already produced its answer.
-            return false;
+            return null;
         }
     }
 
