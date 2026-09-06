@@ -34,6 +34,10 @@ const CONFIG = 4;
 const SIGNING_KEY = randomBytes(32).toString('base64url');
 const DOMAIN = 'example.com';
 const ADMIN = `boss@${DOMAIN}`;
+const DEVELOPER = `dev@${DOMAIN}`;
+
+/** A valid signature from OUTSIDE the company — the 403 that keeps another company off these accounts. */
+const OUTSIDER = 'someone@other-company.test';
 
 function fail(code, message) {
   console.error(`\n  ${message}\n`);
@@ -227,9 +231,9 @@ writeFileSync(
   envTemp,
   [
     `baseUrl=${baseUrl}`,
-    `token=${mintToken(`dev@${DOMAIN}`)}`,
+    `token=${mintToken(DEVELOPER)}`,
     `adminToken=${mintToken(ADMIN)}`,
-    `outsiderToken=${mintToken('someone@other-company.test')}`,
+    `outsiderToken=${mintToken(OUTSIDER)}`,
     '',
   ].join('\n'),
 );
