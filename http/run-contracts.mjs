@@ -8,7 +8,7 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import { createHmac } from 'node:crypto';
-import { mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -62,14 +62,22 @@ async function freePort() {
   });
 }
 
-/** True once the server answers its own health route. */
-async function isReady(baseUrl) {
+/**
+ * How the health probe went: still starting, answering, or answering WRONG.
+ *
+ * The third is the one worth separating. A startup or routing defect makes every route answer 500 —
+ * that is how the missing JSON resolver was found — and treating a 500 like a refused connection
+ * meant polling for the full forty seconds and then reporting ENVIRONMENT, "the requests were never
+ * sent", for a server that was up and broken. A running server that answers wrongly is a contract
+ * failure and should say so at once. (gemini, code round.)
+ */
+async function probe(baseUrl) {
   try {
     const response = await fetch(`${baseUrl}/api/health`);
 
-    return response.ok;
+    return response.ok ? 'ready' : `broken:${response.status}`;
   } catch {
-    return false;
+    return 'starting';
   }
 }
 
@@ -77,17 +85,18 @@ async function waitForReady(baseUrl, child, seconds) {
   const deadline = Date.now() + seconds * 1000;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
-      return false;
+      return 'exited';
     }
 
-    if (await isReady(baseUrl)) {
-      return true;
+    const answer = await probe(baseUrl);
+    if (answer !== 'starting') {
+      return answer;
     }
 
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
 
-  return false;
+  return 'timeout';
 }
 
 const build = spawnSync(
@@ -104,10 +113,36 @@ const baseUrl = `http://127.0.0.1:${port}`;
 // A throwaway data directory per run: no vendors, no accounts, no sessions. That emptiness is
 // deliberate — see the README on why no review ever reaches a vendor.
 const dataDir = mkdtempSync(path.join(tmpdir(), 'coai-contracts-'));
+// An empty directory: nothing is on it, so every vendor probe fails at once instead of launching a
+// CLI that may wait for a human.
+const emptyPath = mkdtempSync(path.join(tmpdir(), 'coai-nopath-'));
+
+// ONE vendor in the allowlist, and no account signed in for it.
+//
+// That combination is what lets the suite exercise the whole submit / poll / cancel contract without
+// a vendor ever being launched: the allowlist accepts the request, the job is queued, and the runner
+// refuses to start it because no account has been signed in. 202, 200 and 204 are real answers from
+// real state, and nothing is spent. Without the file every submission is a 400 and those three
+// statuses are never seen at all — a regression in queue acceptance or cancellation could ship with
+// the suite still green. (codex, code round.)
+writeFileSync(
+  path.join(dataDir, 'vendors.json'),
+  JSON.stringify([{ id: 'codex', runtime: 'codex', models: ['gpt-5.6-luna'], slots: ['a'] }]),
+);
 
 const exe = path.join(
   ROOT, 'src_server', 'src', 'bin', 'Debug', 'net10.0',
   process.platform === 'win32' ? 'coai-server.exe' : 'coai-server');
+
+// The server's output goes to a FILE, never to a pipe this script holds.
+//
+// This is the whole reason the suite used to hang. `spawnSync` blocks Node's event loop for the
+// duration of the run, so nothing drains a piped stdout; the server logs a line per request, filled
+// the pipe, and then BLOCKED writing to it — so it stopped answering, httpyac's remaining requests
+// timed out, and the run wedged with every assertion already passed. It only appeared once a vendor
+// fixture made the server log more, which is why it looked like the fixture's fault.
+const serverLog = path.join(dataDir, 'server.log');
+const serverLogFd = openSync(serverLog, 'a');
 
 const server = spawn(exe, [], {
   env: {
@@ -122,27 +157,55 @@ const server = spawn(exe, [], {
     Auth__Microsoft__Tenant: '',
     Auth__Microsoft__Audiences: '',
     Auth__Google__Enabled: 'false',
+    // A PATH with no vendor CLIs on it, deliberately.
+    //
+    // /api/catalog probes each configured vendor by LAUNCHING its CLI to ask its version. With the
+    // developer's real PATH the suite starts codex, which on a signed-in machine waits. A contract
+    // suite must not depend on which CLIs a machine happens to have: it asserts that `cliFound` is a
+    // BOOLEAN, not that it is true, so a probe that fails at once is the same test everywhere.
+    PATH: emptyPath,
+    Path: emptyPath,
   },
-  stdio: ['ignore', 'pipe', 'pipe'],
+  stdio: ['ignore', serverLogFd, serverLogFd],
 });
 
-let serverOutput = '';
-server.stdout.on('data', (chunk) => { serverOutput += chunk; });
-server.stderr.on('data', (chunk) => { serverOutput += chunk; });
-
+/** What the server said, for a failure message. Read from the file rather than held in memory. */
+function serverSaid() {
+  try {
+    return readFileSync(serverLog, 'utf8').slice(-4000);
+  } catch {
+    return '(the server wrote nothing)';
+  }
+}
 function stop() {
   if (server.exitCode === null) {
     server.kill();
   }
 
+  try {
+    closeSync(serverLogFd);
+  } catch {
+    // Already closed, or never opened. Nothing to do and nothing to say.
+  }
+
   rmSync(dataDir, { recursive: true, force: true });
+  rmSync(emptyPath, { recursive: true, force: true });
 }
 
 process.on('exit', stop);
 process.on('SIGINT', () => { stop(); process.exit(ENVIRONMENT); });
 
-if (!(await waitForReady(baseUrl, server, 40))) {
-  console.error(serverOutput);
+const readiness = await waitForReady(baseUrl, server, 40);
+if (readiness.startsWith('broken:')) {
+  console.error(serverSaid());
+  stop();
+  fail(CONTRACT, `/api/health answered ${readiness.slice(7)}. The server is up and every route is `
+    + 'broken — that is a regression, not an environment problem.');
+}
+
+if (readiness !== 'ready') {
+  console.error(serverSaid());
+  stop();
   fail(ENVIRONMENT, 'coai-server never answered /api/health — the requests were never sent.');
 }
 
@@ -163,22 +226,40 @@ writeFileSync(
 );
 renameSync(envTemp, envPath);
 
+// httpyac is a local devDependency, spawned as plain Node with NO shell.
+//
+// It used to be `npx --yes httpyac@…` with `shell: true`, and on Windows that puts a cmd.exe
+// between this script and the tool. The tool finished every request, printed its summary, and the
+// shell never exited — so the run reported all assertions passed and then hung, which is the worst
+// possible failure for a check somebody is supposed to trust. Spawning the JS entry point directly
+// removes the shell from the chain, and pinning it in http/package.json removes the download.
+const tool = path.join(HERE, 'node_modules', 'httpyac', 'bin', 'httpyac.js');
+if (!existsSync(tool)) {
+  stop();
+  fail(CONFIG, 'httpyac is not installed — run `npm install` in http/ (it is a pinned devDependency).');
+}
+
 let httpyac;
 try {
   httpyac = spawnSync(
-    'npx',
-    // A GLOB, not the directory: pointed at the folder, httpyac tries to parse this very script as a
-    // request file and reports `Invalid URL: import { spawn ... }`.
-    ['--yes', 'httpyac@6.16.7', 'send', '--all', path.join(HERE, '**', '*.http')],
-    { stdio: 'inherit', cwd: HERE, shell: process.platform === 'win32' },
+    process.execPath,
+    // A RELATIVE glob, resolved against `cwd` below: pointed at the folder, httpyac tries to parse
+    // this very script as a request file.
+    [tool, 'send', '--all', '**/*.http'],
+    {
+      stdio: 'inherit',
+      cwd: HERE,
+      // A backstop, not the plan: the requests themselves take about five seconds, so a run that has
+      // not finished in three minutes is wedged rather than slow.
+      timeout: 180_000,
+    },
   );
 } finally {
-  // Every path, including a throw from spawnSync itself. The `exit` handler is a backstop rather
-  // than the plan: a server left holding a port and a temp directory left on disk are what make the
-  // NEXT run fail for a reason that has nothing to do with the API. (Four findings, code round.)
+  // Every path, including a throw from spawnSync itself. A server left holding a port and a temp
+  // directory left on disk are what make the NEXT run fail for a reason that has nothing to do with
+  // the API. (Four findings, first code round.)
   stop();
 }
-
 if (httpyac.error) {
   fail(CONFIG, `httpyac could not be started: ${httpyac.error.message}`);
 }
@@ -191,12 +272,16 @@ if (httpyac.status === null) {
   fail(ENVIRONMENT, 'httpyac was killed before it finished — no verdict was produced.');
 }
 
-if (httpyac.status === 2) {
-  fail(CONFIG, 'httpyac refused its own arguments — the suite is misconfigured, not the API.');
+// httpyac answers 0 for a clean run and 1 when a request failed its assertions. Anything ELSE is
+// the harness — bad arguments, a crash, a version that does not understand the flags — and reporting
+// those as 1 tells whoever reads the exit code that the API is broken when it is the suite that is.
+if (httpyac.status === 1) {
+  fail(CONTRACT, 'a contract request failed — the API did not answer what its .http file says it does.');
 }
 
 if (httpyac.status !== 0) {
-  fail(CONTRACT, 'a contract request failed — the API did not answer what its .http file says it does.');
+  fail(CONFIG, `httpyac exited ${httpyac.status}, which is neither pass nor a failed assertion — `
+    + 'the suite is misconfigured, not the API.');
 }
 
 console.log('\n  contracts: every request answered what its file says.\n');

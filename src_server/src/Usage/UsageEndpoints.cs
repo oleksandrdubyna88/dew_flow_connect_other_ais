@@ -1,5 +1,17 @@
 namespace CoaiServer;
 
+/// <summary>Whose spending a request is asking about.</summary>
+/// <remarks>
+/// A named type rather than a nullable bool. The tri-state version worked — false for me, true for
+/// company, null for neither — and read as a puzzle at the call site, which is where the next person
+/// adds a third scope. (Two reviewers, code round.)
+/// </remarks>
+public enum UsageScope
+{
+    Me,
+    Company,
+}
+
 /// <summary>What the team is spending, to the person who spent it and to an admin.</summary>
 public static class UsageEndpoints
 {
@@ -21,7 +33,7 @@ public static class UsageEndpoints
                     StatusCodes.Status400BadRequest);
             }
 
-            if (Scope(scope) is not { } company)
+            if (Scope(scope) is not { } asked)
             {
                 // `scope=compnay` used to answer 200 with the PERSONAL total. An admin reading that
                 // as the company's would make a spending decision from one person's numbers.
@@ -31,7 +43,7 @@ public static class UsageEndpoints
                     StatusCodes.Status400BadRequest);
             }
 
-            if (company && !caller.IsAdmin)
+            if (asked == UsageScope.Company && !caller.IsAdmin)
             {
                 // 403 rather than 404: the caller is authenticated and the route exists, so the honest
                 // answer is that this is an admin view — and naming the setting is what lets somebody
@@ -43,7 +55,7 @@ public static class UsageEndpoints
 
             var scan = usage.Read(range);
 
-            return Results.Json(Describe(scan, range, caller, company), ServerJsonContext.Default.UsageDto);
+            return Results.Json(Describe(scan, range, caller, asked), ServerJsonContext.Default.UsageDto);
         }).RequireCaller(gate);
     }
 
@@ -56,8 +68,8 @@ public static class UsageEndpoints
     /// about something they cannot see, cannot fix and did not cause. An operator can act on it; a
     /// reviewer looking at their own week cannot. (Two reviewers, plan round.)
     /// </remarks>
-    private static UsageDto Describe(UsageScan scan, UsageRange range, Caller caller, bool company) =>
-        company
+    private static UsageDto Describe(UsageScan scan, UsageRange range, Caller caller, UsageScope scope) =>
+        scope == UsageScope.Company
             ? new UsageDto(
                 range.FromUtc,
                 range.ToUtc,
@@ -73,16 +85,17 @@ public static class UsageEndpoints
                 [],
                 null);
 
-    /// <summary>True for company, false for me, null when it is neither.</summary>
+    /// <summary>The scope asked for, or null when the value is neither of them.</summary>
     /// <remarks>
-    /// Absent means "me" — that is a default, not a fallback. A VALUE that is neither is a typo, and
-    /// answering it with somebody's personal total is how the wrong number ends up in a decision.
+    /// Absent means <see cref="UsageScope.Me"/> — a default, not a fallback. A VALUE that is neither
+    /// is a typo, and answering it with somebody's personal total is how the wrong number ends up in
+    /// a decision somebody makes about money.
     /// </remarks>
-    private static bool? Scope(string? scope) => scope switch
+    private static UsageScope? Scope(string? scope) => scope switch
     {
-        null or "" => false,
-        _ when CompanyScope.Equals(scope, StringComparison.OrdinalIgnoreCase) => true,
-        _ when "me".Equals(scope, StringComparison.OrdinalIgnoreCase) => false,
+        null or "" => UsageScope.Me,
+        _ when CompanyScope.Equals(scope, StringComparison.OrdinalIgnoreCase) => UsageScope.Company,
+        _ when "me".Equals(scope, StringComparison.OrdinalIgnoreCase) => UsageScope.Me,
         _ => null,
     };
 

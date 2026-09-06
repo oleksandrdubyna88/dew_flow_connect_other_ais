@@ -1,0 +1,8 @@
+{
+  "name": "coai-server-contracts",
+  "private": true,
+  "description": "The .http contract suite for coai-server. httpyac is pinned here rather than fetched by npx: npx on Windows puts a cmd.exe between the runner and the tool, and that shell does not exit when httpyac finishes — the run then reports every assertion as passed and hangs.",
+  "devDependencies": {
+    "httpyac": "6.16.7"
+  }
+}

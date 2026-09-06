@@ -25,6 +25,14 @@ Authorization: Bearer {{sessionToken}}
 
 ?? status == 200
 
+{{
+  const assert = require('node:assert');
+  test('the session carries the SAME identity the token it was minted from did', () => {
+    assert.strictEqual(response.parsedBody.email, 'dev@example.com');
+    assert.strictEqual(response.parsedBody.isAdmin, false);
+  });
+}}
+
 ###
 
 # @name a_session_can_be_withdrawn

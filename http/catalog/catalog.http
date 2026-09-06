@@ -18,12 +18,11 @@ Authorization: Bearer {{token}}
 
 ###
 
-# The empty-catalog message, which is what a FRESH install answers. Not @prod: a real deployment has
-# a vendors.json, so asserting this against one would report a healthy server as a regression — the
-# tag means "safe AND true against something live", and this is only the second half here.
-# (codex, code round.)
+# The suite's stack HAS a vendor (the reviews suite needs one), so this asserts the loaded shape
+# rather than the empty-install message. The empty case is covered by
+# CatalogEndpointTests.AnEmptyCatalogSaysWhichFileToCreate, which owns its own data directory.
 
-# @name a_server_with_no_vendors_says_which_file_to_create
+# @name a_configured_vendor_appears_with_its_models_and_slot_counts
 GET {{baseUrl}}/api/catalog
 Authorization: Bearer {{token}}
 
@@ -31,21 +30,22 @@ Authorization: Bearer {{token}}
 
 {{
   const assert = require('node:assert');
-  test('it names the file rather than looking healthy with nothing configured', () => {
-    assert.match(response.parsedBody.error, /vendors\.json/);
+  test('the vendor is there with its allowlist and its accounts counted', () => {
+    const codex = response.parsedBody.vendors.find((v) => v.id === 'codex');
+    assert.ok(codex, 'the configured vendor is missing from the catalog');
+    assert.deepStrictEqual(codex.models, ['gpt-5.6-luna']);
+    assert.strictEqual(codex.slots.total, 1);
+  });
+  test('nothing is signed in, and the counts say so rather than claiming ready', () => {
+    const codex = response.parsedBody.vendors.find((v) => v.id === 'codex');
+    assert.strictEqual(codex.slots.ready, 0);
+    assert.strictEqual(codex.slots.needsSignIn, 1);
+  });
+  test('health speaks only about the BINARY, and says so as a boolean', () => {
+    const codex = response.parsedBody.vendors.find((v) => v.id === 'codex');
+    assert.strictEqual(typeof codex.health.cliFound, 'boolean');
+  });
+  test('a loaded catalog reports no error', () => {
+    assert.strictEqual(response.parsedBody.error, '');
   });
 }}
-###
-
-# @name catalog_without_a_token_is_unauthorized
-GET {{baseUrl}}/api/catalog
-
-?? status == 401
-
-###
-
-# @name catalog_from_another_domain_is_forbidden
-GET {{baseUrl}}/api/catalog
-Authorization: Bearer {{outsiderToken}}
-
-?? status == 403

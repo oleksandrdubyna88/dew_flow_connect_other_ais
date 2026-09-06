@@ -22,12 +22,31 @@ It does the whole lifecycle itself, so a fresh checkout needs nothing prepared:
    `Auth__Local__SigningKey` set and `boss@example.com` in `Coai__Admins`;
 3. polls `/api/health` until it answers, and gives up with exit 3 rather than running requests
    against a server that never came up;
-4. mints the three personas below and writes them to a git-ignored `http/.env`;
+4. mints the three personas below and writes them to a git-ignored `http/.env`, through a temporary
+   file and a rename so two runs at once cannot hand each other the wrong tokens;
 5. runs [httpyac](https://httpyac.github.io) over every `.http` file;
 6. stops the server and deletes the data directory, whatever happened.
 
 Individual files also open in VS Code and send one request at a time — which is the point of writing
 them — as long as `http/.env` exists from a previous run.
+
+The whole run takes about six seconds.
+
+### Three things about the runner that are not obvious
+
+**The server writes to a FILE, never to a pipe the runner holds.** `spawnSync` blocks Node's event
+loop for the whole run, so nothing drains a piped stdout — the server logs a line per request, fills
+the pipe, and then BLOCKS writing to it, stops answering, and the run wedges with every assertion
+already passed. It cost an afternoon to find because it only appeared once the suite configured a
+vendor and the server had more to say.
+
+**httpyac is a pinned devDependency here, spawned as plain Node with no shell.** `npx` on Windows
+puts a `cmd.exe` in between, and pinning it also means the run does not depend on a download.
+
+**A PATH with no vendor CLIs on it.** `/api/catalog` probes each configured vendor by launching its
+CLI. With the developer's real PATH the suite starts `codex`, which on a signed-in machine waits. The
+suite asserts that `cliFound` is a boolean, not that it is true, so a probe that fails immediately is
+exactly as good a test and is the same on every machine.
 
 ## The three personas
 
@@ -42,12 +61,13 @@ deployments, never configured in production. The suite mints:
 
 ## Why no review ever runs
 
-`http/reviews/` submits, polls and cancels real jobs, and **nothing is ever sent to a vendor**. The
-cold stack has a fresh data directory, so no account has been signed in; the runner correctly refuses
-to start a review on an account nobody signed in, and every job stays `queued`. That exercises the
-whole contract of submit / poll / cancel — status, shape, ownership, the id grammar — at zero cost.
+`http/reviews/` submits, polls and cancels REAL jobs — 202, 200, 204, and the 403 for somebody
+else's — and **nothing is ever sent to a vendor**. The cold stack has one vendor in the allowlist and
+no account signed in for it: the allowlist accepts the request, the job is queued, and the runner
+refuses to start it because there is nobody to run it as. Every one of those statuses is a real answer
+from real state, at zero subscription cost.
 
-What it cannot reach is a review that actually *ran*, and that is declared rather than faked. Mocking
+What that cannot reach is a review that actually *ran*, and it is declared rather than faked. Mocking
 the vendor would prove the mock works.
 
 ## What is deliberately not covered

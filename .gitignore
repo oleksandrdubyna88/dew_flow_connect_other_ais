@@ -73,3 +73,5 @@ publish/
 # The extension's packaged artefact — built by CI, attached to a release
 src_vs_code/*.vsix
 http/.env
+http/node_modules
+http/package-lock.json

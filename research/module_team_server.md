@@ -308,6 +308,34 @@ quietly works. `ConfigureHttpJsonOptions` now puts `ServerJsonContext` in the re
 
 That is the whole argument for this tier, and it arrived on the day it was written.
 
+**The suite exercises the review flow for real** — 202, 200, 204 and the 403 for somebody else's —
+because the stack has a vendor in the allowlist and no account signed in for it. The allowlist
+accepts, the job queues, and the runner refuses to start it because there is nobody to run it as.
+Without that fixture every submission was a 400 and those statuses were never exercised at all, so a
+regression in queue acceptance or cancellation could ship with the suite green.
+
+**The runner's own failures are classified as carefully as the API's.** Exit **1** is a contract
+regression and nothing else; **3** is the machine (the build failed, the server never answered, the
+harness was killed); **4** is a misconfigured suite. Reporting a missing httpyac as exit 1 would tell
+whoever reads it that the API is broken when the harness is. A server that comes up and answers 500
+to `/api/health` is reported as a CONTRACT failure at once, rather than being polled for forty
+seconds and called an environment problem — which is what happened the first time, for the very
+defect above.
+
+**Three things about the runner cost an afternoon and are written down where they happened.** The
+server writes to a FILE, never to a pipe: `spawnSync` blocks Node's event loop, so nothing drains a
+piped stdout — the server fills it, blocks writing, stops answering, and the run wedges with every
+assertion already passed. httpyac is a pinned local devDependency spawned as plain Node, because npx
+on Windows puts a `cmd.exe` in between that does not exit. And the stack runs with a PATH holding no
+vendor CLIs, so the catalog probe cannot start a `codex` that waits — the suite asserts `cliFound` is
+a BOOLEAN, not that it is true, which is the same test on every machine. The whole run takes about
+six seconds.
+
+**An unknown `scope` is refused, not defaulted.** `?scope=compnay` used to answer 200 with the
+caller's OWN total, and an admin reading that as the company's would decide from one person's
+numbers. An empty `?window=` still means today: that is a client saying nothing, not naming something
+wrong.
+
 **No review ever reaches a vendor.** The suite's data directory is fresh, so no account is signed in,
 the runner refuses to start a review on one, and every job stays queued — the submit/poll/cancel
 contract is exercised at zero subscription cost. What that cannot reach is declared with
