@@ -7,7 +7,7 @@
 // three personas, the readiness wait and the teardown — is in this file.
 
 import { spawn, spawnSync } from 'node:child_process';
-import { createHmac } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -23,8 +23,15 @@ const CONTRACT = 1;
 const ENVIRONMENT = 3;
 const CONFIG = 4;
 
-/** 32+ bytes: the server refuses a shorter HMAC key at startup, and so does HMAC-SHA256. */
-const SIGNING_KEY = 'coai-contract-suite-signing-key!!';
+/**
+ * A fresh HMAC key for THIS run, never a constant.
+ *
+ * 32+ bytes because the server refuses a shorter one at startup. Generated rather than written down:
+ * a literal key in a repository is a credential by every scanner's definition and by most people's,
+ * even when the server it opens lives for six seconds on loopback — and there is no reason to have
+ * one, since nothing outside this process needs to know it.
+ */
+const SIGNING_KEY = randomBytes(32).toString('base64url');
 const DOMAIN = 'example.com';
 const ADMIN = `boss@${DOMAIN}`;
 
@@ -113,9 +120,7 @@ const baseUrl = `http://127.0.0.1:${port}`;
 // A throwaway data directory per run: no vendors, no accounts, no sessions. That emptiness is
 // deliberate — see the README on why no review ever reaches a vendor.
 const dataDir = mkdtempSync(path.join(tmpdir(), 'coai-contracts-'));
-// An empty directory: nothing is on it, so every vendor probe fails at once instead of launching a
-// CLI that may wait for a human.
-const emptyPath = mkdtempSync(path.join(tmpdir(), 'coai-nopath-'));
+
 
 // ONE vendor in the allowlist, and no account signed in for it.
 //
@@ -163,8 +168,12 @@ const server = spawn(exe, [], {
     // developer's real PATH the suite starts codex, which on a signed-in machine waits. A contract
     // suite must not depend on which CLIs a machine happens to have: it asserts that `cliFound` is a
     // BOOLEAN, not that it is true, so a probe that fails at once is the same test everywhere.
-    PATH: emptyPath,
-    Path: emptyPath,
+    //
+    // EMPTY rather than a temporary directory: a search path made of somewhere writable is a place to
+    // drop an executable that then gets run, which is a real hazard in general even though this
+    // process lives for six seconds. Empty resolves nothing at all, which is the actual intent.
+    PATH: '',
+    Path: '',
   },
   stdio: ['ignore', serverLogFd, serverLogFd],
 });
@@ -189,7 +198,6 @@ function stop() {
   }
 
   rmSync(dataDir, { recursive: true, force: true });
-  rmSync(emptyPath, { recursive: true, force: true });
 }
 
 process.on('exit', stop);
@@ -199,8 +207,9 @@ const readiness = await waitForReady(baseUrl, server, 40);
 if (readiness.startsWith('broken:')) {
   console.error(serverSaid());
   stop();
-  fail(CONTRACT, `/api/health answered ${readiness.slice(7)}. The server is up and every route is `
-    + 'broken — that is a regression, not an environment problem.');
+  const status = readiness.slice(7);
+  fail(CONTRACT, `/api/health answered ${status}. The server is up and every route is broken — `
+    + 'that is a regression, not an environment problem.');
 }
 
 if (readiness !== 'ready') {
@@ -280,7 +289,8 @@ if (httpyac.status === 1) {
 }
 
 if (httpyac.status !== 0) {
-  fail(CONFIG, `httpyac exited ${httpyac.status}, which is neither pass nor a failed assertion — `
+  const code = httpyac.status;
+  fail(CONFIG, `httpyac exited ${code}, which is neither pass nor a failed assertion — `
     + 'the suite is misconfigured, not the API.');
 }
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 
 namespace CoaiServer;
@@ -109,7 +110,16 @@ public sealed class UsageReader(string dataDir)
         {
             var entry = JsonSerializer.Deserialize(text, ServerJsonContext.Default.UsageEntryDto);
 
-            return entry is null || !DateTimeOffset.TryParse(entry.Utc, out var at)
+            // Invariant culture and RoundtripKind: the writer stamps ISO-8601 with "O", and parsing
+            // that with the machine's own culture is how the same file reads differently on a
+            // developer's box and on the VM. RoundtripKind keeps the offset instead of shifting it
+            // into local time.
+            return entry is null
+                || !DateTimeOffset.TryParse(
+                    entry.Utc,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind,
+                    out var at)
                 ? null
                 : new UsageLine(
                     at.ToUniversalTime(),
