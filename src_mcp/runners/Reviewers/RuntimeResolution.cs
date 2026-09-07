@@ -19,6 +19,19 @@ public readonly record struct VendorIdentity(
 {
     /// <summary>The name to send to a Team server, or to look up in its catalog.</summary>
     public string VendorOnServer => RemoteVendor.Length > 0 ? RemoteVendor : Provider;
+
+    /// <summary>
+    /// Whether the ROW records its server's own name, or <see cref="VendorOnServer"/> is falling
+    /// back to the id.
+    /// </summary>
+    /// <remarks>
+    /// The fallback is right for a hand-written row somebody called <c>claude</c> and misleading for
+    /// every row the panel generated, whose id is <c>&lt;server&gt;-&lt;vendor&gt;</c>. A server asked
+    /// for <c>remsoftdev-claude</c> answers, truthfully, that it offers no such vendor — and that
+    /// sentence sends a person hunting for a typo in a name they never typed. Whoever reports the
+    /// refusal needs to know which of the two names it was.
+    /// </remarks>
+    public bool NamesItsServerVendor => RemoteVendor.Length > 0;
 }
 
 /// <summary>

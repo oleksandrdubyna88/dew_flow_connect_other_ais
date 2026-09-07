@@ -64,7 +64,7 @@ public sealed class RemoteProbe(HttpClient http, Func<DateTime>? utcNow = null)
             return fresh;
         }
 
-        var (health, ok) = await AskAsync(server, vendor.VendorOnServer, token, enabled, ct);
+        var (health, ok) = await AskAsync(server, vendor, token, enabled, ct);
 
         return Remember(key, health, ok);
     }
@@ -109,7 +109,7 @@ public sealed class RemoteProbe(HttpClient http, Func<DateTime>? utcNow = null)
             : previous * 2 > MaxBackoff ? MaxBackoff : previous * 2;
 
     private async Task<(VendorHealth Health, bool Ok)> AskAsync(
-        string server, string vendorId, string token, bool enabled, CancellationToken ct)
+        string server, VendorIdentity vendor, string token, bool enabled, CancellationToken ct)
     {
         try
         {
@@ -122,7 +122,7 @@ public sealed class RemoteProbe(HttpClient http, Func<DateTime>? utcNow = null)
             var body = await response.Content.ReadAsStringAsync(timeout.Token);
 
             return response.IsSuccessStatusCode
-                ? (Read(server, vendorId, body, enabled), true)
+                ? (Read(server, vendor, body, enabled), true)
                 : (Refused(server, (int)response.StatusCode, body, enabled), false);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or OperationCanceledException)
@@ -164,13 +164,14 @@ public sealed class RemoteProbe(HttpClient http, Func<DateTime>? utcNow = null)
     /// note can say <i>why</i> a vendor is unusable rather than that it is. "2 accounts, all needing
     /// sign-in" is something the operator can act on; "unavailable" is not.
     /// </remarks>
-    private static VendorHealth Read(string server, string vendorId, string body, bool enabled) =>
+    private static VendorHealth Read(string server, VendorIdentity vendor, string body, bool enabled) =>
         Parse(body) is not { } catalog
             ? new VendorHealth(enabled, false, "", "unavailable", RemoteAsk.UnreadableMessage(server, body))
-            : catalog.Vendors?.FirstOrDefault(v => string.Equals(v.Id, vendorId, StringComparison.OrdinalIgnoreCase))
-                is not { } vendor
-                ? NotOffered(server, vendorId, catalog, enabled)
-                : Offered(server, catalog, vendor, enabled);
+            : catalog.Vendors?.FirstOrDefault(v =>
+                    string.Equals(v.Id, vendor.VendorOnServer, StringComparison.OrdinalIgnoreCase))
+                is not { } offered
+                ? NotOffered(server, vendor, catalog, enabled)
+                : Offered(server, catalog, offered, enabled);
 
     private static RemoteCatalog? Parse(string body)
     {
@@ -185,15 +186,35 @@ public sealed class RemoteProbe(HttpClient http, Func<DateTime>? utcNow = null)
     }
 
     /// <summary>Naming the offer is the difference between "unavailable" and a person fixing a typo.</summary>
+    /// <remarks>
+    /// And naming WHICH name was tried is the difference between a typo and a malformed row. A row
+    /// that records no <c>remoteVendor</c> is asked about under its own id — <c>remsoftdev-claude</c>,
+    /// which is <c>&lt;server&gt;-&lt;vendor&gt;</c> and was never typed by anybody — so the plain
+    /// sentence sends a person looking for a spelling mistake that does not exist. That is exactly
+    /// what shipped: the panel wrote no <c>remoteVendor</c> at all until 2026-09-07, so this was the
+    /// message every Team-server reviewer produced.
+    /// </remarks>
     private static VendorHealth NotOffered(
-        string server, string vendorId, RemoteCatalog catalog, bool enabled)
+        string server, VendorIdentity vendor, RemoteCatalog catalog, bool enabled)
     {
         var offered = catalog.Vendors is { Count: > 0 }
             ? string.Join(", ", catalog.Vendors.Select(v => v.Id))
             : "nothing";
+        var asked = vendor.VendorOnServer;
+        var plain = $"the Team server at {server} does not offer a vendor called '{asked}' — it offers {offered}";
+        // Both halves of the unnamed sentence are FACTS, and the second draft of it was not: it said
+        // the id was "not a name anybody typed", which is true of `remsoftdev-claude` and false of a
+        // hand-written row somebody called `codex`. Nothing here can tell those apart, and the
+        // repository's own test for the plain message was the fixture that proved it — a row with no
+        // recorded name whose id is a perfectly plausible one. So this says what was used and why,
+        // and lets the reader decide which case they are in.
+        var note = vendor.NamesItsServerVendor
+            ? plain
+            : $"{plain}. This row does not record which vendor its server knows it by, so its own id "
+                + "was used as the name; if it came from a Team server, remove it and add the "
+                + "reviewer again.";
 
-        return new VendorHealth(enabled, true, catalog.ServerVersion ?? "", "unavailable",
-            $"the Team server at {server} does not offer a vendor called '{vendorId}' — it offers {offered}");
+        return new VendorHealth(enabled, true, catalog.ServerVersion ?? "", "unavailable", note);
     }
 
     /// <summary>The vendor is there; whether it can review is what its slots say.</summary>

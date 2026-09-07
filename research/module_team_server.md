@@ -193,6 +193,14 @@ Fixed 2026-09-07 with the assertion on both sides — `settingsReach.test.ts` fo
 what is read. `teamServerId` deliberately does not cross: the server has no field for it and no
 question it answers.
 
+**And a row that still has no name for its server says so, instead of reading as a typo.** When the
+catalog does not list what was asked for, `RemoteProbe.NotOffered` now adds — only when the row
+recorded no `remoteVendor` — that its own id was used as the name and that a row from a Team server
+should be removed and added again. It does NOT claim the id was never typed: `VendorIdentity`
+falls back to the id, which is right for a hand-written row somebody called `codex`, and nothing at
+the probe can tell that apart from a generated `remsoftdev-claude`. The first draft of the sentence
+did claim it, and the repository's own test for the plain message was the fixture that refuted it.
+
 **A sign-in belongs to a SIDE of the machine, not to the machine.** The token file is per side
 already — `coaiDataDir()` is a path on whichever extension host is running — so the record that
 describes it is too, and the panel renders THAT rather than the shared intention. With settings

@@ -334,6 +334,50 @@ public sealed class RemoteProbeTests : IDisposable
         health.Note.Should().Contain("no server URL");
         handler.Requests.Should().Be(0);
     }
+
+    /// <summary>
+    /// A remote row that does not record the name its SERVER knows it by says THAT, rather than
+    /// reporting its own id as a vendor nobody has heard of.
+    /// </summary>
+    /// <remarks>
+    /// Rows are <c>&lt;server&gt;-&lt;vendor&gt;</c> and <c>VendorOnServer</c> falls back to the row id
+    /// when <c>remoteVendor</c> is empty — which is right for a hand-written row someone named
+    /// <c>claude</c>, and misleading for every row the panel generated. Until 2026-09-07 the panel
+    /// generated ALL of them without the field, so the sentence a person actually met was "the Team
+    /// server does not offer a vendor called 'remsoftdev-claude'": a true statement about a name they
+    /// never typed, pointing at a typo that did not exist. Accepted finding, story 1.1 code round.
+    /// </remarks>
+    [Fact]
+    public async Task ARowThatCannotNameItsServersVendorSaysSo_RatherThanBlamingATypo()
+    {
+        SignIn();
+        var handler = new StubHandler(HttpStatusCode.OK, Catalog(1, 1, 0, 0, id: "claude"));
+        var unnamed = new VendorIdentity("remsoftdev-claude", "remote", Server);
+
+        var health = await new RemoteProbe(new HttpClient(handler)).RunAsync(unnamed, enabled: true, _dataDir);
+
+        health.Auth.Should().Be("unavailable");
+        health.Note.Should().Contain(
+            "does not record which vendor",
+            "the row id is not a name anybody typed, so reporting it as an unknown vendor sends people hunting for a typo");
+        health.Note.Should().Contain("claude", "what the server does offer is still the useful half");
+    }
+
+    [Fact]
+    public async Task ARowThatDOESNameItsVendorStillGetsThePlainNotOfferedSentence()
+    {
+        // The complement, so the new sentence cannot leak onto rows it is not about: this row states
+        // its server's own name for the vendor and that name is simply wrong. A typo IS the diagnosis
+        // here, and the message must stay the one that says so.
+        SignIn();
+        var handler = new StubHandler(HttpStatusCode.OK, Catalog(1, 1, 0, 0, id: "claude"));
+        var misnamed = new VendorIdentity("remsoftdev-claude", "remote", Server, "cluade");
+
+        var health = await new RemoteProbe(new HttpClient(handler)).RunAsync(misnamed, enabled: true, _dataDir);
+
+        health.Note.Should().Contain("does not offer a vendor called 'cluade'");
+        health.Note.Should().NotContain("does not record which vendor");
+    }
 }
 
 /// <summary>The process probe's own remote arm — the one that must never shell out.</summary>
