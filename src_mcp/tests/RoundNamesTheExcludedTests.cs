@@ -1,0 +1,132 @@
+using System.Collections.Immutable;
+using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Server;
+using FluentAssertions;
+using Xunit;
+
+namespace CoaiMcp.Tests;
+
+/// <summary>
+/// A round that leaves out a reviewer somebody enabled says so, and says why.
+/// </summary>
+/// <remarks>
+/// <para><b>The defect this is for, and it is the one that made three others invisible.</b> On
+/// 2026-09-07 a Team-server reviewer was enabled, ticked for both stages, and never called. The log
+/// held both halves of the contradiction eleven seconds apart:</para>
+/// <code>
+/// [11:03:41 INF] starting: codex,gemini,local,remsoftdev-claude enabled
+/// [11:06:00 INF] round 1 PlanReview opening: 3 reviewer(s) — codex/…, gemini/…, local/…
+/// </code>
+/// <para>Four enabled, three asked, and nothing anywhere named the fourth. The round summary then
+/// said <i>"all 3 reviewers answered"</i> — true about what it asked, and silent about what it did
+/// not. A reviewer that IS asked and fails has always been reported honestly ("9 of 12 answered;
+/// failed: …"), which is exactly why the silence about one never asked was so hard to see.</para>
+/// </remarks>
+public class RoundNamesTheExcludedTests
+{
+    private static ReviewerSummary Answered(int asked) => ReviewerSummary.AllAnswered(asked);
+
+    [Fact]
+    public void WithNobodyExcluded_TheSentenceIsWhatItHasAlwaysBeen()
+    {
+        // The guard on the other side. Every round that has nothing to add must read exactly as it
+        // did, or this change is a change to every round rather than to the ones with a problem.
+        Answered(3).Sentence.Should().Be("all 3 reviewers answered");
+        new ReviewerSummary(3, 2, ["codex/Architecture: exit 1"]).Sentence
+            .Should().Be("2 of 3 reviewers answered; failed: codex/Architecture: exit 1");
+    }
+
+    [Fact]
+    public void AnEnabledReviewerThatCouldNotRunIsNamed_WithTheReason()
+    {
+        var summary = Answered(3) with
+        {
+            Excluded = ImmutableArray.Create(
+                "remsoftdev-claude: not signed in to the Team server at https://coai.remsoft.dev"),
+        };
+
+        summary.Sentence.Should().StartWith("all 3 reviewers answered");
+        summary.Sentence.Should().Contain("1 enabled reviewer could not run");
+        summary.Sentence.Should().Contain("remsoftdev-claude");
+        summary.Sentence.Should().Contain(
+            "not signed in",
+            "the count alone sends somebody hunting; the reason is what they act on");
+    }
+
+    [Fact]
+    public void SeveralExcludedReviewersAreCounted_AndAllNamed()
+    {
+        var summary = Answered(1) with { Excluded = ImmutableArray.Create("a: no key", "b: not signed in") };
+
+        summary.Sentence.Should().Contain("2 enabled reviewers could not run");
+        summary.Sentence.Should().Contain("a: no key").And.Contain("b: not signed in");
+    }
+
+    private static PanelService With(params ProviderSettings[] providers) =>
+        new(
+            new PanelSettings
+            {
+                DataDir = Path.Combine(Path.GetTempPath(), $"coai-excl-{Guid.NewGuid():N}"),
+                Providers = [.. providers],
+            },
+            VaultKeys.None("no vault"),
+            default,
+            new Runners.Processes.ProcessLauncher(),
+            Serilog.Core.Logger.None);
+
+    /// <summary>A Team-server row on a machine that has not signed in: enabled, and unrunnable.</summary>
+    private static ProviderSettings Remote(bool plan = true, bool code = true) =>
+        new("remsoftdev-claude")
+        {
+            Enabled = true, Runtime = "remote", RemoteVendor = "claude", Model = "haiku",
+            BaseUrl = "https://coai.example.com", Plan = plan, Code = code,
+        };
+
+    private static ProviderSettings Local() =>
+        new("local") { Enabled = true, Runtime = "local", Model = "m" };
+
+    [Fact]
+    public void TheRoundKnowsWhoItLeftOut()
+    {
+        var excluded = With(Local(), Remote()).ExcludedFrom(isPlanStage: true);
+
+        excluded.Should().ContainSingle().Which.Should().StartWith("remsoftdev-claude: ");
+    }
+
+    [Fact]
+    public void NobodyIsBothAskedAndExcluded()
+    {
+        // The two lists are derived from ONE predicate, and this is what says so. Two predicates
+        // that agree today is how the three copies of the runtime decision got away with it twice.
+        var service = With(Local(), Remote());
+        var worktree = Path.Combine(Path.GetTempPath(), $"coai-wt-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(worktree);
+
+        var asked = service.BuildWork([ReviewRole.PlanCritique], worktree, "ctx", round: 1, isPlanStage: true)
+            .Select(w => w.Invocation.Provider).Distinct().ToList();
+        var excluded = service.ExcludedFrom(isPlanStage: true).Select(e => e.Split(':')[0]).ToList();
+
+        asked.Should().NotBeEmpty();
+        asked.Should().NotIntersectWith(excluded);
+    }
+
+    [Fact]
+    public void AReviewerTickedForCodeOnlyIsNotReportedAsExcludedFromAPlanRound()
+    {
+        // The stage filter runs BEFORE the availability one, in both directions. A person who turned
+        // a vendor off for plans has not lost a reviewer; saying they did on every plan round would
+        // train them to ignore the sentence, which is the one thing it cannot afford.
+        With(Local(), Remote(plan: false)).ExcludedFrom(isPlanStage: true).Should().BeEmpty();
+        With(Local(), Remote(plan: false)).ExcludedFrom(isPlanStage: false)
+            .Should().ContainSingle("it IS enabled for code, and there it cannot run");
+    }
+
+    [Fact]
+    public void ADisabledReviewerIsNotExcluded_ItIsOff()
+    {
+        var off = Remote() with { Enabled = false };
+
+        With(Local(), off).ExcludedFrom(isPlanStage: true).Should().BeEmpty();
+    }
+}

@@ -22,13 +22,34 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
     private readonly Serilog.ILogger _log = log.ForContext("Stage", stage).ForContext("Round", number);
 
     /// <summary>What the round is about to ask, before the first CLI starts.</summary>
-    public void Opening(IReadOnlyList<ReviewerWork> work, string workingDir, TimeSpan timeout)
+    /// <param name="excluded">
+    /// Reviewers the operator ENABLED for this stage that this round cannot run. Logged here, beside
+    /// the ones that were asked, because the two lines this file writes used to contradict each other
+    /// in silence: the startup line said <c>codex,gemini,local,remsoftdev-claude enabled</c> and this
+    /// one said <c>3 reviewer(s)</c>, eleven seconds apart on 2026-09-07, and nothing named the
+    /// fourth or said why. A log that cannot say why a reviewer did not review is the thing this
+    /// class was written to stop.
+    /// </param>
+    public void Opening(
+        IReadOnlyList<ReviewerWork> work,
+        string workingDir,
+        TimeSpan timeout,
+        IReadOnlyList<string>? excluded = null)
     {
         _log.Information(
             "round {Round} {Stage} opening: {Count} reviewer(s) — {Reviewers}; working dir {WorkingDir}, timeout {Timeout}",
             number, stage, work.Count,
             string.Join(", ", work.Select(w => $"{w.Invocation.Provider}/{w.Invocation.Role}[{w.Prompt}]")),
             workingDir, Humanised(timeout));
+
+        // A separate line rather than a longer one: this is the exceptional case, and folding it into
+        // the sentence above would make every ordinary round pay for it in width.
+        if (excluded is { Count: > 0 })
+        {
+            _log.Warning(
+                "round {Round} {Stage} left out {Count} enabled reviewer(s): {Excluded}",
+                number, stage, excluded.Count, string.Join("; ", excluded));
+        }
 
         foreach (var w in work)
         {
