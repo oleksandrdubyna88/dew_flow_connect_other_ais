@@ -464,9 +464,17 @@ review at all, which is how a caption nobody would file a bug about got fixed.
 The arm needs a fact the list cannot carry. `allowedModelsFor` deliberately returns the row's OWN
 model when the catalog has not arrived — an empty list would make `modelsFor` mark every remote row's
 saved model as withdrawn, on every reload, for as long as a server stayed unreachable — so a count of
-one is ambiguous by construction. It now returns `{ models, named, fromCatalog }`, and the caption
-reads the flag rather than the length: how many models this server allows for the vendor it knows,
-or that the server has not been asked yet.
+one is ambiguous by construction. It returns `{ models, named, catalog }`, and the caption reads the
+state rather than the length.
+
+**Three states, because a caption that guesses is worse than one that points.** `here` is a count of
+what this server allows the vendor it knows. `waiting` says the catalog has not arrived and sends the
+reader to the Team servers section — never *"has not been asked yet"*, because nothing at this call
+site can tell a request in flight from one that failed; the fetch, its error and its stale marker
+belong to that section, and repeating them per reviewer row would report one outage N times.
+`no-server` is the row whose Team server was removed while its reviewers were left behind, and it
+must NOT be sent to a section that no longer lists it. The first two were collapsed into one flag in
+the first draft and split on the code round.
 
 ### The settings mirror is not the panel's (2026-09-02)
 
