@@ -215,6 +215,66 @@ test('ten is after nine, and a build suffix is not a version', async () => {
   assert.equal((await syncedAgainst('0.31.3', '0.31.3-alpha.1')).length, 1);
 });
 
+test('a SECOND, different newer build is reported too — the suppression is per version, not per session', async () => {
+  // A bare "already said something" flag makes the first stand-down the only one a window ever
+  // mentions: a person who updates the other window to 0.31.11 and hits it again is told nothing.
+  // Accepted finding, this story's plan round.
+  const written: string[] = [];
+  const refusals: string[] = [];
+  let existing = '{"COAI_WRITTEN_BY":"0.31.9"}';
+  const it = new ServerSettingsSync(
+    () => ({ settings: { ...DEFAULTS, onExhausted: 'good_enough' } as never, vendors: DEFAULT_VENDORS as never }),
+    async (json: string) => {
+      written.push(json);
+    },
+    '0.31.3',
+    async () => existing,
+    (theirs: string) => refusals.push(theirs),
+  );
+
+  await it.sync();
+  await it.sync();
+  existing = '{"COAI_WRITTEN_BY":"0.31.11"}';
+  await it.sync();
+
+  assert.equal(written.length, 0);
+  assert.deepEqual(refusals, ['0.31.9', '0.31.11'], 'the same stamp once, a different stamp again');
+});
+
+test('a stand-down that later succeeds can be reported again if it happens again', async () => {
+  // The suppression is about not repeating one sentence, not about saying it once per lifetime.
+  // Once a write goes through the situation is over, and the next stand-down is news.
+  //
+  // The settings have to MOVE between the two, and that is not a detail of the fixture: with
+  // unchanged content there is nothing to write, so `sync` returns before it looks at the file and
+  // there is nothing to stand down from. The first draft of this test missed that and expected a
+  // second refusal from an unchanged configuration — the code was right and the test was not.
+  const written: string[] = [];
+  const refusals: string[] = [];
+  let existing = '{"COAI_WRITTEN_BY":"0.31.9"}';
+  let settings: unknown = { ...DEFAULTS, onExhausted: 'good_enough' };
+  const it = new ServerSettingsSync(
+    () => ({ settings: settings as never, vendors: DEFAULT_VENDORS as never }),
+    async (json: string) => {
+      written.push(json);
+    },
+    '0.31.3',
+    async () => existing,
+    (theirs: string) => refusals.push(theirs),
+  );
+
+  await it.sync();
+  existing = '';
+  await it.sync();
+
+  settings = { ...DEFAULTS, onExhausted: 'escalate' };
+  existing = '{"COAI_WRITTEN_BY":"0.31.9"}';
+  await it.sync();
+
+  assert.equal(written.length, 1, 'the newer window went away and the pending content landed');
+  assert.deepEqual(refusals, ['0.31.9', '0.31.9'], 'the second wall is a second sentence');
+});
+
 async function syncedAgainst(mine: string, theirs: string): Promise<string[]> {
   const { it, written } = stamped(`{"COAI_WRITTEN_BY":"${theirs}"}`, mine);
   await it.sync();
