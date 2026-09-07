@@ -53,6 +53,28 @@ jobs:
       - name: Publish the server the way it ships (Native AOT)
         run: dotnet publish src_mcp/src/CoaiMcp.csproj -c Release -r linux-x64 -warnaserror
 
+      # The only check that can see BOTH halves of the client/server contract at once. Every other
+      # test on either side stubs the other, which is how 0.31.1 shipped a sign-in nobody could
+      # use: the extension posted the identity token in the request BODY, the server reads it from
+      # the Authorization header, and both suites were green about their own half.
+      #
+      # It runs HERE rather than in the extension job because this one already has the .NET SDK and
+      # has just compiled the server — `run-contract.mjs` starts that build on a loopback port with
+      # a throwaway data directory. Building `src_server/Dockerfile` instead would be the same test
+      # for minutes more: it publishes Native AOT (clang, a full link) on every pull request. The
+      # container is still the better LOCAL story, and the script takes COAI_CONTRACT_URL for it.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Install the extension's toolchain
+        working-directory: src_vs_code
+        run: npm ci
+
+      - name: Contract — the real client against the real server
+        working-directory: src_vs_code
+        run: npm run test:contract
+
       - name: Plan lifecycle
         run: node .claude/rules/shared/tools/plan-lifecycle.mjs
 

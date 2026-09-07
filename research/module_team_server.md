@@ -75,6 +75,20 @@ it is not.
 > server's posting a header and a null body, the extension's asserting the token was in the body —
 > and nothing crossed between them.
 
+**Something crosses between them now.** `npm run test:contract` in `src_vs_code` drives the
+extension's own `createSession` and `ask` against a real instance of this server and asserts the
+whole handshake: `201` for a session, the issued token accepted on a later call, and `403` — not
+`401` — for an account outside the allowed domain. It needs no Microsoft: this server's symmetric
+`Local` scheme (`Auth:Local:SigningKey`, issuer `coai-local`) exists for exactly this, and the
+test mints a token for it in fifteen lines of `node:crypto`.
+
+`scripts/run-contract.mjs` starts the built server on a loopback port with a throwaway
+`Coai__DataDir` — or steps aside when `COAI_CONTRACT_URL` points at one you are already running,
+which is how the `deploy/docker-compose.yml` stack serves the same suite locally. CI runs it in
+`build · test · family checks`, the job that has already compiled this server. See
+[PLAN_contract_across_the_seam.md](PLAN_contract_across_the_seam.md) for why the container was the
+wrong choice *for CI* and the right one everywhere else.
+
 ## Core entities
 
 | Type | File | Role |
