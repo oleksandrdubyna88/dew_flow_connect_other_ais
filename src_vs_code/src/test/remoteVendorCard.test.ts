@@ -141,6 +141,52 @@ test('a Team-server card is captioned with its server, not with the Codex CLI', 
 test('before the catalog has arrived the caption says so, rather than inventing a number', () => {
   const html = page({ teamServers: [{ ...TEAM, catalog: undefined }] } as Partial<PanelState>);
 
-  assert.match(html, /has not been asked yet/);
+  // Not "has not been asked yet": nothing here can tell a request in flight from one that failed.
+  // The Team servers section owns that, with the server's own message and its stale marker.
+  assert.match(html, /catalog has not arrived/);
+  assert.ok(!html.includes('not been asked yet'), 'that asserts which of the two states it is');
   assert.ok(!html.includes('the Codex CLI has cached'));
+});
+
+test('a server that allows the vendor no models says that, rather than counting to zero', () => {
+  const empty = { ...TEAM, catalog: { ...TEAM.catalog!, vendors: [{ ...TEAM.catalog!.vendors[0]!, models: [] }] } };
+
+  assert.match(page({ teamServers: [empty] } as Partial<PanelState>), /allows 'codex' no models at all/);
+});
+
+test('one allowed model is one model, not "1 models"', () => {
+  const one = { ...TEAM, catalog: { ...TEAM.catalog!, vendors: [{ ...TEAM.catalog!.vendors[0]!, models: ['gpt-5.6'] }] } };
+
+  assert.match(page({ teamServers: [one] } as Partial<PanelState>), /the one model this Team server allows/);
+});
+
+test('a row carrying an empty remoteVendor falls back to its id, as the C# side of the seam does', () => {
+  // `??` keeps an empty string. The other half of this contract length-checks the same field
+  // (`VendorIdentity.Recorded`), and two halves disagreeing about what counts as absent is how the
+  // whole of this plan started.
+  // The row id must BE a vendor the catalog offers, or both readings miss and the test proves
+  // nothing: with the fallback working this row resolves to the server's `codex` and its two models;
+  // with `??` keeping the empty string it searches the catalog for a vendor called nothing.
+  const blank: Vendor = { ...ROW, id: 'codex', remoteVendor: '' };
+
+  const html = page({ vendors: [blank] } as Partial<PanelState>);
+
+  assert.match(html, /the 2 models this Team server allows for 'codex'/);
+  assert.ok(!html.includes("allows '' no models"), 'an empty name would be asked of the catalog verbatim');
+});
+
+/** Every other runtime's caption, so a new first branch cannot quietly reword them. */
+test('no other runtime lost its caption to the remote arm', () => {
+  const captions: [Vendor['runtime'], RegExp][] = [
+    ['codex', /the Codex CLI has cached no model list yet/],
+    ['gemini', /a curated list/],
+    ['claude', /aliases the Claude CLI resolves/],
+    ['antigravity', /a list from when this was written/],
+    ['local', /no engine probed yet/],
+  ];
+
+  for (const [runtime, expected] of captions) {
+    const row: Vendor = { ...ROW, id: runtime, runtime, remoteVendor: undefined, baseUrl: '', model: '' };
+    assert.match(page({ vendors: [row], teamServers: [] } as Partial<PanelState>), expected, runtime);
+  }
 });
