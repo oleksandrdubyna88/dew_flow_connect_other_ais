@@ -88,6 +88,12 @@ test('a panel ahead of its server says so, instead of showing a round the server
   assert.ok(behind.includes('still runs'), 'an older server is named');
   assert.ok(behind.includes('0.18.7'), 'and so is the version that is there');
 
+  // 0.18.8 by name, because it is the one everybody has: it shipped the Team-server reviewer fix
+  // hours before this change and does NOT carry the narrowed conventions rule. The constant moved
+  // from 0.18.8 to 0.18.9 for that reason, and this line is what would catch it moving back.
+  const released = withServer({ kind: 'known', version: '0.18.8', remembered: true, updateOffered: true });
+  assert.ok(released.includes('still runs'), '0.18.8 predates the narrowing and must say so');
+
   const current = withServer({ kind: 'known', version: CONVENTIONS_NARROWED_IN, remembered: true, updateOffered: false });
   assert.ok(!current.includes('still runs'), 'the server that agrees says nothing');
 
