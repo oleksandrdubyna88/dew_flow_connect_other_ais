@@ -71,9 +71,13 @@ jobs:
         with:
           node-version: 22
 
+      # `--ignore-scripts`: this step needs `tsc` and `node` and nothing else, so no dependency's
+      # postinstall has any business running here — and a lifecycle script is where a compromised
+      # package gets its code executed. (The extension job's own `npm ci` keeps them, because
+      # `npm run package` needs esbuild's platform binary linked.) Raised by SonarCloud as S6505.
       - name: Install the extension's toolchain
         working-directory: src_vs_code
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Contract — the real client against the real server
         working-directory: src_vs_code
