@@ -35,7 +35,17 @@ export type ReportRefusal = (theirVersion: string) => void;
  * are writing the same settings from the same configuration — the only cost of standing aside is a
  * write that happens on the next configuration change instead of this one.</p>
  */
-export type CriticalSection = (work: () => Promise<void>) => Promise<void>;
+export type CriticalSection = (work: () => Promise<void>) => Promise<boolean>;
+
+/**
+ * What one call to {@link ServerSettingsSync.sync} did.
+ *
+ * <p>`busy` is the one the caller has to act on: the work did not run because another window is in
+ * the file, so this configuration is still unwritten and nothing will fire again by itself. The
+ * others are terminal — the content is on disk, or it was already, or a newer build owns it, or the
+ * disk refused and the next change will try again.</p>
+ */
+export type SyncOutcome = 'written' | 'unchanged' | 'stood-down' | 'busy' | 'failed';
 
 /**
  * Mirrors the workspace's `coai.*` settings into the file the server reads.
@@ -95,6 +105,8 @@ export class ServerSettingsSync {
     private readonly report: ReportRefusal = () => {},
     private readonly critical: CriticalSection = async (work) => {
       await work();
+
+      return true;
     },
   ) {}
 
@@ -116,11 +128,11 @@ export class ServerSettingsSync {
    * cure a person actually has is the Reload Window button on the warning, which is an activation.
    * The story's own requirement claimed a trigger that does not exist, and the plan round said so.</p>
    */
-  async sync(): Promise<void> {
+  async sync(): Promise<SyncOutcome> {
     const { settings, vendors } = this.read();
     const json = serverSettingsJson(settings, vendors, this.version);
     if (json === this.lastWritten && !this.stoodDown) {
-      return;
+      return 'unchanged';
     }
 
     // The comparison and the write are ONE step, or they are a race. Two guard-aware hosts can
@@ -128,24 +140,40 @@ export class ServerSettingsSync {
     // a payload it decided on before the first one's write existed. The collision that started this
     // epic was 0.4 seconds wide, which is four orders of magnitude more than this section holds.
     // Raised three times on this plan's own round.
-    await this.critical(async () => {
-      if (await this.wouldOverwriteANewerBuild()) {
-        this.stoodDown = true;
-        return;
-      }
+    let outcome: SyncOutcome = 'failed';
+    let entered = false;
+    try {
+      entered = await this.critical(async () => {
+        if (await this.wouldOverwriteANewerBuild()) {
+          this.stoodDown = true;
+          outcome = 'stood-down';
+          return;
+        }
 
-      try {
-        await this.write(json);
-        this.lastWritten = json;
-        this.stoodDown = false;
-        // The situation is over. A stand-down after this is news, not a repeat.
-        this.reportedFor = '';
-      } catch {
-        // Not writable. The pasted env block remains a way in, and this runs from a configuration
-        // listener — throwing here would put an extension error in front of somebody for every
-        // keystroke in their settings file, over a disk problem a settings panel cannot fix.
-      }
-    });
+        try {
+          await this.write(json);
+          this.lastWritten = json;
+          this.stoodDown = false;
+          // The situation is over. A stand-down after this is news, not a repeat.
+          this.reportedFor = '';
+          outcome = 'written';
+        } catch {
+          // Not writable. The pasted env block remains a way in, and this runs from a configuration
+          // listener — throwing here would put an extension error in front of somebody for every
+          // keystroke in their settings file, over a disk problem a settings panel cannot fix.
+          outcome = 'failed';
+        }
+      });
+    } catch {
+      // The section itself failed — a lock that could not be created, a filesystem that threw. Same
+      // reasoning as the write: this runs from a configuration listener and must not surface.
+      return 'failed';
+    }
+
+    // Busy is not failure and not success: nobody wrote, and nothing will fire again on its own.
+    // Saying so is what lets the caller schedule the ONE retry that keeps a configuration from
+    // being dropped because another window happened to be writing when it changed.
+    return entered ? outcome : 'busy';
   }
 
   /**

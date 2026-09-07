@@ -1,3 +1,5 @@
+import * as fsp from 'node:fs/promises';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { coaiDataDir } from './dataDir';
 import { installFailureHint, SingleFlight } from './coaiInstall';
@@ -12,7 +14,7 @@ import { parseSession, SessionFile } from './rounds';
 import { blindSpotsHtml, rowsFrom } from './roundsLog';
 import { RoundsLogPanel } from './roundsLogPanel';
 import { ExistingFile, ServerSettingsSync } from './serverSettingsSync';
-import { lockIsStale } from './settingsLock';
+import { LOCK_STALE_AFTER_MS, lockIsStale } from './settingsLock';
 import { settingsFrom } from './settingsShape';
 import { vendorsFrom } from './vendors';
 
@@ -90,12 +92,13 @@ export function activate(context: vscode.ExtensionContext): void {
     reportStandDown,
     underSettingsLock,
   );
-  void settingsSync.sync();
+  mirrorSettings(settingsSync);
 
   context.subscriptions.push(
+    { dispose: () => clearTimeout(deferred) },
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('coai')) {
-        void settingsSync.sync();
+        mirrorSettings(settingsSync);
         void panel.render();
       }
     }),
@@ -125,6 +128,35 @@ export function deactivate(): void {
   // The watcher is a subscription; VS Code disposes it. No server, no port, nothing else to stop.
 }
 
+/**
+ * The pending retry, and there is at most one.
+ *
+ * <p>A window that finds another one in the file writes nothing — which is right, because nobody
+ * waits for a settings mirror — and then nothing fires again on its own. A configuration change that
+ * happened to land while another window was writing would sit unwritten until the person changed
+ * something else, and there may not be a next time. So one deferred attempt, scheduled just past the
+ * window in which any lock is either released or breakable as stale.</p>
+ *
+ * <p>ONE, and not a ladder: by the time it runs there is no lock left that this window cannot take,
+ * so a second failure is a different problem and the next configuration change will carry it.
+ * Accepted finding, this story's plan round.</p>
+ */
+let deferred: ReturnType<typeof setTimeout> | undefined;
+
+const RETRY_AFTER_MS = LOCK_STALE_AFTER_MS + 2_000;
+
+function mirrorSettings(settingsSync: ServerSettingsSync, isTheRetry = false): void {
+  void settingsSync.sync().then((outcome) => {
+    if (outcome !== 'busy' || isTheRetry || deferred !== undefined) {
+      return;
+    }
+    deferred = setTimeout(() => {
+      deferred = undefined;
+      mirrorSettings(settingsSync, true);
+    }, RETRY_AFTER_MS);
+  });
+}
+
 /** The `coai.*` settings as the sync wants them: one read, both halves, no VS Code type leaving. */
 function readCoaiConfiguration() {
   const config = vscode.workspace.getConfiguration('coai');
@@ -150,6 +182,17 @@ async function writeSettingsFile(json: string): Promise<void> {
   const target = vscode.Uri.joinPath(dataDir(), 'settings.json');
   const temp = vscode.Uri.joinPath(dataDir(), `settings.json.${process.pid}.tmp`);
   await vscode.workspace.fs.writeFile(temp, new TextEncoder().encode(json));
+
+  // The last thing before the rename: are we still the holder? A process suspended past the stale
+  // window — a laptop closing mid-write is the ordinary way — is broken as dead by another window,
+  // and would otherwise wake up and land a payload decided before that window's write existed. This
+  // narrows that to the microseconds between this check and the rename, which is as far as it can be
+  // taken without a lease that renews. Raised on this story's plan round.
+  if (held.length > 0 && !(await lockHolds(held))) {
+    await vscode.workspace.fs.delete(temp).then(undefined, () => undefined);
+    throw new Error('the settings lock was taken over while this write was in flight');
+  }
+
   await vscode.workspace.fs.rename(temp, target, { overwrite: true });
 }
 
@@ -161,67 +204,86 @@ async function writeSettingsFile(json: string): Promise<void> {
  * they are allowed to overwrite, and the second to finish wins with a payload decided before the
  * first one's write existed.</p>
  *
- * <p><b>The lock is a rename, because the API has no exclusive create.</b> `writeFile` overwrites and
- * `createDirectory` is `mkdir -p`; `rename` with `overwrite: false` is the one operation here that
- * FAILS when the destination exists, which is exactly what taking a lock means. The temp file
- * carries this process id so two windows never fight over one temp path on the way in.</p>
+ * <p><b>The lock is an O_EXCL create, and the reason is worth keeping.</b> The first version claimed
+ * exclusion from `vscode.workspace.fs.rename(…, { overwrite: false })` — and whether THAT is atomic
+ * is not documented anywhere; the disk provider checks for existence and then renames, which is
+ * check-then-act, so the whole guarantee rested on an implementation detail. `fs.open(path, 'wx')`
+ * is O_EXCL on every platform this runs on, which is a promise the operating system makes.</p>
  *
- * <p>A lock that cannot be taken is not an error and nothing waits: whoever holds it is writing the
- * same settings from the same configuration, and the only cost of standing aside is a write that
- * happens on the next configuration change. A lock left behind by a killed window is broken once it
- * is stale — see `settingsLock.ts` for why that rule is a tested function rather than a line here.</p>
+ * <p>A lock that cannot be taken is not an error and nothing WAITS — but the caller is told, because
+ * nothing else will fire on its own and the configuration would otherwise sit unwritten until the
+ * person happened to change something else.</p>
  */
-async function underSettingsLock(work: () => Promise<void>): Promise<void> {
-  const lock = vscode.Uri.joinPath(dataDir(), 'settings.lock');
+async function underSettingsLock(work: () => Promise<void>): Promise<boolean> {
   await vscode.workspace.fs.createDirectory(dataDir());
-  if (!(await takeLock(lock))) {
-    return;
-  }
-
-  try {
-    await work();
-  } finally {
-    try {
-      await vscode.workspace.fs.delete(lock);
-    } catch {
-      // Left behind: the next window breaks it once it is stale, which is the case that rule exists
-      // for. Throwing here would replace a settings write with an extension error.
-    }
-  }
-}
-
-async function takeLock(lock: vscode.Uri, mayBreakAStaleOne = true): Promise<boolean> {
-  const mine = vscode.Uri.joinPath(dataDir(), `settings.lock.${process.pid}.tmp`);
-  try {
-    await vscode.workspace.fs.writeFile(mine, new TextEncoder().encode(String(process.pid)));
-    await vscode.workspace.fs.rename(mine, lock, { overwrite: false });
-
-    return true;
-  } catch {
-    await vscode.workspace.fs.delete(mine).then(undefined, () => undefined);
-
-    // ONE attempt at breaking a stale lock, never a loop. Without the flag this and `breakIfStale`
-    // call each other, and a lock somebody keeps re-taking between our delete and our rename spins
-    // the extension host instead of skipping a write nobody would have missed.
-    return mayBreakAStaleOne ? breakIfStale(lock) : false;
-  }
-}
-
-/** A lock older than the window it should ever be held for belonged to a window that died. */
-async function breakIfStale(lock: vscode.Uri): Promise<boolean> {
-  try {
-    const held = await vscode.workspace.fs.stat(lock);
-    if (!lockIsStale(held.mtime, Date.now())) {
-      return false;
-    }
-    await vscode.workspace.fs.delete(lock);
-  } catch {
+  const token = await takeLock();
+  if (token === '') {
     return false;
   }
 
+  held = token;
+  try {
+    await work();
+  } finally {
+    held = '';
+    // ONLY while it is still ours. A window whose lock was broken as stale would otherwise delete
+    // its SUCCESSOR's lock on the way out, and a third window would walk in while the second was
+    // still writing — the race, produced by the release. Raised on this story's plan round.
+    if (await lockHolds(token)) {
+      await fsp.rm(lockPath()).catch(() => undefined);
+    }
+  }
+
+  return true;
+}
+
+/** The token this window currently holds, or empty. Read by the write, just before it renames. */
+let held = '';
+
+function lockPath(): string {
+  return path.join(coaiDataDir(), 'settings.lock');
+}
+
+/** Whether the lock on disk is still the one we took. */
+async function lockHolds(token: string): Promise<boolean> {
+  return await fsp.readFile(lockPath(), 'utf8').then((t) => t === token, () => false);
+}
+
+/**
+ * Take the lock, or answer empty.
+ *
+ * <p>The token is this process and this moment, so a window can tell its OWN lock from the one that
+ * replaced it. `wx` fails with `EEXIST` when the file is there, which is the whole mechanism.</p>
+ */
+async function takeLock(mayBreakAStaleOne = true): Promise<string> {
+  const token = `${process.pid}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  try {
+    await fsp.writeFile(lockPath(), token, { encoding: 'utf8', flag: 'wx' });
+
+    return token;
+  } catch {
+    // ONE attempt at breaking a stale lock, never a loop: a lock somebody keeps re-taking between
+    // our delete and our create would otherwise spin the extension host instead of skipping a write
+    // nobody would have missed.
+    return mayBreakAStaleOne ? breakIfStale() : '';
+  }
+}
+
+/** A lock older than any write could take belonged to a window that died. */
+async function breakIfStale(): Promise<string> {
+  try {
+    const onDisk = await fsp.stat(lockPath());
+    if (!lockIsStale(onDisk.mtimeMs, Date.now())) {
+      return '';
+    }
+    await fsp.rm(lockPath());
+  } catch {
+    return '';
+  }
+
   // Deleted it; take it the ordinary way rather than assuming the gap is ours. Two windows can
-  // reach this line together and only one of their renames can succeed, which is the point.
-  return takeLock(lock, false);
+  // reach this line together and only one of their exclusive creates can succeed, which is the point.
+  return takeLock(false);
 }
 
 /**

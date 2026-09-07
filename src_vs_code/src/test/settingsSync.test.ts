@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
-import { ExistingFile, ServerSettingsSync } from '../serverSettingsSync';
+import { CriticalSection, ExistingFile, ServerSettingsSync } from '../serverSettingsSync';
 import { CoaiSettings, DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS, Vendor } from '../vendors';
 
@@ -321,11 +321,12 @@ test('the read, the comparison and the write happen inside the section, not arou
       order.push('lock');
       await work();
       order.push('unlock');
+
+      return true;
     },
   );
 
-  await it.sync();
-
+  assert.equal(await it.sync(), 'written');
   assert.deepEqual(order, ['lock', 'read', 'write', 'unlock']);
 });
 
@@ -341,12 +342,10 @@ test('a section that cannot run its work writes nothing, and that is not a failu
     '0.31.3',
     async () => ({ kind: 'absent' }),
     () => {},
-    async () => {
-      // Held by another window.
-    },
+    async () => false,
   );
 
-  await it.sync();
+  assert.equal(await it.sync(), 'busy', 'the caller has to know, or the change is dropped');
   assert.equal(written.length, 0);
 
   // And the content is not remembered as written, so the next change still carries it.
@@ -361,6 +360,79 @@ test('a section that cannot run its work writes nothing, and that is not a failu
   );
   await again.sync();
   assert.equal(second.length, 1);
+});
+
+
+test('two windows over one file: exactly one enters, and the file is one whole payload', async () => {
+  // The guarantee itself, at the only level this repository can run it — `module_tests.md` names
+  // "no extension host" as a standing gap, so there are no two real windows to interleave. Two syncs
+  // over one fake lock and one fake file is the same shape: A is paused mid-section while B tries.
+  let file = '';
+  let taken = false;
+  const entered: string[] = [];
+  let releaseA: () => void = () => {};
+  const paused = new Promise<void>((resolve) => {
+    releaseA = resolve;
+  });
+
+  const lock = (name: string, hold?: Promise<void>): CriticalSection => async (work) => {
+    if (taken) {
+      return false;
+    }
+    taken = true;
+    entered.push(name);
+    try {
+      if (hold !== undefined) {
+        await hold;
+      }
+      await work();
+    } finally {
+      taken = false;
+    }
+
+    return true;
+  };
+
+  const build = (name: string, hold?: Promise<void>) => new ServerSettingsSync(
+    () => configuration({ onExhausted: name === 'A' ? 'good_enough' : 'escalate' }),
+    async (json: string) => {
+      file = json;
+    },
+    '0.31.3',
+    async () => (file.length === 0 ? { kind: 'absent' } : { kind: 'contents', text: file }),
+    () => {},
+    lock(name, hold),
+  );
+
+  const first = build('A', paused).sync();
+  const second = await build('B').sync();
+
+  assert.equal(second, 'busy', 'B found the section occupied and did not write');
+  releaseA();
+  assert.equal(await first, 'written');
+
+  assert.equal(entered.length, 1, 'exactly one of them was ever inside');
+  assert.deepEqual(JSON.parse(file)['COAI_ON_EXHAUSTED'], 'good_enough', 'and the file is whole, and A wrote it');
+});
+
+test('a section that throws does not surface out of a configuration listener', async () => {
+  // `sync` is called from `onDidChangeConfiguration`. A lock that cannot be created, a filesystem
+  // that throws — none of it is a thing a settings panel can fix, and all of it would otherwise put
+  // an extension error in front of somebody for a keystroke.
+  const it = new ServerSettingsSync(
+    () => configuration({ onExhausted: 'good_enough' }),
+    async () => {},
+    '0.31.3',
+    async () => ({ kind: 'absent' }),
+    () => {},
+    () => {
+      throw new Error('the lock directory is gone');
+    },
+  );
+
+  assert.equal(await it.sync(), 'failed');
+  // And nothing was remembered as written, so the next change still carries it.
+  assert.equal(await it.sync(), 'failed');
 });
 
 /** The sync with a reader that answers however the test wants, including badly. */
