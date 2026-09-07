@@ -113,6 +113,14 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
     /// <see cref="ReviewerOutcome.Unparseable"/>, not <c>NotStarted</c>. The CLI started; it
     /// produced nothing usable, and telling a person their review "never started" sends them to
     /// look at accounts and executables instead of at the vendor's own empty envelope.</para>
+    /// <para><b>"Empty" means whitespace, and nothing cleverer — this server still has no parser.</b>
+    /// The vendor's own adapter has already taken the answer out of its envelope by the time this
+    /// runs (<c>ClaudeRuntime.ReadAnswer</c> lifts the <c>result</c> field, and its siblings do the
+    /// equivalent), so what arrives here is the vendor's raw ANSWER text and this only asks whether
+    /// there is any. A well-formed answer with no findings — <c>{"findings":[]}</c> — is a real
+    /// answer and travels as one; whether it parses, and whether an empty list is what the caller
+    /// wanted, belongs to the client that asked. Raised as a contradiction on the plan round by
+    /// gemini and by local; there is none, but the boundary is worth naming where it lives.</para>
     /// </remarks>
     private static ReviewAttempt Read(ReviewerLaunch launch) =>
         launch.Terminal is { } terminal

@@ -58,13 +58,57 @@ usable. Tightening this means re-installing the CLIs and re-signing every slot a
 apt-get install -y clang            # Native AOT links with the platform toolchain
 git clone --depth 1 -b main https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais.git /opt/coai/src
 
-# each release
+# each release — publish BESIDE the running binary, never over it
 cd /opt/coai/src && git fetch origin main && git reset --hard origin/main
-dotnet publish src_server/src/CoaiServer.csproj -c Release -o /opt/coai/bin -p:Version=<version>
-systemctl restart coai-server
+dotnet publish src_server/src/CoaiServer.csproj -c Release -o /opt/coai/bin.new -p:Version=<version>
+
+rm -rf /opt/coai/bin.rollback && cp -a /opt/coai/bin /opt/coai/bin.rollback
+systemctl stop coai-server
+cp -a /opt/coai/bin.new/. /opt/coai/bin/
+systemctl start coai-server
 ```
 
 The AOT publish takes several minutes — run it detached rather than inside a command with a timeout.
+
+**Publish to `bin.new`, not to `bin`.** Publishing straight over `/opt/coai/bin` fails with
+`Text file busy` the moment the unit is running — which is every time — and a publish that dies
+half-way has already overwritten some of the files it will not finish writing. Stopping the unit for
+the copy makes the swap a two-second window instead of the several minutes an in-place AOT build
+takes.
+
+### Rolling back
+
+`bin.rollback` is the binary that was serving before the swap, kept by the step above. Going back is
+the same two commands in reverse, and takes seconds:
+
+```bash
+systemctl stop coai-server
+cp -a /opt/coai/bin.rollback/. /opt/coai/bin/
+systemctl start coai-server
+curl -sS https://coai.remsoft.dev/api/health        # the version says which one is live
+```
+
+**What to check before deciding, and the bounded canary that decides it.** A release is not proven
+by the service coming up: `/api/health` answering only says the process started. Submit one real
+review and watch it reach a terminal state:
+
+```bash
+ID=$(curl -s -X POST https://coai.remsoft.dev/api/reviews -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"vendor":"claude","model":"haiku","prompt":"Answer with exactly this JSON and nothing else: {\"findings\":[]}","role":"PlanCritique","timeoutSeconds":120}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
+curl -s "https://coai.remsoft.dev/api/reviews/$ID?wait=90" -H "Authorization: Bearer $TOKEN"
+tail -1 /opt/coai/data/usage.jsonl
+```
+
+It must come back `"status":"done"` with a non-empty `answer`, and the usage line must read
+`"outcome":"ok"`. Anything else — a `failed` status, an empty `answer` on a `done`, or no new usage
+line at all — is a failed release: roll back with the commands above, and only then investigate.
+
+That check is not ceremony. Until 2026-09-07 this server had never completed a single review: every
+one was recorded `NotStarted` while the vendor CLI's own transcript showed a perfect answer, and
+`usage.jsonl` held exactly two lines, weeks apart, both failures. `systemctl is-active` was green
+throughout. One canary review would have found it the day it was deployed.
 
 ### Checking it
 
