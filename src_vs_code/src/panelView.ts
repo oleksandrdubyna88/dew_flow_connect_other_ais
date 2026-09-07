@@ -10,7 +10,7 @@ import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { CoaiSettings } from './settingsShape';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
-import { ModelChoice, modelsFor, modelsProvenance, NO_REMOTE_CATALOG, RemoteProvenance } from './models';
+import { ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
 import { ROLES, promptsFor, selectedFor } from './prompts';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
@@ -307,7 +307,15 @@ function updateLabel(id: string, cli: CliStatus): string {
 }
 
 function reviewersBody(state: PanelState): string {
-  return `${state.vendors.map((v) => vendorCard(v, state.codexModels, state.cliStatus[v.id] ?? UNKNOWN_CLI, state.modelPrices[v.model], state.localEngines[v.id], state.agyModels, allowedModelsFor(v, state.teamServers ?? []), state.providers?.reported ?? {})).join('\n')}
+  return `${state.vendors.map((v) => vendorCard(v, {
+    codexModels: state.codexModels,
+    agyModels: state.agyModels,
+    cli: state.cliStatus[v.id] ?? UNKNOWN_CLI,
+    price: state.modelPrices[v.model],
+    localEngine: state.localEngines[v.id],
+    allowedRemote: allowedModelsFor(v, state.teamServers ?? []),
+    reported: state.providers?.reported ?? {},
+  })).join('\n')}
 <button class="add" data-command="addVendor" title="${escapeHtml(HELP.addVendor)}">＋&nbsp; Add a reviewer</button>`;
 }
 
@@ -423,16 +431,27 @@ function cannotRun(id: string, reported: Readonly<Record<string, ProviderHealth>
     + ` aria-label="${label}">cannot review</span>`;
 }
 
-function vendorCard(
-  vendor: Vendor,
-  codexModels: readonly ModelChoice[],
-  cli: CliStatus,
-  price: ModelPrice | undefined,
-  localEngine?: LocalEngine,
-  agyModels: readonly ModelChoice[] = [],
-  allowedRemote: RemoteProvenance = NO_REMOTE_CATALOG,
-  reported: Readonly<Record<string, ProviderHealth>> = {},
-): string {
+/**
+ * Everything a card needs that is not the row itself: what was discovered, probed and priced.
+ *
+ * <p>One argument instead of seven. The list had reached eight parameters, at which point a reader
+ * has to count commas to know which `readonly ModelChoice[]` is which — and every one of them is the
+ * same kind of thing, a fact this panel went and found. Naming them is what makes the call site
+ * legible, and an analyser was right to say so.</p>
+ */
+interface CardContext {
+  readonly codexModels: readonly ModelChoice[];
+  readonly agyModels: readonly ModelChoice[];
+  readonly cli: CliStatus;
+  readonly price: ModelPrice | undefined;
+  readonly localEngine: LocalEngine | undefined;
+  readonly allowedRemote: RemoteProvenance;
+  /** What the SERVER says it can run — displayed, never re-decided here. */
+  readonly reported: Readonly<Record<string, ProviderHealth>>;
+}
+
+function vendorCard(vendor: Vendor, context: CardContext): string {
+  const { codexModels, cli, price, localEngine, agyModels, allowedRemote, reported } = context;
   const id = escapeHtml(vendor.id);
   const local = vendor.runtime === 'local';
   // A Team server row is configured ON THE SERVER, not here: its endpoint is the server's address,
