@@ -542,6 +542,28 @@ stale, because reading a negative age as "very old" is how two windows both brea
 truncates before it fills, so a host killed between the two leaves every other window and the server
 reading a truncated file — unrecoverable, because the original is gone.
 
+### A card says when the server cannot run that reviewer (2026-09-07)
+
+The panel could say a reviewer was CONFIGURED and never that it could not review, so a Team-server
+row sat here enabled and ticked for both stages while every round quietly ran without it.
+
+The verdict comes from the server — `coai-mcp --providers`, read the way `--log` already is — and the
+panel displays it. Deciding availability again in TypeScript would be the second copy of a decision
+this repository has twice paid for; `RuntimeResolution.AuthOf` is its one author.
+
+**Three states, and only one draws anything.** `unavailable` badges, with the server's own note as
+the title, because "unavailable" is not something a person can act on and "not signed in to the Team
+server at …" is. `fine` draws nothing. **`unknown` draws nothing either** — a probe that failed,
+timed out, found no binary, or simply did not mention this row tells you nothing about it, and a
+badge that lights up because a probe failed is a badge that lies. There is a second reason for that
+here: an MCP client's `env` block outranks the settings file key by key, so a standalone invocation
+cannot see environment a scripted client passed to the running server.
+
+The module is split in two, `providers.ts` and `providersProbe.ts`, exactly as `roundsDb` and
+`roundsDbRead` are and for the same reason: `panelView` imports the types and the parser, so a spawn
+beside them drags `node:child_process` into the bundle the webview page is built from. The
+bundled-page test caught it here too, on the first attempt, with the same three failures.
+
 ### A card captioned with the wrong software (2026-09-07)
 
 `modelsProvenance` (`models.ts`) says where a dropdown's contents came from, and it had arms for
