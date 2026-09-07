@@ -63,10 +63,52 @@ public sealed class ReviewLauncherTests
         var attempt = await Launch(new ProcessResult(3, string.Empty, "boom", TimedOut: false));
 
         attempt.Should().BeOfType<ReviewAttempt.Failed>()
-            .Which.Outcome.Should().BeOfType<ReviewerOutcome.NonZeroExit>();
+            .Which.Outcome.Should().Match<ReviewerOutcome.NonZeroExit>(e => e.ExitCode == 3 && e.StdErrTail == "boom");
     }
 
-    private static async Task<ReviewAttempt> Launch(ProcessResult result)
+    /// <summary>
+    /// The three remaining terminal outcomes, unchanged.
+    /// </summary>
+    /// <remarks>
+    /// Asked for on this change's own plan round by codex and gemini, and fairly: <c>Read</c>
+    /// REPLACED the null-coalescing line that used to map every one of these, so "unchanged" was a
+    /// claim with nothing behind it. A timeout silently recorded as an answer is the expensive
+    /// direction of that mistake.
+    /// </remarks>
+    [Fact]
+    public async Task ATimeout_IsStillATimeout()
+    {
+        var attempt = await Launch(new ProcessResult(0, string.Empty, string.Empty, TimedOut: true));
+
+        attempt.Should().BeOfType<ReviewAttempt.Failed>()
+            .Which.Outcome.Should().BeOfType<ReviewerOutcome.TimedOut>();
+    }
+
+    [Fact]
+    public async Task ARefusalTheVendorNamed_IsStillRateLimited()
+    {
+        var attempt = await Launch(
+            new ProcessResult(1, string.Empty, "You've hit your usage limit · resets 9:30pm", TimedOut: false));
+
+        attempt.Should().BeOfType<ReviewAttempt.Failed>()
+            .Which.Outcome.Should().BeOfType<ReviewerOutcome.RateLimited>();
+    }
+
+    [Fact]
+    public async Task AVendorWithNoAdapter_StillSaysSoBeforeAnythingIsLaunched()
+    {
+        var attempt = await Launch(
+            new ProcessResult(0, Envelope, string.Empty, TimedOut: false),
+            runtime: "no-such-runtime",
+            vendorId: "no-such-vendor");
+
+        attempt.Should().BeOfType<ReviewAttempt.Failed>()
+            .Which.Outcome.Should().BeOfType<ReviewerOutcome.NotStarted>(
+                "nothing ran, so this is the one outcome that genuinely means it never started");
+    }
+
+    private static async Task<ReviewAttempt> Launch(
+        ProcessResult result, string runtime = "claude", string vendorId = "claude")
     {
         var slot = new AccountSlot(
             "claude", "a", Path.GetTempPath(), DateTimeOffset.UtcNow, null, false, string.Empty, 0);
@@ -76,7 +118,7 @@ public sealed class ReviewLauncherTests
             TimeSpan.FromSeconds(60));
 
         return await new ReviewLauncher(new Fixed(result)).RunAsync(
-            new VendorConfig("claude", "claude", ["haiku"], ["a"]),
+            new VendorConfig(vendorId, runtime, ["haiku"], ["a"]),
             slot,
             job,
             new Dictionary<string, string?>(),

@@ -48,6 +48,27 @@ public sealed class FailureSentenceTests
     }
 
     /// <summary>
+    /// A TALLY is not an announcement — the narrowing gemini asked for on the plan round.
+    /// </summary>
+    /// <remarks>
+    /// A plain substring match on the word would hand the sentence to <c>0 failed, 3 passed</c> and
+    /// reintroduce the very defect above, one line further down. What announces a failure is a
+    /// verdict; what counts one is a number.
+    /// </remarks>
+    [Fact]
+    public void ACountOfFailures_IsNotTheReasonAnythingFailed()
+    {
+        const string tally = """
+            Test run: 0 failed, 3 passed
+            Error: the config file could not be read
+            """;
+
+        var sentence = ReviewerSummaryFactory.Describe(new ReviewerOutcome.NonZeroExit(1, tally));
+
+        sentence.Should().Contain("config file").And.NotContain("3 passed");
+    }
+
+    /// <summary>
     /// The behaviour the picker was written for, still intact: a node CLI whose real error sits
     /// above its own version banner never reports the banner. Here the diagnosis goes one better
     /// and answers with the CURE, which is what <c>VendorDiagnosis</c> is for — the point of the

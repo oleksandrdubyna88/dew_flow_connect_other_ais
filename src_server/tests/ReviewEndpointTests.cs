@@ -314,6 +314,32 @@ public sealed class JobRunnerTests : IDisposable
         job.Reason.Should().Contain("exploded");
     }
 
+    /// <summary>
+    /// A CLI that ran and said nothing must not tell the person it never started.
+    /// </summary>
+    /// <remarks>
+    /// Raised by codex on this change's plan round, and the right half of it: mapping the blank
+    /// answer to <c>Unparseable</c> inside the launcher is worth nothing if the status a caller
+    /// READS still says <c>not_started</c>. `not_started` sends somebody to look at accounts,
+    /// executables and sign-ins; the CLI started, it produced an empty envelope, and those are two
+    /// different mornings.
+    /// </remarks>
+    [Fact]
+    public async Task AVendorThatRanAndSaidNothing_IsNotReportedAsNeverStarted()
+    {
+        var (jobs, runner, _) = Build(new ReviewAttempt.Failed(
+            new ReviewerOutcome.Unparseable("the vendor exited cleanly without writing an answer", Usage.None)));
+        jobs.Submit(Job());
+
+        await runner.PumpAsync("codex", CancellationToken.None);
+
+        var job = jobs.All().Single();
+        job.Status.Should().Be(JobStatus.Failed);
+        job.Failure.Should().Be(FailureKind.UnparseableByVendor);
+        job.Failure.Should().NotBe(FailureKind.NotStarted);
+        job.Reason.Should().Contain("without writing an answer");
+    }
+
     [Fact]
     public async Task AnExceptionFromTheInfrastructureStillEndsTheJob()
     {

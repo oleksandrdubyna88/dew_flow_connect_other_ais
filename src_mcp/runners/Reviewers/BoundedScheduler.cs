@@ -492,19 +492,8 @@ public static class ReviewerSummaryFactory
     /// </remarks>
     private const int ReasonLength = 160;
 
-    /// <remarks>
-    /// <c>failed</c> earns its place from a real gate: our OWN remote shim writes progress notes and
-    /// its verdict to the same stderr, and its verdict — "the Team server's claude reviewer failed
-    /// (…)" — announced nothing this list knew. So the fallback took the FIRST meaningful line, a
-    /// progress note, and the round reported a stopped reviewer as <c>running on the Team server</c>.
-    /// A line that says something failed is a line announcing a failure; it belongs here beside
-    /// <c>refused</c> and <c>denied</c>.
-    /// </remarks>
     private static readonly string[] Announcements =
-    [
-        "error:", "error ", "exception", "fatal", "failed", "refused", "denied", "unauthorized",
-        "quota", "not found", "missing",
-    ];
+        ["error:", "error ", "exception", "fatal", "refused", "denied", "unauthorized", "quota", "not found", "missing"];
 
     private static string Because(string stdErrTail)
     {
@@ -531,7 +520,41 @@ public static class ReviewerSummaryFactory
     }
 
     private static bool Announces(string line) =>
-        Announcements.Any(a => line.Contains(a, StringComparison.OrdinalIgnoreCase));
+        Announcements.Any(a => line.Contains(a, StringComparison.OrdinalIgnoreCase)) || SaysSomethingFailed(line);
+
+    /// <summary>
+    /// "… failed" as a VERDICT, never as a tally.
+    /// </summary>
+    /// <remarks>
+    /// <para>The word earns its place from a real gate: our OWN remote shim writes progress notes
+    /// and its verdict to one stderr, and its verdict — "the Team server's claude reviewer failed
+    /// (…)" — announced nothing the list above knew. The fallback then took the first meaningful
+    /// line, a progress note, and the round reported a stopped reviewer as
+    /// <c>running on the Team server</c>.</para>
+    /// <para>It is NOT in the list, because a plain substring would hand the sentence to the first
+    /// line reading <c>0 failed, 3 passed</c> — a tally announces nothing, and a CLI that prints one
+    /// before its real error would reintroduce exactly the defect this fixes. Gemini raised that on
+    /// the plan round, with that example. A digit introducing the word is what separates the two.</para>
+    /// </remarks>
+    private static bool SaysSomethingFailed(string line)
+    {
+        for (var at = Failed(line, 0); at >= 0; at = Failed(line, at + 1))
+        {
+            if (!Counted(line, at))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static int Failed(string line, int from) =>
+        from > line.Length ? -1 : line.IndexOf("failed", from, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Whether the word at <paramref name="at"/> is the tail of "0 failed" / "3 failed".</summary>
+    private static bool Counted(string line, int at) =>
+        line[..at].TrimEnd() is { Length: > 0 } before && char.IsDigit(before[^1]);
 
     /// <summary>Stack frames, source echoes and version banners — the noise around the message.</summary>
     private static bool IsScaffolding(string line) =>
