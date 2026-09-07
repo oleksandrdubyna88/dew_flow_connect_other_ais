@@ -25,24 +25,31 @@ public readonly record struct VendorIdentity(
     /// file. This type is constructible directly, though, and it is the ONE place the row's two names
     /// are told apart: an untrimmed test would call <c>"  "</c> a recorded name, send it to a server
     /// verbatim, and then report the refusal as a typo in a row that records nothing at all.
+    /// <para><c>IsNullOrWhiteSpace</c> rather than <c>Trim().Length</c>, because this is a record
+    /// STRUCT: <c>default(VendorIdentity)</c> and every element of a freshly allocated array hold
+    /// null in each string field — the parameter default of <c>""</c> is a constructor's promise, not
+    /// the type's — and three members read this one accessor.</para>
     /// </remarks>
-    private string Recorded => RemoteVendor.Trim();
+    private string Recorded => string.IsNullOrWhiteSpace(RemoteVendor) ? string.Empty : RemoteVendor.Trim();
 
     /// <summary>The name to send to a Team server, or to look up in its catalog.</summary>
     public string VendorOnServer => Recorded.Length > 0 ? Recorded : Provider;
 
     /// <summary>
-    /// Whether the ROW records its server's own name, or <see cref="VendorOnServer"/> is falling
-    /// back to the id.
+    /// Whether the ROW recorded a name of its own, or <see cref="VendorOnServer"/> is falling back
+    /// to the id.
     /// </summary>
     /// <remarks>
     /// The fallback is right for a hand-written row somebody called <c>claude</c> and misleading for
     /// every row the panel generated, whose id is <c>&lt;server&gt;-&lt;vendor&gt;</c>. A server asked
     /// for <c>remsoftdev-claude</c> answers, truthfully, that it offers no such vendor — and that
-    /// sentence sends a person hunting for a typo in a name they never typed. Whoever reports the
-    /// refusal needs to know which of the two names it was.
+    /// sentence sends a person hunting for a spelling mistake in a name they may never have typed.
+    /// Whoever reports the refusal needs to know which of the two names it was.
+    /// <para>Named for PRESENCE, not for correctness. It was <c>NamesItsServerVendor</c> for one
+    /// round, and two reviewers in that round read the branch using it backwards — "names its
+    /// vendor" invites "names it RIGHTLY", which is a question this property does not answer.</para>
     /// </remarks>
-    public bool NamesItsServerVendor => Recorded.Length > 0;
+    public bool HasRecordedRemoteVendor => Recorded.Length > 0;
 }
 
 /// <summary>

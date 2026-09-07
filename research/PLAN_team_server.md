@@ -8,6 +8,9 @@
 > 1. **A `remote` row needed `remoteVendor`.** A row is `<serverId>-<vendor>` so two servers offering
 >    `codex` do not collide, but the SERVER knows only `codex` — sending the row id was refused by
 >    every server and reported as a vendor it "does not offer", which reads exactly like a typo.
+>    **And this plan did not finish it.** The field was added to the server and never written by the
+>    extension, so the failure it was designed to prevent is the one that shipped. The boundary is in
+>    *Where this plan stops* below.
 > 2. **The client's cancel-an-abandoned-review machinery existed and nothing called it.** A killed
 >    reviewer ran to completion on the company's subscription for an answer nobody would collect,
 >    until `IReviewerRuntime.AbandonAsync` was wired into the executor's two kill paths.
@@ -46,6 +49,25 @@
 > records, the silent mint and the propagated sign-out — and **what the *Server* section says** about
 > the Team server. This plan keeps everything else: the server itself, the *Team servers* section,
 > adding a reviewer, and the spending block. Order: this one first, that one on top of it.
+
+## Where this plan stops, and what finishes it
+
+A boundary named from both sides, per `planning-docs.md`. The other document is
+[../todo/PLAN_team_server_reviewer_never_called.md](../todo/PLAN_team_server_reviewer_never_called.md).
+
+| Item | This plan | The other plan |
+|---|---|---|
+| `remoteVendor` on the server — `VendorDto`, `ProviderSettings`, `VendorIdentity.VendorOnServer` | **built** (story 1.3, epic 3) | — |
+| `remoteVendor` written by the extension into `COAI_VENDORS` | named at :401, **not built** | **builds it**, with the seam asserted from both sides |
+| the `settingsReach` test for that field | asked for at :712, **not built** | **builds it** |
+| what a refusal says when a row records no vendor name | — | **builds it** |
+| the settings file's writer, its version stamp and its lock | — | **builds it** |
+| a round reporting an enabled reviewer it could not run | — | **builds it** |
+| the Team server itself — host, sign-in, sessions, catalog, slots, queue, usage, deployment | **built** | untouched |
+
+**Order:** this plan went first and landed the field and the seam; the other one fills it and reports
+what happens when it is empty. Everything not in this table is disjoint — the other plan changes
+nothing on the server side of `src_server/`.
 
 ## The goal
 

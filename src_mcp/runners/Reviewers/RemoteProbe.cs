@@ -188,10 +188,11 @@ public sealed class RemoteProbe(HttpClient http, Func<DateTime>? utcNow = null)
     /// <summary>Naming the offer is the difference between "unavailable" and a person fixing a typo.</summary>
     /// <remarks>
     /// And naming WHICH name was tried is the difference between a typo and a malformed row. A row
-    /// that records no <c>remoteVendor</c> is asked about under its own id — <c>remsoftdev-claude</c>,
-    /// which is <c>&lt;server&gt;-&lt;vendor&gt;</c> and was never typed by anybody — so the plain
-    /// sentence sends a person looking for a spelling mistake that does not exist. That is exactly
-    /// what shipped: the panel wrote no <c>remoteVendor</c> at all until 2026-09-07, so this was the
+    /// that records no <c>remoteVendor</c> is asked about under its own id, and that id may be one
+    /// the panel generated as <c>&lt;server&gt;-&lt;vendor&gt;</c> — <c>remsoftdev-claude</c> — which
+    /// nothing here can tell apart from a name somebody typed on purpose. So the note reports which
+    /// name was used and why, and claims nothing about where it came from. That distinction matters:
+    /// the panel wrote no <c>remoteVendor</c> at all until 2026-09-07, so the plain sentence was the
     /// message every Team-server reviewer produced.
     /// </remarks>
     private static VendorHealth NotOffered(
@@ -208,7 +209,7 @@ public sealed class RemoteProbe(HttpClient http, Func<DateTime>? utcNow = null)
         // repository's own test for the plain message was the fixture that proved it — a row with no
         // recorded name whose id is a perfectly plausible one. So this says what was used and why,
         // and lets the reader decide which case they are in.
-        var note = vendor.NamesItsServerVendor
+        var note = vendor.HasRecordedRemoteVendor
             ? plain
             : $"{plain}. This row does not record which vendor its server knows it by, so its own id "
                 + "was used as the name; if it came from a Team server, remove it and add the "
