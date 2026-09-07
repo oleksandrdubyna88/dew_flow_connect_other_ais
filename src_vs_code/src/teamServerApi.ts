@@ -225,7 +225,16 @@ export function isHttpsOrLoopback(url: string): boolean {
   }
 }
 
-/** Trade an identity-provider token for a session on this server. */
+/**
+ * Trade an identity-provider token for a session on this server.
+ *
+ * <p><b>The token travels in the Authorization header, and only there.</b> This route is
+ * authorised like every other one: the server resolves the caller from
+ * `Request.Headers.Authorization` before the handler runs, and reads nothing out of the request
+ * body. Posting the token as `{ token }` instead — which is what 0.31.1 shipped — is answered
+ * `401` with an empty body before any JWT scheme is even attempted, so the failure names neither
+ * the token nor the reason.</p>
+ */
 export function createSession(
   url: string,
   idpToken: string,
@@ -233,7 +242,7 @@ export function createSession(
 ): Promise<ServerResult<Session>> {
   return ask<Session>(url, 'api/session', {
     method: 'POST',
-    body: { token: idpToken },
+    token: idpToken,
     fetchImpl,
   });
 }

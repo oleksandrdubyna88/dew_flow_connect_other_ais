@@ -171,8 +171,42 @@ test('a session is created by POST and given up by DELETE', async () => {
   await deleteSession('https://s', 't', fetchImpl);
 
   assert.strictEqual(fetchImpl.seen[0]?.init.method, 'POST');
-  assert.strictEqual(String(fetchImpl.seen[0]?.init.body).includes('idp-token'), true);
   assert.strictEqual(fetchImpl.seen[1]?.init.method, 'DELETE');
+});
+
+/**
+ * The seam that shipped broken in 0.31.1, and the reason this assertion is here rather than one
+ * about the body.
+ *
+ * <p>The extension posted the identity token as `{ token }` in the BODY. The server authorises
+ * `/api/session` from the Authorization header ALONE — `Auth.Bearer` reads
+ * `Request.Headers.Authorization` and nothing on that server ever reads the body — so every
+ * sign-in was answered `401` with an empty body in half a millisecond, without the JWT handler
+ * running at all. Observed on `coai.remsoft.dev`: a 2114-byte JSON body, no
+ * `JwtBearerHandler` line, `401 0 null 0.6838ms`.</p>
+ *
+ * <p>Both halves had tests. The server's posts a header and a null body; this file's asserted the
+ * token was in the body. Two green suites, contradictory expectations, and nothing crossing
+ * between them.</p>
+ */
+test('the identity token is minted through the Authorization header, which is the only place the server reads it', async () => {
+  const fetchImpl = stub(() => ({
+    status: 200,
+    body: JSON.stringify({ token: 't', expiresUtc: '2026-10-01T00:00:00Z', email: 'a@b.c' }),
+  }));
+
+  await createSession('https://s', 'idp-token', fetchImpl);
+
+  const sent = fetchImpl.seen[0];
+  assert.strictEqual(
+    (sent?.init.headers as Record<string, string>)['Authorization'],
+    'Bearer idp-token',
+  );
+  assert.strictEqual(
+    sent?.init.body,
+    undefined,
+    'the server reads no body on this route, and a bearer token in one is a bearer token in a log',
+  );
 });
 
 test('usage names its window and its scope on the wire', async () => {

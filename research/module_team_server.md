@@ -57,6 +57,21 @@ sequenceDiagram
 | `DELETE /api/reviews/{id}` | owner | `204` |
 | `GET /api/usage?window=&scope=` | any / **admins for `company`** | per-vendor totals for the caller, or for everyone plus per person · `400` unknown window · `403` company as a non-admin |
 
+**Every route reads its credential from `Authorization: Bearer …` and from nowhere else** —
+`Auth.Bearer` looks at that header, and no handler here reads a token out of a request body.
+`POST /api/session` is the one people expect to be different, because it is where a session begins;
+it is not.
+
+> **How that was learned, 2026-09-07.** Extension 0.31.1 posted the Microsoft token as
+> `{ token }` in the body of `POST /api/session`. `RequireCaller` then found no identity and
+> answered **401 — before any JWT scheme ran**, which makes this failure hard to read from either
+> end: the panel can only say *the server answered 401*, because the challenge carries no body, and
+> the journal shows `401 0 null 0.68ms` with **no `JwtBearerHandler` line at all**. The absence of
+> that line is the diagnostic: a token that is examined and rejected always logs `IDX…`, and takes
+> milliseconds rather than fractions of one. Both halves of the contract had passing tests — the
+> server's posting a header and a null body, the extension's asserting the token was in the body —
+> and nothing crossed between them.
+
 ## Core entities
 
 | Type | File | Role |
