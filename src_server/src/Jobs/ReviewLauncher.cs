@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
 
@@ -82,11 +83,16 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
         var work = Directory.CreateTempSubdirectory("coai-server-job-").FullName;
         try
         {
+            // WRITTEN, not merely named. Every adapter but claude's passes this path straight to its
+            // CLI — `--json-schema` for antigravity, `--output-schema` for codex — and a path to a
+            // file nobody wrote is a CLI that refuses before it reads the prompt. Measured against
+            // the live server: `failed to read schema file "/tmp/coai-server-job-…/…"`, for both
+            // vendors, on the first day either of them could be tried at all.
             var built = runtime.Build(
                 RoleOf(job.Role),
                 job.Prompt,
                 work,
-                Path.Combine(work, "schema.json"),
+                SchemaFile.Ensure(work),
                 work,
                 new ReviewerSettings(vendor.Id) { Model = job.Model, Timeout = job.RunBudget });
 
