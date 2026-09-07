@@ -47,7 +47,7 @@ reviews:
           how many models. A number without its sample is an advertisement. Bought on 2026-09-06,
           when a fast-mode measurement of one commit was nearly published as a general claim.
           Not applicable to a version number, a line number, a test count, or a size in bytes.
-      - name: "A release-only check has a test that runs on every push"
+      - name: "A release-only check is tested on every push"
         mode: "warning"
         instructions: |
           Pass/fail criteria: if the diff adds or changes logic that executes ONLY while a release is
@@ -56,7 +56,7 @@ reviews:
           logic in the ordinary suite. Bought on 2026-09-06: an archive check written to protect the
           release passed on `tar` output and failed on `7z` output, and would have broken both Windows
           builds at the last step of the release. Its only execution was the release itself.
-      - name: "A bug fix carries a test that reproduces the defect"
+      - name: "A bug fix carries a reproducing test"
         mode: "warning"
         instructions: |
           Pass/fail criteria: if the pull request describes fixing a defect — wrong output, a crash, a
