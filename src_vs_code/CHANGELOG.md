@@ -1,5 +1,32 @@
 # Changelog
 
+## Extension 0.31.6 — 2026-09-07
+
+**New installs start on a budget somebody actually ran.** The shipped defaults were set before this
+gate had reviewed much; they are now the ones this project runs on its own work.
+
+| | was | now |
+|---|---|---|
+| Plan review — rounds | 3 | **1** |
+| Plan review — passes at or under | 2 | **6** |
+| Architecture — rounds · threshold | 2 · 3 | 2 · **5** |
+| Security & reliability — rounds · threshold | 2 · 3 | **1** · **5** |
+| Performance & UX-DX — rounds · threshold | 2 · 3 | **1** · **5** |
+
+One plan round because the second and third mostly re-raise what the first found. Higher thresholds
+because the old ones sat where a real change could not pass, and a gate that blocks everything is a
+gate people learn to ignore.
+
+**Round 1 is the Conventions pass for Architecture only.** It used to be round 1 of all three code
+roles, which meant the same written rules read three times in one round — and now that two of those
+roles get a single round, that round would have been spent on conventions instead of on security or
+performance. Architecture keeps it because it has two rounds: the rules, then the broad question.
+Every role can still be *given* the Conventions prompt; only the default changed. **This half needs
+`coai-mcp` 0.18.9** — the panel and the server decide it together, and a mismatched pair would show
+one thing and run another.
+
+Nothing you had set changes: these are defaults, and your own choices in the panel win.
+
 ## Extension 0.31.5 — 2026-09-07
 
 **A reviewer you added from a Team server now actually reviews.** It did not, for anybody, since

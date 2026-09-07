@@ -124,7 +124,14 @@ public static class PromptCatalog
         // Only when rules were actually found. A conventions pass with nothing to judge against
         // would invent a standard, which is worse than the review it displaced. And an explicit
         // choice above still wins: this is a default, not a lock.
-        if (hasRules && index == 0 && role != PlanRole)
+        // ARCHITECTURE only, since 2026-09-07. It took round 1 of all three code roles first, and
+        // running that way showed why it should not: three reviewers reading the same written rules
+        // in the same round produce the same findings three times, and the two rounds a security or
+        // performance role gets by default are then one round of conventions and none of its own
+        // subject. Architecture keeps it because that role has two rounds — the rules, then the
+        // broad question — so nothing it was asked before is lost. The operator's call, on the
+        // budget they run.
+        if (hasRules && index == 0 && role == ArchitectureRole)
         {
             return For(role).First(p => p.Id == ConventionsId);
         }

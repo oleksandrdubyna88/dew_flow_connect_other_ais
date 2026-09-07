@@ -16,9 +16,18 @@ import { CONVENTIONS_ID, selectedFor, universalFor } from '../prompts';
  * the rule is that two programs agree, and neither can check that alone.</p>
  */
 
-/** What `PromptCatalog.ForRound` returns for an unset round. */
+/**
+ * What `PromptCatalog.ForRound` returns for an unset round.
+ *
+ * <p>Transcribed from the C# by hand, on purpose: the point of this file is that two programs agree,
+ * and a shared implementation would make the agreement true by construction rather than checked.
+ * When the server's branch changes, this line changes with it — and that is the moment somebody has
+ * to look at both.</p>
+ *
+ * <p>2026-09-07: the conventions pass narrowed from every code role to <b>Architecture</b> alone.</p>
+ */
 function whatTheServerRuns(role: string, round: number, hasRules: boolean): string {
-  return hasRules && round === 1 && role !== 'PlanCritique' ? CONVENTIONS_ID : universalFor(role).id;
+  return hasRules && round === 1 && role === 'Architecture' ? CONVENTIONS_ID : universalFor(role).id;
 }
 
 const ROLES = ['PlanCritique', 'Architecture', 'SecurityReliability', 'UxDxPerformance'];

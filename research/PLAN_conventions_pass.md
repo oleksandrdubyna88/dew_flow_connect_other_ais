@@ -1,8 +1,21 @@
 # PLAN — the gate reads the project's own rules, and one pass checks nothing else
 
-> Status: **IMPLEMENTED, 2026-09-01.** Scope: `src_mcp/core/Rounds` (per-stage config, prompt
-> catalog), `src_mcp/runners/Context` (rule discovery), `src_mcp/src/Server/PanelService.cs`,
-> `src_mcp/src/prompts/`, and the panel's Prompts and Gate sections.
+> Status: **IMPLEMENTED, 2026-09-01 — and NARROWED on 2026-09-07.** Scope: `src_mcp/core/Rounds`
+> (per-stage config, prompt catalog), `src_mcp/runners/Context` (rule discovery),
+> `src_mcp/src/Server/PanelService.cs`, `src_mcp/src/prompts/`, and the panel's Prompts and Gate
+> sections.
+>
+> **The default is ARCHITECTURE round 1 now, not every code role's round 1.** Read the design below
+> as written — the pass itself, the prompt, the rule discovery and the "default, not a lock" rule
+> are all unchanged, and the picker still offers `Conventions` to all three roles. What changed is
+> which round gets it without being asked.
+>
+> Why: running it on all three showed the same written rules read by three reviewers in the same
+> round, producing the same findings three times — and with the shipped budget now at ONE round for
+> Security & reliability and for Performance & UX-DX, that round was spent on conventions and the
+> role never asked its own question at all. Architecture keeps it because it has two rounds, the
+> rules and then the broad question, so nothing it used to ask is lost. The operator's decision, on
+> the budget they run.
 >
 > Related docs: [module_server.md](module_server.md), [module_runners.md](module_runners.md),
 > [module_extension.md](module_extension.md),

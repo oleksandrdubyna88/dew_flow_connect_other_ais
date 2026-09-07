@@ -155,8 +155,16 @@ export function roleRecordUpdate(
 }
 
 export const DEFAULTS: CoaiSettings = {
-  rounds: { PlanCritique: 3, Architecture: 2, SecurityReliability: 2, UxDxPerformance: 2 },
-  thresholds: { PlanCritique: 2, Architecture: 3, SecurityReliability: 3, UxDxPerformance: 3 },
+  // The operator's own settings, after a day of running the gate on this repository's real work
+  // (2026-09-07). One plan round rather than three: the second and third rounds re-raise what the
+  // first found rather than finding more, which the round records show. Architecture keeps two
+  // because its first round is the conventions pass and its second is the broad question — two
+  // different questions, not the same one twice. The thresholds went UP because they had been set
+  // where a real change could not pass: a plan round that regularly produces six findings and a
+  // code role that produces five are not failures, and a gate that says they are gets ignored,
+  // which is the one failure mode a gate cannot survive.
+  rounds: { PlanCritique: 1, Architecture: 2, SecurityReliability: 1, UxDxPerformance: 1 },
+  thresholds: { PlanCritique: 6, Architecture: 5, SecurityReliability: 5, UxDxPerformance: 5 },
   onExhausted: 'human',
   maxConcurrency: 3,
   maxPerProvider: 2,
