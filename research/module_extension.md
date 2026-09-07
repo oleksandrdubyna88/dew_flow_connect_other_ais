@@ -500,10 +500,27 @@ first's write existed. The collision that started this was 0.4 seconds wide. So 
 takes a `CriticalSection` callback and does all three inside it; the class still holds no filesystem
 and no VS Code type.
 
-The lock itself is `extension.ts`, and it is **a rename**, because the API has no exclusive create:
-`writeFile` overwrites, `createDirectory` is `mkdir -p`, and `rename` with `overwrite: false` is the
-only operation here that FAILS when the destination exists. A lock that cannot be taken is not an
-error and nothing waits — whoever holds it is writing the same settings from the same configuration.
+The lock itself is `extension.ts`, and it is **`fs.open(path, 'wx')`** — O_EXCL, a promise the
+operating system makes. The first version claimed exclusion from
+`vscode.workspace.fs.rename(…, { overwrite: false })`, and whether that is atomic is not documented
+anywhere: the disk provider checks for existence and then renames, which is check-then-act, so the
+whole guarantee rested on an implementation detail. Raised on the code round and worth keeping in
+mind for the next lock somebody needs here.
+
+**The lock carries an owner token, and that is not decoration.** The release deletes it only while it
+is still ours: a window whose lock was broken as stale would otherwise delete its SUCCESSOR's lock on
+the way out, letting a third window in while the second was writing — the race, produced by the
+release. The same token is re-checked immediately before the settings rename, which is how a process
+suspended past the stale window (a laptop closing mid-write) is stopped from landing a payload it
+decided on before the window that replaced it wrote. That narrows the hole to the microseconds
+between the check and the rename, which is as far as this goes without a renewing lease.
+
+A lock that cannot be taken is not an error and nothing WAITS — but the caller is told, because
+nothing else fires on its own. `sync` answers `busy`, and activation schedules **one** deferred
+attempt just past the window in which any lock is either released or breakable. Not a ladder: by then
+there is no lock this window cannot take, so a second failure is a different problem. Without it, a
+configuration change that landed while another window was writing would sit unwritten until the
+person happened to change something else.
 
 `settingsLock.ts` holds the one decision worth testing: when to break somebody else's. Break too
 eagerly and two windows write at once, which is the race; never break and one window killed at the
