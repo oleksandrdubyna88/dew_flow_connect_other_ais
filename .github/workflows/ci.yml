@@ -83,6 +83,13 @@ jobs:
         working-directory: src_vs_code
         run: npm run test:contract
 
+      # The other seam neither container owns: the extension WRITES <dataDir>/settings.json and
+      # coai-mcp READS it. Both suites were green for the whole life of the `remote` runtime while
+      # `remoteVendor` never crossed, and every Team-server reviewer was dropped from every round.
+      - name: Seam — the extension's own settings file, read by the real coai-mcp
+        working-directory: src_vs_code
+        run: npm run test:seam
+
       - name: Plan lifecycle
         run: node .claude/rules/shared/tools/plan-lifecycle.mjs
 
