@@ -95,7 +95,15 @@ export function activate(context: vscode.ExtensionContext): void {
   mirrorSettings(settingsSync);
 
   context.subscriptions.push(
-    { dispose: () => clearTimeout(deferred) },
+    {
+      dispose: () => {
+        clearTimeout(deferred);
+        // And forget it. Clearing the timer without clearing the marker means a reactivation that
+        // finds the lock busy schedules nothing, and the configuration then waits for a change that
+        // may never come. Accepted finding, this story's code round.
+        deferred = undefined;
+      },
+    },
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('coai')) {
         mirrorSettings(settingsSync);
@@ -190,7 +198,10 @@ async function writeSettingsFile(json: string): Promise<void> {
   // taken without a lease that renews. Raised on this story's plan round.
   if (held.length > 0 && !(await lockHolds(held))) {
     await vscode.workspace.fs.delete(temp).then(undefined, () => undefined);
-    throw new Error('the settings lock was taken over while this write was in flight');
+    throw new Error(
+      'the settings lock was taken over while this write was in flight, so these settings are not on '
+        + 'disk; another window is writing and an attempt is scheduled',
+    );
   }
 
   await vscode.workspace.fs.rename(temp, target, { overwrite: true });
@@ -261,7 +272,14 @@ async function takeLock(mayBreakAStaleOne = true): Promise<string> {
     await fsp.writeFile(lockPath(), token, { encoding: 'utf8', flag: 'wx' });
 
     return token;
-  } catch {
+  } catch (e) {
+    // Only EEXIST means somebody holds it. A permissions error or a dead volume is not contention,
+    // and sending those into stale-breaking would have this window reading and deleting a lock it
+    // had no business touching. Accepted finding, this story's code round.
+    if (!isAlreadyThere(e)) {
+      return '';
+    }
+
     // ONE attempt at breaking a stale lock, never a loop: a lock somebody keeps re-taking between
     // our delete and our create would otherwise spin the extension host instead of skipping a write
     // nobody would have missed.
@@ -269,11 +287,27 @@ async function takeLock(mayBreakAStaleOne = true): Promise<string> {
   }
 }
 
-/** A lock older than any write could take belonged to a window that died. */
+function isAlreadyThere(e: unknown): boolean {
+  return typeof e === 'object' && e !== null && (e as { code?: unknown }).code === 'EEXIST';
+}
+
+/**
+ * A lock older than any write could take belonged to a window that died.
+ *
+ * <p>The token is read before and after the staleness decision, so a lock that was RELEASED and
+ * re-taken while this looked at it is left alone rather than deleted out from under its new owner.
+ * That narrows the window; it does not close it, and the limit is recorded honestly in
+ * `module_extension.md` — deleting a file by path is check-then-act, and there is no
+ * compare-and-unlink to be had.</p>
+ */
 async function breakIfStale(): Promise<string> {
   try {
+    const before = await fsp.readFile(lockPath(), 'utf8');
     const onDisk = await fsp.stat(lockPath());
     if (!lockIsStale(onDisk.mtimeMs, Date.now())) {
+      return '';
+    }
+    if ((await fsp.readFile(lockPath(), 'utf8')) !== before) {
       return '';
     }
     await fsp.rm(lockPath());

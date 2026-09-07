@@ -515,6 +515,16 @@ suspended past the stale window (a laptop closing mid-write) is stopped from lan
 decided on before the window that replaced it wrote. That narrows the hole to the microseconds
 between the check and the rename, which is as far as this goes without a renewing lease.
 
+**The limit, stated rather than implied.** Releasing a lock is *check the owner, then delete by path*,
+and nothing makes those one operation: POSIX has no compare-and-unlink, node exposes no `flock`, and a
+lease that renews is a different design. So a window suspended past the stale window, whose lock was
+broken and re-taken, can in principle delete its successor's lock in the instant between its check
+and its `rm`. The window is narrowed as far as files allow — the token is re-read on both sides of
+the staleness decision, and again immediately before the settings rename — and the blast radius is
+bounded by the atomic write: the worst case is a **complete but stale** payload that the next
+configuration change replaces, never a corrupt file. Raised on the code round and kept here because
+the next person to want a lock in this repository should not have to rediscover it.
+
 A lock that cannot be taken is not an error and nothing WAITS — but the caller is told, because
 nothing else fires on its own. `sync` answers `busy`, and activation schedules **one** deferred
 attempt just past the window in which any lock is either released or breakable. Not a ladder: by then
