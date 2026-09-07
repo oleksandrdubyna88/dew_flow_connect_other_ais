@@ -27,6 +27,8 @@ import { readOverlay, seedIfEmpty, writeOverlay } from './sideSettings';
 import { thisSide } from './installer';
 import { latestServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog, EMPTY_LOG } from './roundsDb';
+import { ProviderHealth } from './providers';
+import { readProviders } from './providersProbe';
 import { readLog } from './roundsDbRead';
 import { sideKey, sideLabel } from './coaiInstall';
 import {
@@ -350,6 +352,33 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     );
   }
 
+  /** The last answer from `--providers`, and when it was taken. */
+  private providersCache: Record<string, ProviderHealth> = {};
+
+  private providersAt = 0;
+
+  /**
+   * What the SERVER says it can run, cached like the rounds log and for the same reason.
+   *
+   * <p>A repaint happens on every five-second tick, and this is a process spawn. Ten seconds is
+   * shorter than any round and longer than any burst of ticks — the gate called a child process on
+   * a hot path out twice.</p>
+   *
+   * <p>An empty answer is not "everything is fine": `availabilityOf` reads a missing row as
+   * UNKNOWN, and the card then shows what it always showed.</p>
+   */
+  private async providerHealth(): Promise<Record<string, ProviderHealth>> {
+    const AGE_MS = 10_000;
+    if (Date.now() - this.providersAt < AGE_MS) {
+      return this.providersCache;
+    }
+    const server = serverPath(this.context.globalStorageUri);
+    this.providersAt = Date.now();
+    this.providersCache = server === undefined ? {} : await readProviders(server.fsPath);
+
+    return this.providersCache;
+  }
+
   /** Re-read everything and repaint: the configuration, the sessions, the ledger and the probes. */
   async render(): Promise<void> {
     if (this.view === undefined) {
@@ -383,6 +412,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       snippetStatus: await pastedSnippetStatus(),
       localEngines: await this.probeLocalEngines(vendors),
       teamServers: this.teamServerStates(config),
+      providerHealth: await this.providerHealth(),
       usageScope: this.usageScope,
     };
 

@@ -6,6 +6,7 @@ import {
 } from './teamServerView';
 import { canonicalTeamServerUrl } from './teamServers';
 import { escapeHtml } from './escapeHtml';
+import { availabilityOf, ProviderHealth } from './providers';
 import { CoaiSettings } from './settingsShape';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
@@ -55,6 +56,13 @@ export interface PanelState {
    * assertions care about. Absent means none, which is what a panel with no Team servers has.</p>
    */
   readonly teamServers?: readonly TeamServerState[] | undefined;
+  /**
+   * What the SERVER says about each configured reviewer, from `coai-mcp --providers`.
+   *
+   * <p>Optional, and absent means the server was not asked or could not answer — which badges
+   * NOTHING. The panel displays this decision; it does not make it.</p>
+   */
+  readonly providerHealth?: Readonly<Record<string, ProviderHealth>> | undefined;
   /**
    * Whose spending the usage section is showing. `company` is offered only to an admin.
    *
@@ -299,7 +307,7 @@ function updateLabel(id: string, cli: CliStatus): string {
 }
 
 function reviewersBody(state: PanelState): string {
-  return `${state.vendors.map((v) => vendorCard(v, state.codexModels, state.cliStatus[v.id] ?? UNKNOWN_CLI, state.modelPrices[v.model], state.localEngines[v.id], state.agyModels, allowedModelsFor(v, state.teamServers ?? []))).join('\n')}
+  return `${state.vendors.map((v) => vendorCard(v, state.codexModels, state.cliStatus[v.id] ?? UNKNOWN_CLI, state.modelPrices[v.model], state.localEngines[v.id], state.agyModels, allowedModelsFor(v, state.teamServers ?? []), state.providerHealth ?? {})).join('\n')}
 <button class="add" data-command="addVendor" title="${escapeHtml(HELP.addVendor)}">＋&nbsp; Add a reviewer</button>`;
 }
 
@@ -385,6 +393,27 @@ function allowedModelsFor(vendor: Vendor, servers: readonly TeamServerState[]): 
   };
 }
 
+/**
+ * A reviewer the SERVER says it cannot run, named on its own card.
+ *
+ * <p>The whole point of this plan: a row could be enabled, ticked for both stages, and silently
+ * absent from every round. The round now says so when one runs — this says so before one does.</p>
+ *
+ * <p><b>Three states, and only one of them draws anything.</b> `unknown` — the server was not asked,
+ * could not answer, or did not mention this row — is silent, because a badge that lights up on a
+ * failed probe is a badge that lies. The reason travels as the title, because "unavailable" is not
+ * something a person can act on and "not signed in to the Team server at …" is.</p>
+ */
+function cannotRun(id: string, reported: Readonly<Record<string, ProviderHealth>>): string {
+  if (availabilityOf(id, reported) !== 'unavailable') {
+    return '';
+  }
+  const why = reported[id]?.note ?? '';
+
+  return `<span class="badge cannot-run" title="${escapeHtml(why)}"`
+    + ` aria-label="${escapeHtml(`${id} cannot review: ${why}`)}">cannot review</span>`;
+}
+
 function vendorCard(
   vendor: Vendor,
   codexModels: readonly ModelChoice[],
@@ -393,6 +422,7 @@ function vendorCard(
   localEngine?: LocalEngine,
   agyModels: readonly ModelChoice[] = [],
   allowedRemote: RemoteProvenance = NO_REMOTE_CATALOG,
+  reported: Readonly<Record<string, ProviderHealth>> = {},
 ): string {
   const id = escapeHtml(vendor.id);
   const local = vendor.runtime === 'local';
@@ -445,7 +475,7 @@ ${local ? remoteNotice(vendor.baseUrl) : ''}
   <div class="head">
     <input type="checkbox" id="v-${id}" data-setting="enabled" data-vendor="${id}"${vendor.enabled ? ' checked' : ''}
            title="${escapeHtml(HELP.vendorEnabled)}">
-    <label class="name" for="v-${id}">${id}</label>
+    <label class="name" for="v-${id}">${id}</label>${cannotRun(vendor.id, reported)}
     ${local ? `${(localEngine?.elsewhere ?? '').length > 0 ? `<button class="run get" data-command="fixWslNetwork" data-id="${id}"
             title="${escapeHtml(HELP.fixWslNetwork)}"
             aria-label="Switch WSL to mirrored networking">⇄</button>` : ''}<button class="run upd" data-command="reprobeLocal" data-id="${id}"
@@ -1129,6 +1159,13 @@ const CSS = `
   .reviewer { font-size: 11px; opacity: .85; margin: 1px 0 1px 8px; }
   .badge { padding: 0 5px; border-radius: 8px; font-size: 10px; font-weight: 600; }
   .badge.running { background: var(--vscode-charts-green); color: var(--vscode-editor-background); }
+  /* The editor's own error colour, so it reads as a problem in every theme rather than in one. */
+  .badge.cannot-run {
+    background: var(--vscode-inputValidation-errorBackground);
+    color: var(--vscode-inputValidation-errorForeground, var(--vscode-foreground));
+    border: 1px solid var(--vscode-inputValidation-errorBorder);
+    margin-left: 6px;
+  }
   .badge.stopped {
     background: var(--vscode-inputValidation-warningBorder);
     color: var(--vscode-editor-background);
