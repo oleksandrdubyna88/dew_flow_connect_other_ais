@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
 using FluentAssertions;
@@ -107,8 +108,39 @@ public sealed class ReviewLauncherTests
                 "nothing ran, so this is the one outcome that genuinely means it never started");
     }
 
+    /// <summary>
+    /// The file the vendor is POINTED at has to be there when the vendor looks.
+    /// </summary>
+    /// <remarks>
+    /// <para>`ReviewLauncher` hands `runtime.Build` a schema PATH and never wrote the file, so every
+    /// adapter that passes it on to its CLI failed the instant the CLI opened it. Measured against
+    /// the live server on 2026-09-07, once each defect above was fixed and the two other vendors
+    /// could finally be tried:</para>
+    /// <code>
+    /// codex        Failed to read output schema file /tmp/coai-server-job-6KLayP/schema.json: No such file or directory
+    /// antigravity  Error: invalid --json-schema: failed to read schema file "/tmp/coai-server-job-9…"
+    /// </code>
+    /// <para>Claude's adapter takes no schema file — it puts the shape in the prompt — which is why
+    /// claude alone appeared to work and why this hid behind the first two defects for so long.</para>
+    /// </remarks>
+    [Fact]
+    public async Task TheSchemaFileTheVendorIsPointedAt_ExistsWhileTheVendorRuns()
+    {
+        var watching = new Watching(new ProcessResult(0, Envelope, string.Empty, TimedOut: false));
+
+        await Run(watching, runtime: "antigravity", vendorId: "antigravity");
+
+        watching.SchemaFound.Should().BeTrue(
+            "the adapter passes this path to its CLI with --json-schema, and the CLI opens it");
+        watching.SchemaText.Should().Be(FindingSchema.Json, "a schema of other bytes shapes nothing");
+    }
+
     private static async Task<ReviewAttempt> Launch(
-        ProcessResult result, string runtime = "claude", string vendorId = "claude")
+        ProcessResult result, string runtime = "claude", string vendorId = "claude") =>
+        await Run(new Fixed(result), runtime, vendorId);
+
+    private static async Task<ReviewAttempt> Run(
+        IProcessLauncher launcher, string runtime = "claude", string vendorId = "claude")
     {
         var slot = new AccountSlot(
             "claude", "a", Path.GetTempPath(), DateTimeOffset.UtcNow, null, false, string.Empty, 0);
@@ -117,7 +149,7 @@ public sealed class ReviewLauncherTests
             JobStatus.Running, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(10),
             TimeSpan.FromSeconds(60));
 
-        return await new ReviewLauncher(new Fixed(result)).RunAsync(
+        return await new ReviewLauncher(launcher).RunAsync(
             new VendorConfig(vendorId, runtime, ["haiku"], ["a"]),
             slot,
             job,
@@ -129,5 +161,25 @@ public sealed class ReviewLauncherTests
     {
         public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default) =>
             Task.FromResult(result);
+    }
+
+    /// <summary>
+    /// Looks at the work directory from INSIDE the launch — the only moment the answer is knowable,
+    /// because the runner deletes that directory in a finally as soon as the launch returns.
+    /// </summary>
+    private sealed class Watching(ProcessResult result) : IProcessLauncher
+    {
+        public bool SchemaFound { get; private set; }
+
+        public string SchemaText { get; private set; } = string.Empty;
+
+        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            var schema = Path.Combine(request.WorkingDirectory, SchemaFile.Name);
+            SchemaFound = File.Exists(schema);
+            SchemaText = SchemaFound ? File.ReadAllText(schema) : string.Empty;
+
+            return Task.FromResult(result);
+        }
     }
 }

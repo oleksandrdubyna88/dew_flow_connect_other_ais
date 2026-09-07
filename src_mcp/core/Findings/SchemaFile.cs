@@ -1,6 +1,4 @@
-using CoaiMcp.Core.Findings;
-
-namespace CoaiMcp.Server;
+namespace CoaiMcp.Core.Findings;
 
 /// <summary>
 /// The finding schema on disk — one file, shared by every server on this machine.
@@ -13,6 +11,12 @@ namespace CoaiMcp.Server;
 /// <c>the round failed: The process cannot access the file 'finding-schema.json' because it is being
 /// used by another process</c>, for a file whose content is a compile-time constant and was already
 /// correct on disk.</para>
+/// <para><b>It lives in the CORE because a SECOND binary needs it.</b> The Team server hands its
+/// reviewers a schema path too, and it had no writer at all — every adapter that passes the path to
+/// its CLI failed on the missing file, which is how codex and antigravity were broken on that server
+/// while claude, whose adapter needs no schema file, appeared to work. The reuse rule's fourth move:
+/// two projects need it and neither may reference the other, so it belongs in the common ancestor
+/// rather than being written a second time.</para>
 /// <para>So the write happens only when the file is missing or different, and losing the race is not
 /// an error: the neighbour is writing the same bytes. It fails OPEN — the caller always gets the
 /// path — because a reviewer that cannot read the schema answers unshaped JSON, which a round
