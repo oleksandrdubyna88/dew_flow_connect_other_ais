@@ -452,6 +452,22 @@ runtime and every `VENDOR_PRESETS` entry through a save and a read, with `gemini
 deliberate exception — it is MIGRATED to `antigravity` because Google retired Code Assist, and
 separating a migration from a defect is exactly what the test does.
 
+### A card captioned with the wrong software (2026-09-07)
+
+`modelsProvenance` (`models.ts`) says where a dropdown's contents came from, and it had arms for
+`local`, `gemini`, `claude` and `antigravity` and fell through to codex. `remote` was added as a
+runtime without one, so a Team-server reviewer read *"codex · 8 models the Codex CLI has cached for
+this machine"* — a claim about software that has nothing to do with it, under a list that arrived
+over HTTP from a server's catalog. Reported from a screenshot while the same row was failing to
+review at all, which is how a caption nobody would file a bug about got fixed.
+
+The arm needs a fact the list cannot carry. `allowedModelsFor` deliberately returns the row's OWN
+model when the catalog has not arrived — an empty list would make `modelsFor` mark every remote row's
+saved model as withdrawn, on every reload, for as long as a server stayed unreachable — so a count of
+one is ambiguous by construction. It now returns `{ models, named, fromCatalog }`, and the caption
+reads the flag rather than the length: how many models this server allows for the vendor it knows,
+or that the server has not been asked yet.
+
 ### The settings mirror is not the panel's (2026-09-02)
 
 `serverSettingsSync.ts` owns the one job of getting `coai.*` into the file the server reads, and it

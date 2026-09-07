@@ -166,12 +166,41 @@ export const ANTIGRAVITY_MODELS: readonly ModelChoice[] = [
 ];
 
 /** Where the list came from, said in the panel so nobody mistakes curation for discovery. */
+/**
+ * What a Team server allows this vendor, as the caption needs it.
+ *
+ * <p>Declared here rather than imported from the panel so this module keeps knowing nothing about
+ * how a card is drawn: this is the smallest shape the sentence needs, and the panel's own record
+ * satisfies it structurally.</p>
+ */
+export interface RemoteProvenance {
+  readonly models: readonly string[];
+  readonly named: string;
+  readonly fromCatalog: boolean;
+}
+
 export function modelsProvenance(
   runtime: Runtime,
   discoveredCodex: readonly ModelChoice[],
   localEngine?: LocalEngine,
   discoveredAgy: readonly ModelChoice[] = [],
+  remote: RemoteProvenance = { models: [], named: '', fromCatalog: false },
 ): string {
+  // A Team-server row runs no CLI on this machine and has no cache here: its list came over HTTP
+  // from a server's catalog. Without this arm the function fell through to the codex sentence, so a
+  // Team-server reviewer was captioned "8 models the Codex CLI has cached for this machine" — a
+  // claim about software that has nothing to do with it, under a dropdown filled from an HTTP
+  // response. Reported from a screenshot, 2026-09-07.
+  //
+  // `fromCatalog` rather than a length test, because the not-yet-asked case deliberately returns the
+  // row's own model rather than an empty list, so a count of one cannot tell the two apart.
+  if (runtime === 'remote') {
+    return remote.fromCatalog
+      ? `${remote.models.length} model${remote.models.length === 1 ? '' : 's'} this Team server `
+        + `allows for '${remote.named}'.`
+      : 'this Team server has not been asked yet — its catalog decides what this reviewer may use.';
+  }
+
   if (runtime === 'local') {
     // The engine's own note carries the reason when nothing answered, which is the case this line
     // exists for: an empty dropdown with no explanation reads as "you have no models".
