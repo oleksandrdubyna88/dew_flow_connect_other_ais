@@ -13,6 +13,13 @@
 > than left unreferenced. Nothing about the sign-in itself changed; the *Team servers* section
 > already showed the address, the version and the account, and it still does.
 >
+> **What it means for somebody using the panel:** a Team server's address, the version answering on
+> it and the account signed in are read under **Team servers** and nowhere else. Nothing was lost —
+> `statusSentence` covers all five states the removed block had, including *Signed in. Asking what
+> it offers…* for a server that has not answered yet, and the row carries the name, the address and
+> the account. Three of those five had no test until this change; they do now
+> (`teamServerView.test.ts`), because that section is the only place they show.
+>
 > Read the design below with that in mind: everything it says about WHERE a sign-in lives is
 > current, and the *Server section* section is a record of a decision that was reversed after a day
 > in front of the person who asked for it.

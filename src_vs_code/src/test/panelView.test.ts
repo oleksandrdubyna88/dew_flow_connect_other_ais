@@ -54,13 +54,20 @@ test('the MCP server section is titled for coai-mcp and describes nothing else',
   assert.ok(html.includes('<summary>MCP server</summary>'), 'the section says what it is about');
   assert.ok(!html.includes('<summary>Server</summary>'), 'and no longer says it vaguely');
 
-  // The address belongs to the Team servers section, and only to it. `ts-here-` was the id prefix
-  // of the block this section used to carry; nothing may render it here again.
-  assert.ok(!html.includes('ts-here-'), 'no Team-server address block in the MCP server section');
-  assert.ok(
-    html.includes('data-server-url="rs"') === false,
-    'the read-only address input is gone from this panel entirely',
-  );
+  // Asserted on the SECTION's own markup rather than the whole panel, because the address and the
+  // account are supposed to be elsewhere in this document — under Team servers, which is the point.
+  const mcp = html.slice(html.indexOf('data-section="server"'), html.indexOf('data-section="usage"'));
+
+  // Not just the `ts-here-` id prefix the old block used: a reintroduction under a different id or
+  // class would slip past that, and what must not come back is the CONTENT.
+  assert.ok(!mcp.includes('ts-here-'), 'no Team-server address block');
+  assert.ok(!mcp.includes('coai.remsoft.dev'), 'no Team-server address');
+  assert.ok(!mcp.includes('a@remsoft.dev'), 'no Team-server account');
+  assert.ok(!mcp.includes('coai-server'), 'no Team-server version — coai-mcp is the subject here');
+  assert.ok(!mcp.includes('data-server-url='), 'no read-only address input');
+
+  // And the section still says its own subject, so this is a narrowing rather than an emptying.
+  assert.ok(mcp.includes('0.18.7'), 'the coai-mcp lines are still there');
 });
 
 test('each role shows its own rounds, its own threshold and its own prompts', () => {
