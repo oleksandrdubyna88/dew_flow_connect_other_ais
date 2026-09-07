@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
-import { ServerSettingsSync } from '../serverSettingsSync';
-import { DEFAULTS } from '../settingsShape';
-import { DEFAULT_VENDORS } from '../vendors';
+import { ExistingFile, ServerSettingsSync } from '../serverSettingsSync';
+import { CoaiSettings, DEFAULTS } from '../settingsShape';
+import { DEFAULT_VENDORS, Vendor } from '../vendors';
 
 /**
  * Settings reach the server whether or not anybody has opened the panel.
@@ -28,11 +28,25 @@ import { DEFAULT_VENDORS } from '../vendors';
  * rather than a comment somebody later moves back.</p>
  */
 
-function sync(state: { settings?: unknown; vendors?: unknown } = {}) {
+/**
+ * A configuration the compiler checks, rather than one cast past it.
+ *
+ * <p>These fixtures were written with `as never` on both halves, which turns off exactly the check
+ * that would catch a settings shape drifting out from under them. Two reviewers named it on the same
+ * round, and the rule they cited says what to do instead: a typed factory with real defaults and
+ * typed overrides. It was copied from the fixture next to it, which is the specific thing
+ * reuse-first forbids — do not imitate a pattern you can see is wrong because everything here does
+ * it that way.</p>
+ */
+function configuration(over: Partial<CoaiSettings> = {}): { settings: CoaiSettings; vendors: readonly Vendor[] } {
+  return { settings: { ...DEFAULTS, ...over }, vendors: DEFAULT_VENDORS };
+}
+
+function sync(state: { settings?: Partial<CoaiSettings>; vendors?: readonly Vendor[] } = {}) {
   const written: string[] = [];
-  const value = { settings: DEFAULTS, vendors: DEFAULT_VENDORS, ...state };
+  const value = { settings: { ...DEFAULTS, ...state.settings }, vendors: state.vendors ?? DEFAULT_VENDORS };
   const it = new ServerSettingsSync(
-    () => ({ settings: value.settings as never, vendors: value.vendors as never }),
+    () => ({ settings: value.settings, vendors: value.vendors }),
     async (json: string) => {
       written.push(json);
     },
@@ -137,16 +151,21 @@ test('the settings mirror does not live inside the panel view', () => {
  * stops the NEXT pair, and today's machine is unstuck by reloading the stale window. That limit is
  * stated rather than implied.</p>
  */
+/** A file with these contents, or — for the empty string — no file at all. */
+function asFile(existing: string): ExistingFile {
+  return existing.length === 0 ? { kind: 'absent' } : { kind: 'contents', text: existing };
+}
+
 function stamped(existing: string, version = '0.31.3') {
   const written: string[] = [];
   const refusals: string[] = [];
   const it = new ServerSettingsSync(
-    () => ({ settings: { ...DEFAULTS, onExhausted: 'good_enough' } as never, vendors: DEFAULT_VENDORS as never }),
+    () => configuration({ onExhausted: 'good_enough' }),
     async (json: string) => {
       written.push(json);
     },
     version,
-    async () => existing,
+    async () => asFile(existing),
     (theirs: string) => refusals.push(theirs),
   );
   return { it, written, refusals };
@@ -223,12 +242,12 @@ test('a SECOND, different newer build is reported too — the suppression is per
   const refusals: string[] = [];
   let existing = '{"COAI_WRITTEN_BY":"0.31.9"}';
   const it = new ServerSettingsSync(
-    () => ({ settings: { ...DEFAULTS, onExhausted: 'good_enough' } as never, vendors: DEFAULT_VENDORS as never }),
+    () => configuration({ onExhausted: 'good_enough' }),
     async (json: string) => {
       written.push(json);
     },
     '0.31.3',
-    async () => existing,
+    async () => asFile(existing),
     (theirs: string) => refusals.push(theirs),
   );
 
@@ -252,14 +271,14 @@ test('a stand-down that later succeeds can be reported again if it happens again
   const written: string[] = [];
   const refusals: string[] = [];
   let existing = '{"COAI_WRITTEN_BY":"0.31.9"}';
-  let settings: unknown = { ...DEFAULTS, onExhausted: 'good_enough' };
+  let settings: CoaiSettings = { ...DEFAULTS, onExhausted: 'good_enough' };
   const it = new ServerSettingsSync(
-    () => ({ settings: settings as never, vendors: DEFAULT_VENDORS as never }),
+    () => ({ settings, vendors: DEFAULT_VENDORS }),
     async (json: string) => {
       written.push(json);
     },
     '0.31.3',
-    async () => existing,
+    async () => asFile(existing),
     (theirs: string) => refusals.push(theirs),
   );
 
@@ -280,3 +299,115 @@ async function syncedAgainst(mine: string, theirs: string): Promise<string[]> {
   await it.sync();
   return written;
 }
+
+/** The sync with a reader that answers however the test wants, including badly. */
+function reading(answer: () => Promise<ExistingFile>, version = '0.31.3') {
+  const written: string[] = [];
+  const refusals: string[] = [];
+  const it = new ServerSettingsSync(
+    () => configuration({ onExhausted: 'good_enough' }),
+    async (json: string) => {
+      written.push(json);
+    },
+    version,
+    answer,
+    (theirs: string) => refusals.push(theirs),
+  );
+  return { it, written, refusals };
+}
+
+test('a file that cannot be READ is not a file that is not there', async () => {
+  // The defect three reviewers found independently: an earlier draft answered '' for both, so a
+  // locked file — or a volume that blinked — read as "nothing there", which is permission to
+  // overwrite. That is the exact revert this story exists to prevent, through a different door.
+  const { it, written, refusals } = reading(async () => ({ kind: 'unreadable' }));
+
+  await it.sync();
+
+  assert.equal(written.length, 0, 'a guard that cannot answer must stand the write down');
+  assert.deepEqual(refusals, [], 'and say nothing about a version it never read');
+});
+
+test('a reader that throws synchronously stands the write down too', async () => {
+  // `.catch()` on the promise does not cover this, and the guard is awaited outside the try that
+  // protects the write — so the exception would abort `sync` before it ever reached the write.
+  const { it, written } = reading(() => {
+    throw new Error('the provider is gone');
+  });
+
+  await it.sync();
+
+  assert.equal(written.length, 0);
+});
+
+test('after a stand-down, going back to what was last written still writes it', async () => {
+  // The "nothing changed" short-circuit compares against the last SUCCESSFUL write, and after a
+  // stand-down the file holds something else entirely. Change a setting, stand down, change it
+  // back, and the content matches — so the write was skipped and the value never landed.
+  const written: string[] = [];
+  let existing: ExistingFile = { kind: 'absent' };
+  let settings: CoaiSettings = { ...DEFAULTS, onExhausted: 'good_enough' };
+  const it = new ServerSettingsSync(
+    () => ({ settings, vendors: DEFAULT_VENDORS }),
+    async (json: string) => {
+      written.push(json);
+    },
+    '0.31.3',
+    async () => existing,
+  );
+
+  await it.sync();
+  assert.equal(written.length, 1);
+
+  settings = { ...DEFAULTS, onExhausted: 'escalate' };
+  existing = { kind: 'contents', text: '{"COAI_WRITTEN_BY":"0.31.9"}' };
+  await it.sync();
+  assert.equal(written.length, 1, 'stood down, as it should');
+
+  settings = { ...DEFAULTS, onExhausted: 'good_enough' };
+  existing = { kind: 'absent' };
+  await it.sync();
+
+  assert.equal(written.length, 2, 'the same content as before the stand-down still has to be written');
+});
+
+test('two spellings of one version are one sentence', async () => {
+  // If the comparison treats `0.31.9-alpha.1` and `0.31.9` as the same version, so must the
+  // suppression, or a person is told the same thing twice.
+  const written: string[] = [];
+  const refusals: string[] = [];
+  let existing = '{"COAI_WRITTEN_BY":"0.31.9-alpha.1"}';
+  let settings: CoaiSettings = { ...DEFAULTS, onExhausted: 'good_enough' };
+  const it = new ServerSettingsSync(
+    () => ({ settings, vendors: DEFAULT_VENDORS }),
+    async (json: string) => {
+      written.push(json);
+    },
+    '0.31.3',
+    async () => asFile(existing),
+    (theirs: string) => refusals.push(theirs),
+  );
+
+  await it.sync();
+  settings = { ...DEFAULTS, onExhausted: 'escalate' };
+  existing = '{"COAI_WRITTEN_BY":"0.31.9"}';
+  await it.sync();
+
+  assert.deepEqual(refusals, ['0.31.9-alpha.1'], 'the second is the same version, differently spelled');
+});
+
+test('a stamp from a corrupted file cannot produce a dialog nobody can read', async () => {
+  // It has to still READ as newer, or nothing is reported and the test proves nothing about the
+  // message. The noise goes after the number, where a corrupted file would leave it.
+  const noisy = `9.9.9${String.fromCharCode(7)}${'x'.repeat(200)}`;
+  const { it, refusals } = reading(async () => ({
+    kind: 'contents',
+    text: JSON.stringify({ COAI_WRITTEN_BY: noisy }),
+  }));
+
+  await it.sync();
+
+  assert.equal(refusals.length, 1);
+  assert.ok(!refusals[0]!.includes(String.fromCharCode(7)), 'control characters are stripped');
+  assert.ok(refusals[0]!.length <= 64, 'and the length is capped');
+});

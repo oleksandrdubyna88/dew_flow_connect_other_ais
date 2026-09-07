@@ -11,7 +11,7 @@ import { showHelp } from './helpPanel';
 import { parseSession, SessionFile } from './rounds';
 import { blindSpotsHtml, rowsFrom } from './roundsLog';
 import { RoundsLogPanel } from './roundsLogPanel';
-import { ServerSettingsSync } from './serverSettingsSync';
+import { ExistingFile, ServerSettingsSync } from './serverSettingsSync';
 import { settingsFrom } from './settingsShape';
 import { vendorsFrom } from './vendors';
 
@@ -148,19 +148,29 @@ async function writeSettingsFile(json: string): Promise<void> {
 }
 
 /**
- * The settings file as it is now, or an empty string.
+ * The settings file as it is now, or which of the two ways it could not be read.
  *
- * <p>Never throws: "there is no file" and "the file could not be read" are the same answer to the
- * question the sync asks, which is whether a NEWER build wrote what is there. Neither is a reason
- * to refuse to write.</p>
+ * <p><b>Absent and unreadable are different answers and the difference decides a write.</b> An
+ * earlier draft answered `''` for both, so a file that is locked, or on a volume that blinked, was
+ * indistinguishable from a file that is not there — and "not there" is permission to overwrite. That
+ * is the exact revert this whole epic is about, reached through a different door. Three reviewers
+ * found it independently on this story's code round.</p>
+ *
+ * <p>Only a confirmed `FileNotFound` is absent. Everything else — a permission error, a disconnected
+ * volume, a provider that threw — stands the write down and is retried on the next change.</p>
  */
-async function readSettingsFile(): Promise<string> {
+async function readSettingsFile(): Promise<ExistingFile> {
   try {
-    return new TextDecoder().decode(
-      await vscode.workspace.fs.readFile(vscode.Uri.joinPath(dataDir(), 'settings.json')),
-    );
-  } catch {
-    return '';
+    return {
+      kind: 'contents',
+      text: new TextDecoder().decode(
+        await vscode.workspace.fs.readFile(vscode.Uri.joinPath(dataDir(), 'settings.json')),
+      ),
+    };
+  } catch (e) {
+    return e instanceof vscode.FileSystemError && e.code === 'FileNotFound'
+      ? { kind: 'absent' }
+      : { kind: 'unreadable' };
   }
 }
 
