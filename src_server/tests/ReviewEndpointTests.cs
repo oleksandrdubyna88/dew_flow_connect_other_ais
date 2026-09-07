@@ -190,7 +190,17 @@ public sealed class JobRunnerTests : IDisposable
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 
-    private sealed class Fake(params ReviewerOutcome[] outcomes) : IReviewLauncher
+    /// <summary>
+    /// Hands the runner whole ATTEMPTS, because that is what a launcher returns.
+    /// </summary>
+    /// <remarks>
+    /// It used to take bare outcomes and dress each one as an attempt itself — including a
+    /// <c>ReviewerOutcome.Ok(null!, …)</c> for the success case, a value the real launcher cannot
+    /// build because it holds the vendor's raw text and never a parsed review. That fake success
+    /// was the only success in the suite, so the runner's success arm was covered here and
+    /// unreachable in production for the whole life of the server.
+    /// </remarks>
+    private sealed class Fake(params ReviewAttempt[] attempts) : IReviewLauncher
     {
         private int _calls;
 
@@ -204,16 +214,15 @@ public sealed class JobRunnerTests : IDisposable
         {
             SlotsUsed.Add(slot.Name);
             Environments.Add(environment);
-            var outcome = outcomes[Math.Min(_calls++, outcomes.Length - 1)];
 
-            return Task.FromResult(new ReviewAttempt(outcome, outcome is ReviewerOutcome.Ok ? "the answer" : "", 7, 11));
+            return Task.FromResult(attempts[Math.Min(_calls++, attempts.Length - 1)]);
         }
     }
 
-    private (JobStore Jobs, JobRunner Runner, Fake Launcher) Build(params ReviewerOutcome[] outcomes)
+    private (JobStore Jobs, JobRunner Runner, Fake Launcher) Build(params ReviewAttempt[] attempts)
     {
         var jobs = new JobStore();
-        var launcher = new Fake(outcomes);
+        var launcher = new Fake(attempts);
         var catalog = new VendorCatalogHost(_dir);
         var slots = new SlotRegistry(_dir, new JsonFileStore());
 
@@ -227,7 +236,7 @@ public sealed class JobRunnerTests : IDisposable
     [Fact]
     public async Task AGoodRunComesBackWithTheVendorsRawAnswer()
     {
-        var (jobs, runner, launcher) = Build(new ReviewerOutcome.Ok(null!, false, Usage.None));
+        var (jobs, runner, launcher) = Build(new ReviewAttempt.Answered("the answer", 7, 11));
         jobs.Submit(Job());
 
         (await runner.PumpAsync("codex", CancellationToken.None)).Should().BeTrue();
@@ -245,8 +254,7 @@ public sealed class JobRunnerTests : IDisposable
         // With a second account signed in and idle, failing the review outright told a caller "rate
         // limited" while an account that could have run it sat there — which defeats the whole point
         // of configuring more than one. (codex, code round.)
-        var (jobs, runner, _) = Build(
-            new ReviewerOutcome.RateLimited("You've hit your session limit · resets 9:30pm (UTC)"));
+        var (jobs, runner, _) = Build(new ReviewAttempt.Failed(new ReviewerOutcome.RateLimited("You've hit your session limit · resets 9:30pm (UTC)")));
         jobs.Submit(Job());
 
         await runner.PumpAsync("codex", CancellationToken.None);
@@ -261,7 +269,7 @@ public sealed class JobRunnerTests : IDisposable
     [Fact]
     public async Task WhenEveryAccountIsRateLimitedTheReviewFailsWithTheVendorsWords()
     {
-        var (jobs, runner, _) = Build(new ReviewerOutcome.RateLimited("session limit reached"));
+        var (jobs, runner, _) = Build(new ReviewAttempt.Failed(new ReviewerOutcome.RateLimited("session limit reached")));
         jobs.Submit(Job());
 
         // Once for slot a, once for slot b. After the second there is nowhere left to rotate to.
@@ -279,7 +287,7 @@ public sealed class JobRunnerTests : IDisposable
         // Without this the job cycles a and b for the whole ten-minute queue window, re-asking
         // accounts it already knows are exhausted, and fails anyway — the only difference being how
         // long the caller waited to be told. (Two reviewers, second code round.)
-        var (jobs, runner, launcher) = Build(new ReviewerOutcome.RateLimited("limit"));
+        var (jobs, runner, launcher) = Build(new ReviewAttempt.Failed(new ReviewerOutcome.RateLimited("limit")));
         jobs.Submit(Job());
 
         for (var attempt = 0; attempt < 5; attempt++)
@@ -295,7 +303,7 @@ public sealed class JobRunnerTests : IDisposable
     [Fact]
     public async Task AVendorThatCrashesEndsTheJobRatherThanLeavingItRunning()
     {
-        var (jobs, runner, _) = Build(new ReviewerOutcome.NonZeroExit(3, "it exploded"));
+        var (jobs, runner, _) = Build(new ReviewAttempt.Failed(new ReviewerOutcome.NonZeroExit(3, "it exploded")));
         jobs.Submit(Job());
 
         await runner.PumpAsync("codex", CancellationToken.None);
@@ -326,7 +334,7 @@ public sealed class JobRunnerTests : IDisposable
     [Fact]
     public async Task NothingRunsWhenThereIsNothingQueued()
     {
-        var (_, runner, launcher) = Build(new ReviewerOutcome.Ok(null!, false, Usage.None));
+        var (_, runner, launcher) = Build(new ReviewAttempt.Answered("the answer", 7, 11));
 
         (await runner.PumpAsync("codex", CancellationToken.None)).Should().BeFalse();
 
@@ -336,7 +344,7 @@ public sealed class JobRunnerTests : IDisposable
     [Fact]
     public async Task ASuccessWritesOneUsageLineCarryingTheCallersEmail()
     {
-        var (jobs, runner, _) = Build(new ReviewerOutcome.Ok(null!, false, Usage.None));
+        var (jobs, runner, _) = Build(new ReviewAttempt.Answered("the answer", 7, 11));
         jobs.Submit(Job("someone@example.com"));
 
         await runner.PumpAsync("codex", CancellationToken.None);

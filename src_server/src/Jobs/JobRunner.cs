@@ -114,18 +114,26 @@ public sealed class JobRunner(
     private void Record(VendorConfig vendor, AccountSlot slot, JobRecord job, ReviewAttempt attempt)
     {
         var now = DateTimeOffset.UtcNow;
-        JobRecord? finished = attempt.Outcome switch
+
+        // The success arm is FIRST, and it is a shape of its own rather than a `_` fallthrough. As a
+        // fallthrough it was unreachable for the whole life of this server — the launcher could not
+        // build the outcome it was matching on — and an arm nothing can reach reads exactly like an
+        // arm that works.
+        JobRecord? finished = attempt switch
         {
-            ReviewerOutcome.RateLimited limited => RateLimited(vendor, slot, job, limited, now),
-            ReviewerOutcome.NonZeroExit exit =>
+            ReviewAttempt.Answered answered => Succeeded(slot, job, answered, now),
+            ReviewAttempt.Failed { Outcome: ReviewerOutcome.RateLimited limited } =>
+                RateLimited(vendor, slot, job, limited, now),
+            ReviewAttempt.Failed { Outcome: ReviewerOutcome.NonZeroExit exit } =>
                 JobTransitions.Fail(job, FailureKind.NonZeroExit, Tail(exit.StdErrTail, exit.ExitCode), now),
-            ReviewerOutcome.TimedOut =>
+            ReviewAttempt.Failed { Outcome: ReviewerOutcome.TimedOut } =>
                 JobTransitions.Fail(job, FailureKind.TimedOut, JobTransitions.ExpiryReason(job), now),
-            ReviewerOutcome.Unparseable bad =>
+            ReviewAttempt.Failed { Outcome: ReviewerOutcome.Unparseable bad } =>
                 JobTransitions.Fail(job, FailureKind.UnparseableByVendor, bad.Reason, now),
-            ReviewerOutcome.NotStarted missing =>
+            ReviewAttempt.Failed { Outcome: ReviewerOutcome.NotStarted missing } =>
                 JobTransitions.Fail(job, FailureKind.NotStarted, missing.Reason, now),
-            _ => Succeeded(slot, job, attempt, now),
+            _ => JobTransitions.Fail(
+                job, FailureKind.NotStarted, "the executor returned a verdict this server cannot read", now),
         };
 
         if (finished is null)
@@ -139,13 +147,14 @@ public sealed class JobRunner(
         Ledger(vendor, job, finished);
     }
 
-    private JobRecord Succeeded(AccountSlot slot, JobRecord job, ReviewAttempt attempt, DateTimeOffset now)
+    private JobRecord Succeeded(
+        AccountSlot slot, JobRecord job, ReviewAttempt.Answered answered, DateTimeOffset now)
     {
         // A success is also what clears a slot's back-off counter: an account that worked is not
         // three refusals into an exponential wait.
         slots.MarkSucceeded(slot);
 
-        return JobTransitions.Succeed(job, attempt.Answer, attempt.TokensIn, attempt.TokensOut, now);
+        return JobTransitions.Succeed(job, answered.Raw, answered.TokensIn, answered.TokensOut, now);
     }
 
     /// <summary>
