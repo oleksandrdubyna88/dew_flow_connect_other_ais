@@ -57,8 +57,11 @@ sequenceDiagram
 | `DELETE /api/reviews/{id}` | owner | `204` |
 | `GET /api/usage?window=&scope=` | any / **admins for `company`** | per-vendor totals for the caller, or for everyone plus per person · `400` unknown window · `403` company as a non-admin |
 
-**Every route reads its credential from `Authorization: Bearer …` and from nowhere else** —
-`Auth.Bearer` looks at that header, and no handler here reads a token out of a request body.
+**Every route that has a caller reads its credential from `Authorization: Bearer …` and from
+nowhere else** — `Auth.Bearer` looks at that header, and no handler here reads a token out of a
+request body. The two anonymous routes above (`/api/health`, `/api/client-config`) have no
+credential to read at all, deliberately: a client that has not signed in yet must be able to ask
+this server what it wants.
 `POST /api/session` is the one people expect to be different, because it is where a session begins;
 it is not.
 
