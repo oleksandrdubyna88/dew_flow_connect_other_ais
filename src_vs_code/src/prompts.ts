@@ -82,7 +82,7 @@ export const CONVENTIONS_ID = 'conventions';
  * section says so while that is true, rather than leaving it to be discovered from a round's
  * findings.</p>
  */
-export const CONVENTIONS_NARROWED_IN = '0.18.8';
+export const CONVENTIONS_NARROWED_IN = '0.18.9';
 
 /**
  * What the panel shows as selected for one round — the stored choice, or what the server would
