@@ -1,5 +1,16 @@
 # Changelog
 
+## Extension 0.31.2 — 2026-09-07
+
+**Signing in to a Team server works.** It could not in 0.31.1, for anybody: the extension sent your
+Microsoft token in the request *body*, and the server reads it from the `Authorization` header and
+nowhere else. So the server answered `401` before it had looked at the token at all — which is why
+the panel could only say *the server answered 401*, with no reason attached. The token now travels
+in the header, which is where every other call already put it.
+
+Nothing else changed, and no configuration needs changing: this was one line on the client side of
+a contract whose two halves were each tested on their own.
+
 ## Extension 0.31.1 — 2026-09-06
 
 **Team servers.** A company buys ONE subscription per vendor, installs the CLIs on ONE machine, and
