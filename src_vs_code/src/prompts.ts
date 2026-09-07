@@ -72,6 +72,19 @@ export function universalFor(role: string): PromptChoice {
 export const CONVENTIONS_ID = 'conventions';
 
 /**
+ * The first coai-mcp whose round 1 is the conventions pass for ARCHITECTURE alone.
+ *
+ * <p>Before it, every code role's round 1 was the conventions pass. The panel and the server decide
+ * this SEPARATELY — one in `selectedFor`, one in `PromptCatalog.ForRound` — and they are installed
+ * separately too: an extension updates itself, a server is a binary somebody presses a button to
+ * replace. So a panel ahead of its server shows `Universal` for a round the server runs
+ * `conventions` in, which is precisely the divergence this pair is written to avoid. The Prompts
+ * section says so while that is true, rather than leaving it to be discovered from a round's
+ * findings.</p>
+ */
+export const CONVENTIONS_NARROWED_IN = '0.18.8';
+
+/**
  * What the panel shows as selected for one round — the stored choice, or what the server would
  * actually use, so the box never reads as "nothing" when a prompt is in fact chosen.
  *
