@@ -197,11 +197,13 @@ test('the identity token is minted through the Authorization header, which is th
 
   await createSession('https://s', 'idp-token', fetchImpl);
 
+  // `new Headers(...)` rather than `init.headers as Record<string, string>`: the doctrine's DoD
+  // forbids an `as` cast standing in for a real type, and `HeadersInit` is a union of three shapes
+  // — a cast to one of them is a promise about `ask`'s internals that would come due silently the
+  // day it passes a `Headers` instead. This reads whichever shape it is. (The neighbouring catalog
+  // test still casts; left as found rather than rewritten in a hotfix.)
   const sent = fetchImpl.seen[0];
-  assert.strictEqual(
-    (sent?.init.headers as Record<string, string>)['Authorization'],
-    'Bearer idp-token',
-  );
+  assert.strictEqual(new Headers(sent?.init.headers).get('Authorization'), 'Bearer idp-token');
   assert.strictEqual(
     sent?.init.body,
     undefined,
