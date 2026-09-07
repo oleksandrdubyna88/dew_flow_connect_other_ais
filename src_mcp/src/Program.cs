@@ -90,13 +90,18 @@ internal static class Program
     internal static Startup Classify(string[] args) =>
         args.Length == 0
             ? Startup.Serve
-            : args[0] is "--help" or "-h" or "help" ? Startup.Help
-            : args[0] is "--version" or "-v" or "version" ? Startup.Version
-            : args[0] == "--ask-local" ? Startup.AskLocal
-            : args[0] == "--ask-remote" ? Startup.AskRemote
-            : args[0] == "--log" ? Startup.Log
-            : args[0] == "--providers" ? Startup.Providers
-            : Startup.Usage;
+            // A switch rather than a ternary chain: the chain was six deep and every new one-shot
+            // mode made it deeper, which an analyser reads as one expression doing seven jobs.
+            : args[0] switch
+            {
+                "--help" or "-h" or "help" => Startup.Help,
+                "--version" or "-v" or "version" => Startup.Version,
+                "--ask-local" => Startup.AskLocal,
+                "--ask-remote" => Startup.AskRemote,
+                "--log" => Startup.Log,
+                "--providers" => Startup.Providers,
+                _ => Startup.Usage,
+            };
 
     private static async Task<int> Main(string[] args)
     {
@@ -205,7 +210,7 @@ internal static class Program
         var service = new Server.PanelService(
             settings, keys, DateTime.UtcNow, launcher, Serilog.Core.Logger.None);
 
-        Console.Out.WriteLine(await service.ProvidersAsync());
+        await Console.Out.WriteLineAsync(await service.ProvidersAsync());
 
         return 0;
     }

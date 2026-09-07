@@ -417,8 +417,10 @@ function cannotRun(id: string, reported: Readonly<Record<string, ProviderHealth>
   // sharing the live server's environment, needs a channel into it that does not exist.
   const said = `${why} (as coai-mcp reads your settings file here)`;
 
+  const label = escapeHtml(`${id} cannot review: ${said}`);
+
   return `<span class="badge cannot-run" title="${escapeHtml(said)}"`
-    + ` aria-label="${escapeHtml(`${id} cannot review: ${said}`)}">cannot review</span>`;
+    + ` aria-label="${label}">cannot review</span>`;
 }
 
 function vendorCard(

@@ -143,11 +143,15 @@ public sealed record ReviewerSummary(
                 ? $"all {Asked} reviewers answered"
                 : $"{Answered} of {Asked} reviewers answered; failed: {string.Join(", ", Failures)}";
             var left = Excluded.IsDefaultOrEmpty ? [] : Excluded;
+            if (left.Length == 0)
+            {
+                return answered;
+            }
 
-            return left.Length == 0
-                ? answered
-                : $"{answered}; {left.Length} enabled reviewer{(left.Length == 1 ? "" : "s")} "
-                    + $"could not run: {string.Join("; ", left)}";
+            var plural = left.Length == 1 ? string.Empty : "s";
+
+            return $"{answered}; {left.Length} enabled reviewer{plural} "
+                + $"could not run: {string.Join("; ", left)}";
         }
     }
 }

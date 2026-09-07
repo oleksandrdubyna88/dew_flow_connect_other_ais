@@ -307,14 +307,14 @@ public sealed partial class PanelService
         // job — refusing it at the gate does their work for them and takes away the one round that
         // would have told the person why. The floor belongs to the code stage, where the scope has
         // something to be checked against.
-        RunStageAsync(repoPath, branch, planText, RoundMachine.BeginPlanRound, needsWorktree: false, isPlanStage: true,
+        RunStageAsync(repoPath, branch, planText, new StageRun(RoundMachine.BeginPlanRound, NeedsWorktree: false, IsPlanStage: true,
             (session, workingDir, _) => Task.FromResult<IReadOnlyList<ReviewerWork>>(
                 BuildWork([ReviewRole.PlanCritique], workingDir, $"## The plan under review\n\n{planText}",
                     session.State.RoundsRunThisStage + 1,
                     isPlanStage: true,
                     seed: StableSeed(session.State.SessionId, session.State.RoundsRunThisStage + 1),
                     planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session) : null,
-                    deal: _settings.DealPlanLenses)),
+                    deal: _settings.DealPlanLenses))),
             ct);
 
     /// <summary>
@@ -342,7 +342,7 @@ public sealed partial class PanelService
             return Task.FromResult(Error(CodeScope.Refusal));
         }
 
-        return RunStageAsync(repoPath, branch, scope, RoundMachine.BeginCodeRound, needsWorktree: true, isPlanStage: false,
+        return RunStageAsync(repoPath, branch, scope, new StageRun(RoundMachine.BeginCodeRound, NeedsWorktree: true, IsPlanStage: false,
             async (session, workingDir, sha) =>
             {
                 var files = await _context.CollectAsync(repoPath, baseRef, sha, ct: ct);
@@ -374,7 +374,7 @@ public sealed partial class PanelService
                 return BuildWork(roles, workingDir, context, round, isPlanStage: false, rules.HasRules,
                     seed: StableSeed(session.State.SessionId, round),
                     deal: _settings.DealCodeLenses);
-            },
+            }),
             ct);
     }
 
@@ -458,22 +458,11 @@ public sealed partial class PanelService
     private string Scope(string repoPath, string branch, string planText) =>
         planText.Trim().Length > 0 ? planText : _store.Load(repoPath, branch)?.PlanText ?? string.Empty;
 
-    /// <param name="needsWorktree">
-    /// Whether the reviewers get a checkout at all. Only the code stage does: a plan reviewer with a
-    /// repository in front of it explores it, and a plan is text.
-    /// </param>
     private async Task<string> RunStageAsync(
         string repoPath,
         string branch,
         string planText,
-        Func<SessionState, Transition> begin,
-        bool needsWorktree,
-        // TOLD, not derived. `!needsWorktree` happens to mean "plan" today and this file already
-        // records what deriving the stage cost twice: `planPrompts is { Count: > 0 }` is empty on an
-        // ordinary plan round, and reading the ROLES works only because no code round happens to
-        // carry PlanCritique. The caller knows which stage it is running.
-        bool isPlanStage,
-        Func<PersistedSession, string, string, Task<IReadOnlyList<ReviewerWork>>> makeWork,
+        StageRun stage,
         CancellationToken ct)
     {
         if (planText.Length == 0)
@@ -489,7 +478,7 @@ public sealed partial class PanelService
 
         session = ApplyAnyHumanDecision(session);
 
-        if (begin(session.State) is Transition.Refused refused)
+        if (stage.Begin(session.State) is Transition.Refused refused)
         {
             return Error(refused.Sentence);
         }
@@ -499,12 +488,12 @@ public sealed partial class PanelService
             var sha = await _worktrees.ResolveShaAsync(repoPath, branch);
             // The plan stage gets an empty scratch directory instead of a checkout — there is
             // nothing there to wander into, which is the point.
-            await using var lease = needsWorktree
+            await using var lease = stage.NeedsWorktree
                 ? await _worktrees.AddAsync(repoPath, sha, session.State.SessionId, session.State.RoundsRunThisStage + 1)
                 : null;
-            using var scratch = needsWorktree ? null : new ScratchDirectory();
+            using var scratch = stage.NeedsWorktree ? null : new ScratchDirectory();
             var workingDir = lease?.Path ?? scratch!.Path;
-            var work = await makeWork(session, workingDir, sha);
+            var work = await stage.MakeWork(session, workingDir, sha);
 
             // A stage nobody serves is a REFUSAL, not an empty round. With no reviewer the round
             // runs nothing, merges nothing, and passes the gate — reporting `proceed` having
@@ -526,7 +515,7 @@ public sealed partial class PanelService
             var subject = RoundSubject.From(planText, File.Exists);
             var live = new LiveRound(_store, session, work, subject);
             var audit = new RoundAudit(_log, session.State.Stage.ToString(), session.State.RoundsRunThisStage + 1);
-            var excluded = ExcludedFrom(isPlanStage);
+            var excluded = ExcludedFrom(stage.IsPlanStage);
             audit.Opening(work, workingDir, _settings.ReviewerTimeout, excluded);
             var results = await _scheduler.RunAllAsync(work, _executor, ct, progress =>
             {
@@ -1348,3 +1337,23 @@ public sealed partial class PanelService
     private static string Error(string sentence) =>
         JsonSerializer.Serialize(new ErrorAnswer(sentence), ServerJsonContext.Default.ErrorAnswer);
 }
+
+/// <summary>
+/// Which stage a run IS: how it begins, whether its reviewers get a checkout, and how its work is
+/// built.
+/// </summary>
+/// <remarks>
+/// <para>One argument instead of four, because <c>RunStageAsync</c> had grown to eight parameters and
+/// an analyser is right that eight is where a signature stops being readable. These four are not four
+/// independent knobs — they are one answer to "which stage is this", and every combination other than
+/// the two the callers pass is meaningless.</para>
+/// <para><b><c>IsPlanStage</c> is TOLD, not derived from <c>NeedsWorktree</c>.</b> The two happen to
+/// agree today, and this file records what deriving the stage cost twice: <c>planPrompts is
+/// { Count: &gt; 0 }</c> is empty on an ordinary plan round, and reading the ROLES works only because
+/// no code round happens to carry <c>PlanCritique</c>.</para>
+/// </remarks>
+internal sealed record StageRun(
+    Func<SessionState, Transition> Begin,
+    bool NeedsWorktree,
+    bool IsPlanStage,
+    Func<PersistedSession, string, string, Task<IReadOnlyList<ReviewerWork>>> MakeWork);

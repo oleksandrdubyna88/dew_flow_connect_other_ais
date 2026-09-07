@@ -169,12 +169,17 @@ public static class RuntimeResolution
     /// <para>The full note is not lost: it is what `providers` answers and what the panel's card
     /// shows, both of which a PERSON reads. This is the sentence a MODEL reads.</para>
     /// </remarks>
-    public static string ExclusionReason(VendorIdentity vendor, bool hasVaultKey, bool hasServerToken) =>
-        NameOf(vendor) == "remote" && !hasServerToken
-            ? "this machine is not signed in to its Team server"
-            : AuthOf(vendor, hasVaultKey, hasServerToken).Auth == "unavailable"
-                ? "no credential for it on this machine"
-                : "it cannot run here";
+    public static string ExclusionReason(VendorIdentity vendor, bool hasVaultKey, bool hasServerToken)
+    {
+        if (NameOf(vendor) == "remote" && !hasServerToken)
+        {
+            return "this machine is not signed in to its Team server";
+        }
+
+        return AuthOf(vendor, hasVaultKey, hasServerToken).Auth == "unavailable"
+            ? "no credential for it on this machine"
+            : "it cannot run here";
+    }
 
     private static (string Auth, string Note) TeamServerAuthOf(VendorIdentity vendor, bool hasServerToken) =>
         hasServerToken
