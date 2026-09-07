@@ -479,8 +479,19 @@ work. Three things about it are worth knowing:
   pair, not that one. A machine already in the state is unstuck by reloading the stale window — which
   is what the warning now says, with the button that does it.
 
-A refusal is reported once per session, never silently: a window that quietly reverts somebody's
-configuration is the same defect seen from the other side.
+A refusal is reported **once per distinct newer version**, cleared after a successful write, and never
+silently: a window that quietly reverts somebody's configuration is the same defect seen from the
+other side. A once-per-session flag was the first draft and is the wrong shape — somebody who updates
+the other window and hits the wall again would be told nothing. The suppression compares the
+NORMALISED version, so two spellings of one version are one sentence, and the stamp is stripped of
+control characters and capped before it reaches a dialog, because it is text out of a file anybody
+can edit.
+
+**A file that cannot be READ is not a file that is not there.** The first implementation answered an
+empty string for both, so a locked file — or a volume that blinked — read as "nothing there", which
+is permission to overwrite: the same revert, through a different door. Only a confirmed
+`FileNotFound` is absent; every other failure stands the write down and is retried on the next
+configuration change. Three reviewers found that independently on one round.
 
 ### A card captioned with the wrong software (2026-09-07)
 
