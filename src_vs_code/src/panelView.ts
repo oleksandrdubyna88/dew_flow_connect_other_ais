@@ -450,22 +450,21 @@ interface CardContext {
   readonly reported: Readonly<Record<string, ProviderHealth>>;
 }
 
-function vendorCard(vendor: Vendor, context: CardContext): string {
-  const { codexModels, cli, price, localEngine, agyModels, allowedRemote, reported } = context;
-  const id = escapeHtml(vendor.id);
-  const local = vendor.runtime === 'local';
-  // A Team server row is configured ON THE SERVER, not here: its endpoint is the server's address,
-  // its CLI runs there, and its price is the company's subscription rather than this person's. Three
-  // fields that could only be filled in wrongly.
-  const remote = vendor.runtime === 'remote';
-  const models = modelsFor(vendor.runtime, codexModels, vendor.model, localEngine, agyModels, allowedRemote.models);
-  // Who is asked for an endpoint: everybody except the shipped vendors that already know where
-  // they go. It used to be "everybody with a baseUrl already set, plus local" — which hid the field
-  // from the one preset whose entire purpose is to be given a base URL ("Another OpenAI-compatible
-  // endpoint" ships with an empty one), so it could never be filled in. Found by Gemma4 26B,
-  // 2026-09-02, and it is the only defect in that campaign no hosted model found.
-  const endpoint =
-    remote || (KNOWS_ITS_OWN_ENDPOINT.has(vendor.id) && vendor.baseUrl.length === 0)
+/**
+ * The endpoint field, and the CLI-path and price fields.
+ *
+ * <p>Lifted out of `vendorCard` because that function had reached a cognitive complexity of 32
+ * against an allowed 15 — one function deciding what a card shows for six runtimes, three of which
+ * hide different halves of it. These two are whole answers on their own and read better named.</p>
+ *
+ * <p>Who is asked for an endpoint: everybody except the shipped vendors that already know where
+ * they go. It used to be "everybody with a baseUrl already set, plus local" — which hid the field
+ * from the one preset whose entire purpose is to be given a base URL ("Another OpenAI-compatible
+ * endpoint" ships with an empty one), so it could never be filled in. Found by Gemma4 26B,
+ * 2026-09-02, and it is the only defect in that campaign no hosted model found.</p>
+ */
+function endpointField(vendor: Vendor, id: string, local: boolean, remote: boolean): string {
+  return remote || (KNOWS_ITS_OWN_ENDPOINT.has(vendor.id) && vendor.baseUrl.length === 0)
       ? ''
       : `
   <div class="field">
@@ -481,7 +480,10 @@ ${local ? remoteNotice(vendor.baseUrl) : ''}
   // Shown for EVERY vendor, not only a custom endpoint. PATH is not always able to answer: in WSL
   // `codex` and `gemini` resolve to the WINDOWS npm shims through the interop PATH and die on a
   // missing Linux binary, and until this field existed nothing could point at the native one.
-  const executable = remote ? '' : `
+}
+
+function runtimeFields(vendor: Vendor, id: string, local: boolean, remote: boolean, price: ModelPrice | undefined): string {
+  return remote ? '' : `
   <div class="field">
     <input type="text" data-setting="executablePath" data-vendor="${id}" title="${escapeHtml(HELP.vendorExecutablePath)}"
            placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(vendor.executablePath)}">
@@ -498,6 +500,19 @@ ${local ? remoteNotice(vendor.baseUrl) : ''}
            value="${vendor.pricePerMillionOut === 0 ? '' : vendor.pricePerMillionOut}"
            placeholder="${ratePlaceholder(price?.outPerMillion)}" title="${escapeHtml(local ? HELP.localPrice : rateNote(vendor.model, price))}">
   </div>`;
+}
+
+function vendorCard(vendor: Vendor, context: CardContext): string {
+  const { codexModels, cli, price, localEngine, agyModels, allowedRemote, reported } = context;
+  const id = escapeHtml(vendor.id);
+  const local = vendor.runtime === 'local';
+  // A Team server row is configured ON THE SERVER, not here: its endpoint is the server's address,
+  // its CLI runs there, and its price is the company's subscription rather than this person's. Three
+  // fields that could only be filled in wrongly.
+  const remote = vendor.runtime === 'remote';
+  const models = modelsFor(vendor.runtime, codexModels, vendor.model, localEngine, agyModels, allowedRemote.models);
+  const endpoint = endpointField(vendor, id, local, remote);
+  const executable = runtimeFields(vendor, id, local, remote, price);
 
   return `<div class="vendor">
   <div class="head">
