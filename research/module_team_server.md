@@ -75,6 +75,12 @@ it is not.
 > server's posting a header and a null body, the extension's asserting the token was in the body —
 > and nothing crossed between them.
 
+**The `Local` scheme and a real provider cannot both be configured.** `Startup.Guard` refuses to
+start when `Auth:Local:SigningKey` is set alongside a Microsoft tenant or Google: that scheme signs
+identities with a shared secret, so beside a real provider it is an identity bypass — anyone with
+the key is anyone in an allowed domain. It exists for the tests and for an air-gapped deployment,
+and now the server enforces the boundary instead of a comment describing it.
+
 **Something crosses between them now.** `npm run test:contract` in `src_vs_code` drives the
 extension's own `createSession` and `ask` against a real instance of this server and asserts the
 whole handshake: `201` for a session, the issued token accepted on a later call, and `403` — not
