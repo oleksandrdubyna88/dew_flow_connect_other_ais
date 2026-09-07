@@ -27,9 +27,11 @@ const CAP_MS = 8_000;
  * Server section says the check itself could not be made. **Answered** — the map, which the cards
  * read.</p>
  *
- * <p>An empty parse from a zero exit counts as NOT answered: a real configuration always has at
- * least the two default vendors, so an empty map means the shape moved rather than that somebody
- * configured nobody.</p>
+ * <p><b>An empty answer is answered.</b> What decides `answered` is whether a providers ARRAY was
+ * parsed at all, not how many rows it held — a build that legitimately reports zero reviewers must
+ * not read as a build that could not report. An earlier draft derived it from the map being
+ * non-empty and would have shown "could not report its reviewers" forever on such a configuration;
+ * two reviewers caught it on the same round.</p>
  */
 export async function readProviders(executable: string): Promise<ProvidersAnswer> {
   if (executable.length === 0) {
@@ -43,5 +45,7 @@ export async function readProviders(executable: string): Promise<ProvidersAnswer
 
   const reported = parseProviders(output);
 
-  return { reported, asked: true, answered: Object.keys(reported).length > 0 };
+  return reported === undefined
+    ? { reported: {}, asked: true, answered: false }
+    : { reported, asked: true, answered: true };
 }

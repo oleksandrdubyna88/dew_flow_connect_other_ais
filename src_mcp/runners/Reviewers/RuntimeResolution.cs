@@ -156,6 +156,26 @@ public static class RuntimeResolution
     /// just refused to run, and a hand-written second copy here would drift from it the first time
     /// either was reworded.
     /// </remarks>
+    /// <summary>
+    /// Why a vendor cannot review, in words this side wrote.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Deliberately NOT the vendor's note.</b> That note can carry a remote server's own
+    /// text — <see cref="RemoteAsk.UnexpectedMessage"/> interpolates a response body — and the
+    /// exclusion reason travels into <c>ReviewerSummary.Sentence</c>, which reaches the calling AI as
+    /// round status. A remote service must not be able to put instruction-shaped text into an AI's
+    /// instruction stream, and a review gate is precisely the place where that would be worth doing.
+    /// Raised on epic 3's code round.</para>
+    /// <para>The full note is not lost: it is what `providers` answers and what the panel's card
+    /// shows, both of which a PERSON reads. This is the sentence a MODEL reads.</para>
+    /// </remarks>
+    public static string ExclusionReason(VendorIdentity vendor, bool hasVaultKey, bool hasServerToken) =>
+        NameOf(vendor) == "remote" && !hasServerToken
+            ? "this machine is not signed in to its Team server"
+            : AuthOf(vendor, hasVaultKey, hasServerToken).Auth == "unavailable"
+                ? "no credential for it on this machine"
+                : "it cannot run here";
+
     private static (string Auth, string Note) TeamServerAuthOf(VendorIdentity vendor, bool hasServerToken) =>
         hasServerToken
             ? ("server token", $"signed in to the Team server at {TeamServerAuth.Normalise(vendor.BaseUrl)}")

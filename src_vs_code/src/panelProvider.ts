@@ -352,33 +352,62 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     );
   }
 
-  /** The last answer from `--providers`, and when it was taken. */
+  /** The last answer from `--providers`, when it was taken, and which binary gave it. */
   private providersCache: ProvidersAnswer = { reported: {}, asked: false, answered: false };
 
   private providersAt = 0;
 
+  /** Keyed on the executable too: a reinstall inside the window must not serve the old one's answer. */
+  private providersFrom = '';
+
+  private providersInFlight = false;
+
   /**
-   * What the SERVER says it can run, cached like the rounds log and for the same reason.
+   * What the SERVER says it can run — the last answer, never a wait.
    *
-   * <p>A repaint happens on every five-second tick, and this is a process spawn. Ten seconds is
-   * shorter than any round and longer than any burst of ticks — the gate called a child process on
-   * a hot path out twice.</p>
+   * <p><b>Started by a render and never awaited by one.</b> `refreshTeamServers` already has this
+   * shape and it is here for the same reason: this is a process spawn with an 8 s cap, and awaiting
+   * it inside `render` holds the whole panel for as long as a cold or hanging binary takes. The
+   * probe repaints when it lands, and the freshness check is what stops the loop — the render it
+   * triggers finds the answer fresh and starts nothing.</p>
    *
-   * <p>An empty answer is not "everything is fine": `availabilityOf` reads a missing row as
-   * UNKNOWN, and the card then shows what it always showed.</p>
+   * <p>An empty answer is not "everything is fine": `availabilityOf` reads a missing row as UNKNOWN,
+   * and the card then shows what it always showed.</p>
    */
-  private async providerHealth(): Promise<ProvidersAnswer> {
+  private providerHealth(): ProvidersAnswer {
     const AGE_MS = 10_000;
-    if (Date.now() - this.providersAt < AGE_MS) {
-      return this.providersCache;
-    }
     const server = serverPath(this.context.globalStorageUri);
-    this.providersAt = Date.now();
-    this.providersCache = server === undefined
-      ? { reported: {}, asked: false, answered: false }
-      : await readProviders(server.fsPath);
+    const executable = server?.fsPath ?? '';
+
+    // The path is part of the key. Reinstalling or repointing the server inside the window would
+    // otherwise serve the previous binary's verdict — which can badge a reviewer the new one runs.
+    if (executable !== this.providersFrom || Date.now() - this.providersAt >= AGE_MS) {
+      void this.refreshProviders(executable);
+    }
 
     return this.providersCache;
+  }
+
+  /** One probe at a time, and a repaint when it lands rather than a wait while it runs. */
+  private async refreshProviders(executable: string): Promise<void> {
+    if (this.providersInFlight) {
+      return;
+    }
+    this.providersInFlight = true;
+    try {
+      const answer = executable.length === 0
+        ? { reported: {}, asked: false, answered: false }
+        : await readProviders(executable);
+      const changed = JSON.stringify(answer) !== JSON.stringify(this.providersCache);
+      this.providersCache = answer;
+      this.providersAt = Date.now();
+      this.providersFrom = executable;
+      if (changed) {
+        await this.render();
+      }
+    } finally {
+      this.providersInFlight = false;
+    }
   }
 
   /** Re-read everything and repaint: the configuration, the sessions, the ledger and the probes. */
@@ -414,7 +443,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       snippetStatus: await pastedSnippetStatus(),
       localEngines: await this.probeLocalEngines(vendors),
       teamServers: this.teamServerStates(config),
-      providers: await this.providerHealth(),
+      providers: this.providerHealth(),
       usageScope: this.usageScope,
     };
 

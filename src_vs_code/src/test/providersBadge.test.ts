@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import { test } from 'node:test';
-import { availabilityOf, parseProviders } from '../providers';
+import { availabilityOf, parseProviders, ProviderHealth } from '../providers';
 import { PanelState, panelHtml } from '../panelView';
 import { DEFAULTS } from '../settingsShape';
 import { Vendor } from '../vendors';
@@ -31,24 +31,47 @@ const ROW: Vendor = {
   pricePerMillionOut: 0,
 };
 
+/**
+ * A `PanelState` the COMPILER checks, rather than one cast past it.
+ *
+ * <p>Every field spelled out and no trailing `as`. The fixture beside this one is written with
+ * `as unknown as PanelState`, which is the shape the TypeScript doctrine names: a promise to
+ * maintain a type by hand that comes due silently the day `PanelState` gains a required field. Two
+ * reviewers caught this file copying it, which is the specific thing reuse-first forbids — do not
+ * imitate a pattern you can see is wrong because the file next door does it that way.</p>
+ *
+ * <p>The neighbour is left alone deliberately: rewriting a fixture I was not asked to change turns a
+ * small diff into one nobody can review. It is named here instead.</p>
+ */
 function page(over: Partial<PanelState> = {}): string {
-  return panelHtml({
+  const state: PanelState = {
     settings: DEFAULTS,
     vendors: [ROW],
-    codexModels: [], agyModels: [],
+    codexModels: [],
+    agyModels: [],
     localEngines: {},
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
-    side: '', perSide: false,
-    questions: [], sessions: [], openSections: ['reviewers'],
-    usage: [], usageWindow: 'day', latestServerVersion: '',
-    cliStatus: {}, modelPrices: {},
-    snippetStatus: { kind: 'absent', version: 0 },
+    side: '',
+    perSide: false,
+    questions: [],
+    sessions: [],
+    openSections: ['reviewers'],
+    usage: [],
+    usageWindow: 'day',
+    latestServerVersion: '',
+    cliStatus: {},
+    modelPrices: {},
+    // `current`, not `version` — which the cast in the neighbouring fixture has been hiding, and
+    // which the compiler said the moment this one stopped casting.
+    snippetStatus: { kind: 'absent', current: 0 },
     teamServers: [],
     ...over,
-  } as unknown as PanelState, 'nonce');
+  };
+
+  return panelHtml(state, 'nonce');
 }
 
-const UNAVAILABLE: Record<string, { provider: string; auth: string; note: string }> = {
+const UNAVAILABLE: Record<string, ProviderHealth> = {
   'remsoftdev-claude': {
     provider: 'remsoftdev-claude',
     auth: 'unavailable',
@@ -64,7 +87,7 @@ test('a reviewer the server cannot run is badged, with the reason', () => {
 });
 
 test('a reviewer the server CAN run is badged with nothing', () => {
-  const fine = {
+  const fine: Record<string, ProviderHealth> = {
     'remsoftdev-claude': { provider: 'remsoftdev-claude', auth: 'server token', note: '1 of 1 account(s) ready' },
   };
 
@@ -76,7 +99,10 @@ test('a probe that answered nothing badges nothing — unknown is not unavailabl
   // that lights up because a probe failed is a badge that lies, and the ⤓ buttons on this same card
   // already refuse to guess for exactly this reason.
   assert.ok(!page().includes('cannot review'), 'no answer at all');
-  assert.ok(!page({ providers: { reported: {}, asked: true, answered: false } }).includes('cannot review'), 'an empty answer');
+  assert.ok(
+    !page({ providers: { reported: {}, asked: true, answered: false } }).includes('cannot review'),
+    'an answer that could not be read',
+  );
 });
 
 test('a row the server did not mention is unknown, not fine', () => {
@@ -84,26 +110,35 @@ test('a row the server did not mention is unknown, not fine', () => {
   // than to reassure somebody over.
   assert.equal(availabilityOf('remsoftdev-claude', {}), 'unknown');
   assert.equal(availabilityOf('remsoftdev-claude', UNAVAILABLE), 'unavailable');
-  assert.equal(
-    availabilityOf('x', { x: { provider: 'x', auth: 'own auth', note: '' } }),
-    'fine',
-  );
+  assert.equal(availabilityOf('x', { x: { provider: 'x', auth: 'own auth', note: '' } }), 'fine');
 });
 
 test('an answer with no auth at all is unknown, because it says nothing', () => {
   assert.equal(availabilityOf('x', { x: { provider: 'x', auth: '', note: 'something' } }), 'unknown');
 });
 
-test('the parser survives everything a different build could hand it', () => {
-  assert.deepEqual(parseProviders('not json'), {});
-  assert.deepEqual(parseProviders('null'), {});
-  assert.deepEqual(parseProviders('{}'), {}, 'a body with no providers array');
-  assert.deepEqual(parseProviders('{"providers":"nope"}'), {});
-  assert.deepEqual(parseProviders('{"providers":[null,{"provider":""},{"nope":1}]}'), {}, 'rows with no id');
+test('a body that is not a providers answer is undefined, not an empty one', () => {
+  // The distinction the Server section's sentence rests on. Collapsing the two made "the binary
+  // could not answer" derivable from an empty map, so a build that legitimately reported zero
+  // reviewers would have shown "could not report its reviewers" forever. Two reviewers, one round.
+  assert.equal(parseProviders('not json'), undefined);
+  assert.equal(parseProviders('null'), undefined);
+  assert.equal(parseProviders('{}'), undefined, 'a body with no providers array');
+  assert.equal(parseProviders('{"providers":"nope"}'), undefined);
 
+  assert.deepEqual(parseProviders('{"providers":[]}'), {}, 'an EMPTY array is an answer');
+  assert.deepEqual(
+    parseProviders('{"providers":[null,{"provider":""},{"nope":1}]}'),
+    {},
+    'rows with no id are dropped, and the answer is still an answer',
+  );
+});
+
+test('the parser keeps what it can read and defaults what it cannot', () => {
   const one = parseProviders('{"providers":[{"provider":"codex","auth":"own auth"}]}');
-  assert.equal(one['codex']?.auth, 'own auth');
-  assert.equal(one['codex']?.note, '', 'a missing note is empty, not undefined');
+
+  assert.equal(one?.['codex']?.auth, 'own auth');
+  assert.equal(one?.['codex']?.note, '', 'a missing note is empty, not undefined');
 });
 
 test('the Server section says when the installed binary could not report at all', () => {
@@ -113,17 +148,26 @@ test('the Server section says when the installed binary could not report at all'
   const html = page({
     providers: { reported: {}, asked: true, answered: false },
     openSections: ['reviewers', 'server'],
-  } as Partial<PanelState>);
+  });
 
   assert.match(html, /could not report its reviewers/);
   assert.ok(!html.includes('cannot review'), 'and still badges no reviewer');
+});
+
+test('a binary that answered with no reviewers is not a binary that failed', () => {
+  const html = page({
+    providers: { reported: {}, asked: true, answered: true },
+    openSections: ['reviewers', 'server'],
+  });
+
+  assert.ok(!html.includes('could not report its reviewers'));
 });
 
 test('a binary that was never asked says nothing — that section already says the server is absent', () => {
   const html = page({
     providers: { reported: {}, asked: false, answered: false },
     openSections: ['reviewers', 'server'],
-  } as Partial<PanelState>);
+  });
 
   assert.ok(!html.includes('could not report its reviewers'));
 });

@@ -559,6 +559,19 @@ badge that lights up because a probe failed is a badge that lies. There is a sec
 here: an MCP client's `env` block outranks the settings file key by key, so a standalone invocation
 cannot see environment a scripted client passed to the running server.
 
+**The probe is STARTED by a render and never awaited by one**, the shape `refreshTeamServers`
+already has: it is a process spawn with an 8 s cap, and awaiting it inside `render` held the whole
+panel for as long as a cold or hanging binary took. It repaints when it lands, and the freshness
+check stops the loop. Its cache is keyed on the executable PATH as well as the clock — reinstalling
+or repointing the server inside the window would otherwise serve the previous binary's verdict, and
+that verdict can badge a reviewer the new one runs perfectly.
+
+**The badge says where its verdict came from.** `--providers` reads the settings file plus the
+environment of the process that asked it, and an MCP client's own `env` block outranks that file key
+by key — so a person whose client passes one can see that this reading is not necessarily the
+running server's. Sharing the live server's environment would need a channel into it that does not
+exist.
+
 **A probe that could not be made is said once, in the Server section.** The card stays silent — a
 badge fed by a failed probe would be a badge about a reviewer nobody asked about — but the check
 failing is a fact about this BINARY, and silence about a failed check is the class of defect this
@@ -566,8 +579,10 @@ whole plan is about. So the answer carries `asked` and `answered`: no binary say
 that section already reports the server as absent; asked-and-failed says the installed `coai-mcp`
 could not report its reviewers. An 8 s cap kills a probe that hangs, a non-zero exit (a build too old
 for the flag exits 64 saying so) and a body whose shape moved are both "asked and failed", and an
-empty map from a zero exit counts as failed too — a real configuration always has at least the two
-default vendors. Four reviewers raised this on one round.
+an answer whose shape moved is failed. An EMPTY providers array is not: what decides `answered` is
+whether the array was parsed at all, never how many rows it held, or a build that legitimately
+reported zero reviewers would say "could not report" forever. Four reviewers raised the first half
+of this on one round and two the second.
 
 The module is split in two, `providers.ts` and `providersProbe.ts`, exactly as `roundsDb` and
 `roundsDbRead` are and for the same reason: `panelView` imports the types and the parser, so a spawn

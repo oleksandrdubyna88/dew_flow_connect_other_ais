@@ -91,7 +91,31 @@ public class RoundNamesTheExcludedTests
     {
         var excluded = With(Local(), Remote()).ExcludedFrom(isPlanStage: true);
 
-        excluded.Should().ContainSingle().Which.Should().StartWith("remsoftdev-claude: ");
+        excluded.Should().ContainSingle().Which.Should()
+            .StartWith("remsoftdev-claude: ").And.Contain("not signed in to its Team server");
+    }
+
+    /// <summary>
+    /// The reason a MODEL reads is written on this side, never by the vendor.
+    /// </summary>
+    /// <remarks>
+    /// A remote vendor's note can carry the SERVER's own text — <c>UnexpectedMessage</c> interpolates
+    /// a response body — and this string travels into the round summary that reaches the calling AI.
+    /// A remote service being able to put instruction-shaped text into an AI's instruction stream is
+    /// a channel worth closing, and a review gate is precisely where somebody would want it. The full
+    /// note is still what <c>providers</c> answers and what the panel shows: the surfaces a PERSON
+    /// reads. Raised on epic 3's code round.
+    /// </remarks>
+    [Fact]
+    public void TheReasonIsOursEvenWhenTheVendorsNoteIsNot()
+    {
+        var reason = With(Local(), Remote()).ExcludedFrom(isPlanStage: true).Single();
+
+        // The note for this state names the server's ADDRESS and tells the person where to sign in.
+        // None of that belongs in a sentence a model is handed as round status.
+        reason.Should().NotContain("https://", "a URL out of a vendor's note is text this side did not write");
+        reason.Should().NotContain("sign in from", "the cure is for the panel, not for the model");
+        reason.Should().Be("remsoftdev-claude: this machine is not signed in to its Team server");
     }
 
     [Fact]

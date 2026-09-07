@@ -53,13 +53,21 @@ export interface ProvidersAnswer {
   readonly answered: boolean;
 }
 
-/** The shape the server answers with, parsed defensively. */
-export function parseProviders(output: string): Record<string, ProviderHealth> {
+/**
+ * The shape the server answers with, parsed defensively — and whether it WAS that shape.
+ *
+ * <p>`undefined` means the body was not a providers answer at all: not JSON, not an object, or no
+ * `providers` array. An empty MAP from a well-formed array is a different thing entirely, and
+ * collapsing the two is what an earlier draft did — it derived "the binary could not answer" from
+ * the map being empty, so a build that legitimately reported zero reviewers would have shown "could
+ * not report its reviewers" forever. Raised twice on epic 3's code round.</p>
+ */
+export function parseProviders(output: string): Record<string, ProviderHealth> | undefined {
   try {
     const parsed: unknown = JSON.parse(output);
     const rows = (parsed as { providers?: unknown })?.providers;
     if (!Array.isArray(rows)) {
-      return {};
+      return undefined;
     }
 
     const found: Record<string, ProviderHealth> = {};
@@ -72,7 +80,7 @@ export function parseProviders(output: string): Record<string, ProviderHealth> {
 
     return found;
   } catch {
-    return {};
+    return undefined;
   }
 }
 
