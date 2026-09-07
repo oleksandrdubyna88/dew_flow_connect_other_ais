@@ -36,6 +36,14 @@ updates:
       npm-minor-and-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+    # @types/vscode is pinned by hand to the engine the extension declares, so MINOR bumps are
+    # ignored as well as major ones. vsce refuses to package when the types run ahead of it —
+    # "@types/vscode ^1.136.0 greater than engines.vscode ^1.85.0" — so 1.134 -> 1.136 is a red
+    # build, and the only ways out are to raise engines, which drops every user below that VS Code
+    # build, or to leave the types alone. PR #77, 2026-09-07.
+    ignore:
+      - dependency-name: "@types/vscode"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     labels: ["dependencies", "npm"]
     commit-message:
       prefix: "chore(deps)"
