@@ -18,6 +18,7 @@ Convention: `.claude/rules/shared/common/planning-docs.md`.
 | [PLAN_provider_liveness.md](PLAN_provider_liveness.md) | `providers` still calls a vendor healthy on the strength of `--version`, which never reaches the vendor. Three states instead of two, established by a real round trip and cached. |
 | [PLAN_rule_formatting.md](PLAN_rule_formatting.md) | Every reviewer in an eight-cell measurement missed the one rule written as a table row. Whether rule FORMATTING changes what a reviewer can apply, measured. |
 | [PLAN_panel_probing_state.md](PLAN_panel_probing_state.md) | A render waits on its probes with nothing on screen saying so: press ⟳ where nothing answers and the old sentence sits unchanged for seconds. Extracted from the WSL plan's code round, where it was accepted as true and left as a tail. |
+| [PLAN_contract_across_the_seam.md](PLAN_contract_across_the_seam.md) | Two green suites disagreed about one wire format and shipped a sign-in nobody could use: the server's tests posted a header, the extension's asserted a body. A test that fails when the two halves disagree, an enforced "credential comes from the Authorization header only" rule, and a 401 that says why to the extent it safely can. Accepted in the 0.31.2 gate and deferred out of the hotfix. |
 
 Everything else planned so far shipped — the master plan, all six epics, the conventions pass, the
 per-role gate with dealt prompts, and the escalation tail are
