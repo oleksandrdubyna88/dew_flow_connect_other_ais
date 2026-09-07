@@ -34,7 +34,7 @@ window of the profile, local and remote alike. The TOKEN is not shared: `writeTo
 So today, after signing in from a Windows window and opening a WSL one, the panel says *Signed in as
 you@company* and the shim in that distro has no token file at all. The panel is describing a machine;
 everything underneath it is per side. That is the same defect
-[PLAN_server_version_per_side.md](../research/PLAN_server_version_per_side.md) fixed for the coai-mcp
+[PLAN_server_version_per_side.md](PLAN_server_version_per_side.md) fixed for the coai-mcp
 version, one layer over.
 
 ## What the operator asked for, in their words
@@ -198,7 +198,7 @@ Every one of these is a unit test in `src_vs_code/src/test`, run by `npm test`:
 - [x] The panel never reports a session this side has no token for.
 - [x] A sign-out on one side takes the other sides with it.
 - [x] `trustedKey` stayed shared, and it is written down why.
-- [x] `npm test` green — 603 tests, 0 failing.
+- [x] `npm test` green — 605 tests, 0 failing.
 - [x] This plan is promoted to `research/` with what shipped differently.
 
 ## What shipped differently

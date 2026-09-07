@@ -2,7 +2,8 @@
 
 Documentation of shipped behaviour: [architecture.md](architecture.md) is the entry point; each
 `module_*.md` deep-dives one module. Implemented plans are promoted here from `todo/` with an
-`IMPLEMENTED <date>` status line — none yet.
+`IMPLEMENTED <date>` status line, and every one of them is a row in the table below — the promotion
+is not finished until it is.
 
 | Document | What it covers |
 |---|---|
@@ -55,3 +56,4 @@ Documentation of shipped behaviour: [architecture.md](architecture.md) is the en
 | [PLAN_team_server.md](PLAN_team_server.md) | IMPLEMENTED 2026-09-06 — one company subscription per vendor on one machine, behind Microsoft sign-in restricted to a company domain: the server (sessions, vendor catalog, account slots, review queue, per-person usage), the `remote` client runtime with its `--ask-remote` shim, the panel's *Team servers* section, and the deployment. `coai.remsoft.dev` is live. Four things shipped differently and the status line names them; the per-PERSON spending view is the open tail |
 | [PLAN_settings_per_side.md](PLAN_settings_per_side.md) | IMPLEMENTED 2026-09-06 — each side of the machine keeps its own vendors, proxies, CLI paths and vault key, off by default and seeded from what that side had; the identity is the one the install record already folds |
 | [PLAN_vendor_per_stage.md](PLAN_vendor_per_stage.md) | IMPLEMENTED 2026-09-06 — a vendor is set per stage (local measured 19 % useful on a plan and 3 % on code), and a stage no vendor serves is refused rather than passed with nothing reviewed |
+| [PLAN_team_server_side_and_url.md](PLAN_team_server_side_and_url.md) | IMPLEMENTED 2026-09-06 — a Team-server sign-in belongs to a SIDE of the machine: the panel renders the token file this side holds instead of a record VS Code shares between windows, sharing-on mints each side its own token without a prompt, and a sign-out reaches the other sides. The *Server* section gained the address, read-only, with the server's version beside it. Its open tail is the token file that is not stat-ed at render time |
