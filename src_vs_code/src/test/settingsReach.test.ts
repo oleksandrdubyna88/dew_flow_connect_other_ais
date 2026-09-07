@@ -179,3 +179,37 @@ test('teamServerId stays on this side — the server has no field for it and no 
 
   assert.ok(!('teamServerId' in vendors[0]!), 'the server would carry a field it cannot use');
 });
+
+/**
+ * `coai.vendors` is JSON a person edits by hand, so the value can be anything.
+ *
+ * <p>`vendorsFrom` guards by `typeof`; `vendorsEnv` is exported beside it and did not. A hand-written
+ * `"remoteVendor": null` satisfies an `=== undefined` check and then has `.length` read off it, which
+ * throws inside the settings sync — and a sync that throws leaves the server reading whatever the
+ * file held before, with nothing anywhere saying the write never happened. Raised on the code round.</p>
+ */
+test('a hand-written null remoteVendor is absent, not a crash', () => {
+  const row = { ...REMOTE_ROW, remoteVendor: null } as unknown as typeof REMOTE_ROW;
+
+  const vendors = JSON.parse(
+    (JSON.parse(serverSettingsJson(DEFAULTS, [row])) as Record<string, string>)['COAI_VENDORS']!,
+  ) as object[];
+
+  assert.ok(!('remoteVendor' in vendors[0]!), 'null is not a vendor name — it is an absent one');
+});
+
+test('a whitespace-only remoteVendor is absent too, and never sent as a name made of spaces', () => {
+  const vendors = JSON.parse(
+    (JSON.parse(serverSettingsJson(DEFAULTS, [{ ...REMOTE_ROW, remoteVendor: '   ' }])) as Record<string, string>)['COAI_VENDORS']!,
+  ) as object[];
+
+  assert.ok(!('remoteVendor' in vendors[0]!));
+});
+
+test('the name is trimmed but never re-cased — a server whose catalog says DeepSeek matches DeepSeek', () => {
+  const vendors = JSON.parse(
+    (JSON.parse(serverSettingsJson(DEFAULTS, [{ ...REMOTE_ROW, remoteVendor: ' DeepSeek ' }])) as Record<string, string>)['COAI_VENDORS']!,
+  ) as { remoteVendor?: string }[];
+
+  assert.equal(vendors[0]!.remoteVendor, 'DeepSeek', 'lower-casing here refuses every vendor a server spells with capitals');
+});

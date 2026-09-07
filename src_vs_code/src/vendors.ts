@@ -317,7 +317,18 @@ export function vendorsEnv(vendors: readonly Vendor[]): string {
         // `teamServerId` deliberately stays behind: the server has no field for it and no
         // question it answers. It exists so the PANEL can follow a row to its server entry after
         // somebody fixes a typo in a hostname.
-        ...(v.remoteVendor === undefined || v.remoteVendor.length === 0 ? {} : { remoteVendor: v.remoteVendor }),
+        //
+        // Guarded by `typeof`, not by `!== undefined`, and trimmed before it is weighed. This is
+        // JSON a person edits: a hand-written `"remoteVendor": null` passes an undefined check and
+        // then has `.length` read off it, which throws inside the settings sync — and a sync that
+        // throws leaves the server on the file's previous contents with nothing saying the write
+        // never happened. A name made only of spaces is absent for the same reason it is absent
+        // from `vendorsFrom`. Trimming is not the normalisation this field forbids: that one is
+        // about CASE, and neither side lower-cases, because a server whose catalog says `DeepSeek`
+        // matches `DeepSeek`. Both raised on this change's code round.
+        ...(typeof v.remoteVendor === 'string' && v.remoteVendor.trim().length > 0
+          ? { remoteVendor: v.remoteVendor.trim() }
+          : {}),
         // Written only when NARROWED, like every other value in the env block: a vendor that
         // reviews both stages says nothing, and the server reads an absent flag as both. So the
         // block a person opens still carries only what differs from the defaults.

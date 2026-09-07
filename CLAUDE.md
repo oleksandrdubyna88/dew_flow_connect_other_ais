@@ -40,9 +40,16 @@ node .claude/rules/shared/tools/pin-check.mjs
 
 ## Non-negotiables inherited from the design
 
-- **stdout carries JSON-RPC.** The server's console logging goes to stderr; one stray stdout line is
-  a protocol corruption that looks like a protocol bug. The sanctioned stdout writes are `--help`
-  and `--version` — a person at a terminal, never the protocol path.
+- **stdout carries JSON-RPC — on the PROTOCOL path.** The server's console logging goes to stderr;
+  one stray stdout line while serving stdio is a protocol corruption that looks like a protocol bug.
+  What is sanctioned is not a fixed list of two flags but a shape: a **one-shot CLI mode**, selected
+  by `args[0]` before any transport is opened, that answers and exits and never speaks JSON-RPC at
+  all. Those are `--help`, `--version`, `--log`, `--ask-local`, `--ask-remote` and `--providers`, and
+  their stdout is their entire interface — `--log` has been read from stdout by the panel since the
+  rounds-log page shipped (`roundsDbRead.ts`). This paragraph used to name only `--help` and
+  `--version`, which the code had already outgrown by three flags; a reviewer read it literally on
+  2026-09-07 and was right to. **Adding a one-shot mode means adding it here.** Inside `ServeAsync`
+  the rule is unchanged and absolute.
 - **Reviewers are read-only, in a worktree pinned to a SHA** — one worktree per round, outside the
   repository, pruned on `open`, removed in `finally`.
 - **No secret ever reaches argv or a log line.** Vendor keys come from one CredsForDevs `config`

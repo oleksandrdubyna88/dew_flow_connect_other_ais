@@ -1,6 +1,9 @@
 # PLAN — a Team server reviewer you enabled, and the round that never called it
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/vendors.ts`,
+> Status: **in progress — story 1.1 landed 2026-09-07, the other eight are open.** Kept in `todo/`
+> until the last one ships; promoted then. What has shipped: `vendorsEnv` carries `remoteVendor`,
+> asserted from both sides, with `null` and whitespace-only values treated as absent.
+> Scope: `src_vs_code/src/vendors.ts`,
 > `serverSettingsFile.ts`, `serverSettingsSync.ts`, `extension.ts`, `models.ts`, `panelView.ts`,
 > `panelProvider.ts`; `src_mcp/src/Server/PanelService.cs`, `RoundAudit.cs`, `Program.cs`,
 > `src_mcp/core/Rounds/SessionState.cs`.
@@ -258,6 +261,7 @@ Every item is written RED first and its failure message is checked to name the r
 | C2 | as above | mcp | with nothing excluded the sentence is byte-identical to today's |
 | C3 | new | mcp | `ExcludedFrom` and `BuildWork` agree — nothing is both asked and excluded |
 | C4 | new | mcp | `--providers` prints the same JSON as the `providers` tool, on stdout, exit 0 |
+| C4b | new, **the live check for this seam** | extension | `serverSettingsJson()`'s own output is written into a temp `COAI_DATA_DIR` and the REAL `coai-mcp` binary is run against it with `--providers`; the Team-server row must resolve under `claude`. This is what B1–B3 cannot do: two suites agreeing about a format each hold a copy of the names, and `.claude/rules/shared/common/testing.md` says in as many words that a contract with two implementations needs ONE check exercising them against each other. Raised twice on story 1.1's code round, by codex and by gemini, and it is why `--providers` earns its keep twice |
 | C5 | `panelView.test.ts` | extension | a vendor the server calls unavailable is badged with the server's note |
 | C6 | new | mcp | a reviewer ticked for CODE only is not reported as excluded from a PLAN round — the stage filter runs before the availability one |
 | C7 | `panelView.test.ts` | extension | a probe that failed renders NO badge — the unknown state is not the unavailable one |
