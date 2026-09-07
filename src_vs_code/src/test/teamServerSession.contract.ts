@@ -78,6 +78,10 @@ async function signIn(email: string): Promise<Session> {
     assert.fail(`${email} was refused: status ${result.status} — ${result.message}`);
   }
 
+  // 201, not merely 2xx: `SessionTests.ASession_IsMintedFromATokenAndThenCarriesTheCaller` asserts
+  // that exact code on the server side, so this is where the two halves agree about it.
+  assert.strictEqual(result.status, 201, 'minting a session is a Created, and the server says so');
+
   return result.value;
 }
 

@@ -25,9 +25,17 @@ export const CONTRACT_HEADER = 'X-Coai-Contract';
 /** What this client speaks. Must match `RemoteAsk.ContractVersion` in C#. */
 export const CONTRACT_VERSION = 1;
 
-/** What a server said, or why it could not be asked. */
+/**
+ * What a server said, or why it could not be asked.
+ *
+ * <p>`status` is on BOTH arms. A success used to discard it, which meant no caller could tell
+ * `201 Created` from any other 2xx — and the server's own test asserts exactly `201` for a minted
+ * session, so the two halves of the contract could disagree about the code while agreeing about
+ * the body. CodeRabbit asked for it on the contract suite's pull request; nothing pays for it but
+ * one field.</p>
+ */
 export type ServerResult<T> =
-  | { readonly ok: true; readonly value: T }
+  | { readonly ok: true; readonly status: number; readonly value: T }
   | { readonly ok: false; readonly status: number; readonly message: string };
 
 export interface ClientConfig {
@@ -137,7 +145,11 @@ export async function ask<T>(
       return { ok: false, status: response.status, message: said(text, response.status) };
     }
 
-    return { ok: true, value: (text.length > 0 ? JSON.parse(text) : {}) as T };
+    return {
+      ok: true,
+      status: response.status,
+      value: (text.length > 0 ? JSON.parse(text) : {}) as T,
+    };
   } catch (e) {
     // Includes the deadline: an aborted request is a server that did not answer, which is exactly
     // what a person needs told, and is not different in kind from one that refused the connection.
