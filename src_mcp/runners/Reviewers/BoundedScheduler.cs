@@ -492,8 +492,19 @@ public static class ReviewerSummaryFactory
     /// </remarks>
     private const int ReasonLength = 160;
 
+    /// <remarks>
+    /// <c>failed</c> earns its place from a real gate: our OWN remote shim writes progress notes and
+    /// its verdict to the same stderr, and its verdict — "the Team server's claude reviewer failed
+    /// (…)" — announced nothing this list knew. So the fallback took the FIRST meaningful line, a
+    /// progress note, and the round reported a stopped reviewer as <c>running on the Team server</c>.
+    /// A line that says something failed is a line announcing a failure; it belongs here beside
+    /// <c>refused</c> and <c>denied</c>.
+    /// </remarks>
     private static readonly string[] Announcements =
-        ["error:", "error ", "exception", "fatal", "refused", "denied", "unauthorized", "quota", "not found", "missing"];
+    [
+        "error:", "error ", "exception", "fatal", "failed", "refused", "denied", "unauthorized",
+        "quota", "not found", "missing",
+    ];
 
     private static string Because(string stdErrTail)
     {

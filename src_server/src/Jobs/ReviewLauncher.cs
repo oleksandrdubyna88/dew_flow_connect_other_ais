@@ -3,16 +3,43 @@ using CoaiMcp.Runners.Reviewers;
 
 namespace CoaiServer;
 
-/// <summary>What one attempt at one vendor, on one account, came back with.</summary>
-/// <param name="Outcome">
-/// The executor's own verdict, unchanged. Six shapes, already classified and already tested where
-/// they are defined — this server maps them to a wire vocabulary and invents none of its own.
-/// </param>
-/// <param name="Answer">
-/// The vendor's RAW text. Parsing, repair and de-duplication stay in the client, so the same parser
-/// does not exist twice and drift.
-/// </param>
-public sealed record ReviewAttempt(ReviewerOutcome Outcome, string Answer, long TokensIn, long TokensOut);
+/// <summary>
+/// What one attempt at one vendor, on one account, came back with: an answer, or the reason there
+/// is none.
+/// </summary>
+/// <remarks>
+/// <para><b>Two shapes, because the one-shape version could not express a success.</b> It used to
+/// be a single record carrying a <see cref="ReviewerOutcome"/>, and the executor says a good run by
+/// returning NO outcome — <c>ReviewerLaunch.Terminal</c> is null exactly when the process ran and
+/// exited zero. There was nothing to put in the field, so the launcher put
+/// <c>NotStarted("the executor returned no verdict")</c> there, and every successful review on this
+/// server was recorded as a review that never began. The runner's success arm was unreachable for
+/// as long as the type made success unsayable.</para>
+/// <para>It survived 171 green tests because the only thing that ever produced the success shape
+/// was the suite's own fake launcher, handing the runner a <c>ReviewerOutcome.Ok(null!, …)</c> that
+/// the real launcher cannot construct — it holds raw text, not a parsed review. Each side was
+/// tested against itself. `usage.jsonl` on the live server held two lines, weeks apart, both
+/// <c>NotStarted</c>, with the vendor's own transcript beside them showing a perfect answer.</para>
+/// </remarks>
+public abstract record ReviewAttempt
+{
+    /// <summary>Closed: these two shapes are the whole vocabulary, and nobody adds a third.</summary>
+    private ReviewAttempt()
+    {
+    }
+
+    /// <param name="Raw">
+    /// The vendor's RAW text. Parsing, repair and de-duplication stay in the client, so the same
+    /// parser does not exist twice and drift.
+    /// </param>
+    public sealed record Answered(string Raw, long TokensIn, long TokensOut) : ReviewAttempt;
+
+    /// <param name="Outcome">
+    /// The executor's own verdict, unchanged — this server maps it to a wire vocabulary and invents
+    /// none of its own.
+    /// </param>
+    public sealed record Failed(ReviewerOutcome Outcome) : ReviewAttempt;
+}
 
 /// <summary>
 /// The seam between the job runner and an actual vendor CLI.
@@ -46,8 +73,8 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
         var runtime = RuntimeResolution.For(new VendorIdentity(vendor.Id, vendor.Runtime, string.Empty));
         if (runtime is null)
         {
-            return new ReviewAttempt(
-                new ReviewerOutcome.NotStarted($"no runtime adapter for '{vendor.Runtime}'"), string.Empty, 0, 0);
+            return new ReviewAttempt.Failed(
+                new ReviewerOutcome.NotStarted($"no runtime adapter for '{vendor.Runtime}'"));
         }
 
         // Its own directory per job, deleted by the runner in a finally. The vendor writes its answer
@@ -68,19 +95,32 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
             // this decides which account it runs as.
             var invocation = built with { Request = built.Request with { Environment = environment } };
 
-            var launch = await new ReviewerExecutor(launcher).LaunchAsync(invocation, ct);
-
-            return new ReviewAttempt(
-                launch.Terminal ?? new ReviewerOutcome.NotStarted("the executor returned no verdict"),
-                launch.Answer ?? string.Empty,
-                launch.Usage.TokensIn,
-                launch.Usage.TokensOut);
+            return Read(await new ReviewerExecutor(launcher).LaunchAsync(invocation, ct));
         }
         finally
         {
             Delete(work);
         }
     }
+
+    /// <summary>What one launch means to this server.</summary>
+    /// <remarks>
+    /// <para>Pure, and the only place the executor's contract is read: a <c>Terminal</c> outcome is
+    /// the launch deciding for itself; a null one means the process RAN and exited zero, which is
+    /// what a good review looks like from here. Reading that null as a failure is the defect this
+    /// method exists to make impossible.</para>
+    /// <para>An empty answer after a clean exit is still a failure — but
+    /// <see cref="ReviewerOutcome.Unparseable"/>, not <c>NotStarted</c>. The CLI started; it
+    /// produced nothing usable, and telling a person their review "never started" sends them to
+    /// look at accounts and executables instead of at the vendor's own empty envelope.</para>
+    /// </remarks>
+    private static ReviewAttempt Read(ReviewerLaunch launch) =>
+        launch.Terminal is { } terminal
+            ? new ReviewAttempt.Failed(terminal)
+            : string.IsNullOrWhiteSpace(launch.Answer)
+                ? new ReviewAttempt.Failed(new ReviewerOutcome.Unparseable(
+                    "the vendor exited cleanly without writing an answer", launch.Usage))
+                : new ReviewAttempt.Answered(launch.Answer, launch.Usage.TokensIn, launch.Usage.TokensOut);
 
     /// <summary>The role a client named. Validated at the endpoint, so a bad one cannot arrive here.</summary>
     private static ReviewRole RoleOf(string role) =>
