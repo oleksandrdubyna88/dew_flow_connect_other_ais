@@ -18,6 +18,12 @@
  * to every pull request, while `build · test · family checks` has already compiled this server
  * seconds earlier. The container remains the better LOCAL story, which is why the address is an
  * input rather than something this script owns.</p>
+ *
+ * <p><b>A remote address is refused unless you say so.</b> These tests mint sessions and probe a
+ * refusal; pointed at a real deployment they would create real session state on it, and this
+ * machine keeps `coai.remsoft.dev` one environment variable away. Loopback is allowed silently,
+ * anything else needs `COAI_CONTRACT_ALLOW_REMOTE=1` — the point being that it must be typed
+ * rather than inherited. Raised by codex's reviewer on the plan round.</p>
  */
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -28,6 +34,45 @@ import { join, resolve } from 'node:path';
 
 const DOMAIN = process.env.COAI_CONTRACT_DOMAIN ?? 'contract.test';
 const READY_TIMEOUT_MS = 60_000;
+const TEST_TIMEOUT_MS = 60_000;
+const STOP_GRACE_MS = 5_000;
+
+/**
+ * Whatever must be torn down if this process ends, for ANY reason.
+ *
+ * <p>Reached from the signal handlers and from {@link fail} as well as from the happy path: three
+ * reviewers independently pointed out that "the script stops it afterwards" only holds when the
+ * script gets to its afterwards. A killed run used to leave a server holding a port.</p>
+ */
+let cleanUp = () => {};
+let cleaned = false;
+
+function runCleanUp() {
+  if (cleaned) {
+    return;
+  }
+  cleaned = true;
+  cleanUp();
+}
+
+process.on('exit', runCleanUp);
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(signal, () => {
+    runCleanUp();
+    process.exit(130);
+  });
+}
+process.on('uncaughtException', (error) => {
+  console.error(error);
+  runCleanUp();
+  process.exit(1);
+});
+
+function fail(message) {
+  console.error(`run-contract: ${message}`);
+  runCleanUp();
+  process.exit(1);
+}
 
 /** The compiled contract tests, listed rather than globbed — see scripts/run-tests.mjs on why. */
 function contractTests() {
@@ -82,7 +127,7 @@ async function waitForHealth(url, child) {
   const deadline = Date.now() + READY_TIMEOUT_MS;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
-      fail(`the server exited with code ${child.exitCode} before it became healthy`);
+      fail(`the server exited with code ${child.exitCode} before it became healthy — its output is above`);
     }
     try {
       const response = await fetch(`${url}/api/health`);
@@ -106,6 +151,8 @@ async function startServer() {
   const data = mkdtempSync(join(tmpdir(), 'coai-contract-'));
 
   const child = spawn('dotnet', [serverAssembly()], {
+    // Inherited rather than captured: when startup fails, its own log lines are the diagnosis, and
+    // in CI they belong in the job output where somebody will actually read them.
     stdio: ['ignore', 'inherit', 'inherit'],
     env: {
       ...process.env,
@@ -114,20 +161,34 @@ async function startServer() {
       // them too and nothing is written next to the extension's sources.
       Coai__DataDir: data,
       Coai__AllowedDomains: DOMAIN,
+      // Pinned, not defaulted: an inherited `Coai__AllowAnyDomain=true` would turn the
+      // outside-the-company assertion from a refusal into an acceptance, and the suite would go
+      // green while proving the opposite of what it says.
+      Coai__AllowAnyDomain: 'false',
       // Loopback with no proxy in front of it: the forwarded-proto gate would refuse every
       // request, and it is a deployment concern rather than a contract one.
       Coai__RequireForwardedHttps: 'false',
       Auth__Local__SigningKey: key,
+      // The server refuses to start with a local key beside a real provider, and this process
+      // inherits whatever the shell has — so both are cleared for the child rather than trusted.
+      Auth__Microsoft__Tenant: '',
+      Auth__Google__Enabled: 'false',
     },
   });
 
+  cleanUp = () => stopServer(child, data);
   await waitForHealth(url, child);
 
-  return { url, key, stop: () => stopServer(child, data) };
+  return { url, key };
 }
 
 function stopServer(child, data) {
-  child.kill();
+  if (child.exitCode === null) {
+    child.kill();
+    // A server that ignores the polite signal still has to release the port before the next run.
+    const hard = setTimeout(() => child.kill('SIGKILL'), STOP_GRACE_MS);
+    hard.unref();
+  }
   try {
     rmSync(data, { recursive: true, force: true });
   } catch {
@@ -137,23 +198,37 @@ function stopServer(child, data) {
 
 function runTests(env) {
   return new Promise((ok) => {
-    const child = spawn(process.execPath, ['--test', ...contractTests()], {
-      stdio: 'inherit',
-      env: { ...process.env, ...env },
-    });
+    const child = spawn(
+      process.execPath,
+      ['--test', `--test-timeout=${TEST_TIMEOUT_MS}`, ...contractTests()],
+      { stdio: 'inherit', env: { ...process.env, ...env } });
     child.on('exit', (code) => ok(code ?? 1));
   });
 }
 
-function fail(message) {
-  console.error(`run-contract: ${message}`);
-  process.exit(1);
+/** Loopback, or an address somebody typed on purpose. Never one that merely happened to be set. */
+function isLoopback(url) {
+  try {
+    const { hostname } = new URL(url);
+
+    return ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(hostname);
+  } catch {
+    return false;
+  }
 }
 
 const given = process.env.COAI_CONTRACT_URL ?? '';
 if (given.length > 0) {
   if ((process.env.COAI_CONTRACT_KEY ?? '').length === 0) {
-    fail('COAI_CONTRACT_URL is set but COAI_CONTRACT_KEY is not — the tests cannot mint a token.');
+    fail(
+      'COAI_CONTRACT_URL is set but COAI_CONTRACT_KEY is not — the tests cannot mint a token, and '
+      + 'this script will not generate one for a server it did not start: it would not match.');
+  }
+  if (!isLoopback(given) && process.env.COAI_CONTRACT_ALLOW_REMOTE !== '1') {
+    fail(
+      `${given} is not loopback. These tests mint sessions and probe a refusal, so pointed at a `
+      + 'real deployment they would leave real session state on it. Set '
+      + 'COAI_CONTRACT_ALLOW_REMOTE=1 if that is genuinely what you want.');
   }
   console.log(`run-contract: using the server at ${given}`);
   process.exit(await runTests({ COAI_CONTRACT_DOMAIN: DOMAIN }));
@@ -169,6 +244,6 @@ try {
     COAI_CONTRACT_DOMAIN: DOMAIN,
   });
 } finally {
-  server.stop();
+  runCleanUp();
 }
 process.exit(status);

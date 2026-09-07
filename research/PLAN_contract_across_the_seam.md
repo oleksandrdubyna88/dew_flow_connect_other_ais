@@ -95,6 +95,42 @@ beside the extension's sources.
 `Coai__AllowedDomains`, and `Coai__RequireForwardedHttps=false` — without the last one the
 forwarded-proto gate refuses every loopback request, correctly, since there is no proxy in front.
 
+## What the plan round added
+
+Fifteen findings, six applied. Three of them changed the shape of the thing:
+
+**The server now refuses to run the local scheme beside a real identity provider.** Raised by
+gemini's reviewer, and the best finding of the round: this suite makes `Auth:Local:SigningKey` a
+routine, documented path, and that scheme signs identities with a *shared secret* — whoever holds
+the key can be anyone in an allowed domain. `Auth.cs` had said "it is empty wherever a real
+identity provider exists" since day one, which is a convention, and a convention does not fail.
+`Startup.Guard` now refuses the combination, with a test that was watched failing first. The
+deployment was checked at the time and carries no local key, so this closes a door rather than an
+incident.
+
+**The runner cannot leak a server.** Three reviewers independently made the same point from
+different directions: "it stops it afterwards" only holds when the script reaches its afterwards.
+Teardown now hangs off one idempotent handler reached from `exit`, `SIGINT`/`SIGTERM`/`SIGHUP`, an
+uncaught exception and every `fail()` path, with `SIGKILL` after five seconds for a server that
+ignores the polite one. Before this, a failed health check exited while the child kept the port.
+
+**A remote address is refused unless it is typed.** These tests mint sessions and probe a refusal,
+and this machine keeps `coai.remsoft.dev` one environment variable away. Loopback passes silently;
+anything else needs `COAI_CONTRACT_ALLOW_REMOTE=1`.
+
+Two smaller ones: `Coai__AllowAnyDomain=false` and the two provider variables are pinned for the
+child rather than inherited — an inherited `AllowAnyDomain=true` would have turned the
+outside-the-company assertion into an acceptance and left the suite green while proving the
+opposite of what it says. And the test runner carries `--test-timeout`.
+
+Nine were rejected with reasons recorded in the gate. Most described the script rather than read
+it — that CI never compiles (it does: `test:contract` is `npm run compile && …`), that the binary
+crosses a job boundary (it does not: same job, same runner), that health is polled once (it is
+polled every 250 ms against a deadline, checking whether the child died). The one worth naming is
+the free-port race, raised twice and real: the window is microseconds and losing it fails loudly
+with the server's own output, while the proposed cure — parsing the port out of a log line — trades
+it for a permanent dependency on log formatting.
+
 ## Definition of Done
 
 - [x] A test exists that fails when the client and the server disagree about `POST /api/session`'s

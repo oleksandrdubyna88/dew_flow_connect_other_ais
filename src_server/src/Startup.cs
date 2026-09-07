@@ -49,6 +49,26 @@ public static class Startup
                 + "to '<client-id>,api://<client-id>' from the app registration.");
         }
 
+        // The local scheme signs identities with a SHARED SECRET: whoever holds the key can present
+        // any email an allowed domain covers, with no Microsoft and no Google. That is exactly what
+        // makes it right for the tests and for an air-gapped deployment — and an identity bypass
+        // beside a real provider, because the company's own sign-in becomes optional for anyone who
+        // has the key.
+        //
+        // `Auth.cs` has said "it is empty wherever a real identity provider exists" since day one.
+        // That was a convention, and a convention does not fail; the client/server contract suite
+        // made this scheme a routine, documented path, so its reviewer asked for the sentence to
+        // become a start-up failure. `coai.remsoft.dev` was checked when this was written and
+        // carries no local key: this closes a door rather than an incident.
+        if (localEnabled && (!string.IsNullOrWhiteSpace(msTenant) || googleEnabled))
+        {
+            throw new InvalidOperationException(
+                "Auth:Local:SigningKey is set alongside a real identity provider. The local scheme "
+                + "signs identities with a shared secret, so anyone holding that key could sign in "
+                + "as anyone in an allowed domain without going near Microsoft or Google. Remove "
+                + "the key, or remove the provider — this server will not run both.");
+        }
+
         if (allowedDomains.Count == 0 && !allowAnyDomain)
         {
             throw new InvalidOperationException(
