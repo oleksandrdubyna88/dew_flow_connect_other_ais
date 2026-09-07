@@ -75,6 +75,19 @@ it is not.
 > server's posting a header and a null body, the extension's asserting the token was in the body —
 > and nothing crossed between them.
 
+**An admin is shown the release line, and cannot act on it from here.** The *Team servers* row
+carries one more sentence for a caller the catalog marks `isAdmin`: what the newest published
+`server-v*` release is, with a `⬆` when it is newer than the version this server reports. Read-only
+on purpose — a Team server is DEPLOYED rather than downloaded, so an Update button would mean this
+panel touching somebody else's machine, and the request was to show it.
+
+Silent in three states, each of which would otherwise be a sentence teaching nothing: the caller is
+not an admin, the server has not said its version yet, or no `server-v*` release exists — which is
+the ordinary state today, since the deployment was made by hand and the release line has never been
+cut. `latestTeamServerVersion` and the coai-mcp lookup share one tag list, one half-hour clock and
+one comparator; the tag PREFIX is the only difference, and it is a parameter rather than a second
+copy of the filter.
+
 **The `Local` scheme and a real provider cannot both be configured.** `Startup.Guard` refuses to
 start when `Auth:Local:SigningKey` is set alongside a Microsoft tenant or Google: that scheme signs
 identities with a shared secret, so beside a real provider it is an identity bypass — anyone with

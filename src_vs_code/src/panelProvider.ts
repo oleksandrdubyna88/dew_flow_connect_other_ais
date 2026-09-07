@@ -25,7 +25,7 @@ import {
 import { askVersion, capture } from './versionProbe';
 import { readOverlay, seedIfEmpty, writeOverlay } from './sideSettings';
 import { thisSide } from './installer';
-import { latestServerVersion, serverOnThisSide, serverPath } from './installer';
+import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog, EMPTY_LOG } from './roundsDb';
 import { ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
@@ -188,6 +188,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   }> = {};
   /** The newest published server version, and when GitHub last answered. */
   private latestServer = '';
+  /** The newest published Team-server version, shown to admins only. Read-only: it is deployed. */
+  private latestTeamServer = '';
   private latestCheckedAt = 0;
   /** Each vendor's installed and published CLI version, and when they were last read. */
   private cliStatus: Record<string, CliStatus> = {};
@@ -438,6 +440,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       usage: this.remembered(await this.readUsage()),
       usageWindow: this.usageWindow,
       latestServerVersion: published,
+      latestTeamServerVersion: this.latestTeamServer,
       cliStatus: await this.vendorCliStatus(vendors),
       modelPrices: await this.modelPrices(vendors),
       snippetStatus: await pastedSnippetStatus(),
@@ -1918,6 +1921,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
     this.latestCheckedAt = Date.now();
     this.latestServer = (await latestServerVersion()) ?? '';
+    // The Team server's line, on the same clock and in the same breath: two release lines read from
+    // one tag list, and a second timer would mean two rate limits and two answers about one moment.
+    this.latestTeamServer = (await latestTeamServerVersion()) ?? '';
     return this.latestServer;
   }
 

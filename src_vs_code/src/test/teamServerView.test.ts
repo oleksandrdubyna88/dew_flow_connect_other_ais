@@ -6,6 +6,7 @@ import {
   TeamServerState,
   disclosure,
   slotSentence,
+  publishedNote,
   statusSentence,
   teamServerRow,
   teamServersBody,
@@ -128,7 +129,45 @@ test('a server that has not answered yet says it is asking, not that it is broke
 });
 
 /**
- * The address and the account, which now appear in this section and nowhere else.
+ * What the release line has, for the person who could act on it — and silence for everybody else.
+ *
+ * <p>Read-only by design: a Team server is deployed rather than downloaded, so there is no button
+ * and there could not be one. The operator asked to be SHOWN it, with an arrow when a newer
+ * release exists, and nothing more.</p>
+ */
+test('an admin is told what is published, and told when it is newer', () => {
+  const admin = (serverVersion: string): TeamServerState =>
+    state({ email: 'a@b.c', catalog: { serverVersion, isAdmin: true, vendors: [], error: '' } });
+
+  assert.ok(publishedNote(admin('0.5.2'), '0.5.3').startsWith('⬆'), 'a newer release leads with the arrow');
+  assert.ok(publishedNote(admin('0.5.2'), '0.5.3').includes('0.5.3'), 'and names it');
+  assert.ok(publishedNote(admin('0.5.2'), '0.5.3').includes('0.5.2'), 'beside what is running');
+
+  assert.ok(!publishedNote(admin('0.5.3'), '0.5.3').startsWith('⬆'), 'the same version is not an update');
+  assert.ok(publishedNote(admin('0.5.3'), '0.5.3').includes('up to date'));
+
+  // 0.10.0 against 0.9.9 is the case a string comparison gets wrong, which is why this shares the
+  // comparator with the coai-mcp update check rather than having one of its own.
+  assert.ok(publishedNote(admin('0.9.9'), '0.10.0').startsWith('⬆'), '0.10.0 is newer than 0.9.9');
+});
+
+test('everybody who is not an admin is told nothing about the release line', () => {
+  const notAdmin = state({
+    email: 'a@b.c',
+    catalog: { serverVersion: '0.5.2', isAdmin: false, vendors: [], error: '' },
+  });
+  assert.strictEqual(publishedNote(notAdmin, '0.5.3'), '');
+
+  // Two more silences, each of which would otherwise be a sentence that teaches nothing: a server
+  // that has not said its version yet, and a release line with nothing published in it — which is
+  // the ordinary state today, since the Team server is deployed by hand and has no `server-v*` tag.
+  const admin = { ...notAdmin, catalog: { ...notAdmin.catalog!, isAdmin: true } };
+  assert.strictEqual(publishedNote({ ...admin, catalog: undefined }, '0.5.3'), '');
+  assert.strictEqual(publishedNote(admin, ''), '');
+});
+
+/**
+ * The address and the account, which appear in this section and nowhere else.
  *
  * <p>Asserted here for the same reason: until 0.31.4 they were also in the *Server* section, so a
  * regression that dropped them from the row would still have shown them somewhere. Nothing is

@@ -178,10 +178,18 @@ export function sqliteNameFor(rid: CoaiRid): string {
   return rid.startsWith('osx-') ? 'libe_sqlite3.dylib' : 'libe_sqlite3.so';
 }
 
-/** `mcp-v0.1.0` → `0.1.0`; any other tag line yields nothing rather than a wrong version. */
-export function versionFromTag(tag: string): string | undefined {
-  return tag.startsWith(TAG_PREFIX) && tag.length > TAG_PREFIX.length
-    ? tag.slice(TAG_PREFIX.length)
+/**
+ * `mcp-v0.1.0` → `0.1.0`; any other tag line yields nothing rather than a wrong version.
+ *
+ * <p><b>The prefix is a parameter</b> because this repository publishes three release lines from
+ * one tag list — `mcp-v*`, `extension-v*` and `server-v*` — and each reader wants exactly one of
+ * them. Answering with the newest tag of ANY shape is the defect this whole pair exists to prevent
+ * (see {@link newestServerTag}); a second copy of the same filter for the Team server would be the
+ * same defect written twice.</p>
+ */
+export function versionFromTag(tag: string, prefix: string = TAG_PREFIX): string | undefined {
+  return tag.startsWith(prefix) && tag.length > prefix.length
+    ? tag.slice(prefix.length)
     : undefined;
 }
 
@@ -215,11 +223,17 @@ export function updateAvailable(installed: string | undefined, publishedTag: str
  * extension release therefore answered the question "is there a newer server", produced a tag
  * that is not a server version, and the check quietly concluded no. It never fired once.</p>
  */
-export function newestServerTag(tags: readonly string[]): string | undefined {
+export function newestServerTag(
+  tags: readonly string[],
+  prefix: string = TAG_PREFIX,
+): string | undefined {
   return tags
-    .filter((t) => versionFromTag(t) !== undefined)
-    .sort((a, b) => compareVersions(versionFromTag(b)!, versionFromTag(a)!))[0];
+    .filter((t) => versionFromTag(t, prefix) !== undefined)
+    .sort((a, b) => compareVersions(versionFromTag(b, prefix)!, versionFromTag(a, prefix)!))[0];
 }
+
+/** The Team server's own release line. Deployed rather than downloaded — the tag is all we read. */
+export const TEAM_SERVER_TAG_PREFIX = 'server-v';
 
 /**
  * What to DO about an install that failed, when the failure is one we recognise.
