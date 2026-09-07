@@ -44,6 +44,22 @@ jobs:
         run: |
           dotnet tool install --global dotnet-sonarscanner
           dotnet tool install --global dotnet-coverage
+      # Two additions to the exclusion lists, both about build scripts rather than shipped code,
+      # and both worth knowing about because an exclusion is a decision to stop looking:
+      #
+      #   sonar.exclusions        + src_vs_code/scripts/**
+      #     These launch the toolchain — `dotnet`, `node` — and S4036 fires on doing that at all
+      #     ("make sure PATH contains only fixed, unwriteable directories"). For a script whose
+      #     entire contract is to use the developer's toolchain, that is not a finding it can ever
+      #     satisfy; the alternative is three hotspots marked safe by hand on every new script.
+      #     Same rationale as the existing `src_mcp/tests_fakecli/**` entry. Note this stops
+      #     analysing those files for real defects too — if they grow logic worth checking, the
+      #     entry should come back out and the hotspots be reviewed instead.
+      #
+      #   sonar.coverage.exclusions + src_vs_code/src/test/**, src_vs_code/scripts/**
+      #     Test code and tooling, which is what `**/tests/**` already does for the .NET half.
+      #     Without it a pull request that adds a test suite fails the 80 % new-code coverage gate
+      #     for having added tests.
       - name: Begin
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -54,7 +70,7 @@ jobs:
             /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.cs.vscoveragexml.reportsPaths="coverage/*.xml"             /d:sonar.javascript.lcov.reportPaths="coverage/extension.lcov"             /d:sonar.typescript.lcov.reportPaths="coverage/extension.lcov" \
-            /d:sonar.exclusions="**/bin/**,**/obj/**,artifacts/**,**/node_modules/**,src_mcp/tests_fakecli/**" \
+            /d:sonar.exclusions="**/bin/**,**/obj/**,artifacts/**,**/node_modules/**,src_mcp/tests_fakecli/**,src_vs_code/scripts/**" \
             /d:sonar.coverage.exclusions="**/tests/**,**/*.Tests/**,src_mcp/tests_fakecli/**,http/**,src_vs_code/src/test/**,src_vs_code/scripts/**"
       - name: Build
         run: dotnet build dew_flow_connect_other_ais.slnx -c Release --no-incremental

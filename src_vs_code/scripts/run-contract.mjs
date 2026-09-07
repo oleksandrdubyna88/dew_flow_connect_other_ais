@@ -231,7 +231,10 @@ function stopServer(child, data) {
 function kill(child, signal) {
   try {
     if (process.platform === 'win32') {
-      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+      // The absolute path, not the name: `taskkill` resolved through PATH is a name a writeable
+      // directory earlier in PATH can claim, and this call runs with whatever rights the run has.
+      const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
+      spawn(taskkill, ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
 
       return;
     }
