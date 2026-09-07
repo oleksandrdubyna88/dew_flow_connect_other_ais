@@ -493,6 +493,28 @@ is permission to overwrite: the same revert, through a different door. Only a co
 `FileNotFound` is absent; every other failure stands the write down and is retried on the next
 configuration change. Three reviewers found that independently on one round.
 
+**The read, the comparison and the write are one step.** A guard that reads a stamp and then
+overwrites it is a time-of-check-to-time-of-use race — two guard-aware hosts can both read a stamp
+they are allowed to overwrite, and the second to finish wins with a payload decided before the
+first's write existed. The collision that started this was 0.4 seconds wide. So `ServerSettingsSync`
+takes a `CriticalSection` callback and does all three inside it; the class still holds no filesystem
+and no VS Code type.
+
+The lock itself is `extension.ts`, and it is **a rename**, because the API has no exclusive create:
+`writeFile` overwrites, `createDirectory` is `mkdir -p`, and `rename` with `overwrite: false` is the
+only operation here that FAILS when the destination exists. A lock that cannot be taken is not an
+error and nothing waits — whoever holds it is writing the same settings from the same configuration.
+
+`settingsLock.ts` holds the one decision worth testing: when to break somebody else's. Break too
+eagerly and two windows write at once, which is the race; never break and one window killed at the
+wrong instant wedges every other window on the machine forever, which is worse and silent. Ten
+seconds, four orders of magnitude above the work it covers — and a clock that went BACKWARDS is not
+stale, because reading a negative age as "very old" is how two windows both break one lock.
+
+**The write itself is temp-plus-rename**, the way an answered escalation already is. `writeFile`
+truncates before it fills, so a host killed between the two leaves every other window and the server
+reading a truncated file — unrecoverable, because the original is gone.
+
 ### A card captioned with the wrong software (2026-09-07)
 
 `modelsProvenance` (`models.ts`) says where a dropdown's contents came from, and it had arms for

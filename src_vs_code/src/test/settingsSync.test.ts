@@ -300,6 +300,69 @@ async function syncedAgainst(mine: string, theirs: string): Promise<string[]> {
   return written;
 }
 
+test('the read, the comparison and the write happen inside the section, not around it', async () => {
+  // A guard that reads a stamp and then overwrites it is a time-of-check-to-time-of-use race: two
+  // guard-aware hosts can both read a stamp they are allowed to overwrite, and the second to finish
+  // wins with a payload decided before the first one's write existed. Raised three times on this
+  // plan's own round. The order below is what makes the guard mean anything.
+  const order: string[] = [];
+  const it = new ServerSettingsSync(
+    () => configuration({ onExhausted: 'good_enough' }),
+    async () => {
+      order.push('write');
+    },
+    '0.31.3',
+    async () => {
+      order.push('read');
+      return { kind: 'absent' };
+    },
+    () => {},
+    async (work) => {
+      order.push('lock');
+      await work();
+      order.push('unlock');
+    },
+  );
+
+  await it.sync();
+
+  assert.deepEqual(order, ['lock', 'read', 'write', 'unlock']);
+});
+
+test('a section that cannot run its work writes nothing, and that is not a failure', async () => {
+  // Somebody else holds the lock. They are writing the same settings from the same configuration,
+  // so the whole cost of standing aside is a write that happens on the next configuration change.
+  const written: string[] = [];
+  const it = new ServerSettingsSync(
+    () => configuration({ onExhausted: 'good_enough' }),
+    async (json: string) => {
+      written.push(json);
+    },
+    '0.31.3',
+    async () => ({ kind: 'absent' }),
+    () => {},
+    async () => {
+      // Held by another window.
+    },
+  );
+
+  await it.sync();
+  assert.equal(written.length, 0);
+
+  // And the content is not remembered as written, so the next change still carries it.
+  const second: string[] = [];
+  const again = new ServerSettingsSync(
+    () => configuration({ onExhausted: 'good_enough' }),
+    async (json: string) => {
+      second.push(json);
+    },
+    '0.31.3',
+    async () => ({ kind: 'absent' }),
+  );
+  await again.sync();
+  assert.equal(second.length, 1);
+});
+
 /** The sync with a reader that answers however the test wants, including badly. */
 function reading(answer: () => Promise<ExistingFile>, version = '0.31.3') {
   const written: string[] = [];

@@ -12,6 +12,7 @@ import { parseSession, SessionFile } from './rounds';
 import { blindSpotsHtml, rowsFrom } from './roundsLog';
 import { RoundsLogPanel } from './roundsLogPanel';
 import { ExistingFile, ServerSettingsSync } from './serverSettingsSync';
+import { lockIsStale } from './settingsLock';
 import { settingsFrom } from './settingsShape';
 import { vendorsFrom } from './vendors';
 
@@ -87,6 +88,7 @@ export function activate(context: vscode.ExtensionContext): void {
     extensionVersion(context),
     readSettingsFile,
     reportStandDown,
+    underSettingsLock,
   );
   void settingsSync.sync();
 
@@ -141,10 +143,85 @@ function readCoaiConfiguration() {
  */
 async function writeSettingsFile(json: string): Promise<void> {
   await vscode.workspace.fs.createDirectory(dataDir());
-  await vscode.workspace.fs.writeFile(
-    vscode.Uri.joinPath(dataDir(), 'settings.json'),
-    new TextEncoder().encode(json),
-  );
+  // Written beside it and renamed over it, the way an answered escalation already is. `writeFile`
+  // truncates before it fills, so a host killed between the two leaves every other window — and the
+  // server — reading a truncated file. That is worse than the revert this epic is about, and it
+  // cannot be recovered from, because the original is gone. Raised on story 2.1's plan round.
+  const target = vscode.Uri.joinPath(dataDir(), 'settings.json');
+  const temp = vscode.Uri.joinPath(dataDir(), `settings.json.${process.pid}.tmp`);
+  await vscode.workspace.fs.writeFile(temp, new TextEncoder().encode(json));
+  await vscode.workspace.fs.rename(temp, target, { overwrite: true });
+}
+
+/**
+ * Runs the settings read, the version comparison and the write with nobody else in the file.
+ *
+ * <p>Every window on this machine writes this one path, so the guard that reads a stamp and then
+ * overwrites it is a time-of-check-to-time-of-use race: two guard-aware hosts can both read a stamp
+ * they are allowed to overwrite, and the second to finish wins with a payload decided before the
+ * first one's write existed.</p>
+ *
+ * <p><b>The lock is a rename, because the API has no exclusive create.</b> `writeFile` overwrites and
+ * `createDirectory` is `mkdir -p`; `rename` with `overwrite: false` is the one operation here that
+ * FAILS when the destination exists, which is exactly what taking a lock means. The temp file
+ * carries this process id so two windows never fight over one temp path on the way in.</p>
+ *
+ * <p>A lock that cannot be taken is not an error and nothing waits: whoever holds it is writing the
+ * same settings from the same configuration, and the only cost of standing aside is a write that
+ * happens on the next configuration change. A lock left behind by a killed window is broken once it
+ * is stale — see `settingsLock.ts` for why that rule is a tested function rather than a line here.</p>
+ */
+async function underSettingsLock(work: () => Promise<void>): Promise<void> {
+  const lock = vscode.Uri.joinPath(dataDir(), 'settings.lock');
+  await vscode.workspace.fs.createDirectory(dataDir());
+  if (!(await takeLock(lock))) {
+    return;
+  }
+
+  try {
+    await work();
+  } finally {
+    try {
+      await vscode.workspace.fs.delete(lock);
+    } catch {
+      // Left behind: the next window breaks it once it is stale, which is the case that rule exists
+      // for. Throwing here would replace a settings write with an extension error.
+    }
+  }
+}
+
+async function takeLock(lock: vscode.Uri, mayBreakAStaleOne = true): Promise<boolean> {
+  const mine = vscode.Uri.joinPath(dataDir(), `settings.lock.${process.pid}.tmp`);
+  try {
+    await vscode.workspace.fs.writeFile(mine, new TextEncoder().encode(String(process.pid)));
+    await vscode.workspace.fs.rename(mine, lock, { overwrite: false });
+
+    return true;
+  } catch {
+    await vscode.workspace.fs.delete(mine).then(undefined, () => undefined);
+
+    // ONE attempt at breaking a stale lock, never a loop. Without the flag this and `breakIfStale`
+    // call each other, and a lock somebody keeps re-taking between our delete and our rename spins
+    // the extension host instead of skipping a write nobody would have missed.
+    return mayBreakAStaleOne ? breakIfStale(lock) : false;
+  }
+}
+
+/** A lock older than the window it should ever be held for belonged to a window that died. */
+async function breakIfStale(lock: vscode.Uri): Promise<boolean> {
+  try {
+    const held = await vscode.workspace.fs.stat(lock);
+    if (!lockIsStale(held.mtime, Date.now())) {
+      return false;
+    }
+    await vscode.workspace.fs.delete(lock);
+  } catch {
+    return false;
+  }
+
+  // Deleted it; take it the ordinary way rather than assuming the gap is ours. Two windows can
+  // reach this line together and only one of their renames can succeed, which is the point.
+  return takeLock(lock, false);
 }
 
 /**
