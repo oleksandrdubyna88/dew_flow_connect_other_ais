@@ -178,11 +178,34 @@ behaviour and the migration path. On a refusal it says so once, naming the versi
 offering *Reload Window*; a race that silently reverts a person's configuration becomes a sentence
 telling them what to do.
 
-Semver comparison is a pure function with its own tests, and it must SPECIFY what it compares rather
-than leave a naive split to decide: build metadata (`+build`) is ignored, a pre-release
-(`0.31.2-alpha.1`) is older than the release it precedes, and numeric segments compare numerically so
-`0.31.10` is newer than `0.31.9`. `lastWritten` is not updated on a refusal — the next change must
-try again, the same reasoning the existing failed-write branch already uses.
+**The comparison is not a new function.** `updateAvailable` in `cliVersions.ts` has compared versions
+by numeric dot-segment since the CLI update buttons existed, and a second comparator beside it is the
+shape this plan has already had to fix twice. It needs one normalisation in FRONT of it, and the
+grammar is stated rather than left to whatever a split happens to do:
+
+- numeric dot-segments, compared left to right, a missing segment reading as 0 — so `0.31.10` is
+  after `0.31.9`, the comparison a string check always gets wrong;
+- everything from the first `-` or `+` is **cut before comparing**, so `0.31.10-beta.1`,
+  `0.31.10+build.7` and `0.31.10` are ONE version to this guard and none of them blocks another.
+  Without the cut, `+build.7` becomes a fourth segment and a local build blocks every released one;
+- a value that parses to no digits sorts as 0, and is therefore overwritten;
+- equal is not strictly newer, so two windows on one build behave exactly as they did before.
+
+`lastWritten` is not updated on a refusal — the next change must try again, the same reasoning the
+existing failed-write branch already uses. **That is not the same as "when the other window closes":**
+nothing observes a window closing — it does not touch this file and fires no configuration event —
+so the pending write lands on the next configuration change or the next activation, and the cure a
+person actually has is the Reload Window button on the warning, which is an activation.
+
+The warning is suppressed **per version**, not per session, and cleared after a successful write: a
+bare flag makes the first stand-down the only one a window ever mentions, so somebody who updates the
+other window and hits the wall again is told nothing.
+
+**And the write itself becomes crash-safe in the same story.** `vscode.workspace.fs.writeFile`
+truncates before it fills, so a host killed mid-write leaves every other window reading a truncated
+file — a worse outcome than the revert this epic is about, and one the guard cannot recover from
+because the original content is gone. Temp file plus rename, beside the lock, since both are about
+the same few lines. Raised on story 2.1's plan round and deferred here rather than left implied.
 
 **Read, check and write happen under one exclusive lock.** A read-then-write guard is a
 time-of-check-to-time-of-use race and the gate was right to refuse it: two hosts can both read a
