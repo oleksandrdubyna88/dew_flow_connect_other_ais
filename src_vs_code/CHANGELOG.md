@@ -1,5 +1,15 @@
 # Changelog
 
+## Extension 0.31.7 — 2026-09-07
+
+**If you are an admin on a Team server, its row now tells you what is published.** One line under
+the status: the newest released `coai-server` version, and a `⬆` when it is newer than the one your
+server is running.
+
+Nothing to press. A Team server is deployed rather than downloaded, so updating it is somebody
+going to that machine — this only tells you there is a reason to. Everybody who is not an admin
+sees nothing new, and so does an admin whose server has no published release to compare against.
+
 ## Extension 0.31.6 — 2026-09-07
 
 **New installs start on a budget somebody actually ran.** The shipped defaults were set before this

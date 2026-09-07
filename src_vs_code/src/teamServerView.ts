@@ -1,5 +1,8 @@
 import { Catalog, CatalogVendor, SlotSummary, Usage } from './teamServerApi';
 import { TeamServer, canonicalTeamServerUrl } from './teamServers';
+// The same comparator the coai-mcp update check uses. Two version comparisons in one panel that
+// disagreed about what "newer" means is a defect waiting for a version like 0.10.0.
+import { compareVersions } from './coaiInstall';
 // The ONE escaper, imported rather than copied. A private second copy is the anti-pattern the
 // security rule names by example — "three byte-identical private copies | hardening one left the
 // other two behind" — and byte-identical is exactly what this one was. Caught on the code round.
@@ -213,14 +216,38 @@ function notSignedInHere(state: TeamServerState): string {
       + `itself in: ${state.problem}`;
 }
 
+/**
+ * What the release line has, for the person who could act on it.
+ *
+ * <p><b>Admins only, and read-only on purpose.</b> A Team server is DEPLOYED, not downloaded —
+ * there is no Update button here and there could not be one, because updating it means touching a
+ * machine this panel has no business touching. The request was to SHOW it, and that is all this
+ * does.</p>
+ *
+ * <p>Silent in three states, each of which would otherwise be a sentence that teaches nothing: the
+ * caller is not an admin; the server has not said its version yet; or no `server-v*` release has
+ * been published (the Team server is deployed by hand, so that is the ordinary state today).</p>
+ */
+export function publishedNote(state: TeamServerState, published: string): string {
+  const running = state.catalog?.serverVersion ?? '';
+  if (state.catalog?.isAdmin !== true || running.length === 0 || published.length === 0) {
+    return '';
+  }
+
+  return compareVersions(published, running) > 0
+    ? `⬆ ${published} is published — this one runs ${running}.`
+    : `${published} is the newest published — this one is up to date.`;
+}
+
 /** One server's rows. */
-export function teamServerRow(state: TeamServerState): string {
+export function teamServerRow(state: TeamServerState, published = ''): string {
   const signedIn = state.email.length > 0;
   const id = escape(state.server.id);
   // A button that cannot help while something is already in flight is disabled rather than left
   // pressable — pressing it again is what a person does when nothing appears to be happening.
   const stop = (state.busy ?? '').length > 0 ? ' disabled' : '';
   const slots = (state.catalog?.vendors ?? []).map((v) => escape(slotSentence(v))).join('; ');
+  const release = publishedNote(state, published);
 
   return `<div class="ts-row" data-server="${id}">
   <div class="ts-head">
@@ -229,6 +256,7 @@ export function teamServerRow(state: TeamServerState): string {
   </div>
   <div class="ts-acct">${accountGlyph(signedIn)} ${escape(signedIn ? state.email : 'no account')}</div>
   <div class="hint">${escape(statusSentence(state))}</div>
+  ${release.length > 0 ? `<div class="hint ts-release">${escape(release)}</div>` : ''}
   ${slots.length > 0 ? `<div class="ts-slots">${slots}</div>` : ''}
   <div class="hint ts-warn">${escape(disclosure(state.server.url))}</div>
   <div class="ts-buttons">
@@ -241,7 +269,7 @@ export function teamServerRow(state: TeamServerState): string {
 }
 
 /** The whole section body. */
-export function teamServersBody(states: readonly TeamServerState[]): string {
+export function teamServersBody(states: readonly TeamServerState[], published = ''): string {
   const add = `<button class="add" data-command="addTeamServer">＋&nbsp; Add a Team server</button>`;
   if (states.length === 0) {
     return `<div class="hint"><b>Nothing here yet.</b> A Team server runs the vendor CLIs on one `
@@ -250,6 +278,6 @@ export function teamServersBody(states: readonly TeamServerState[]): string {
 ${add}`;
   }
 
-  return `${states.map(teamServerRow).join('\n')}
+  return `${states.map((s) => teamServerRow(s, published)).join('\n')}
 ${add}`;
 }

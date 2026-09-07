@@ -109,6 +109,8 @@ export interface PanelState {
   readonly usageWindow: Window;
   /** The newest published server version, or empty while it is unknown or unreachable. */
   readonly latestServerVersion: string;
+  /** The newest published Team-server version, or empty. Admins see it; nobody can act on it here. */
+  readonly latestTeamServerVersion?: string | undefined;
   /**
    * The local model engine on this machine, probed at repaint.
    *
@@ -165,7 +167,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     section('gate', 'The gate', open, gateBody(state.settings)),
     section('limits', 'Limits', open, limitsBody(state.settings)),
     section('keys', 'Vendor keys', open, keysBody(state)),
-    section('teamServers', 'Team servers', open, teamServersBody(state.teamServers ?? [])),
+    section('teamServers', 'Team servers', open, teamServersBody(state.teamServers ?? [], state.latestTeamServerVersion ?? '')),
     section('side', 'This side', open, sideBody(state)),
     section('server', 'MCP server', open, serverBody(state)),
     section('rounds', 'Active rounds', open, `<div id="live-rounds">${roundsBody(state.sessions, nowMs)}</div>`),

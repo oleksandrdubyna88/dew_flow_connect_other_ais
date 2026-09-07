@@ -16,6 +16,8 @@ import {
   installedKey,
   ridFor,
   newestServerTag,
+  TEAM_SERVER_TAG_PREFIX,
+  TAG_PREFIX,
   serverStatus,
   versionFromTag,
 } from './coaiInstall';
@@ -230,7 +232,26 @@ export async function latestServerVersion(): Promise<string | undefined> {
   }
 }
 
-async function latestTag(): Promise<string> {
+/**
+ * The newest published TEAM server version, or undefined when there is none or GitHub is away.
+ *
+ * <p>Read-only, and shown to admins only. A Team server is DEPLOYED rather than downloaded — there
+ * is no button here and there could not be one, because updating it means touching somebody's
+ * machine. The panel's job is to say that a newer one exists, which is the whole request.</p>
+ *
+ * <p>`undefined` covers two different states on purpose: no `server-v*` release has been cut yet,
+ * and GitHub could not be reached. Neither is worth a sentence in a panel — an admin who sees
+ * nothing here learns nothing false.</p>
+ */
+export async function latestTeamServerVersion(): Promise<string | undefined> {
+  try {
+    return versionFromTag(await latestTag(TEAM_SERVER_TAG_PREFIX), TEAM_SERVER_TAG_PREFIX);
+  } catch {
+    return undefined;
+  }
+}
+
+async function latestTag(prefix: string = TAG_PREFIX): Promise<string> {
   const response = await fetch(`https://api.github.com/repos/${RELEASES_REPO}/releases?per_page=30`, {
     headers: { accept: 'application/vnd.github+json' },
   });
@@ -241,7 +262,7 @@ async function latestTag(): Promise<string> {
   const tags = Array.isArray(body)
     ? body.map((r) => r.tag_name).filter((t): t is string => typeof t === 'string')
     : [];
-  const newest = newestServerTag(tags);
+  const newest = newestServerTag(tags, prefix);
   if (newest === undefined) {
     throw new Error('no server release is published yet');
   }
