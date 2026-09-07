@@ -78,9 +78,11 @@ import {
   SignedIn,
   TokenFact,
   catalogOf,
+  intentScopeOf,
   plannedAction,
   readToken,
   reconcile,
+  revokedKey,
   signIn,
   signOut,
   signedInKey,
@@ -868,6 +870,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       if (carried !== undefined && (!perSide || state.get<SignedIn>(to) === undefined)) {
         await state.update(to, carried);
       }
+
+      // The SIGN-OUT travels with the sign-in, and forgetting it was a hole: sign out with the sides
+      // shared, separate them before another side has refreshed, and that side finds a token, no
+      // intent — and no revocation in its new scope. So it keeps a session the person ended. An
+      // intent that was NOT carried is exactly the case where this matters. Raised on the second
+      // code round.
+      const stamped = state.get<number>(revokedKey(server.id, perSide ? '' : side));
+      if (stamped !== undefined && state.get<number>(revokedKey(server.id, perSide ? side : '')) === undefined) {
+        await state.update(revokedKey(server.id, perSide ? side : ''), stamped);
+      }
     }
   }
 
@@ -1242,7 +1254,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * "does this side keep its own things" has one answer rather than two that can disagree.</p>
    */
   private intentScope(config: vscode.WorkspaceConfiguration): string {
-    return this.perSide(config) ? this.sideKeyHere() : '';
+    return intentScopeOf(this.sideKeyHere(), this.perSide(config));
   }
 
   private authHost(): AuthHost {
