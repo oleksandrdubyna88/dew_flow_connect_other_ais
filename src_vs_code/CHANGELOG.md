@@ -1,5 +1,17 @@
 # Changelog
 
+## Extension 0.31.3 — unreleased
+
+**No behaviour changed.** This entry exists because the version string must not: 0.31.2 is published
+to the Marketplace, and the code behind it has since gained one field — a successful server result
+now carries the HTTP status it came back with, so a caller can tell `201 Created` from any other
+success. Two different builds answering to one version string is how "fixed in 0.31.2" and "still
+broken in 0.31.2" become both true.
+
+Behind it: one test suite that drives this extension's real client against a real `coai-server` and
+fails when the two disagree about a wire format — which is what shipped a sign-in nobody could use
+in 0.31.1.
+
 ## Extension 0.31.2 — 2026-09-07
 
 **Signing in to a Team server works.** It could not in 0.31.1, for anybody: the extension sent your
