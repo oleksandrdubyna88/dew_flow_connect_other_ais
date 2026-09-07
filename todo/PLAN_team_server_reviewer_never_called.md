@@ -95,6 +95,21 @@ record which vendor its server knows it by. Today that row fails much later, as 
 against the catalog at sync time was considered and rejected: it makes writing a settings file depend
 on a reachable network service.
 
+The distinction lives on `VendorIdentity` as **`NamesItsServerVendor`**, beside the fallback it is
+about — `VendorOnServer` alone cannot serve, because a recorded name that happens to equal the id
+returns the same string as a fallback does. Both read one trimmed value, so a name made of spaces is
+no name.
+
+The sentence, exactly, so it can be asserted rather than inferred — the plain refusal, then:
+
+> This row does not record which vendor its server knows it by, so its own id was used as the name;
+> if it came from a Team server, remove it and add the reviewer again.
+
+It stops there deliberately. It does **not** say the id was never typed: the fallback is legitimate
+for a hand-written row somebody called `codex`, nothing at the probe can tell that apart from a
+generated `remsoftdev-claude`, and the repository's own `codex` fixture refuted the stronger claim
+within a minute of it being written.
+
 ### C. A round that excludes an enabled reviewer says nothing
 
 `RoundAudit.Opening` (`src_mcp/src/Server/RoundAudit.cs:25`) prints what was asked.

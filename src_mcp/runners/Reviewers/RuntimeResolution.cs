@@ -17,8 +17,19 @@ namespace CoaiMcp.Runners.Reviewers;
 public readonly record struct VendorIdentity(
     string Provider, string Runtime, string BaseUrl, string RemoteVendor = "")
 {
+    /// <summary>
+    /// The recorded name with its edges removed — the only form worth asking a question about.
+    /// </summary>
+    /// <remarks>
+    /// <c>ParseVendors</c> trims on the way in, so a value of spaces cannot arrive from a settings
+    /// file. This type is constructible directly, though, and it is the ONE place the row's two names
+    /// are told apart: an untrimmed test would call <c>"  "</c> a recorded name, send it to a server
+    /// verbatim, and then report the refusal as a typo in a row that records nothing at all.
+    /// </remarks>
+    private string Recorded => RemoteVendor.Trim();
+
     /// <summary>The name to send to a Team server, or to look up in its catalog.</summary>
-    public string VendorOnServer => RemoteVendor.Length > 0 ? RemoteVendor : Provider;
+    public string VendorOnServer => Recorded.Length > 0 ? Recorded : Provider;
 
     /// <summary>
     /// Whether the ROW records its server's own name, or <see cref="VendorOnServer"/> is falling
@@ -31,7 +42,7 @@ public readonly record struct VendorIdentity(
     /// sentence sends a person hunting for a typo in a name they never typed. Whoever reports the
     /// refusal needs to know which of the two names it was.
     /// </remarks>
-    public bool NamesItsServerVendor => RemoteVendor.Length > 0;
+    public bool NamesItsServerVendor => Recorded.Length > 0;
 }
 
 /// <summary>

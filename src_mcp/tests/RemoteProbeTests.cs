@@ -363,6 +363,32 @@ public sealed class RemoteProbeTests : IDisposable
         health.Note.Should().Contain("claude", "what the server does offer is still the useful half");
     }
 
+    /// <summary>
+    /// Saying WHICH name was tried costs no extra request, for either shape of row.
+    /// </summary>
+    /// <remarks>
+    /// The message assertions above would all still pass if the richer note were built by asking the
+    /// catalog a second time, and `providers` is called on every panel open against a server that is
+    /// running other people's reviews. Accepted finding, this story's plan round: a promise about
+    /// request count needs an assertion about request count.
+    /// </remarks>
+    [Theory]
+    [InlineData("")]
+    [InlineData("cluade")]
+    public async Task NeitherShapeOfRowCostsTheServerASecondRequest(string recorded)
+    {
+        SignIn();
+        var handler = new StubHandler(HttpStatusCode.OK, Catalog(1, 1, 0, 0, id: "claude"));
+        var probe = new RemoteProbe(new HttpClient(handler));
+        var vendor = new VendorIdentity("remsoftdev-claude", "remote", Server, recorded);
+
+        var first = await probe.RunAsync(vendor, enabled: true, _dataDir);
+        var second = await probe.RunAsync(vendor, enabled: true, _dataDir);
+
+        handler.Requests.Should().Be(1, "the second call must come from the cache, as it always did");
+        second.Note.Should().Be(first.Note, "a cached answer is handed back whole, not re-derived");
+    }
+
     [Fact]
     public async Task ARowThatDOESNameItsVendorStillGetsThePlainNotOfferedSentence()
     {
