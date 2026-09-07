@@ -112,6 +112,36 @@ test('a first failure with nothing cached does not pretend to have numbers', () 
   assert.strictEqual(said, 'connection refused');
 });
 
+/**
+ * The fifth state, and the one that had no test until this section became the only place it shows.
+ *
+ * <p>Signed in and the catalog has not answered yet — what the *Server* section used to spell as
+ * *connecting…* before that block was removed in 0.31.4. Three reviewers asked the same question
+ * about that removal: does this section really carry every state the other one did? Four of the
+ * five were covered above; this is the one that was not.</p>
+ */
+test('a server that has not answered yet says it is asking, not that it is broken', () => {
+  const said = statusSentence(state({ email: 'a@b.c' }));
+
+  assert.ok(said.includes('Signed in'), said);
+  assert.ok(said.includes('Asking what it offers'), said);
+});
+
+/**
+ * The address and the account, which now appear in this section and nowhere else.
+ *
+ * <p>Asserted here for the same reason: until 0.31.4 they were also in the *Server* section, so a
+ * regression that dropped them from the row would still have shown them somewhere. Nothing is
+ * behind this one now.</p>
+ */
+test('a row names the server it is, the address it points at and who is signed in', () => {
+  const row = teamServerRow(state({ email: 'someone@company.example' }));
+
+  assert.ok(row.includes('RemSoft Dev'), row);
+  assert.ok(row.includes('https://coai.example.com'), row);
+  assert.ok(row.includes('someone@company.example'), row);
+});
+
 test('the row offers Sign in when nobody is, and Sign out when somebody is', () => {
   assert.ok(teamServerRow(state()).includes('data-command="signInTeamServer"'));
   assert.ok(!teamServerRow(state()).includes('data-command="signOutTeamServer"'));
