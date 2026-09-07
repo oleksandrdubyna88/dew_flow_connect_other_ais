@@ -104,7 +104,6 @@ const ROW = {
   enabled: true,
   plan: true,
   code: true,
-  baseUrl: 'PLACEHOLDER',
   executablePath: '',
   pricePerMillionIn: 0,
   pricePerMillionOut: 0,
@@ -112,9 +111,13 @@ const ROW = {
 
 const dataDir = mkdtempSync(join(tmpdir(), 'coai-seam-'));
 const server = catalogServer();
+// The callback fires when the socket is LISTENING, which is why nothing here polls for readiness.
 await new Promise((done) => server.listen(0, '127.0.0.1', done));
 const address = `http://127.0.0.1:${server.address().port}`;
-ROW.baseUrl = address;
+
+// Derived, not assigned into: the address is only knowable after the server is up, and a fixture
+// that is mutated after creation is a fixture whose value depends on when you read it.
+const row = { ...ROW, baseUrl: address };
 
 // Signed in, at the path BOTH sides derive independently — the extension's `tokenFileName` here,
 // .NET's `TeamServerAuth.TokenPath` there. Without a token the probe answers "not signed in" before
@@ -164,7 +167,7 @@ async function providers() {
 }
 
 // The extension's own writer, over the extension's own parser: the path a real panel takes.
-writeFileSync(join(dataDir, 'settings.json'), serverSettingsJson(DEFAULTS, vendorsFrom([ROW]), '9.9.9'), 'utf8');
+writeFileSync(join(dataDir, 'settings.json'), serverSettingsJson(DEFAULTS, vendorsFrom([row]), '9.9.9'), 'utf8');
 
 let answer;
 try {
@@ -175,8 +178,8 @@ try {
 ${e.message}`);
 }
 
-const row = (answer.providers ?? []).find((p) => p.provider === 'remsoftdev-claude');
-if (row === undefined) {
+const reported = (answer.providers ?? []).find((p) => p.provider === 'remsoftdev-claude');
+if (reported === undefined) {
   fail(`the server did not see the row at all. It saw: ${(answer.providers ?? []).map((p) => p.provider).join(', ')}`);
 }
 
@@ -184,24 +187,24 @@ if (row === undefined) {
 // this run answers: "the Team server at http://127.0.0.1:… does not offer a vendor called
 // 'remsoftdev-claude' — it offers claude". That is the bug of 2026-09-07, reproduced end to end by
 // the two real implementations rather than described by a fixture.
-if (row.note.includes('does not offer a vendor called') || row.note.includes('does not record which vendor')) {
-  fail(`remoteVendor did not cross the seam — the server was asked for the ROW ID. It said: ${row.note}`);
+if (reported.note.includes('does not offer a vendor called') || reported.note.includes('does not record which vendor')) {
+  fail(`remoteVendor did not cross the seam — the server was asked for the ROW ID. It said: ${reported.note}`);
 }
 
 // The positive half: it was asked about `claude`, found it, and read its accounts. Asserting only
 // the absence of a refusal would pass for a row the server never resolved at all.
-if (row.auth !== 'server token') {
-  fail(`the row did not resolve to a usable Team-server vendor. auth=${row.auth}, note=${row.note}`);
+if (reported.auth !== 'server token') {
+  fail(`the row did not resolve to a usable Team-server vendor. auth=${reported.auth}, note=${reported.note}`);
 }
 
 // And the row must be a REMOTE one on the far side: a `codex` classification is the other half of
 // the same failure, and it reads as "install it with npm install -g @openai/codex".
-if (row.note.includes('npm install')) {
-  fail(`the server classified a Team-server row as a codex vendor. It said: ${row.note}`);
+if (reported.note.includes('npm install')) {
+  fail(`the server classified a Team-server row as a codex vendor. It said: ${reported.note}`);
 }
 
 server.close();
 rmSync(dataDir, { recursive: true, force: true });
 console.log(`seam: ok — the server read the row as a remote vendor and knows it by its server's name.`);
-console.log(`seam: its note was "${row.note}"`);
+console.log(`seam: its note was "${reported.note}"`);
 console.log(`seam: asked ${binary}`);

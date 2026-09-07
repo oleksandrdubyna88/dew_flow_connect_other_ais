@@ -171,6 +171,24 @@ internal static class Program
     /// </remarks>
     private static async Task<int> ProvidersJsonAsync()
     {
+        try
+        {
+            return await ProvidersJsonCoreAsync();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException
+                                       or System.Text.Json.JsonException or InvalidOperationException)
+        {
+            // A settings file that will not open, a vault read that threw. The panel reads a
+            // non-zero exit as "asked and could not answer", which is right — but a person at a
+            // terminal deserves a sentence rather than a stack trace. Raised on epic 3's code round.
+            Note($"could not read this machine's provider configuration: {e.Message}");
+
+            return 74; // EX_IOERR
+        }
+    }
+
+    private static async Task<int> ProvidersJsonCoreAsync()
+    {
         // Layered exactly as `ServeAsync` layers it. Reading the ENVIRONMENT alone was the first
         // version, and the seam check caught it in one run: the panel's own settings file was
         // ignored, so this mode answered about the DEFAULT vendors and would have badged a

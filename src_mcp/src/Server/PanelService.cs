@@ -226,10 +226,23 @@ public sealed partial class PanelService
             .Where(p => !CanRun(p))
             .Select(p => $"{p.Provider}: {ReasonFor(p)}")];
 
+    /// <summary>
+    /// Why a reviewer was left out, in words THIS side wrote.
+    /// </summary>
+    /// <remarks>
+    /// Not the vendor's own note, and that is a security decision rather than an editorial one: the
+    /// note can carry a remote server's text — <c>RemoteAsk.UnexpectedMessage</c> interpolates a
+    /// response body — and this string travels into the round summary that reaches the calling AI. A
+    /// remote service must not be able to put instruction-shaped text into an AI's instruction
+    /// stream, and a review gate is precisely where that would be worth doing. The full note is
+    /// still what <c>providers</c> answers and what the panel's card shows — the surfaces a PERSON
+    /// reads. Raised on epic 3's code round.
+    /// </remarks>
     private string ReasonFor(ProviderSettings provider) =>
         RuntimeFor(provider) is null
             ? $"no adapter for a runtime called '{provider.Runtime}'"
-            : AuthFor(provider).Note;
+            : RuntimeResolution.ExclusionReason(
+                provider.Identity(), _keys.Keys.ContainsKey(provider.Provider), HasServerToken(provider));
 
     // ---------- open / status ----------
 

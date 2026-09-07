@@ -410,8 +410,15 @@ function cannotRun(id: string, reported: Readonly<Record<string, ProviderHealth>
   }
   const why = reported[id]?.note ?? '';
 
-  return `<span class="badge cannot-run" title="${escapeHtml(why)}"`
-    + ` aria-label="${escapeHtml(`${id} cannot review: ${why}`)}">cannot review</span>`;
+  // Where the verdict came from, said in the same breath. `coai-mcp --providers` reads the settings
+  // file plus the environment of the process that asked it, and an MCP client's own `env` block
+  // outranks that file key by key — so somebody whose client passes one can see that this reading is
+  // not necessarily the running server's. Accepted finding, epic 3's code round; the alternative,
+  // sharing the live server's environment, needs a channel into it that does not exist.
+  const said = `${why} (as coai-mcp reads your settings file here)`;
+
+  return `<span class="badge cannot-run" title="${escapeHtml(said)}"`
+    + ` aria-label="${escapeHtml(`${id} cannot review: ${said}`)}">cannot review</span>`;
 }
 
 function vendorCard(
