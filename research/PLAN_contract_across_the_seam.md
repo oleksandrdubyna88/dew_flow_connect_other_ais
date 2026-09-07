@@ -1,6 +1,6 @@
 # PLAN — two green suites must not be able to disagree about one wire
 
-> Status: **IMPLEMENTED, 2026-09-07.** Scope: `src_vs_code/src/contract/`,
+> Status: **IMPLEMENTED, 2026-09-07.** Scope: `src_vs_code/src/test/teamServerSession.contract.ts`,
 > `src_vs_code/scripts/run-contract.mjs`, the `test:contract` script, and three steps in
 > `.github/workflows/ci.yml`.
 >
@@ -26,7 +26,7 @@ in 0.31.2 — this plan is about the class, not that instance.
 
 **One contract suite that drives the REAL client against a REAL server.**
 
-- `src_vs_code/src/contract/teamServerSession.contract.ts` calls the extension's own
+- `src_vs_code/src/test/teamServerSession.contract.ts` calls the extension's own
   `createSession` and `ask` — not a stub — and asserts a session is minted (`201`), that the
   session token then works on a later call, and that an account outside the company domain is
   refused **403 rather than 401**.
@@ -130,6 +130,46 @@ polled every 250 ms against a deadline, checking whether the child died). The on
 the free-port race, raised twice and real: the window is microseconds and losing it fails loudly
 with the server's own output, while the proposed cure — parsing the port out of a log line — trades
 it for a permanent dependency on log formatting.
+
+## What the code round added
+
+Twenty-eight findings across nine reviewers, thirteen applied — and CodeRabbit, reviewing the same
+branch independently, found two of the same things plus one nobody else did.
+
+**Nothing can hang the job any more.** The health request had no timeout of its own, so a server
+that accepted the connection and then said nothing would have parked the readiness loop past its
+own deadline for ever; it carries an `AbortSignal.timeout` now. The test child has a whole-run
+deadline as well as `--test-timeout`, because a hang while resolving an import never reaches the
+per-test one. And `runTests` listens for `error` as well as `exit` — CodeRabbit's catch: a child
+that cannot be spawned emits only the former, and the promise would never have settled.
+
+**The teardown was wrong in a way that undid itself.** The SIGKILL escalation was scheduled and
+then `unref`'d, with `process.exit` on the next line — so the timer that was supposed to catch a
+server ignoring SIGTERM could never fire. It is a real timer now, cleared on the child's exit, and
+the signal handlers let the loop run instead of exiting under it. Teardown also takes the process
+**tree** (`security.md` requires it): a process group on POSIX, `taskkill /T` on Windows.
+
+**The `as` casts went.** Two of them, in the new test — the same doctrine rule the 0.31.2 hotfix
+had just applied one file over. `assert.fail` returns `never`, so narrowing the result union costs
+nothing and the compiler does the work.
+
+**The test moved to `src/test/`** on CodeRabbit's convention finding. It stays out of `npm test`
+because that runner lists `*.test.js` and this compiles to `*.contract.js` — the separation is the
+suffix, not the folder.
+
+**Two CI facts, both found by the tools rather than by reading.** `actions/setup-node@v7` was
+unpinned, which zizmor flags and which is what took SonarCloud's new-code security rating to C; it
+is pinned to a SHA now, in the house style, and the two older unpinned lines are named in a comment
+as somebody else's change rather than silently swept into this one. And the quality gate wanted 80 %
+coverage of new code from a diff that is a test and a script: `sonar.coverage.exclusions` now covers
+`src_vs_code/src/test/**` and `src_vs_code/scripts/**`, which is what the existing `**/tests/**`
+entry already does for the .NET half.
+
+Fifteen were rejected with reasons recorded in the gate. Three deserve naming because they were
+confidently wrong about facts: that the signing key in the child's environment is world-readable
+(`ps` shows argv, and `/proc/<pid>/environ` is 0400 — the same account that could read the file the
+finding proposes instead); that a comment was missing where the comment is directly above the line;
+and one that reasons itself to "This is compliant" mid-paragraph and files anyway.
 
 ## Definition of Done
 

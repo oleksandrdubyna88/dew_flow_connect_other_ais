@@ -63,7 +63,11 @@ jobs:
       # a throwaway data directory. Building `src_server/Dockerfile` instead would be the same test
       # for minutes more: it publishes Native AOT (clang, a full link) on every pull request. The
       # container is still the better LOCAL story, and the script takes COAI_CONTRACT_URL for it.
-      - uses: actions/setup-node@v7
+      # Pinned to a SHA, unlike the two `actions/setup-node@v7` lines that predate this one: a
+      # mutable tag can change what runs, this step runs immediately before `npm ci`, and both
+      # zizmor and SonarCloud's new-code security rating call an unpinned action out. Pinning the
+      # older two is somebody's separate change, not this one's.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
 
