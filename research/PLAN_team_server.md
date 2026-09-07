@@ -53,7 +53,7 @@
 ## Where this plan stops, and what finishes it
 
 A boundary named from both sides, per `planning-docs.md`. The other document is
-[../todo/PLAN_team_server_reviewer_never_called.md](../todo/PLAN_team_server_reviewer_never_called.md).
+[PLAN_team_server_reviewer_never_called.md](PLAN_team_server_reviewer_never_called.md).
 
 | Item | This plan | The other plan |
 |---|---|---|

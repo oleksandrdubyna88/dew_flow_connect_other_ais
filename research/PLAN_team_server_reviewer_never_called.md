@@ -1,23 +1,59 @@
 # PLAN — a Team server reviewer you enabled, and the round that never called it
 
-> Status: **in progress — story 1.1 landed 2026-09-07, the other eight are open.** Kept in `todo/`
-> until the last one ships; promoted then. What has shipped: `vendorsEnv` carries `remoteVendor`,
-> asserted from both sides, with `null` and whitespace-only values treated as absent.
-> Scope: `src_vs_code/src/vendors.ts`,
-> `serverSettingsFile.ts`, `serverSettingsSync.ts`, `extension.ts`, `models.ts`, `panelView.ts`,
-> `panelProvider.ts`; `src_mcp/src/Server/PanelService.cs`, `RoundAudit.cs`, `Program.cs`,
-> `src_mcp/core/Rounds/SessionState.cs`.
+> Status: **IMPLEMENTED, 2026-09-07.** All three epics shipped: `remoteVendor` reaches the server and
+> a refusal says which of a row's two names was tried; the settings file records who wrote it, refuses
+> an older build's overwrite, and is written under a lock and by rename; and a round now names every
+> enabled reviewer it could not run — in the log, in the tool response and on the card — with a new
+> `coai-mcp --providers` behind the last of those.
 >
-> Related docs: [architecture.md](../research/architecture.md),
-> [module_team_server.md](../research/module_team_server.md),
-> [module_extension.md](../research/module_extension.md),
-> [PLAN_team_server.md](../research/PLAN_team_server.md).
+> **What shipped differently, and what it cost.** Six of the accepted findings were defects in code
+> committed minutes earlier, which is the record worth keeping:
+>
+> 1. **The seam had no live check and now has one.** `npm run test:seam` writes the file with the
+>    extension's own `serverSettingsJson`, signs a throwaway data directory in at the token path both
+>    sides derive independently, serves a catalog from loopback, and runs the REAL binary against it.
+>    Watched failing with `remoteVendor` removed, with the sentence from the incident. Its first draft
+>    was toothless — an unreachable server answers "not signed in" before the vendor name is used at
+>    all — and its second looked only under `bin/Debug`, which CI does not build.
+> 2. **The version guard was a TOCTOU race** (raised three times) and then, once it was a lock, the
+>    lock was not exclusive: `vscode.workspace.fs.rename(…, { overwrite: false })` is nowhere
+>    documented as atomic and its disk provider is check-then-act. It is `fs.open(…, 'wx')` now, with
+>    an owner token, because the release could otherwise delete its SUCCESSOR's lock.
+> 3. **A file that could not be READ was indistinguishable from one that was not there** — and absent
+>    is permission to write, so the guard could be walked straight through. Three reviewers found it
+>    independently.
+> 4. **A remote server could write into an AI's instruction stream.** The excluded-reviewer reason
+>    forwarded the vendor's own note, which for a remote vendor can carry the server's text, into the
+>    round summary the calling AI reads. It is a locally written reason now.
+> 5. **Three `null`-into-`.length` crashes**, in three different files, from the same `!== undefined`
+>    habit.
+> 6. **A claim corrected in a string and left standing in the prose beside it — three times.** Worth
+>    naming as a pattern rather than as three incidents.
+>
+> **The one thing this plan cannot do**, stated in its own text throughout: the version guard is not
+> retroactive. 0.31.0 has shipped and has no guard in it, so it stops the NEXT pair; a machine already
+> in the state is unstuck by reloading the stale window, which is what the warning now offers.
+>
+> **Open tails**, each named in the section below rather than left implied: server-controlled text
+> reaches a log and a panel unfiltered across all of `RemoteAsk`; and the settings lock's guarantee
+> rests on unit tests because two real extension hosts need a harness this repository does not have —
+> `research/module_tests.md` names that as its largest standing gap.
+>
+> Scope: `src_vs_code/src/vendors.ts`, `serverSettingsFile.ts`, `serverSettingsSync.ts`,
+> `settingsLock.ts`, `providers.ts`, `providersProbe.ts`, `extension.ts`, `models.ts`, `panelView.ts`,
+> `panelProvider.ts`, `scripts/run-seam.mjs`; `src_mcp/src/Server/PanelService.cs`, `RoundAudit.cs`,
+> `Program.cs`, `src_mcp/core/Rounds/SessionState.cs`,
+> `src_mcp/runners/Reviewers/{RuntimeResolution,RemoteProbe,BoundedScheduler}.cs`.
+>
+> Related docs: [architecture.md](architecture.md), [module_team_server.md](module_team_server.md),
+> [module_extension.md](module_extension.md), [module_server.md](module_server.md),
+> [module_tests.md](module_tests.md), [PLAN_team_server.md](PLAN_team_server.md).
 
 ## Where the older plan stops, and what this one finishes
 
 The same boundary, written from this side too, per `planning-docs.md` — a division named from one
 direction is not a division. The other document is
-[../research/PLAN_team_server.md](../research/PLAN_team_server.md), *Where this plan stops*.
+[PLAN_team_server.md](PLAN_team_server.md), *Where this plan stops*.
 
 | Item | PLAN_team_server | This plan |
 |---|---|---|
@@ -102,7 +138,7 @@ fills it. `PLAN_team_server.md:401` listed `vendorsEnv` as a site to change and 
 
 So **even with A fixed** the row would reach the server as `remote` with an empty `RemoteVendor`,
 `VendorOnServer` would fall back to the row id, and `coai.remsoft.dev` would refuse
-`remsoftdev-claude` as a vendor it does not offer. [architecture.md](../research/architecture.md)
+`remsoftdev-claude` as a vendor it does not offer. [architecture.md](architecture.md)
 §*The one interface neither container owns* predicted this failure in those words.
 
 `teamServerId` is deliberately NOT carried: the server has no field for it and no question it

@@ -76,7 +76,7 @@ server parsed it faithfully. Every Team-server reviewer was therefore dropped fr
 silently, because a round did not report a reviewer it never asked. Both suites were green
 throughout, which is the property this section is about: a seam neither container owns is a seam
 neither container's tests reach. Recorded, with the fix, in
-[PLAN_team_server_reviewer_never_called.md](../todo/PLAN_team_server_reviewer_never_called.md).
+[PLAN_team_server_reviewer_never_called.md](PLAN_team_server_reviewer_never_called.md).
 
 ## How the Team server is deployed (2026-09-06)
 
