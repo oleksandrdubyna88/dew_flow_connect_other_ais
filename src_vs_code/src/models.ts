@@ -188,6 +188,15 @@ export interface RemoteProvenance {
 }
 
 /**
+ * What a vendor that is not a Team-server row knows about a catalog: nothing.
+ *
+ * <p>A module constant rather than an object literal in a parameter default. A literal there is
+ * allocated afresh on every call and is a default nobody can point at — which is why the analyser
+ * flags it, and why two files had written the same three fields out by hand.</p>
+ */
+export const NO_REMOTE_CATALOG: RemoteProvenance = { models: [], named: '', catalog: 'no-server' };
+
+/**
  * What the caption says when there is no allowlist to count.
  *
  * <p>Neither of these says "not asked yet". Nothing at this call site can tell a request still in
@@ -232,7 +241,7 @@ export function modelsProvenance(
   discoveredCodex: readonly ModelChoice[],
   localEngine?: LocalEngine,
   discoveredAgy: readonly ModelChoice[] = [],
-  remote: RemoteProvenance = { models: [], named: '', catalog: 'no-server' },
+  remote: RemoteProvenance = NO_REMOTE_CATALOG,
 ): string {
   // A Team-server row runs no CLI on this machine and has no cache here: its list came over HTTP
   // from a server's catalog. Without this arm the function fell through to the codex sentence, so a
