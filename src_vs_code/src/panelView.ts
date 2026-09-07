@@ -320,9 +320,26 @@ const KNOWS_ITS_OWN_ENDPOINT: ReadonlySet<string> = new Set(['codex', 'claude', 
  * — a guessed list would let somebody pick a model that was never going to be accepted. The row's
  * own saved model is added back by `modelsFor`, marked, so a selection never silently vanishes.</p>
  */
-function allowedModelsFor(vendor: Vendor, servers: readonly TeamServerState[]): readonly string[] {
+/**
+ * What a Team server allows, and whether the server has actually said so.
+ *
+ * <p>The two cannot be collapsed into a list length. When the catalog has not arrived this returns
+ * the row's OWN model — never an empty list, because an empty one means "your server withdrew this
+ * model" and `modelsFor` would mark it so, on every reload, for as long as a server stayed
+ * unreachable. So a one-item list is ambiguous by construction, and the caption has to be told which
+ * of the two it is looking at rather than counting.</p>
+ */
+interface RemoteModels {
+  readonly models: readonly string[];
+  /** The name the SERVER knows this vendor by — what the count is about. */
+  readonly named: string;
+  /** False until the server has answered; the row's own model is standing in. */
+  readonly fromCatalog: boolean;
+}
+
+function allowedModelsFor(vendor: Vendor, servers: readonly TeamServerState[]): RemoteModels {
   if (vendor.runtime !== 'remote') {
-    return [];
+    return { models: [], named: vendor.id, fromCatalog: false };
   }
 
   // By ID first, because an address is CORRECTABLE and an id is not: fixing a typo in a hostname
@@ -340,10 +357,14 @@ function allowedModelsFor(vendor: Vendor, servers: readonly TeamServerState[]): 
     // `modelsFor` would then mark every remote row's saved model as withdrawn — on every reload,
     // before the first fetch has landed, and for as long as a server stays unreachable. A person
     // would read that as their configuration having been dropped. Caught on the code round.
-    return [vendor.model];
+    return { models: [vendor.model], named, fromCatalog: false };
   }
 
-  return (server.catalog.vendors ?? []).find((v) => v.id === named)?.models ?? [];
+  return {
+    models: (server.catalog.vendors ?? []).find((v) => v.id === named)?.models ?? [],
+    named,
+    fromCatalog: true,
+  };
 }
 
 function vendorCard(
@@ -353,7 +374,7 @@ function vendorCard(
   price: ModelPrice | undefined,
   localEngine?: LocalEngine,
   agyModels: readonly ModelChoice[] = [],
-  allowedRemote: readonly string[] = [],
+  allowedRemote: RemoteModels = { models: [], named: '', fromCatalog: false },
 ): string {
   const id = escapeHtml(vendor.id);
   const local = vendor.runtime === 'local';
@@ -361,7 +382,7 @@ function vendorCard(
   // its CLI runs there, and its price is the company's subscription rather than this person's. Three
   // fields that could only be filled in wrongly.
   const remote = vendor.runtime === 'remote';
-  const models = modelsFor(vendor.runtime, codexModels, vendor.model, localEngine, agyModels, allowedRemote);
+  const models = modelsFor(vendor.runtime, codexModels, vendor.model, localEngine, agyModels, allowedRemote.models);
   // Who is asked for an endpoint: everybody except the shipped vendors that already know where
   // they go. It used to be "everybody with a baseUrl already set, plus local" — which hid the field
   // from the one preset whose entire purpose is to be given a base URL ("Another OpenAI-compatible
@@ -424,7 +445,7 @@ ${local ? remoteNotice(vendor.baseUrl) : ''}
     <select data-setting="model" data-vendor="${id}" title="${escapeHtml(local ? HELP.localModel : HELP.vendorModel)}">
       ${modelOptions(models, vendor.model, local ? 'whatever the engine answers with' : "the CLI's default")}
     </select>
-    <div class="hint">${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(vendor.runtime, codexModels, localEngine, agyModels))}</div>
+    <div class="hint">${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(vendor.runtime, codexModels, localEngine, agyModels, allowedRemote))}</div>
   </div>
   <div class="field stages${vendor.enabled ? '' : ' off'}">
     <label class="check"><input type="checkbox" data-setting="plan" data-vendor="${id}"${vendor.plan ? ' checked' : ''}${vendor.enabled ? '' : ' disabled'}> reviews plans${help('vendorStages')}</label>

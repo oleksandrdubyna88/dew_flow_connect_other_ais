@@ -121,3 +121,26 @@ test('a row written before ids existed still finds its server by address', () =>
 
   assert.ok(html.includes('gpt-5.6-mini'));
 });
+
+/**
+ * The caption under a Team-server row names the SERVER's catalog, never the Codex CLI.
+ *
+ * <p>`modelsProvenance` had arms for local, gemini, claude and antigravity and fell through to
+ * codex, so a Team-server reviewer was captioned "codex · 8 models the Codex CLI has cached for
+ * this machine" — a sentence about a CLI that has nothing to do with it, under a dropdown whose
+ * contents came from an HTTP catalog. Reported from a screenshot, 2026-09-07.</p>
+ */
+test('a Team-server card is captioned with its server, not with the Codex CLI', () => {
+  const html = page();
+
+  assert.ok(!html.includes('the Codex CLI has cached'), 'this row runs no CLI on this machine at all');
+  assert.match(html, /2 models? this Team server allows/);
+  assert.ok(html.includes('codex'), 'the vendor the server knows it by is what the count is about');
+});
+
+test('before the catalog has arrived the caption says so, rather than inventing a number', () => {
+  const html = page({ teamServers: [{ ...TEAM, catalog: undefined }] } as Partial<PanelState>);
+
+  assert.match(html, /has not been asked yet/);
+  assert.ok(!html.includes('the Codex CLI has cached'));
+});
