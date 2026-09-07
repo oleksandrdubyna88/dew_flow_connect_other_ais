@@ -8,7 +8,7 @@ export type ReadConfiguration = () => { settings: CoaiSettings; vendors: readonl
 export type WriteFile = (json: string) => Promise<void>;
 /** The file as it is now, or an empty string when there is none. Never throws. */
 export type ReadExisting = () => Promise<string>;
-/** Told which build's file was left alone, once per session. */
+/** Told which build's file was left alone. Called once per distinct version, not once per run. */
 export type ReportRefusal = (theirVersion: string) => void;
 
 /**
@@ -38,8 +38,17 @@ export class ServerSettingsSync {
   /** The last content actually written, so an unchanged configuration touches nothing. */
   private lastWritten = '';
 
-  /** Reported once: a person needs the sentence, not one per keystroke in their settings file. */
-  private reported = false;
+  /**
+   * Which stamp this window has already complained about.
+   *
+   * <p>The version rather than a bare flag, and cleared on a successful write. A boolean makes the
+   * FIRST stand-down the only one a window ever mentions: somebody who updates the other window to
+   * a newer build and hits the same wall again is told nothing, and somebody whose write later
+   * lands and then stands down a second time is told nothing either. What must not repeat is one
+   * sentence about one version, which is a different thing from saying it once per lifetime.
+   * Accepted finding, this story's plan round.</p>
+   */
+  private reportedFor = '';
 
   constructor(
     private readonly read: ReadConfiguration,
@@ -59,8 +68,13 @@ export class ServerSettingsSync {
    *
    * <p>A failed write is not remembered as done: the disk being unwritable is not worth
    * interrupting anyone over, but the next change must still try. A REFUSAL is not remembered
-   * either, and for a sharper reason — the newer window will close, and the same content must then
-   * be written rather than believed to be there already.</p>
+   * either, so the pending content is written the moment writing becomes possible.</p>
+   *
+   * <p><b>Which is not the same as "when the other window closes".</b> Nothing here observes that:
+   * a window closing does not touch this file, fires no configuration event, and this class has no
+   * watcher. The write lands on the NEXT configuration change or the next activation — and the
+   * cure a person actually has is the Reload Window button on the warning, which is an activation.
+   * The story's own requirement claimed a trigger that does not exist, and the plan round said so.</p>
    */
   async sync(): Promise<void> {
     const { settings, vendors } = this.read();
@@ -76,6 +90,8 @@ export class ServerSettingsSync {
     try {
       await this.write(json);
       this.lastWritten = json;
+      // The situation is over. A stand-down that happens again after this is news, not a repeat.
+      this.reportedFor = '';
     } catch {
       // Not writable. The pasted env block remains a way in, and this runs from a configuration
       // listener — throwing here would put an extension error in front of somebody for every
@@ -113,8 +129,8 @@ export class ServerSettingsSync {
       return false;
     }
 
-    if (!this.reported) {
-      this.reported = true;
+    if (this.reportedFor !== theirs) {
+      this.reportedFor = theirs;
       this.report(theirs);
     }
 
