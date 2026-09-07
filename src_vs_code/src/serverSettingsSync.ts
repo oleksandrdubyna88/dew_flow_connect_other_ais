@@ -6,8 +6,21 @@ import { Vendor } from './vendors';
 /** Everything the sync needs from the editor, so the sync itself needs nothing from it. */
 export type ReadConfiguration = () => { settings: CoaiSettings; vendors: readonly Vendor[] };
 export type WriteFile = (json: string) => Promise<void>;
-/** The file as it is now, or an empty string when there is none. Never throws. */
-export type ReadExisting = () => Promise<string>;
+/**
+ * What the settings file says, or why it could not be asked.
+ *
+ * <p><b>Three answers, not two, and the third is the point.</b> An earlier draft returned a string
+ * and answered `''` for everything that went wrong — so a file that is LOCKED, or on a volume that
+ * blinked, was indistinguishable from a file that is not there. One of those is permission to write
+ * and the other is the exact overwrite this class exists to prevent, reached through a different
+ * door. Three reviewers found it independently on this story's code round.</p>
+ */
+export type ExistingFile =
+  | { readonly kind: 'contents'; readonly text: string }
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'unreadable' };
+
+export type ReadExisting = () => Promise<ExistingFile>;
 /** Told which build's file was left alone. Called once per distinct version, not once per run. */
 export type ReportRefusal = (theirVersion: string) => void;
 
@@ -50,11 +63,22 @@ export class ServerSettingsSync {
    */
   private reportedFor = '';
 
+  /**
+   * Did the last attempt stand down rather than write?
+   *
+   * <p>Because the "nothing changed, nothing to do" short-circuit compares against the last
+   * SUCCESSFUL write, and after a stand-down that is an older state than the file holds. Change a
+   * setting, stand down, change it back, and the content matches `lastWritten` exactly — so the
+   * write is skipped and the pending value never lands at all. Accepted finding, this story's code
+   * round.</p>
+   */
+  private stoodDown = false;
+
   constructor(
     private readonly read: ReadConfiguration,
     private readonly write: WriteFile,
     private readonly version = '',
-    private readonly readExisting: ReadExisting = async () => '',
+    private readonly readExisting: ReadExisting = async () => ({ kind: 'absent' }),
     private readonly report: ReportRefusal = () => {},
   ) {}
 
@@ -79,17 +103,19 @@ export class ServerSettingsSync {
   async sync(): Promise<void> {
     const { settings, vendors } = this.read();
     const json = serverSettingsJson(settings, vendors, this.version);
-    if (json === this.lastWritten) {
+    if (json === this.lastWritten && !this.stoodDown) {
       return;
     }
 
     if (await this.wouldOverwriteANewerBuild()) {
+      this.stoodDown = true;
       return;
     }
 
     try {
       await this.write(json);
       this.lastWritten = json;
+      this.stoodDown = false;
       // The situation is over. A stand-down that happens again after this is news, not a repeat.
       this.reportedFor = '';
     } catch {
@@ -124,14 +150,39 @@ export class ServerSettingsSync {
       return false;
     }
 
-    const theirs = writtenBy(await this.readExisting().catch(() => ''));
+    // A guard that cannot answer stands the write DOWN rather than waving it through, and that
+    // direction is the whole point: the cost of a needless wait is one configuration change, and
+    // the cost of a needless write is somebody's reviewer disappearing. `.catch` on the promise is
+    // not enough on its own — a caller-supplied reader can throw synchronously, and this is awaited
+    // outside the try that protects the write.
+    let existing: ExistingFile;
+    try {
+      existing = await this.readExisting();
+    } catch {
+      return true;
+    }
+
+    if (existing.kind === 'unreadable') {
+      // Silent, like the failed-write branch below and for the same reason: a volume that will not
+      // answer is not a thing a settings panel can fix, and the write would very likely fail too.
+      return true;
+    }
+
+    if (existing.kind === 'absent') {
+      return false;
+    }
+
+    const theirs = writtenBy(existing.text);
     if (theirs.length === 0 || !updateAvailable(release(this.version), release(theirs))) {
       return false;
     }
 
-    if (this.reportedFor !== theirs) {
-      this.reportedFor = theirs;
-      this.report(theirs);
+    // Suppressed on the NORMALISED version, shown as the stamp actually found: if `0.31.9-alpha.1`
+    // and `0.31.9` are one version to the comparison, they are one version to the sentence too.
+    const seen = release(theirs);
+    if (this.reportedFor !== seen) {
+      this.reportedFor = seen;
+      this.report(displayable(theirs));
     }
 
     return true;
@@ -140,5 +191,19 @@ export class ServerSettingsSync {
 
 /** `0.31.3-alpha.1` and `0.31.3+build.7` → `0.31.3`. The release a build belongs to, and no more. */
 function release(version: string): string {
-  return version.split(/[-+]/)[0] ?? version;
+  return (version.trim().split(/[-+]/)[0] ?? version).trim();
+}
+
+/**
+ * A stamp read out of a file, made fit for a notification.
+ *
+ * <p>It is arbitrary text from a file anybody can edit, and it goes into a VS Code dialog. Control
+ * characters and an unbounded length are not an attack anyone is expecting here — they are how a
+ * corrupted file produces a message nobody can read.</p>
+ */
+function displayable(stamp: string): string {
+  // Written as a code-point comparison rather than a control-character class, because the
+  // class has to be SPELLED, and the first attempt at spelling it put a real NUL byte in this
+  // file. Everything below the space, and DEL, is dropped.
+  return [...stamp].filter((c) => c >= ' ' && c !== '\u007f').join('').slice(0, 64);
 }
