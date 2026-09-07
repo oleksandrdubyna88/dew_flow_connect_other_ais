@@ -9,7 +9,7 @@ import { escapeHtml } from './escapeHtml';
 import { CoaiSettings } from './settingsShape';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
-import { ModelChoice, modelsFor, modelsProvenance } from './models';
+import { CatalogState, ModelChoice, modelsFor, modelsProvenance } from './models';
 import { ROLES, promptsFor, selectedFor } from './prompts';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
@@ -333,13 +333,13 @@ interface RemoteModels {
   readonly models: readonly string[];
   /** The name the SERVER knows this vendor by — what the count is about. */
   readonly named: string;
-  /** False until the server has answered; the row's own model is standing in. */
-  readonly fromCatalog: boolean;
+  /** Where the list came from — see `RemoteProvenance` in `models.ts`. */
+  readonly catalog: CatalogState;
 }
 
 function allowedModelsFor(vendor: Vendor, servers: readonly TeamServerState[]): RemoteModels {
   if (vendor.runtime !== 'remote') {
-    return { models: [], named: vendor.id, fromCatalog: false };
+    return { models: [], named: vendor.id, catalog: 'no-server' };
   }
 
   // By ID first, because an address is CORRECTABLE and an id is not: fixing a typo in a hostname
@@ -350,32 +350,35 @@ function allowedModelsFor(vendor: Vendor, servers: readonly TeamServerState[]): 
   const server = servers.find((s) => (vendor.teamServerId !== undefined && vendor.teamServerId.length > 0)
     ? s.server.id === vendor.teamServerId
     : canonicalTeamServerUrl(s.server.url) === url);
-  // Length-checked, not `??`: nullish coalescing keeps an EMPTY string, so a row carrying
-  // `remoteVendor: ''` would be looked up — and captioned — under a blank name. `vendorsFrom` cannot
-  // produce one, but the C# side of this seam length-checks the same field (`VendorIdentity.Recorded`)
-  // and two halves of one contract disagreeing about what counts as absent is how this whole plan
-  // started. Accepted finding, this story's plan round.
-  // Length-checked, not `??`: nullish coalescing keeps an EMPTY string, so a row carrying
-  // `remoteVendor: ''` would be looked up in the catalog under a blank name. `vendorsFrom` cannot
-  // produce one, but the C# side of this seam length-checks the same field
-  // (`VendorIdentity.Recorded`), and two halves of one contract disagreeing about what counts as
-  // absent is how this whole plan started. Accepted finding, this story's plan round.
-  const named = vendor.remoteVendor !== undefined && vendor.remoteVendor.length > 0
+  // Guarded by `typeof`, not by `!== undefined`: a JSON null passes the second and then has
+  // `.length` read off it, and this is a field a person can hand-write. Length-checked rather than
+  // `??`, because nullish coalescing keeps an EMPTY string — a row carrying `remoteVendor: ''` would
+  // be looked up in the catalog under a blank name. The C# side of this seam asks the same question
+  // the same way (`VendorIdentity.Recorded`), and two halves of one contract disagreeing about what
+  // counts as absent is how this whole plan started. Both raised on this story's rounds.
+  const named = typeof vendor.remoteVendor === 'string' && vendor.remoteVendor.length > 0
     ? vendor.remoteVendor
     : vendor.id;
 
-  if (server?.catalog === undefined) {
+  // Three states, not two. "No server entry matches this row" is not "its catalog has not arrived
+  // yet" — it is what a person is left with after removing a Team server and keeping its reviewers,
+  // and sending them to a section that no longer lists their server is worse than saying nothing.
+  if (server === undefined) {
+    return { models: [vendor.model], named, catalog: 'no-server' };
+  }
+
+  if (server.catalog === undefined) {
     // NOT an empty allowlist. An empty one means "this server no longer offers your model", and
     // `modelsFor` would then mark every remote row's saved model as withdrawn — on every reload,
     // before the first fetch has landed, and for as long as a server stays unreachable. A person
     // would read that as their configuration having been dropped. Caught on the code round.
-    return { models: [vendor.model], named, fromCatalog: false };
+    return { models: [vendor.model], named, catalog: 'waiting' };
   }
 
   return {
     models: (server.catalog.vendors ?? []).find((v) => v.id === named)?.models ?? [],
     named,
-    fromCatalog: true,
+    catalog: 'here',
   };
 }
 
@@ -386,7 +389,7 @@ function vendorCard(
   price: ModelPrice | undefined,
   localEngine?: LocalEngine,
   agyModels: readonly ModelChoice[] = [],
-  allowedRemote: RemoteModels = { models: [], named: '', fromCatalog: false },
+  allowedRemote: RemoteModels = { models: [], named: '', catalog: 'no-server' },
 ): string {
   const id = escapeHtml(vendor.id);
   const local = vendor.runtime === 'local';

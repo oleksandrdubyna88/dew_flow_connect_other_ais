@@ -173,23 +173,37 @@ export const ANTIGRAVITY_MODELS: readonly ModelChoice[] = [
  * how a card is drawn: this is the smallest shape the sentence needs, and the panel's own record
  * satisfies it structurally.</p>
  */
+export type CatalogState =
+  /** The server answered and this is its allowlist. */
+  | 'here'
+  /** A server entry exists and its catalog is not in the panel's state yet. */
+  | 'waiting'
+  /** No Team server on this side matches the row — usually one removed with its reviewers left behind. */
+  | 'no-server';
+
 export interface RemoteProvenance {
   readonly models: readonly string[];
   readonly named: string;
-  readonly fromCatalog: boolean;
+  readonly catalog: CatalogState;
 }
 
 /**
- * What the caption says before a server has answered.
+ * What the caption says when there is no allowlist to count.
  *
- * <p>It does NOT say "not asked yet". Nothing at this call site can tell a request still in flight
- * from one that failed — the fetch, its error and its retry belong to the Team servers section,
- * which already renders the server's own message and marks a stale answer. Claiming the first when
- * it may be the second is the kind of confident wrong sentence this file has had to remove twice.
- * Pointing at the one place that knows costs a clause. Accepted finding, this story's plan round.</p>
+ * <p>Neither of these says "not asked yet". Nothing at this call site can tell a request still in
+ * flight from one that failed — the fetch, its error and its retry belong to the Team servers
+ * section, which already renders the server's own message and marks a stale answer. Claiming the
+ * first when it may be the second is the kind of confident wrong sentence this file has had to
+ * remove twice; pointing at the one place that knows costs a clause.</p>
+ *
+ * <p>And the two are kept apart, because they have different cures. A row whose server entry is
+ * GONE — removed while its reviewers were left behind — must not be sent to a section that no
+ * longer lists it. Accepted findings, this story's plan and code rounds.</p>
  */
-const CATALOG_NOT_HERE =
-  "this Team server's catalog has not arrived — the Team servers section says why.";
+const CATALOG_NOT_HERE: Readonly<Record<Exclude<CatalogState, 'here'>, string>> = {
+  waiting: "this Team server's catalog has not arrived — the Team servers section says why.",
+  'no-server': 'no Team server on this side matches this reviewer — add it under Team servers, or remove the row.',
+};
 
 /**
  * The count, in a sentence rather than a template with a number bolted to it.
@@ -218,7 +232,7 @@ export function modelsProvenance(
   discoveredCodex: readonly ModelChoice[],
   localEngine?: LocalEngine,
   discoveredAgy: readonly ModelChoice[] = [],
-  remote: RemoteProvenance = { models: [], named: '', fromCatalog: false },
+  remote: RemoteProvenance = { models: [], named: '', catalog: 'no-server' },
 ): string {
   // A Team-server row runs no CLI on this machine and has no cache here: its list came over HTTP
   // from a server's catalog. Without this arm the function fell through to the codex sentence, so a
@@ -226,10 +240,10 @@ export function modelsProvenance(
   // claim about software that has nothing to do with it, under a dropdown filled from an HTTP
   // response. Reported from a screenshot, 2026-09-07.
   //
-  // `fromCatalog` rather than a length test, because the not-yet-asked case deliberately returns the
+  // A state rather than a length test, because the not-yet-answered case deliberately returns the
   // row's own model rather than an empty list, so a count of one cannot tell the two apart.
   if (runtime === 'remote') {
-    return remote.fromCatalog ? allowedNote(remote) : CATALOG_NOT_HERE;
+    return remote.catalog === 'here' ? allowedNote(remote) : CATALOG_NOT_HERE[remote.catalog];
   }
 
   if (runtime === 'local') {
