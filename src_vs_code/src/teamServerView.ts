@@ -197,14 +197,20 @@ export function statusSentence(state: TeamServerState): string {
  */
 function notSignedInHere(state: TeamServerState): string {
   const elsewhere = state.elsewhere ?? '';
-  if (elsewhere.length === 0) {
-    return 'Not signed in.';
+  // The PROBLEM first, whoever is or is not signed in elsewhere. It used to be reachable only when
+  // another side was signed in, so with the sides separated — or simply with nobody else signed in —
+  // a refused sign-in, a timeout and a server that is down all rendered as a bare "Not signed in."
+  // Caught on the code round.
+  if (state.problem.length === 0) {
+    return elsewhere.length === 0
+      ? 'Not signed in.'
+      : `${elsewhere} is signed in on another side of this machine — press Sign in to use it here.`;
   }
 
-  return state.problem.length > 0
-    ? `${elsewhere} is signed in on another side of this machine, and this side could not sign `
-      + `itself in: ${state.problem}`
-    : `${elsewhere} is signed in on another side of this machine — press Sign in to use it here.`;
+  return elsewhere.length === 0
+    ? `Not signed in — ${state.problem}`
+    : `${elsewhere} is signed in on another side of this machine, and this side could not sign `
+      + `itself in: ${state.problem}`;
 }
 
 /**
@@ -223,21 +229,29 @@ export function teamServerHere(states: readonly TeamServerState[], perSide: bool
 
 function hereBlock(state: TeamServerState, perSide: boolean): string {
   const id = escape(state.server.id);
+  // The sign-out hint only where there is something to sign out OF. Telling somebody who is signed
+  // out to sign out first is an instruction they cannot follow, and this section has no buttons at
+  // all — every one of them is in *Team servers*, which is why both sentences name it. Raised on the
+  // code round.
+  const change = state.email.length > 0
+    ? `To point this side somewhere else, sign out under <b>Team servers</b> first.`
+    : `<b>Team servers</b> is where you sign in and out.`;
 
   return `<div class="field">
   <label for="ts-here-${id}">Team server — ${escape(state.server.name)}</label>
   <input id="ts-here-${id}" type="text" data-server-url="${id}" readonly aria-readonly="true"
          value="${escape(canonicalTeamServerUrl(state.server.url))}">
   <div class="status">${escape(hereSentence(state))}</div>
-  <div class="hint">${escape(sideSentence(perSide))} To point this side somewhere else, sign out
-  under <b>Team servers</b> first.</div>
+  <div class="hint">${escape(sideSentence(perSide))} ${change}</div>
 </div>`;
 }
 
 /** What is answering on this side, in one line — the version being the point of it. */
 export function hereSentence(state: TeamServerState): string {
   if (state.email.length === 0) {
-    return notSignedInHere(state);
+    // Not `notSignedInHere`: that one ends in "press Sign in", and there is no such button in THIS
+    // section. The sentence has to name where the button actually is. Raised on the code round.
+    return signedOutHere(state);
   }
   if (state.catalog === undefined) {
     return state.problem.length > 0
@@ -250,6 +264,21 @@ export function hereSentence(state: TeamServerState): string {
   const stale = state.stale ? ' (last known — it is not answering now)' : '';
 
   return `coai-server ${state.catalog.serverVersion}${stale} — signed in as ${state.email}.`;
+}
+
+/** The same states as {@link notSignedInHere}, worded for a section that has no buttons. */
+function signedOutHere(state: TeamServerState): string {
+  const elsewhere = state.elsewhere ?? '';
+  if (state.problem.length > 0) {
+    return elsewhere.length === 0
+      ? `Not signed in — ${state.problem}`
+      : `${elsewhere} is signed in on another side, and this side could not sign itself in: `
+        + state.problem;
+  }
+
+  return elsewhere.length === 0
+    ? 'Not signed in on this side.'
+    : `Not signed in on this side — ${elsewhere} is signed in on another one.`;
 }
 
 /** Which of the two arrangements this machine is in, said rather than implied. */

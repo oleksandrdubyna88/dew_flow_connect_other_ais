@@ -82,10 +82,29 @@ test('a version that is only the last known one says so', () => {
 test('a side that holds no token says so, even while another side is signed in', () => {
   // The defect this whole change is about: the record said "signed in", the distro had no token,
   // and the panel reported a session no review could use.
-  assert.ok(hereSentence(state()).startsWith('Not signed in'));
+  assert.strictEqual(hereSentence(state()), 'Not signed in on this side.');
   assert.strictEqual(
     hereSentence(state({ elsewhere: 'a@remsoft.dev' })),
-    'a@remsoft.dev is signed in on another side of this machine — press Sign in to use it here.',
+    'Not signed in on this side — a@remsoft.dev is signed in on another one.',
+  );
+});
+
+test('this section never tells anybody to press a button it does not have', () => {
+  // Every control is in *Team servers*. The first wording here ended in "press Sign in to use it
+  // here", under a block whose only element is a read-only input. Caught on the code round.
+  const out = teamServerHere([state({ elsewhere: 'a@remsoft.dev' })], false);
+
+  assert.ok(!out.includes('press Sign in'), out);
+  assert.ok(out.includes('Team servers'), 'it names where the buttons actually are');
+  assert.ok(!out.includes('sign out under'), 'and does not ask somebody signed out to sign out');
+});
+
+test('a failure is never swallowed, whoever else is signed in', () => {
+  // It used to be reachable only when another side was signed in, so with the sides separated a
+  // refused sign-in and a server that is down both rendered as a bare "Not signed in."
+  assert.strictEqual(
+    hereSentence(state({ problem: 'the server did not answer' })),
+    'Not signed in — the server did not answer',
   );
 });
 

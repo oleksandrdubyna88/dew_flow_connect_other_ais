@@ -8,6 +8,7 @@ import {
   SignedIn,
   StateStore,
   TokenFact,
+  plannedAction,
   reconcile,
   revokedKey,
   sessionAction,
@@ -121,12 +122,25 @@ test('a side with no token of its own mints one — this is the WSL window', () 
   assert.strictEqual(sessionAction(INTENT, undefined, 0, NOW), 'mint');
 });
 
-test('a token for a DIFFERENT account than the intent is replaced', () => {
+test('a token for a DIFFERENT account than the intent is REPLACED, not minted over', () => {
   // Reachable by turning the per-side switch off while two sides hold two accounts. Without this
-  // the WSL window would go on reviewing as somebody the panel no longer names.
+  // the WSL window would go on reviewing as somebody the panel no longer names — and minting over
+  // it rather than replacing it would leave that person's session live on the server.
   const other: TokenFact = { ...FACT, email: 'someone.else@b.c' };
 
-  assert.strictEqual(sessionAction(INTENT, other, 0, NOW), 'mint');
+  assert.strictEqual(sessionAction(INTENT, other, 0, NOW), 'replace');
+});
+
+test('a token older than the last sign-out is replaced even though somebody signed back in', () => {
+  // The hole the code round found. Sign out on Windows (stamped), sign in again there, and a WSL
+  // window that had not refreshed in between saw an intent, a matching account and an unexpired
+  // token — so it kept a session the person had ended. The stamp has to mean the same thing whether
+  // or not somebody signed back in.
+  assert.strictEqual(sessionAction(INTENT, FACT, FACT.mintedAtMs + 1, NOW), 'replace');
+});
+
+test('a token minted after the sign-out, for the intended account, is left alone', () => {
+  assert.strictEqual(sessionAction(INTENT, FACT, FACT.mintedAtMs - 1, NOW), 'nothing');
 });
 
 test('a token that is nearly out is renewed — the old silent renewal, unchanged', () => {
@@ -322,6 +336,147 @@ test('a token file deleted by hand is not believed for a moment longer', async (
 
     assert.strictEqual(done.problem, '', 'it re-mints rather than complaining');
     assert.ok(existsSync(join(dir, 'servers', tokenFileName(SERVER.url))));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// What the CODE round found — one test each
+// ---------------------------------------------------------------------------------------------
+
+test('a stale token is ENDED on the server before a new one is asked for', async () => {
+  // Minting over it would leave the other account's session running on the server, reachable by
+  // whoever still holds that token. Ending it first is the difference between `replace` and `mint`.
+  const dir = temp();
+  try {
+    const state = store({
+      [signedInKey(SERVER.id)]: INTENT,
+      [trustedKey(SERVER.id)]: APPLICATION,
+      [tokenFactKey(SERVER.id, WINDOWS)]: {
+        email: 'someone.else@b.c', expiresUtc: '2027-01-01T00:00:00Z', mintedAtMs: 1_000,
+      } satisfies TokenFact,
+    });
+    await writeToken(dir, SERVER.url, 'the-other-account-token');
+
+    const ended: string[] = [];
+    const impl = (async (input: unknown, init: RequestInit = {}) => {
+      if ((init.method ?? 'GET') === 'DELETE') {
+        ended.push(String(input));
+
+        return { ok: true, status: 204, text: async () => '' } as Response;
+      }
+
+      return (await (serverSaying('a@b.c') as (i: unknown, o: unknown) => Promise<Response>)(input, init));
+    }) as typeof fetch;
+
+    const done = await reconcile(SERVER, host(dir, state, { side: WINDOWS, fetchImpl: impl }), NOW);
+
+    assert.strictEqual(done.problem, '');
+    assert.strictEqual(ended.length, 1, 'the account that is being replaced is signed out first');
+    assert.strictEqual(
+      (state.all[tokenFactKey(SERVER.id, WINDOWS)] as TokenFact).email,
+      'a@b.c',
+      'and the side ends up on the intended account',
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a sign-out this side did not press does not re-stamp the revocation', async () => {
+  // Windows signs out at t1 and signs in again at t2. If the WSL window's own sign-out then stamped
+  // t3, Windows' NEW session would look older than the revocation and be thrown away on its next
+  // refresh — a sign-out invalidating the sign-in that followed it.
+  const dirWsl = temp();
+  try {
+    const state = store({
+      [revokedKey(SERVER.id)]: 1_500,
+      [tokenFactKey(SERVER.id, WSL)]: { ...INTENT, mintedAtMs: 1_000 } satisfies TokenFact,
+    });
+    await writeToken(dirWsl, SERVER.url, 'wsl-token');
+
+    await reconcile(SERVER, host(dirWsl, state, { side: WSL, now: () => 9_999 }), NOW);
+
+    assert.strictEqual(state.all[revokedKey(SERVER.id)], 1_500, 'the stamp is the one that was set');
+  } finally {
+    rmSync(dirWsl, { recursive: true, force: true });
+  }
+});
+
+test('a token file that will not delete keeps its record, so the next refresh tries again', async () => {
+  // Clearing the record first read as tidier and was a hole: with no record nothing ever came back
+  // here, so a token that failed to delete stayed on disk as a usable credential under a panel
+  // reporting "signed out".
+  const dir = temp();
+  try {
+    const state = store({
+      [signedInKey(SERVER.id)]: INTENT,
+      [tokenFactKey(SERVER.id, WINDOWS)]: { ...INTENT, mintedAtMs: 1_000 } satisfies TokenFact,
+    });
+    await writeToken(dir, SERVER.url, 'windows-token');
+    // The directory is what `rm` is given; making it unreadable is not portable, so the failure is
+    // injected where the code actually branches — a dataDir that cannot be written.
+    const wedged: AuthHost = {
+      ...host(dir, state, { side: WINDOWS }),
+      dataDir: join(dir, 'no', 'such', '\0invalid'),
+    };
+
+    const out = await signOut(SERVER, wedged, 'windows-token');
+
+    assert.strictEqual(out.ok, false);
+    assert.ok(
+      state.all[tokenFactKey(SERVER.id, WINDOWS)] !== undefined,
+      'the record survives, because it is the only thing that will bring anybody back here',
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the mint stamp comes from the injected clock, not the machine', async () => {
+  // `.claude/rules/shared/common/utc-timestamps.md` rule 2: it is persisted and then COMPARED
+  // against another side's sign-out, which is exactly the case that rule names.
+  const dir = temp();
+  try {
+    const state = store({
+      [signedInKey(SERVER.id)]: INTENT,
+      [trustedKey(SERVER.id)]: APPLICATION,
+    });
+
+    await reconcile(SERVER, host(dir, state, { side: WSL, now: () => 4_242 }), NOW);
+
+    assert.strictEqual((state.all[tokenFactKey(SERVER.id, WSL)] as TokenFact).mintedAtMs, 4_242);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('nothing to do is answered without touching the network', async () => {
+  // What `plannedAction` exists for: the panel asks BEFORE it says "Signing in…", so the ordinary
+  // sixty-second refresh neither flashes a spinner nor makes a request.
+  const dir = temp();
+  try {
+    const state = store({
+      [signedInKey(SERVER.id)]: INTENT,
+      [tokenFactKey(SERVER.id, WINDOWS)]: { ...INTENT, mintedAtMs: 1_000 } satisfies TokenFact,
+    });
+    await writeToken(dir, SERVER.url, 'windows-token');
+    let called = 0;
+    const counting = (async () => {
+      called += 1;
+
+      return { ok: true, status: 200, text: async () => '{}' } as Response;
+    }) as typeof fetch;
+
+    const action = await plannedAction(
+      SERVER,
+      host(dir, state, { side: WINDOWS, fetchImpl: counting }),
+      NOW,
+    );
+
+    assert.strictEqual(action, 'nothing');
+    assert.strictEqual(called, 0);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

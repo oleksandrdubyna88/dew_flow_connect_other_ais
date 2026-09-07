@@ -183,6 +183,14 @@ export interface AuthHost {
    * own from it, so Windows and WSL end up on one account without anybody signing in twice.</p>
    */
   readonly perSide?: boolean | undefined;
+  /**
+   * The clock, injected — `.claude/rules/shared/common/utc-timestamps.md` rule 2.
+   *
+   * <p>Both stamps this module writes are PERSISTED and then COMPARED to each other: a token's mint
+   * time against a sign-out on another side. An ambient clock in a value a test has to pin is the
+   * exact case that rule names, and the comparison is the whole propagation mechanism.</p>
+   */
+  readonly now?: (() => number) | undefined;
   getSession(scope: string, interactive: boolean): Promise<string | undefined>;
   confirmApplication(server: TeamServer, applicationId: string): Promise<boolean>;
   say(message: string): void;
@@ -292,7 +300,7 @@ export async function signIn(
   await host.state.update(intentKey(host, server.id), signedIn);
   // Both halves, in the same breath: what this scope INTENDS, and what this side now actually holds.
   // The panel reads the second one, so a mint that never happened cannot render as a session.
-  const fact: TokenFact = { ...signedIn, mintedAtMs: Date.now() };
+  const fact: TokenFact = { ...signedIn, mintedAtMs: nowOf(host) };
   await host.state.update(tokenFactKey(server.id, host.side ?? ''), fact);
 
   return { ok: true, signedIn };
@@ -313,6 +321,11 @@ function revocationKey(host: AuthHost, serverId: string): string {
   return revokedKey(serverId, host.perSide === true ? (host.side ?? '') : '');
 }
 
+/** The injected clock, or the machine's when nobody injected one. */
+function nowOf(host: AuthHost): number {
+  return host.now?.() ?? Date.now();
+}
+
 /**
  * A session that came back as somebody else, ended again before it can be used.
  *
@@ -326,15 +339,31 @@ async function refusedForWrongAccount(
   session: { readonly token: string; readonly email: string },
   expectedEmail: string,
 ): Promise<string> {
-  if (expectedEmail.length === 0 || session.email === expectedEmail) {
+  if (expectedEmail.length === 0) {
     return '';
   }
 
-  await deleteSession(server.url, session.token, host.fetchImpl);
+  // An EMPTY email from the server would otherwise compare unequal and be reported as the wrong
+  // account, or — had the check been written the other way round — skip the comparison entirely and
+  // let an unidentified session through. It is neither: a session whose owner the server will not
+  // name cannot be checked against an intent, so it is refused. Raised on the code round.
+  if (session.email.length > 0 && session.email === expectedEmail) {
+    return '';
+  }
+
+  const ended = await deleteSession(server.url, session.token, host.fetchImpl);
+  // Ending it can FAIL, and then a live session exists on the server that this machine holds no
+  // token for and cannot revoke. That is not something to swallow: the token is gone from memory the
+  // moment this returns, so the only remedy left is the server's own expiry — and the person is the
+  // one who has to know. Raised on the code round.
+  const stranded = ended.ok
+    ? ''
+    : ' The session it created could not be ended again, so it stays live on the server until it '
+      + 'expires; nothing on this machine can use it.';
 
   return `${server.name}: the Microsoft account active on this side is ${session.email}, not `
     + `${expectedEmail} — nothing was signed in here. Sign in explicitly to use ${session.email} on `
-    + 'this side, or separate the sides in the panel to keep an account per side.';
+    + `this side, or separate the sides in the panel to keep an account per side.${stranded}`;
 }
 
 /**
@@ -394,14 +423,14 @@ export async function signOut(
   // remedy is the server's expiry rather than anything they can press.
   const revoked = token.length === 0 || (await deleteSession(server.url, token, host.fetchImpl)).ok;
   await host.state.update(intentKey(host, server.id), undefined);
-  await host.state.update(revocationKey(host, server.id), Date.now());
-  await host.state.update(tokenFactKey(server.id, host.side ?? ''), undefined);
+  await host.state.update(revocationKey(host, server.id), nowOf(host));
 
-  try {
-    await deleteToken(host.dataDir, server.url);
-  } catch (e) {
-    const why = e instanceof Error ? e.message : String(e);
-
+  // The FACT is cleared only if the FILE actually went. Clearing it first looked tidier and was a
+  // hole: with no fact, nothing ever came back here, so a token that failed to delete stayed on disk
+  // as a usable credential with the panel reporting "signed out". Kept, the next refresh sees a fact
+  // older than the revocation and tries again. Raised on the code round.
+  const why = await forgetTokenHere(server, host);
+  if (why.length > 0) {
     return {
       ok: false,
       message: `${server.name}: signed out on the server, but its token file could not be deleted `
@@ -419,8 +448,14 @@ export async function signOut(
     };
 }
 
-/** What this side should do about its session, given the intent and what it actually holds. */
-export type SessionAction = 'mint' | 'signOut' | 'nothing';
+/**
+ * What this side should do about its session, given the intent and what it actually holds.
+ *
+ * <p>`replace` is not `mint` and the difference is a credential: the token here is one that must not
+ * survive — somebody else's account, or one the person signed out — so it is ENDED on the server and
+ * deleted before a new one is asked for. Minting over it would leave the old session live.</p>
+ */
+export type SessionAction = 'mint' | 'replace' | 'signOut' | 'nothing';
 
 /**
  * The whole rule, as one pure table.
@@ -446,12 +481,32 @@ export function sessionAction(
   if (intent === undefined) {
     return fact !== undefined && revokedAtMs > fact.mintedAtMs ? 'signOut' : 'nothing';
   }
+  if (fact === undefined) {
+    return 'mint';
+  }
 
-  return mintDue(intent, fact, nowMs) ? 'mint' : 'nothing';
+  return whatIsWrongHere(intent, fact, revokedAtMs, nowMs);
 }
 
-function mintDue(intent: SignedIn, fact: TokenFact | undefined, nowMs: number): boolean {
-  return fact === undefined || fact.email !== intent.email || needsRenewal(fact.expiresUtc, nowMs);
+/**
+ * A side that HAS a token: is it the right one, is it still wanted, is it still fresh.
+ *
+ * <p>The revocation is compared here as well as in the branch above, which is the fix for a hole the
+ * code round found: sign out on Windows, sign in again there, and a WSL window that had not refreshed
+ * in between saw an intent, a matching account and an unexpired token — and kept a session the person
+ * had ended. The stamp has to mean the same thing whether or not somebody signed back in.</p>
+ */
+function whatIsWrongHere(
+  intent: SignedIn,
+  fact: TokenFact,
+  revokedAtMs: number,
+  nowMs: number,
+): SessionAction {
+  if (fact.email !== intent.email || revokedAtMs > fact.mintedAtMs) {
+    return 'replace';
+  }
+
+  return needsRenewal(fact.expiresUtc, nowMs) ? 'mint' : 'nothing';
 }
 
 /** What a reconciliation did, for the row that has to explain itself. */
@@ -481,24 +536,101 @@ export async function reconcile(
   host: AuthHost,
   nowMs: number = Date.now(),
 ): Promise<Reconciled> {
+  const action = await plannedAction(server, host, nowMs);
+  const intent = host.state.get<SignedIn>(intentKey(host, server.id));
+
+  // A sign-out this side did not press: end the token it holds, and NOTHING else. Calling `signOut`
+  // here re-stamped the revocation, which then read as newer than a session somebody had just signed
+  // back in with on the side that pressed it — so a sign-out could invalidate the sign-in that
+  // followed it. Caught on the code round.
+  if (action === 'signOut') {
+    return { problem: await endTokenHere(server, host), changed: true };
+  }
+
+  return intent === undefined ? { problem: '', changed: false } : mintHere(server, host, intent, action);
+}
+
+/**
+ * Get this side onto the intended account, ending whatever it holds first when that is not it.
+ *
+ * <p>The order is the point: the old token is a live session on the server, so it is ended BEFORE a
+ * new one is asked for. Minting over it would leave somebody else's session running, and a mint that
+ * then failed would leave the panel reporting the account it was supposed to have replaced.</p>
+ */
+async function mintHere(
+  server: TeamServer,
+  host: AuthHost,
+  intent: SignedIn,
+  action: SessionAction,
+): Promise<Reconciled> {
+  if (action === 'nothing') {
+    return { problem: '', changed: false };
+  }
+
+  const stuck = action === 'replace' ? await endTokenHere(server, host) : '';
+  if (stuck.length > 0) {
+    return { problem: stuck, changed: false };
+  }
+
+  const outcome = await signIn(server, host, false, intent.email);
+
+  return {
+    problem: outcome.ok ? '' : outcome.message,
+    changed: outcome.ok || action === 'replace',
+  };
+}
+
+/**
+ * End this side's session and forget its token — without touching the intent or the stamp.
+ *
+ * <p>Returns why it could not, or empty. The fact is kept when the FILE could not be deleted, so
+ * this side comes back and tries again rather than reporting a credential gone that is still there.</p>
+ */
+async function endTokenHere(server: TeamServer, host: AuthHost): Promise<string> {
+  const token = await readToken(host.dataDir, server.url);
+  if (token.length > 0) {
+    await deleteSession(server.url, token, host.fetchImpl);
+  }
+
+  const why = await forgetTokenHere(server, host);
+
+  return why.length === 0
+    ? ''
+    : `${server.name}: a token this side must not keep could not be deleted (${why}). It is at `
+      + `${join(host.dataDir, 'servers', tokenFileName(server.url))}.`;
+}
+
+/** This side's token file and the record of it, gone — or why the file would not go. */
+async function forgetTokenHere(server: TeamServer, host: AuthHost): Promise<string> {
+  try {
+    await deleteToken(host.dataDir, server.url);
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+
+  await host.state.update(tokenFactKey(server.id, host.side ?? ''), undefined);
+
+  return '';
+}
+
+/**
+ * What this side is about to do — WITHOUT doing it.
+ *
+ * <p>Separated from {@link reconcile} so the panel can say "Signing in…" BEFORE the four requests
+ * rather than after them. Asking first also keeps the panel from announcing work on every sixty-second
+ * refresh: the common answer is `nothing`, and a row that flashed a spinner once a minute would be
+ * worse than the silence it replaced.</p>
+ */
+export async function plannedAction(
+  server: TeamServer,
+  host: AuthHost,
+  nowMs: number = Date.now(),
+): Promise<SessionAction> {
   const intent = host.state.get<SignedIn>(intentKey(host, server.id));
   const fact = await factHere(server, host);
   const revokedAtMs = host.state.get<number>(revocationKey(host, server.id)) ?? 0;
-  const action = sessionAction(intent, fact, revokedAtMs, nowMs);
 
-  if (action === 'mint' && intent !== undefined) {
-    const outcome = await signIn(server, host, false, intent.email);
-
-    return outcome.ok ? { problem: '', changed: true } : { problem: outcome.message, changed: false };
-  }
-
-  if (action === 'signOut') {
-    const gone = await signOut(server, host, await readToken(host.dataDir, server.url));
-
-    return { problem: gone.ok ? '' : gone.message, changed: true };
-  }
-
-  return { problem: '', changed: false };
+  return sessionAction(intent, fact, revokedAtMs, nowMs);
 }
 
 /**
