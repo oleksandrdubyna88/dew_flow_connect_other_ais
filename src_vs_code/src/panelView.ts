@@ -6,7 +6,7 @@ import {
 } from './teamServerView';
 import { canonicalTeamServerUrl } from './teamServers';
 import { escapeHtml } from './escapeHtml';
-import { availabilityOf, ProviderHealth } from './providers';
+import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { CoaiSettings } from './settingsShape';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
@@ -62,7 +62,7 @@ export interface PanelState {
    * <p>Optional, and absent means the server was not asked or could not answer — which badges
    * NOTHING. The panel displays this decision; it does not make it.</p>
    */
-  readonly providerHealth?: Readonly<Record<string, ProviderHealth>> | undefined;
+  readonly providers?: ProvidersAnswer | undefined;
   /**
    * Whose spending the usage section is showing. `company` is offered only to an admin.
    *
@@ -307,7 +307,7 @@ function updateLabel(id: string, cli: CliStatus): string {
 }
 
 function reviewersBody(state: PanelState): string {
-  return `${state.vendors.map((v) => vendorCard(v, state.codexModels, state.cliStatus[v.id] ?? UNKNOWN_CLI, state.modelPrices[v.model], state.localEngines[v.id], state.agyModels, allowedModelsFor(v, state.teamServers ?? []), state.providerHealth ?? {})).join('\n')}
+  return `${state.vendors.map((v) => vendorCard(v, state.codexModels, state.cliStatus[v.id] ?? UNKNOWN_CLI, state.modelPrices[v.model], state.localEngines[v.id], state.agyModels, allowedModelsFor(v, state.teamServers ?? []), state.providers?.reported ?? {})).join('\n')}
 <button class="add" data-command="addVendor" title="${escapeHtml(HELP.addVendor)}">＋&nbsp; Add a reviewer</button>`;
 }
 
@@ -645,6 +645,15 @@ function serverBody(state: PanelState): string {
   // The pasted snippet is the other half of this section: the server is installed here, and
   // the instruction that makes an AI USE it lives in somebody's CLAUDE.md, where it goes stale
   // silently. One line, and only when there is something to do about it.
+  // The check itself, when it could not be made. Here rather than on a card, because it says
+  // nothing about any one reviewer — a badge fed by a failed probe would be a badge that lies — and
+  // because "asked and could not answer" is a fact about this binary. `asked: false` is silent: the
+  // line above already says the server is absent. Four reviewers raised this on the plan round.
+  const probe = state.providers !== undefined && state.providers.asked && !state.providers.answered
+    ? '<div class="stale">The installed coai-mcp could not report its reviewers, so no card can say '
+      + 'whether the server would run it. An update usually fixes it.</div>'
+    : '';
+
   const snippet = snippetNote(state.snippetStatus);
   const stale = snippet.length === 0 ? '' : `<div class="stale">${escapeHtml(snippet)}</div>`;
 
@@ -653,7 +662,7 @@ function serverBody(state: PanelState): string {
   // question with two answers — and in front of the operator it read as two subjects sharing a
   // box. A Team server is described where it is managed, under *Team servers*; a section titled
   // for one thing describes that thing.
-  return `${installed}${stale}
+  return `${installed}${stale}${probe}
 ${published}
 <div class="hint">Changes here are saved for the server straight away; it reads them when your MCP client next starts it. The config block in the ⋯ menu is pasted once, when you first set it up.</div>
 <button class="link" data-command="checkForUpdate">Check again</button>`;

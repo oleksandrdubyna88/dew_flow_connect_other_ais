@@ -48,7 +48,7 @@ function page(over: Partial<PanelState> = {}): string {
   } as unknown as PanelState, 'nonce');
 }
 
-const UNAVAILABLE = {
+const UNAVAILABLE: Record<string, { provider: string; auth: string; note: string }> = {
   'remsoftdev-claude': {
     provider: 'remsoftdev-claude',
     auth: 'unavailable',
@@ -57,7 +57,7 @@ const UNAVAILABLE = {
 };
 
 test('a reviewer the server cannot run is badged, with the reason', () => {
-  const html = page({ providerHealth: UNAVAILABLE });
+  const html = page({ providers: { reported: UNAVAILABLE, asked: true, answered: true } });
 
   assert.match(html, /cannot review/);
   assert.ok(html.includes('not signed in to the Team server'), 'the count is not actionable; the reason is');
@@ -68,7 +68,7 @@ test('a reviewer the server CAN run is badged with nothing', () => {
     'remsoftdev-claude': { provider: 'remsoftdev-claude', auth: 'server token', note: '1 of 1 account(s) ready' },
   };
 
-  assert.ok(!page({ providerHealth: fine }).includes('cannot review'));
+  assert.ok(!page({ providers: { reported: fine, asked: true, answered: true } }).includes('cannot review'));
 });
 
 test('a probe that answered nothing badges nothing — unknown is not unavailable', () => {
@@ -76,7 +76,7 @@ test('a probe that answered nothing badges nothing — unknown is not unavailabl
   // that lights up because a probe failed is a badge that lies, and the ⤓ buttons on this same card
   // already refuse to guess for exactly this reason.
   assert.ok(!page().includes('cannot review'), 'no answer at all');
-  assert.ok(!page({ providerHealth: {} }).includes('cannot review'), 'an empty answer');
+  assert.ok(!page({ providers: { reported: {}, asked: true, answered: false } }).includes('cannot review'), 'an empty answer');
 });
 
 test('a row the server did not mention is unknown, not fine', () => {
@@ -104,4 +104,26 @@ test('the parser survives everything a different build could hand it', () => {
   const one = parseProviders('{"providers":[{"provider":"codex","auth":"own auth"}]}');
   assert.equal(one['codex']?.auth, 'own auth');
   assert.equal(one['codex']?.note, '', 'a missing note is empty, not undefined');
+});
+
+test('the Server section says when the installed binary could not report at all', () => {
+  // Not a badge on a card: a failed probe says nothing about any one reviewer, and a badge fed by
+  // one would be a badge that lies. It IS a fact about this binary, and silence about a failed CHECK
+  // is the class of defect this whole plan is about. Four reviewers raised it on the plan round.
+  const html = page({
+    providers: { reported: {}, asked: true, answered: false },
+    openSections: ['reviewers', 'server'],
+  } as Partial<PanelState>);
+
+  assert.match(html, /could not report its reviewers/);
+  assert.ok(!html.includes('cannot review'), 'and still badges no reviewer');
+});
+
+test('a binary that was never asked says nothing — that section already says the server is absent', () => {
+  const html = page({
+    providers: { reported: {}, asked: false, answered: false },
+    openSections: ['reviewers', 'server'],
+  } as Partial<PanelState>);
+
+  assert.ok(!html.includes('could not report its reviewers'));
 });

@@ -37,6 +37,22 @@ export interface ProviderHealth {
  */
 export type Availability = 'fine' | 'unavailable' | 'unknown';
 
+/**
+ * What one probe produced, and whether it produced anything.
+ *
+ * <p>`answered: false` is not "everything is fine" and it is not "this reviewer is broken" — it is
+ * that the installed binary was asked and could not say. The CARD stays silent about a reviewer it
+ * knows nothing about, and the Server section says the check itself failed. Four reviewers on this
+ * epic's plan round raised the same point: silence about a failed CHECK is the class of defect this
+ * whole plan is about.</p>
+ */
+export interface ProvidersAnswer {
+  readonly reported: Record<string, ProviderHealth>;
+  /** A binary existed and was run. False means nothing was asked — which the Server section says. */
+  readonly asked: boolean;
+  readonly answered: boolean;
+}
+
 /** The shape the server answers with, parsed defensively. */
 export function parseProviders(output: string): Record<string, ProviderHealth> {
   try {

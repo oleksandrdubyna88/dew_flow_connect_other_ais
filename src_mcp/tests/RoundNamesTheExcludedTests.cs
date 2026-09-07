@@ -122,6 +122,31 @@ public class RoundNamesTheExcludedTests
             .Should().ContainSingle("it IS enabled for code, and there it cannot run");
     }
 
+    /// <summary>
+    /// A reviewer that WAS asked and then failed is a failure, never an exclusion.
+    /// </summary>
+    /// <remarks>
+    /// The two live in one sentence and a reader would expect them to blur, so this says they do
+    /// not. Exclusion is decided BEFORE the roster, from <c>CanRun</c>; a timeout, a non-zero exit or
+    /// a kill happens to a reviewer that entered it. They have different cures — one is a
+    /// configuration, the other is a run — and a round that put a timed-out vendor in both lists
+    /// would send somebody to fix a credential that is fine. Accepted finding, this epic's plan round.
+    /// </remarks>
+    [Fact]
+    public void AReviewerThatWasAskedAndFailedIsAFailure_NotAnExclusion()
+    {
+        var summary = ReviewerSummaryFactory.From(
+            [(new ReviewerInvocation("codex", ReviewRole.PlanCritique,
+                new Runners.Processes.ProcessRequest("codex", [], "D:/wt")),
+              new ReviewerOutcome.TimedOut())],
+            excluded: ["remsoftdev-claude: not signed in"]);
+
+        summary.Failures.Should().ContainSingle().Which.Should().Contain("codex/PlanCritique");
+        summary.Excluded.Should().ContainSingle().Which.Should().StartWith("remsoftdev-claude");
+        summary.Excluded.Should().NotContain(e => e.Contains("codex"), "codex was asked; it did not answer");
+        summary.Sentence.Should().Contain("failed: codex").And.Contain("1 enabled reviewer could not run");
+    }
+
     [Fact]
     public void ADisabledReviewerIsNotExcluded_ItIsOff()
     {

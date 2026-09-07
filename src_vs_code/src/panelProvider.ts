@@ -27,7 +27,7 @@ import { readOverlay, seedIfEmpty, writeOverlay } from './sideSettings';
 import { thisSide } from './installer';
 import { latestServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog, EMPTY_LOG } from './roundsDb';
-import { ProviderHealth } from './providers';
+import { ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
 import { readLog } from './roundsDbRead';
 import { sideKey, sideLabel } from './coaiInstall';
@@ -353,7 +353,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   }
 
   /** The last answer from `--providers`, and when it was taken. */
-  private providersCache: Record<string, ProviderHealth> = {};
+  private providersCache: ProvidersAnswer = { reported: {}, asked: false, answered: false };
 
   private providersAt = 0;
 
@@ -367,14 +367,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * <p>An empty answer is not "everything is fine": `availabilityOf` reads a missing row as
    * UNKNOWN, and the card then shows what it always showed.</p>
    */
-  private async providerHealth(): Promise<Record<string, ProviderHealth>> {
+  private async providerHealth(): Promise<ProvidersAnswer> {
     const AGE_MS = 10_000;
     if (Date.now() - this.providersAt < AGE_MS) {
       return this.providersCache;
     }
     const server = serverPath(this.context.globalStorageUri);
     this.providersAt = Date.now();
-    this.providersCache = server === undefined ? {} : await readProviders(server.fsPath);
+    this.providersCache = server === undefined
+      ? { reported: {}, asked: false, answered: false }
+      : await readProviders(server.fsPath);
 
     return this.providersCache;
   }
@@ -412,7 +414,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       snippetStatus: await pastedSnippetStatus(),
       localEngines: await this.probeLocalEngines(vendors),
       teamServers: this.teamServerStates(config),
-      providerHealth: await this.providerHealth(),
+      providers: await this.providerHealth(),
       usageScope: this.usageScope,
     };
 
