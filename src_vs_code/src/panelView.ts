@@ -9,7 +9,7 @@ import { escapeHtml } from './escapeHtml';
 import { CoaiSettings } from './settingsShape';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
-import { CatalogState, ModelChoice, modelsFor, modelsProvenance } from './models';
+import { ModelChoice, modelsFor, modelsProvenance, NO_REMOTE_CATALOG, RemoteProvenance } from './models';
 import { ROLES, promptsFor, selectedFor } from './prompts';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
@@ -328,16 +328,12 @@ const KNOWS_ITS_OWN_ENDPOINT: ReadonlySet<string> = new Set(['codex', 'claude', 
  * model" and `modelsFor` would mark it so, on every reload, for as long as a server stayed
  * unreachable. So a one-item list is ambiguous by construction, and the caption has to be told which
  * of the two it is looking at rather than counting.</p>
+ *
+ * <p>The shape is `RemoteProvenance`, declared beside the caption that reads it. It was declared
+ * twice for one release — the same three fields, once here and once there — which is the beginning
+ * of the drift this plan spent two stories closing on the other seam.</p>
  */
-interface RemoteModels {
-  readonly models: readonly string[];
-  /** The name the SERVER knows this vendor by — what the count is about. */
-  readonly named: string;
-  /** Where the list came from — see `RemoteProvenance` in `models.ts`. */
-  readonly catalog: CatalogState;
-}
-
-function allowedModelsFor(vendor: Vendor, servers: readonly TeamServerState[]): RemoteModels {
+function allowedModelsFor(vendor: Vendor, servers: readonly TeamServerState[]): RemoteProvenance {
   if (vendor.runtime !== 'remote') {
     return { models: [], named: vendor.id, catalog: 'no-server' };
   }
@@ -396,7 +392,7 @@ function vendorCard(
   price: ModelPrice | undefined,
   localEngine?: LocalEngine,
   agyModels: readonly ModelChoice[] = [],
-  allowedRemote: RemoteModels = { models: [], named: '', catalog: 'no-server' },
+  allowedRemote: RemoteProvenance = NO_REMOTE_CATALOG,
 ): string {
   const id = escapeHtml(vendor.id);
   const local = vendor.runtime === 'local';
