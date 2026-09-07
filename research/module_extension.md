@@ -559,6 +559,16 @@ badge that lights up because a probe failed is a badge that lies. There is a sec
 here: an MCP client's `env` block outranks the settings file key by key, so a standalone invocation
 cannot see environment a scripted client passed to the running server.
 
+**A probe that could not be made is said once, in the Server section.** The card stays silent — a
+badge fed by a failed probe would be a badge about a reviewer nobody asked about — but the check
+failing is a fact about this BINARY, and silence about a failed check is the class of defect this
+whole plan is about. So the answer carries `asked` and `answered`: no binary says nothing, because
+that section already reports the server as absent; asked-and-failed says the installed `coai-mcp`
+could not report its reviewers. An 8 s cap kills a probe that hangs, a non-zero exit (a build too old
+for the flag exits 64 saying so) and a body whose shape moved are both "asked and failed", and an
+empty map from a zero exit counts as failed too — a real configuration always has at least the two
+default vendors. Four reviewers raised this on one round.
+
 The module is split in two, `providers.ts` and `providersProbe.ts`, exactly as `roundsDb` and
 `roundsDbRead` are and for the same reason: `panelView` imports the types and the parser, so a spawn
 beside them drags `node:child_process` into the bundle the webview page is built from. The

@@ -352,6 +352,14 @@ to the sentence that already travels into `ReviewAnswer.Reviewers`, the closing 
 live round record. A round with nothing to add reads exactly as it always did, and that has its own
 test.
 
+**Exclusion is not failure, and the two must not blur.** Exclusion is decided BEFORE the roster,
+from `CanRun`; a timeout, a non-zero exit or a kill happens to a reviewer that entered it. They read
+in one sentence and have different cures — one is a configuration, the other is a run — so a test
+asserts a timed-out vendor appears in `Failures` and never in `Excluded`. And the stage filter being
+first is an EXECUTION rule only: `providers` and the panel's badge report every configured reviewer
+whatever stage is running, so a credential defect on a code-only vendor is visible during a plan
+round, on its card.
+
 `RunStageAsync` gained an explicit `isPlanStage` rather than deriving it from `needsWorktree`. That
 derivation happens to be right today, and this file already records what deriving the stage cost
 twice — `planPrompts is { Count: > 0 }` is empty on an ordinary plan round, and reading the roles
