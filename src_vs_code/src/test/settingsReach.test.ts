@@ -110,3 +110,72 @@ test('a round nobody chose is padded with nothing, not with what it resolves to 
   assert.equal(selectedFor('Architecture', 2, { Architecture: rounds }), 'architecture');
   assert.equal(selectedFor('Architecture', 3, { Architecture: rounds }), 'arch-evolution');
 });
+
+/**
+ * A Team-server row carries TWO names and the server needs the second one.
+ *
+ * <p>The row id is `<server>-<vendor>` because it must stay unique across servers — it names the
+ * row, its usage history and its vault key. What `--vendor` must carry is the SERVER's own
+ * spelling. `vendorsEnv` wrote only the first for the whole life of the `remote` runtime, so every
+ * Team-server review was refused as a vendor the server "does not offer", which reads exactly like
+ * a typo in a name nobody typed. `research/architecture.md` predicted this failure in those words
+ * before it happened.</p>
+ */
+const REMOTE_ROW = {
+  id: 'remsoftdev-claude',
+  runtime: 'remote',
+  teamServerId: 'remsoftdev',
+  remoteVendor: 'claude',
+  model: 'haiku',
+  enabled: true,
+  plan: true,
+  code: true,
+  baseUrl: 'https://coai.remsoft.dev',
+  executablePath: '',
+  pricePerMillionIn: 0,
+  pricePerMillionOut: 0,
+} as const;
+
+test('a Team-server row carries the name its SERVER knows it by, not only the row id', () => {
+  const written = JSON.parse(serverSettingsJson(DEFAULTS, [REMOTE_ROW])) as Record<string, string>;
+  const vendors = JSON.parse(written['COAI_VENDORS']!) as { id: string; runtime: string; remoteVendor?: string }[];
+
+  assert.equal(vendors[0]!.runtime, 'remote');
+  assert.equal(
+    vendors[0]!.remoteVendor,
+    'claude',
+    'without this the server is sent the row id and refuses it as a vendor it does not offer',
+  );
+});
+
+test('the row id is NOT what travels as the vendor name — the two are different on purpose', () => {
+  const vendors = JSON.parse(
+    (JSON.parse(serverSettingsJson(DEFAULTS, [REMOTE_ROW])) as Record<string, string>)['COAI_VENDORS']!,
+  ) as { id: string; remoteVendor?: string }[];
+
+  assert.equal(vendors[0]!.id, 'remsoftdev-claude');
+  // Typed, then compared. `notEqual` alone passes while the field is absent entirely, which is the
+  // very defect this file is here about — an assertion that holds in the broken state is decoration.
+  assert.equal(typeof vendors[0]!.remoteVendor, 'string');
+  assert.notEqual(vendors[0]!.remoteVendor, vendors[0]!.id);
+});
+
+test('a codex row gains no remoteVendor key at all, so the file a person opens is unchanged', () => {
+  const codex = { ...REMOTE_ROW, id: 'codex', runtime: 'codex', baseUrl: '', model: 'gpt-5.6-luna' } as Record<string, unknown>;
+  delete codex['remoteVendor'];
+  delete codex['teamServerId'];
+
+  const vendors = JSON.parse(
+    (JSON.parse(serverSettingsJson(DEFAULTS, vendorsFrom([codex]))) as Record<string, string>)['COAI_VENDORS']!,
+  ) as object[];
+
+  assert.ok(!('remoteVendor' in vendors[0]!), 'an empty key on every codex row is noise that means nothing');
+});
+
+test('teamServerId stays on this side — the server has no field for it and no question it answers', () => {
+  const vendors = JSON.parse(
+    (JSON.parse(serverSettingsJson(DEFAULTS, [REMOTE_ROW])) as Record<string, string>)['COAI_VENDORS']!,
+  ) as object[];
+
+  assert.ok(!('teamServerId' in vendors[0]!), 'the server would carry a field it cannot use');
+});

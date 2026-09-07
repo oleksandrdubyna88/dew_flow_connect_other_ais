@@ -94,4 +94,41 @@ public class VendorRuntimeSurvivesParsingTests
         PanelSettings.ParseVendors("""[{"id":"gemini","model":"m"}]""")
             .Should().ContainSingle().Subject.Runtime.Should().BeEmpty();
     }
+
+    /// <summary>
+    /// The JSON the extension writes for a Team-server row reaches the adapter as the name the
+    /// SERVER knows, not as the row's own id.
+    /// </summary>
+    /// <remarks>
+    /// This is the twin of the extension's <c>settingsReach</c> assertion, and it lives here for the
+    /// reason the token-file vectors do: each side was self-consistent and the seam between them was
+    /// not. <c>vendorsEnv</c> never wrote <c>remoteVendor</c>, so every Team-server review reached
+    /// <c>coai.remsoft.dev</c> asking for a vendor called <c>remsoftdev-claude</c> and was refused as
+    /// one it does not offer — which reads exactly like a typo in a name nobody typed.
+    /// </remarks>
+    [Fact]
+    public void ATeamServerRowReachesTheAdapterUnderTheServersOwnNameForIt()
+    {
+        var vendor = PanelSettings.ParseVendors(
+            """[{"id":"remsoftdev-claude","runtime":"remote","model":"haiku","baseUrl":"https://coai.remsoft.dev","remoteVendor":"claude"}]""")
+            .Should().ContainSingle().Subject;
+
+        vendor.Identity().VendorOnServer.Should().Be(
+            "claude", "the row id is unique across servers; the vendor name is what the server knows");
+        vendor.Provider.Should().Be("remsoftdev-claude", "the row still owns its id, its history and its key");
+    }
+
+    [Fact]
+    public void ARowWithNoRemoteVendorFallsBackToItsId_WhichIsTheShapeThatUsedToShip()
+    {
+        // Kept as a characterisation of the fallback rather than an endorsement of it: a row written
+        // by hand, or by a build older than this one, still resolves to SOMETHING. What changes is
+        // that `providers` now says the row does not record the name its server knows it by, instead
+        // of letting it fail later as a vendor that does not exist.
+        var vendor = PanelSettings.ParseVendors(
+            """[{"id":"remsoftdev-claude","runtime":"remote","model":"haiku","baseUrl":"https://coai.remsoft.dev"}]""")
+            .Should().ContainSingle().Subject;
+
+        vendor.Identity().VendorOnServer.Should().Be("remsoftdev-claude");
+    }
 }
