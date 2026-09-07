@@ -344,8 +344,10 @@ public sealed class RemoteProbeTests : IDisposable
     /// when <c>remoteVendor</c> is empty — which is right for a hand-written row someone named
     /// <c>claude</c>, and misleading for every row the panel generated. Until 2026-09-07 the panel
     /// generated ALL of them without the field, so the sentence a person actually met was "the Team
-    /// server does not offer a vendor called 'remsoftdev-claude'": a true statement about a name they
-    /// never typed, pointing at a typo that did not exist. Accepted finding, story 1.1 code round.
+    /// server does not offer a vendor called 'remsoftdev-claude'" — true, and pointing at a spelling
+    /// mistake rather than at the missing field. The note may not go further than that: the id here
+    /// MAY be one the panel generated, and nothing at the probe can tell that from a name somebody
+    /// typed on purpose. Accepted finding, story 1.1 code round.
     /// </remarks>
     [Fact]
     public async Task ARowThatCannotNameItsServersVendorSaysSo_RatherThanBlamingATypo()
@@ -401,8 +403,11 @@ public sealed class RemoteProbeTests : IDisposable
 
         var health = await new RemoteProbe(new HttpClient(handler)).RunAsync(misnamed, enabled: true, _dataDir);
 
-        health.Note.Should().Contain("does not offer a vendor called 'cluade'");
-        health.Note.Should().NotContain("does not record which vendor");
+        // Whole-string, not Contain: the requirement is that this branch stays byte-for-byte what it
+        // was, and `Contain` cannot fail on an appended sentence — which is precisely the leak this
+        // test exists to catch. Accepted finding, this story's code round.
+        health.Note.Should().Be(
+            $"the Team server at {Server} does not offer a vendor called 'cluade' — it offers claude");
     }
 }
 

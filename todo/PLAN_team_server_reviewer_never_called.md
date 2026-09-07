@@ -13,6 +13,26 @@
 > [module_extension.md](../research/module_extension.md),
 > [PLAN_team_server.md](../research/PLAN_team_server.md).
 
+## Where the older plan stops, and what this one finishes
+
+The same boundary, written from this side too, per `planning-docs.md` — a division named from one
+direction is not a division. The other document is
+[../research/PLAN_team_server.md](../research/PLAN_team_server.md), *Where this plan stops*.
+
+| Item | PLAN_team_server | This plan |
+|---|---|---|
+| `remoteVendor` on the server — `VendorDto`, `ProviderSettings`, `VendorIdentity.VendorOnServer` | **built** (story 1.3, epic 3) | — |
+| `remoteVendor` written by the extension into `COAI_VENDORS` | named at `:401`, **not built** | **story 1.1** |
+| the `settingsReach` test for that field | asked for at `:712`, **not built** | **story 1.1** |
+| what a refusal says when a row records no vendor name | — | **story 1.2** |
+| the settings file's writer, its version stamp and its lock | — | **epic 2** |
+| a round reporting an enabled reviewer it could not run | — | **epic 3** |
+| the Team server itself — host, sign-in, sessions, catalog, slots, queue, usage, deployment | **built** | untouched |
+
+**Order:** the older plan went first and landed the field and the seam; this one fills it and reports
+what happens when it is empty. Everything not in this table is disjoint — nothing here touches
+`src_server/`.
+
 ## The symptom
 
 A Team server was added, `claude` was picked from its catalog, the row appeared in *Reviewers* with
@@ -284,6 +304,17 @@ Every item is written RED first and its failure message is checked to name the r
 
 Full suites both sides: `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe` and
 `cd src_vs_code && npm test`.
+
+## Open tails — found here, deliberately not built here
+
+**A Team server's text reaches a log and a panel unfiltered.** Raised on story 1.2's code round
+against `NotOffered`, and refused there because it is not a property of that call site: every
+`RemoteAsk` message interpolates server-controlled text and `UnexpectedMessage(server, status, body)`
+interpolates a whole raw response body. Sanitising two fragments in one method would close the
+smallest hole on that surface and read as coverage the code does not have. The right scope is
+`RemoteAsk` and `RemoteProbe` together — strip control and ANSI sequences, cap the length — taking
+into account that the panel already escapes for HTML and that the log does not. Its own plan, not a
+line in this one.
 
 ## Definition of Done
 

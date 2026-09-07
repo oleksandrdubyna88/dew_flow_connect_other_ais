@@ -323,8 +323,26 @@ public sealed class RemoteRuntimeTests
     {
         var blank = new VendorIdentity("remsoftdev-claude", "remote", "https://s", "   ");
 
-        blank.NamesItsServerVendor.Should().BeFalse();
+        blank.HasRecordedRemoteVendor.Should().BeFalse();
         blank.VendorOnServer.Should().Be("remsoftdev-claude", "a name of spaces would be asked for verbatim");
+    }
+
+    /// <summary>
+    /// A default-constructed identity answers rather than throwing.
+    /// </summary>
+    /// <remarks>
+    /// This is a record STRUCT, so <c>default(VendorIdentity)</c> and every element of a freshly
+    /// allocated array have null in each string field — the parameter default of <c>""</c> is a
+    /// constructor's promise, not the type's. Three members now read one accessor, so one
+    /// unguarded <c>.Trim()</c> would take all three down. Accepted finding, this story's code round.
+    /// </remarks>
+    [Fact]
+    public void ADefaultIdentityHasNoRecordedNameRatherThanThrowing()
+    {
+        var nothing = default(VendorIdentity);
+
+        nothing.HasRecordedRemoteVendor.Should().BeFalse();
+        nothing.Invoking(v => v.VendorOnServer).Should().NotThrow();
     }
 
     [Fact]
