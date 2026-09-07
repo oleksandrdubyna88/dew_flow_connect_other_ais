@@ -452,6 +452,36 @@ runtime and every `VENDOR_PRESETS` entry through a save and a read, with `gemini
 deliberate exception — it is MIGRATED to `antigravity` because Google retired Code Assist, and
 separating a migration from a defect is exactly what the test does.
 
+### The settings file has more than one writer (2026-09-07)
+
+`<dataDir>/settings.json` is written by `ServerSettingsSync` at activation and on every
+`onDidChangeConfiguration`. Every open VS Code window runs its own extension host, every host hears
+that event, and they all write **one path** — including a host still running the build it was loaded
+with, because VS Code keeps a loaded extension until its window reloads.
+
+That reverted a Team-server reviewer. VS Code's own `coai.vendors` held `runtime: "remote"`,
+`remoteVendor: "claude"`; the file held `runtime: "codex"`, written **0.4 seconds later**. A window
+open since before the update was running 0.31.0, whose `RUNTIMES` has no `remote`, and `vendorsFrom`
+rewrites an unknown runtime to `codex` so the row still launches something. That fallback is right
+for RENDERING and for LAUNCHING, and it must never have been persisted into a file other builds read.
+
+So the file carries `COAI_WRITTEN_BY`, and a build stands down rather than overwrite a newer one's
+work. Three things about it are worth knowing:
+
+- **The stamp is on the FILE, not in `envBlock`.** `envBlock` also builds the block a person pastes
+  into an MCP client, where provenance is noise. The server ignores the extra key —
+  `PanelSettings.UnknownValues` reports unknown VALUES of known keys, never unknown keys.
+- **The comparison is `updateAvailable`**, the one the CLI update buttons already use, with a `-pre`
+  / `+build` suffix cut off first. Without the cut `0.31.3+build.7` splits into four dot-segments
+  and a local build blocks every released one; with it, a pre-release compares as its release and
+  neither blocks the other, which is right for a guard about SHIPPED builds.
+- **It cannot be retroactive.** 0.31.0 has shipped and has no guard in it, so this stops the next
+  pair, not that one. A machine already in the state is unstuck by reloading the stale window — which
+  is what the warning now says, with the button that does it.
+
+A refusal is reported once per session, never silently: a window that quietly reverts somebody's
+configuration is the same defect seen from the other side.
+
 ### A card captioned with the wrong software (2026-09-07)
 
 `modelsProvenance` (`models.ts`) says where a dropdown's contents came from, and it had arms for

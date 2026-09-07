@@ -121,3 +121,102 @@ test('the settings mirror does not live inside the panel view', () => {
     'the settings mirror is wired at activation, where there is no view to depend on',
   );
 });
+
+/**
+ * The file every window shares records which build wrote it, and an older build stands down.
+ *
+ * <p><b>The report, 2026-09-07.</b> A Team-server reviewer was added in one VS Code window and
+ * vanished from every round. VS Code's own `coai.vendors` held it correctly — `runtime: "remote"`,
+ * `remoteVendor: "claude"` — and `<dataDir>/settings.json` held it as `runtime: "codex"`, written
+ * 0.4 seconds later. Two extension hosts, one file. One of the windows had been open since before
+ * the update and was running 0.31.0, whose `RUNTIMES` has no `remote`; `vendorsFrom` rewrites an
+ * unknown runtime to `codex` so the row still launches something, and `ServerSettingsSync` then
+ * wrote that coerced value out. A rendering fallback became a persisted fact.</p>
+ *
+ * <p>The guard cannot be retroactive — 0.31.0 has already shipped and has no guard in it — so it
+ * stops the NEXT pair, and today's machine is unstuck by reloading the stale window. That limit is
+ * stated rather than implied.</p>
+ */
+function stamped(existing: string, version = '0.31.3') {
+  const written: string[] = [];
+  const refusals: string[] = [];
+  const it = new ServerSettingsSync(
+    () => ({ settings: { ...DEFAULTS, onExhausted: 'good_enough' } as never, vendors: DEFAULT_VENDORS as never }),
+    async (json: string) => {
+      written.push(json);
+    },
+    version,
+    async () => existing,
+    (theirs: string) => refusals.push(theirs),
+  );
+  return { it, written, refusals };
+}
+
+test('the file says which build wrote it', async () => {
+  const { it, written } = stamped('');
+
+  await it.sync();
+
+  assert.equal(
+    (JSON.parse(written[0]!) as Record<string, string>)['COAI_WRITTEN_BY'],
+    '0.31.3',
+    'without a stamp no build can tell whether it is about to overwrite a newer one',
+  );
+});
+
+test('an older build does not overwrite what a newer one wrote', async () => {
+  const { it, written, refusals } = stamped('{"COAI_WRITTEN_BY":"0.31.9"}', '0.31.3');
+
+  await it.sync();
+
+  assert.equal(written.length, 0, 'this is the write that reverted a reviewer nobody could see');
+  assert.deepEqual(refusals, ['0.31.9'], 'a silent stand-down is the same defect from the other side');
+});
+
+test('a refusal is not remembered as a write, so the next change still tries', async () => {
+  const { it, written } = stamped('{"COAI_WRITTEN_BY":"0.31.9"}', '0.31.3');
+
+  await it.sync();
+  await it.sync();
+
+  assert.equal(written.length, 0);
+  // And once the newer window is gone, the same content must still be written.
+  const again = stamped('', '0.31.3');
+  await again.it.sync();
+  assert.equal(again.written.length, 1, 'the refusal must not have poisoned the remembered content');
+});
+
+test('an absent, older or unreadable stamp is overwritten, which is every file written before this', async () => {
+  for (const existing of ['', '{}', '{"COAI_WRITTEN_BY":"0.31.0"}', 'not json at all', '{"COAI_WRITTEN_BY":""}']) {
+    const { it, written } = stamped(existing, '0.31.3');
+    await it.sync();
+    assert.equal(written.length, 1, `a file holding ${JSON.stringify(existing)} must not block the write`);
+  }
+});
+
+test('the same version does not block itself — two windows on one build are one build', async () => {
+  const { it, written } = stamped('{"COAI_WRITTEN_BY":"0.31.3"}', '0.31.3');
+
+  await it.sync();
+
+  assert.equal(written.length, 1);
+});
+
+test('ten is after nine, and a build suffix is not a version', async () => {
+  // `0.31.10` sorts before `0.31.9` as text and after it as a version, which is the one comparison
+  // a hand-rolled string check always gets wrong. Reused from `updateAvailable`, which the CLI
+  // update buttons have compared this way since they existed.
+  assert.equal((await syncedAgainst('0.31.10', '0.31.9')).length, 1, '0.31.9 must not block 0.31.10');
+  assert.equal((await syncedAgainst('0.31.9', '0.31.10')).length, 0, '0.31.10 must block 0.31.9');
+  // Build metadata is not part of the comparison, and a pre-release compares as its release: this
+  // guard is about a SHIPPED build overwriting a newer SHIPPED build, and two locally built
+  // 0.31.3s are the same version to it. Stated because "semver" alone does not say which.
+  assert.equal((await syncedAgainst('0.31.3', '0.31.3+build.7')).length, 1);
+  assert.equal((await syncedAgainst('0.31.3', '0.31.3-alpha.1')).length, 1);
+});
+
+async function syncedAgainst(mine: string, theirs: string): Promise<string[]> {
+  const { it, written } = stamped(`{"COAI_WRITTEN_BY":"${theirs}"}`, mine);
+  await it.sync();
+  return written;
+}
