@@ -1,5 +1,17 @@
 # Changelog
 
+## Extension 0.31.4 — 2026-09-07
+
+**The *Server* section is now *MCP server*, and it is about that.** It carried the Team server's
+address and the version answering on it as well, from 0.31.1 — the idea being that *what am I
+talking to* is one question with two answers. Seen in the panel it was two subjects sharing a box.
+The section is named for one thing and describes that thing; your Team server's address, its
+version and the account you are signed in as are in **Team servers**, where you manage it, and
+always were.
+
+Nothing about signing in changed. A sign-in still belongs to one side of your machine and behaves
+the way the side switch says.
+
 ## Extension 0.31.3 — 2026-09-07
 
 **Nothing you can see changed.** Install it or don't; the panel behaves exactly as 0.31.2 did.

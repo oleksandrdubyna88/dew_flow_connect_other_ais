@@ -1,6 +1,5 @@
 import {
   TeamServerState,
-  teamServerHere,
   teamServersBody,
   teamUsageBlock,
   usageScopeControl,
@@ -160,7 +159,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     section('keys', 'Vendor keys', open, keysBody(state)),
     section('teamServers', 'Team servers', open, teamServersBody(state.teamServers ?? [])),
     section('side', 'This side', open, sideBody(state)),
-    section('server', 'Server', open, serverBody(state)),
+    section('server', 'MCP server', open, serverBody(state)),
     section('rounds', 'Active rounds', open, `<div id="live-rounds">${roundsBody(state.sessions, nowMs)}</div>`),
   ].join('\n');
 
@@ -580,14 +579,13 @@ function serverBody(state: PanelState): string {
   const snippet = snippetNote(state.snippetStatus);
   const stale = snippet.length === 0 ? '' : `<div class="stale">${escapeHtml(snippet)}</div>`;
 
-  // The other server this side talks to. Empty for somebody who has no Team server, so the section
-  // is exactly what it was for them — and beneath the coai-mcp lines for everybody else, because
-  // the question "what am I talking to" is one question with two answers.
-  const team = teamServerHere(state.teamServers ?? [], state.perSide);
-
+  // This section is about coai-mcp and nothing else. It carried the Team server's address and
+  // version too for a day (0.31.1–0.31.3), on the reasoning that "what am I talking to" is one
+  // question with two answers — and in front of the operator it read as two subjects sharing a
+  // box. A Team server is described where it is managed, under *Team servers*; a section titled
+  // for one thing describes that thing.
   return `${installed}${stale}
 ${published}
-${team}
 <div class="hint">Changes here are saved for the server straight away; it reads them when your MCP client next starts it. The config block in the ⋯ menu is pasted once, when you first set it up.</div>
 <button class="link" data-command="checkForUpdate">Check again</button>`;
 }
