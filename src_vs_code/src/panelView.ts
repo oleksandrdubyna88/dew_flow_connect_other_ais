@@ -376,7 +376,14 @@ function allowedModelsFor(vendor: Vendor, servers: readonly TeamServerState[]): 
   }
 
   return {
-    models: (server.catalog.vendors ?? []).find((v) => v.id === named)?.models ?? [],
+    // Case-insensitively, because `RemoteProbe.Read` on the other side of this seam compares with
+    // `OrdinalIgnoreCase`. A server whose catalog says `DeepSeek` answers a row that recorded
+    // `deepseek` perfectly well, and this comparison showed that same row an empty dropdown and a
+    // caption saying the server allows it nothing. Neither side may lower-case the name it SENDS —
+    // that is the server's own spelling — but both must agree about which names are the same one.
+    // Found by the automated reviewer on this change's pull request.
+    models: (server.catalog.vendors ?? [])
+      .find((v) => v.id.toLowerCase() === named.toLowerCase())?.models ?? [],
     named,
     catalog: 'here',
   };

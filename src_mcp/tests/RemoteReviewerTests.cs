@@ -343,6 +343,10 @@ public sealed class RemoteRuntimeTests
 
         nothing.HasRecordedRemoteVendor.Should().BeFalse();
         nothing.Invoking(v => v.VendorOnServer).Should().NotThrow();
+        // And answers a STRING. Not throwing is not the same as being usable: the fallback is
+        // `Provider`, which is null on a default struct, and a null out of a non-nullable property
+        // is a crash moved one call further away. Found by the automated reviewer.
+        nothing.VendorOnServer.Should().BeEmpty();
     }
 
     [Fact]
