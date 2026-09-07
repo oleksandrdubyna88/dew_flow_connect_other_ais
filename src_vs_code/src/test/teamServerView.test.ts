@@ -1,7 +1,7 @@
 import * as assert from 'node:assert';
 import { test } from 'node:test';
 import { Catalog, CatalogVendor } from '../teamServerApi';
-import { TeamServer } from '../teamServers';
+import { TeamServer, canonicalTeamServerUrl } from '../teamServers';
 import {
   TeamServerState,
   disclosure,
@@ -138,7 +138,14 @@ test('a row names the server it is, the address it points at and who is signed i
   const row = teamServerRow(state({ email: 'someone@company.example' }));
 
   assert.ok(row.includes('RemSoft Dev'), row);
-  assert.ok(row.includes('https://coai.example.com'), row);
+  // Read out of its span and COMPARED, not `includes`-d. The weaker form is a
+  // `js/incomplete-url-substring-sanitization` alert from CodeQL — which cannot tell a test
+  // assertion from a host check written that way — and it caught this exact mistake in 0.31.2, one
+  // file over. It is also the stronger assertion: an address anywhere in the row would satisfy it.
+  assert.strictEqual(
+    /<span class="ts-url">([^<]*)<\/span>/.exec(row)?.[1] ?? '',
+    canonicalTeamServerUrl(SERVER.url),
+  );
   assert.ok(row.includes('someone@company.example'), row);
 });
 

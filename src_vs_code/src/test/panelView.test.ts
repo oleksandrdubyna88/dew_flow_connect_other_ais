@@ -42,10 +42,14 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
  * to name the box: a Team server is described where it is managed, under *Team servers*.</p>
  */
 test('the MCP server section is titled for coai-mcp and describes nothing else', () => {
-  const server = { id: 'rs', name: 'RemSoftDev', url: 'https://coai.remsoft.dev' };
+  // TWO servers, because a reintroduction that only rendered the second would pass a
+  // single-server fixture while every person with two saw it.
   const html = panelHtml(
     state({
-      teamServers: [{ server, email: 'a@remsoft.dev', problem: '', stale: false }],
+      teamServers: [
+        { server: { id: 'rs', name: 'RemSoftDev', url: 'https://coai.remsoft.dev' }, email: 'a@remsoft.dev', problem: '', stale: false },
+        { server: { id: 'st', name: 'Staging', url: 'https://coai.staging.dev' }, email: 'b@remsoft.dev', problem: '', stale: false },
+      ],
       latestServerVersion: '0.18.7',
     }),
     'n0nce',
@@ -54,15 +58,22 @@ test('the MCP server section is titled for coai-mcp and describes nothing else',
   assert.ok(html.includes('<summary>MCP server</summary>'), 'the section says what it is about');
   assert.ok(!html.includes('<summary>Server</summary>'), 'and no longer says it vaguely');
 
-  // Asserted on the SECTION's own markup rather than the whole panel, because the address and the
-  // account are supposed to be elsewhere in this document — under Team servers, which is the point.
-  const mcp = html.slice(html.indexOf('data-section="server"'), html.indexOf('data-section="usage"'));
+  // The SECTION's own markup, not the whole panel: the address and the account are supposed to be
+  // elsewhere in this document — under Team servers, which is the point. `rounds` is the section
+  // after this one; the bounds are asserted because a slice from a `-1` reads to the end of the
+  // document and would pass by accident. (It did: this test bounded on a `usage` section that
+  // `panelHtml` does not render, and was green only because Team servers happens to come first.)
+  const from = html.indexOf('data-section="server"');
+  const to = html.indexOf('data-section="rounds"');
+  assert.ok(from > 0 && to > from, 'the MCP server section is bounded by the one after it');
+  const mcp = html.slice(from, to);
 
   // Not just the `ts-here-` id prefix the old block used: a reintroduction under a different id or
   // class would slip past that, and what must not come back is the CONTENT.
   assert.ok(!mcp.includes('ts-here-'), 'no Team-server address block');
   assert.ok(!mcp.includes('coai.remsoft.dev'), 'no Team-server address');
-  assert.ok(!mcp.includes('a@remsoft.dev'), 'no Team-server account');
+  assert.ok(!mcp.includes('coai.staging.dev'), 'not the second one either');
+  assert.ok(!mcp.includes('@remsoft.dev'), 'no Team-server account');
   assert.ok(!mcp.includes('coai-server'), 'no Team-server version — coai-mcp is the subject here');
   assert.ok(!mcp.includes('data-server-url='), 'no read-only address input');
 
