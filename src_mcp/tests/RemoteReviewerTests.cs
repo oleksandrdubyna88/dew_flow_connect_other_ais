@@ -308,6 +308,30 @@ public sealed class RemoteRuntimeTests
         new VendorIdentity("codex", "codex", "").VendorOnServer.Should().Be("codex");
     }
 
+    /// <summary>
+    /// A name made only of spaces is no name: the row falls back to its id, and says it did.
+    /// </summary>
+    /// <remarks>
+    /// <c>ParseVendors</c> trims, so this cannot arrive from a settings file — but this type is
+    /// constructible directly, it is the one place the two names are told apart, and a
+    /// <c>Length &gt; 0</c> test would have called <c>"  "</c> a recorded name and produced the typo
+    /// diagnosis for a row that records nothing. The extension side took the same correction for the
+    /// same value one story earlier.
+    /// </remarks>
+    [Fact]
+    public void AVendorNameMadeOfSpacesIsNotARecordedName()
+    {
+        var blank = new VendorIdentity("remsoftdev-claude", "remote", "https://s", "   ");
+
+        blank.NamesItsServerVendor.Should().BeFalse();
+        blank.VendorOnServer.Should().Be("remsoftdev-claude", "a name of spaces would be asked for verbatim");
+    }
+
+    [Fact]
+    public void ARecordedNameIsTrimmedButNeverReCased() =>
+        new VendorIdentity("remsoftdev-deepseek", "remote", "https://s", " DeepSeek ")
+            .VendorOnServer.Should().Be("DeepSeek", "a server whose catalog says DeepSeek matches DeepSeek");
+
     [Fact]
     public void ResolvingARemoteVendorHandsTheAdapterTheServersName() =>
         RuntimeResolution.For(new VendorIdentity("remsoft-dev-codex", "remote", "https://s", "codex"))
