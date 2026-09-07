@@ -33,6 +33,36 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
 });
 
 
+/**
+ * The section is named for one thing and describes that thing.
+ *
+ * <p>For three releases (0.31.1–0.31.3) it also carried the Team server's address, read-only, and
+ * the version answering on it — on the reasoning that "what am I talking to" is one question with
+ * two answers. In front of the operator it read as two subjects sharing a box, and the answer was
+ * to name the box: a Team server is described where it is managed, under *Team servers*.</p>
+ */
+test('the MCP server section is titled for coai-mcp and describes nothing else', () => {
+  const server = { id: 'rs', name: 'RemSoftDev', url: 'https://coai.remsoft.dev' };
+  const html = panelHtml(
+    state({
+      teamServers: [{ server, email: 'a@remsoft.dev', problem: '', stale: false }],
+      latestServerVersion: '0.18.7',
+    }),
+    'n0nce',
+  );
+
+  assert.ok(html.includes('<summary>MCP server</summary>'), 'the section says what it is about');
+  assert.ok(!html.includes('<summary>Server</summary>'), 'and no longer says it vaguely');
+
+  // The address belongs to the Team servers section, and only to it. `ts-here-` was the id prefix
+  // of the block this section used to carry; nothing may render it here again.
+  assert.ok(!html.includes('ts-here-'), 'no Team-server address block in the MCP server section');
+  assert.ok(
+    html.includes('data-server-url="rs"') === false,
+    'the read-only address input is gone from this panel entirely',
+  );
+});
+
 test('each role shows its own rounds, its own threshold and its own prompts', () => {
   // The Gate and the Prompts sections described one thing between them: how many times this role
   // asks, how much it may still find, and what it asks each time. One box per role now.

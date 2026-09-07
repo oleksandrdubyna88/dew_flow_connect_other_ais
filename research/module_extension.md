@@ -99,15 +99,25 @@ Toggling the switch carries the sign-in either way rather than dropping it: on, 
 seeded from the shared one; off, this side's is promoted to the shared one when there is none. Other
 sides need nothing — their token then disagrees with the intent, and the rule re-mints it.
 
-### The Server section says what this side is talking to (2026-09-06)
+### The MCP server section is about coai-mcp, and about nothing else (2026-09-07)
 
-`teamServerHere` renders, under the `coai-mcp` lines, one block per configured Team server: the
-address as a **read-only** input and `coai-server <version> — signed in as <email>` once a catalog has
-answered. Read-only on purpose — pointing a live session somewhere else is a sign-out, not a text
-edit — and the section names where to go instead. Before a catalog answers it says *connecting*; a
-catalog older than the last failed attempt is marked as the last known one, because a version that
-goes silently stale is what makes a dead connection look healthy. Empty for a person with no Team
-server, so that section is exactly what it was for them.
+It is titled **MCP server** and carries the `coai-mcp` lines alone: what is installed on this side,
+what is published, the Install/Update button when those differ, and the snippet note.
+
+**It carried the Team server too, for three releases, and that was the mistake.** From 0.31.1 to
+0.31.3 `teamServerHere` rendered one block per configured Team server underneath — the address as a
+read-only input, `coai-server <version> — signed in as <email>` once a catalog answered, *connecting*
+before that, and a version marked as last known when the server had stopped answering. The reasoning
+was that *what am I talking to* is one question with two answers. In front of the operator it read
+as two subjects sharing a box, and the correction was to name the box: a Team server is described
+where it is managed, under **Team servers**.
+
+So `teamServerHere`, `hereBlock`, `hereSentence`, `signedOutHere` and `sideSentence` are gone from
+`teamServerView.ts` with their test file, rather than left unreferenced. The panel is the only place
+that rendered them, and dead code that once had a purpose is the kind a later reader reinstates by
+accident. The design record is
+[PLAN_team_server_side_and_url.md](PLAN_team_server_side_and_url.md), whose status line says which
+half of it survived — the per-side sign-in did, and that is the half that mattered.
 
 **`teamServers` and `usageScope` are OPTIONAL on `PanelState`,** which is an accommodation and worth
 naming as one: the test fixtures are stored with CRLF under `core.autocrlf=true`, so any commit that

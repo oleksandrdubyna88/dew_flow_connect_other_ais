@@ -1,8 +1,21 @@
 # PLAN — the Team server belongs to a SIDE, and the Server section says which one
 
-> Status: **IMPLEMENTED, 2026-09-06.** Scope: the extension's panel
-> (`src_vs_code/src/panelView.ts`, `teamServerView.ts`, `panelProvider.ts`) and the sign-in records
-> (`teamServerAuth.ts`).
+> Status: **IMPLEMENTED, 2026-09-06 — and HALF OF IT WAS REMOVED AGAIN on 2026-09-07.** Scope: the
+> extension's panel (`src_vs_code/src/panelView.ts`, `teamServerView.ts`, `panelProvider.ts`) and
+> the sign-in records (`teamServerAuth.ts`).
+>
+> **What survived and what did not.** Requirement 2/3 — a sign-in belongs to a SIDE, sharing on
+> mints each side its own token, sharing off lets each hold a different account, a sign-out reaches
+> the others — is live and is the half that mattered. Requirement 1, the Team server's address and
+> version inside the *Server* section, shipped in 0.31.1 and was taken out in **0.31.4**: the
+> operator read it as two subjects sharing one box, and the section is now titled *MCP server* and
+> describes only that. `teamServerHere` and its four helpers were deleted with their tests rather
+> than left unreferenced. Nothing about the sign-in itself changed; the *Team servers* section
+> already showed the address, the version and the account, and it still does.
+>
+> Read the design below with that in mind: everything it says about WHERE a sign-in lives is
+> current, and the *Server section* section is a record of a decision that was reversed after a day
+> in front of the person who asked for it.
 >
 > Related docs: [PLAN_team_server.md](PLAN_team_server.md),
 > [PLAN_server_version_per_side.md](PLAN_server_version_per_side.md),
