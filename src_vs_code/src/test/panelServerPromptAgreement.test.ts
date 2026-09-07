@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CONVENTIONS_ID, selectedFor, universalFor } from '../prompts';
+import { CONVENTIONS_ID, CONVENTIONS_NARROWED_IN, selectedFor, universalFor } from '../prompts';
+import { panelHtml, PanelState } from '../panelView';
+import { DEFAULTS } from '../settingsShape';
+import { DEFAULT_VENDORS } from '../vendors';
+import { SNIPPET_VERSION } from '../claudeSnippet';
 
 /**
  * The picker shows the prompt the SERVER will run, for every round the person can see.
@@ -15,6 +19,26 @@ import { CONVENTIONS_ID, selectedFor, universalFor } from '../prompts';
  * <p>Its twin on the C# side is <code>ConventionsPassTests</code>. Two suites for one rule, because
  * the rule is that two programs agree, and neither can check that alone.</p>
  */
+
+/** Enough panel to render the Prompts section; every field the version-skew test does not read. */
+const baseState = (): PanelState => ({
+  settings: DEFAULTS,
+  vendors: DEFAULT_VENDORS,
+  codexModels: [], agyModels: [],
+  localEngines: {},
+  server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
+  side: '',
+  perSide: false,
+  questions: [],
+  sessions: [],
+  openSections: ['prompts'],
+  usage: [],
+  usageWindow: 'week',
+  cliStatus: {},
+  modelPrices: {},
+  snippetStatus: { kind: 'current', current: SNIPPET_VERSION },
+  latestServerVersion: '',
+});
 
 /**
  * What `PromptCatalog.ForRound` returns for an unset round.
@@ -44,6 +68,34 @@ test('an unset round shows what the server runs, with rules and without', () => 
       }
     }
   }
+});
+
+/**
+ * The one case the transcription above cannot cover: the two programs are versioned separately.
+ *
+ * <p>`selectedFor` and `PromptCatalog.ForRound` agree in the SOURCE, and are installed apart — an
+ * extension updates itself, a server is a binary somebody presses a button to replace. Below
+ * {@link CONVENTIONS_NARROWED_IN} the server still makes round 1 of every code role the conventions
+ * pass, so this panel would show `Universal` for a round that runs `conventions`. Raised by three
+ * reviewers independently on the round that shipped the narrowing, and it is the only one of their
+ * version-skew findings that a test can hold.</p>
+ */
+test('a panel ahead of its server says so, instead of showing a round the server will not run', () => {
+  const withServer = (server: PanelState['server']): string =>
+    panelHtml({ ...baseState(), server }, 'n0nce');
+
+  const behind = withServer({ kind: 'known', version: '0.18.7', remembered: true, updateOffered: true });
+  assert.ok(behind.includes('still runs'), 'an older server is named');
+  assert.ok(behind.includes('0.18.7'), 'and so is the version that is there');
+
+  const current = withServer({ kind: 'known', version: CONVENTIONS_NARROWED_IN, remembered: true, updateOffered: false });
+  assert.ok(!current.includes('still runs'), 'the server that agrees says nothing');
+
+  const newer = withServer({ kind: 'known', version: '0.19.0', remembered: true, updateOffered: false });
+  assert.ok(!newer.includes('still runs'), 'nor does a later one');
+
+  const absent = withServer({ kind: 'absent', version: '', remembered: false, updateOffered: false });
+  assert.ok(!absent.includes('still runs'), 'a server nobody has installed is not behind');
 });
 
 test('a later round never shows a lens nobody selected', () => {

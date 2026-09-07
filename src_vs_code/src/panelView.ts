@@ -11,14 +11,14 @@ import { CoaiSettings } from './settingsShape';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
-import { ROLES, promptsFor, selectedFor } from './prompts';
+import { CONVENTIONS_NARROWED_IN, ROLES, promptsFor, selectedFor } from './prompts';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorColour } from './vendorColour';
 import { CliStatus, cliStatusNote, updateAvailable, UNKNOWN_CLI } from './cliVersions';
 import { SnippetStatus, snippetNote } from './claudeSnippet';
 import { LocalEngine, remoteWarning } from './localEngines';
-import { ServerStatus } from './coaiInstall';
+import { ServerStatus, compareVersions } from './coaiInstall';
 import { ModelPrice } from './modelPrices';
 import { Vendor } from './vendors';
 
@@ -783,6 +783,30 @@ function fanOut(state: PanelState): string {
   );
 }
 
+/**
+ * Said out loud while the installed server would not do what these pickers show.
+ *
+ * <p>The panel and `coai-mcp` decide an unset round's prompt separately and are installed
+ * separately: an extension updates itself, a server is a binary somebody presses a button to
+ * replace. Below {@link CONVENTIONS_NARROWED_IN} the server makes round 1 of EVERY code role the
+ * conventions pass, so this panel would show `Universal` for a round that runs `conventions` —
+ * exactly the kind of quiet disagreement this pair exists to prevent. Three reviewers raised it on
+ * the round that shipped the change.</p>
+ *
+ * <p>A sentence rather than a block: the fix is the Update button one section down, and this stops
+ * being true the moment somebody presses it.</p>
+ */
+function conventionsSkew(server: ServerStatus): string {
+  const known = server.kind !== 'absent' && server.version.length > 0;
+  if (!known || compareVersions(CONVENTIONS_NARROWED_IN, server.version) <= 0) {
+    return '';
+  }
+
+  return `  <div class="stale">The coai-mcp you have installed (${escapeHtml(server.version)}) still runs `
+    + `<b>Conventions</b> on round 1 of every code role, whatever these pickers say. `
+    + `Update it to ${escapeHtml(CONVENTIONS_NARROWED_IN)} or later — the <b>MCP server</b> section below.</div>`;
+}
+
 function promptsBody(state: PanelState): string {
   const s = state.settings;
   const roleRow = (role: (typeof ROLES)[number]): string => {
@@ -848,6 +872,7 @@ ${plan}
     <div class="hint">Fast sends the diff, the plan and this project’s rules — and nothing to explore. Measured on one commit: every hosted model found MORE that way, at a half to a third of the tokens. Full also hands them the checkout, for a review that needs the surrounding code.</div>
   </div>
   <div class="hint"><b>Architecture</b> round 1 defaults to <b>Conventions</b>: it judges the diff against the rules this project has written down \u2014 <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>GEMINI.md</code>, <code>.claude/rules</code> \u2014 and nothing else. The other two roles spend their round on their own subject; pick <b>Conventions</b> for them if you want the rules read again. Anything you pick wins.</div>
+${conventionsSkew(state.server)}
 ${code}
 </div>`;
 }
