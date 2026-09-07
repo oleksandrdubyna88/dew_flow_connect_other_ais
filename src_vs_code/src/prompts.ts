@@ -99,7 +99,12 @@ export function selectedFor(
   // `hasRules` is optimistic here because the panel cannot know: the server decides at round time
   // by looking in the worktree. The section text says so, and a repo with no written rules falls
   // back to the universal prompt on the server side.
-  if (hasRules && round === 1 && role !== 'PlanCritique') {
+  // ARCHITECTURE only, since 2026-09-07 — `PromptCatalog.ForRound` says the same in the same
+  // words, and `panelServerPromptAgreement.test.ts` is what holds the two to it. It took round 1 of
+  // all three code roles first: three reviewers reading the same written rules in the same round
+  // produce the same findings three times, and a role with one round then spent it on conventions
+  // and never asked its own question at all. Architecture keeps it because it has two rounds.
+  if (hasRules && round === 1 && role === 'Architecture') {
     return CONVENTIONS_ID;
   }
 

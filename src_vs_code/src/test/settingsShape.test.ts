@@ -8,17 +8,59 @@ import { DEFAULT_VENDORS, normaliseId, Vendor, vendorsEnv, vendorsFrom } from '.
 /** A reader over a plain object, as VS Code's configuration behaves for our purposes. */
 const reader = (values: Record<string, unknown>) => (section: string) => values[section];
 
+/**
+ * The shipped budget, as the operator set it after a day of running this gate on real work.
+ *
+ * <p>Every role is asserted, not two of them: these numbers decide what a person who installs this
+ * extension gets before they touch anything, and a default nobody stated is a default nobody can
+ * argue with. Changing one is meant to be a red test and a decision, which is what this is for.</p>
+ */
 test('defaults match the master plan configuration table', () => {
-  assert.equal(DEFAULTS.rounds['PlanCritique'], 3);
-  assert.equal(DEFAULTS.rounds['Architecture'], 2, 'a code role gets two passes by default');
-  assert.equal(DEFAULTS.thresholds['PlanCritique'], 2);
-  assert.equal(DEFAULTS.thresholds['Architecture'], 3, 'a diff carries more than a plan does');
+  assert.equal(DEFAULTS.rounds['PlanCritique'], 1, 'one plan round: the later ones re-raise');
+  assert.equal(DEFAULTS.rounds['Architecture'], 2, 'conventions first, then the broad question');
+  assert.equal(DEFAULTS.rounds['SecurityReliability'], 1);
+  assert.equal(DEFAULTS.rounds['UxDxPerformance'], 1);
+  assert.equal(DEFAULTS.thresholds['PlanCritique'], 6, 'six findings on a plan is a Tuesday');
+  assert.equal(DEFAULTS.thresholds['Architecture'], 5);
+  assert.equal(DEFAULTS.thresholds['SecurityReliability'], 5);
+  assert.equal(DEFAULTS.thresholds['UxDxPerformance'], 5);
+  assert.equal(DEFAULTS.dealPlanLenses, false, 'every vendor answers the same question');
+  assert.equal(DEFAULTS.dealCodeLenses, false);
+  assert.equal(DEFAULTS.codeWorkspace, 'none', 'Fast — the diff, not a checkout');
   assert.equal(DEFAULTS.onExhausted, 'human');
   assert.equal(DEFAULTS.maxConcurrency, 3);
   assert.equal(DEFAULTS.maxPerProvider, 2);
   assert.equal(DEFAULTS.reviewerTimeoutMinutes, 10);
   assert.equal(DEFAULTS.escalationMinutes, 30);
   assert.equal(DEFAULTS.credsKey, '');
+});
+
+/**
+ * The manifest and `DEFAULTS` are one decision written twice, and nothing held them together.
+ *
+ * <p>VS Code answers `getConfiguration` from `contributes.configuration` when a person has set
+ * nothing, so the manifest is what a NEW user actually gets; `DEFAULTS` is what this code falls
+ * back to. When they disagree, the panel and the stored configuration disagree about what the
+ * person is running, and neither half is wrong on its own — the failure this repository keeps
+ * producing. Both had to be edited by hand to change the shipped budget, which is the moment to
+ * make the pair checkable.</p>
+ */
+test('the manifest ships the same defaults this code falls back to', () => {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8'),
+  ) as { contributes: { configuration: { properties: Record<string, { default?: unknown }> } } };
+  const declared = (key: string): unknown =>
+    manifest.contributes.configuration.properties[`coai.${key}`]?.default;
+
+  assert.deepEqual(declared('rounds'), DEFAULTS.rounds);
+  assert.deepEqual(declared('thresholds'), DEFAULTS.thresholds);
+  assert.equal(declared('onExhausted'), DEFAULTS.onExhausted);
+  assert.equal(declared('maxConcurrency'), DEFAULTS.maxConcurrency);
+  assert.equal(declared('maxPerProvider'), DEFAULTS.maxPerProvider);
+  assert.equal(declared('reviewerTimeoutMinutes'), DEFAULTS.reviewerTimeoutMinutes);
+  assert.equal(declared('escalationMinutes'), DEFAULTS.escalationMinutes);
+  assert.equal(declared('dealPlanLenses'), DEFAULTS.dealPlanLenses);
+  assert.equal(declared('dealCodeLenses'), DEFAULTS.dealCodeLenses);
 });
 
 test('the shipped reviewers are the two whose CLIs authenticate themselves', () => {

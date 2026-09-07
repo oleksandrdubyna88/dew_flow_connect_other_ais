@@ -19,13 +19,42 @@ public sealed class ConventionsPassTests
 {
     private static readonly IReadOnlyList<string> NoChoice = [];
 
+    /// <summary>
+    /// ARCHITECTURE round 1, and only Architecture — narrowed 2026-09-07 from all three code roles.
+    /// </summary>
+    /// <remarks>
+    /// <para>Running it on all three showed the cost: the same written rules read by three reviewers
+    /// in the same round produce the same findings three times, and a role whose budget is ONE round
+    /// spent it on conventions and never asked its own question at all. Architecture keeps the pass
+    /// because it has two rounds — the rules, then the broad question — so nothing it used to ask is
+    /// lost.</para>
+    /// <para>The other two reach it by choosing it: this is a default, not a lock, and the picker
+    /// still offers `Conventions` for every code role.</para>
+    /// </remarks>
     [Fact]
-    public void CodeRoundOne_IsTheConventionsPass_ForEveryCodeRole()
+    public void CodeRoundOne_IsTheConventionsPass_ForArchitectureAlone()
     {
-        foreach (var role in (string[])[PromptCatalog.ArchitectureRole, PromptCatalog.SecurityRole, PromptCatalog.UxDxRole])
+        PromptCatalog.ForRound(PromptCatalog.ArchitectureRole, 1, NoChoice, hasRules: true)
+            .Id.Should().Be("conventions", "Architecture round 1 judges the written rules");
+
+        foreach (var role in (string[])[PromptCatalog.SecurityRole, PromptCatalog.UxDxRole])
         {
             PromptCatalog.ForRound(role, 1, NoChoice, hasRules: true)
-                .Id.Should().Be("conventions", $"{role} round 1 must judge the written rules");
+                .Id.Should().Be(
+                    PromptCatalog.For(role).First(p => p.Universal).Id,
+                    $"{role} has one round by default and spends it on its own subject");
+        }
+    }
+
+    [Fact]
+    public void TheConventionsPass_IsStillOfferedToEveryCodeRole()
+    {
+        // Narrowing the DEFAULT must not narrow the choice: a person who wants the rules read three
+        // times can still say so, and the panel's picker lists this prompt for all three.
+        foreach (var role in (string[])[PromptCatalog.ArchitectureRole, PromptCatalog.SecurityRole, PromptCatalog.UxDxRole])
+        {
+            PromptCatalog.ForRound(role, 1, [PromptCatalog.ConventionsId], hasRules: true)
+                .Id.Should().Be("conventions", $"{role} can be asked for the conventions pass");
         }
     }
 

@@ -161,7 +161,15 @@ test('the number of prompt pickers follows that role\u2019s rounds', () => {
 
   const four = html({ ...DEFAULTS.rounds, Architecture: 4 });
   assert.equal(pickers(four, 'Architecture'), 4);
-  assert.equal(pickers(four, 'SecurityReliability'), 2, 'one role\u2019s budget is not another\u2019s');
+  // Against the DEFAULT rather than a literal: what this line is about is that raising one role's
+  // budget leaves the others alone, and writing the number here made it a second assertion about
+  // what the default happens to be \u2014 which is how it went red when the defaults changed and
+  // nothing about picker sizing did.
+  assert.equal(
+    pickers(four, 'SecurityReliability'),
+    DEFAULTS.rounds['SecurityReliability'],
+    'one role\u2019s budget is not another\u2019s',
+  );
 
   const one = html({ ...DEFAULTS.rounds, UxDxPerformance: 1 });
   assert.equal(pickers(one, 'UxDxPerformance'), 1, 'a single round shows a single picker');

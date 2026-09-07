@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "Your AI writes the code; other vendors' models review it \u2014 the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.31.5",
+  "version": "0.31.6",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -217,20 +217,20 @@
         "coai.rounds": {
           "type": "object",
           "default": {
-            "PlanCritique": 3,
+            "PlanCritique": 1,
             "Architecture": 2,
-            "SecurityReliability": 2,
-            "UxDxPerformance": 2
+            "SecurityReliability": 1,
+            "UxDxPerformance": 1
           },
           "markdownDescription": "How many rounds each reviewer ROLE gets. Architecture may be worth two passes with different lenses while performance is worth one; a shared budget forces the cheapest role to pay for the most expensive. Edit it in the **ConnectOtherAIs** panel."
         },
         "coai.thresholds": {
           "type": "object",
           "default": {
-            "PlanCritique": 2,
-            "Architecture": 3,
-            "SecurityReliability": 3,
-            "UxDxPerformance": 3
+            "PlanCritique": 6,
+            "Architecture": 5,
+            "SecurityReliability": 5,
+            "UxDxPerformance": 5
           },
           "markdownDescription": "How many blocking/major findings each ROLE may still have and pass. A finding is counted against the threshold of the role that raised it."
         },
