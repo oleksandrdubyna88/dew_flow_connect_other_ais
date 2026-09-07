@@ -181,6 +181,18 @@ row, its spending history and its vault key. The server knows only `codex`. `rem
 that, all the way to `--vendor`. Without it every Team-server review would have been refused on
 arrival and reported as a vendor the server "does not offer" — which reads exactly like a typo.
 
+**And for its first two releases it did not carry it.** `VendorDto.RemoteVendor` and
+`VendorIdentity.VendorOnServer` shipped with epic 3 and nothing filled them: `vendorsEnv` in
+`src_vs_code/src/vendors.ts` wrote `id`, `runtime`, `model`, `baseUrl` and the two stage flags, and
+the field the whole seam exists for was never in the JSON. Both halves' tests passed, because each
+half was self-consistent — the C# side parsed a field the TypeScript side never sent, and no test
+anywhere asserted the crossing. `PLAN_team_server.md:401` had named `vendorsEnv` as a site to change
+and `:712` had asked for the `settingsReach` test; neither was done, and nothing failed to say so.
+Fixed 2026-09-07 with the assertion on both sides — `settingsReach.test.ts` for what is written,
+`VendorRuntimeSurvivesParsingTests.ATeamServerRowReachesTheAdapterUnderTheServersOwnNameForIt` for
+what is read. `teamServerId` deliberately does not cross: the server has no field for it and no
+question it answers.
+
 **A sign-in belongs to a SIDE of the machine, not to the machine.** The token file is per side
 already — `coaiDataDir()` is a path on whichever extension host is running — so the record that
 describes it is too, and the panel renders THAT rather than the shared intention. With settings

@@ -69,6 +69,15 @@ across servers, while `--vendor` must carry the SERVER's own spelling. Two names
 the moment either side normalises the wrong one, every review on that server is refused as a vendor
 it "does not offer".
 
+**That prediction came true before the paragraph was a week old, and in the one way it did not
+cover: not a side normalising the wrong name, but a side never sending it.** The extension's
+`vendorsEnv` omitted `remoteVendor` from `COAI_VENDORS` for the whole of 0.31.0–0.31.2 while the
+server parsed it faithfully. Every Team-server reviewer was therefore dropped from every round —
+silently, because a round did not report a reviewer it never asked. Both suites were green
+throughout, which is the property this section is about: a seam neither container owns is a seam
+neither container's tests reach. Recorded, with the fix, in
+[PLAN_team_server_reviewer_never_called.md](../todo/PLAN_team_server_reviewer_never_called.md).
+
 ## How the Team server is deployed (2026-09-06)
 
 `coai.remsoft.dev` runs as a **systemd unit on the host**, not as a container, and the reason is the

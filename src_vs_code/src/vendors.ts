@@ -307,6 +307,17 @@ export function vendorsEnv(vendors: readonly Vendor[]): string {
         model: v.model,
         baseUrl: v.baseUrl,
         executablePath: v.executablePath,
+        // The SERVER's own name for this vendor, which is not the row's id and must not be
+        // confused with it: a row is `<server>-<vendor>` so two Team servers offering `codex` do
+        // not collide, while `--vendor` has to carry what the server actually knows. This was
+        // missing for the whole life of the `remote` runtime — the server received the row id,
+        // refused it as a vendor it "does not offer", and the reviewer was dropped from every
+        // round while the panel went on reporting it as configured.
+        //
+        // `teamServerId` deliberately stays behind: the server has no field for it and no
+        // question it answers. It exists so the PANEL can follow a row to its server entry after
+        // somebody fixes a typo in a hostname.
+        ...(v.remoteVendor === undefined || v.remoteVendor.length === 0 ? {} : { remoteVendor: v.remoteVendor }),
         // Written only when NARROWED, like every other value in the env block: a vendor that
         // reviews both stages says nothing, and the server reads an absent flag as both. So the
         // block a person opens still carries only what differs from the defaults.
