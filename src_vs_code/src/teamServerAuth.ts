@@ -66,6 +66,17 @@ export function signedInKey(serverId: string, side = ''): string {
   return side.length === 0 ? `${STATE_PREFIX}${serverId}` : `${STATE_PREFIX}${serverId}@${side}`;
 }
 
+/**
+ * Which scope the INTENT lives in: this side's, or the shared one.
+ *
+ * <p>Exported and used by both modules on purpose. The panel needed the same answer to read the
+ * record, and computing it in two places is two places to change when the rule changes — which was
+ * the shape of the finding that put this function here. Raised on the second code round.</p>
+ */
+export function intentScopeOf(side: string, perSide: boolean): string {
+  return perSide ? side : '';
+}
+
 /** Where the fact lives. Side-scoped in EVERY mode — see {@link TokenFact}. */
 export function tokenFactKey(serverId: string, side: string): string {
   return `${STATE_PREFIX}${serverId}#${side}`;
@@ -313,12 +324,16 @@ export async function signIn(
  * record they are talking about.</p>
  */
 function intentKey(host: AuthHost, serverId: string): string {
-  return signedInKey(serverId, host.perSide === true ? (host.side ?? '') : '');
+  return signedInKey(serverId, scopeOf(host));
 }
 
 /** The sign-out stamp for the same scope the intent lives in. */
 function revocationKey(host: AuthHost, serverId: string): string {
-  return revokedKey(serverId, host.perSide === true ? (host.side ?? '') : '');
+  return revokedKey(serverId, scopeOf(host));
+}
+
+function scopeOf(host: AuthHost): string {
+  return intentScopeOf(host.side ?? '', host.perSide === true);
 }
 
 /** The injected clock, or the machine's when nobody injected one. */

@@ -8,6 +8,7 @@ import {
   SignedIn,
   StateStore,
   TokenFact,
+  intentScopeOf,
   plannedAction,
   reconcile,
   revokedKey,
@@ -480,4 +481,37 @@ test('nothing to do is answered without touching the network', async () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('the scope rule has ONE answer, and both modules ask for it', () => {
+  // It was computed in the panel and again in the auth module. Two places to change when the rule
+  // changes is two places that can disagree about which record a sign-in is in. Raised on the second
+  // code round.
+  assert.strictEqual(intentScopeOf(WSL, false), '', 'sharing on means the shared record');
+  assert.strictEqual(intentScopeOf(WSL, true), WSL);
+  assert.strictEqual(signedInKey(SERVER.id, intentScopeOf(WSL, false)), signedInKey(SERVER.id));
+});
+
+test('a sign-out that has not reached a side yet survives the sides being separated', () => {
+  // Sign out with the sides shared, separate them before the other side refreshes, and that side
+  // would find a token, no intent — and no revocation in its NEW scope. So it kept a session the
+  // person had ended. The stamp has to travel with the intent. Raised on the second code round.
+  const shared = 2_000;
+  const state = store({ [revokedKey(SERVER.id)]: shared });
+
+  // What `carryTeamLogins` does when the switch goes ON, for the revocation half.
+  const carried = state.get<number>(revokedKey(SERVER.id));
+  assert.strictEqual(carried, shared);
+
+  const fact: TokenFact = { ...INTENT, mintedAtMs: 1_000 };
+  assert.strictEqual(
+    sessionAction(undefined, fact, carried ?? 0, NOW),
+    'signOut',
+    'carried across, the stamp still says this token is one the person signed out of',
+  );
+  assert.strictEqual(
+    sessionAction(undefined, fact, 0, NOW),
+    'nothing',
+    'and without it — the defect — the side keeps a session that was ended',
+  );
 });
