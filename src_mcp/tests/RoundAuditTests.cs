@@ -98,6 +98,39 @@ public sealed class RoundAuditTests
             role,
             new ProcessRequest("codex", args, "D:/wt") { StdIn = "the prompt" }));
 
+    /// <summary>
+    /// The opening line stops contradicting the startup line.
+    /// </summary>
+    /// <remarks>
+    /// On 2026-09-07 this file wrote <c>3 reviewer(s)</c> eleven seconds after the host had written
+    /// <c>codex,gemini,local,remsoftdev-claude enabled</c>, and nothing named the fourth or said why.
+    /// A log that cannot say why a reviewer did not review is what this class exists to prevent, and
+    /// it could only say it about reviewers it had ASKED.
+    /// </remarks>
+    [Fact]
+    public void AnEnabledReviewerTheRoundCouldNotRunIsNamed_OnItsOwnLine()
+    {
+        new RoundAudit(_log, "PlanReview", 1).Opening(
+            [Work("codex", ReviewRole.PlanCritique)],
+            "D:/wt",
+            TimeSpan.FromMinutes(10),
+            ["remsoftdev-claude: not signed in to the Team server at https://coai.example.com"]);
+
+        _sink.Lines.Should().Contain(l => l.Contains("1 reviewer(s)"));
+        var left = _sink.Lines.Should().ContainSingle(l => l.Contains("left out")).Subject;
+        left.Should().Contain("remsoftdev-claude").And.Contain("not signed in");
+    }
+
+    [Fact]
+    public void AnOrdinaryRoundGainsNoLineAtAll()
+    {
+        // The exceptional case pays for itself; every other round reads exactly as it did.
+        new RoundAudit(_log, "PlanReview", 1).Opening(
+            [Work("codex", ReviewRole.PlanCritique)], "D:/wt", TimeSpan.FromMinutes(10));
+
+        _sink.Lines.Should().NotContain(l => l.Contains("left out"));
+    }
+
     [Fact]
     public void AFailedReviewer_IsAWarningNamingTheReason()
     {

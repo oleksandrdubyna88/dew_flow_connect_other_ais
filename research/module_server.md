@@ -322,6 +322,41 @@ Debug, so a failure can be reproduced by pasting it into a terminal), each revie
 answer with tokens and cost, every failure as a WARNING naming the reason, and every finding with
 its origin. It rides the same per-run log file as everything else.
 
+### A round names the reviewer it could not run (2026-09-07)
+
+Everything above reported honestly about reviewers the round **asked**. A reviewer that was enabled
+and never entered the roster was reported by nothing at all, and the two lines this file writes
+contradicted each other in silence:
+
+```
+[11:03:41 INF] starting: codex,gemini,local,remsoftdev-claude enabled
+[11:06:00 INF] round 1 PlanReview opening: 3 reviewer(s) — codex/…, gemini/…, local/…
+```
+
+Eleven seconds apart, in one file, on 2026-09-07 — and the verdict then said *"all 3 reviewers
+answered"*, which was true about what it asked. That silence is what made three other defects
+invisible for a day.
+
+`BuildWork`'s filter is now one predicate, `CanRun`, read from two directions: it decides who is
+dealt work, and `ExcludedFrom(isPlanStage)` returns everyone else with the vendor's own note as the
+reason. Two predicates that agree today is how three copies of the runtime decision got away with it
+twice in this same file.
+
+The stage filter runs **first**, in both directions. A vendor turned off for plans has not been lost,
+and reporting it on every plan round would train a person to ignore the sentence — which is the one
+thing it cannot afford, because it exists to be read the once it matters.
+
+It reaches two surfaces from one list: `RoundAudit.Opening` writes a WARNING beside the roster line
+(a separate line, so an ordinary round pays nothing for it), and `ReviewerSummary.Excluded` appends
+to the sentence that already travels into `ReviewAnswer.Reviewers`, the closing audit line and the
+live round record. A round with nothing to add reads exactly as it always did, and that has its own
+test.
+
+`RunStageAsync` gained an explicit `isPlanStage` rather than deriving it from `needsWorktree`. That
+derivation happens to be right today, and this file already records what deriving the stage cost
+twice — `planPrompts is { Count: > 0 }` is empty on an ordinary plan round, and reading the roles
+works only because no code round carries `PlanCritique`.
+
 ### A `call_human` verdict reaches the person (2026-09-01)
 
 `RoundMachine` can end a round with `call_human`, and that verdict is returned to the calling AI —

@@ -196,6 +196,41 @@ public sealed partial class PanelService
     internal static IReviewerRuntime? RuntimeFor(ProviderSettings provider) =>
         RuntimeResolution.For(provider.Identity());
 
+    /// <summary>
+    /// Can this vendor actually review — an adapter for its runtime, and a credential that exists?
+    /// </summary>
+    /// <remarks>
+    /// ONE predicate, read from two directions. `BuildWork` asks who to deal work to;
+    /// <see cref="ExcludedFrom"/> asks who was left out and why, so that a round can say it. Two
+    /// predicates that agree today is how three copies of the runtime decision got away with it
+    /// twice in this file's own history.
+    /// </remarks>
+    private bool CanRun(ProviderSettings provider) =>
+        RuntimeFor(provider) is not null && AuthFor(provider).Auth != "unavailable";
+
+    /// <summary>
+    /// The reviewers the operator ENABLED for this stage that this round cannot run, each as
+    /// <c>name: reason</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>The stage filter runs FIRST, in both directions: a vendor turned off for plans has not
+    /// been lost, and reporting it on every plan round would train a person to ignore the sentence —
+    /// which is the one thing it cannot afford, because it exists to be read the once it matters.</para>
+    /// <para>The reason is the vendor's own note, never a summary of it. "needs a key under 'x' and
+    /// the vault holds none" and "not signed in to the Team server at …" have different cures, and
+    /// the whole point of naming the exclusion is that somebody can act on it.</para>
+    /// </remarks>
+    internal IReadOnlyList<string> ExcludedFrom(bool isPlanStage) =>
+        [.. _settings.Providers
+            .Where(p => p.Serves(isPlanStage))
+            .Where(p => !CanRun(p))
+            .Select(p => $"{p.Provider}: {ReasonFor(p)}")];
+
+    private string ReasonFor(ProviderSettings provider) =>
+        RuntimeFor(provider) is null
+            ? $"no adapter for a runtime called '{provider.Runtime}'"
+            : AuthFor(provider).Note;
+
     // ---------- open / status ----------
 
     public async Task<string> OpenAsync(string repoPath, string branch, CancellationToken ct = default)
@@ -259,7 +294,7 @@ public sealed partial class PanelService
         // job — refusing it at the gate does their work for them and takes away the one round that
         // would have told the person why. The floor belongs to the code stage, where the scope has
         // something to be checked against.
-        RunStageAsync(repoPath, branch, planText, RoundMachine.BeginPlanRound, needsWorktree: false,
+        RunStageAsync(repoPath, branch, planText, RoundMachine.BeginPlanRound, needsWorktree: false, isPlanStage: true,
             (session, workingDir, _) => Task.FromResult<IReadOnlyList<ReviewerWork>>(
                 BuildWork([ReviewRole.PlanCritique], workingDir, $"## The plan under review\n\n{planText}",
                     session.State.RoundsRunThisStage + 1,
@@ -294,7 +329,7 @@ public sealed partial class PanelService
             return Task.FromResult(Error(CodeScope.Refusal));
         }
 
-        return RunStageAsync(repoPath, branch, scope, RoundMachine.BeginCodeRound, needsWorktree: true,
+        return RunStageAsync(repoPath, branch, scope, RoundMachine.BeginCodeRound, needsWorktree: true, isPlanStage: false,
             async (session, workingDir, sha) =>
             {
                 var files = await _context.CollectAsync(repoPath, baseRef, sha, ct: ct);
@@ -420,6 +455,11 @@ public sealed partial class PanelService
         string planText,
         Func<SessionState, Transition> begin,
         bool needsWorktree,
+        // TOLD, not derived. `!needsWorktree` happens to mean "plan" today and this file already
+        // records what deriving the stage cost twice: `planPrompts is { Count: > 0 }` is empty on an
+        // ordinary plan round, and reading the ROLES works only because no code round happens to
+        // carry PlanCritique. The caller knows which stage it is running.
+        bool isPlanStage,
         Func<PersistedSession, string, string, Task<IReadOnlyList<ReviewerWork>>> makeWork,
         CancellationToken ct)
     {
@@ -473,7 +513,8 @@ public sealed partial class PanelService
             var subject = RoundSubject.From(planText, File.Exists);
             var live = new LiveRound(_store, session, work, subject);
             var audit = new RoundAudit(_log, session.State.Stage.ToString(), session.State.RoundsRunThisStage + 1);
-            audit.Opening(work, workingDir, _settings.ReviewerTimeout);
+            var excluded = ExcludedFrom(isPlanStage);
+            audit.Opening(work, workingDir, _settings.ReviewerTimeout, excluded);
             var results = await _scheduler.RunAllAsync(work, _executor, ct, progress =>
             {
                 live.Report(progress);
@@ -491,7 +532,8 @@ public sealed partial class PanelService
                         progress.Elapsed);
                 }
             });
-            var summary = ReviewerSummaryFactory.From(results);
+            // What ran, and — since 2026-09-07 — who was enabled for this stage and could not.
+            var summary = ReviewerSummaryFactory.From(results, excluded);
             var reviews = results.Select(r => r.Outcome).OfType<ReviewerOutcome.Ok>().Select(o => o.Review).ToList();
             // The ROLE is stamped here because this is the only place that holds both the invocation
             // and its answer. A threshold belongs to a role, so a finding has to remember whose it is.
@@ -838,10 +880,7 @@ public sealed partial class PanelService
         // (research/RESULTS_vendor_overlap_2026-09-06.md): a local model was 19 % useful on a plan
         // and 3 % on code while writing more findings than both hosted vendors together, so "on for
         // the plan, off for the code" is a setting somebody actually wants.
-        var runnable = _settings.Providers
-            .Where(p => p.Serves(isPlanStage))
-            .Where(p => RuntimeFor(p) is not null && AuthFor(p).Auth != "unavailable")
-            .ToList();
+        var runnable = _settings.Providers.Where(p => p.Serves(isPlanStage)).Where(CanRun).ToList();
         if (runnable.Count == 0)
         {
             return [];

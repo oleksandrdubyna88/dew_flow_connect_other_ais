@@ -111,14 +111,45 @@ public enum Stage
     Done,
 }
 
-/// <summary>How many reviewers were asked and how many answered — partial rounds are honest.</summary>
-public sealed record ReviewerSummary(int Asked, int Answered, ImmutableArray<string> Failures)
+/// <summary>
+/// How many reviewers were asked, how many answered — and who was never asked at all.
+/// </summary>
+/// <param name="Excluded">
+/// Reviewers the operator ENABLED for this stage that the round could not run, each as
+/// <c>name: reason</c>. Empty on almost every round, and the reason it exists is the one where it is
+/// not: a reviewer that is asked and fails has always been reported honestly, and one that never
+/// entered the roster was reported by nothing at all. On 2026-09-07 that made a Team-server reviewer
+/// invisible for a day — the log said "4 enabled" and "3 reviewer(s)" eleven seconds apart, and the
+/// verdict said "all 3 reviewers answered", which was true about what it asked.
+/// </param>
+public sealed record ReviewerSummary(
+    int Asked,
+    int Answered,
+    ImmutableArray<string> Failures,
+    ImmutableArray<string> Excluded = default)
 {
     public static ReviewerSummary AllAnswered(int asked) => new(asked, asked, []);
 
-    public string Sentence => Answered == Asked
-        ? $"all {Asked} reviewers answered"
-        : $"{Answered} of {Asked} reviewers answered; failed: {string.Join(", ", Failures)}";
+    /// <remarks>
+    /// The excluded clause is APPENDED rather than folded in, so a round with nothing to add reads
+    /// exactly as it always did. A change to every round's sentence in service of the rare one is a
+    /// change nobody asked for.
+    /// </remarks>
+    public string Sentence
+    {
+        get
+        {
+            var answered = Answered == Asked
+                ? $"all {Asked} reviewers answered"
+                : $"{Answered} of {Asked} reviewers answered; failed: {string.Join(", ", Failures)}";
+            var left = Excluded.IsDefaultOrEmpty ? [] : Excluded;
+
+            return left.Length == 0
+                ? answered
+                : $"{answered}; {left.Length} enabled reviewer{(left.Length == 1 ? "" : "s")} "
+                    + $"could not run: {string.Join("; ", left)}";
+        }
+    }
 }
 
 /// <summary>

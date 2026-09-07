@@ -443,13 +443,21 @@ public sealed class BoundedScheduler(
 /// <summary>Folds a fan-out's outcomes into the core's honest per-round summary.</summary>
 public static class ReviewerSummaryFactory
 {
-    public static ReviewerSummary From(IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results) =>
+    /// <param name="excluded">
+    /// Reviewers the operator enabled for this stage that the round could not run. Optional, and
+    /// empty is the ordinary case — but a round that leaves one out and says nothing is how a
+    /// Team-server reviewer stayed invisible for a day.
+    /// </param>
+    public static ReviewerSummary From(
+        IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results,
+        IReadOnlyList<string>? excluded = null) =>
         new(
             results.Count,
             results.Count(r => r.Outcome is ReviewerOutcome.Ok),
             [.. results
                 .Where(r => r.Outcome is not ReviewerOutcome.Ok)
-                .Select(r => $"{r.Invocation.Provider}/{r.Invocation.Role}: {Describe(r.Outcome)}")]);
+                .Select(r => $"{r.Invocation.Provider}/{r.Invocation.Role}: {Describe(r.Outcome)}")],
+            [.. excluded ?? []]);
 
     public static string Describe(ReviewerOutcome outcome) => outcome switch
     {
