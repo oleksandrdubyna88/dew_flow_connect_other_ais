@@ -75,7 +75,19 @@ export function activate(context: vscode.ExtensionContext): void {
   // opened the ConnectOtherAIs panel, nothing watched `coai.*` and nothing wrote the file. They
   // set `onExhausted` to `good_enough`, restarted, and the server went on answering `call_human`
   // from an `env` block pasted months earlier — ten third rounds in a row.
-  const settingsSync = new ServerSettingsSync(readCoaiConfiguration, (json) => writeSettingsFile(json));
+  //
+  // And it stamps what it writes, because this file has more than one writer: every open window
+  // has its own extension host, they all hear `onDidChangeConfiguration`, and a host loaded before
+  // the last update is still running the build it started with. One of those reverted a
+  // Team-server reviewer on 2026-09-07 by rewriting a runtime it did not know. An older build now
+  // stands down and says so, once.
+  const settingsSync = new ServerSettingsSync(
+    readCoaiConfiguration,
+    (json) => writeSettingsFile(json),
+    extensionVersion(context),
+    readSettingsFile,
+    reportStandDown,
+  );
   void settingsSync.sync();
 
   context.subscriptions.push(
@@ -133,6 +145,63 @@ async function writeSettingsFile(json: string): Promise<void> {
     vscode.Uri.joinPath(dataDir(), 'settings.json'),
     new TextEncoder().encode(json),
   );
+}
+
+/**
+ * The settings file as it is now, or an empty string.
+ *
+ * <p>Never throws: "there is no file" and "the file could not be read" are the same answer to the
+ * question the sync asks, which is whether a NEWER build wrote what is there. Neither is a reason
+ * to refuse to write.</p>
+ */
+async function readSettingsFile(): Promise<string> {
+  try {
+    return new TextDecoder().decode(
+      await vscode.workspace.fs.readFile(vscode.Uri.joinPath(dataDir(), 'settings.json')),
+    );
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * This build's own version, from the manifest VS Code loaded it from.
+ *
+ * <p>`packageJSON` is `any`, so it is narrowed here rather than asserted: a manifest without a
+ * version string yields an empty one, and an empty version makes the sync behave exactly as it did
+ * before the stamp existed. Being unable to name yourself is a reason to stand aside from the
+ * comparison, never a reason to guess at it.</p>
+ */
+function extensionVersion(context: vscode.ExtensionContext): string {
+  const manifest: unknown = context.extension.packageJSON;
+  if (typeof manifest !== 'object' || manifest === null) {
+    return '';
+  }
+  const version = (manifest as Record<string, unknown>)['version'];
+
+  return typeof version === 'string' ? version : '';
+}
+
+/**
+ * Says that a newer build's settings were left alone, and offers the one action that fixes it.
+ *
+ * <p>Once per session, from the sync, which cannot import this module. A window running an older
+ * build reverts settings SILENTLY today — that silence is the whole defect, seen from the other
+ * side — and the cure is not a setting or a reinstall: it is reloading this window, which is what
+ * makes VS Code pick up the extension it has already downloaded.</p>
+ */
+function reportStandDown(theirVersion: string): void {
+  void vscode.window
+    .showWarningMessage(
+      `ConnectOtherAIs left the server settings alone: they were written by version ${theirVersion}, `
+        + 'which is newer than the build this window is running. Reload the window to catch up.',
+      'Reload Window',
+    )
+    .then((choice) => {
+      if (choice === 'Reload Window') {
+        void vscode.commands.executeCommand('workbench.action.reloadWindow');
+      }
+    });
 }
 
 /** The one answer, as the Uri the rest of this file wants. It lives in `dataDir.ts`. */
