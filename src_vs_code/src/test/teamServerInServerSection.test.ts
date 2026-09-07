@@ -1,7 +1,7 @@
 import * as assert from 'node:assert';
 import { test } from 'node:test';
 import { Catalog } from '../teamServerApi';
-import { TeamServer } from '../teamServers';
+import { TeamServer, canonicalTeamServerUrl } from '../teamServers';
 import {
   TeamServerState,
   hereSentence,
@@ -29,6 +29,18 @@ function state(over: Partial<TeamServerState> = {}): TeamServerState {
   return { server: SERVER, email: '', problem: '', stale: false, ...over };
 }
 
+/**
+ * The address one block actually carries, read off the input's `value`.
+ *
+ * <p>Read out and COMPARED rather than asserted with `includes`, which was both the weaker test —
+ * an address anywhere in the markup would have satisfied it, including inside a sentence — and a
+ * `js/incomplete-url-substring-sanitization` alert from CodeQL, whose heuristic cannot tell a test
+ * assertion from a security check written that way. This says the exact thing the test means.</p>
+ */
+function addressIn(html: string, serverId: string): string {
+  return new RegExp(`id="ts-here-${serverId}"[^>]*value="([^"]*)"`).exec(html)?.[1] ?? '';
+}
+
 test('a person with no Team server sees nothing new in the Server section', () => {
   assert.strictEqual(teamServerHere([], false), '');
 });
@@ -36,7 +48,7 @@ test('a person with no Team server sees nothing new in the Server section', () =
 test('the address is there, and it is read-only', () => {
   const html = teamServerHere([state({ email: 'a@remsoft.dev', catalog: catalog() })], false);
 
-  assert.ok(html.includes('https://coai.remsoft.dev'), html);
+  assert.strictEqual(addressIn(html, 'remsoft-dev'), canonicalTeamServerUrl(SERVER.url));
   assert.ok(html.includes('readonly'), 'changing where a live session points is a sign-out');
   assert.ok(!html.includes('data-setting='), 'nothing here writes a setting');
 });
@@ -48,8 +60,8 @@ test('every configured server gets its own block', () => {
     false,
   );
 
-  assert.ok(html.includes('https://coai.remsoft.dev'));
-  assert.ok(html.includes('https://coai.staging.dev'));
+  assert.strictEqual(addressIn(html, 'remsoft-dev'), canonicalTeamServerUrl(SERVER.url));
+  assert.strictEqual(addressIn(html, 'staging'), canonicalTeamServerUrl(OTHER.url));
 });
 
 test('the coai-server version appears once the server has answered', () => {
