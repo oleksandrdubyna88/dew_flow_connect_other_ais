@@ -1,5 +1,33 @@
 # Changelog
 
+## Extension 0.31.5 — 2026-09-07
+
+**A reviewer you added from a Team server now actually reviews.** It did not, for anybody, since
+Team servers shipped: the row sat in *Reviewers* with both stage boxes ticked, and every round ran
+without it. Nothing said so — the panel called it configured, which was true, and the round reported
+"all 3 reviewers answered", which was true about what it asked.
+
+Two things were wrong, and both are fixed.
+
+The extension never sent the one field a Team server needs. A reviewer row is named
+`<server>-<vendor>` so two servers offering `codex` cannot collide, and the name the SERVER knows it
+by travels separately — that second name was missing from everything the extension wrote, so your
+server was asked for a vendor called `remsoftdev-claude` and answered, truthfully, that it offers no
+such thing.
+
+And a second VS Code window could undo your settings. Every window writes the file the server reads,
+including a window still running the build it was opened with — and an older build rewrites a
+reviewer type it does not recognise. Two windows, 0.4 seconds apart, and the newer one lost. The
+file now records which build wrote it, an older one stands down and tells you to reload that window,
+and the write happens under a lock and by rename, so a crash cannot leave half a file behind.
+
+**And when a reviewer cannot run, you are told.** Its card says so, with the reason — not signed in,
+no key, no such vendor — and a round that leaves one out names it in the log and in what it hands
+your AI. The reason comes from the server, so the panel never has a second opinion about it.
+
+Smaller: a Team-server card no longer claims its models come from the Codex CLI, and a refusal says
+which of the row's two names was tried instead of reading like a typo you never made.
+
 ## Extension 0.31.4 — 2026-09-07
 
 **The *Server* section is now *MCP server*, and it is about that.** It carried the Team server's
