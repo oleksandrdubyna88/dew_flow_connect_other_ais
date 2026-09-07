@@ -350,7 +350,19 @@ function allowedModelsFor(vendor: Vendor, servers: readonly TeamServerState[]): 
   const server = servers.find((s) => (vendor.teamServerId !== undefined && vendor.teamServerId.length > 0)
     ? s.server.id === vendor.teamServerId
     : canonicalTeamServerUrl(s.server.url) === url);
-  const named = vendor.remoteVendor ?? vendor.id;
+  // Length-checked, not `??`: nullish coalescing keeps an EMPTY string, so a row carrying
+  // `remoteVendor: ''` would be looked up — and captioned — under a blank name. `vendorsFrom` cannot
+  // produce one, but the C# side of this seam length-checks the same field (`VendorIdentity.Recorded`)
+  // and two halves of one contract disagreeing about what counts as absent is how this whole plan
+  // started. Accepted finding, this story's plan round.
+  // Length-checked, not `??`: nullish coalescing keeps an EMPTY string, so a row carrying
+  // `remoteVendor: ''` would be looked up in the catalog under a blank name. `vendorsFrom` cannot
+  // produce one, but the C# side of this seam length-checks the same field
+  // (`VendorIdentity.Recorded`), and two halves of one contract disagreeing about what counts as
+  // absent is how this whole plan started. Accepted finding, this story's plan round.
+  const named = vendor.remoteVendor !== undefined && vendor.remoteVendor.length > 0
+    ? vendor.remoteVendor
+    : vendor.id;
 
   if (server?.catalog === undefined) {
     // NOT an empty allowlist. An empty one means "this server no longer offers your model", and

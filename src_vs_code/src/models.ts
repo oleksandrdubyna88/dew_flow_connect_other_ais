@@ -179,6 +179,40 @@ export interface RemoteProvenance {
   readonly fromCatalog: boolean;
 }
 
+/**
+ * What the caption says before a server has answered.
+ *
+ * <p>It does NOT say "not asked yet". Nothing at this call site can tell a request still in flight
+ * from one that failed — the fetch, its error and its retry belong to the Team servers section,
+ * which already renders the server's own message and marks a stale answer. Claiming the first when
+ * it may be the second is the kind of confident wrong sentence this file has had to remove twice.
+ * Pointing at the one place that knows costs a clause. Accepted finding, this story's plan round.</p>
+ */
+const CATALOG_NOT_HERE =
+  "this Team server's catalog has not arrived — the Team servers section says why.";
+
+/**
+ * The count, in a sentence rather than a template with a number bolted to it.
+ *
+ * <p>It does NOT substitute a friendly word for an empty `named`. That guard was written here first
+ * and removed: it made the caption read plausibly while the LOOKUP behind it searched the catalog
+ * for a vendor called nothing, and it silently disarmed the test for exactly that defect — the test
+ * passed with the bug in place, which is the one failure mode a test cannot have. The caller
+ * guarantees a name (`vendorsFrom` refuses a row with an empty id), so a blank one here should look
+ * as wrong as it is.</p>
+ */
+function allowedNote(remote: RemoteProvenance): string {
+  // Zero is a real state, not an error: a server can offer a vendor and allow it no models at all,
+  // and "0 models this Team server allows" is a sentence nobody writes.
+  if (remote.models.length === 0) {
+    return `this Team server allows '${remote.named}' no models at all.`;
+  }
+
+  return remote.models.length === 1
+    ? `the one model this Team server allows for '${remote.named}'.`
+    : `the ${remote.models.length} models this Team server allows for '${remote.named}'.`;
+}
+
 export function modelsProvenance(
   runtime: Runtime,
   discoveredCodex: readonly ModelChoice[],
@@ -195,10 +229,7 @@ export function modelsProvenance(
   // `fromCatalog` rather than a length test, because the not-yet-asked case deliberately returns the
   // row's own model rather than an empty list, so a count of one cannot tell the two apart.
   if (runtime === 'remote') {
-    return remote.fromCatalog
-      ? `${remote.models.length} model${remote.models.length === 1 ? '' : 's'} this Team server `
-        + `allows for '${remote.named}'.`
-      : 'this Team server has not been asked yet — its catalog decides what this reviewer may use.';
+    return remote.fromCatalog ? allowedNote(remote) : CATALOG_NOT_HERE;
   }
 
   if (runtime === 'local') {
