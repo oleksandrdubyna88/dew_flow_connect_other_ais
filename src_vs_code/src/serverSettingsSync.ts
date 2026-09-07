@@ -70,6 +70,23 @@ export type SyncOutcome = 'written' | 'unchanged' | 'stood-down' | 'busy' | 'fai
  * runtime so the row still launches something — a sensible fallback for RENDERING that must never
  * have been persisted. So the file records who wrote it, and an older build stands down.</p>
  */
+/**
+ * The defaults, as module constants rather than async arrows written into the parameter list.
+ *
+ * <p>An analyser reads an `async` expression in a constructor's default as an asynchronous operation
+ * IN the constructor and calls it critical, which is a fair reading of the shape even though nothing
+ * here awaits during construction — the value is a function, and it runs when a caller runs it. A
+ * named constant says that plainly and costs nothing.</p>
+ */
+const NO_FILE: ReadExisting = async () => ({ kind: 'absent' });
+
+/** No lock: run the work and report that it ran. What a caller with no filesystem gets. */
+const NO_LOCK: CriticalSection = async (work) => {
+  await work();
+
+  return true;
+};
+
 export class ServerSettingsSync {
   /** The last content actually written, so an unchanged configuration touches nothing. */
   private lastWritten = '';
@@ -101,13 +118,9 @@ export class ServerSettingsSync {
     private readonly read: ReadConfiguration,
     private readonly write: WriteFile,
     private readonly version = '',
-    private readonly readExisting: ReadExisting = async () => ({ kind: 'absent' }),
+    private readonly readExisting: ReadExisting = NO_FILE,
     private readonly report: ReportRefusal = () => {},
-    private readonly critical: CriticalSection = async (work) => {
-      await work();
-
-      return true;
-    },
+    private readonly critical: CriticalSection = NO_LOCK,
   ) {}
 
   /**

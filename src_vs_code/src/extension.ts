@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
@@ -267,7 +268,10 @@ async function lockHolds(token: string): Promise<boolean> {
  * replaced it. `wx` fails with `EEXIST` when the file is there, which is the whole mechanism.</p>
  */
 async function takeLock(mayBreakAStaleOne = true): Promise<string> {
-  const token = `${process.pid}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  // `randomUUID`, not `Math.random`: uniqueness is all this needs, but a pseudorandom generator in a
+  // token is a shape worth not having — and an analyser is right to ask about one without reading
+  // what the token is for. The crypto one is the same line and answers the question.
+  const token = `${process.pid}:${Date.now()}:${randomUUID()}`;
   try {
     await fsp.writeFile(lockPath(), token, { encoding: 'utf8', flag: 'wx' });
 
