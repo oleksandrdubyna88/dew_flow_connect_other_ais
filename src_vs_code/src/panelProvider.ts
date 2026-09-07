@@ -78,6 +78,7 @@ import {
   SignedIn,
   TokenFact,
   catalogOf,
+  plannedAction,
   readToken,
   reconcile,
   signIn,
@@ -858,7 +859,13 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       const from = signedInKey(server.id, perSide ? '' : side);
       const to = signedInKey(server.id, perSide ? side : '');
       const carried = state.get<SignedIn>(from);
-      if (carried !== undefined && state.get<SignedIn>(to) === undefined) {
+      // Turning sharing ON (perSide false) OVERWRITES the shared record. Guarding it the way the
+      // other direction is guarded was a defect: the shared record is never cleared, so it almost
+      // always holds an older account — the promotion would be skipped, that stale account would
+      // become everybody's intent, and this side would then have its live session replaced by one
+      // it had left behind. Caught on the code round. The other direction keeps its guard: seeding
+      // a side that already has a record would discard a decision somebody made.
+      if (carried !== undefined && (!perSide || state.get<SignedIn>(to) === undefined)) {
         await state.update(to, carried);
       }
     }
@@ -1212,7 +1219,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         elsewhere: here === undefined ? (intent?.email ?? '') : '',
         catalog: known?.catalog,
         usage: known?.usage,
-        problem: known?.problem ?? (here === undefined ? (failed?.message ?? '') : ''),
+        // A failed silent sign-in is shown whether or not this side still holds SOMETHING. It used
+        // to be suppressed while a token was present, which is the one case where it matters most:
+        // the token belongs to an account the intent no longer names, so the row read "signed in as
+        // <the wrong person>" with no sign that anything had gone wrong. Caught on the code round.
+        problem: known?.problem ?? (failed?.message ?? ''),
         stale: known?.stale ?? false,
         busy: this.busy[server.id] ?? '',
       };
@@ -1239,6 +1250,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       dataDir: coaiDataDir(),
       side: this.sideKeyHere(),
       perSide: this.perSide(vscode.workspace.getConfiguration('coai')),
+      // Injected, because both stamps it writes are persisted and then compared to each other —
+      // `.claude/rules/shared/common/utc-timestamps.md` rule 2. Raised on the code round.
+      now: () => Date.now(),
       state: {
         get: <T,>(key: string) => this.context.globalState.get<T>(key),
         update: async (key: string, value: unknown) => {
@@ -1557,12 +1571,33 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return failed.message;
     }
 
-    const done = await reconcile(server, this.authHost());
-    this.mintFailure = done.problem.length > 0
-      ? { ...this.mintFailure, [server.id]: { at: Date.now(), message: done.problem } }
-      : PanelProvider.without(this.mintFailure, server.id);
+    // ASKED before it is DONE, so the row can say what is happening while it happens — and so that
+    // it says nothing on the ordinary refresh, where the answer is `nothing` and a spinner once a
+    // minute would be worse than the silence it replaced.
+    const host = this.authHost();
+    if (await plannedAction(server, host) === 'nothing') {
+      this.mintFailure = PanelProvider.without(this.mintFailure, server.id);
 
-    return done.problem;
+      return '';
+    }
+
+    // SAYS SO while it runs. A silent sign-in is four requests and can take seconds, and without
+    // this the row read "<somebody> is signed in on another side — press Sign in to use it here"
+    // with an enabled button, throughout: the person is invited to start a second, interactive
+    // sign-in against the one already in flight. The same finding the interactive path had on
+    // epic 3's code round, one path over. Raised on this one's.
+    this.busy = { ...this.busy, [server.id]: 'Signing in…' };
+    await this.render();
+    try {
+      const done = await reconcile(server, host);
+      this.mintFailure = done.problem.length > 0
+        ? { ...this.mintFailure, [server.id]: { at: Date.now(), message: done.problem } }
+        : PanelProvider.without(this.mintFailure, server.id);
+
+      return done.problem;
+    } finally {
+      this.busy = PanelProvider.without(this.busy, server.id);
+    }
   }
 
   /** One entry dropped, the rest kept — a copy, because nothing here is mutated in place. */

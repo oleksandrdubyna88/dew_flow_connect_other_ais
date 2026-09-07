@@ -45,6 +45,8 @@ reaches the other sides: until now, signing out in Windows left a working token 
 
 If a side cannot sign itself in — no Microsoft session there, or the account active on it is a
 different one — it says so and offers the button, instead of showing an account no review can use.
+Signing yourself in there once is all it takes; nothing is minted behind your back for an account you
+did not approve, and a session that comes back as somebody else is ended again rather than used.
 
 *Requires a Team server: `coai-server`, deployed by whoever runs your company's subscriptions.*
 

@@ -40,6 +40,13 @@
 > is why the references carry a commit rather than a date, and why re-verifying them is the first step
 > of any story that quotes one.
 
+> **A slice of this plan was taken later, and is named here so a reader starting from this document
+> does not build it twice:** [PLAN_team_server_side_and_url.md](PLAN_team_server_side_and_url.md)
+> (IMPLEMENTED 2026-09-06) owns **where a sign-in lives** — the intent/fact split, the per-side
+> records, the silent mint and the propagated sign-out — and **what the *Server* section says** about
+> the Team server. This plan keeps everything else: the server itself, the *Team servers* section,
+> adding a reviewer, and the spending block. Order: this one first, that one on top of it.
+
 ## The goal
 
 A company has many developers and does not want each of them to buy a Codex, an Antigravity and a

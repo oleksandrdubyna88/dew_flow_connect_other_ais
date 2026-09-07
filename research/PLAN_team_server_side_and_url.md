@@ -1,12 +1,19 @@
 # PLAN — the Team server belongs to a SIDE, and the Server section says which one
 
-> Status: **plan only, nothing implemented yet, 2026-09-06.** Scope: the extension's panel
+> Status: **IMPLEMENTED, 2026-09-06.** Scope: the extension's panel
 > (`src_vs_code/src/panelView.ts`, `teamServerView.ts`, `panelProvider.ts`) and the sign-in records
 > (`teamServerAuth.ts`).
 >
-> Related docs: [PLAN_team_server.md](../research/PLAN_team_server.md),
-> [PLAN_server_version_per_side.md](../research/PLAN_server_version_per_side.md),
-> [module_extension.md](../research/module_extension.md).
+> Related docs: [PLAN_team_server.md](PLAN_team_server.md),
+> [PLAN_server_version_per_side.md](PLAN_server_version_per_side.md),
+> [module_extension.md](module_extension.md).
+>
+> **The boundary with [PLAN_team_server.md](PLAN_team_server.md):** that plan built the Team server
+> itself and the panel's *Team servers* section — adding a server, signing in, the catalog, the
+> reviewer rows, the spending block. This one took ONE slice out of it afterwards: **where a sign-in
+> lives** and **what the *Server* section says**. Everything else in that plan is untouched, and its
+> own open tail (the per-PERSON spending view) is
+> [../todo/PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md).
 
 ## The symptom
 
@@ -185,15 +192,56 @@ Every one of these is a unit test in `src_vs_code/src/test`, run by `npm test`:
 
 ## Definition of Done
 
-- [ ] The Server section shows the address, read-only, and the coai-server version once connected.
-- [ ] With the switch off, a second side signs itself in with the same account and no prompt.
-- [ ] With the switch on, a second side starts signed out and can choose a different account.
-- [ ] The panel never reports a session this side has no token for.
-- [ ] A sign-out on one side takes the other sides with it.
-- [ ] `trustedKey` stayed shared, and it is written down why.
-- [ ] `npm test` green; the gate's plan and code rounds both reached `proceed` or `good_enough` with
-      every finding resolved.
-- [ ] This plan is promoted to `research/` with what shipped differently.
+- [x] The Server section shows the address, read-only, and the coai-server version once connected.
+- [x] With the switch off, a second side signs itself in with the same account and no prompt.
+- [x] With the switch on, a second side starts signed out and can choose a different account.
+- [x] The panel never reports a session this side has no token for.
+- [x] A sign-out on one side takes the other sides with it.
+- [x] `trustedKey` stayed shared, and it is written down why.
+- [x] `npm test` green — 603 tests, 0 failing.
+- [x] This plan is promoted to `research/` with what shipped differently.
+
+## What shipped differently
+
+**The rule gained a fourth action, `replace`.** The plan had three — mint, sign out, nothing — and the
+code round showed that "mint" over a token belonging to somebody else, or to a session the person had
+signed out, leaves that session LIVE on the server. `replace` ends it first and only then asks for a
+new one. It is what the wrong-account case and the revoked-token case both needed.
+
+**The revocation is compared in both branches, not only where there is no intent.** The plan's table
+consulted the sign-out stamp only when the intent was gone. Sign out on Windows, sign in again there,
+and a WSL window that had not refreshed in between saw an intent, a matching account and an unexpired
+token — and kept a session the person had ended. Found by gemini's reviewer, and the reason `replace`
+has two triggers rather than one.
+
+**A propagated sign-out does not re-stamp.** `reconcile` originally called `signOut`, which stamps —
+so the WSL window acting on Windows' sign-out set a *newer* stamp than the session Windows had just
+signed back in with, and Windows would have thrown its own new session away. `reconcile` now ends the
+token and touches nothing else.
+
+**`plannedAction` was extracted.** Not in the plan: the panel has to say "Signing in…" BEFORE four
+requests rather than after them, and asking on every sixty-second refresh whether anything is due is
+also what keeps a row from flashing a spinner once a minute.
+
+**The clock is injected.** `.claude/rules/shared/common/utc-timestamps.md` rule 2 — both stamps are
+persisted and then compared to each other, which is exactly the case that rule names. The plan had
+`Date.now()` inline.
+
+**The sign-out cleanup keeps its record until the FILE is gone.** Clearing the fact first meant that a
+token which failed to delete stayed on disk as a usable credential with nothing left to bring anybody
+back to it, under a panel reporting "signed out".
+
+**Two wordings changed after the round:** a failure is now shown whether or not another side is signed
+in (it used to be reachable only in the one case), and the *Server* section has its own sentences
+because it has no buttons — telling somebody there to "press Sign in" pointed at a control that is in
+*Team servers*.
+
+**The open tail.** The panel still renders `TokenFact` from `globalState` without stat-ing the token
+file at render time, so a file deleted by hand outside the editor shows as signed in for up to the
+sixty-second refresh window, after which `factHere` discards it. Raised as blocking by the local
+reviewer and rejected with that reasoning: the section is documented as rendering what was last
+learned, and synchronous disk I/O on a panel that repaints on every keystroke is a cost this codebase
+avoids deliberately elsewhere.
 
 ## What the plan round changed, and what it did not
 
