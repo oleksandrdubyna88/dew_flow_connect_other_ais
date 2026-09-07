@@ -74,6 +74,16 @@ internal static class Program
         /// nothing and keeps every query beside its table.
         /// </remarks>
         Log,
+
+        /// <summary>
+        /// Print every provider's health as JSON and leave — what the `providers` tool answers.
+        /// </summary>
+        /// <remarks>
+        /// For the PANEL, which badges a reviewer this server cannot run. It reads this the same way
+        /// it already reads <c>--log</c>, and the alternative — deciding availability again in
+        /// TypeScript — is the second copy of a decision this repository has twice paid for.
+        /// </remarks>
+        Providers,
     }
 
     /// <summary>Which of the three this invocation is. Pure, so it is a unit test.</summary>
@@ -85,6 +95,7 @@ internal static class Program
             : args[0] == "--ask-local" ? Startup.AskLocal
             : args[0] == "--ask-remote" ? Startup.AskRemote
             : args[0] == "--log" ? Startup.Log
+            : args[0] == "--providers" ? Startup.Providers
             : Startup.Usage;
 
     private static async Task<int> Main(string[] args)
@@ -115,6 +126,9 @@ internal static class Program
             case Startup.Log:
                 return LogJson(args);
 
+            case Startup.Providers:
+                return await ProvidersJsonAsync();
+
             default:
                 return await ServeAsync();
         }
@@ -142,6 +156,42 @@ internal static class Program
     /// not an error: a panel asking a machine that has never run a round is asking a fair question
     /// and deserves an answer it can render.
     /// </remarks>
+    /// <summary>
+    /// Every configured provider's health, as the `providers` tool answers it, on stdout.
+    /// </summary>
+    /// <remarks>
+    /// <para>A one-shot CLI mode: selected from <c>args[0]</c> before any transport is opened, so it
+    /// never speaks JSON-RPC and its stdout is its entire interface. The stdout non-negotiable in
+    /// CLAUDE.md is about the PROTOCOL path, and names this flag among the modes that legitimately
+    /// write there.</para>
+    /// <para>It exists so the panel can BADGE a reviewer the server cannot run without deciding
+    /// availability for itself. That decision has one author — <c>RuntimeResolution.AuthOf</c> — and
+    /// this repository has twice paid for a second copy of it. The panel already reads
+    /// <c>--log</c> exactly this way.</para>
+    /// </remarks>
+    private static async Task<int> ProvidersJsonAsync()
+    {
+        // Layered exactly as `ServeAsync` layers it. Reading the ENVIRONMENT alone was the first
+        // version, and the seam check caught it in one run: the panel's own settings file was
+        // ignored, so this mode answered about the DEFAULT vendors and would have badged a
+        // configuration nobody has. The variable still outranks the file, key by key, as everywhere.
+        var configuration = Server.SettingsFile.Layer(
+            Server.SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable),
+            Environment.GetEnvironmentVariable);
+        var settings = Server.PanelSettings.FromEnvironment(configuration);
+        var launcher = new Runners.Processes.ProcessLauncher();
+        // The same read `ServeAsync` does, so a vendor whose key is in the vault is reported as
+        // runnable here too — otherwise this mode would badge half a configuration as unavailable.
+        var keys = await new Server.KeyVault(launcher)
+            .ReadAsync(Environment.GetEnvironmentVariable(Server.KeyVault.KeyVariable));
+        var service = new Server.PanelService(
+            settings, keys, DateTime.UtcNow, launcher, Serilog.Core.Logger.None);
+
+        Console.Out.WriteLine(await service.ProvidersAsync());
+
+        return 0;
+    }
+
     private static int LogJson(string[] args)
     {
         var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
