@@ -58,7 +58,14 @@ public sealed class RemoteProbe(HttpClient http, Func<DateTime>? utcNow = null)
 
         // The token is part of the cache key — as a hash, and only so that signing in again is not
         // held behind a backoff earned by the token that was replaced.
-        var key = $"{server} {vendor.VendorOnServer} {TeamServerAuth.Fingerprint(token)}";
+        //
+        // And so is whether the name was RECORDED, because two different rows can produce one
+        // `VendorOnServer`: a row that records `codex`, and a row called `codex` that records
+        // nothing and falls back to its id. They ask the server the same question and deserve
+        // different sentences back, so they must not share one entry. Found by the automated
+        // reviewer on the pull request that introduced the second sentence.
+        var key = $"{server} {vendor.VendorOnServer} {vendor.HasRecordedRemoteVendor} "
+            + TeamServerAuth.Fingerprint(token);
         if (Remembered(key) is { } fresh)
         {
             return fresh;

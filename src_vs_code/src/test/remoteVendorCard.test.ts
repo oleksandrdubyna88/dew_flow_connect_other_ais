@@ -134,7 +134,7 @@ test('a Team-server card is captioned with its server, not with the Codex CLI', 
   const html = page();
 
   assert.ok(!html.includes('the Codex CLI has cached'), 'this row runs no CLI on this machine at all');
-  assert.match(html, /2 models? this Team server allows/);
+  assert.match(html, /the 2 models this Team server allows for 'codex'/);
   assert.ok(html.includes('codex'), 'the vendor the server knows it by is what the count is about');
 });
 
@@ -173,6 +173,24 @@ test('a row carrying an empty remoteVendor falls back to its id, as the C# side 
 
   assert.match(html, /the 2 models this Team server allows for 'codex'/);
   assert.ok(!html.includes("allows '' no models"), 'an empty name would be asked of the catalog verbatim');
+});
+
+test('the catalog is matched case-insensitively, exactly as the server matches it', () => {
+  // `RemoteProbe.Read` compares with OrdinalIgnoreCase, so a server whose catalog says `DeepSeek`
+  // answers a row that recorded `deepseek` — and the panel, comparing with `===`, showed that same
+  // row an empty dropdown and "allows no models at all" for a reviewer that works. Two halves of
+  // one contract disagreeing about what counts as the same name is what this whole plan is about.
+  // Found by the automated reviewer.
+  const server: TeamServerState = {
+    ...TEAM,
+    catalog: { ...TEAM.catalog!, vendors: [{ ...TEAM.catalog!.vendors[0]!, id: 'DeepSeek', models: ['ds-1', 'ds-2'] }] },
+  };
+  const row: Vendor = { ...ROW, remoteVendor: 'deepseek' };
+
+  const html = page({ vendors: [row], teamServers: [server] });
+
+  assert.ok(html.includes('ds-2'), 'the dropdown is empty for a reviewer the server is happy to run');
+  assert.match(html, /the 2 models this Team server allows for 'deepseek'/);
 });
 
 test('a row whose Team server is gone is told THAT, not to go and read the section it left', () => {

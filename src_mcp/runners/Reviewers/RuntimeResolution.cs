@@ -33,7 +33,13 @@ public readonly record struct VendorIdentity(
     private string Recorded => string.IsNullOrWhiteSpace(RemoteVendor) ? string.Empty : RemoteVendor.Trim();
 
     /// <summary>The name to send to a Team server, or to look up in its catalog.</summary>
-    public string VendorOnServer => Recorded.Length > 0 ? Recorded : Provider;
+    /// <remarks>
+    /// The fallback is coalesced for the same reason <see cref="Recorded"/> guards its own field:
+    /// this is a record STRUCT, so <c>default(VendorIdentity)</c> has null in <c>Provider</c> too,
+    /// and handing a null out of a non-nullable property is a crash moved one call further from the
+    /// thing that caused it. Found by the automated reviewer.
+    /// </remarks>
+    public string VendorOnServer => Recorded.Length > 0 ? Recorded : Provider ?? string.Empty;
 
     /// <summary>
     /// Whether the ROW recorded a name of its own, or <see cref="VendorOnServer"/> is falling back

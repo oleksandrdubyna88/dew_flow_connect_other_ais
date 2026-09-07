@@ -366,6 +366,34 @@ public sealed class RemoteProbeTests : IDisposable
     }
 
     /// <summary>
+    /// Two rows that ask the server the same question, and must not share one answer.
+    /// </summary>
+    /// <remarks>
+    /// The cache is keyed by server, the name being asked about, and the token — and the name is
+    /// <c>VendorOnServer</c>, which two DIFFERENT rows can produce: one that records <c>codex</c>,
+    /// and one called <c>codex</c> that records nothing and falls back to its id. They deserve
+    /// different sentences, and until the key said so the second row to ask was handed the first
+    /// one's. Found by the automated reviewer on this change's pull request.
+    /// </remarks>
+    [Fact]
+    public async Task ARecordedNameAndAFallbackDoNotShareOneCachedAnswer()
+    {
+        SignIn();
+        var handler = new StubHandler(HttpStatusCode.OK, Catalog(1, 1, 0, 0, id: "claude"));
+        var probe = new RemoteProbe(new HttpClient(handler));
+
+        var fallback = await probe.RunAsync(
+            new VendorIdentity("codex", "remote", Server), enabled: true, _dataDir);
+        var recorded = await probe.RunAsync(
+            new VendorIdentity("remsoftdev-codex", "remote", Server, "codex"), enabled: true, _dataDir);
+
+        fallback.Note.Should().Contain("does not record which vendor");
+        recorded.Note.Should().NotContain(
+            "does not record which vendor",
+            "this row DOES record one — it was handed the other row's answer out of the cache");
+    }
+
+    /// <summary>
     /// Saying WHICH name was tried costs no extra request, for either shape of row.
     /// </summary>
     /// <remarks>
