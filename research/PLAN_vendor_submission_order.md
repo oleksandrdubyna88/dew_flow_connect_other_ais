@@ -1,11 +1,30 @@
 # PLAN — every client submits its reviewers in a different order
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_mcp/src/Server/PanelService.cs`
-> (`BuildWork`), one new helper, and tests on both the ordering and the invariant it must not break.
+> Status: **IMPLEMENTED, 2026-09-08.** Scope: `src_mcp/src/Server/PanelService.cs` (`BuildWork`),
+> `SeededShuffle` in the core, and tests on the ordering, the distribution and the invariant.
 >
-> Related docs: [module_server.md](../research/module_server.md),
-> [module_runners.md](../research/module_runners.md),
-> [PLAN_team_server_reviewer_never_called.md](../research/PLAN_team_server_reviewer_never_called.md).
+> Related docs: [module_server.md](module_server.md), [module_runners.md](module_runners.md),
+> [PLAN_team_server_reviewer_never_called.md](PLAN_team_server_reviewer_never_called.md).
+>
+> **Deviations from the plan as written, which are the valuable part of this record:**
+>
+> 1. **The goal was overstated and had to be weakened.** It promised that two clients get DIFFERENT
+>    orders. A seeded shuffle cannot promise that — with two vendors there are two possible orders,
+>    so half of all client pairs collide however good the hash is. Three reviewers said so
+>    independently on the plan round. What it delivers is SPREADING, measured as a distribution:
+>    a hundred sessions at two and three vendors, no single order above 70 %.
+> 2. **The plan's one open question was settled by measurement, not argument.** "Shuffle always, or
+>    only when a remote vendor is present" — always, because the whole suite is green without an
+>    expectation change, so no existing test encoded a meaningful provider order.
+> 3. **The assumption underneath it became a test.** That list order is dispatch order was a
+>    paragraph; `SubmissionOrderIsTheDispatchOrderTests` pins it with the machine cap at one. Its
+>    scope was then narrowed again by the code round: the slots FREE when a round opens are taken in
+>    list order deterministically — that prefix is what decides who is asked first — while who gets a
+>    RELEASED slot afterwards is `SemaphoreSlim`'s business, and .NET documents no order for it.
+> 4. **The reuse step grew a proof.** Folding two private Fisher-Yates loops into one `SeededShuffle`
+>    picks one algorithm, and a reviewer asked what would happen if they had differed. They differed
+>    only in their signatures — and a characterization test now carries the ORIGINAL loop so the next
+>    refactor goes red against the algorithm rather than against a constant nobody can re-derive.
 
 ## The symptom
 

@@ -909,6 +909,12 @@ public sealed partial class PanelService
         // Seeded with the round's own seed rather than freshly random, so two SESSIONS differ while
         // one session replays — the property the deal below already depends on, and the reason an
         // audit log can name a seed somebody is able to reuse.
+        //
+        // How far the ordering actually reaches, narrowed by the code round: the slots that are FREE
+        // when the round opens are taken in list order, deterministically, because each task runs
+        // synchronously to its first await. That prefix is what decides which vendor is asked first,
+        // which is the whole point. Past it, who gets a RELEASED slot is SemaphoreSlim's business and
+        // .NET documents no order for it — so the tail is best-effort rather than a promise.
         var runnable = SeededShuffle.Of(eligible, seed);
 
         // The items: one per role for a code round, or one per unspent lens for a plan round.

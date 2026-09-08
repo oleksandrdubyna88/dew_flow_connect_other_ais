@@ -23,9 +23,9 @@ namespace CoaiMcp.Tests;
 /// session id and the round number — so two sessions differ while one session replays. A second
 /// source of randomness would have made a round unreproducible to save nothing.</para>
 /// </remarks>
-public class SubmissionOrderTests
+public sealed class SubmissionOrderTests : IDisposable
 {
-    private static PanelService Service(params string[] vendors) =>
+    private PanelService Service(params string[] vendors) =>
         new(new PanelSettings
         {
             DataDir = Path.Combine(Path.GetTempPath(), $"coai-order-{Guid.NewGuid():N}"),
@@ -35,15 +35,37 @@ public class SubmissionOrderTests
         }, VaultKeys.None("no vault"), default,
         new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None);
 
-    private static string Worktree()
+    /// <summary>
+    /// One root for the whole class, swept when it ends.
+    /// </summary>
+    /// <remarks>
+    /// The distribution test builds a hundred rounds, and a directory per round left a hundred
+    /// folders in the temp directory on every run — found on the code round. `IDisposable` on the
+    /// class is xUnit's own teardown, so the sweep happens whether the assertions pass or throw.
+    /// </remarks>
+    private readonly string _root = Directory.CreateTempSubdirectory("coai-order-").FullName;
+
+    public void Dispose()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"coai-wt-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.Delete(_root, recursive: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // A temp directory that outlives one run is litter, not a failed test.
+        }
+    }
+
+    private string Worktree()
+    {
+        var path = Path.Combine(_root, Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(path);
         return path;
     }
 
     /// <summary>The vendors in the order this round would offer them, first appearance first.</summary>
-    private static List<string> ProviderOrder(int seed)
+    private List<string> ProviderOrder(int seed)
     {
         var work = Service("alpha", "bravo", "charlie", "delta").BuildWork(
             [ReviewRole.Conventions, ReviewRole.Architecture, ReviewRole.SecurityReliability, ReviewRole.UxDxPerformance],
