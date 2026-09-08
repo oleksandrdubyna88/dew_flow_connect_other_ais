@@ -765,8 +765,13 @@ test('the round limit says what it works out to, and warns when it cannot be met
     }),
     'n0nce',
   );
-  const noCode = /worked out: at most (\d+) waves?/.exec(planOnly);
-  assert.ok(noCode && Number(noCode[1]) >= 1, 'a round with no code vendors still allows one wave');
+  // The EXACT count, not "at least one". A reviewer pointed out that the old enabled-vendor
+  // arithmetic also produces a positive number, so a floor assertion cannot tell the regression from
+  // the fix. With no code-capable vendor the count floors at one vendor x four code roles = four
+  // reviewers, which is two waves at a cap of three — where counting every ENABLED vendor would give
+  // two vendors x four = eight, and three waves.
+  assert.match(planOnly, /worked out: at most 2 waves × 10 min = 20 min/,
+    'no code-capable vendor floors at one, not at every enabled vendor');
 
   const dealt = withSettings({ roundTimeoutMinutes: 0, reviewerTimeoutMinutes: 10, maxConcurrency: 3, dealCodeLenses: true });
   const dealtWaves = /worked out: at most (\d+) waves?/.exec(dealt);
