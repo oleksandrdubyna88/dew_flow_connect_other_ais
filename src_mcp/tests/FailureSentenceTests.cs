@@ -32,7 +32,7 @@ public sealed class FailureSentenceTests
     {
         var sentence = ReviewerSummaryFactory.Describe(new ReviewerOutcome.NonZeroExit(70, ShimStdErr));
 
-        sentence.Should().Contain("failed").And.NotContain("running on the Team server");
+        sentence.Should().Contain("reviewer failed").And.NotContain("running on the Team server");
     }
 
     /// <summary>
@@ -48,12 +48,15 @@ public sealed class FailureSentenceTests
     }
 
     /// <summary>
-    /// A TALLY is not an announcement — the narrowing gemini asked for on the plan round.
+    /// A vendor's TALLY is not the reason anything failed.
     /// </summary>
     /// <remarks>
-    /// A plain substring match on the word would hand the sentence to <c>0 failed, 3 passed</c> and
-    /// reintroduce the very defect above, one line further down. What announces a failure is a
-    /// verdict; what counts one is a number.
+    /// The first attempt at this fix taught the picker the word "failed", and three reviewers broke
+    /// it independently on the code round: <c>0 failed, 3 passed</c> and <c>3 tests failed</c> are
+    /// tallies that announce nothing, while <c>Step 3 failed</c> and <c>Job 12 failed</c> are real
+    /// verdicts with a digit in front — no rule over that one word can have it both ways. Excluding
+    /// our OWN progress notes instead leaves the vocabulary untouched, so a tally is ordinary text
+    /// again and the line that genuinely announces an error wins on its own merits.
     /// </remarks>
     [Fact]
     public void ACountOfFailures_IsNotTheReasonAnythingFailed()

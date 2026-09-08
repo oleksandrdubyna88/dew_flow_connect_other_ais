@@ -204,6 +204,38 @@ public static class RemoteAsk
         $"the Team server's {vendor} reviewer failed ({(failure.Length > 0 ? failure : "no reason given")})"
         + (reason.Length > 0 ? $": {Trim(reason, 400)}" : string.Empty);
 
+    /// <summary>Still waiting for a free account, and how many are ahead.</summary>
+    public static string QueuedMessage(string serverUrl, int position) =>
+        $"queued on the Team server at {serverUrl}, {position} ahead of it";
+
+    /// <summary>On an account now, running.</summary>
+    public static string RunningMessage(string serverUrl) =>
+        $"running on the Team server at {serverUrl}";
+
+    /// <summary>
+    /// Whether a line the shim wrote is PROGRESS rather than a verdict.
+    /// </summary>
+    /// <remarks>
+    /// <para>The shim writes both to one stderr, and whoever reads that stream to explain a failure
+    /// has to be able to tell them apart. Measured on a real gate, 2026-09-07: a Team-server
+    /// reviewer failed and the round reported
+    /// <c>exit 70: [coai-mcp] claude: running on the Team server at …</c> — a reviewer described as
+    /// RUNNING in the sentence announcing that it had stopped, because the reason-picker took the
+    /// first line that was not obviously noise and a progress note is the first line there is.</para>
+    /// <para><b>Asking "is this progress" rather than "does this announce a failure" is the whole
+    /// point.</b> The first attempt taught the picker the word <c>failed</c>, and three reviewers
+    /// independently broke it: <c>0 failed, 3 passed</c> and <c>3 tests failed</c> are tallies that
+    /// announce nothing, while <c>Step 3 failed</c> and <c>Job 12 failed</c> are real verdicts with
+    /// a digit in front — no rule over that word can have it both ways. These two sentences, by
+    /// contrast, are ours: we author them, there are exactly two, and neither can be confused with
+    /// anything a vendor CLI prints.</para>
+    /// <para>Matched on the STEM rather than the whole sentence, because the server URL and the
+    /// queue position are interpolated into them.</para>
+    /// </remarks>
+    public static bool IsProgress(string line) =>
+        line.Contains("queued on the Team server", StringComparison.OrdinalIgnoreCase) ||
+        line.Contains("running on the Team server", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Which exit an HTTP status means, for a status this shim knows.</summary>
     /// <remarks>
     /// Returns null when the status is not one of the handled ones, so the caller can produce the
