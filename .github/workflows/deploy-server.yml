@@ -218,6 +218,15 @@ jobs:
             exit 1
           fi
 
+          # The archive name is BUILT from a version that preflight already pinned, so it cannot
+          # carry a metacharacter today. Asserted anyway, because that is a fact about a different
+          # file: the day somebody derives this name from a release listing instead, the safety
+          # would quietly move without anything here noticing. One line, checked at the boundary.
+          if ! printf '%s' "$ASSET" | grep -Eq '^coai-server-[0-9A-Za-z.-]+\.tar\.gz$'; then
+            echo "::error::refusing to send an archive name this shape: '$ASSET'"
+            exit 1
+          fi
+
           # NOT /tmp. The script runs as root and unpacks what it is given, and /tmp is
           # world-writable: anything else on that box can pre-create the name as a symlink and have
           # root extract through it. A directory under the deploy account's own home cannot be
@@ -227,6 +236,12 @@ jobs:
               "$USER_NAME@$HOST" "mkdir -p ~/$STAGE && chmod 700 ~/$STAGE"
           scp -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes \
               "$ASSET" "$USER_NAME@$HOST:$STAGE/$ASSET"
+
+          # What is live BEFORE the swap, in the job log. The script keeps a release trail and can
+          # print it, and printing it costs one ssh round trip: an operator reading a failed deploy
+          # afterwards should not have to log in to find out what it replaced.
+          ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes \
+              "$USER_NAME@$HOST" '/opt/coai/src/deploy/systemd-release.sh --list' || true
 
           # One remote command, no inline script. The unpacking that would otherwise live in a
           # heredoc here belongs to `--from`, which takes the archive itself — a shell fragment
@@ -256,11 +271,16 @@ jobs:
         run: |
           set -uo pipefail
           SSH="ssh -i $HOME/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=15"
-          WANT="\"version\":\"$VERSION\""
+
+          # PARSED, not grepped. `"version":"0.5.5"` is what this serializer emits today; one
+          # whitespace change in a future System.Text.Json would make every healthy deploy read as
+          # broken and trigger a rollback nobody needed. jq is on the runner, so both bodies are
+          # judged here rather than on the host. (gemini, code round.)
+          serves() { printf '%s' "$1" | jq -e --arg v "$VERSION" '.version == $v' >/dev/null 2>&1; }
 
           LOCAL=$($SSH "$USER_NAME@$HOST" 'curl -fsS --max-time 5 http://127.0.0.1:8090/api/health' 2>&1 || true)
           echo "loopback: ${LOCAL:-<no answer>}"
-          if ! printf '%s' "$LOCAL" | grep -q "$WANT"; then
+          if ! serves "$LOCAL"; then
             echo "the unit itself is not serving $VERSION — the edge is not the problem"
           fi
 
@@ -269,13 +289,13 @@ jobs:
           PUBLIC=""
           for attempt in $(seq 1 30); do
             PUBLIC=$(curl -fsS --max-time 5 -H 'Cache-Control: no-cache' "$PUBLIC_URL/api/health" 2>/dev/null || true)
-            printf '%s' "$PUBLIC" | grep -q "$WANT" && break
+            serves "$PUBLIC" && break
             echo "  attempt $attempt: ${PUBLIC:-<no answer>}"
             sleep 2
           done
           echo "public: ${PUBLIC:-<no answer>}"
 
-          if printf '%s' "$PUBLIC" | grep -q "$WANT"; then
+          if serves "$PUBLIC"; then
             echo "state=ok" >> "$GITHUB_OUTPUT"
             echo "$PUBLIC_URL is serving $VERSION"
             exit 0

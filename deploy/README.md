@@ -90,11 +90,15 @@ version 0.5.5
   → refuses anything that is not a version, before an approval is spent
   → refuses a version whose release has no linux-x64 archive
   → production environment: someone approves
-  → downloads the archive, checks its .sha256, scp to the host
-  → systemd-release.sh --from /tmp/<archive> 0.5.5   ← the same script, the same canary
+  → downloads the archive, checks its .sha256, scp to ~/.coai-deploy on the host
+  → systemd-release.sh --from ~/.coai-deploy/<archive> 0.5.5   ← the same script, the same canary
   → asserts https://coai.remsoft.dev/api/health reports 0.5.5
   → on any failure after the swap: systemd-release.sh --rollback, and says so
 ```
+
+Staged under the deploy account's home rather than `/tmp`: the script unpacks as **root**, and
+`/tmp` is world-writable — anything else on that box could pre-create the name as a symlink and
+have root extract through it. Raised on this change's code round.
 
 It **runs the script rather than replacing it**: the release trail, the atomic symlink swap, the
 per-vendor canary and the rollback stay in one place that a person can also run by hand. What the

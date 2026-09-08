@@ -1,11 +1,11 @@
 # PLAN — the Team server gets a release line, and a deploy that runs it
 
-> Status: **plan only, nothing implemented yet.** Scope: `.github/workflows/release.yml`,
-> a new `.github/workflows/deploy-server.yml`, `deploy/systemd-release.sh`, and the tests in
-> `src_vs_code/src/test/install.test.ts` that hold the workflow to its promises.
+> Status: **IMPLEMENTED, 2026-09-08.** Scope: `.github/workflows/release.yml`, a new
+> `.github/workflows/deploy-server.yml`, `deploy/systemd-release.sh`, `POST_DEPLOY.md`, and the
+> tests in `src_vs_code/src/test/install.test.ts` that hold the workflows to their promises.
 >
 > Related docs: [deploy/README.md](../deploy/README.md),
-> [research/module_team_server.md](../research/module_team_server.md).
+> [module_team_server.md](module_team_server.md).
 
 ## The symptom
 
@@ -220,3 +220,50 @@ Run: `cd src_vs_code && npm test` (tests 1–6), `node -e` parse of both workflo
   shape would consume, and `deploy/update.sh` still drives that one.
 - It does not move the live host off systemd, or off root. Both are recorded decisions with
   reasons in `deploy/README.md`.
+
+## What shipped differently, and what the gate changed (2026-09-08)
+
+Fifteen reviewers over two code rounds. What they moved:
+
+- **The deploy did not pass `--from`.** The plan's own §3 ran `systemd-release.sh <version>` — the
+  BUILD path — while §4 existed to stop the host building. Caught by gemini and codex on the plan
+  round, before a line was written. The sequence now downloads the release asset, checks its
+  `.sha256` and hands the archive to `--from`.
+- **The completeness job was coupled to the container manifest.** `needs: [server-binaries,
+  server-manifest]` meant a registry outage left the shape that IS deployed with no completeness
+  signal. Three reviewers, independently.
+- **A count is not a check.** It counted archives and checksums; six wrongly-named files satisfy
+  that, and the one that goes missing is the RID the host installs. It asserts each expected NAME.
+- **The smoke's deadline lied by a factor of three.** Sixty iterations of a two-second curl plus a
+  sleep is up to 180 seconds while the message says sixty. It is a wall-clock instant now.
+- **The canary token PATH was an injection.** ssh joins its arguments back into one string and the
+  remote shell re-parses it, so a repository variable reading `/etc/x;touch /root/pwned` would have
+  run on the host. Validated like the version. The archive name is asserted too — it cannot carry a
+  metacharacter today, and that is a fact about a different file.
+- **`/tmp` was a symlink race.** The script unpacks as root; the staging directory moved under the
+  deploy account's home.
+- **The rollback could have downgraded a healthy server.** The first draft rolled back on any
+  post-swap failure. A deploy that never took effect leaves the PREVIOUS release serving, and
+  popping the trail then takes a working server back a version to fix a deployment that never
+  happened. Verification now reads three states — `ok`, `unchanged`, `broken` — and only `broken`
+  rolls back. It also runs `if: always()`, because an ssh session that dies after the swap used to
+  skip verification entirely.
+- **`--strip-components=1` was a guess about the archive's shape.** Verified rather than argued:
+  against an archive packed from inside a directory the old extraction staged `[]` — every file
+  stripped away — and the new one stages both files. Nested, flat and junk archives were each run
+  through the extracted function.
+- **grep on raw JSON would have caused a spurious rollback.** One whitespace change in a future
+  serializer and every healthy deploy reads as broken. Parsed with `jq` now.
+- **The test coupled two release lines.** `a server tag builds the same six platforms` asserted the
+  server matrix against `COAI_RIDS` — the EXTENSION's install list — so a server-only RID would have
+  turned it red until coai-mcp published one too. It is held against the completeness job's own
+  declared list, with a third test tying the deploy's `HOST_RID` to both.
+
+Rejected, with reasons recorded in the session: three Blocking findings claiming this branch
+reverted the extension's chat modules and its version. They were an artefact of the gate's own
+diff — `origin/main..HEAD`, two dots — after main moved mid-review; a three-dot diff showed nine
+files and no extension source at all. That is a real defect in the gate and it has its own plan:
+[../todo/PLAN_the_gate_diffs_from_a_moving_base.md](../todo/PLAN_the_gate_diffs_from_a_moving_base.md).
+
+**Not done here:** the `server-v0.5.5` tag itself. It is the first thing that happens after this
+merges — cutting it before would have published exactly the incomplete line this plan removes.
