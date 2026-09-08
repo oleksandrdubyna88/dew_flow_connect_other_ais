@@ -45,6 +45,8 @@ interface Thread {
   readonly passage: string;
   readonly models: readonly ChatModelChoice[];
   modelId: string;
+  /** Whether a turn is in flight. Only so a switch can say out loud that it is waiting for one. */
+  running: boolean;
   /**
    * The conversation to hand the NEXT turn, because the process it goes to never heard it.
    *
@@ -142,6 +144,12 @@ function ask(entry: ChatEntry, text: string): Promise<void> {
   const mine = thread.turns
     .then(() => oneTurn(entry, text))
     .catch((reason: unknown) => {
+      // Including the flag: a turn that threw is not a turn still running, and leaving it set would
+      // make every later switch claim to be waiting for an answer that will never arrive.
+      const thrown = threads.get(entry.id);
+      if (thrown !== undefined) {
+        thrown.running = false;
+      }
       show(entry, false, `the turn failed unexpectedly: ${asText(reason)}`);
     });
   thread.turns = mine;
@@ -171,6 +179,7 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
     return;
   }
   thread.messages = [...thread.messages, { role: 'you', text }];
+  thread.running = true;
   show(entry, true, '');
 
   // What is SHOWN is what the person typed; what is SENT may carry the whole conversation with it,
@@ -180,6 +189,7 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   const sent = carrying.length > 0 ? carriedTurn(carrying, text, chatLanguage()) : text;
 
   const result = await thread.session.send(sent);
+  thread.running = false;
   if (!result.ok) {
     // The carry is NOT cleared here. A turn that failed carried nothing anywhere, and clearing it
     // would mean the retry — the same question, one keypress later — reaches the new model with no
@@ -315,7 +325,20 @@ function switchModel(entry: ChatEntry, modelId: string): void {
   if (thread === undefined || thread.modelId === modelId) {
     return;
   }
-  thread.turns = thread.turns.then(() => switchNow(entry, modelId)).catch(() => undefined);
+  if (thread.running) {
+    void vscode.window.showInformationMessage(
+      `Switching to ${modelId} as soon as the current answer arrives.`,
+    );
+  }
+  thread.turns = thread.turns
+    .then(() => switchNow(entry, modelId))
+    .catch((reason: unknown) => {
+      // Not swallowed: a switch that failed leaves the thread on the OLD model, and a person who
+      // believes otherwise reads the next answer as the new model's. (codex, the code round.)
+      const failure = `The chat could not switch to ${modelId}: ${asText(reason)}`;
+      void vscode.window.showWarningMessage(failure);
+      show(entry, false, failure);
+    });
 }
 
 function switchNow(entry: ChatEntry, modelId: string): void {
@@ -345,7 +368,7 @@ function switchNow(entry: ChatEntry, modelId: string): void {
   // for a conversation they moved and then never continued. Taken HERE rather than when the switch
   // was asked for, because this runs after the turn queue has drained — so an answer that was still
   // arriving when the person changed their mind is in the transcript by now. (codex, the plan round.)
-  thread.carry = thread.messages;
+  thread.carry = [...thread.messages];
   show(entry, false, '');
   // Said out loud: the next question costs more than the last one, because it carries everything
   // above it. A person who is not told reads the first answer as a model that mysteriously knows.
@@ -413,6 +436,7 @@ function newConversation(
     passage: state.passage,
     models: ready.models,
     modelId: ready.modelId,
+    running: false,
     carry: [],
     messages: [],
     turns: Promise.resolve(),

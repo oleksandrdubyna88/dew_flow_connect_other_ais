@@ -103,6 +103,9 @@ const SAID_CLOSE = (id: string): string => `--- end of what was said (${id}) ---
 /** Said inside the fence when the conversation was longer than one turn can carry. */
 const TRIMMED = '(earlier turns are not carried — the conversation was longer than one question can hold)';
 
+/** Said in place of the tail of a single turn too big to carry whole. */
+const CUT = '… (cut here — this one turn was longer than the whole budget)';
+
 /**
  * The newest turns that fit, and whether anything was left behind.
  *
@@ -115,8 +118,15 @@ function within(said: readonly Said[], budget: number): { kept: readonly Said[];
   let spent = 0;
   for (let index = said.length - 1; index >= 0; index -= 1) {
     const turn = said[index] as Said;
+    // The newest turn can be bigger than the whole budget by itself — somebody pasted a log, or a
+    // model answered at length. The first shape kept it whatever its size, which is how a 60 000
+    // bound produced a 200 000 character turn the vendor then refused. (gemini and codex, one
+    // finding from two directions.)
+    if (kept.length === 0 && turn.text.length > budget) {
+      return { kept: [{ role: turn.role, text: `${turn.text.slice(0, budget)}${CUT}` }], trimmed: true };
+    }
     spent += turn.text.length;
-    if (spent > budget && kept.length > 0) {
+    if (spent > budget) {
       return { kept, trimmed: true };
     }
     kept.unshift(turn);
@@ -148,26 +158,37 @@ const HANDOVER_NOTE =
  * <p>The language is asked for again: the new process was never told, and a conversation that
  * silently changes language mid-way reads as a broken tool rather than a new model.</p>
  */
-export function carriedTurn(said: readonly Said[], question: string, language: LanguageCode): string {
-  const named = ENGLISH_NAME[language] ?? ENGLISH_NAME.en;
+export function carriedTurn(
+  said: readonly Said[],
+  question: string,
+  language: LanguageCode,
   // Per turn, and unguessable, because the material is a conversation that can contain ANY text —
   // including this file's own delimiters. A transcript that closes its own fence early turns
-  // everything after it back into instructions to the model. (gemini, the plan round.)
-  const id = randomUUID().slice(0, 8);
+  // everything after it back into instructions to the model. (gemini, the plan round.) Given rather
+  // than generated when a caller wants the same inputs to produce the same turn — a contract test
+  // across two implementations of this handover cannot compare a random one. The default is the
+  // random one, so no caller can forget. (codex, the code round.)
+  fenceId: string = randomUUID().slice(0, 8),
+): string {
+  const named = ENGLISH_NAME[language] ?? ENGLISH_NAME.en;
   const { kept, trimmed } = within(said, CARRY_BUDGET);
-  // Attributed, or the answers read as more questions and the model argues with itself. The labels
-  // are the page's own — what a reader sees above each message is what the next model is told.
-  const transcript = kept.map((turn) => `${turn.role === 'you' ? 'You' : 'The other AI'}: ${turn.text}`);
+  // Attributed, or the answers read as more questions and the model argues with itself. The label
+  // stands on its own line and the text is INDENTED under it, so a line inside somebody's answer
+  // that reads `You: …` is visibly nested rather than a boundary the model could take for real.
+  const transcript = kept.map((turn) => [
+    `${turn.role === 'you' ? 'You' : 'The other AI'}:`,
+    ...turn.text.split('\n').map((line) => `  ${line}`),
+  ].join('\n'));
 
   return [
     HANDOVER_NOTE,
     '',
     `Answer in ${named}.`,
     '',
-    SAID_OPEN(id),
+    SAID_OPEN(fenceId),
     ...(trimmed ? [TRIMMED] : []),
     ...transcript,
-    SAID_CLOSE(id),
+    SAID_CLOSE(fenceId),
     '',
     // Last, and said as an instruction: after a long stretch of somebody else's words, this is what
     // the model is actually being asked to do, and recency is the only position that survives it.
