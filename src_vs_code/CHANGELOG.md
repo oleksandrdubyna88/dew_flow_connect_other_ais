@@ -2,6 +2,25 @@
 
 ## Extension 0.31.7 — 2026-09-08
 
+**Conventions is its own reviewer now.** There is a fourth box in the code stage, above
+Architecture, with its own rounds and its own "passes at or under" — and `Conventions` is gone from
+the other roles' dropdowns.
+
+It used to be a prompt that borrowed somebody else's round: round 1 of every code role, and since
+yesterday round 1 of Architecture alone. Borrowing was always the complaint — a role with one round
+spent it on the written rules and never asked its own question, and whatever the conventions pass
+found counted against that role's threshold. Now it has a budget of its own.
+
+**Architecture drops to one round.** It had two because the first was the conventions pass and the
+second its own question; take the pass away and the second is the only real round it had.
+
+A repository that wrote no rules down — no `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` or `.claude/rules`
+— has these reviewers skipped, and the server says so. A pass with nothing to judge against would
+invent a standard, which is worse than the review it displaced.
+
+**Needs `coai-mcp` 0.18.10.** An older server has four roles and cannot parse a fifth; the Prompts
+section says so while that is true.
+
 **Each reviewer now wears its own colour.** The card in *Reviewers* has a coloured left edge, and it
 is the same colour that reviewer’s name has in *Active rounds* and in the rounds log — so you can
 follow one vendor from where you set it up to where it is running without reading either.

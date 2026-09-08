@@ -218,7 +218,8 @@
           "type": "object",
           "default": {
             "PlanCritique": 1,
-            "Architecture": 2,
+            "Conventions": 1,
+            "Architecture": 1,
             "SecurityReliability": 1,
             "UxDxPerformance": 1
           },
@@ -228,6 +229,7 @@
           "type": "object",
           "default": {
             "PlanCritique": 6,
+            "Conventions": 5,
             "Architecture": 5,
             "SecurityReliability": 5,
             "UxDxPerformance": 5

@@ -103,10 +103,10 @@ test('a round nobody chose is padded with nothing, not with what it resolves to 
   rounds[2] = 'arch-evolution';
 
   assert.deepEqual(rounds, ['', '', 'arch-evolution']);
-  // An empty slot still resolves the way the server resolves it: conventions in round 1 when the
-  // repository has written rules, that role's universal prompt when it has none.
-  assert.equal(selectedFor('Architecture', 1, { Architecture: rounds }), 'conventions');
-  assert.equal(selectedFor('Architecture', 1, { Architecture: rounds }, false), 'architecture');
+  // An empty slot resolves the way the server resolves it: this role's universal prompt. Round 1
+  // used to be the conventions pass here; Conventions is a role of its own now, so Architecture's
+  // first round is Architecture's own question.
+  assert.equal(selectedFor('Architecture', 1, { Architecture: rounds }), 'architecture');
   assert.equal(selectedFor('Architecture', 2, { Architecture: rounds }), 'architecture');
   assert.equal(selectedFor('Architecture', 3, { Architecture: rounds }), 'arch-evolution');
 });

@@ -370,8 +370,20 @@ public sealed partial class PanelService
                     .RolesForRound(Stage.CodeReview, round)
                     .Select(Enum.Parse<ReviewRole>)
                     .ToList();
+
+                // A conventions pass with nothing to judge against would invent a standard, which is
+                // worse than the review it displaced. That reasoning is older than the role: it used
+                // to gate a round-1 substitution, and it gates the ROLE now. Said out loud rather
+                // than dropped quietly — a round that reviewed less than it was asked to must say so.
+                if (!rules.HasRules && roles.Remove(ReviewRole.Conventions))
+                {
+                    _log.Warning(
+                        "round {Round}: the Conventions reviewers are skipped — this repository has no "
+                        + "written rules for them to judge against (CLAUDE.md, AGENTS.md, GEMINI.md, "
+                        + ".claude/rules)", round);
+                }
                 _log.Information("round {Round} runs {Count} role(s): {Roles}", round, roles.Count, string.Join(", ", roles));
-                return BuildWork(roles, workingDir, context, round, isPlanStage: false, rules.HasRules,
+                return BuildWork(roles, workingDir, context, round, isPlanStage: false,
                     seed: StableSeed(session.State.SessionId, round),
                     deal: _settings.DealCodeLenses);
             }),
@@ -762,12 +774,11 @@ public sealed partial class PanelService
     private string ModelOf(string provider) =>
         _settings.Providers.FirstOrDefault(p => p.Provider == provider)?.Model ?? string.Empty;
 
-    private PromptChoice ChoiceFor(ReviewRole role, int round, bool hasRules) =>
+    private PromptChoice ChoiceFor(ReviewRole role, int round) =>
         PromptCatalog.ForRound(
             role.ToString(),
             round,
-            _settings.PromptsPerRound.GetValueOrDefault(role.ToString(), []),
-            hasRules);
+            _settings.PromptsPerRound.GetValueOrDefault(role.ToString(), []));
 
     /// <summary>
     /// A <c>call_human</c> verdict reaches the PERSON, not only the AI that asked.
@@ -836,7 +847,6 @@ public sealed partial class PanelService
         // the class of silent mistake this parameter was introduced to end. A caller that forgets it
         // does not compile.
         bool isPlanStage,
-        bool hasRules = false,
         int seed = 0,
         IReadOnlyList<string>? planPrompts = null,
         bool deal = false)
@@ -891,7 +901,7 @@ public sealed partial class PanelService
         // The items: one per role for a code round, or one per unspent lens for a plan round.
         var items = planPrompts is { Count: > 0 }
             ? planPrompts.Select(id => (Role: roles[0], PromptId: id)).ToList()
-            : roles.Select(role => (Role: role, PromptId: ChoiceFor(role, round, hasRules).Id)).ToList();
+            : roles.Select(role => (Role: role, PromptId: ChoiceFor(role, round).Id)).ToList();
 
         var work = new List<ReviewerWork>();
         if (!deal)

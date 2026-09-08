@@ -16,25 +16,38 @@ public sealed class PromptCatalogTests
         [PromptCatalog.PlanRole, PromptCatalog.ArchitectureRole, PromptCatalog.SecurityRole, PromptCatalog.UxDxRole];
 
     [Fact]
-    public void EveryRole_HasExactlyOneUniversalPrompt_AndFiveNarrowOnes()
+    public void EveryRoleWithLenses_HasOneUniversalPromptAndFiveNarrowOnes()
     {
+        // Six choices per section is the number a person was asked to be given, and the count is
+        // pinned here rather than left to grow: a section with eleven options is a section nobody
+        // reads, and every lens past the first three had to earn its place in a measurement
+        // (research/RESULTS_focused_prompts.md).
         foreach (var role in Roles)
         {
             var choices = PromptCatalog.For(role).ToList();
-            // A universal prompt and five lenses, plus — for the three CODE roles — the conventions
-            // pass, which is not a lens: it asks a different question (does this obey the written
-            // rules) and it owns round 1 rather than taking a turn in the rotation.
-            //
-            // Six choices per section is the number a person was asked to be given, and the count is
-            // pinned here rather than left to grow: a section with eleven options is a section
-            // nobody reads, and every lens past the first three had to earn its place in a
-            // measurement (research/RESULTS_focused_prompts.md).
-            var expected = role == PromptCatalog.PlanRole ? 6 : 7;
-            choices.Should().HaveCount(expected, $"{role} should offer a universal prompt and five lenses");
+            choices.Should().HaveCount(6, $"{role} should offer a universal prompt and five lenses");
             choices.Count(c => c.Universal).Should().Be(1, $"{role} needs exactly one default");
-            choices.Count(c => c.Id == PromptCatalog.ConventionsId)
-                .Should().Be(role == PromptCatalog.PlanRole ? 0 : 1, "a plan is not judged against code conventions");
+            choices.Should().NotContain(c => c.Id == PromptCatalog.ConventionsId,
+                $"{role} does not offer the conventions prompt — Conventions is a role of its own");
         }
+    }
+
+    /// <summary>
+    /// The Conventions role has ONE prompt, and that is the shape rather than an omission.
+    /// </summary>
+    /// <remarks>
+    /// It asks a different kind of question from the lenses: not "look at the change through this
+    /// aperture" but "does this obey what the project wrote down". There is nothing to choose
+    /// between, so the picker has one entry and it is the role's universal prompt.
+    /// </remarks>
+    [Fact]
+    public void TheConventionsRole_HasExactlyOnePrompt_WhichIsItsUniversalOne()
+    {
+        var choices = PromptCatalog.For(PromptCatalog.ConventionsRole).ToList();
+
+        choices.Should().ContainSingle();
+        choices[0].Id.Should().Be(PromptCatalog.ConventionsId);
+        choices[0].Universal.Should().BeTrue();
     }
 
     [Fact]
