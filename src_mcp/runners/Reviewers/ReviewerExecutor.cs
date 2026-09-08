@@ -199,6 +199,11 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
         ReviewerInvocation? repair = null,
         CancellationToken ct = default)
     {
+        // The reviewer's deadline bounds the REVIEWER, and this method makes up to two launches.
+        // The clock starts here so the second one gets what the first left, exactly as the
+        // rate-limit ladder already does — same helper, same arithmetic.
+        var spent = System.Diagnostics.Stopwatch.StartNew();
+        var budget = invocation.Request.Timeout;
         var (outcome, review, usage, answer, evidence) = await RunOnceAsync(invocation, ct);
         if (outcome is not null)
         {
@@ -216,7 +221,12 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
                 Because(Said(answer, Complaint(evidence)), "and no repair was configured", Keep(invocation, evidence)), usage);
         }
 
-        var (repairOutcome, repaired, repairUsage, repairAnswer, repairEvidence) = await RunOnceAsync(repair, ct);
+        // Measured in the ledger before it was fixed: one reviewer at 668.8 s against a ten-minute
+        // deadline, reporting `ok`. `reviewerTimeoutMinutes` bounded each LAUNCH, so a reviewer that
+        // needed a repair could take twice what it was given — and the operator who reported "the
+        // limit did not work again" was reading a real number.
+        var (repairOutcome, repaired, repairUsage, repairAnswer, repairEvidence) =
+            await RunOnceAsync(RetryLadder.WithinRemaining(repair, spent.Elapsed, budget), ct);
         return repairOutcome
                ?? (repaired is { } fixedReview
                    // Both launches are billed, so both are counted — a repaired reviewer that

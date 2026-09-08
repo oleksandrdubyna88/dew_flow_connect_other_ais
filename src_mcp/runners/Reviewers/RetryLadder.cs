@@ -151,4 +151,20 @@ public static class RetryLadder
     /// </remarks>
     public static TimeSpan Remaining(TimeSpan elapsed, TimeSpan budget) =>
         elapsed >= budget ? TimeSpan.Zero : budget - elapsed;
+
+    /// <summary>The same launch, allowed only the time this reviewer has left.</summary>
+    /// <remarks>
+    /// Lived privately in <c>BoundedScheduler</c>, where the rate-limit ladder needed it. The REPAIR
+    /// launch needed the identical thing and did not have it, so it is here now — beside the
+    /// arithmetic it is made of, with one caller in each file rather than a second copy in the
+    /// second one.
+    /// </remarks>
+    public static ReviewerInvocation WithinRemaining(
+        ReviewerInvocation invocation,
+        TimeSpan elapsed,
+        TimeSpan budget) =>
+        invocation with
+        {
+            Request = invocation.Request with { Timeout = Remaining(elapsed, budget) },
+        };
 }
