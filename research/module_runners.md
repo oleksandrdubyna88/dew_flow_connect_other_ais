@@ -184,6 +184,29 @@ Three failures cost hours because the reason was discarded at the last step:
   the outcome naming the file. The one replayed by hand afterwards succeeded, which is precisely
   the case where the raw text is the whole story.
 
+### A progress note is never a reason (2026-09-07)
+
+The fourth of those, and the one that shows the limit of "choose by content". The remote shim writes
+its PROGRESS and its VERDICT to one stderr, so a failed Team-server reviewer was reported as
+
+```
+exit 70: [coai-mcp] claude: running on the Team server at https://coai.remsoft.dev
+```
+
+— described as RUNNING in the sentence announcing that it had stopped. The verdict was directly
+underneath, discarded: it announced nothing the vocabulary knew, so the picker fell back to the first
+line that was not scaffolding, and a progress note is the first line there is.
+
+**The fix is not a bigger vocabulary.** Teaching it the word `failed` was tried and broken by three
+reviewers on the same round: `0 failed, 3 passed` and `3 tests failed` are tallies that announce
+nothing, while `Step 3 failed` and `Job 12 failed` are real verdicts with a digit in front — no rule
+over that one word can have it both ways, and each variant traded one wrong answer for another.
+
+So the question changed from "does this announce a failure" to "is this one of OUR progress notes".
+There are exactly two, `RemoteAsk.IsProgress` owns both sentences beside the verdicts they compete
+with (`AskRemote` used to build them inline, which is how the recognition would have drifted), and
+`IsScaffolding` excludes them. The announcement vocabulary is untouched.
+
 ### The Gemini retirement (2026-09-01)
 
 Google closed Gemini Code Assist for individual accounts. The CLI now fails inside `_doSetupUser`,
