@@ -81,6 +81,10 @@ export class CliChatSession implements ChatSession {
    * sent and hung for the entire startup budget on every turn. Found by its own tests.</p>
    */
   private startOutcome: string | undefined;
+  /** Whether this conversation has ever been answered - a first turn cannot have lost a context. */
+  private everAnswered = false;
+  /** The next answer comes from a process that never heard the earlier turns. Told once, then cleared. */
+  private contextLost = false;
   private queue: Promise<unknown> = Promise.resolve();
   private disposed = false;
 
@@ -169,8 +173,14 @@ export class CliChatSession implements ChatSession {
     return new Promise<string>((resolve) => {
       const cancelBudget = this.timers.after(this.budgets.startupMs, () => {
         this.waitingForInit = undefined;
+        // What the child managed to say before giving up is the difference between "not installed"
+        // and "installed, and refusing your sign-in". Read BEFORE the kill, which reads better
+        // beside it. (local, the plan round.)
+        const said = child.stderrTail().trim().slice(-300);
         this.stop();
-        resolve('the model’s process did not start');
+        resolve(said.length === 0
+          ? 'the model’s process did not start'
+          : 'the model’s process did not start: ' + said);
       });
       this.waitingForInit = (failure: string) => {
         cancelBudget();
@@ -209,7 +219,12 @@ export class CliChatSession implements ChatSession {
     const answer = typeof event.result?.response === 'string' ? event.result.response : '';
     const error = typeof event.result?.error === 'string' ? event.result.error : '';
     if (status === 'SUCCESS') {
-      this.settle({ ok: true, answer: answer.trim() });
+      const lost = this.contextLost;
+      this.contextLost = false;
+      this.everAnswered = true;
+      this.settle(lost
+        ? { ok: true, answer: answer.trim(), contextLost: true }
+        : { ok: true, answer: answer.trim() });
 
       return;
     }
@@ -223,6 +238,10 @@ export class CliChatSession implements ChatSession {
   private onGone(failure: string): void {
     this.child = undefined;
     this.ready = false;
+    // Only a conversation that HAD something to lose can lose it. A process that never answered
+    // takes nothing with it, and saying "the conversation restarted" about a first turn would be
+    // noise where the real news is that it failed at all.
+    this.contextLost = this.contextLost || this.everAnswered;
     this.startOutcome = failure;
     this.waitingForInit?.(failure);
     this.settle({ ok: false, failure });
@@ -241,6 +260,9 @@ export class CliChatSession implements ChatSession {
 
   /** Kill the process and forget it. Idempotent — `dispose` and a budget can both arrive. */
   private stop(): void {
+    // A killed process takes the conversation with it exactly as a dead one does - the budget that
+    // killed it does not make the loss less real, and the next answer must still say so.
+    this.contextLost = this.contextLost || this.everAnswered;
     const child = this.child;
     this.child = undefined;
     this.ready = false;

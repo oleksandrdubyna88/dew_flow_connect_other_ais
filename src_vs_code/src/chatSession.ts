@@ -9,7 +9,20 @@
 
 /** What one turn produced: an answer, or a sentence saying why there is none. */
 export type TurnResult =
-  | { readonly ok: true; readonly answer: string }
+  | {
+    readonly ok: true;
+    readonly answer: string;
+    /**
+     * The process answering this turn is not the one that heard the earlier ones.
+     *
+     * <p>A vendor CLI that died takes the conversation with it - the next question starts a new
+     * process with no memory of the passage or of anything already said, and its answer will read
+     * as a model that has lost the thread. The session cannot prevent that; what it must not do is
+     * HIDE it. A reviewer raised exactly this on the plan round, and it is the difference between
+     * "the model is being obtuse" and "the conversation restarted".</p>
+     */
+    readonly contextLost?: true;
+  }
   | { readonly ok: false; readonly failure: string };
 
 export interface ChatSession {
