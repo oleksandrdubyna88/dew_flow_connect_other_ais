@@ -28,8 +28,8 @@ a local engine is already serialised by its own lease.
 
 ## The goal
 
-The order in which one client offers its reviewers must differ from the order another client offers
-theirs, without giving up either of two properties the round already has:
+The order in which one client offers its reviewers must be SPREAD across clients rather than
+identical for all of them, without giving up either of two properties the round already has:
 
 1. **Reproducibility.** A round must be replayable — `PromptDeal` is already seeded from
    `StableSeed(sessionId, round)` (`PanelService.cs:397`) for exactly this reason.
@@ -53,6 +53,39 @@ work       = providers × items          // unchanged otherwise
   is also the reason not to invent a second seeding scheme.
 - **No server change.** `JobStore.TryClaim` stays FIFO. A fair queue fed in a biased order is fixed
   at the feeding end.
+
+## What this does NOT promise, said before somebody assumes it
+
+Three reviewers on the plan round arrived at the same objection from three directions, and they
+were right. A seeded shuffle spreads orders; it cannot GUARANTEE that two clients differ. With two
+vendors there are two possible orders, so half of all client pairs collide however good the hash
+is; with three there are six. An earlier draft of this document claimed clients "get different
+orders", which overstated it. The measured claim is the one in the tests: over a hundred sessions
+at two and three vendors, no single order takes more than 70 %.
+
+A guarantee would need the clients to coordinate — with each other or through the server — which is
+a much larger change than the contention it would remove.
+
+**Two more limits, stated rather than discovered later:**
+
+- **Replay means the same session, the same round AND the same runnable set.** The seed is
+  `StableSeed(sessionId, round)` and does not include which providers were runnable. A provider
+  whose health flips mid-round changes the shuffle's INPUT, not just its order.
+- **A deliberately arranged provider order stops meaning anything.** Nothing in this product treats
+  the settings order as a priority today — it is the order rows appear in the panel — but somebody
+  could reasonably have arranged it cheapest-first. After this change that arrangement is
+  reshuffled every round. Accepted, and if it is ever wanted back the shape is a per-provider
+  "pinned first" flag that survives the shuffle rather than a switch that disables it.
+
+## The assumption this rests on, now a test
+
+That the work list's order is the order reviewers actually start. It holds because `RunAllAsync`
+builds its tasks with `work.Select(async ...)` — an async lambda runs synchronously to its first
+await, which is the GLOBAL semaphore — and `Task.WhenAll` enumerates in list order, so every
+reviewer reaches the machine's gate in list order and `SemaphoreSlim` releases FIFO. The machine's
+cap being taken BEFORE the per-provider one is the other half: with a cap smaller than the round,
+list order decides who gets the machine. `SubmissionOrderIsTheDispatchOrderTests` pins it with the
+cap at one.
 
 ## Open question, to settle before building
 
@@ -86,6 +119,9 @@ incidental one, that assumption is what changes.
 | One session id gives one order, twice | `src_mcp/tests` | replayability is not lost |
 | Every (provider, role) row survives the shuffle | `src_mcp/tests` | no vendor is starved |
 | A single-provider round is unchanged | `src_mcp/tests` | the degenerate case is not reordered into nonsense |
+| No single order takes >70 % of 100 sessions, at 2 and 3 vendors | `src_mcp/tests` | the real, weaker claim |
+| A fixed seed deals the hand it dealt before the shuffles were merged | `src_mcp/tests` | the refactor changed no permutation |
+| With one slot, reviewers start in list order | `src_mcp/tests` | the assumption the whole change rests on |
 
 ## Definition of Done
 
@@ -93,5 +129,8 @@ incidental one, that assumption is what changes.
 - [ ] The same session and round replay to the same order.
 - [ ] No row is added, dropped or duplicated by the shuffle, asserted over several seeds.
 - [ ] `JobStore.TryClaim` is untouched — the server's queue stays FIFO.
+- [x] The guarantee is stated as spreading rather than distinctness, with the residual collision named.
+- [x] The dispatch-order assumption is a test rather than a paragraph.
+- [x] The merge of the two shuffles is proved to change no permutation.
 - [ ] Module docs describe the ordering and why it is seeded rather than random.
 - [ ] Any existing test that was silently depending on provider order is named in the summary.

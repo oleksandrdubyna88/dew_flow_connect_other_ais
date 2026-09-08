@@ -64,6 +64,45 @@ public class SubmissionOrderTests
             "every client shipping the same vendor list must not queue for the same accounts first");
     }
 
+    /// <summary>
+    /// The load is SPREAD, which is a weaker claim than "no two clients collide" — and the true one.
+    /// </summary>
+    /// <remarks>
+    /// <para>Three reviewers on the plan round said the same thing from three angles, and they were
+    /// right: a seeded shuffle cannot guarantee distinct orders. With two vendors there are two
+    /// possible orders, so half of all client pairs collide however good the hash is; with three
+    /// there are six. The plan claimed clients "get different orders" and that overstated it.</para>
+    /// <para>What the change actually buys is a distribution instead of a constant, and two vendors
+    /// is the case worth measuring because it is the common one and the least favourable. So the
+    /// assertion is that no single order takes more than 70 % of a hundred sessions — comfortably
+    /// above the 50 % a fair coin gives and far below the 100 % of today's behaviour, which is what
+    /// this test would have caught.</para>
+    /// </remarks>
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void AcrossManySessions_NoSingleOrderDominates(int vendorCount)
+    {
+        string[] pool = ["alpha", "bravo", "charlie"];
+        var vendors = pool.Take(vendorCount).ToArray();
+
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var i = 0; i < 100; i++)
+        {
+            var work = Service(vendors).BuildWork(
+                [ReviewRole.Conventions, ReviewRole.Architecture],
+                Worktree(), "ctx", round: 1, isPlanStage: false,
+                seed: PanelService.StableSeed($"session-{i}", 1));
+
+            var order = string.Join(",", work.Select(w => w.Invocation.Provider).Distinct(StringComparer.Ordinal));
+            counts[order] = counts.GetValueOrDefault(order) + 1;
+        }
+
+        counts.Keys.Should().HaveCountGreaterThan(1, "one order for every session is the defect itself");
+        counts.Values.Max().Should().BeLessThan(70,
+            $"with {vendorCount} vendors the orders must be spread rather than concentrated");
+    }
+
     [Fact]
     public void OneSession_ReplaysToTheSameOrder()
     {
