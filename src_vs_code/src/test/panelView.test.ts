@@ -727,3 +727,37 @@ test('a vendor that is off leaves its stage boxes readable but inert', () => {
   assert.match(html, /data-setting="code" data-vendor="codex" disabled/);
   assert.match(html, /class="field stages off"/);
 });
+
+/**
+ * The round limit shows what it will actually be, beside the box that sets it.
+ *
+ * <p>Zero means "work it out", and a reviewer on the plan round called that a hidden dependency:
+ * raise the reviewer timeout and the round doubles with nothing on screen saying so. The panel does
+ * the same arithmetic the server does, in the numbers currently configured.</p>
+ */
+test('the round limit says what it works out to, and warns when it cannot be met', () => {
+  const withSettings = (over: Partial<PanelState['settings']>): string =>
+    panelHtml(state({ settings: { ...DEFAULTS, ...over }, openSections: ['limits'] }), 'n0nce');
+
+  // Asserted as a SHAPE rather than against a vendor count: how many vendors ship enabled is a
+  // default that moves, and a test that hard-codes it fails for a reason that has nothing to do
+  // with the arithmetic under test.
+  const derived = withSettings({ roundTimeoutMinutes: 0, reviewerTimeoutMinutes: 10, maxConcurrency: 3 });
+  const said = /worked out: (\d+) waves? × 10 min = (\d+) min/.exec(derived);
+  assert.ok(said, `the derivation is shown; the note read: ${derived.slice(derived.indexOf('worked out') - 20, 200)}`);
+  assert.ok(Number(said[1]) >= 1, 'at least one wave');
+  assert.equal(Number(said[2]), Number(said[1]) * 10, 'and the total is the waves times the reviewer timeout');
+
+  const tooSmall = withSettings({ roundTimeoutMinutes: 5, reviewerTimeoutMinutes: 10 });
+  assert.ok(
+    tooSmall.includes("shorter than one reviewer's 10 min"),
+    'a limit under one reviewer cannot be met, and the panel says so where it is set',
+  );
+
+  const byHand = withSettings({ roundTimeoutMinutes: 90, reviewerTimeoutMinutes: 10 });
+  assert.ok(byHand.includes('set by hand'), 'a workable explicit limit needs no arithmetic');
+  // "worked out:" with the colon — the note's own form. The help article on the same page says
+  // "worked out rather than guessed" about the setting, which is prose about it, not a claim that
+  // THIS value was derived.
+  assert.ok(!byHand.includes('worked out:'), 'and is not described as derived');
+});

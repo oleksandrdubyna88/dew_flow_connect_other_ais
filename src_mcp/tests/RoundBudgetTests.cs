@@ -67,4 +67,46 @@ public sealed class RoundBudgetTests
         RoundBudget.For(TenMinutes, reviewers: 0, concurrency: 0).Should().Be(TenMinutes);
         RoundBudget.For(TenMinutes, reviewers: -4, concurrency: -1).Should().Be(TenMinutes);
     }
+
+    /// <summary>
+    /// A derivation has a ceiling, because a round nobody is waiting for is not a round.
+    /// </summary>
+    /// <remarks>
+    /// An hour per reviewer at a concurrency of one and twenty reviewers derives twenty hours. The
+    /// person who set those numbers did not ask for a day-long round, and one holds a worktree and a
+    /// session while nobody watches — a reviewer on the plan round called it a zombie, which is the
+    /// right word. The ceiling is generous on purpose: it bounds the absurd without arguing with the
+    /// merely patient.
+    /// </remarks>
+    [Fact]
+    public void ADerivationCannotExceedTheCeiling()
+    {
+        RoundBudget.For(TimeSpan.FromHours(1), reviewers: 20, concurrency: 1)
+            .Should().Be(RoundBudget.Ceiling);
+    }
+
+    [Fact]
+    public void TheCeilingDoesNotTouchAnOrdinaryRound()
+    {
+        // The guard on the other side: a ceiling that clipped real configurations would be a limit
+        // pretending to be a safety net.
+        RoundBudget.For(TenMinutes, reviewers: 12, concurrency: 3)
+            .Should().BeLessThan(RoundBudget.Ceiling);
+        RoundBudget.For(TimeSpan.FromMinutes(30), reviewers: 12, concurrency: 3)
+            .Should().BeLessThan(RoundBudget.Ceiling);
+    }
+
+    [Fact]
+    public void TheCeilingIsStillAtLeastOneWave_ForALongReviewerTimeout()
+    {
+        // The two bounds meeting: a reviewer timeout above the ceiling would floor and cap at once,
+        // and the floor must win — cancelling a reviewer before its first attempt is the one
+        // outcome neither bound is for.
+        var patient = RoundBudget.Ceiling + TimeSpan.FromHours(1);
+
+        RoundBudget.For(patient, reviewers: 1, concurrency: 1)
+            .Should().Be(patient,
+                "a single reviewer allowed longer than the ceiling is a deliberate setting, and "
+                + "capping under it would cancel that reviewer before its first attempt");
+    }
 }

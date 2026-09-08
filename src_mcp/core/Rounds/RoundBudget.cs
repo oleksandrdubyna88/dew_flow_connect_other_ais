@@ -30,7 +30,24 @@ public static class RoundBudget
         // A configured zero is a configuration mistake, not a way to make a round instantaneous or
         // infinite — the same reading `BoundedScheduler` gives its own caps.
         var waves = Math.Max(1, (int)Math.Ceiling(Math.Max(1, reviewers) / (double)Math.Max(1, concurrency)));
+        var derived = reviewerTimeout * waves;
 
-        return reviewerTimeout * waves;
+        // Capped, because a derivation with no ceiling is a way to build a round nobody is waiting
+        // for any more: an hour per reviewer at a concurrency of one and twenty reviewers is twenty
+        // hours, and the person who set those numbers did not ask for a day-long round. A reviewer
+        // on the plan round called it a zombie, which is the right word — it holds a worktree and a
+        // session while nobody watches. The ceiling is generous on purpose: it bounds the absurd
+        // without arguing with the merely patient.
+        var capped = derived > Ceiling ? Ceiling : derived;
+
+        // The FLOOR wins where the two bounds meet. A reviewer allowed longer than the ceiling is a
+        // deliberate setting, and capping under it would cancel that reviewer before its first
+        // attempt — the one outcome neither bound exists for. Found by a test whose assertion was
+        // weaker than its own docstring: it asserted "at least the ceiling" and passed while the
+        // floor lost.
+        return capped < reviewerTimeout ? reviewerTimeout : capped;
     }
+
+    /// <summary>The longest a DERIVED budget may reach. An explicit setting is the operator's own.</summary>
+    public static readonly TimeSpan Ceiling = TimeSpan.FromHours(8);
 }
