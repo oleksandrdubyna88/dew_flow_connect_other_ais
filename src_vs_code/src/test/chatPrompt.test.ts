@@ -75,3 +75,12 @@ test('the material note stands above the fence, so the fence means something', (
   assert.ok(noteAt >= 0, 'nothing tells the model what the line below means');
   assert.strictEqual(fenceAt, noteAt + 1, 'the note and the fence drifted apart');
 });
+
+test('a language code the catalog does not know still asks for a real language', () => {
+  // `coai.chatLanguage` is JSON a person can edit; a typo there must not reach the model as
+  // "Answer in undefined." (local and gemini, the code round.)
+  const turn = openingTurn('Explain', 'kl' as unknown as Parameters<typeof openingTurn>[1], PASSAGE);
+
+  assert.ok(turn.includes('Answer in English.'), `an unknown language produced: ${turn.split('\n')[2]}`);
+  assert.ok(!turn.includes('undefined'), 'the turn carries the word undefined');
+});

@@ -1,63 +1,81 @@
 import { spawn } from 'node:child_process';
-import { access } from 'node:fs/promises';
-import { delimiter, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { unquoted } from './cliVersions';
+import { join } from 'node:path';
 
 /**
- * The one place this extension starts a process.
+ * The one place this extension starts a process it controls.
  *
- * <p>It is the version probe's own spawn, WIDENED rather than copied. Every guard below was written
- * against a real failure — a `.cmd` that throws synchronously instead of emitting `error`, a shell
- * probe whose grandchild outlived the kill, a bare `taskkill` that could be a file planted in an
- * opened workspace, a working directory `cmd.exe` searches before the PATH. A second launcher would
- * have had to learn each of them again, and the one already in the tree (`wslNetwork.ts`) shows how
- * that goes: it has a different stdio contract and none of this hardening.</p>
+ * <p>It is the version probe's own launcher, WIDENED rather than copied. Every guard below was
+ * written against a real failure — a `.cmd` that throws synchronously instead of emitting `error`,
+ * a shell probe whose grandchild outlived the kill, a bare `taskkill` that could be a file planted
+ * in an opened workspace, a working directory `cmd.exe` searches before the PATH. A second launcher
+ * would have had to learn each of them again, and the one already in the tree (`wslNetwork.ts`)
+ * shows how that goes: it has a different stdio contract and none of this hardening.</p>
  *
  * <p><b>Why a handle and not a promise.</b> `capture` wants the whole output and then the exit code,
  * which a promise says well. A chat session wants to write a line, read lines back, and keep the
- * process for the next question — which a promise cannot say at all. One launcher answers both by
- * returning the child as an object; `capture` is re-expressed over it in `versionProbe.ts` and its
- * three callers cannot tell.</p>
+ * process for the next question — which a promise cannot say at all. One launcher answers both.</p>
  *
- * <p><b>`close`, not `exit`.</b> The exit event here fires on `close`, when the child's stdio has
- * also ended. `exit` can arrive with output still buffered, and the version probe would then parse a
- * truncated banner into "no version" — the kind of defect that reproduces once a fortnight on a slow
- * machine and never on the one it was written on.</p>
+ * <p><b>The one deliberate exception to "one spawn site".</b> `killTree` starts `taskkill.exe`
+ * itself, so this file contains two `spawn` calls rather than one. It is named here because a
+ * structural guard that counts spawns will find it and should not treat it as a regression: killing
+ * a tree is not launching a child, it takes no handle, produces no output anybody reads, and is
+ * unref'd immediately. Raised by codex on the code round of this very change, and answered by saying
+ * so rather than by hiding it behind an injected primitive that would have one implementation.</p>
+ *
+ * <p><b>Two details are load-bearing.</b> The exit event fires on `close`, not `exit`: `exit` can
+ * arrive with output still buffered, and a truncated banner parses to no version at all. And every
+ * subscription is late-safe — output that arrived before anybody subscribed is replayed to the first
+ * subscriber, because a short-lived child can print its whole answer and close before the caller's
+ * next line runs.</p>
  */
 
 /** How much stderr is worth keeping. Enough for a stack or a refusal; not a leak. */
 const STDERR_TAIL_MAX = 8000;
 
+/** Stop receiving. Returned by every stream subscription — see `ProcessHandle.onLine`. */
+export type Unsubscribe = () => void;
+
 export interface LaunchOptions {
   /** Run through the platform shell. Only the Windows shim case sets this — see `needsShell`. */
   readonly shell?: boolean;
-  /** The child's working directory. The shell branch must pass an empty one. */
+  /** The child's working directory. Defaults per `workingDirectory` — a shell never gets the cwd. */
   readonly cwd?: string;
 }
 
-/**
- * A started child, or one that could not be started.
- *
- * <p>Every subscription is late-safe: a listener registered after the event already happened is
- * called anyway. Without that, `launch` on a name that does not exist would be a silent handle —
- * the caller subscribes on the next line and the `error` has already gone.</p>
- */
 export interface ProcessHandle {
   /** Write one line (a newline is appended). `false` when the pipe is already gone. */
   writeLine(line: string): boolean;
-  /** Raw stdout, as it arrives. For a caller that wants the text exactly as printed. */
-  onStdout(listener: (chunk: string) => void): void;
+  /** Raw stdout as it arrives. Replayed to the first subscriber; unsubscribe when done. */
+  onStdout(listener: (chunk: string) => void): Unsubscribe;
   /** Whole stdout lines, split across chunk boundaries, each delivered once. */
-  onLine(listener: (line: string) => void): void;
-  /** The exit code, once, on `close`. Never fires after `onError`. */
+  onLine(listener: (line: string) => void): Unsubscribe;
+  /** The exit code, once, on `close`. Never fires after `onError`. Late-safe. */
   onExit(listener: (code: number) => void): void;
-  /** The child could not be started, or died of its own error. Fires once. */
+  /** The child could not be started, or died of its own error. Fires once. Late-safe. */
   onError(listener: (reason: string) => void): void;
-  /** The tail of what the child wrote to stderr, capped. */
+  /** The tail of what the child wrote to stderr — or why it never started. */
   stderrTail(): string;
   /** Kill what we started — the whole tree when a shell is in the way. Safe to call twice. */
   kill(): void;
+}
+
+/**
+ * Where a child runs.
+ *
+ * <p>Its own function so the rule can be TESTED rather than trusted: a shell that is handed no
+ * working directory inherits the extension host's, which in VS Code is the opened workspace — and
+ * `cmd.exe` searches the working directory before the PATH. A workspace holding a file named like
+ * the tool being probed would then run with the host's privileges. The caller may still choose a
+ * directory; what it may not do is leave a shell pointed at somebody's checkout by omission.
+ * (gemini, the code round.)</p>
+ */
+export function workingDirectory(shell: boolean, cwd: string | undefined): string | undefined {
+  if (cwd !== undefined) {
+    return cwd;
+  }
+
+  return shell ? tmpdir() : undefined;
 }
 
 /**
@@ -70,6 +88,7 @@ export interface ProcessHandle {
  */
 export function launch(target: string, args: readonly string[], options: LaunchOptions = {}): ProcessHandle {
   const shell = options.shell === true;
+  const cwd = workingDirectory(shell, options.cwd);
 
   let child: ReturnType<typeof spawn> | undefined;
   let failure = '';
@@ -77,7 +96,7 @@ export function launch(target: string, args: readonly string[], options: LaunchO
     child = spawn(target, [...args], {
       shell,
       windowsHide: true,
-      ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+      ...(cwd === undefined ? {} : { cwd }),
     });
   } catch (reason) {
     failure = reason instanceof Error ? reason.message : String(reason);
@@ -86,123 +105,199 @@ export function launch(target: string, args: readonly string[], options: LaunchO
   return child === undefined ? failedHandle(failure) : liveHandle(child, shell);
 }
 
-/** A handle for a child that never started. Late-safe like any other, and `kill` is a no-op. */
+/**
+ * A handle for a child that never started.
+ *
+ * <p>Its `stderrTail` carries the REASON rather than an empty string. A caller that shows "could not
+ * be read" and nothing else leaves somebody guessing between a missing binary, a denied permission
+ * and a rejected argument — three different things to do next. (local and gemini, the code round.)</p>
+ */
 function failedHandle(reason: string): ProcessHandle {
   return {
     writeLine: () => false,
-    onStdout: () => undefined,
-    onLine: () => undefined,
+    onStdout: () => () => undefined,
+    onLine: () => () => undefined,
     onExit: () => undefined,
     onError: (listener) => {
       listener(reason);
     },
-    stderrTail: () => '',
+    stderrTail: () => reason,
     kill: () => undefined,
   };
 }
 
-function liveHandle(child: ReturnType<typeof spawn>, shell: boolean): ProcessHandle {
-  const stdoutListeners: ((chunk: string) => void)[] = [];
-  const lineListeners: ((line: string) => void)[] = [];
-  const exitListeners: ((code: number) => void)[] = [];
-  const errorListeners: ((reason: string) => void)[] = [];
+/**
+ * A stream of values that holds what it emitted until somebody is listening.
+ *
+ * <p>The replay is the point. A child can write its whole answer and close before the caller's next
+ * statement runs, and an `onLine` that only appends a listener loses that answer for ever — codex
+ * and gemini raised it independently. What is held is handed to the FIRST subscriber and then
+ * dropped: a second subscriber joining later is joining a conversation in progress, and pretending
+ * otherwise would deliver one line twice.</p>
+ */
+function replayingFan<T>(): { emit(value: T): void; on(listener: (value: T) => void): Unsubscribe } {
+  let listeners: readonly ((value: T) => void)[] = [];
+  let held: readonly T[] = [];
+  let opened = false;
 
-  let pending = '';
-  let stderr = '';
-  let exited: number | undefined;
-  let errored: string | undefined;
-
-  const deliverLines = (chunk: string): void => {
-    pending += chunk;
-    // A line is only whole once its terminator has arrived; whatever follows the last one stays in
-    // `pending` for the next chunk. This is the split that a naive `chunk.split('\n')` gets wrong
-    // exactly when the pipe is busiest.
-    const parts = pending.split(/\r?\n/);
-    pending = parts.pop() ?? '';
-    for (const line of parts) {
-      for (const listener of lineListeners) {
-        listener(line);
+  return {
+    emit(value: T): void {
+      if (!opened) {
+        held = [...held, value];
+        return;
       }
-    }
+      for (const listener of listeners) {
+        listener(value);
+      }
+    },
+    on(listener: (value: T) => void): Unsubscribe {
+      opened = true;
+      listeners = [...listeners, listener];
+      const pending = held;
+      held = [];
+      for (const value of pending) {
+        listener(value);
+      }
+
+      // Without this, a chat session that subscribes per turn leaves every past turn's callback in
+      // the list, and turn 100's answer is delivered to ninety-nine stale handlers. (codex, gemini.)
+      return () => {
+        listeners = listeners.filter((known) => known !== listener);
+      };
+    },
   };
+}
 
-  child.stdout?.on('data', (chunk: Buffer) => {
-    const text = chunk.toString();
-    for (const listener of stdoutListeners) {
-      listener(text);
-    }
-    deliverLines(text);
-  });
+/** A thing that happens at most once, and is still heard by whoever asks afterwards. */
+function onceFan<T>(): { fire(value: T): boolean; on(listener: (value: T) => void): void } {
+  let listeners: readonly ((value: T) => void)[] = [];
+  let fired: { value: T } | undefined;
 
-  child.stderr?.on('data', (chunk: Buffer) => {
-    stderr = `${stderr}${chunk.toString()}`.slice(-STDERR_TAIL_MAX);
-  });
-
-  child.on('error', (reason: Error) => {
-    if (errored === undefined && exited === undefined) {
-      errored = reason.message;
-      for (const listener of errorListeners) {
-        listener(errored);
+  return {
+    fire(value: T): boolean {
+      if (fired !== undefined) {
+        return false;
       }
-    }
-  });
+      fired = { value };
+      for (const listener of listeners) {
+        listener(value);
+      }
 
-  child.on('close', (code) => {
-    if (errored !== undefined || exited !== undefined) {
-      return;
-    }
-    // Whatever the child printed without a final newline is still a line somebody wrote.
-    if (pending.length > 0) {
+      return true;
+    },
+    on(listener: (value: T) => void): void {
+      if (fired !== undefined) {
+        listener(fired.value);
+        return;
+      }
+      listeners = [...listeners, listener];
+    },
+  };
+}
+
+/**
+ * Whole lines out of a stream that arrives in arbitrary pieces.
+ *
+ * <p>A line is only whole once its terminator has arrived; whatever follows the last one waits for
+ * the next chunk. This is the split a naive `chunk.split('\n')` gets wrong exactly when the pipe is
+ * busiest. `flush` exists because a child that prints without a final newline still printed a line.</p>
+ */
+function lineSplitter(deliver: (line: string) => void): { push(text: string): void; flush(): void } {
+  let pending = '';
+
+  return {
+    push(text: string): void {
+      pending += text;
+      const parts = pending.split(/\r?\n/);
+      pending = parts.pop() ?? '';
+      for (const line of parts) {
+        deliver(line);
+      }
+    },
+    flush(): void {
+      if (pending.length === 0) {
+        return;
+      }
       const last = pending;
       pending = '';
-      for (const listener of lineListeners) {
-        listener(last);
-      }
-    }
-    exited = code ?? -1;
-    for (const listener of exitListeners) {
-      listener(exited);
-    }
+      deliver(last);
+    },
+  };
+}
+
+function liveHandle(child: ReturnType<typeof spawn>, shell: boolean): ProcessHandle {
+  const stdout = replayingFan<string>();
+  const lines = replayingFan<string>();
+  const exited = onceFan<number>();
+  const errored = onceFan<string>();
+  const splitter = lineSplitter((line) => lines.emit(line));
+  const stderr = { tail: '' };
+
+  // Decode as text on the STREAM, not per chunk: a Cyrillic character split across a chunk boundary
+  // becomes two replacement characters if each half is decoded alone, and the passages this launcher
+  // exists to carry are routinely Russian. (gemini, the code round.)
+  child.stdout?.setEncoding('utf8');
+  child.stderr?.setEncoding('utf8');
+
+  child.stdout?.on('data', (text: string) => {
+    stdout.emit(text);
+    splitter.push(text);
+  });
+  child.stderr?.on('data', (text: string) => {
+    stderr.tail = `${stderr.tail}${text}`.slice(-STDERR_TAIL_MAX);
+  });
+
+  // EPIPE on a pipe whose reader has gone arrives ASYNCHRONOUSLY, so no try/catch around `write` can
+  // see it. Unhandled, node makes it a fatal exception and the extension host dies with it — the one
+  // finding in this round that took a whole editor down. (gemini, Blocking.)
+  child.stdin?.on('error', () => undefined);
+
+  child.on('error', (reason: Error) => {
+    // The reason goes into the tail as well as to the listener. A missing binary does NOT throw
+    // synchronously on Windows — it arrives here, asynchronously — so a caller that only reads
+    // `stderrTail` to explain a failure would have found it empty for the commonest failure there
+    // is. Caught by the test written for the failed-handle half of the same finding.
+    stderr.tail = `${stderr.tail}[coai] ${reason.message}`.slice(-STDERR_TAIL_MAX);
+    errored.fire(reason.message);
+  });
+  child.on('close', (code) => {
+    splitter.flush();
+    exited.fire(code ?? -1);
   });
 
   return {
-    writeLine: (line) => {
-      const stdin = child.stdin;
-      if (stdin === null || stdin.destroyed || stdin.writableEnded) {
-        return false;
+    writeLine: (line) => writeLine(child, line),
+    onStdout: stdout.on,
+    onLine: lines.on,
+    onExit: exited.on,
+    onError: errored.on,
+    stderrTail: () => stderr.tail,
+    kill: () => {
+      const failed = killTree(child, shell);
+      if (failed.length > 0) {
+        // Not swallowed: a tree kill that could not even start is why a vendor process is still
+        // running, and that sentence belongs where the caller already looks. (codex, the code round.)
+        stderr.tail = `${stderr.tail}\n[coai] tree kill failed: ${failed}`.slice(-STDERR_TAIL_MAX);
       }
-      try {
-        stdin.write(`${line}\n`);
-        return true;
-      } catch {
-        // A pipe that closed between the check and the write is a state, not an exception: the
-        // caller learns the turn failed from `onExit`/`onError`, which is where it can say so.
-        return false;
-      }
     },
-    onStdout: (listener) => {
-      stdoutListeners.push(listener);
-    },
-    onLine: (listener) => {
-      lineListeners.push(listener);
-    },
-    onExit: (listener) => {
-      if (exited !== undefined) {
-        listener(exited);
-        return;
-      }
-      exitListeners.push(listener);
-    },
-    onError: (listener) => {
-      if (errored !== undefined) {
-        listener(errored);
-        return;
-      }
-      errorListeners.push(listener);
-    },
-    stderrTail: () => stderr,
-    kill: () => killTree(child, shell),
   };
+}
+
+/** One line into the child, or `false` when the pipe has gone. Never throws. */
+function writeLine(child: ReturnType<typeof spawn>, line: string): boolean {
+  const stdin = child.stdin;
+  if (stdin === null || stdin.destroyed || stdin.writableEnded) {
+    return false;
+  }
+  try {
+    stdin.write(`${line}\n`);
+
+    return true;
+  } catch {
+    // A pipe that closed between the check and the write is a state, not an exception: the caller
+    // learns the turn failed from `onExit`/`onError`, which is where it can say so.
+    return false;
+  }
 }
 
 /**
@@ -211,72 +306,39 @@ function liveHandle(child: ReturnType<typeof spawn>, shell: boolean): ProcessHan
  * <p><b>`child.kill()`, never `process.kill(pid)`</b>: a probe that exits in the same tick the timer
  * fires has a pid that no longer exists, and Windows reuses pids — so killing by number can throw
  * `ESRCH` or, worse, terminate whatever now holds that number. `child.kill()` on an exited child is
- * a no-op. (codex, the code round.)</p>
+ * a no-op. (codex, an earlier code round.)</p>
  *
  * <p><b>`taskkill` by ABSOLUTE path.</b> `CreateProcess` searches the application directory and the
  * working directory before the system one, so a bare `taskkill` could be a file planted in an opened
- * workspace, run with the extension host's privileges. Raised as Blocking in the same round —
- * against the fix for another hole in this file, which is a fair description of why a shell is worth
- * this much care.</p>
+ * workspace, run with the extension host's privileges.</p>
+ *
+ * @returns why the tree kill could not be started, or an empty string when it was
  */
-function killTree(child: ReturnType<typeof spawn>, shell: boolean): void {
+function killTree(child: ReturnType<typeof spawn>, shell: boolean): string {
   const pid = child.pid;
   if (!shell || process.platform !== 'win32' || pid === undefined) {
     child.kill();
-    return;
+
+    return '';
   }
+
+  let failed = '';
   try {
-    spawn(TASKKILL, ['/pid', String(pid), '/t', '/f'], { windowsHide: true, cwd: tmpdir() }).unref();
-  } catch {
-    // Nothing to report: the caller has already been told, or is about to be.
+    // `.on('error')` BEFORE `.unref()`: a taskkill that fails to spawn emits `error` on a child
+    // nobody is listening to, and node turns that into a fatal exception in the extension host.
+    // (gemini, the code round.)
+    spawn(TASKKILL, ['/pid', String(pid), '/t', '/f'], { windowsHide: true, cwd: tmpdir() })
+      .on('error', (reason: Error) => {
+        failed = reason.message;
+      })
+      .unref();
+  } catch (reason) {
+    failed = reason instanceof Error ? reason.message : String(reason);
   }
   child.kill();
+
+  return failed;
 }
 
 /** The system utility, not whatever is called that on the PATH or in a workspace. */
 const TASKKILL = join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'taskkill.exe');
-
-/**
- * Where a bare executable name actually is, or empty when the PATH does not have it.
- *
- * <p>The name already carries its extension (`versionProbeCandidates` supplies `codex.cmd`), so
- * this is a directory walk and not a PATHEXT search. Empty rather than a guess: handing an
- * unresolved name to a shell is exactly the case this exists to prevent.</p>
- */
-export async function onPath(name: string): Promise<string> {
-  const path = process.env['PATH'] ?? '';
-  const key = `${path}\u0000${name}`;
-  const known = resolvedOnPath.get(key);
-  if (known !== undefined) {
-    return known;
-  }
-
-  let found = '';
-  for (const dir of path.split(delimiter)) {
-    if (dir.length === 0) {
-      continue;
-    }
-    const candidate = join(unquoted(dir), name);
-    try {
-      await access(candidate);
-      found = candidate;
-      break;
-    } catch {
-      // Not here; the next directory is not an error.
-    }
-  }
-  resolvedOnPath.set(key, found);
-
-  return found;
-}
-
-/**
- * Where each bare name resolved to, MISSES INCLUDED, keyed by the PATH it was resolved against.
- *
- * <p>A miss is the expensive case — it walks every directory — and it is also the common one, since
- * the candidate list tries `codex.cmd` on a machine that may only have `codex.exe`. Without this,
- * a long PATH costs its whole length in `access` calls per candidate per probe. Keying on the PATH
- * itself means a machine whose PATH changes re-resolves rather than trusting a stale answer.
- * (codex and gemini, the code round.)</p>
- */
-const resolvedOnPath = new Map<string, string>();

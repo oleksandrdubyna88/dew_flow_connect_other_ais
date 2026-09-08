@@ -56,11 +56,16 @@ const MATERIAL_NOTE =
  */
 export function openingTurn(prompt: string, language: LanguageCode, passage: string): string {
   const instruction = prompt.trim().length > 0 ? prompt.trim() : DEFAULT_CHAT_PROMPT;
+  // The type says this cannot miss; a settings file says otherwise. `coai.chatLanguage` is JSON a
+  // person can edit, and a typo there would otherwise reach the model as `Answer in undefined.` —
+  // which is worse than the wrong language, because it reads as a broken tool. (local and gemini,
+  // the code round, independently.)
+  const named = ENGLISH_NAME[language] ?? ENGLISH_NAME.en;
 
   return [
     instruction,
     '',
-    `Answer in ${ENGLISH_NAME[language]}.`,
+    `Answer in ${named}.`,
     '',
     MATERIAL_NOTE,
     FENCE,

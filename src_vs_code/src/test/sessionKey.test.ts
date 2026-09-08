@@ -96,3 +96,30 @@ test('a renamed tab keeps its panel through identity, without needing the label'
   assert.strictEqual(match?.kind, 'existing', 'a rename lost the conversation');
   assert.strictEqual(match?.label, 'new name', 'the panel title did not follow the rename');
 });
+
+
+test('a closed panel is not re-attached while a namesake is still open', () => {
+  // Two conditions, not one. The first version checked only that the panel it FOUND was closed, so
+  // with two panels called `main` — one closed, one open — a new `main` tab was re-keyed onto the
+  // closed one while the live namesake sat beside it. (codex, the code round on this file.)
+  const closed = tab('main');
+  const stillThere = tab('main');
+  const known = [panelFor(closed), panelFor(stillThere)];
+  const arriving: TabSnapshot = { key: { tab: 'arriving' }, label: 'main', viewType: CLAUDE_PANEL_VIEW_TYPE };
+
+  const match = sourceSession(arriving, [stillThere, arriving], known);
+
+  assert.strictEqual(match?.kind, 'new', 'the fallback re-keyed onto a closed namesake');
+});
+
+test('one closed panel with a unique label is still re-attached', () => {
+  // The narrowing must not cost the case it was written for: a single panel, its tab gone.
+  const closed = tab('одна');
+  const other = tab('другая');
+  const known = [panelFor(closed), panelFor(other)];
+  const arriving: TabSnapshot = { key: { tab: 'arriving' }, label: 'одна', viewType: CLAUDE_PANEL_VIEW_TYPE };
+
+  const match = sourceSession(arriving, [other, arriving], known);
+
+  assert.strictEqual(match?.kind, 'rekey');
+});
