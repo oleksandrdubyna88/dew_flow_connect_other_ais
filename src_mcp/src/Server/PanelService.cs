@@ -917,36 +917,9 @@ public sealed partial class PanelService
         // .NET documents no order for it — so the tail is best-effort rather than a promise.
         var runnable = SeededShuffle.Of(eligible, seed);
 
-        // The items: one per role for a code round, or one per unspent lens for a plan round.
-        var items = planPrompts is { Count: > 0 }
-            ? planPrompts.Select(id => (Role: roles[0], PromptId: id)).ToList()
-            : roles.Select(role => (Role: role, PromptId: ChoiceFor(role, round).Id)).ToList();
-
+        var items = Items(roles, round, planPrompts);
         var work = new List<ReviewerWork>();
-        if (!deal)
-        {
-            // The shipped behaviour: every vendor answers every question, so two vendors agreeing on
-            // a finding is a fact the gate can use. Dealing is opt-in precisely because it gives
-            // that up.
-            foreach (var provider in runnable)
-            {
-                foreach (var item in items)
-                {
-                    Add(provider, item.Role, item.PromptId);
-                }
-            }
-
-            return work;
-        }
-
-        foreach (var hand in PromptDeal.Deal(
-            [.. items.Select(i => $"{i.Role}|{i.PromptId}")],
-            [.. runnable.Select(p => p.Provider)],
-            seed))
-        {
-            var parts = hand.Item.Split('|', 2);
-            Add(runnable.First(p => p.Provider == hand.Vendor), Enum.Parse<ReviewRole>(parts[0]), parts[1]);
-        }
+        Assemble(runnable, items, deal, seed, Add);
 
         return work;
 
@@ -990,6 +963,61 @@ public sealed partial class PanelService
                 runtime.Build(role, prompt, launchDir, schemaFile, outputDir, settings),
                 runtime.Build(role, repairPrompt, repairDir, schemaFile, outputDir, settings),
                 choice.Id));
+        }
+    }
+
+    /// <summary>
+    /// What this round asks: one item per role, or one per unspent lens when the plan stage deals.
+    /// </summary>
+    /// <remarks>
+    /// Pure, and extracted out of `BuildWork` on the code round — twice, by two different reviewers,
+    /// for exceeding the doctrine's complexity ceiling. This half was always a value rather than a
+    /// step, and reading it as one makes the method above shorter by a branch.
+    /// </remarks>
+    private List<(ReviewRole Role, string PromptId)> Items(
+        IReadOnlyList<ReviewRole> roles,
+        int round,
+        IReadOnlyList<string>? planPrompts) =>
+        planPrompts is { Count: > 0 }
+            ? [.. planPrompts.Select(id => (Role: roles[0], PromptId: id))]
+            : [.. roles.Select(role => (Role: role, PromptId: ChoiceFor(role, round).Id))];
+
+    /// <summary>
+    /// Who is asked what: every vendor every question, or one hand dealt across them.
+    /// </summary>
+    /// <remarks>
+    /// <para>Not dealing is the shipped behaviour, and the reason is worth keeping beside the
+    /// branch: every vendor answering every question is what makes two vendors agreeing on a finding
+    /// a fact the gate can use. Dealing is opt-in precisely because it gives that up — every lens
+    /// gets asked instead of one lens being asked twice, at half the launches.</para>
+    /// <para>The `add` callback belongs to the caller because building one reviewer needs a dozen
+    /// things this method has no business holding — a schema file, two directories, a vault key.
+    /// What is extracted here is the SHAPE of the fan-out, which is the part with the branches.</para>
+    /// </remarks>
+    private static void Assemble(
+        IReadOnlyList<ProviderSettings> runnable,
+        IReadOnlyList<(ReviewRole Role, string PromptId)> items,
+        bool deal,
+        int seed,
+        Action<ProviderSettings, ReviewRole, string> add)
+    {
+        if (!deal)
+        {
+            foreach (var (provider, item) in runnable.SelectMany(p => items.Select(i => (p, i))))
+            {
+                add(provider, item.Role, item.PromptId);
+            }
+
+            return;
+        }
+
+        foreach (var hand in PromptDeal.Deal(
+            [.. items.Select(i => $"{i.Role}|{i.PromptId}")],
+            [.. runnable.Select(p => p.Provider)],
+            seed))
+        {
+            var parts = hand.Item.Split('|', 2);
+            add(runnable.First(p => p.Provider == hand.Vendor), Enum.Parse<ReviewRole>(parts[0]), parts[1]);
         }
     }
 
