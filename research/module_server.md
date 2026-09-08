@@ -426,6 +426,25 @@ product's own rounds, where the plan stage passed at two and the code stage neve
 legacy `COAI_MAX_ROUNDS` / `COAI_GATE_THRESHOLD` become the value for BOTH stages rather than being
 dropped.
 
+**A ROUND has a deadline too (2026-09-08).** A reviewer was bounded and a round was not — and the
+round is what a person watches, so one could run for a long time while every reviewer inside it
+behaved. `RunStageAsync` links a `CancellationTokenSource` for the round's own budget: whichever
+fires first wins, so a person cancelling still cancels and the deadline cannot outlive its caller.
+The scheduler already treats cancellation as a per-reviewer outcome rather than an exception, which
+is what makes it small.
+
+**Its default is DERIVED, and that is the design rather than a convenience.** `RoundBudget.For`
+takes the reviewer timeout, the number of reviewers and the machine cap, and returns the waves that
+division needs — twelve reviewers at a cap of three is four waves, forty minutes at the shipped
+settings. Shipping a fixed number instead would cancel healthy rounds on any machine with more
+vendors than whoever chose it, and the failure would read exactly like a bug in the gate. A floor of
+one full wave is asserted over six shapes. `COAI_ROUND_TIMEOUT_MINUTES` overrides it; zero means
+derive, which is why it is read with `CountVar` rather than `IntVar`.
+
+**The summary says the ROUND ran out, not that its reviewers failed.** `ReviewerSummary.EndedByDeadline`
+is set only when the round clock fired and the caller's token did not — inferring it from cancelled
+reviewers would call it a deadline the moment a person cancels a round themselves.
+
 **The defaults are the panel's, and that is enforced (2026-09-08).** They are `PlanDefault = (1, 6)`
 and `CodeDefault = (1, 5)` — one round everywhere, six open findings tolerated on a plan and five on
 a diff. One round because the second and third re-raise what the first found rather than finding

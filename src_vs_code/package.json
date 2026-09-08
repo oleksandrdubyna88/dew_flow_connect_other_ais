@@ -106,6 +106,12 @@
           "minimum": 1,
           "description": "Per-reviewer process timeout."
         },
+        "coai.roundTimeoutMinutes": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "markdownDescription": "How long a **whole round** may take before the reviewers still running are cancelled and the round is gated on whatever answered. `0` works it out from the round itself — vendors × roles reviewers through the concurrency cap, each wave allowed one reviewer timeout. At the defaults that is four waves: forty minutes. Lowering it cuts into reviewers that have not finished; their findings are lost."
+        },
         "coai.credsKey": {
           "type": "string",
           "default": "",

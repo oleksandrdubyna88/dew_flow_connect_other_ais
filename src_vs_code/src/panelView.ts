@@ -606,6 +606,10 @@ function limitsBody(s: CoaiSettings): string {
   <input type="number" id="reviewerTimeoutMinutes" min="1" data-setting="reviewerTimeoutMinutes" value="${s.reviewerTimeoutMinutes}">
 </div>
 <div class="field inline">
+  ${labelled('roundTimeoutMinutes', 'Round limit, minutes (0 = work it out)', 'roundTimeout')}
+  <input type="number" id="roundTimeoutMinutes" min="0" data-setting="roundTimeoutMinutes" value="${s.roundTimeoutMinutes}">
+</div>
+<div class="field inline">
   ${labelled('escalationMinutes', 'Wait for you, minutes', 'escalationMinutes')}
   <input type="number" id="escalationMinutes" min="1" data-setting="escalationMinutes" value="${s.escalationMinutes}">
 </div>`;

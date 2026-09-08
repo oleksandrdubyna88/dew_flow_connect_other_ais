@@ -66,6 +66,7 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.maxConcurrency': 'reviewers at once',
   'coai.maxPerProvider': 'per vendor',
   'coai.reviewerTimeoutMinutes': 'reviewer timeout',
+  'coai.roundTimeoutMinutes': 'a whole round',
   'coai.escalationMinutes': 'wait for you',
   'coai.rounds': 'rounds',
   'coai.thresholds': 'passes at or under',
