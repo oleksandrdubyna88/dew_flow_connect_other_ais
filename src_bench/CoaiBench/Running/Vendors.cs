@@ -8,7 +8,23 @@ public sealed record VendorConfig(
     string Runtime = "",
     string Model = "",
     string BaseUrl = "",
-    string ExecutablePath = "");
+    string ExecutablePath = "")
+{
+    /// <summary>
+    /// What a Team server calls this vendor — which is NOT the row's id.
+    /// </summary>
+    /// <remarks>
+    /// <para>A row is named <c>&lt;server&gt;-&lt;vendor&gt;</c> so that two Team servers each
+    /// offering <c>codex</c> do not collide on one id. The server has only ever heard of
+    /// <c>codex</c>, so sending it the row id is refused with a 400 — <i>"'remsoftdev-claude' is not
+    /// a vendor here"</i>.</para>
+    /// <para>Measured rather than reasoned about: a campaign of twelve plan rounds produced twelve
+    /// `call_human` verdicts in seven seconds each and zero tokens, with that sentence repeated
+    /// thirty-six times. The bench could not measure a Team server at all. It is the same field, the
+    /// same failure and the same discovery route as the extension's own version of this bug.</para>
+    /// </remarks>
+    public string RemoteVendor { get; init; } = string.Empty;
+}
 
 /// <summary>
 /// The vendors the bench runs are the operator's own, never a list rebuilt from names.
@@ -51,7 +67,10 @@ public static class Vendors
                 .OfType<JsonObject>()
                 .Select(v => new VendorConfig(
                     Text(v, "id"), Text(v, "runtime"), Text(v, "model"),
-                    Text(v, "baseUrl"), Text(v, "executablePath")))
+                    Text(v, "baseUrl"), Text(v, "executablePath"))
+                {
+                    RemoteVendor = Text(v, "remoteVendor"),
+                })
                 .Where(v => v.Id.Length > 0)];
         }
         catch (Exception e) when (e is IOException or System.Text.Json.JsonException)
@@ -100,7 +119,7 @@ public static class Vendors
         var array = new JsonArray();
         foreach (var vendor in vendors)
         {
-            array.Add(new JsonObject
+            var row = new JsonObject
             {
                 ["id"] = vendor.Id,
                 ["runtime"] = vendor.Runtime,
@@ -108,7 +127,15 @@ public static class Vendors
                 ["baseUrl"] = vendor.BaseUrl,
                 ["executablePath"] = vendor.ExecutablePath,
                 ["enabled"] = true,
-            });
+            };
+            // Written only when there IS one, exactly as the panel writes it: a local vendor's row
+            // carries no empty field for a concept that does not apply to it.
+            if (vendor.RemoteVendor.Length > 0)
+            {
+                row["remoteVendor"] = vendor.RemoteVendor;
+            }
+
+            array.Add(row);
         }
 
         return array.ToJsonString();
