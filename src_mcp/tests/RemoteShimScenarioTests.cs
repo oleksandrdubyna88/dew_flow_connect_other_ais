@@ -292,7 +292,14 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         }
 
         using var process = Process.Start(info)!;
-        await WaitForAsync(() => File.Exists(invocation.JobFile), TimeSpan.FromSeconds(30));
+        // Waits for a READABLE claim, not for the file to appear. Waiting on File.Exists killed the
+        // shim in the window between creating the file and writing it, which is a real window and a
+        // real defect — it left a claim naming no job, and the parent could not cancel. It is fixed
+        // (the write goes to a sibling and moves over), and this waits for the thing it actually
+        // needs so the test cannot depend on how fast the machine is. It failed on a win-x64 release
+        // runner and nowhere else: `Expected string to be "job-77" ... but "" has a length of 0`.
+        await WaitForAsync(
+            () => RemoteRuntime.ReadClaim(invocation.JobFile).JobId.Length > 0, TimeSpan.FromSeconds(30));
         process.Kill(entireProcessTree: true);
         await process.WaitForExitAsync();
 

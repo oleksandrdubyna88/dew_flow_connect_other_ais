@@ -274,25 +274,40 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
     /// </summary>
     /// <returns>Empty when the claim was written; otherwise why it could not be.</returns>
     /// <remarks>
-    /// The failure is RETURNED rather than swallowed. Losing the claim costs a cancellation, not a
-    /// review — the server's queue deadline still ends the job eventually — so this must not fail the
-    /// review; but a silent loss means a person is later billed for work nobody can explain, with
-    /// nothing anywhere saying why. The shim prints it. Raised twice on the code round.
+    /// <para>The failure is RETURNED rather than swallowed. Losing the claim costs a cancellation, not
+    /// a review — the server's queue deadline still ends the job eventually — so this must not fail
+    /// the review; but a silent loss means a person is later billed for work nobody can explain, with
+    /// nothing anywhere saying why. The shim prints it. Raised twice on the code round.</para>
+    /// <para><b>Written to a sibling and MOVED over, because the point of this file is that it
+    /// survives a kill.</b> `File.WriteAllText` truncates first and writes second, so a process killed
+    /// between those two steps left a file that exists and names nothing — `ReadClaim` returns
+    /// `None`, `CancelAbandonedAsync` gives up, and the job keeps costing money until the server's own
+    /// deadline. That is precisely the silent loss the paragraph above says must not happen, in the
+    /// one function written to prevent it.</para>
+    /// <para>A same-directory move is atomic on both platforms this ships to, so a reader sees the old
+    /// claim or the new one and never half of either. Found by a release runner: the killed-shim test
+    /// failed on win-x64 and nowhere else, expecting a job id and reading an empty string, because a
+    /// slower machine killed the shim inside the write.</para>
     /// </remarks>
     public static string Claim(string jobFile, string serverUrl, string jobId, string tokenFile)
     {
+        // Beside the destination, never in the temp directory: a move across volumes is a copy, and a
+        // copy is the non-atomic write this exists to avoid.
+        var pending = jobFile + ".writing-" + Guid.NewGuid().ToString("N")[..8];
         try
         {
             File.WriteAllText(
-                jobFile,
+                pending,
                 JsonSerializer.Serialize(
                     new RemoteClaim(TeamServerAuth.Normalise(serverUrl), jobId, tokenFile),
                     RemoteClaimContext.Default.RemoteClaim));
+            File.Move(pending, jobFile, overwrite: true);
 
             return string.Empty;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
+            Forget(pending);
             return e.Message;
         }
     }
