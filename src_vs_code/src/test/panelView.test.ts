@@ -5,8 +5,15 @@ import { UsageEntry } from '../usage';
 import { roundsLogHtml, usageTabHtml } from '../roundsLog';
 import { escapeHtml, panelHtml, PanelState } from '../panelView';
 import { DEFAULTS } from '../settingsShape';
-import { vendorColour } from '../vendorColour';
+import { vendorPalette } from '../vendorColour';
 import { DEFAULT_VENDORS } from '../vendors';
+
+/**
+ * The palette the page builds for this fixture — from the vendors it configures, which is the same
+ * canonical list every view reads. Asking for a colour any other way here would be asserting against
+ * a second palette, which is exactly what these tests exist to forbid.
+ */
+const DEFAULT_COLOUR = vendorPalette(DEFAULT_VENDORS.map((v) => v.id));
 
 const state = (over: Partial<PanelState> = {}): PanelState => ({
   settings: DEFAULTS,
@@ -516,7 +523,7 @@ test('a running round shows its status, its reviewers and what it has cost', () 
   // The vendor's word now carries its own colour, so the row is a span plus the rest of the
   // sentence. Same content, and the assertion now also says where the colour stops.
   assert.ok(html.includes(
-    `<span class="who" style="color:${vendorColour('codex')}">codex</span>/Architecture — done (2 findings)`));
+    `<span class="who" style="color:${DEFAULT_COLOUR('codex')}">codex</span>/Architecture — done (2 findings)`));
   assert.ok(html.includes('5.3k in / 260 out'));
   assert.ok(html.includes('no cost reported'));
 });
@@ -534,14 +541,14 @@ test('a reviewer card wears the colour that vendor has in the rounds list', () =
 
   for (const vendor of DEFAULT_VENDORS) {
     assert.ok(
-      html.includes(`<div class="vendor" style="border-left-color:${vendorColour(vendor.id)}">`),
-      `${vendor.id}'s card should carry ${vendorColour(vendor.id)}`,
+      html.includes(`<div class="vendor" style="border-left-color:${DEFAULT_COLOUR(vendor.id)}">`),
+      `${vendor.id}'s card should carry ${DEFAULT_COLOUR(vendor.id)}`,
     );
   }
 
   // Per VENDOR, not one colour for the section: two different ids must not paint the same edge, or
   // the loop above would pass against a constant and say nothing.
-  const colours = DEFAULT_VENDORS.map((v) => vendorColour(v.id));
+  const colours = DEFAULT_VENDORS.map((v) => DEFAULT_COLOUR(v.id));
   assert.strictEqual(new Set(colours).size, colours.length, 'each vendor gets its own colour');
 });
 

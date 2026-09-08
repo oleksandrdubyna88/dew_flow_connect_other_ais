@@ -907,13 +907,36 @@ elsewhere. It lived inside `PanelProvider` beside `vscode`, so it could not be t
 is how a rule ships wrong and stays wrong, asserted by nothing but its own comment. Nine tests now
 say what it does.
 
-**A vendor's name carries one colour, everywhere.** `vendorColour` maps a name to the editor's own
-chart palette — anchored for `codex`, `gemini` and `local`, hashed for anything else, so a custom
-vendor is stable too and no colour is a hex value that could vanish on somebody's theme. Derived from
-the NAME rather than handed out in arrival order, because a colour that changes between the rounds
-list, the spending chart and the next restart teaches a mapping that then lies. Only the vendor word
-is coloured; the rest of the row is exactly as it was. The anchors are not decoration: a plain hash
-put the three shipped vendors into two colours out of six, caught by the test on its first run.
+**A reviewer's colour is its own, everywhere.** `vendorPalette(configuredIds)` decides the colours of
+a whole list at once and returns the lookup every view uses. Only the vendor word is coloured; the
+rest of the row is exactly as it was.
+
+Deciding it per NAME was the first design and it did not survive contact: a name hashed into six
+chart colours put `local` and `remsoftdev-codex` on the same orange in a panel with six reviewers
+configured (reported 2026-09-08), and `claude` and `antigravity` on the same purple. Six names into
+six buckets collide more often than not, and a colour derived from one name cannot know what the
+other five took — so the promise moved to the LIST. See
+[PLAN_vendor_colours_never_repeat.md](PLAN_vendor_colours_never_repeat.md).
+
+Four properties hold it together:
+
+- **Twelve contributed colours.** `contributes.colors` in the manifest declares
+  `coai.vendorColour1..12`, each with a dark, a light and two high-contrast default, and the code
+  writes `var(--vscode-coai-vendorColour7, #B482F5)` — theme first, the hex only for a build older
+  than the manifest. The same shape as the CredsForDevs dependency palette, and the same twelve hues.
+- **Sorted, never arrival order.** A colour that changes between the rounds list, the spending chart
+  and the next restart teaches a mapping that then lies, so the list is normalised, de-duplicated and
+  sorted before anything is handed out.
+- **Anchored slots are reserved whether or not the anchor is configured** — `codex` blue, `gemini`
+  green, `local` orange, `claude` purple, `antigravity` cyan. Placing anchors "first" is not enough:
+  with only `claude` on the list, a stranger would otherwise take blue and `codex` would come back to
+  a colour somebody else wears. The reservation is lent out, last, rather than letting the thirteenth
+  reviewer repeat early.
+- **One canonical list.** Every view colours from the CONFIGURED reviewers — `PanelProvider.vendorIds()`
+  — never from "whoever appears in the data I am drawing". Two views inferring their own lists would
+  paint one vendor two colours the moment the lists differed by a name. A provider that is no longer
+  configured still gets a stable colour from its own name, and that is the only colour in the product
+  allowed to coincide with a live reviewer's.
 
 **Since 2026-09-08 a reviewer's CARD carries the same colour**, as a 3px left edge in the
 *Reviewers* section — so a vendor can be followed from where it is configured to where it is
@@ -923,9 +946,9 @@ in the stylesheet with a neutral fallback and the COLOUR is inline, because it i
 vendor rather than named by a class.
 
 The synchronisation is free and must stay that way: the card is keyed by `vendor.id` and a round
-records the same string as `provider`, so one call to `vendorColour` answers for both. A second
-mapping would satisfy "the card is coloured" and break the only thing that was asked for — the test
-asserts the card's colour against the function rather than against a hex, for exactly that reason.
+records the same string as `provider`, so one palette answers for both. A second mapping would
+satisfy "the card is coloured" and break the only thing that was asked for — the test asserts the
+card's colour against the palette rather than against a hex, for exactly that reason.
 
 A round from a server older than `seconds` shows its reviewers with no duration rather than `0s`:
 absent is unknown, and printing a zero would be a measurement nobody made. The list is also twice as

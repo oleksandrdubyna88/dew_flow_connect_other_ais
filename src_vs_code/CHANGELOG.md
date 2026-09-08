@@ -1,6 +1,30 @@
 # Changelog
 
-## Unreleased
+## Extension 0.31.8 — 2026-09-08
+
+**No two reviewers wear the same colour any more.** With six reviewers configured — three here and
+one Team server's three — `local` and `remsoftdev-codex` had the same orange edge, and `claude` and
+`antigravity` would have shared a purple the moment both were added.
+
+That was not an unlucky hash, it was the shape of the answer. A name was hashed into six chart
+colours; six names into six buckets collide more often than they do not, and a colour worked out
+from ONE name cannot know what the other five took. So the promise moved to the list: the palette is
+now decided for every configured reviewer at once.
+
+There are twelve colours instead of six, contributed by the extension itself, so each carries a
+dark, a light and two high-contrast variant rather than being whatever the theme happens to mean by
+"orange". `codex`, `gemini` and `local` keep the blue, green and orange they already had — a mapping
+you have learned is not worth invalidating — and `claude` and `antigravity` are pinned before anybody
+learns something else. Those five hold their slots whether or not they are configured, so a stranger
+never takes blue while `codex` is away.
+
+Every view colours from the same list, the reviewers in your settings, rather than from whoever
+happens to appear in the rounds it is drawing. That is what keeps a card, its running round, its
+spending card and the log agreeing. A reviewer you have since removed still gets a colour, from its
+own name, and it is the only one allowed to look like somebody else's.
+
+Past twelve reviewers the thirteenth repeats. Twelve colours cannot dress thirteen people, and a
+grey nobody can tell from an ordinary row would cost more than the repeat does.
 
 **The rounds log names the model.** A reviewer row that has one now reads
 `remsoftdev-claude/Architecture · claude-haiku-4-5 — done (3 findings)` instead of stopping at the
@@ -14,6 +38,7 @@ back which model answered, so an escalation or a server-side substitution is not
 gap is the next piece of work, and this entry exists so the number is not read as more than it is.
 
 Rounds recorded before this release name no model, which is the truth about them.
+
 
 ## Extension 0.31.7 — 2026-09-08
 

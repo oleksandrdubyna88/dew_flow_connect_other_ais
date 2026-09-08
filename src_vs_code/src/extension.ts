@@ -490,7 +490,7 @@ async function showRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher, pa
   // opened a log should not wait on a process to see it: the findings arrive in the next push, a
   // moment later. Raised by the gate as blocking the panel on an unannounced read.
   log.show(
-    rowsFrom(await readSessions(), Date.now(), await panel.modelPrice(), await panel.usageLines()),
+    rowsFrom(await readSessions(), Date.now(), await panel.modelPrice(), await panel.usageLines(), undefined, panel.vendorIds()),
     watcher.openQuestions,
     await panel.usageTab());
   await refreshRoundsLog(log, watcher, panel, true);
@@ -503,7 +503,7 @@ async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher,
   }
   const fresh = await panel.roundsLog();
   log.update(
-    rowsFrom(await readSessions(), Date.now(), await panel.modelPrice(), await panel.usageLines(), fresh),
+    rowsFrom(await readSessions(), Date.now(), await panel.modelPrice(), await panel.usageLines(), fresh, panel.vendorIds()),
     watcher.openQuestions,
     await panel.usageTab(),
     force,
