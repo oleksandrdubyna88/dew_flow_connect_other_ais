@@ -102,6 +102,39 @@ public static class LocalAsk
             + "(COAI_REVIEWER_TIMEOUT_MINUTES), run fewer local roles per round, or point this "
             + "vendor at a second engine.";
 
+    /// <summary>
+    /// Still waiting for the card: how many are ahead, and for how long.
+    /// </summary>
+    /// <remarks>
+    /// <para>It lives HERE, beside <see cref="IsProgress"/>, for the same reason
+    /// <see cref="RemoteAsk.QueuedMessage"/> and <see cref="RemoteAsk.RunningMessage"/> do: whoever
+    /// reads this shim's stderr to explain a failure has to be able to tell a progress note from a
+    /// verdict, and a sentence composed at the call site is a sentence nothing can recognise.</para>
+    /// <para>It was composed at the call site. Measured on a real gate, 2026-09-08:
+    /// <c>local/Conventions FAILED after 290.0s: exit 69: l Qwen3.5-35B-A3B-Q5_vk128:latest,
+    /// pid 52068)</c> — the reported reason was forty-five characters of THIS note, cut mid-word,
+    /// while <see cref="QueuedOutMessage"/> sat directly underneath it saying what to do.</para>
+    /// </remarks>
+    public static string WaitingMessage(string endpoint, int ahead, TimeSpan soFar, string model, int pid) =>
+        $"{WaitingOpening}{endpoint}: {ahead} ahead, {soFar.TotalSeconds:F0}s so far "
+            + $"(model {model}, pid {pid})";
+
+    /// <inheritdoc cref="WaitingMessage"/>
+    public const string WaitingOpening = "waiting for the local engine at ";
+
+    /// <summary>
+    /// Whether a line this shim wrote is PROGRESS rather than a verdict.
+    /// </summary>
+    /// <remarks>
+    /// Matched on the STEM, because the endpoint, the queue position, the elapsed time, the model
+    /// and the pid are all interpolated into it. The same shape as
+    /// <see cref="RemoteAsk.IsProgress"/>, and for the same reason recorded there: asking "is this
+    /// progress" is answerable because these sentences are OURS, while asking "does this announce a
+    /// failure" is not — that was tried, and three reviewers broke it with tallies.
+    /// </remarks>
+    public static bool IsProgress(string line) =>
+        line.Contains(WaitingOpening, StringComparison.OrdinalIgnoreCase);
+
     /// <inheritdoc cref="TooSlowMessage"/>
     public const string TooSlowOpening = "the local engine at ";
 

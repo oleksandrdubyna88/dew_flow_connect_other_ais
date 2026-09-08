@@ -251,6 +251,50 @@ There are exactly two, `RemoteAsk.IsProgress` owns both sentences beside the ver
 with (`AskRemote` used to build them inline, which is how the recognition would have drifted), and
 `IsScaffolding` excludes them. The announcement vocabulary is untouched.
 
+### The same thing, one shim over — and a reason is never half a line (2026-09-08)
+
+The LOCAL shim had the identical defect, and nobody looked for it there because the sentence it
+produced was worse rather than merely wrong:
+
+```
+local/Conventions FAILED after 290.0s: exit 69: l Qwen3.5-35B-A3B-Q5_vk128:latest, pid 52068)
+```
+
+It begins mid-word. Nothing crashed: the reviewer waited its whole five-minute deadline for the local
+engine and never got the card — three sibling local reviewers in the same round answered in 1.9 min,
+34 s and 35 s. Exit 69 is `EX_UNAVAILABLE`, which the shim writes for exactly that, and
+`LocalAsk.QueuedOutMessage` says what to do about it: more time, fewer local roles per round, or a
+second engine. The cure was written, printed, and lost to forty-five characters of an unrelated line.
+
+**Three links, and the third is what made it a fragment.** The shim writes its waiting note to the
+same stderr as its verdict; `ReviewerExecutor` kept the last 400 CHARACTERS, so the cut landed
+wherever it landed; and `Because` takes the first line that is not scaffolding — which was now half
+of a progress note, recognised as neither progress nor a runtime frame.
+
+The local note is `LocalAsk.WaitingMessage` now, beside `LocalAsk.IsProgress`, exactly as the remote
+pair are — `Program.cs` composed it inline, which is why there was nothing to name in the excluded
+set. And the tail is built out of **whole lines**: `ReviewerExecutor.TailOf` keeps as many complete
+trailing lines as the budget holds and never half of one.
+
+**Whole lines by construction, not by a flag.** The plan proposed telling `Because` that the tail had
+been truncated so it could drop the first line, and all three plan reviewers found the same two holes
+in that from three directions: a 400-character cut can land exactly on a newline, and dropping the
+first line then discards a complete diagnostic; and a stderr with no newline inside the budget has no
+first line to drop, so dropping it reports a real failure as blank. Trimming where the whole stderr
+is in hand costs the picker no new parameter and leaves it no case to get wrong. The one thing it
+cannot do is fit a line longer than the entire budget — that line's OPENING is kept, which is the
+half `Because` shows anyway. (Measured: `QueuedOutMessage` is 340–359 characters against the 400
+budget, so it fits today and an endpoint longer than about 85 characters would not.)
+
+One more fallback moved. `Because` ended at "the last line" when every line was scaffolding, and for
+a reviewer killed while it was still queuing that is a progress note again — the same defect wearing
+the other shoe. A tail that is nothing but progress notes now says *it was still waiting for its
+engine when it stopped*; a tail that is nothing but stack frames keeps the old behaviour, because its
+last line is at least something a person can search for.
+
+Design record:
+[PLAN_a_progress_note_is_never_a_reason_the_local_half.md](PLAN_a_progress_note_is_never_a_reason_the_local_half.md).
+
 ### The Gemini retirement (2026-09-01)
 
 Google closed Gemini Code Assist for individual accounts. The CLI now fails inside `_doSetupUser`,

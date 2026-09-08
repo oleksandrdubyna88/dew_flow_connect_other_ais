@@ -523,9 +523,29 @@ public static class ReviewerSummaryFactory
         }
 
         var meaningful = lines.Where(l => !IsScaffolding(l)).ToList();
-        var line = meaningful.FirstOrDefault(Announces) ?? meaningful.FirstOrDefault() ?? lines[^1];
+        if (meaningful.Count == 0)
+        {
+            return NothingButScaffolding(lines);
+        }
+
+        var line = meaningful.FirstOrDefault(Announces) ?? meaningful[0];
         return $": {(line.Length <= ReasonLength ? line : $"{line[..ReasonLength]}…")}";
     }
+
+    /// <summary>
+    /// Every line was scaffolding, so there is no reason to quote — say which kind of nothing.
+    /// </summary>
+    /// <remarks>
+    /// The fallback used to be the LAST line, which for a reviewer killed while it was still queuing
+    /// is a progress note again — the defect this exclusion exists for, wearing the other shoe. A
+    /// reviewer that only ever said "waiting" has a real answer and it is not a quotation: it never
+    /// got started. A stack trace with no message in it keeps the old behaviour, because its last
+    /// line is at least something a person can search for. (codex, the plan round.)
+    /// </remarks>
+    private static string NothingButScaffolding(IReadOnlyList<string> lines) =>
+        lines.All(IsProgressNote)
+            ? " — it was still waiting for its engine when it stopped, and gave no other reason"
+            : $": {(lines[^1].Length <= ReasonLength ? lines[^1] : $"{lines[^1][..ReasonLength]}…")}";
 
     private static bool Announces(string line) =>
         Announcements.Any(a => line.Contains(a, StringComparison.OrdinalIgnoreCase));
@@ -550,7 +570,20 @@ public static class ReviewerSummaryFactory
     /// prints anything like them. The vocabulary above is left exactly as it was.</para>
     /// </remarks>
     private static bool IsScaffolding(string line) =>
-        RemoteAsk.IsProgress(line) || IsRuntimeFrame(line);
+        IsProgressNote(line) || IsRuntimeFrame(line);
+
+    /// <summary>
+    /// A note either shim writes while it is still waiting — never a verdict.
+    /// </summary>
+    /// <remarks>
+    /// The LOCAL half was added on 2026-09-08, the day the same defect surfaced one shim over:
+    /// <c>local/Conventions FAILED after 290.0s: exit 69: l Qwen3.5-35B-A3B-Q5_vk128:latest,
+    /// pid 52068)</c>. The remote pair had been named here since 2026-09-07 and the local one had
+    /// not, because <c>Program.cs</c> composed its sentence inline — so there was nothing to name.
+    /// It is <see cref="LocalAsk.WaitingMessage"/> now, beside its own recogniser.
+    /// </remarks>
+    private static bool IsProgressNote(string line) =>
+        RemoteAsk.IsProgress(line) || LocalAsk.IsProgress(line);
 
     /// <summary>The noise a crashing runtime prints AROUND its message.</summary>
     /// <remarks>
