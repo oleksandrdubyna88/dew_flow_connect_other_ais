@@ -94,6 +94,17 @@ export const CONVENTIONS_ID = 'conventions';
 export const CONVENTIONS_ROLE_SINCE = '0.18.10';
 
 /**
+ * The `coai-mcp` that understands a role being switched OFF.
+ *
+ * <p>Same shape of skew as {@link CONVENTIONS_ROLE_SINCE}, and the same reason it must be said out
+ * loud: an older server reads the per-role env keys it knows and simply never looks for
+ * `COAI_ENABLED_*`, so it launches the reviewer anyway. That failure is silent AND backwards — the
+ * panel shows a role unticked while it is the one thing still reviewing — which is worse than the
+ * conventions skew, where an absent reviewer at least matches an absent result.</p>
+ */
+export const ROLE_SWITCH_SINCE = '0.18.13';
+
+/**
  * What the panel shows as selected for one round — the stored choice, or what the server would
  * actually use, so the box never reads as "nothing" when a prompt is in fact chosen.
  *

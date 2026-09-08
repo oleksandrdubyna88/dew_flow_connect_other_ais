@@ -1,5 +1,42 @@
 # Changelog
 
+## Extension 0.31.9 — 2026-09-08
+
+**A code-review role can be switched off.** Each of the four boxes — Conventions, Architecture,
+Security & reliability, Performance & UX-DX — now carries a tick box on its own heading. Unticked,
+that role takes no part in the round at all: no reviewer is launched for it, nothing it would have
+found is counted, and it lends the stage neither its rounds nor its threshold.
+
+Until now the only way to keep a role out was to lie to a control that means something else — set
+its rounds low enough that it never gets a turn. That is not the same statement, it is not readable
+as one, and it threw away the number you would want back. The switch keeps the role's rounds, its
+threshold and its prompt picks, and returns them unchanged when you tick it again.
+
+The last ticked role cannot be unticked. A code round with no reviewer in it is not an empty round —
+a round nobody answered is counted as unresolved, so it would sit open and the next review would be
+refused for the wrong reason. The server refuses that round too, because a Team server and a
+hand-written config block have no checkbox to look at.
+
+Plan review is not affected: it has one role and no tick box.
+
+**Wants `coai-mcp` 0.18.13.** An older server does not look for the new setting and runs the role
+anyway — a failure that reads backwards, because the box says off while the reviewer is the one thing
+still working. The Code stage section says so out loud, naming the roles it would run, while that is
+true.
+
+## Server 0.18.13 — 2026-09-08
+
+**A role switched off in the panel is a role the round does not launch.** `COAI_ENABLED_<ROLE>`
+disables one code role; absent means on, and only the four spellings of false switch anything off —
+absent, empty, `no`, a typo and a shell-mangled value all leave the reviewer working. A role wrongly
+on costs one extra pass; a role wrongly off is a review nobody performed with nothing saying so.
+
+A disabled role lends the stage neither its rounds nor its threshold, so it cannot keep a stage
+running rounds nobody reviews or hold the gate open against a number no reviewer can bring down.
+With every code role off, `review_code` is refused before the scope check and before any worktree,
+naming the four boxes and the variable. `COAI_ENABLED_PLANCRITIQUE` is refused: this is code review
+only.
+
 ## Extension 0.31.8 — 2026-09-08
 
 **No two reviewers wear the same colour any more.** With six reviewers configured — three here and

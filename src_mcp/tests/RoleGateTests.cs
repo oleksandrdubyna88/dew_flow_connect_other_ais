@@ -146,6 +146,62 @@ public sealed class RoleGateTests
     }
 
     [Fact]
+    public void COAI_ENABLED_SwitchesOneCodeRoleOff_AndNothingElse()
+    {
+        var env = new Dictionary<string, string> { ["COAI_ENABLED_ARCHITECTURE"] = "false" };
+        var settings = PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name));
+
+        settings.Rounds.For(PromptCatalog.ArchitectureRole).Enabled.Should().BeFalse();
+        settings.Rounds.For(PromptCatalog.SecurityRole).Enabled.Should().BeTrue();
+        settings.Rounds.EnabledRolesOf(Stage.CodeReview).Should().BeEquivalentTo(
+            [PromptCatalog.ConventionsRole, PromptCatalog.SecurityRole, PromptCatalog.UxDxRole]);
+    }
+
+    [Fact]
+    public void ARoleIsOnUnlessTheVariableSaysOffInSoManyWords()
+    {
+        // Not the inverse of the ordinary flag helper, and the asymmetry is the point: a role
+        // wrongly ON costs one extra pass, a role wrongly OFF is a review nobody performed with
+        // nothing on screen saying so. Absent, empty, "no", a typo and a shell-mangled value all
+        // leave the reviewer working; only the four spellings of false stop it.
+        foreach (var value in new[] { "", "no", "off", "0.0", "FaLsE", "true", " false " })
+        {
+            var env = new Dictionary<string, string> { ["COAI_ENABLED_UXDXPERFORMANCE"] = value };
+            var settings = PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name));
+
+            settings.Rounds.For(PromptCatalog.UxDxRole).Enabled.Should().BeTrue($"'{value}' does not say off");
+        }
+
+        foreach (var value in new[] { "0", "false", "FALSE", "False" })
+        {
+            var env = new Dictionary<string, string> { ["COAI_ENABLED_UXDXPERFORMANCE"] = value };
+            var settings = PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name));
+
+            settings.Rounds.For(PromptCatalog.UxDxRole).Enabled.Should().BeFalse($"'{value}' says off");
+        }
+    }
+
+    [Fact]
+    public void NoEnvironmentAtAll_LeavesEveryRoleOn()
+    {
+        var settings = PanelSettings.FromEnvironment(_ => null);
+
+        settings.Rounds.EnabledRolesOf(Stage.CodeReview).Should().HaveCount(4);
+        settings.Rounds.For(PromptCatalog.PlanRole).Enabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ThePlanRole_CannotBeSwitchedOffByAVariable()
+    {
+        // Code review only. The boundary refuses rather than trusting that nobody writes the key.
+        var env = new Dictionary<string, string> { ["COAI_ENABLED_PLANCRITIQUE"] = "false" };
+        var settings = PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name));
+
+        settings.Rounds.For(PromptCatalog.PlanRole).Enabled.Should().BeTrue();
+        settings.Rounds.RolesForRound(Stage.PlanReview, round: 1).Should().ContainSingle();
+    }
+
+    [Fact]
     public void TheShippedDefaults_AreOneRoundEverywhere_AndAreThePanelsNumbers()
     {
         // These four numbers are also the panel's DEFAULTS, and that is load-bearing rather than
@@ -233,5 +289,89 @@ public sealed class RoleGateTests
 
         var ok = (Transition.Ok)RoundMachine.CompleteRound(state, gate, ReviewerSummary.AllAnswered(3));
         ok.Verdict.Should().BeOfType<RoundVerdict.Revise>("security has three rounds and has used one");
+    }
+    // ---------- a role the operator switched off does not take part ----------
+
+    /// <remarks>
+    /// Asked for on 2026-09-08: a checkbox on each of the four code-review boxes, and unticking one
+    /// means "this role does not take part in the round at all" — not a reviewer that runs and is
+    /// then ignored. Rounds could already keep a role out of a LATER round; nothing could keep it
+    /// out of the first one except lying to a control that means something else.
+    /// </remarks>
+    [Fact]
+    public void ARoleSwitchedOff_TakesPartInNoRoundAtAll()
+    {
+        var config = new PanelConfig(
+            new Dictionary<string, RoleGate>
+            {
+                [PromptCatalog.ConventionsRole] = new(2, 3),
+                [PromptCatalog.ArchitectureRole] = new(2, 3, Enabled: false),
+                [PromptCatalog.SecurityRole] = new(2, 3),
+                [PromptCatalog.UxDxRole] = new(2, 3),
+            },
+            StagePolicy.Human);
+
+        config.RolesForRound(Stage.CodeReview, round: 1).Should().NotContain(PromptCatalog.ArchitectureRole);
+        config.RolesForRound(Stage.CodeReview, round: 2).Should().NotContain(PromptCatalog.ArchitectureRole);
+        config.RolesForRound(Stage.CodeReview, round: 1).Should().BeEquivalentTo(
+            [PromptCatalog.ConventionsRole, PromptCatalog.SecurityRole, PromptCatalog.UxDxRole]);
+    }
+
+    [Fact]
+    public void AStagesBudget_IgnoresTheRolesThatAreSwitchedOff()
+    {
+        // The point of the requirement: a role that is off must not keep the stage running rounds
+        // nobody reviews, and must not lend the stage its threshold either.
+        var config = new PanelConfig(
+            new Dictionary<string, RoleGate>
+            {
+                [PromptCatalog.ConventionsRole] = new(1, 2),
+                [PromptCatalog.ArchitectureRole] = new(5, 9, Enabled: false),
+                [PromptCatalog.SecurityRole] = new(2, 3),
+                [PromptCatalog.UxDxRole] = new(1, 2),
+            },
+            StagePolicy.Human);
+
+        config.For(Stage.CodeReview).MaxRounds.Should().Be(2, "architecture's five rounds are switched off");
+        config.For(Stage.CodeReview).Threshold.Should().Be(3, "and so is its threshold of nine");
+    }
+
+    [Fact]
+    public void EveryCodeRoleSwitchedOff_IsAnEmptyStageRatherThanAThrow()
+    {
+        // The all-off case is DECIDED here rather than crashing here: `Max` over an empty sequence
+        // throws, and the round that must be refused is refused by the caller reading this.
+        var config = new PanelConfig(
+            PanelConfig.CodeRoleNames.ToDictionary(r => r, _ => new RoleGate(2, 3, Enabled: false)),
+            StagePolicy.Human);
+
+        config.EnabledRolesOf(Stage.CodeReview).Should().BeEmpty();
+        config.For(Stage.CodeReview).Should().Be(new StageGate(0, 0));
+        config.RolesForRound(Stage.CodeReview, round: 1).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ThePlanRole_HasNoSwitchAndIsNeverSkipped()
+    {
+        // Code review only, by the operator's ruling. A plan stage with one role and a switch that
+        // turns it off is a different feature nobody asked for.
+        var config = new PanelConfig(
+            new Dictionary<string, RoleGate> { [PromptCatalog.PlanRole] = new(1, 6) },
+            StagePolicy.Human);
+
+        config.For(PromptCatalog.PlanRole).Enabled.Should().BeTrue();
+        config.RolesForRound(Stage.PlanReview, round: 1).Should().BeEquivalentTo([PromptCatalog.PlanRole]);
+    }
+
+    [Fact]
+    public void ARoleNobodyConfigured_IsOn()
+    {
+        // Absent means ON, everywhere: an older stored record, a config written before the switch
+        // existed, a role nobody has touched. The one thing that must never happen is a role
+        // silently not reviewing because a key was missing.
+        var config = Config((PromptCatalog.ArchitectureRole, 2, 3));
+
+        config.For(PromptCatalog.SecurityRole).Enabled.Should().BeTrue();
+        config.RolesForRound(Stage.CodeReview, round: 1).Should().Contain(PromptCatalog.SecurityRole);
     }
 }

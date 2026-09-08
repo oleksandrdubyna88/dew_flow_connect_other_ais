@@ -15,6 +15,7 @@ import { selectedFor } from '../prompts';
 const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   rounds: { PlanCritique: 5, Architecture: 4, SecurityReliability: 4, UxDxPerformance: 4 },
   thresholds: { PlanCritique: 1, Architecture: 5, SecurityReliability: 5, UxDxPerformance: 5 },
+  roleEnabled: { Conventions: true, Architecture: false, SecurityReliability: true, UxDxPerformance: true },
   dealPlanLenses: true,
   onExhausted: 'escalate',
   maxConcurrency: 7,
@@ -62,6 +63,10 @@ test('the file the panel writes is the shape the server parses', () => {
   assert.equal(written['COAI_DEAL_CODE'], 'true');
   assert.equal(written['COAI_CODE_WORKSPACE'], 'worktree');
   assert.deepEqual(JSON.parse(written['COAI_PROMPTS_PER_ROUND']!), { SecurityReliability: ['sec-attack'] });
+  // Only the role that is OFF, and spelled the way the server reads it. A key the server does not
+  // recognise is a reviewer that keeps running while the panel shows it unticked.
+  assert.equal(written['COAI_ENABLED_ARCHITECTURE'], 'false');
+  assert.equal(written['COAI_ENABLED_CONVENTIONS'], undefined, 'a role that is ON writes nothing');
 });
 
 test('a vendor added in the panel travels with its runtime and model', () => {

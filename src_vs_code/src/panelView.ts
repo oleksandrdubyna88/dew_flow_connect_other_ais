@@ -7,11 +7,11 @@ import {
 import { canonicalTeamServerUrl } from './teamServers';
 import { escapeHtml } from './escapeHtml';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
-import { CoaiSettings } from './settingsShape';
+import { CoaiSettings, enabledCodeRoles, roleIsOn } from './settingsShape';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
-import { CONVENTIONS_ROLE_SINCE, ROLES, promptsFor, selectedFor } from './prompts';
+import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, ROLES, promptsFor, selectedFor } from './prompts';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
@@ -796,7 +796,7 @@ function roundLimitNote(s: CoaiSettings, enabledVendors: number): string {
   // Dealing changes the arithmetic rather than scaling it: every lens goes to ONE vendor instead of
   // to all of them, so a dealt round launches one reviewer per ROLE however many vendors are on.
   // That is half the round at two vendors, and the panel would have promised the undealt number.
-  const codeRoles = ROLES.filter((r) => r.stage === 'code').length;
+  const codeRoles = enabledCodeRoles(s).length;
   const reviewers = s.dealCodeLenses ? codeRoles : Math.max(1, enabledVendors) * codeRoles;
   const waves = Math.max(1, Math.ceil(reviewers / Math.max(1, s.maxConcurrency)));
 
@@ -826,7 +826,9 @@ function fanOut(state: PanelState): string {
   // "UP TO", because the server drops the Conventions reviewers in a repository that wrote no
   // rules down, and the panel cannot know that: whether rules exist is decided at round time by
   // looking in the worktree. Announcing four where three run is the mismatch a reviewer caught.
-  const codeRoles = ROLES.filter((r) => r.stage === 'code');
+  // Only the roles that are switched ON: this sentence is a promise about the round that is about
+  // to run, and one that counts a role the operator unticked is describing a different round.
+  const codeRoles = ROLES.filter((r) => r.stage === 'code' && roleIsOn(state.settings, r.id));
   const reviewers = vendors * codeRoles.length;
   // Derived, not stored: it is the widest CODE role's budget, and a stored copy would be a
   // second source of truth for a number that already exists.
@@ -867,6 +869,27 @@ function conventionsSkew(server: ServerStatus): string {
     + `<b>MCP server</b> section below.</div>`;
 }
 
+/**
+ * Said out loud while the installed server would run a role this panel shows switched off.
+ *
+ * <p>Below {@link ROLE_SWITCH_SINCE} the server never looks for `COAI_ENABLED_*`, so it launches
+ * every role whatever the boxes say. Louder than {@link conventionsSkew} deserves to be, because it
+ * fails the wrong way round: an unticked box that still reviews tells a person the opposite of what
+ * is happening, and they would only find out by reading the reviewer list of a finished round.</p>
+ */
+function roleSwitchSkew(server: ServerStatus, settings: CoaiSettings): string {
+  const known = server.kind !== 'absent' && server.version.length > 0;
+  const off = Object.entries(settings.roleEnabled).filter(([, on]) => !on).map(([role]) => role);
+  if (!known || off.length === 0 || compareVersions(ROLE_SWITCH_SINCE, server.version) <= 0) {
+    return '';
+  }
+
+  return `  <div class="stale">The coai-mcp you have installed (${escapeHtml(server.version)}) does not `
+    + `know a role can be switched off, so it will run ${escapeHtml(off.join(', '))} anyway — `
+    + `whatever these boxes say. Update it to ${escapeHtml(ROLE_SWITCH_SINCE)} or later — the `
+    + `<b>MCP server</b> section below.</div>`;
+}
+
 function promptsBody(state: PanelState): string {
   const s = state.settings;
   const roleRow = (role: (typeof ROLES)[number]): string => {
@@ -888,21 +911,35 @@ function promptsBody(state: PanelState): string {
   </div>`;
     }).join('\n');
 
+    // A switch, but only on the CODE roles: the plan stage has one role, and a checkbox whose only
+    // setting turns the whole stage off is a different feature nobody asked for.
+    const switched = role.stage !== 'plan';
+    const on = !switched || roleIsOn(s, role.id);
+    // The LAST role standing cannot be unticked. Refusing here, where the pointer is, beats
+    // refusing at round time with an error about a review somebody already waited for — and the
+    // server still refuses the all-off round, because a hand-written env block has no checkbox.
+    const last = switched && on && enabledCodeRoles(s).length === 1;
+    const off = switched && !on ? ' off' : '';
+
     // The gate and the prompts were two sections describing one thing: how many times this role
     // asks, how much it may still find, and what it asks each time. One box now.
-    return `<div class="role role-${ROLE_TONE[role.id] ?? 'plan'}">
-  <div class="head"><span class="name">${escapeHtml(role.label)}</span></div>
+    return `<div class="role role-${ROLE_TONE[role.id] ?? 'plan'}${off}">
+  <div class="head">${switched
+      ? `<input type="checkbox" id="role-${role.id}" data-setting="roleEnabled" data-role="${role.id}"${on ? ' checked' : ''}${last ? ' disabled' : ''}
+           title="${escapeHtml(last ? HELP.lastRole : HELP.roleEnabled)}">
+    <label class="name" for="role-${role.id}">${escapeHtml(role.label)}</label>`
+      : `<span class="name">${escapeHtml(role.label)}</span>`}</div>
   <div class="field inline">
     ${labelled(`rounds-${role.id}`, 'Rounds', 'maxRounds')}
     <input type="number" id="rounds-${role.id}" min="1" max="6" data-setting="rounds" data-role="${role.id}"
-           value="${s.rounds[role.id] ?? 2}">
+           value="${s.rounds[role.id] ?? 2}"${on ? '' : ' disabled'}>
   </div>
   <div class="field inline">
     ${labelled(`threshold-${role.id}`, 'Passes at or under', 'gateThreshold')}
     <input type="number" id="threshold-${role.id}" min="0" data-setting="thresholds" data-role="${role.id}"
-           value="${s.thresholds[role.id] ?? 3}">
+           value="${s.thresholds[role.id] ?? 3}"${on ? '' : ' disabled'}>
   </div>
-${pickers}
+${on ? pickers : ''}
 </div>`;
   };
 
@@ -919,6 +956,7 @@ ${plan}
 </div>
 <div class="role-group">
   <div class="group-head">Code stage \u2014 ${fanOut(state)}</div>
+${roleSwitchSkew(state.server, s)}
   <div class="field">
     <label class="check"><input type="checkbox" data-setting="dealCodeLenses"${s.dealCodeLenses ? ' checked' : ''}> Deal the roles across vendors</label>
     <div class="hint">Off: each of the three roles is asked of every vendor. On: the three roles are dealt out, one vendor each.</div>
@@ -1345,8 +1383,12 @@ const CSS = `
      settings panel into four coloured slabs, and it survives a light theme unchanged. */
   .role { border: 1px solid var(--vscode-widget-border); border-left: 3px solid var(--tone-plan);
           border-radius: 3px; padding: 6px 8px 2px; margin: 0 0 8px; }
-  .role .head { margin: 0 0 4px; }
+  .role .head { margin: 0 0 4px; display: flex; align-items: center; gap: 6px; }
   .role .name { font-weight: 600; }
+  /* A role switched off keeps its colour on the edge — it is still that role — and dims everything
+     that no longer applies. The name stays at full strength so the box is still findable. */
+  .role.off .field { opacity: .5; }
+  .role.off .name { opacity: .7; }
   .role-plan { border-left-color: var(--tone-plan); }
   .role-arch { border-left-color: var(--tone-arch); }
   .role-sec { border-left-color: var(--tone-sec); }

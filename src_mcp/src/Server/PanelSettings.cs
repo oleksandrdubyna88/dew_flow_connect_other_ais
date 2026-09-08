@@ -537,6 +537,8 @@ public sealed record PanelSettings
     /// <c>COAI_ROUNDS_ARCHITECTURE</c> / <c>COAI_THRESHOLD_SECURITYRELIABILITY</c> name a role;
     /// <c>COAI_MAX_ROUNDS_CODE</c> / <c>COAI_THRESHOLD_PLAN</c> name a stage; <c>COAI_MAX_ROUNDS</c>
     /// and <c>COAI_GATE_THRESHOLD</c> are the originals and still fill in for everything.
+    /// <c>COAI_ENABLED_ARCHITECTURE</c> switches one CODE role off, and only off — see
+    /// <see cref="NotSwitchedOff"/>.
     /// </remarks>
     private static Dictionary<string, RoleGate> RoleGates(Func<string, string?> env)
     {
@@ -554,7 +556,10 @@ public sealed record PanelSettings
             var threshold = CountVar(env, $"COAI_THRESHOLD_{key}",
                 CountVar(env, $"COAI_THRESHOLD_{stage}",
                     CountVar(env, "COAI_GATE_THRESHOLD", shipped.Threshold)));
-            gates[role] = new RoleGate(rounds, threshold);
+            // The plan role carries no switch at all — code review only, by the operator's ruling —
+            // so the boundary refuses to disable it rather than trusting nobody sets the variable.
+            var enabled = isPlan || NotSwitchedOff(env, $"COAI_ENABLED_{key}");
+            gates[role] = new RoleGate(rounds, threshold, enabled);
         }
 
         return gates;
@@ -562,6 +567,22 @@ public sealed record PanelSettings
 
     private static bool Flag(Func<string, string?> env, string name) =>
         env(name) is "1" or "true" or "TRUE" or "True";
+
+    /// <summary>
+    /// A switch that is ON unless it says, in so many words, that it is off.
+    /// </summary>
+    /// <remarks>
+    /// <para>The inverse of <see cref="Flag"/>, and deliberately not <c>!Flag(...)</c>: the two
+    /// answer different questions. <c>Flag</c> is for a switch whose absence means off, where an
+    /// unreadable value should stay off. This one guards a REVIEWER, where the failure modes are not
+    /// symmetric — a role wrongly on costs one extra pass, a role wrongly off means a review nobody
+    /// performed and nothing on screen saying so.</para>
+    /// <para>So only the four spellings of false disable it. Absent, empty, <c>no</c>, <c>0.0</c>,
+    /// a typo, a value some shell mangled — every one of them leaves the reviewer working. This is
+    /// the parser half of "absent means on"; <see cref="RoleGate.Enabled"/> is the other half.</para>
+    /// </remarks>
+    private static bool NotSwitchedOff(Func<string, string?> env, string name) =>
+        env(name) is not ("0" or "false" or "FALSE" or "False");
 
     private static int IntVar(Func<string, string?> env, string name, int fallback) =>
         int.TryParse(env(name), out var value) && value > 0 ? value : fallback;

@@ -70,6 +70,7 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.escalationMinutes': 'wait for you',
   'coai.rounds': 'rounds',
   'coai.thresholds': 'passes at or under',
+  'coai.roleEnabled': 'tick box on its own heading',
   'coai.dealPlanLenses': 'deal the lenses across vendors',
   'coai.dealCodeLenses': 'deal the lenses across vendors',
   'coai.codeWorkspace': 'what a reviewer gets',

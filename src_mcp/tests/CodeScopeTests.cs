@@ -64,6 +64,27 @@ public sealed class CodeScopeTests : IDisposable
     }
 
     [Fact]
+    public async Task ACodeRound_WithEveryRoleSwitchedOff_IsRefused_NamingWhatToTick()
+    {
+        // Asked for on 2026-09-08 with the per-role checkboxes: unticking all four would otherwise
+        // start a round with no reviewers in it, and a round nobody answered is counted UNRESOLVED —
+        // so it would sit open for ever and the next call would be refused for the wrong reason.
+        var allOff = new PanelConfig(
+            PanelConfig.CodeRoleNames.ToDictionary(r => r, _ => new RoleGate(1, 5, Enabled: false)),
+            StagePolicy.Human);
+        var service = new PanelService(
+            new PanelSettings { DataDir = _data, Rounds = allOff },
+            VaultKeys.None("not configured for this test"), default, new ProcessLauncher(), Serilog.Core.Logger.None);
+
+        var answer = await service.ReviewCodeAsync("D:/nowhere", "main", "main~1", Scope);
+
+        answer.Should().ContainEquivalentOf("switched off", "the refusal has to say what happened");
+        answer.Should().ContainEquivalentOf("Architecture", "and name a box to tick");
+        answer.Should().Contain("COAI_ENABLED_", "a Team server has no checkbox to look at");
+        answer.Should().NotContain("worktree", "nothing should have been launched to discover this");
+    }
+
+    [Fact]
     public void ThePlanThatPassed_IsTheScope_AndIsKept()
     {
         // The plan round already carries the intent, agreed by both halves. Throwing it away and

@@ -122,6 +122,20 @@ public sealed partial class PanelService
     private static readonly ImmutableArray<ReviewRole> CodeRoles =
         [ReviewRole.Conventions, ReviewRole.Architecture, ReviewRole.SecurityReliability, ReviewRole.UxDxPerformance];
 
+    /// <summary>
+    /// What a caller is told when every code-review role has been switched off.
+    /// </summary>
+    /// <remarks>
+    /// It names the four boxes rather than the setting alone, because the person reading it is
+    /// looking at a panel with four titled sections and not at a JSON key. The environment variable
+    /// is named too: a Team server or a hand-written `mcpServers` block is the other way this state
+    /// is reachable, and there is no checkbox to look at there.
+    /// </remarks>
+    internal const string NoCodeRolesRefusal =
+        "Every code-review role is switched off, so this round would have no reviewers in it. "
+        + "Tick at least one of Conventions, Architecture, Security & reliability or Performance & UX-DX "
+        + "in the panel — or clear the matching COAI_ENABLED_<ROLE> variable — and ask again.";
+
     // ---------- providers ----------
 
     public async Task<string> ProvidersAsync(CancellationToken ct = default)
@@ -332,6 +346,15 @@ public sealed partial class PanelService
     /// </remarks>
     public Task<string> ReviewCodeAsync(string repoPath, string branch, string baseRef, string planText, CancellationToken ct = default)
     {
+        // Before the scope check and before anything is built, because it needs nothing to be true:
+        // a code round with every role switched off would launch no reviewer, and that is not an
+        // empty round — the session counts a round nobody answered as unresolved, so it would sit
+        // open for ever and the next `review_code` would be refused for the wrong reason.
+        if (_settings.Rounds.EnabledRolesOf(Stage.CodeReview).Count == 0)
+        {
+            return Task.FromResult(Error(NoCodeRolesRefusal));
+        }
+
         var scope = Scope(repoPath, branch, planText);
         // Only once the stage itself is reachable. "The plan stage has not passed" is the more
         // useful sentence for a caller who skipped it, and telling them to send a scope for a
