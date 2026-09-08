@@ -144,9 +144,19 @@ test('every webview this extension holds is released when it is disposed', () =>
 
   // DISCOVERED, not listed. A hand-written list is a list that goes stale the day somebody adds a
   // fifth webview — and `chatPanel.ts` had already appeared while this very change was in review.
-  const dir = path.join(__dirname, '..', '..', 'src');
-  const owners = fs.readdirSync(dir)
-    .filter((file) => file.endsWith('.ts'))
+  // RECURSIVE, because a webview owner added under `src/foo/` would otherwise never be discovered
+  // and could hold a disposed view with the suite still green. Raised on the code round.
+  const root = path.join(__dirname, '..', '..', 'src');
+  const walk = (dir: string): string[] => fs.readdirSync(dir, { withFileTypes: true })
+    .flatMap((entry) => {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        return entry.name === 'test' ? [] : walk(full);
+      }
+
+      return entry.name.endsWith('.ts') ? [path.relative(root, full)] : [];
+    });
+  const owners = walk(root)
     .filter((file) => /createWebviewPanel\(|resolveWebviewView\(/.test(read(file)));
 
   assert.ok(owners.length >= 4, `every webview owner is checked; found ${owners.join(', ')}`);
@@ -190,5 +200,5 @@ test('the view is re-read after the awaits, not carried from the check', () => {
 
   const after = source.slice(source.indexOf('const live = this.view;'));
   assert.ok(after.length > 0, 'the view is captured once, after the awaits');
-  assert.doesNotMatch(after, /this\.view\.webview/, 'and nothing writes through the field again');
+  assert.doesNotMatch(after, /this\.held\.view\.webview/, 'and nothing writes through the handle again');
 });
