@@ -816,8 +816,8 @@ function conventionsSkew(server: ServerStatus): string {
   }
 
   return `  <div class="stale">The coai-mcp you have installed (${escapeHtml(server.version)}) does not `
-    + `know <b>Conventions</b> is a role, so it will not run it — your code rounds are three `
-    + `reviewers, not four. Update it to ${escapeHtml(CONVENTIONS_ROLE_SINCE)} or later — the `
+    + `know <b>Conventions</b> is a role, so it will not run it — your code rounds are three code `
+    + `roles, not four. Update it to ${escapeHtml(CONVENTIONS_ROLE_SINCE)} or later — the `
     + `<b>MCP server</b> section below.</div>`;
 }
 

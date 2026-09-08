@@ -10,8 +10,10 @@
 
 ## What the operator asked for
 
-> вот тут я хочу добавить еще одну секцию. назовем конвеншинс. там будет только проверка
-> конвеншинс. а выбор конвеншинс в других дропдаунах убрать.
+> I want to add one more section here. Let us call it Conventions. It will hold only the
+> conventions check. And take the Conventions choice out of the other dropdowns.
+
+*(translated from the operator's Russian; this repository's documentation is English.)*
 
 A fourth box in the code stage, called **Conventions**, that does the conventions check and nothing
 else — and `Conventions` disappears from the other three roles' dropdowns.
