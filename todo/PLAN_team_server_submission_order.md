@@ -55,8 +55,11 @@ The load is not skewed because of demand. It is skewed because of a **list order
 
 ## Test plan
 
-- A pure unit over the submission order: given the same vendor list, repeated submissions do not all
-  begin with the same vendor (seeded, so the test is deterministic).
+- A pure unit over the submission order, asserting the FLATNESS the requirement above actually
+  states rather than merely that the first vendor varies: over N submissions across V vendors, each
+  vendor leads within an explicit tolerance of N/V. "Not always the same one" would pass a
+  distribution that still sends 80 % of first submissions to one account, which is the defect.
+  Seeded, so the assertion is deterministic. (CodeRabbit, PR 93.)
 - A test that `JobStore.TryClaim` is still FIFO — the guard for requirement 3.
 - A test that the round's reported reviewer order is unaffected.
 

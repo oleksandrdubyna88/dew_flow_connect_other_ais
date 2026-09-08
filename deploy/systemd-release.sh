@@ -51,20 +51,34 @@ trail_pop() { sed -i '1d' "$TRAIL"; }
 # rename syscall: there is no instant at which the tree is half-new. Copying file by file over
 # the live directory — what this used to do — leaves old and new assemblies mixed if the copy
 # is interrupted, and the unit then starts a combination nobody has ever tested.
+#
+# Returns non-zero rather than dying when the restart fails: under `set -e` a `die` here would
+# leave the script with $LIVE already pointing at the new release and no rollback run at all.
+# Every caller checks. (CodeRabbit, PR 93.)
 switch_to() {
     local release=$1
-    [[ -x "$release/$SERVICE" ]] || die "no $SERVICE binary in $release"
+    [[ -x "$release/$SERVICE" ]] || { say "no $SERVICE binary in $release"; return 1; }
     ln -sfn "$release" "$LIVE.next"
     mv -Tf "$LIVE.next" "$LIVE"
-    systemctl restart "$SERVICE"
+    systemctl restart "$SERVICE" || { say "the unit refused to restart on $release"; return 1; }
 }
 
 # ── the canary ───────────────────────────────────────────────────────────────────────────
 # `systemctl is-active` and /api/health say the process started. They said exactly that every
 # day this server ran without ever completing a single review. What proves a release is one
 # real review per configured vendor, reaching `done` with a non-empty answer.
-# A path beats a value: COAI_TOKEN_FILE keeps the credential out of the process table and out
-# of shell history, which COAI_TOKEN=… on the command line cannot.
+
+# The canary carries a live session token, so the destination is CHECKED rather than trusted:
+# COAI_URL is an override, and an override that can name any host is a way to make this script
+# post the company's token somewhere else. (CodeRabbit, PR 93.)
+require_https_origin() {
+    [[ "$URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?/?$ ]] \
+        || die "COAI_URL must be a bare https origin, not '$URL' — the canary sends a session token to it"
+}
+
+# A path beats a value: COAI_TOKEN_FILE keeps the credential out of the process table and out of
+# shell history, which COAI_TOKEN=… on the command line cannot.
+
 session_token() {
     if [[ -n "${COAI_TOKEN_FILE:-}" ]]; then
         [[ -r "$COAI_TOKEN_FILE" ]] || die "COAI_TOKEN_FILE is set but $COAI_TOKEN_FILE cannot be read"
@@ -82,7 +96,7 @@ canary() {
     printf 'header = "Authorization: Bearer %s"\n' "$(session_token)" >"$cfg"
     trap 'rm -f "$cfg"' RETURN
 
-    id=$(curl -sS -K "$cfg" -X POST "$URL/api/reviews" -H 'Content-Type: application/json' \
+    id=$(curl -sS --connect-timeout 10 --max-time 30 -K "$cfg" -X POST "$URL/api/reviews" -H 'Content-Type: application/json' \
         -d "{\"vendor\":\"$vendor\",\"model\":\"$model\",\"prompt\":\"Answer with exactly this JSON and nothing else: {\\\"findings\\\":[]}\",\"role\":\"PlanCritique\",\"timeoutSeconds\":$budget}" \
         | python3 -c 'import sys,json;print(json.load(sys.stdin).get("id",""))')
     [[ -n "$id" && "$id" != "None" ]] || { say "  $vendor: the server refused the review"; return 1; }
@@ -92,7 +106,12 @@ canary() {
     # failed release rolls back a deployment that was fine. (codex, code round.)
     waited=0
     while [[ "$waited" -lt "$((budget + 30))" ]]; do
-        body=$(curl -sS -K "$cfg" "$URL/api/reviews/$id?wait=20")
+        # --max-time comfortably past the 20s long poll: a stalled connection would otherwise
+        # hold here for ever and `waited` would never advance. (CodeRabbit, PR 93.)
+        body=$(curl -sS --connect-timeout 10 --max-time 45 -K "$cfg" "$URL/api/reviews/$id?wait=20") || {
+            say "  $vendor: the poll did not come back; treating as a failure"
+            return 1
+        }
         status=$(printf '%s' "$body" | python3 -c 'import sys,json;print(json.load(sys.stdin)["status"])')
         case "$status" in
             done)
@@ -127,12 +146,31 @@ for v in json.load(open(sys.argv[1])):
 ' "$ROOT/data/vendors.json"
 }
 
+# With no predecessor there is nothing to go back TO, and leaving the rejected build serving is
+# the one outcome worse than being down: it answers, wrongly, and every signal reads healthy. So
+# the unit is stopped and the trail emptied, which `--list` then says plainly.
+# (CodeRabbit, PR 93.)
 roll_back_to() {
     local previous=$1
-    [[ -n "$previous" ]] || return 0
+    if [[ -z "$previous" ]]; then
+        say "no earlier deployment to roll back to — stopping $SERVICE rather than leaving a rejected build serving"
+        systemctl stop "$SERVICE" || true
+        : >"$TRAIL"
+        return 0
+    fi
+
     trail_pop
-    switch_to "$previous"
+    switch_to "$previous" || say "the rollback to $previous did not start either — $SERVICE is DOWN"
     say "rolled back to $previous"
+}
+
+# One release or rollback at a time. Two concurrent runs can interleave a trail write with a
+# symlink swap and leave the trail describing an order that never happened, after which a rollback
+# selects the wrong release. (CodeRabbit, PR 93.)
+take_the_lock() {
+    mkdir -p "$RELEASES"
+    exec 9>"$RELEASES/.lock"
+    flock -n 9 || die "another release or rollback is running (it holds $RELEASES/.lock)"
 }
 
 # ── commands ─────────────────────────────────────────────────────────────────────────────
@@ -144,6 +182,7 @@ case "${1:-}" in
         exit 0
         ;;
     --rollback)
+        take_the_lock
         [[ -s "$TRAIL" ]] || die "no trail — nothing to roll back to"
         PREVIOUS=$(trail_at 1)
         [[ -n "$PREVIOUS" ]] || die "the trail holds only the live deployment — nothing further back"
@@ -167,6 +206,7 @@ case "${1:-}" in
 esac
 
 VERSION=$1
+take_the_lock
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 RELEASE="$RELEASES/$VERSION-$STAMP"
 mkdir -p "$RELEASES"
@@ -195,10 +235,21 @@ fi
 say "health: $(curl -sS "$URL/api/health")"
 
 say "canary — one real review per configured vendor"
+
+# Materialised and CHECKED before the loop. In a process substitution a python3 failure is
+# invisible to the parent: the loop reads EOF, FAILED stays 0, and the release passes having
+# canaried nothing — the exact "green because it never ran" shape this whole change is about.
+# (CodeRabbit, PR 93.)
+if ! VENDORS=$(vendors_from_config) || [[ -z "$VENDORS" ]]; then
+    say "could not read a vendor list from $ROOT/data/vendors.json — nothing to canary"
+    roll_back_to "$PREVIOUS"
+    die "release $VERSION rejected"
+fi
+
 FAILED=0
 while read -r vendor model; do
     canary "$vendor" "$model" || FAILED=1
-done < <(vendors_from_config)
+done <<<"$VENDORS"
 
 if [[ "$FAILED" -ne 0 ]]; then
     say "the canary failed; rolling back"

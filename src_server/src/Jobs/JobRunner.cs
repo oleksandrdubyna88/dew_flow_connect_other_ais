@@ -128,8 +128,12 @@ public sealed class JobRunner(
                 JobTransitions.Fail(job, FailureKind.NonZeroExit, Tail(exit.StdErrTail, exit.ExitCode), now),
             ReviewAttempt.Failed { Outcome: ReviewerOutcome.TimedOut } =>
                 JobTransitions.Fail(job, FailureKind.TimedOut, JobTransitions.ExpiryReason(job), now),
+            // The tokens travel with THIS one. It is the failure that ran and was billed, and
+            // dropping its usage wrote a spending line saying a broken vendor cost nothing.
             ReviewAttempt.Failed { Outcome: ReviewerOutcome.Unparseable bad } =>
-                JobTransitions.Fail(job, FailureKind.UnparseableByVendor, bad.Reason, now),
+                JobTransitions.Fail(
+                    job, FailureKind.UnparseableByVendor, bad.Reason, now,
+                    bad.Usage.TokensIn, bad.Usage.TokensOut),
             ReviewAttempt.Failed { Outcome: ReviewerOutcome.NotStarted missing } =>
                 JobTransitions.Fail(job, FailureKind.NotStarted, missing.Reason, now),
             _ => JobTransitions.Fail(
