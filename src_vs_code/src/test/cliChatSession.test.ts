@@ -129,7 +129,7 @@ function fakeChild(): FakeChild {
 }
 
 /** Timers the test drives by hand: nothing here ever waits for a real millisecond. */
-function fakeTimers(): Timers & { expire(): void } {
+function fakeTimers(): Timers & { expire(): void; armed(): number } {
   let pending: (() => void)[] = [];
 
   return {
@@ -147,6 +147,7 @@ function fakeTimers(): Timers & { expire(): void } {
         run();
       }
     },
+    armed: () => pending.length,
   };
 }
 
@@ -405,4 +406,149 @@ test('disposing twice is not an error', () => {
   session.dispose();
 
   assert.doesNotThrow(() => session.dispose());
+});
+
+/* ------------------------------------------------------------------------------------------------
+ * What the plan round of story 1.3 asked for. Seven findings accepted, five rejected; these are the
+ * seven, as assertions.
+ * ---------------------------------------------------------------------------------------------- */
+
+test('an answer from a process that never heard the earlier turns says so', async () => {
+  // A vendor CLI that died takes the conversation with it. The session cannot prevent that; what it
+  // must not do is hide it, or the next answer reads as a model being obtuse rather than as a
+  // conversation that restarted. (gemini, the plan round.)
+  let current = fakeChild();
+  const session = new CliChatSession(() => current.handle, BUDGETS, fakeTimers());
+
+  const { answering: first } = await asking(session, current, 'one');
+  current.say(ok('answer one'));
+  assert.deepStrictEqual(await first, { ok: true, answer: 'answer one' });
+
+  current.exit();
+  current = fakeChild();
+  const second = session.send('two');
+  current.say(INIT);
+  await flush();
+  current.say(ok('answer two'));
+
+  assert.deepStrictEqual(await second, { ok: true, answer: 'answer two', contextLost: true });
+});
+
+test('a first answer is never reported as having lost a context', async () => {
+  // Nothing was there to lose. Saying so would be noise where the real news is elsewhere.
+  const child = fakeChild();
+  const session = new CliChatSession(() => child.handle, BUDGETS, fakeTimers());
+
+  const { answering } = await asking(session, child, 'one');
+  child.say(ok('answer one'));
+
+  assert.deepStrictEqual(await answering, { ok: true, answer: 'answer one' });
+});
+
+test('the loss is reported once, not for ever after', async () => {
+  let current = fakeChild();
+  const session = new CliChatSession(() => current.handle, BUDGETS, fakeTimers());
+  const { answering: first } = await asking(session, current, 'one');
+  current.say(ok('a'));
+  await first;
+  current.exit();
+
+  current = fakeChild();
+  const second = session.send('two');
+  current.say(INIT);
+  await flush();
+  current.say(ok('b'));
+  await second;
+
+  const third = session.send('three');
+  await flush();
+  current.say(ok('c'));
+
+  assert.deepStrictEqual(await third, { ok: true, answer: 'c' }, 'the restart was announced twice');
+});
+
+test('only the startup budget is armed before a turn is written', async () => {
+  // The two budgets are separate and never run together: one guards reaching `init`, the other
+  // guards being answered. A reviewer feared they overlapped and that a turn budget could fire
+  // during startup; this is the assertion that they do not. (local, the plan round.)
+  const child = fakeChild();
+  const timers = fakeTimers();
+  const session = new CliChatSession(() => child.handle, BUDGETS, timers);
+
+  void session.send('hello');
+  await flush();
+  assert.strictEqual(timers.armed(), 1, 'more than one budget was armed at once');
+
+  child.say(INIT);
+  await flush();
+  assert.strictEqual(timers.armed(), 1, 'the startup budget outlived the start');
+});
+
+test('a turn queued behind a killed one starts a new process rather than a dead pipe', async () => {
+  let current = fakeChild();
+  const timers = fakeTimers();
+  const session = new CliChatSession(() => current.handle, BUDGETS, timers);
+
+  const { answering: first } = await asking(session, current, 'one');
+  current.say(ok('answer one'));
+  await first;
+
+  const second = session.send('two');
+  await flush();
+  timers.expire();
+  await second;
+
+  current = fakeChild();
+  const third = session.send('three');
+  current.say(INIT);
+  await flush();
+  current.say(ok('from the new one'));
+
+  // The killed process took the conversation with it, so this answer is honest about that too.
+  assert.deepStrictEqual(await third, { ok: true, answer: 'from the new one', contextLost: true });
+});
+
+test('a turn queued behind a disposal is answered rather than left hanging', async () => {
+  // Every send must settle. A queued turn that never resolves leaves the page disabled for ever,
+  // which is worse than a refusal. (codex, the plan round.)
+  const child = fakeChild();
+  const session = new CliChatSession(() => child.handle, BUDGETS, fakeTimers());
+
+  const { answering: first } = await asking(session, child, 'one');
+  const second = session.send('two');
+  session.dispose();
+
+  const a = await first as { ok: boolean };
+  const b = await second as { ok: boolean };
+  assert.strictEqual(a.ok, false);
+  assert.strictEqual(b.ok, false);
+});
+
+test('a result with a status nobody knows is a failure that names it', async () => {
+  const child = fakeChild();
+  const session = new CliChatSession(() => child.handle, BUDGETS, fakeTimers());
+
+  const { answering } = await asking(session, child, 'hello');
+  child.say(JSON.stringify({ event: 'result', result: { status: 'CANCELLED', response: '', error: '' } }));
+
+  const result = await answering as { ok: boolean; failure?: string };
+  assert.strictEqual(result.ok, false);
+  assert.match(result.failure ?? '', /CANCELLED/);
+});
+
+test('a process that dies before init says what it left on stderr', async () => {
+  // "Not installed" and "installed, and refusing your sign-in" are different problems, and the
+  // sentence has to tell them apart. (local, the plan round.)
+  const child = fakeChild();
+  const timers = fakeTimers();
+  const session = new CliChatSession(() => child.handle, BUDGETS, timers);
+
+  const answering = session.send('hello');
+  await flush();
+  child.setStderr('IneligibleTierError: this client is no longer supported');
+  timers.expire();
+
+  const result = await answering as { ok: boolean; failure?: string };
+  assert.strictEqual(result.ok, false);
+  assert.match(result.failure ?? '', /IneligibleTierError/);
 });
