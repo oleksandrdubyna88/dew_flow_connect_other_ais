@@ -56,7 +56,13 @@ public sealed partial class PanelService
             settings.RetryLadder);
         // Unparseable answers are kept beside the sessions, so "it would not parse" can be read
         // rather than guessed at.
-        _executor = new ReviewerExecutor(launcher, Path.Combine(settings.DataDir, "unparseable"));
+        _executor = new ReviewerExecutor(
+            launcher,
+            Path.Combine(settings.DataDir, "unparseable"),
+            // Its own directory beside that one: "it said nothing" and "it said something
+            // I could not read" are different questions, and a person chasing one must not
+            // have to wade through the other.
+            Path.Combine(settings.DataDir, "empty"));
         _prompts = new RolePrompts(settings.DataDir);
         _escalations = new Escalations(settings.DataDir);
         _ledger = new UsageLedger(settings.DataDir);
@@ -391,6 +397,23 @@ public sealed partial class PanelService
                 _log.Information(
                     "rules for review: {Count} file(s), {Bytes} bytes, {Omitted} omitted, {Missing} mount(s) not in the tree",
                     rules.Files.Count, rules.Bytes, rules.Omitted.Count, rules.MissingMounts.Count);
+                // What the reviewers were actually sent, which the line above says nothing about.
+                // The diff IS a reviewer's world at this stage, and on 2026-09-08 eight of them
+                // answered with nothing while the only way to ask whether they had seen the change
+                // was to subtract this rules byte count from a token total in the ledger. Every
+                // number here was already computed and thrown away.
+                //
+                // UTF-8 bytes throughout, so a diff of Cyrillic identifiers and one of ASCII are
+                // measured the same way — and `elided` because a partial view is exactly the state
+                // in which a reviewer's silence means nothing at all.
+                _log.Information(
+                    "context for review: diff {DiffBytes} bytes over {DiffFiles} file(s), {Elided} elided; "
+                    + "plan {PlanBytes} bytes; rules {RulesBytes} bytes",
+                    System.Text.Encoding.UTF8.GetByteCount(bundle.Diff.Text),
+                    bundle.Diff.TotalFiles,
+                    bundle.Diff.Elided.Length,
+                    System.Text.Encoding.UTF8.GetByteCount(bundle.PlanText),
+                    rules.Bytes);
                 // Only the roles whose OWN budget reaches this round. The stage counts rounds once
                 // and a role stops taking part when its rounds are spent, so architecture can be
                 // worth two passes while performance is worth one.
@@ -1024,7 +1047,8 @@ public sealed partial class PanelService
             work.Add(new ReviewerWork(
                 runtime.Build(role, prompt, launchDir, schemaFile, outputDir, settings),
                 runtime.Build(role, repairPrompt, repairDir, schemaFile, outputDir, settings),
-                choice.Id));
+                choice.Id,
+                System.Text.Encoding.UTF8.GetByteCount(prompt)));
         }
     }
 

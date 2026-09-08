@@ -8,10 +8,20 @@ namespace CoaiMcp.Runners.Reviewers;
 /// checking that rotation works had to infer the prompt from the byte count of the argv line and
 /// the known lengths of the catalog files, which is not a thing anyone should have to do.
 /// </param>
+/// <param name="PromptBytes">
+/// UTF-8 bytes of the prompt this reviewer was actually given.
+/// <para>Recorded because a round could describe what it ASSEMBLED and prove nothing about what any
+/// reviewer received: the context is built once and composed per reviewer, and anything between the
+/// two — a prompt template that dropped a section, a choice resolved to the wrong text — leaves a
+/// round log confidently naming a diff nobody was sent. On 2026-09-08 eight reviewers answered with
+/// nothing and the only way to ask whether they had seen the change was to subtract a rules byte
+/// count from a token total. Raised on this change's own plan round.</para>
+/// </param>
 public sealed record ReviewerWork(
     ReviewerInvocation Invocation,
     ReviewerInvocation? Repair = null,
-    string Prompt = "");
+    string Prompt = "",
+    int PromptBytes = 0);
 
 /// <summary>
 /// One reviewer crossing a line, reported the moment it happens.

@@ -10,7 +10,19 @@ namespace CoaiMcp.Runners.Reviewers;
 public abstract record ReviewerOutcome
 {
     /// <param name="Usage">What the vendor said the run consumed. Zeroes mean it said nothing.</param>
-    public sealed record Ok(NormalisedReview Review, bool Repaired, Usage Usage) : ReviewerOutcome
+    /// <param name="Evidence">
+    /// Where this reviewer's raw answer was kept, or empty for the ordinary case where it was not.
+    /// <para>Only a review with NO findings is kept. A reviewer that answers `{"findings": []}` has
+    /// succeeded by every measure the round can take — an `ok` outcome, its tokens counted — and on
+    /// 2026-09-08 eight of them did that on a diff a ninth reviewer found eleven things in. Nothing
+    /// was kept, so the question "did the model answer emptily, or was it handed a prompt that
+    /// deserved an empty answer" had no artefact behind it at all.</para>
+    /// <para>It travels ON the outcome rather than being logged where it is written, because the
+    /// sentence that needs it is the reviewer's own audit line — which is written by the caller,
+    /// from the outcome, and is where somebody chasing a silent round is already reading.</para>
+    /// </param>
+    public sealed record Ok(NormalisedReview Review, bool Repaired, Usage Usage, string Evidence = "")
+        : ReviewerOutcome
     {
         public Ok(NormalisedReview Review, bool Repaired) : this(Review, Repaired, Usage.None) { }
     }
@@ -148,7 +160,10 @@ public static class RateLimit
 /// parse. An unparseable answer gets exactly one repair launch; a second failure is a named
 /// outcome, never a retry loop.
 /// </summary>
-public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnparseableIn = null)
+public sealed class ReviewerExecutor(
+    IProcessLauncher launcher,
+    string? keepUnparseableIn = null,
+    string? keepEmptyIn = null)
 {
     private const int StdErrTail = 400;
 
@@ -168,20 +183,40 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
     /// afterwards succeeded, so the sentence named a symptom nobody could chase. An unparseable
     /// answer is the one case where the raw text is the whole story.
     /// </remarks>
-    private string? Keep(ReviewerInvocation invocation, string? raw)
+    private string? Keep(ReviewerInvocation invocation, string? raw) =>
+        KeepIn(keepUnparseableIn, invocation, raw);
+
+    /// <summary>
+    /// One reviewer's raw answer, on disk, under whichever directory the question belongs to.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The name identifies the author.</b> `provider-Role-timestamp` is unique within a
+    /// round by construction — one reviewer per provider and role — which matters because a person
+    /// reading a silent round has twelve files and needs the one belonging to codex/Architecture.
+    /// Nothing inside the file says who wrote it.</para>
+    /// <para><b>Written to a sibling and renamed.</b> `File.WriteAllText` truncates first and writes
+    /// second, so a process killed between those steps leaves a file that exists and holds nothing —
+    /// which, in THIS directory, reads exactly like a vendor that answered with nothing. That is the
+    /// one confusion the evidence exists to prevent. `RemoteRuntime.Claim` documents the same trap
+    /// and the same cure; it is not shared code because that one also retries a `Replace` against a
+    /// reader holding the destination, and here the destination is a name nothing else knows.</para>
+    /// </remarks>
+    private static string? KeepIn(string? directory, ReviewerInvocation invocation, string? raw)
     {
-        if (keepUnparseableIn is null || raw is null)
+        if (directory is null || raw is null)
         {
             return null;
         }
 
         try
         {
-            Directory.CreateDirectory(keepUnparseableIn);
+            Directory.CreateDirectory(directory);
             var file = Path.Combine(
-                keepUnparseableIn,
+                directory,
                 $"{invocation.Provider}-{invocation.Role}-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.txt");
-            File.WriteAllText(file, raw);
+            var pending = file + ".writing";
+            File.WriteAllText(pending, raw);
+            File.Move(pending, file, overwrite: true);
             return file;
         }
         catch (IOException)
@@ -207,6 +242,33 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
     /// in the same breath, then report a timeout describing the repair rather than the answer that
     /// needed one — hiding the diagnosis somebody is actually looking for.</para>
     /// </remarks>
+    /// <summary>
+    /// A reviewer that answered — and, when it answered with NOTHING, the file that says so.
+    /// </summary>
+    /// <remarks>
+    /// <para>A review with no findings is a success by every measure the round can take: an `ok`
+    /// outcome, its tokens counted, its seconds recorded. On 2026-09-08 eight remote reviewers
+    /// returned `{"findings": []}` in four to twenty-five seconds each, on a diff the local
+    /// reviewer found eleven things in — and there was nothing to read afterwards, because the raw
+    /// text of a parsed answer is dropped. Only a PARSE failure reached `unparseable/`.</para>
+    /// <para>Kept in its own directory rather than beside those, because "it said nothing" and
+    /// "it said something I could not read" are different questions and a person chasing one must
+    /// not wade through the other.</para>
+    /// <para>An answer WITH findings is not kept. A directory that also collected the healthy case
+    /// would be a directory whose name lies, and the one file that matters would be one of
+    /// hundreds.</para>
+    /// </remarks>
+    private ReviewerOutcome.Ok Answered(
+        NormalisedReview review,
+        bool Repaired,
+        Usage usage,
+        ReviewerInvocation invocation,
+        string? raw) =>
+        new(review,
+            Repaired,
+            usage,
+            review.Findings.IsEmpty ? KeepIn(keepEmptyIn, invocation, raw) ?? string.Empty : string.Empty);
+
     private static string? NoRepairToRun(ReviewerInvocation? repair, TimeSpan left) => repair switch
     {
         null => "and no repair was configured",
@@ -232,7 +294,7 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
 
         if (review is { } parsed)
         {
-            return new ReviewerOutcome.Ok(parsed, Repaired: false, usage);
+            return Answered(parsed, Repaired: false, usage, invocation, answer);
         }
 
         // Measured in the ledger before it was fixed: one reviewer at 668.8 s against a ten-minute
@@ -256,7 +318,7 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
                ?? (repaired is { } fixedReview
                    // Both launches are billed, so both are counted — a repaired reviewer that
                    // reported only its second attempt would under-report every time.
-                   ? new ReviewerOutcome.Ok(fixedReview, Repaired: true, usage.Add(repairUsage))
+                   ? Answered(fixedReview, Repaired: true, usage.Add(repairUsage), repair, repairAnswer)
                    // BOTH launches are kept, and the first one wins when the repair came back
                    // empty: a vendor whose envelope broke leaves nothing to read, and the
                    // evidence file was landing at zero bytes exactly when it was most needed.
