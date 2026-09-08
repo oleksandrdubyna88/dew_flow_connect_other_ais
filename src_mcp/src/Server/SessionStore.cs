@@ -14,26 +14,13 @@ namespace CoaiMcp.Server;
 /// measures each reviewer anyway (<c>ReviewerProgress.Elapsed</c>) and was throwing the number away
 /// at this boundary.
 /// </remarks>
-/// <param name="Model">
-/// The model this reviewer was LAUNCHED with — what the panel is configured to ask for.
-/// </param>
-/// <remarks>
-/// <para>Trailing and defaulted, so every session file already on disk stays valid: an older round
-/// simply names no model, which is the truth about it.</para>
-/// <para><b>It is what was ASKED for, not necessarily what answered.</b> A Team server picks the
-/// model for the account it claims and reports none back, and an escalation can run a stronger one —
-/// so this is the client's side of the question until the server answers it too
-/// (`todo/PLAN_the_log_names_the_model.md`). Naming that limit here rather than letting the log
-/// imply more than it knows.</para>
-/// </remarks>
 public sealed record ReviewerState(
     string Provider,
     string Role,
     string Status,
     int Findings = 0,
     string Note = "",
-    double Seconds = 0,
-    string Model = "")
+    double Seconds = 0)
 {
     public const string Queued = "queued";
     public const string Running = "running";
