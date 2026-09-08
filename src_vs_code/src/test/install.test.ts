@@ -903,3 +903,56 @@ test('and the extension passes it nothing — the call site, not just the defaul
       `mcpServerBlock(${args}) passes an env: every key in it freezes that setting for the client`);
   }
 });
+
+// ---------- a release is a DRAFT until it is whole (2026-09-08) ----------
+//
+// The operator pressed Install and got a 404 on an asset that exists: it was uploaded at 17:31:54Z,
+// after the click. A release is created by whichever matrix leg finishes FIRST, and the extension's
+// update check reads `…/releases` immediately — so for the whole length of the matrix the release is
+// published, visible, and missing most of its assets. Every link it offers in that window answers
+// 404 honestly.
+//
+// It had happened before. `mcp-v0.16.0` shipped five RIDs and no win-x64, and the tag was burned.
+
+test('no release line publishes before something has checked it is whole', () => {
+  // The window cannot be reopened by somebody copying the old three-line pattern into a fourth
+  // release line: every `gh release create` in this file makes a DRAFT.
+  const workflow = releaseWorkflow();
+  const creates = [...workflow.matchAll(/gh release create[^\n]*(?:\\n[^\n]*)*/g)].map((m) => m[0]);
+
+  assert.ok(creates.length >= 3, `every release line creates one; found ${creates.length}`);
+  for (const create of creates) {
+    assert.match(create, /--draft/, `a release must not be visible before it is whole: ${create.slice(0, 60)}`);
+  }
+});
+
+test('a release is published only by the job that verified it', () => {
+  // `--draft=false` is the publish, and it belongs to the job that counted the assets — never to a
+  // matrix leg, which cannot see its five siblings.
+  const workflow = releaseWorkflow();
+  const publishes = [...workflow.matchAll(/gh release edit[^\n]*--draft=false/g)].map((m) => m[0]);
+
+  assert.equal(publishes.length, 3, 'one publish per release line, and no more');
+  for (const job of ['mcp-release-complete', 'server-release-complete', 'extension']) {
+    assert.match(jobBlock(workflow, job), /--draft=false/, `${job} publishes what it verified`);
+  }
+});
+
+test('the mcp line checks every expected asset by NAME', () => {
+  // The line that shipped incomplete twice gains what the server line already had. By name, not by
+  // count: six wrongly named files satisfy a tally, and the one that goes missing is the platform
+  // somebody is installing on right now.
+  const verify = jobBlock(releaseWorkflow(), 'mcp-release-complete');
+
+  assert.match(verify, /needs:\s*\[\s*mcp-binaries/, 'it runs after every archive is uploaded');
+  assert.match(verify, /coai-mcp-\$VERSION-\$rid/, 'each expected asset name is looked for');
+  assert.match(verify, /the release is incomplete — missing:/, 'and the missing ones are named');
+});
+
+test('a completeness job waits for every leg of its matrix', () => {
+  // A job that published before the last upload would recreate the window with more steps in it.
+  const workflow = releaseWorkflow();
+
+  assert.match(jobBlock(workflow, 'mcp-release-complete'), /needs:\s*\[\s*mcp-binaries\s*\]/);
+  assert.match(jobBlock(workflow, 'server-release-complete'), /needs:\s*\[\s*server-binaries\s*\]/);
+});

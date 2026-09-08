@@ -510,6 +510,33 @@ leaves the round gated with nothing on screen — a crash traded for a hang, whi
 crash at least says that something happened. `id` and `question` remain the only two that decide
 whether a question can be shown; the rest is metadata, and metadata is rendered, not adjudicated.
 
+## The update check can trust `…/releases` again (2026-09-08)
+
+`installer.ts` asks GitHub for the newest release and offers its asset. That was safe only while a
+release meant a FINISHED release — and it never did: `gh release create` ran inside every matrix leg,
+so the release existed from the moment the FIRST of six finished, and the other five were still
+uploading. For that window the update check saw a published release and offered a download that
+answered 404.
+
+Measured twice. `mcp-v0.16.0` shipped five RIDs and no `win-x64`, and the tag had to be burned. On
+2026-09-08 an operator pressed Install and got
+
+```
+downloading …/releases/download/mcp-v0.18.13/coai-mcp-0.18.13-win-x64.zip answered 404
+```
+
+on an asset uploaded at 17:31:54Z — after the click.
+
+**Every release line now creates a DRAFT**, which `GET /releases` does not return to anyone but a
+writer, so there is no window at all. A completeness job publishes it (`gh release edit
+--draft=false`) once every expected asset is present BY NAME — and the mcp line gained that job,
+which only the server line had. A failed matrix leg therefore leaves a draft nobody can see, instead
+of five platforms of six with the sixth answering 404 permanently.
+
+The extension line drafts and publishes inside its one job: it has one asset and no siblings to wait
+for. The draft still earns its place there, because "the window is small" is what the mcp line's
+window was called before it cost a release.
+
 ## Verified
 
 90 `node:test` cases over the pure modules; `.vsix` packaged in CI and installed by hand on

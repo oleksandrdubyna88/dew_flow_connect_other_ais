@@ -11,6 +11,14 @@ Target: the released **extension** version — `--target 0.29.3`. The MCP binary
 
 Last verified: 2026-09-04 · extension 0.29.5 / mcp 0.16.0 · item 1 PASS on the SECOND tag — the first mcp-v0.16.0 shipped five RIDs and no win-x64, because a new test starved a two-core runner and a real reviewer subprocess died beside it; the tag was burned and re-cut. Item 2 PASS. Item 4 done by hand: the binary beside the installed extension was replaced from the release asset after its checksum was verified, and answers `coai-mcp 0.16.0`.
 
+**A failed matrix leg now leaves a DRAFT, not a partial release (2026-09-08).** Every release line
+creates its release as a draft and publishes it from a completeness job that checks each expected
+asset BY NAME. So a red release run means *nothing was published*, and item 1 below answers about a
+release that never became visible — `gh release view` still finds a draft, and that is the state to
+expect after a failure. Before this, the same failure left five platforms of six on a PUBLISHED
+release and the sixth answering 404 to whoever was installing on it; it happened on `mcp-v0.16.0`
+and again on `mcp-v0.18.13`, and both times a person found it rather than CI.
+
 **A slow `npm ci` is not a hung release, and cancelling one costs a re-run.** Measured here on
 extension-v0.29.2: the step sat at seven minutes against a whole-job history of 2m33s, was cancelled
 as hung, and the re-attempt took 7m26s and published cleanly. The registry is simply slower some
