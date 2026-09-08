@@ -66,6 +66,10 @@ export const HELP = {
   addVendor:
     'Add another independent reviewer: a preset, or any OpenAI-compatible endpoint by name and URL. More vendors means more independent eyes — and more cost per round.',
 
+  roleEnabled:
+    'Whether this role reviews at all. Unticked, it takes no part in a code round — no reviewer is launched for it, nothing it would have found is counted, and it lends the stage neither its rounds nor its threshold. Its rounds, threshold and prompt picks are kept and come back unchanged when you tick it again, so this is a switch rather than a way of clearing the box. Plan review is not affected: it has one role and no switch.',
+  lastRole:
+    'The only role still ticked. A code round with nobody in it is not an empty round — the server counts a round no reviewer answered as unresolved, so it would sit open and the next review would be refused for the wrong reason. Tick another role first, then this one can go.',
   maxRounds:
     'How many times THIS ROLE may be asked before the policy below takes over. Each role has its own count, because they are not worth the same number of passes: architecture may deserve two with different lenses while performance deserves one, and a shared budget makes the cheapest role pay for the most expensive. A round runs the roles that still have a count left — all of them, not only the ones that gated, because the next round reads a REVISED diff and a role that was clean on the old one can find something in the fix. When a role’s count is spent it simply stops being asked, and the stage keeps going for the roles that have not.',
   gateThreshold:

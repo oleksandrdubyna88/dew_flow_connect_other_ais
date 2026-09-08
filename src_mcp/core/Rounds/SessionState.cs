@@ -35,7 +35,17 @@ public enum EscalationStep
 }
 
 /// <summary>One role's budget: how many attempts it gets, and how much may still be open.</summary>
-public sealed record RoleGate(int MaxRounds, int Threshold);
+/// <param name="Enabled">
+/// <para>Whether this role takes part at all. Asked for on 2026-09-08 as a checkbox on each of the
+/// four code-review boxes: unticking one means the role does not take part in the round — not a
+/// reviewer that runs and is then ignored.</para>
+/// <para><b>Defaulted to true, positionally, on purpose.</b> Every construction site that predates
+/// the switch keeps compiling and keeps meaning what it meant, and "absent means on" becomes true by
+/// construction rather than by a rule somebody has to remember. That matters at three boundaries at
+/// once: an older panel driving a newer server, a stored settings record written before the key
+/// existed, and a role nobody has ever touched.</para>
+/// </param>
+public sealed record RoleGate(int MaxRounds, int Threshold, bool Enabled = true);
 
 /// <summary>Kept as the name a stage-wide budget goes by; a stage's gate is its widest role.</summary>
 public sealed record StageGate(int MaxRounds, int Threshold);
@@ -93,18 +103,49 @@ public sealed record PanelConfig(
             ? gate
             : role == PromptCatalog.PlanRole ? PlanDefault : CodeDefault;
 
-    /// <summary>The stage's budget: its widest role, because the stage counts rounds once.</summary>
+    /// <summary>
+    /// The roles of this stage that are switched ON, in the order a round runs them.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Empty is a legitimate answer</b>, and it is the whole reason this is a named member
+    /// rather than a `Where` inside two callers: it means the operator has unticked every reviewer
+    /// this stage has, and a caller must refuse the round rather than start one nobody is in. A
+    /// round with no reviewers is not an empty round — the session state counts it as unresolved,
+    /// and it would sit there for ever.</para>
+    /// <para>The plan stage is never affected: its one role carries no switch, by the operator's
+    /// ruling that this is code review only.</para>
+    /// </remarks>
+    public IReadOnlyList<string> EnabledRolesOf(Stage stage) =>
+        [.. RolesOf(stage).Where(r => For(r).Enabled)];
+
+    /// <summary>The stage's budget: its widest ENABLED role, because the stage counts rounds once.</summary>
+    /// <remarks>
+    /// A role that is switched off lends the stage neither its rounds nor its threshold. Leaving
+    /// either in would keep the stage running rounds nobody reviews, or hold the gate open against a
+    /// number no reviewer can bring down. With every role off the answer is <c>(0, 0)</c> — a stage
+    /// that may run no round — rather than an exception from <c>Max</c> over an empty sequence.
+    /// </remarks>
     public StageGate For(Stage stage)
     {
-        var roles = RolesOf(stage);
-        return new StageGate(roles.Max(r => For(r).MaxRounds), roles.Max(r => For(r).Threshold));
+        var roles = EnabledRolesOf(stage);
+        return roles.Count == 0
+            ? NoEnabledRoles
+            : new StageGate(roles.Max(r => For(r).MaxRounds), roles.Max(r => For(r).Threshold));
     }
 
+    /// <summary>What a stage whose every role is switched off is worth: no round, nothing open.</summary>
+    public static readonly StageGate NoEnabledRoles = new(0, 0);
+
     /// <summary>
-    /// Which roles take part in a given round of a stage — those whose own budget reaches it.
+    /// Which roles take part in a given round of a stage — those switched on whose budget reaches it.
     /// </summary>
+    /// <remarks>
+    /// Two different reasons a role is absent, and they are not interchangeable: its budget is spent
+    /// (it reviewed and has no round left) or the operator switched it off (it never reviews). The
+    /// first is a fact about this round; the second is a fact about the stage.
+    /// </remarks>
     public IReadOnlyList<string> RolesForRound(Stage stage, int round) =>
-        [.. RolesOf(stage).Where(r => For(r).MaxRounds >= Math.Max(round, 1))];
+        [.. EnabledRolesOf(stage).Where(r => For(r).MaxRounds >= Math.Max(round, 1))];
 
     private static string[] RolesOf(Stage stage) =>
         stage == Stage.CodeReview ? CodeRoleNames : [PromptCatalog.PlanRole];

@@ -364,6 +364,32 @@ poisoning the map. `maxRoundsCode` was briefly a field and is now DERIVED where 
 stored copy would be a second source of truth for a number that already exists, and the
 every-setting-reaches-the-server test caught it by refusing to see a change in the env block.
 
+**Each CODE role's heading carries a tick box (2026-09-08).** Unticked, the role takes no part in a
+code round: no reviewer is launched, nothing it would have found is counted, and it lends the stage
+neither its rounds nor its threshold. Until this existed a role could only be kept out by lying to a
+control that means something else, which also lost the number the person wants back afterwards — so
+the switch keeps the role's rounds, threshold and prompt picks and returns them unchanged.
+
+Four things hold it together:
+
+- `coai.roleEnabled` is a role-keyed object like its two neighbours, read one KEY at a time
+  (`asRoleFlags`) and ON unless a key says `false`. Per key rather than per record is what makes a
+  partial stored object safe: a configuration written before the setting existed has no keys at all,
+  and one written the moment somebody unticked Architecture has exactly one — read as a whole, both
+  would mean "everything off", which is three reviewers silently not reviewing.
+- The plan role has no entry and no box. One role and a switch that turns the whole stage off is a
+  different feature; the server's parser refuses `COAI_ENABLED_PLANCRITIQUE` for the same reason.
+- **The last ticked role cannot be unticked** — refused at the pointer rather than at round time,
+  because a code round no reviewer answers never resolves. The server still refuses the all-off round
+  as well: a hand-written `mcpServers` block and a Team server have no checkbox to look at.
+- The panel's own arithmetic reads the switch. The fan-out sentence and the round-limit note are
+  promises about the round that is about to run, and one that counts a role the operator unticked is
+  describing a different round.
+
+`ROLE_SWITCH_SINCE` warns while the installed `coai-mcp` is older than the switch — a skew that fails
+BACKWARDS, unlike `CONVENTIONS_ROLE_SINCE`: an old server never looks for `COAI_ENABLED_*` and runs
+the role anyway, so an unticked box would be telling a person the opposite of what is happening.
+
 `selectedFor` mirrors the server's conventions rule, because it did not and the panel showed
 `Universal` for a round the server would run `Conventions` in.
 
