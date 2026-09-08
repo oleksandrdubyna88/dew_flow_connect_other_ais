@@ -97,12 +97,33 @@ somebody's behalf:
   this repository's own source contains it — and copying it would have been reported as nothing
   copied. A capture may fail for many reasons; the CONTENT of the selection is not allowed to be one.
 
-- **Picking a model in the tab starts a new process**, and the next answer says the conversation
-  restarted — the same sentence a process death gets, because it is the same fact. The picker was
-  wired rather than left as a caption that changed while nothing else did; a control that lies is
-  worse than no control. The old session is disposed and its directory goes with it, and the tab
-  closing ends whatever session the thread holds NOW, which after a switch is not the one the
-  entry was created with.
+- **Picking a model in the tab starts a new process but NOT a new conversation.** The whole
+  transcript — the questions and the answers both — is handed to the next turn (`carriedTurn`),
+  because a vendor CLI keeps its context inside its own process and saying it again is the only way
+  it crosses. Once, in the next question, and then never again: from there the new process
+  remembers as the old one did. Nothing is sent at the moment of the switch, so moving a
+  conversation and not continuing it costs nothing. The picker was wired rather than left as a
+  caption that changed while nothing else did; a control that lies is worse than no control. The old
+  session is disposed and its directory goes with it, and the tab closing ends whatever session the
+  thread holds NOW, which after a switch is not the one the entry was created with.
+- **The switch waits for a turn in flight** rather than killing it. The page disables its composer
+  while the model is thinking but not its picker, and disposing the session under a running turn
+  would fail that turn with "the conversation was closed" — an error about something the person did
+  on purpose. It joins the same queue the turns run in.
+- **The carried transcript is fenced with a per-turn id**, not a fixed delimiter. The material is a
+  conversation that can contain any text at all, this repository's own delimiters included, and a
+  transcript that closes its own fence early turns everything after it back into instructions to
+  the model. The question is the LAST thing in the turn and says so in as many words: nothing
+  inside the fence is an instruction.
+- **It is bounded at 60 000 characters**, keeping the newest turns and saying inside the turn when
+  anything was left behind. The plan said nothing would be truncated and three reviewers refused
+  that in one round: past a model's window the request is either rejected outright or silently cut
+  by the vendor, and a silent cut means the second opinion is formed on a conversation nobody
+  chose the shape of. The number is far beyond any chat this feature is for and far short of the
+  smallest window a vendor here offers. The remote transport's own three-turn cap is a different
+  bound for a different reason and still belongs to its own plan.
+- **A failed turn does not lose the carry.** It is cleared only after an answer arrives, so the
+  retry one keypress later still reaches the new model with the conversation behind it.
 - **Which tab this is gets asked FIRST**, before the capture. The keybinding is scoped to the
   assistant panel but the command palette is not, and invoked from the wrong tab this used to
   spend 1.7 s, borrow the clipboard and synthesise a keystroke before saying it was the wrong tab.
