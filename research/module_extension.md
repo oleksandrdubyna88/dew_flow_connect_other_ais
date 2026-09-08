@@ -56,13 +56,29 @@ vendor call costs money. `coai.chatAutoSend` lets the person overrule that in ei
 
 The copy helper is WinAPI (`keybd_event`) and not .NET’s `SendKeys`, which was measured to deliver
 NOTHING to an Electron window: 0 characters against 17107 in the same window in the same second. It
-releases every modifier first, because a keybinding leaves Ctrl and Alt physically held and a
-synthetic `Ctrl+C` on top of a held Alt is `Ctrl+Alt+C`. It travels to PowerShell base64-encoded, so
-no layer of shell quoting can touch it.
+travels to PowerShell base64-encoded, so no layer of shell quoting can touch it — and it is ONE
+constant with nothing interpolated into it: the passage comes back through the clipboard, as data.
+
+**It waits for the person’s chord to come up; it does not force it up.** A keybinding can leave
+Ctrl and Alt physically held, and a synthetic `Ctrl+C` on top of a held Alt is `Ctrl+Alt+C`, which
+copies nothing. The first version answered that by releasing every modifier unconditionally, and
+the plan gate refused it from both sides at once: a key-up sent while a finger is down does not
+stay up (the hardware repeat re-asserts it), and where it does stay up the person’s next keystroke
+arrives with the modifier missing. Both objections are about the same mistake — changing global
+keyboard state that belongs to somebody else. `GetAsyncKeyState` asks instead: in the ordinary case
+the keypress is long over before PowerShell has even started and NOTHING is released; a chord still
+held after 800 ms is released key by key, only where it is actually down.
 
 **The clipboard is borrowed, never taken.** It is saved, used as a channel, and put back only if
 nothing else wrote to it during the window — which is over a second wide, and long enough for
-somebody to copy something in another window.
+somebody to copy something in another window. What the borrow cannot promise is worth stating:
+`vscode.env.clipboard` is text and nothing else, so an image or a file on the clipboard is invisible
+to it. The narrower guarantee it does keep is that nothing it could not READ is ever written over —
+when the borrow comes back empty, the emptiness is its own sentinel and not a byte is written.
+
+Each conversation runs in an empty temp directory of its own, made where the process is actually
+started and removed when the tab closes. It used to be made on every INVOCATION, including the ones
+that only reveal a tab already open, and removed never.
 ### A conversation is a process, and it ends four ways (2026-09-08)
 
 ```mermaid

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CHAT_RUNTIMES, chatModelsFrom, chosenModel } from '../chatModels';
-import { AGY_ARGS, launchSpecFor } from '../cliChatLaunch';
+import { AGY_ARGS, chatHome, launchSpecFor } from '../cliChatLaunch';
 import { Vendor } from '../vendors';
 
 /**
@@ -102,6 +102,36 @@ test('the child runs in the directory it was given, never the workspace', () => 
 test('a configured path is used, and a bare name is the fallback', () => {
   assert.strictEqual(launchSpecFor(vendor({ executablePath: 'D:/tools/agy.exe' }), 't').executable, 'D:/tools/agy.exe');
   assert.strictEqual(launchSpecFor(vendor(), 't').executable, 'agy');
+});
+
+test('the directory a conversation runs in is made once and taken away once', () => {
+  // It used to be made on every press of the keybinding, including the presses that only reveal a
+  // tab that is already open, and it was never removed. (codex, the plan round.)
+  const made: string[] = [];
+  const removed: string[] = [];
+  const home = chatHome(
+    () => {
+      made.push('made');
+
+      return 'C:/temp/coai-chat-abc';
+    },
+    (dir) => removed.push(dir),
+  );
+
+  assert.strictEqual(home.dir, 'C:/temp/coai-chat-abc');
+  home.release();
+  home.release();
+
+  assert.deepStrictEqual(made, ['made'], 'the directory was made more than once');
+  assert.deepStrictEqual(removed, ['C:/temp/coai-chat-abc'], 'removed twice, or never');
+});
+
+test('a directory that will not delete does not take the closing tab down with it', () => {
+  const home = chatHome(() => 'C:/temp/coai-chat-locked', () => {
+    throw new Error('the directory is in use by another process');
+  });
+
+  assert.doesNotThrow(() => home.release());
 });
 
 test('a runtime with no adapter is refused rather than launched through the wrong protocol', () => {

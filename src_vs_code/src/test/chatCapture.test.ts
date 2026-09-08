@@ -38,6 +38,24 @@ test('the helper releases every modifier before it presses anything', () => {
   assert.ok(press > releases, 'the chord is built before the modifiers are let go');
 });
 
+test('the helper waits for the person to let go before it touches the keyboard state at all', () => {
+  // Two reviewers, independently: a synthetic key-up on a key somebody is PHYSICALLY holding does
+  // not stay up — the hardware repeat re-asserts it — and if it does stay up, the person's next
+  // keystroke arrives unmodified. The fix is not to fight it: ask whether the keys are still down,
+  // and in the ordinary case (a keypress is over long before this runs) release nothing whatever.
+  const waits = COPY_SCRIPT.indexOf('if (-not $held) { break }');
+  const releases = COPY_SCRIPT.indexOf('KEYUP, [IntPtr]::Zero)');
+
+  assert.match(COPY_SCRIPT, /GetAsyncKeyState/, 'nothing asks whether the modifiers are still held');
+  assert.ok(waits > 0, 'nothing waits for them to come up');
+  assert.ok(waits < releases, 'the state is changed before anybody waited for it to sort itself out');
+  assert.match(
+    COPY_SCRIPT,
+    /if \(\[CoaiKeys\]::Held\(\$vk\)\) \{ \[CoaiKeys\]::keybd_event/,
+    'a key that is already up is released again — that is the state change nobody asked for',
+  );
+});
+
 test('the helper uses WinAPI, not the .NET convenience that delivers nothing', () => {
   // SendKeys readback: 0 characters. keybd_event readback: 17107. Same window, same second.
   assert.match(COPY_SCRIPT, /keybd_event/);
@@ -114,6 +132,35 @@ test('somewhere that is not Windows refuses in words, and names the way through'
   assert.strictEqual(capture.text, '');
   assert.match(capture.failure, /right-click menu/, 'the refusal does not say what to do instead');
   assert.deepStrictEqual(clipboard.writes(), [], 'a platform that cannot capture still touched the clipboard');
+});
+
+test('a clipboard we could not read as text is never written to', async () => {
+  // Somebody had an IMAGE on the clipboard. `vscode.env.clipboard` is text-only, so the borrow reads
+  // an empty string and the old code wrote a sentinel over the image and then "restored" the empty
+  // string it had read — destroying, in the FAILURE case, something it never held. When there is
+  // nothing to give back, the empty clipboard is its own sentinel and we touch nothing.
+  const clipboard = fakeClipboard('');
+
+  const capture = await captureSelection(async () => undefined, clipboard, 'win32');
+
+  assert.strictEqual(capture.text, '');
+  assert.match(capture.failure, /nothing was copied/);
+  assert.deepStrictEqual(clipboard.writes(), [], 'an unreadable clipboard was overwritten anyway');
+});
+
+test('a copy onto an unreadable clipboard is kept, not replaced by the emptiness we read', async () => {
+  const clipboard = fakeClipboard('');
+
+  const capture = await captureSelection(
+    async () => {
+      await clipboard.write('the selected passage');
+    },
+    clipboard,
+    'win32',
+  );
+
+  assert.strictEqual(capture.text, 'the selected passage');
+  assert.strictEqual(clipboard.held(), 'the selected passage', 'the restore blanked the clipboard');
 });
 
 test('the restore rule is one comparison, and it is the whole guard', () => {

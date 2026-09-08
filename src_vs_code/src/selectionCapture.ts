@@ -12,14 +12,26 @@ import { ProcessHandle } from './processLauncher';
  * <p><b>Two things the probe learned that this file exists to keep.</b> `.NET`'s `SendKeys` delivers
  * NOTHING to an Electron window (readback: 0 characters) while `keybd_event` delivers reliably
  * (17 107) — so this is WinAPI, deliberately, and must not be "simplified" back. And when the
- * command is invoked from a KEYBINDING the person is still physically holding `Ctrl` and `Alt`: a
- * synthetic `Ctrl+C` on top of a held `Alt` is `Ctrl+Alt+C`, which copies nothing. Every modifier is
- * released first.</p>
+ * command is invoked from a KEYBINDING the person may still be physically holding `Ctrl` and `Alt`:
+ * a synthetic `Ctrl+C` on top of a held `Alt` is `Ctrl+Alt+C`, which copies nothing.</p>
+ *
+ * <p><b>So the script WAITS for the chord to come up rather than forcing it up.</b> Two reviewers
+ * raised the same objection from opposite directions: a key-up sent while a finger is down does not
+ * stay up (the hardware repeat re-asserts it), and if it does stay up, the person's next keystroke
+ * arrives with the modifier missing. Both are about the same mistake — changing global keyboard
+ * state that belongs to somebody else. `GetAsyncKeyState` asks instead: in the ordinary case the
+ * keypress is long over before PowerShell has started and NOTHING is released, and a chord still
+ * held after 800 ms is released deliberately, key by key, only where it is actually down.</p>
  *
  * <p><b>The clipboard is borrowed, never taken.</b> It is saved, used as a channel, and put back —
  * but only if nothing else wrote to it while we were busy. The window is over a second wide, and a
  * person who copied something in another window during it would otherwise find their copy replaced
  * by a tidy-up. Raised on the code round; the check is one comparison and it is tested.</p>
+ *
+ * <p><b>What the borrow cannot promise.</b> `vscode.env.clipboard` is text and nothing else: an
+ * image or a file on the clipboard is invisible to it, and the person's own `Ctrl+C` replaces it
+ * whatever we do. What this file guarantees is narrower and worth stating — it never destroys what
+ * it could not read. When the borrow comes back empty, nothing is written at all.</p>
  */
 
 /** What the clipboard holds while we watch to see whether the copy landed. */
@@ -39,13 +51,22 @@ using System;
 using System.Runtime.InteropServices;
 public class CoaiKeys {
   [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, IntPtr extra);
+  [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vk);
   public const uint KEYUP = 0x0002;
   public const byte CTRL = 0x11, ALT = 0x12, SHIFT = 0x10, KC = 0x43;
+  public static bool Held(byte vk) { return (GetAsyncKeyState((int)vk) & 0x8000) != 0; }
 }
 "@
-Start-Sleep -Milliseconds 180
-foreach ($vk in @([CoaiKeys]::ALT, [CoaiKeys]::CTRL, [CoaiKeys]::SHIFT)) {
-  [CoaiKeys]::keybd_event($vk, 0, [CoaiKeys]::KEYUP, [IntPtr]::Zero)
+$mods = @([CoaiKeys]::ALT, [CoaiKeys]::CTRL, [CoaiKeys]::SHIFT)
+Start-Sleep -Milliseconds 120
+for ($i = 0; $i -lt 40; $i++) {
+  $held = $false
+  foreach ($vk in $mods) { if ([CoaiKeys]::Held($vk)) { $held = $true } }
+  if (-not $held) { break }
+  Start-Sleep -Milliseconds 20
+}
+foreach ($vk in $mods) {
+  if ([CoaiKeys]::Held($vk)) { [CoaiKeys]::keybd_event($vk, 0, [CoaiKeys]::KEYUP, [IntPtr]::Zero) }
 }
 Start-Sleep -Milliseconds 120
 [CoaiKeys]::keybd_event([CoaiKeys]::CTRL, 0, 0, [IntPtr]::Zero)
@@ -114,12 +135,23 @@ export async function captureSelection(
   }
 
   const borrowed = await clipboard.read();
-  await clipboard.write(SENTINEL);
+  // Nothing readable as TEXT — an image, a file, a copied cell — reads back as an empty string, and
+  // `vscode.env.clipboard` offers no way to see it, let alone put it back. So it is not taken: the
+  // emptiness is its own sentinel, and a capture that lands nothing leaves what the person had
+  // exactly where it was. Writing a sentinel over an image and then "restoring" the empty string we
+  // had read is a tidy-up that destroys something it never held. (gemini, the plan round.)
+  const restorable = borrowed.length > 0;
+  const marker = restorable ? SENTINEL : '';
+  if (restorable) {
+    await clipboard.write(marker);
+  }
   await run();
   const captured = await clipboard.read();
 
-  if (captured === SENTINEL) {
-    await clipboard.write(borrowed);
+  if (captured === marker) {
+    if (restorable) {
+      await clipboard.write(borrowed);
+    }
 
     return {
       text: '',
@@ -127,7 +159,7 @@ export async function captureSelection(
     };
   }
 
-  if (shouldRestore(await clipboard.read(), captured)) {
+  if (restorable && shouldRestore(await clipboard.read(), captured)) {
     await clipboard.write(borrowed);
   }
 

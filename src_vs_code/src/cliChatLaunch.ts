@@ -50,21 +50,69 @@ export const AGY_ARGS: readonly string[] = [
 ];
 
 /**
+ * Why this row cannot be chatted with, or an empty string.
+ *
+ * <p>Its own function because the answer is needed BEFORE anything is created — a tab, a process, a
+ * directory. `launchSpecFor` asks it too, so there is one sentence and one rule rather than two.</p>
+ */
+export function chatRuntimeRefusal(vendor: Vendor): string {
+  if (CHAT_RUNTIMES.includes(vendor.runtime)) {
+    return '';
+  }
+
+  // Refused BY NAME rather than routed through a protocol it does not speak. `vendor-routing.md`
+  // is explicit that a Claude model never goes through `agy`, and the failure would be invisible
+  // in the output — which is exactly why that rule exists.
+  return `${vendor.id} runs on ${vendor.runtime}, and the chat can only speak to ${CHAT_RUNTIMES.join(', ')} so far`;
+}
+
+/** A directory of its own for one conversation, and the way to take it away again. */
+export interface ChatHome {
+  readonly dir: string;
+  /** Remove it. Idempotent, and never throws — a tab closing must not fail on a locked file. */
+  release(): void;
+}
+
+/**
+ * Make the directory a conversation runs in, and hold the way to remove it.
+ *
+ * <p>The gate asked what cleans up after a launch, and the honest answer was: nothing. Worse, the
+ * directory was made on every INVOCATION — pressing `Ctrl+Alt+A` against a tab that is already open
+ * starts no process at all, and left an empty directory in `%TEMP%` each time. It is made where it
+ * is used now, and released when the conversation closes.</p>
+ *
+ * <p>Injected `make` and `remove` so the two guarantees — made once, removed once, whatever happens
+ * — are a test rather than a claim. `dispose` and `closeAll` can both arrive for the same tab.</p>
+ */
+export function chatHome(make: () => string, remove: (dir: string) => void): ChatHome {
+  const dir = make();
+  let released = false;
+
+  return {
+    dir,
+    release: () => {
+      if (released) {
+        return;
+      }
+      released = true;
+      try {
+        remove(dir);
+      } catch {
+        // An empty directory nobody can delete is not worth a message, let alone a failed close.
+      }
+    },
+  };
+}
+
+/**
  * The command line for one vendor row, or the reason there is none.
  *
  * @param tempDir a directory with nothing in it — see the note below
  */
 export function launchSpecFor(vendor: Vendor, tempDir: string): LaunchSpec {
-  if (!CHAT_RUNTIMES.includes(vendor.runtime)) {
-    // Refused BY NAME rather than routed through a protocol it does not speak. `vendor-routing.md`
-    // is explicit that a Claude model never goes through `agy`, and the failure would be invisible
-    // in the output — which is exactly why that rule exists.
-    return {
-      executable: '',
-      args: [],
-      cwd: '',
-      refusal: `${vendor.id} runs on ${vendor.runtime}, and the chat can only speak to ${CHAT_RUNTIMES.join(', ')} so far`,
-    };
+  const refusal = chatRuntimeRefusal(vendor);
+  if (refusal.length > 0) {
+    return { executable: '', args: [], cwd: '', refusal };
   }
 
   return {
