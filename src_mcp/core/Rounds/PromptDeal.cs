@@ -40,21 +40,8 @@ public static class PromptDeal
             return [];
         }
 
-        var shuffled = Shuffled(items, seed);
+        var shuffled = SeededShuffle.Of(items, seed);
         return [.. shuffled.Select((item, index) => new DealtItem(item, vendors[index % vendors.Count]))];
     }
 
-    /// <summary>Fisher-Yates with a seeded generator: the same seed always deals the same hand.</summary>
-    private static List<string> Shuffled(IReadOnlyList<string> items, int seed)
-    {
-        var random = new Random(seed);
-        var order = items.ToList();
-        for (var i = order.Count - 1; i > 0; i--)
-        {
-            var j = random.Next(i + 1);
-            (order[i], order[j]) = (order[j], order[i]);
-        }
-
-        return order;
-    }
 }

@@ -889,11 +889,27 @@ public sealed partial class PanelService
         // (research/RESULTS_vendor_overlap_2026-09-06.md): a local model was 19 % useful on a plan
         // and 3 % on code while writing more findings than both hosted vendors together, so "on for
         // the plan, off for the code" is a setting somebody actually wants.
-        var runnable = _settings.Providers.Where(p => p.Serves(isPlanStage)).Where(CanRun).ToList();
-        if (runnable.Count == 0)
+        var eligible = _settings.Providers.Where(p => p.Serves(isPlanStage)).Where(CanRun).ToList();
+        if (eligible.Count == 0)
         {
             return [];
         }
+
+        // The ORDER the vendors are offered in, which is not a detail once a Team server is in the
+        // list. This method builds the round vendor-major and `BoundedScheduler` starts one task per
+        // row against a single semaphore, which hands out its slots in the order they were asked
+        // for — so this list's order IS the order reviewers reach a shared server. Every client
+        // ships the same vendor list, so ten people starting a round at nine in the morning all
+        // queue for the first vendor's shared accounts while the second vendor's sit idle.
+        //
+        // The server's queue is not what needs fixing: `JobStore.TryClaim` is FIFO and a job it
+        // never received cannot be claimed early. A fair queue fed in a biased order is fixed at the
+        // feeding end.
+        //
+        // Seeded with the round's own seed rather than freshly random, so two SESSIONS differ while
+        // one session replays — the property the deal below already depends on, and the reason an
+        // audit log can name a seed somebody is able to reuse.
+        var runnable = SeededShuffle.Of(eligible, seed);
 
         // The items: one per role for a code round, or one per unspent lens for a plan round.
         var items = planPrompts is { Count: > 0 }
