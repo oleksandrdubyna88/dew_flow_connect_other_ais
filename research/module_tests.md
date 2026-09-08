@@ -23,6 +23,19 @@ The campaign harness is in this repository rather than a repository of its own b
 a harness that must measure several things. It is C#, like the server it drives, so a renamed field
 is a compile error rather than a scenario that quietly stops matching.
 
+## Flows that are not a tool
+
+`ScenarioCoverageTests` derives the table above from the tool registry, so a flow INSIDE a tool has
+no row there. The ones that need naming anyway:
+
+| Flow | Covered | By |
+|---|---|---|
+| Dispatch order of a round's reviewers | yes | `SubmissionOrderSchedulerTests` and `SubmissionOrderGuaranteeTests` — the REAL `BoundedScheduler` and the REAL `ReviewerExecutor`, launching real `FakeCli` processes over a real pipe. Not a stub between them: what is faked is the vendor, which is the one thing a scenario cannot afford to launch. They pin both halves — Team-server reviewers start in a varying order, and the round reports them in the order it was given them — plus every outcome (answer, non-zero exit, timeout, cancellation) staying attached to its own reviewer. |
+
+The permutation itself is a pure function with its own unit suite (`SubmissionOrderTests`), including
+the distribution: over 3000 rounds each vendor leads within a tenth of the fair share, which is the
+assertion "not always the same vendor" cannot make.
+
 ## How it is run
 
 Exactly what CI runs — [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):

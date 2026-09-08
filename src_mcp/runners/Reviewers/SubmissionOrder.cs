@@ -62,6 +62,10 @@ public static class SubmissionOrder
         var shuffled = remote.ToArray();
         for (var i = shuffled.Length - 1; i > 0; i--)
         {
+            // Invariant: `roll` returns [0,1), so `(int)(roll() * (i+1))` is at most `i` and the
+            // clamp never fires. It is here because the range is a PARAMETER's promise rather than
+            // this method's guarantee — a caller pinning it to exactly 1.0 (a test does) would
+            // otherwise index one past the end. (local, code round: state the invariant at the site.)
             var j = Math.Clamp((int)(roll() * (i + 1)), 0, i);
             (shuffled[i], shuffled[j]) = (shuffled[j], shuffled[i]);
         }

@@ -13,9 +13,14 @@ three different quantities:
 
 | vendor | what `TokensIn` counts | where |
 |---|---|---|
-| claude | `inputTokens + cacheCreationInputTokens + cacheReadInputTokens`, summed over every model in `modelUsage` | `ClaudeRuntime.Aggregate` |
-| antigravity | `usage.input_tokens` alone — no cache term | `AntigravityRuntime.ReadUsage` |
-| codex | the MAXIMUM over `input_tokens` and the `cache_*` keys, because its stream is cumulative | `UsageParser` |
+| claude | `inputTokens + cacheCreationInputTokens + cacheReadInputTokens`, summed over every model in `modelUsage` | `src_mcp/runners/Reviewers/ClaudeRuntime.cs:111` |
+| antigravity | `usage.input_tokens` alone — no cache term | `src_mcp/runners/Reviewers/AntigravityRuntime.cs:106` |
+| codex | the MAXIMUM over `input_tokens` and the `cache_*` keys, because its stream is cumulative | `src_mcp/core/Findings/UsageParser.cs:37` |
+
+The shape they all fill is `src_mcp/core/Findings/UsageParser.cs:8`
+(`Usage(long TokensIn, long TokensOut, double? CostUsd)`), and the row that reaches disk is written at
+`src_mcp/runners/Reviewers/UsageLedger.cs:69` into the file named at
+`src_mcp/runners/Reviewers/UsageLedger.cs:52`.
 
 Measured 2026-09-08: an identical trivial review — twenty output tokens — reported **29 513** input
 for claude against **12 593** for codex and **14 673** for antigravity. The whole gap is Claude Code's
@@ -45,6 +50,20 @@ material", which the per-output-token measurement then refuted.
 - **What does the spending view actually want to show?** Money is the column people read, and
   `CostUsd` is already reported by claude alone. A per-vendor token column may be the wrong shape for
   the question it is being asked.
+
+## Build order
+
+1. **Capture one real envelope per vendor** into `src_mcp/tests/` fixtures — from the deployed
+   server's own runs, not hand-written. Nothing below can be decided honestly without them, and the
+   open question about agy's cache fields is answered by looking rather than by reasoning.
+2. **Decide the shape** on that evidence: widen `Usage` (`UsageParser.cs:8`) with cache terms, or
+   normalise at the adapter. Record the decision and its reason before writing either.
+3. **The three adapters**, one at a time, each with its fixture asserting the decomposition it
+   produces: `ClaudeRuntime.cs:111`, `AntigravityRuntime.cs:106`, `UsageParser.cs:37`.
+4. **The ledger** (`UsageLedger.cs:69`) and whatever reads `usage.jsonl`, including the migration
+   story for rows already written in the old shape.
+5. **The spending view** last, because what it should SHOW is the open question above and the
+   answer may be "money, not tokens".
 
 ## Test plan
 

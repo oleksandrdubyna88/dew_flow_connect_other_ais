@@ -291,4 +291,55 @@ public sealed class SubmissionOrderGuaranteeTests
             results.Select(r => r.Invocation.Provider).Should().Equal(["s-a", "local", "s-b", "s-c"]);
         }
     }
+
+    /// <summary>
+    /// A reviewer KILLED on its own timeout keeps its row too.
+    /// </summary>
+    /// <remarks>
+    /// The scope claims all four outcomes stay attached to their reviewer, and only the non-zero
+    /// exit had a test — a regression in the timeout mapping would have passed the suite.
+    /// (codex, code round.)
+    /// </remarks>
+    [Fact]
+    public async Task AReviewerThatTimedOutIsStillReportedAgainstItsOwnRow()
+    {
+        var slow = new ReviewerWork(
+            FakeCliInvocations.Invoke("s-b", ["sleep", "30000"], TimeSpan.FromMilliseconds(300)) with
+            {
+                JobFile = Path.Combine(_dir, "s-b.job"),
+            });
+        var work = new[] { Remote("s-a"), slow, Remote("s-c") };
+
+        for (var run = 0; run < 6; run++)
+        {
+            var results = await Serial().RunAllAsync(work, _executor, TestContext.Current.CancellationToken);
+
+            results.Select(r => r.Invocation.Provider).Should().Equal(["s-a", "s-b", "s-c"]);
+            results[1].Outcome.Should().BeOfType<ReviewerOutcome.TimedOut>();
+        }
+    }
+
+    /// <summary>
+    /// A round CANCELLED mid-flight still reports every reviewer, each on its own row.
+    /// </summary>
+    /// <remarks>
+    /// The reorder writes results back by dispatch position, so a cancellation that skipped a slot
+    /// would leave a default tuple in the array and a reviewer reported as somebody else. The
+    /// scheduler answers a cancelled reviewer with `NotStarted` rather than throwing, which is what
+    /// makes every slot fillable — this pins the two behaviours together.
+    /// </remarks>
+    [Fact]
+    public async Task ACancelledRoundStillReportsEveryReviewerOnItsOwnRow()
+    {
+        var work = new[] { Remote("s-a"), Remote("s-b"), Remote("s-c") };
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        var results = await Serial().RunAllAsync(work, _executor, cancelled.Token);
+
+        results.Should().HaveCount(3);
+        results.Select(r => r.Invocation.Provider).Should().Equal(["s-a", "s-b", "s-c"]);
+        results.Should().OnlyContain(r => r.Outcome is ReviewerOutcome.NotStarted,
+            "a cancelled round reports its reviewers rather than throwing them away");
+    }
 }
