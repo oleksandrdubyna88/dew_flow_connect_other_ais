@@ -55,6 +55,18 @@ export interface CoaiSettings {
    */
   readonly rounds: Readonly<Record<string, number>>;
   readonly thresholds: Readonly<Record<string, number>>;
+  /**
+   * Whether each CODE role takes part at all, keyed by role id.
+   *
+   * <p>Asked for on 2026-09-08: a checkbox on each of the four code-review boxes, and unticking one
+   * means the role does not take part in the round — not a reviewer that runs and is then ignored.
+   * Until this existed a role could only be kept out by lying to a control that means something
+   * else, which also lost the number the person wants back when they turn it on again.</p>
+   *
+   * <p>Code roles only. `PlanCritique` is absent from this record and from the panel, because a
+   * switch whose only setting turns the whole plan stage off is a different feature.</p>
+   */
+  readonly roleEnabled: Readonly<Record<string, boolean>>;
 
   readonly onExhausted: OnExhausted;
   readonly maxConcurrency: number;
@@ -175,6 +187,9 @@ export const DEFAULTS: CoaiSettings = {
   // which is the one failure mode a gate cannot survive.
   rounds: { PlanCritique: 1, Conventions: 1, Architecture: 1, SecurityReliability: 1, UxDxPerformance: 1 },
   thresholds: { PlanCritique: 6, Conventions: 5, Architecture: 5, SecurityReliability: 5, UxDxPerformance: 5 },
+  // Every code role on. The four keys are also what the reader iterates, so this object is the list
+  // of roles that HAVE a switch — the plan role is absent from it deliberately.
+  roleEnabled: { Conventions: true, Architecture: true, SecurityReliability: true, UxDxPerformance: true },
   onExhausted: 'human',
   maxConcurrency: 3,
   maxPerProvider: 2,
@@ -205,7 +220,7 @@ export type SettingsOverlay = Readonly<Record<string, unknown>>;
  * side would not find out until a review ran against the wrong company's server.</p>
  */
 export const OVERLAID_SETTINGS: readonly string[] = [
-  'vendors', 'rounds', 'thresholds', 'onExhausted', 'maxConcurrency', 'maxPerProvider',
+  'vendors', 'rounds', 'thresholds', 'roleEnabled', 'onExhausted', 'maxConcurrency', 'maxPerProvider',
   'reviewerTimeoutMinutes', 'roundTimeoutMinutes', 'credsKey', 'escalationMinutes', 'promptsPerRound',
   'dealPlanLenses', 'dealCodeLenses', 'autonomous', 'splitPlan', 'splitWithFable', 'codeWorkspace',
 ];
@@ -250,6 +265,7 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
   return {
     rounds: asRoleNumbers(read('rounds'), DEFAULTS.rounds, asPositive),
     thresholds: asRoleNumbers(read('thresholds'), DEFAULTS.thresholds, asCount),
+    roleEnabled: asRoleFlags(read('roleEnabled'), DEFAULTS.roleEnabled),
     onExhausted: asOnExhausted(read('onExhausted')),
     maxConcurrency: asPositive(read('maxConcurrency'), DEFAULTS.maxConcurrency),
     maxPerProvider: asPositive(read('maxPerProvider'), DEFAULTS.maxPerProvider),
@@ -312,6 +328,14 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
   for (const [role, threshold] of Object.entries(settings.thresholds)) {
     if (threshold !== DEFAULTS.thresholds[role]) {
       env[`COAI_THRESHOLD_${role.toUpperCase()}`] = String(threshold);
+    }
+  }
+  // Only the roles that are OFF, because every role is on by default and this file carries only what
+  // differs. The key is spelled from the role ID exactly as the two loops above spell theirs, which
+  // is what keeps it the same string the server reads — `envKeysMatchTheServer.test.ts` asserts it.
+  for (const [role, on] of Object.entries(settings.roleEnabled)) {
+    if (!on) {
+      env[`COAI_ENABLED_${role.toUpperCase()}`] = 'false';
     }
   }
   if (settings.onExhausted !== DEFAULTS.onExhausted) {
@@ -402,6 +426,54 @@ function asPromptRounds(value: unknown): Record<string, string[]> {
  * <p>A stored map is whatever a person or a sync left there, so each entry is validated on its
  * own and a junk one takes the default rather than poisoning the map.</p>
  */
+/**
+ * Whether this role takes part in a code round.
+ *
+ * <p>The plan role has no entry and never will, so it answers true — a caller asking about it is
+ * asking a question the feature does not have, and the safe answer is the one that changes nothing.
+ * The same is true of a role id nobody recognises.</p>
+ */
+export function roleIsOn(settings: CoaiSettings, role: string): boolean {
+  return settings.roleEnabled[role] !== false;
+}
+
+/**
+ * The code roles that will actually run — what the panel counts when it predicts a round.
+ *
+ * <p>Derived from the settings rather than from {@link ROLES}, because the fan-out sentence and the
+ * round-limit note are promises about what is about to happen. A panel that says "up to eight
+ * reviewers" while two roles are switched off is not describing this round.</p>
+ */
+export function enabledCodeRoles(settings: CoaiSettings): readonly string[] {
+  return Object.keys(DEFAULTS.roleEnabled).filter((role) => roleIsOn(settings, role));
+}
+
+/**
+ * A role-keyed record of switches, read one KEY at a time and ON unless a key says otherwise.
+ *
+ * <p>Per key rather than per record, which is what makes a partial stored object safe: a
+ * configuration written before this setting existed has no keys at all, and one written the moment
+ * somebody unticked Architecture has exactly one. Reading the record as a whole would turn both into
+ * "everything off" — three reviewers silently not reviewing, with nothing on screen saying so.</p>
+ *
+ * <p>Only an explicit `false` disables. A string, a number, a null left by a hand-edited
+ * settings.json — all of them leave the role working, which is the same asymmetry the server's env
+ * parser applies: a role wrongly on costs one extra pass, a role wrongly off is a review nobody
+ * performed.</p>
+ */
+function asRoleFlags(
+  value: unknown,
+  defaults: Readonly<Record<string, boolean>>,
+): Readonly<Record<string, boolean>> {
+  const stored = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  const out: Record<string, boolean> = {};
+  for (const role of Object.keys(defaults)) {
+    out[role] = stored[role] !== false;
+  }
+
+  return out;
+}
+
 function asRoleNumbers(
   value: unknown,
   defaults: Readonly<Record<string, number>>,

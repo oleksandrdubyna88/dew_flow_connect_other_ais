@@ -796,3 +796,105 @@ test('the round limit says what it works out to, and warns when it cannot be met
   // THIS value was derived.
   assert.ok(!byHand.includes('worked out:'), 'and is not described as derived');
 });
+
+/**
+ * A code role can be switched off, and off means it does not take part.
+ *
+ * <p>Asked for on 2026-09-08 over a screenshot of the four code boxes. The requirement is not "grey
+ * it out" — it is that the role takes no part in the round, which is a server behaviour; what the
+ * panel owes is a switch that says so, an arithmetic that agrees with it, and a refusal to remove
+ * the last one.</p>
+ */
+test('every code role box carries a switch, and the plan role does not', () => {
+  const html = panelHtml(state(), 'n0nce');
+
+  for (const role of ['Conventions', 'Architecture', 'SecurityReliability', 'UxDxPerformance']) {
+    assert.ok(
+      html.includes(`data-setting="roleEnabled" data-role="${role}"`),
+      `${role} has no switch`,
+    );
+  }
+  assert.ok(
+    !html.includes('data-setting="roleEnabled" data-role="PlanCritique"'),
+    'the plan stage has one role; a switch that turns the whole stage off is a different feature',
+  );
+});
+
+test('a role switched off dims its box and disables the controls that no longer apply', () => {
+  const html = panelHtml(
+    state({ settings: { ...DEFAULTS, roleEnabled: { ...DEFAULTS.roleEnabled, Architecture: false } } }),
+    'n0nce',
+  );
+
+  assert.match(html, /class="role role-arch off"/, 'the box says it is off');
+  assert.match(
+    html,
+    /data-setting="rounds" data-role="Architecture"[^>]*disabled/,
+    'a rounds box that cannot be reached by any reviewer is not editable',
+  );
+  // And the role is still THERE, with its number kept: this is a switch, not a way of clearing it.
+  assert.ok(html.includes('id="rounds-Architecture"'));
+});
+
+test('the last role standing cannot be unticked', () => {
+  const onlyOne = {
+    ...DEFAULTS,
+    roleEnabled: { Conventions: false, Architecture: true, SecurityReliability: false, UxDxPerformance: false },
+  };
+  const html = panelHtml(state({ settings: onlyOne }), 'n0nce');
+
+  assert.match(
+    html,
+    /data-setting="roleEnabled" data-role="Architecture"[^>]*disabled/,
+    'removing the last reviewer would start a round nobody answers, which never resolves',
+  );
+  assert.match(
+    html,
+    /data-setting="roleEnabled" data-role="Conventions"(?![^>]*disabled)/,
+    'the ones already off stay clickable, or there is no way back',
+  );
+});
+
+test('the fan-out sentence counts the roles that will actually run', () => {
+  const all = panelHtml(state(), 'n0nce');
+  const two = panelHtml(
+    state({
+      settings: {
+        ...DEFAULTS,
+        roleEnabled: { Conventions: false, Architecture: true, SecurityReliability: true, UxDxPerformance: false },
+      },
+    }),
+    'n0nce',
+  );
+
+  // The sentence is a promise about the round that is about to run. Announcing four roles' worth of
+  // reviewers while two are switched off describes a different round.
+  assert.notEqual(
+    all.slice(all.indexOf('Code stage'), all.indexOf('Code stage') + 200),
+    two.slice(two.indexOf('Code stage'), two.indexOf('Code stage') + 200),
+    'the fan-out sentence did not notice that two roles are off',
+  );
+});
+
+test('an older server that would run the role anyway is called out', () => {
+  // The failure this warns about is backwards: the box says off and the reviewer runs. A person
+  // would only discover it by reading the reviewer list of a round they already paid for.
+  const off = { ...DEFAULTS, roleEnabled: { ...DEFAULTS.roleEnabled, Architecture: false } };
+  const old = panelHtml(
+    state({ settings: off, server: { kind: 'known', version: '0.18.12', remembered: true, updateOffered: false } }),
+    'n0nce',
+  );
+  const current = panelHtml(
+    state({ settings: off, server: { kind: 'known', version: '0.18.13', remembered: true, updateOffered: false } }),
+    'n0nce',
+  );
+  const nothingOff = panelHtml(
+    state({ server: { kind: 'known', version: '0.18.12', remembered: true, updateOffered: false } }),
+    'n0nce',
+  );
+
+  assert.match(old, /does not know a role can be switched off[\s\S]*Architecture/);
+  assert.ok(!current.includes('does not know a role can be switched off'), 'a server that knows is not nagged');
+  assert.ok(!nothingOff.includes('does not know a role can be switched off'),
+    'and neither is one where nothing is switched off — there is nothing to get wrong');
+});

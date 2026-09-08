@@ -550,6 +550,23 @@ lenses while performance is worth one. `For(string role)` is the only way to rea
 `For(Stage)` answers the widest of the stage's roles, because the stage counts rounds once and a role
 simply stops taking part when its own budget is spent (`RolesForRound`).
 
+**A role can also be switched OFF entirely (2026-09-08).** `RoleGate` carries `Enabled`, defaulted
+to `true` positionally so that every construction site that predates the switch keeps meaning what it
+meant and "absent means on" holds by construction — which matters at three boundaries at once: an
+older panel driving a newer server, a stored settings record written before the key existed, and a
+role nobody has ever touched. `EnabledRolesOf(stage)` is the named member both `RolesForRound` and
+`For(Stage)` read, so a role that is off lends the stage neither its rounds nor its threshold; with
+every code role off it answers empty and `For(Stage)` is `(0, 0)` rather than an exception out of
+`Max`. `ReviewCodeAsync` refuses that round before the scope check and before any worktree, naming
+the four boxes and the env variable — because a round no reviewer answered is counted UNRESOLVED, so
+it would sit open for ever and the next call would be refused for the wrong reason.
+
+The env key is `COAI_ENABLED_<ROLE>`, and it is read by `NotSwitchedOff` rather than by the ordinary
+`Flag` helper: only the four spellings of false disable a role, and absent, empty, `no`, a typo and a
+shell-mangled value all leave the reviewer working. The asymmetry is deliberate — a role wrongly on
+costs one extra pass, a role wrongly off is a review nobody performed with nothing saying so. The
+plan role is never disabled: the boundary refuses it rather than trusting that nobody writes the key.
+
 Two consequences worth naming:
 
 - **A finding is counted against the threshold of the role that raised it.** `Finding.Role` is stamped

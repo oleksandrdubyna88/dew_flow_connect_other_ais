@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "Your AI writes the code; other vendors' models review it \u2014 the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.31.8",
+  "version": "0.31.9",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -352,6 +352,16 @@
             "UxDxPerformance": 1
           },
           "markdownDescription": "How many rounds each reviewer ROLE gets. Architecture may be worth two passes with different lenses while performance is worth one; a shared budget forces the cheapest role to pay for the most expensive. Edit it in the **ConnectOtherAIs** panel."
+        },
+        "coai.roleEnabled": {
+          "type": "object",
+          "default": {
+            "Conventions": true,
+            "Architecture": true,
+            "SecurityReliability": true,
+            "UxDxPerformance": true
+          },
+          "markdownDescription": "Which CODE-review roles take part. Unticking one means that role does not take part in the round at all — no reviewer is launched for it and its findings count towards nothing. Its rounds, threshold and prompts are kept and come back unchanged when it is ticked again. Plan review is not affected."
         },
         "coai.thresholds": {
           "type": "object",
