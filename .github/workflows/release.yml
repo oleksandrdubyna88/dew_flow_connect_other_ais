@@ -346,6 +346,11 @@ jobs:
           - rid: osx-x64
             runner: macos-latest
     runs-on: ${{ matrix.runner }}
+    # A bound on the whole leg, not only on the poll inside it. The smoke's own deadline covers a
+    # server that never binds; this covers the rest — a link that hangs, a runner that stalls, a
+    # process that ignores its termination. Without it the ceiling is the workflow default of six
+    # hours, which is a release nobody watches finish.
+    timeout-minutes: 45
     permissions:
       contents: write
     steps:
@@ -419,12 +424,17 @@ jobs:
             exit 0
           fi
 
+          # An ABSOLUTE deadline, not a loop count. Sixty iterations of `--max-time 2` plus a
+          # one-second sleep is up to 180 seconds while the failure message says sixty — a bound
+          # that lies about itself by a factor of three, on six legs at once. Raised on the code
+          # round, and it is the kind of thing only arithmetic catches.
           DEADLINE=60
+          UNTIL=$(( $(date +%s) + DEADLINE ))
           HEALTH=""
-          for _ in $(seq 1 "$DEADLINE"); do
+          while [ "$(date +%s)" -lt "$UNTIL" ]; do
             HEALTH=$(curl -fsS --max-time 2 http://127.0.0.1:5099/api/health 2>/dev/null || true)
             [ -n "$HEALTH" ] && break
-            sleep 1
+            sleep 2
           done
 
           if [ -z "$HEALTH" ]; then
@@ -514,28 +524,48 @@ jobs:
 
   # A release with five archives and a swallowed error looks exactly like one with six from inside
   # any single matrix leg. This job is the only place that can see all of them.
+  #
+  # It needs `server-binaries` and NOT `server-manifest`, deliberately. The two artefacts have
+  # independent lifecycles — a container registry outage has nothing to do with whether the binary
+  # the live host installs is complete — and coupling them means a failed image job leaves the
+  # deployment shape that IS used with no completeness signal at all. Raised by three reviewers.
   server-release-complete:
     name: the server release carries every platform
     if: startsWith(github.ref, 'refs/tags/server-v')
-    needs: [server-binaries, server-manifest]
+    needs: [server-binaries]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - name: Count what the release actually carries
+      - name: Every expected asset is there, by NAME
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
           set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#server-v}"
+          # By name rather than by count: six wrongly-named archives satisfy a count, and the one
+          # that matters is `linux-x64` — the RID the live host installs. A release missing exactly
+          # that one would pass a tally and fail the next deploy.
+          RIDS=(linux-x64 linux-arm64 win-x64 win-arm64 osx-x64 osx-arm64)
           EXPECTED=6
+          [ "${#RIDS[@]}" -eq "$EXPECTED" ] || { echo "the RID list and EXPECTED disagree"; exit 1; }
+
           ASSETS=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')
-          ARCHIVES=$(printf '%s\n' "$ASSETS" | grep -cE '\.(zip|tar\.gz)$' || true)
-          SUMS=$(printf '%s\n' "$ASSETS" | grep -cE '\.sha256$' || true)
           printf '%s\n' "$ASSETS"
-          if [ "$ARCHIVES" -ne "$EXPECTED" ] || [ "$SUMS" -ne "$EXPECTED" ]; then
-            echo "expected $EXPECTED archives and $EXPECTED checksums, found $ARCHIVES and $SUMS"
+
+          MISSING=""
+          for rid in "${RIDS[@]}"; do
+            case "$rid" in win-*) EXT=zip ;; *) EXT=tar.gz ;; esac
+            for name in "coai-server-$VERSION-$rid.$EXT" "coai-server-$VERSION-$rid.$EXT.sha256"; do
+              printf '%s\n' "$ASSETS" | grep -qx "$name" || MISSING="$MISSING $name"
+            done
+          done
+
+          if [ -n "$MISSING" ]; then
+            echo "the release is incomplete — missing:$MISSING"
             exit 1
           fi
           echo "the release carries all $EXPECTED platforms, each with its checksum"

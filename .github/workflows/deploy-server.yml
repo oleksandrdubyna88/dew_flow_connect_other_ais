@@ -42,6 +42,7 @@ jobs:
   preflight:
     name: the request is answerable
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       tag: ${{ steps.check.outputs.tag }}
       asset: ${{ steps.check.outputs.asset }}
@@ -88,6 +89,11 @@ jobs:
     name: deploy to coai.remsoft.dev
     needs: preflight
     runs-on: ubuntu-latest
+    # Generous, because the release script's canary runs one REAL review per configured vendor and
+    # a slow reviewer legitimately takes minutes. Bounded all the same: an ssh session to a host
+    # that stops answering mid-script would otherwise hold this job — and its approval — for the
+    # six-hour default, with nothing on screen saying it is stuck.
+    timeout-minutes: 40
     # Where the required reviewer and the deploy secrets both live. Without it, a workflow that can
     # reach the host from any branch is a workflow anyone with push access can point at the
     # company's paid subscriptions.
@@ -174,7 +180,22 @@ jobs:
           sha256sum -c "$ASSET.sha256"
           tar tzf "$ASSET" | head -20
 
+      # Read BEFORE anything is swapped, because it is what makes the rollback decision safe: a
+      # deploy that failed before the swap leaves a healthy server on this version, and rolling
+      # THAT back would downgrade a server nobody had a complaint about.
+      - name: What the server is serving now
+        id: before
+        env:
+          PUBLIC_URL: ${{ vars.COAI_PUBLIC_URL || 'https://coai.remsoft.dev' }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          NOW=$(curl -fsS --max-time 10 "$PUBLIC_URL/api/health" 2>/dev/null || true)
+          echo "before: ${NOW:-<no answer>}"
+          echo "health=$NOW" >> "$GITHUB_OUTPUT"
+
       - name: Put it on the host and run the release script
+        id: install
         env:
           HOST: ${{ secrets.COAI_DEPLOY_HOST }}
           USER_NAME: ${{ secrets.COAI_DEPLOY_USER }}
@@ -186,69 +207,110 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          # ssh joins its command arguments back into ONE string and the remote shell re-parses it,
+          # so an argv element is not the boundary it looks like. A repository variable reading
+          # `/etc/x;touch /root/pwned` would therefore execute on the host, as the deploy account.
+          # `$VERSION` was already pinned to a strict pattern in `preflight`; this is the other
+          # value that crosses, and it gets the same treatment. Raised on the code round.
+          if ! printf '%s' "$TOKEN_FILE" | grep -Eq '^/[A-Za-z0-9._/-]+$'; then
+            echo "::error::COAI_CANARY_TOKEN_FILE is not a plain absolute path: '$TOKEN_FILE'"
+            exit 1
+          fi
+
+          # NOT /tmp. The script runs as root and unpacks what it is given, and /tmp is
+          # world-writable: anything else on that box can pre-create the name as a symlink and have
+          # root extract through it. A directory under the deploy account's own home cannot be
+          # raced by a user who is not already that account. Raised on the code round.
+          STAGE=".coai-deploy"
+          ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes \
+              "$USER_NAME@$HOST" "mkdir -p ~/$STAGE && chmod 700 ~/$STAGE"
           scp -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes \
-              "$ASSET" "$USER_NAME@$HOST:/tmp/$ASSET"
+              "$ASSET" "$USER_NAME@$HOST:$STAGE/$ASSET"
 
           # One remote command, no inline script. The unpacking that would otherwise live in a
           # heredoc here belongs to `--from`, which takes the archive itself — a shell fragment
           # embedded in a workflow is the copy of the release procedure nobody would ever test.
-          #
-          # `$VERSION` reaches the remote shell as its own argv element, and it passed the pattern
-          # in `preflight` before this job existed: it holds digits, dots and dashes, so there is
-          # nothing here for a shell to re-parse into a second command.
           ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes \
               "$USER_NAME@$HOST" \
               env "COAI_TOKEN_FILE=$TOKEN_FILE" \
-              /opt/coai/src/deploy/systemd-release.sh --from "/tmp/$ASSET" "$VERSION"
+              /opt/coai/src/deploy/systemd-release.sh --from "\$HOME/$STAGE/$ASSET" "$VERSION"
 
-      # The script's canary proves reviews work behind the swap. This proves the version answering
-      # the internet is the one that was asked for — loopback first, so a failure separates "the
-      # unit is wrong" from "the edge is wrong" instead of blaming whichever is checked.
+      # `always()`, and that is the fix for a real window: an ssh session that dies AFTER the script
+      # swapped `bin` fails this job with the new release live and unverified, and a verification
+      # that only runs on success would never look. It runs whenever the install was ATTEMPTED.
       #
-      # Retried, because nginx and the unit do not come back in the same millisecond and a single
-      # curl one second after a restart measures the restart.
+      # Loopback first, so a failure separates "the unit is wrong" from "the edge is wrong" instead
+      # of blaming whichever end happened to be checked. Retried, because nginx and the unit do not
+      # come back in the same millisecond and a single curl after a restart measures the restart.
       - name: The version serving the internet is the one that was asked for
         id: verify
+        if: always() && steps.install.outcome != 'skipped'
         env:
           HOST: ${{ secrets.COAI_DEPLOY_HOST }}
           USER_NAME: ${{ secrets.COAI_DEPLOY_USER }}
           VERSION: ${{ inputs.version }}
+          BEFORE: ${{ steps.before.outputs.health }}
           PUBLIC_URL: ${{ vars.COAI_PUBLIC_URL || 'https://coai.remsoft.dev' }}
         shell: bash
         run: |
           set -uo pipefail
-          SSH="ssh -i $HOME/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes"
+          SSH="ssh -i $HOME/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=15"
+          WANT="\"version\":\"$VERSION\""
 
           LOCAL=$($SSH "$USER_NAME@$HOST" 'curl -fsS --max-time 5 http://127.0.0.1:8090/api/health' 2>&1 || true)
-          echo "loopback: $LOCAL"
+          echo "loopback: ${LOCAL:-<no answer>}"
+          if ! printf '%s' "$LOCAL" | grep -q "$WANT"; then
+            echo "the unit itself is not serving $VERSION — the edge is not the problem"
+          fi
 
+          # `no-cache`: a proxy that answered this endpoint a minute ago could hand back the
+          # PREVIOUS version's body and make a failed deploy read as an old one, or the reverse.
           PUBLIC=""
-          for _ in $(seq 1 30); do
-            PUBLIC=$(curl -fsS --max-time 5 "$PUBLIC_URL/api/health" 2>/dev/null || true)
-            printf '%s' "$PUBLIC" | grep -q "\"version\":\"$VERSION\"" && break
+          for attempt in $(seq 1 30); do
+            PUBLIC=$(curl -fsS --max-time 5 -H 'Cache-Control: no-cache' "$PUBLIC_URL/api/health" 2>/dev/null || true)
+            printf '%s' "$PUBLIC" | grep -q "$WANT" && break
+            echo "  attempt $attempt: ${PUBLIC:-<no answer>}"
             sleep 2
           done
-          echo "public: $PUBLIC"
+          echo "public: ${PUBLIC:-<no answer>}"
 
-          if ! printf '%s' "$PUBLIC" | grep -q "\"version\":\"$VERSION\""; then
-            echo "::error::$PUBLIC_URL reports '$PUBLIC' after deploying $VERSION"
+          if printf '%s' "$PUBLIC" | grep -q "$WANT"; then
+            echo "state=ok" >> "$GITHUB_OUTPUT"
+            echo "$PUBLIC_URL is serving $VERSION"
+            exit 0
+          fi
+
+          # The distinction the rollback depends on. Still serving what it served before the swap
+          # means the swap did not happen: the live release is the one that was running this
+          # morning, and popping the trail would take a healthy server BACK a version for a deploy
+          # that never landed.
+          if [ -n "$BEFORE" ] && [ "$PUBLIC" = "$BEFORE" ]; then
+            echo "state=unchanged" >> "$GITHUB_OUTPUT"
+            echo "::error::the deploy did not take effect — $PUBLIC_URL still reports what it did before it ran. Nothing was rolled back, because nothing changed."
             exit 1
           fi
-          echo "$PUBLIC_URL is serving $VERSION"
+
+          echo "state=broken" >> "$GITHUB_OUTPUT"
+          echo "::error::$PUBLIC_URL reports '${PUBLIC:-<no answer>}' after deploying $VERSION"
+          exit 1
 
       # The window this closes: the script swaps `bin` and canaries behind it, and everything after
       # that used to be a red job over a live server still running the new release. `--rollback`
       # pops the trail — it BUILDS nothing and takes seconds — and the summary says it ran, because
       # a rollback nobody is told about is a second incident.
+      #
+      # `broken` only. A deploy that never took effect leaves the previous release serving, and
+      # rolling that back would undo a deployment nobody asked about to fix one that never happened.
       - name: Roll back, because the deploy did not prove itself
-        if: failure() && steps.verify.outcome == 'failure'
+        if: always() && steps.verify.outputs.state == 'broken'
         env:
           HOST: ${{ secrets.COAI_DEPLOY_HOST }}
           USER_NAME: ${{ secrets.COAI_DEPLOY_USER }}
         shell: bash
         run: |
           set -uo pipefail
-          OUT=$(ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes \
+          OUT=$(ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=15 \
                     "$USER_NAME@$HOST" '/opt/coai/src/deploy/systemd-release.sh --rollback' 2>&1)
           STATUS=$?
           printf '%s\n' "$OUT"

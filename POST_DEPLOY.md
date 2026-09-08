@@ -29,6 +29,8 @@ mornings. Read the step's own elapsed time against the JOB's history before acti
 | 7 | The Team server is **up but refuses everything**: `/api/health` answers and every other route says `403 HTTPS required.` — because `UseForwardedHeaders` consumes `X-Forwarded-Proto` from a TRUSTED proxy and the gate read the raw header. Configuring `Coai:TrustedProxies` CORRECTLY was what broke it, which is why it survived review and 165 tests | `curl -fsS https://coai.remsoft.dev/api/client-config` must return the scope JSON, not `HTTPS required.` — and `/api/catalog` must answer **401** (no token), never 403 | auto |
 | 8 | The server runs, and **none of its vendors can review**: a CLI that the image or the host updated no longer starts, and nothing says so until a round fails halfway through | `curl` `/api/catalog` with a session token and check all three vendors report a version — the server probes them at startup, so a blank version is a CLI that did not run | manual |
 | 4 | The extension spawns a **stale** `coai-mcp` — the binary beside a fresh extension is the one that was published last, not the one that was just built | Check the packaged binary's version against the release you just made, from inside the installed extension folder rather than from the repository | manual |
+| 9 | A Team server release ships **five of six platforms**, exactly as item 1 describes for the MCP binary — and the one that goes missing is the one the live host installs, so the next deploy stops at its preflight with nothing to download. Applies from `server-v0.5.5`, the first tag that publishes binaries at all | `node -e "const{execFileSync}=require('child_process');const v=process.env.SERVER_VERSION;const a=JSON.parse(execFileSync('gh',['release','view','server-v'+v,'--json','assets'],{encoding:'utf8'})).assets.map(x=>x.name);const rids=['linux-x64','linux-arm64','win-x64','win-arm64','osx-x64','osx-arm64'];const missing=rids.filter(r=>!a.includes('coai-server-'+v+'-'+r+(r.startsWith('win-')?'.zip':'.tar.gz')));console.log(missing.length?'missing: '+missing.join(', '):'all six RIDs present');process.exitCode=+(missing.length?1:0)"` | auto |
+| 10 | The deploy workflow reports success and the box serves **the version it served before** — the swap silently did not happen, and the number everyone quotes comes from a binary nobody can trace. This is the failure this whole line exists for: 0.5.5 was on the internet, built by hand, from a commit no tag names | `curl -fsS https://coai.remsoft.dev/api/health` must report `SERVER_VERSION`, and `systemd-release.sh --list` on the host must show `bin` pointing at a `releases/<that version>-<stamp>` directory | auto |
 
 ## Why item 1 is first
 
@@ -42,13 +44,14 @@ rebuilt, an artefact never deployed — at least leave something behind that loo
 ```bash
 gh auth status                                   # item 1 reads the release through gh
 export MCP_VERSION=0.15.0                        # the binary's own tag: mcp-v<version>
+export SERVER_VERSION=0.5.5                      # the Team server's own tag: server-v<version>
 node .claude/rules/shared/tools/post-deploy-check.mjs --target 0.29.3
 ```
 
 `TARGET` here is a **version**, not a URL: what is being checked is what a user receives, and both
 places a user receives it from are addressed by name rather than by host.
 
-**Two numbers, on purpose.** The tags are `extension-v<x>` and `mcp-v<y>` and they move
+**Three numbers, on purpose.** The tags are `extension-v<x>`, `mcp-v<y>` and `server-v<z>` and they move
 independently — a release of one is not a release of the other. A checklist that assumed one version
 would check the wrong artefact half the time, which is how this item was written wrong the first time
 and caught by running it: `gh release view v0.26.1` answered *release not found*.

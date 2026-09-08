@@ -203,9 +203,19 @@ stage_from() {
     if [[ -d "$source" ]]; then
         cp -a "$source/." "$target/"
     else
-        tar xzf "$source" -C "$target" --strip-components=1
+        tar xzf "$source" -C "$target" --strip-components=1 \
+            || die "$source did not unpack — is it the release .tar.gz?"
     fi
-    chmod +x "$target/$SERVICE" 2>/dev/null || true
+
+    # Said HERE rather than left to the inspection below, because the two failures need different
+    # sentences: "the archive had no top-level directory, so --strip-components=1 removed
+    # everything" is a packaging mistake, and "the binary does not contain this version" is a wrong
+    # download. One message for both would send the reader to the wrong half.
+    [[ -f "$target/$SERVICE" ]] \
+        || die "$source produced no $SERVICE in $target — a flat archive, or the wrong file"
+    # No `|| true`: a staged binary that cannot be made executable is a release that will not
+    # start, and swallowing it here means finding out from `switch_to` two steps later.
+    chmod +x "$target/$SERVICE" || die "cannot make $target/$SERVICE executable"
 }
 
 case "${1:-}" in
@@ -238,6 +248,11 @@ case "${1:-}" in
         : # a version to release; handled below
         ;;
 esac
+
+# One version and nothing else. `--from X 0.5.5 --canary-only` used to run a plain release of
+# 0.5.5 with the third argument dropped in silence, which is the shape of a flag that was typed,
+# ignored, and believed.
+[[ $# -eq 1 ]] || die "expected one version, got: $*"
 
 VERSION=$1
 take_the_lock
