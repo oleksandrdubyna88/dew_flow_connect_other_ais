@@ -74,31 +74,17 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+
       - name: Create it, once
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Idempotent for a re-run: a draft this workflow already made is REUSED rather than
-          # duplicated, which is the whole failure above.
-          # Reused only when it is still a DRAFT. `gh release view` succeeds for a PUBLISHED release
-          # too, so a re-run against a tag somebody had published by hand would skip creation and
-          # send six legs uploading into a release clients can already see — the exact window this
-          # change removes. Raised twice on the code round.
-          if EXISTING=$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft' 2>/dev/null); then
-            if [ "$EXISTING" = "true" ]; then
-              echo "$GITHUB_REF_NAME is already a draft; reusing it"
-              exit 0
-            fi
-            echo "$GITHUB_REF_NAME is already PUBLISHED — refusing to upload into a visible release."
-            echo "Cut a new tag, or delete that release if it was published in error."
-            exit 1
-          fi
-          gh release create "$GITHUB_REF_NAME" --draft \
-            --title "coai-mcp ${GITHUB_REF_NAME#mcp-v}" \
-            --notes "Native AOT builds of the ConnectOtherAIs MCP server."
+        run: >-
+          .github/scripts/draft-release.sh "$GITHUB_REF_NAME"
+          "coai-mcp ${GITHUB_REF_NAME#mcp-v}"
+          "Native AOT builds of the ConnectOtherAIs MCP server."
+
 
   server-draft:
     name: the server release, as a draft
@@ -108,29 +94,17 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+
       - name: Create it, once
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Reused only when it is still a DRAFT. `gh release view` succeeds for a PUBLISHED release
-          # too, so a re-run against a tag somebody had published by hand would skip creation and
-          # send six legs uploading into a release clients can already see — the exact window this
-          # change removes. Raised twice on the code round.
-          if EXISTING=$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft' 2>/dev/null); then
-            if [ "$EXISTING" = "true" ]; then
-              echo "$GITHUB_REF_NAME is already a draft; reusing it"
-              exit 0
-            fi
-            echo "$GITHUB_REF_NAME is already PUBLISHED — refusing to upload into a visible release."
-            echo "Cut a new tag, or delete that release if it was published in error."
-            exit 1
-          fi
-          gh release create "$GITHUB_REF_NAME" --draft \
-            --title "coai-server ${GITHUB_REF_NAME#server-v}" \
-            --notes "Native AOT builds of the ConnectOtherAIs Team server, and the multi-arch image at ghcr.io/${{ github.repository_owner }}/coai-server:${GITHUB_REF_NAME#server-v}."
+        run: >-
+          .github/scripts/draft-release.sh "$GITHUB_REF_NAME"
+          "coai-server ${GITHUB_REF_NAME#server-v}"
+          "Native AOT builds of the ConnectOtherAIs Team server, and the multi-arch image at ghcr.io/${{ github.repository_owner }}/coai-server:${GITHUB_REF_NAME#server-v}."
+
 
   mcp-binaries:
     name: coai-mcp (${{ matrix.rid }})
@@ -715,7 +689,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: read
+      # WRITE, because this job PUBLISHES now. It was `read` when it only counted the assets, and
+      # the publish would have failed silently on every server release — `gh release edit` refused,
+      # then the script's own verification reported a complete release as unpublishable. Found on
+      # the code round by reading the permissions beside what the job actually does.
+      contents: write
     steps:
       - uses: actions/checkout@v7
 

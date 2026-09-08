@@ -197,3 +197,28 @@ draft job it does not need` matched `always()` anywhere in the job block — inc
 explaining it — so it passed against a workflow with the guard removed. It reads the `if:` condition
 itself now. A structural test that prose can satisfy is not a test, and I found this only by putting
 the defect back and watching it stay green.
+
+## The second code round, and the one that would have failed every server release
+
+- **`server-release-complete` had `permissions: contents: read`.** Correct while it only COUNTED
+  assets; wrong the moment it became the thing that publishes. `gh release edit --draft=false` would
+  have been refused on every server release, and the script's own verification would then have
+  reported a complete release as unpublishable. Found by gemini, by reading the permissions beside
+  what the job actually does. A test now asserts `contents: write` on every job that creates, edits
+  or publishes a release.
+- **The draft create/reuse was written twice**, like the verifier before it. It is
+  [`.github/scripts/draft-release.sh`](../.github/scripts/draft-release.sh) now.
+- **The expected RID list is a parameter** with the six as its default. The two lines have
+  independent lifecycles — the extension test says so in as many words — and a server-only RID must
+  not silently become an mcp release's expectation.
+
+And one found by looking rather than by review: **git had recorded both scripts `100644`**, so
+`run: .github/scripts/…` would have failed with "Permission denied" on every release — and
+`deploy/systemd-release.sh` was the same, which is what the deploy workflow's own preflight tests
+with `test -x` and what `deploy/README.md` tells an operator to run. Four scripts are `100755`, a
+`.gitattributes` pins `*.sh` to LF (a CRLF shebang is "bad interpreter" on the runner that executes
+one of them), and a test reads the mode out of git's index.
+
+Rejected with reasons: adding `needs: [mcp-draft]` to the extension job (it would skip the extension
+release entirely, which is the defect this round fixed one line over), `set -o pipefail` in the
+script (it is the first line), and reformatting a failure message that is already one name per line.
