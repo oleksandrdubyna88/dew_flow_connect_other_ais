@@ -34,8 +34,23 @@ import { ProcessHandle } from './processLauncher';
  * it could not read. When the borrow comes back empty, nothing is written at all.</p>
  */
 
-/** What the clipboard holds while we watch to see whether the copy landed. */
-const SENTINEL = 'COAI-CHAT-NOTHING-WAS-COPIED';
+/**
+ * What the clipboard holds while we watch to see whether the copy landed.
+ *
+ * <p>Exported for the test that pins the collision below, not because anybody else needs it.</p>
+ */
+export const CLIPBOARD_SENTINEL = 'COAI-CHAT-NOTHING-WAS-COPIED';
+
+/**
+ * The marker for ONE capture, which is not the same as the marker for the next.
+ *
+ * <p>A fixed sentinel is a string somebody can copy — this file's own source contains it, and
+ * selecting that line would have been reported as "nothing was copied". A capture may fail for a
+ * hundred reasons, but never for the CONTENT of what was selected. (local, the code round.)</p>
+ */
+export function markerFor(): string {
+  return `${CLIPBOARD_SENTINEL}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
 
 /**
  * The whole helper, as one PowerShell program.
@@ -141,7 +156,7 @@ export async function captureSelection(
   // exactly where it was. Writing a sentinel over an image and then "restoring" the empty string we
   // had read is a tidy-up that destroys something it never held. (gemini, the plan round.)
   const restorable = borrowed.length > 0;
-  const marker = restorable ? SENTINEL : '';
+  const marker = restorable ? markerFor() : '';
   if (restorable) {
     await clipboard.write(marker);
   }

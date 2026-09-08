@@ -81,10 +81,15 @@ export interface ChatHome {
  * starts no process at all, and left an empty directory in `%TEMP%` each time. It is made where it
  * is used now, and released when the conversation closes.</p>
  *
- * <p>Injected `make` and `remove` so the two guarantees — made once, removed once, whatever happens
- * — are a test rather than a claim. `dispose` and `closeAll` can both arrive for the same tab.</p>
+ * <p>Injected `make`, `remove` and `report` so the three guarantees — made once, removed once, and
+ * a failure SAID rather than swallowed — are tests rather than claims. `dispose` and `closeAll` can
+ * both arrive for the same tab, and a directory a virus scanner is holding open can refuse to go.</p>
+ *
+ * <p>`report` is required, not defaulted. A closing tab is the outer edge of a detached call, and
+ * `reliability.md` is explicit that such an edge ends in a catch that LOGS; a default no-op would
+ * have made the silence the easy path again, which is how it got here. (codex, the code round.)</p>
  */
-export function chatHome(make: () => string, remove: (dir: string) => void): ChatHome {
+export function chatHome(make: () => string, remove: (dir: string) => void, report: (failure: string) => void): ChatHome {
   const dir = make();
   let released = false;
 
@@ -97,11 +102,18 @@ export function chatHome(make: () => string, remove: (dir: string) => void): Cha
       released = true;
       try {
         remove(dir);
-      } catch {
-        // An empty directory nobody can delete is not worth a message, let alone a failed close.
+      } catch (reason) {
+        // Not rethrown: a tab must still close. Said, because an empty directory per conversation
+        // that never goes away is exactly the kind of thing nobody notices for a year.
+        report(`the chat's temporary directory could not be removed: ${dir} — ${asText(reason)}`);
       }
     },
   };
+}
+
+/** A thrown thing, as a sentence. */
+function asText(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
 }
 
 /**

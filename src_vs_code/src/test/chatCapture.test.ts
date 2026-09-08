@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { COPY_SCRIPT, Clipboard, argvFor, captureSelection, shouldRestore } from '../selectionCapture';
+import { CLIPBOARD_SENTINEL, COPY_SCRIPT, Clipboard, argvFor, captureSelection, markerFor, shouldRestore } from '../selectionCapture';
 
 /**
  * Borrowing the clipboard to copy somebody else's selection.
@@ -161,6 +161,28 @@ test('a copy onto an unreadable clipboard is kept, not replaced by the emptiness
 
   assert.strictEqual(capture.text, 'the selected passage');
   assert.strictEqual(clipboard.held(), 'the selected passage', 'the restore blanked the clipboard');
+});
+
+test('a passage that happens to BE the marker is still a passage', async () => {
+  // A fixed sentinel is a string somebody can copy. Whoever selects the line that names it in this
+  // repository's own source would be told nothing was copied — for content, which is the one thing
+  // a capture must never judge. The marker is unique per call instead. (local, the code round.)
+  const clipboard = fakeClipboard('what the person had copied');
+
+  const capture = await captureSelection(
+    async () => {
+      await clipboard.write(CLIPBOARD_SENTINEL);
+    },
+    clipboard,
+    'win32',
+  );
+
+  assert.strictEqual(capture.text, CLIPBOARD_SENTINEL);
+  assert.strictEqual(capture.failure, '');
+});
+
+test('two captures never borrow under the same marker', () => {
+  assert.notStrictEqual(markerFor(), markerFor(), 'the marker is fixed, so its collision is too');
 });
 
 test('the restore rule is one comparison, and it is the whole guard', () => {
