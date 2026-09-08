@@ -78,25 +78,46 @@ public sealed class RepairRunsInsideTheBudgetTests
     /// <para>Raised by two reviewers on the plan round, and it is the sharper half of the fix.
     /// `ProcessLauncher` calls `CancelAfter(request.Timeout)`, so a repair handed `TimeSpan.Zero`
     /// would start a process and cancel it in the same breath — and report `TimedOut`, which
-    /// describes the repair rather than the answer that needed one.</para>
-    /// <para>The first launch's complaint is the useful one: it says WHY the answer could not be
-    /// parsed, which is what somebody reading the round is looking for. A timeout would have hidden
-    /// exactly that.</para>
+    /// describes the repair rather than the answer that needed one. The first launch's complaint is
+    /// the useful one: it says WHY the answer could not be parsed, which is what somebody reading
+    /// the round is looking for.</para>
+    /// <para><b>Through the launcher seam, because the real one cannot reach this state.</b> The
+    /// first draft used a real process and a 100 ms budget — and the code round pointed out that
+    /// the launcher cancels at the deadline, so the first launch returns `TimedOut` and `RunAsync`
+    /// exits before the new branch is ever reached. A vendor that answers slowly with junk is a
+    /// thing the real launcher will not do on request; a fake is how it is asked.</para>
     /// </remarks>
     [Fact]
     public async Task WithTheBudgetAlreadySpent_TheRepairIsSkipped_AndTheFirstComplaintSurvives()
     {
-        // A tenth of a second for the reviewer, and a first launch that takes longer than that while
-        // answering nothing parseable: there is no time left for a repair by the time one is wanted.
-        var outcome = await _executor.RunAsync(
-            FakeCliInvocations.Invoke("vendor", ["sleep", "300"], TimeSpan.FromMilliseconds(100)),
-            FakeCliInvocations.Invoke("vendor", ["emit", FakeCliInvocations.CleanReview], TimeSpan.FromSeconds(10)),
+        var launcher = new SlowJunkLauncher(TimeSpan.FromMilliseconds(120));
+        var executor = new ReviewerExecutor(launcher);
+
+        var outcome = await executor.RunAsync(
+            FakeCliInvocations.Invoke("vendor", ["ignored"], TimeSpan.FromMilliseconds(50)),
+            FakeCliInvocations.Invoke("vendor", ["ignored"], TimeSpan.FromMilliseconds(50)),
             TestContext.Current.CancellationToken);
 
-        // The first launch is cut off by its own deadline here, which is the honest report: nothing
-        // about the repair is invented, and no second process is started to say so.
-        outcome.Should().BeOfType<ReviewerOutcome.TimedOut>(
-            "a launch that outlives its own deadline is a timeout, and the repair never happens");
+        launcher.Launches.Should().Be(1, "there was no time left to launch a repair");
+        var unparseable = outcome.Should().BeOfType<ReviewerOutcome.Unparseable>().Subject;
+        unparseable.Reason.Should().Contain("deadline was spent",
+            "the round summary renders this reason, so it is where a person learns time ran out");
+        unparseable.Reason.Should().StartWith("the answer was not the schema's JSON",
+            "the first launch's own complaint leads, because it says WHY a repair was wanted at all");
+    }
+
+    /// <summary>Answers slowly, with something that is not a review — what a real CLI cannot be asked for.</summary>
+    private sealed class SlowJunkLauncher(TimeSpan takes) : IProcessLauncher
+    {
+        public int Launches { get; private set; }
+
+        public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            Launches += 1;
+            await Task.Delay(takes, ct);
+
+            return new ProcessResult(0, "not json at all", string.Empty, TimedOut: false);
+        }
     }
 
     [Fact]

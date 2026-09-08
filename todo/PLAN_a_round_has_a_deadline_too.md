@@ -81,7 +81,16 @@ here before it is written.
 2. **Does it bound the QUEUE too?** A Team-server job waiting behind other people is not this
    machine's work, but it is the person's wall-clock. Assumption: yes, one clock from the moment
    the round opens — that is the number the panel shows and the number they complained about.
-3. **Per stage, or one?** The plan stage is one reviewer per vendor and the code stage is four, so
+3. **How does the reason reach the person?** Cancelling the outstanding reviewers makes each of
+   them `Abandoned`, and `ReviewerSummaryFactory.Describe` has no case for that — it falls through
+   to `"unknown"`, which is the least useful word available for the one thing this feature exists to
+   explain. `ReviewerSummary.From` also takes no round-deadline input, so the summary cannot tell
+   "the round ran out" from "a reviewer failed on its own". **Assumption: the deadline is passed
+   into the summary explicitly** and rendered as its own sentence, rather than inferred from a count
+   of abandoned reviewers — inferring it would be wrong the moment a round is cancelled by a person.
+   Raised on this plan's code round, before any of it was built, which is the cheapest moment.
+
+4. **Per stage, or one?** The plan stage is one reviewer per vendor and the code stage is four, so
    one number cannot fit both without being far too generous for the plan. Assumption: derive both
    from the same setting via the arithmetic above, which already accounts for the role count.
 

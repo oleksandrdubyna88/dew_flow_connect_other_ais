@@ -194,6 +194,26 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
         }
     }
 
+    /// <summary>
+    /// Why there is no second launch to make, or null when there is one.
+    /// </summary>
+    /// <remarks>
+    /// <para>Two questions with one answer — nobody configured a repair, or the deadline is spent —
+    /// and they were two `if` blocks returning nearly the same object until the code round counted
+    /// `RunAsync`'s branches. Asking once puts the two REASONS beside each other, which is where
+    /// they belong: they differ only in the sentence a person reads.</para>
+    /// <para>A spent deadline matters more than it looks. `ProcessLauncher` calls
+    /// `CancelAfter(request.Timeout)`, so a repair handed zero would start a process and cancel it
+    /// in the same breath, then report a timeout describing the repair rather than the answer that
+    /// needed one — hiding the diagnosis somebody is actually looking for.</para>
+    /// </remarks>
+    private static string? NoRepairToRun(ReviewerInvocation? repair, TimeSpan left) => repair switch
+    {
+        null => "and no repair was configured",
+        _ when left <= TimeSpan.Zero => "and the reviewer's deadline was spent before it could be repaired",
+        _ => null,
+    };
+
     public async Task<ReviewerOutcome> RunAsync(
         ReviewerInvocation invocation,
         ReviewerInvocation? repair = null,
@@ -215,37 +235,21 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
             return new ReviewerOutcome.Ok(parsed, Repaired: false, usage);
         }
 
-        if (repair is null)
-        {
-            return new ReviewerOutcome.Unparseable(
-                Because(Said(answer, Complaint(evidence)), "and no repair was configured", Keep(invocation, evidence)), usage);
-        }
-
         // Measured in the ledger before it was fixed: one reviewer at 668.8 s against a ten-minute
         // deadline, reporting `ok`. `reviewerTimeoutMinutes` bounded each LAUNCH, so a reviewer that
         // needed a repair could take twice what it was given — and the operator who reported "the
         // limit did not work again" was reading a real number.
         var left = RetryLadder.Remaining(spent.Elapsed, budget);
-        if (left <= TimeSpan.Zero)
+        if (NoRepairToRun(repair, left) is { } why)
         {
-            // A launch with nothing left would start a process and cancel it in the same breath —
-            // `ProcessLauncher` calls `CancelAfter(request.Timeout)` — and report a timeout, which
-            // describes the repair rather than the answer that needed one. The first launch's
-            // complaint is the useful one, so it is what comes back. Raised by two reviewers on the
-            // plan round, and the reason it is not merely tidy: a `TimedOut` here would have hidden
-            // exactly the diagnosis somebody is looking for.
             return new ReviewerOutcome.Unparseable(
-                Because(
-                    Said(answer, Complaint(evidence)),
-                    "and the reviewer's deadline was spent before it could be repaired",
-                    Keep(invocation, evidence)),
-                usage);
+                Because(Said(answer, Complaint(evidence)), why, Keep(invocation, evidence)), usage);
         }
 
         // The LESSER of the two, not whichever was computed last. The scheduler may already have
         // shortened this repair on a retry, and overwriting that with the executor's own remainder
         // would hand it back time the ladder had taken away. Raised on the code round.
-        var repairBudget = left < repair.Request.Timeout ? left : repair.Request.Timeout;
+        var repairBudget = left < repair!.Request.Timeout ? left : repair.Request.Timeout;
         var (repairOutcome, repaired, repairUsage, repairAnswer, repairEvidence) =
             await RunOnceAsync(repair with { Request = repair.Request with { Timeout = repairBudget } }, ct);
         return repairOutcome

@@ -23,6 +23,15 @@ export interface ReviewerState {
   /** What this reviewer read and wrote, when the server recorded it per reviewer. */
   readonly tokensIn?: number;
   readonly tokensOut?: number;
+  /**
+   * The model it was LAUNCHED with — absent in rounds written before 0.18.11.
+   *
+   * <p>What was asked for, not necessarily what answered: a Team server chooses the model for the
+   * account it claims and reports none back. The log shows this because a round that names its
+   * vendor and not its model cannot answer the question people actually ask about a slow or a weak
+   * reviewer.</p>
+   */
+  readonly model?: string;
 }
 
 export interface RoundRecord {
@@ -154,7 +163,11 @@ export function reviewerRows(round: RoundRecord): readonly ReviewerRow[] {
 
     return {
       provider: s.provider,
-      rest: `/${s.role} — ${s.status}${detail.length > 0 ? ` (${detail.join(', ')})` : ''}`,
+      // The model rides with the ROLE rather than in the detail list: it is what the reviewer IS,
+      // like its vendor and its role, not something it did. An older round carries none and reads
+      // exactly as it did.
+      rest: `/${s.role}${s.model ? ` · ${s.model}` : ''} — ${s.status}`
+        + `${detail.length > 0 ? ` (${detail.join(', ')})` : ''}`,
     };
   });
 }
