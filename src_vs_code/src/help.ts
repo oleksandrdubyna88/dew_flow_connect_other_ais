@@ -81,6 +81,8 @@ export const HELP = {
     'Of those, how many may belong to ONE vendor. Rate limits are per vendor: without this cap a single slow or throttled vendor would hold every slot and the others would wait behind it.',
   reviewerTimeout:
     'How long one reviewer may take before its process is killed and the round records a timeout for it. A round with a missing reviewer still produces a verdict, and says who was missing.',
+  roundTimeout:
+    'How long a WHOLE round may take before the reviewers still running are cancelled and the round is gated on whatever answered. Leave it at 0 and it is worked out from the round itself: vendors x roles reviewers through the machine cap above, each wave allowed one reviewer timeout. At the defaults that is four waves, forty minutes. Lower it and you are cutting into reviewers that have not finished; their findings are lost, and the verdict is made without them.',
   escalationMinutes:
     'How long a question waits for your answer before the AI is told to ask you in the chat instead. The question stays open in this panel either way — nothing is decided by your silence.',
 

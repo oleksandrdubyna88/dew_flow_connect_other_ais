@@ -178,11 +178,11 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'Limits: how many at once, how long each may take',
       whatItIs:
-        '**Reviewers at once** caps the whole fan-out. **Per vendor** caps one vendor. **Reviewer timeout** is how long a single reviewer may run. **Wait for you** is how long an escalation waits before giving up on a person.',
+        '**Reviewers at once** caps the whole fan-out. **Per vendor** caps one vendor. **Reviewer timeout** is how long a single reviewer may run. **Round limit** is how long they all get between them. **Wait for you** is how long an escalation waits before giving up on a person.',
       why:
         'A code round is six processes wanting to start in the same instant — three roles times two vendors. Unbounded, that is where local process limits, the CLIs\' own lock files and the vendors\' rate limits all arrive at once, each looking like a timeout unless it is handled by name.',
       setup:
-        'Three at once and two per vendor are the defaults. The per-vendor cap exists because a rate limit is per vendor: a global cap alone would happily spend all of its slots on one of them.\n\nThe reviewer timeout is ten minutes. A code round on a large diff takes three to five.',
+        'Three at once and two per vendor are the defaults. The per-vendor cap exists because a rate limit is per vendor: a global cap alone would happily spend all of its slots on one of them.\n\nThe reviewer timeout is ten minutes. A code round on a large diff takes three to five.\n\nThe round limit bounds a whole round rather than one reviewer, and it is 0 by default — which means it is worked out rather than guessed. A round runs your vendors times its roles through the cap above, so it takes as many waves as that division needs, and each wave can honestly take a full reviewer timeout: three vendors, four code roles and a cap of three is four waves, forty minutes. Set a number and you override that. Set a small one and you are cutting into reviewers that have not finished — they are cancelled, their findings are lost, and the round is decided without them.',
       usage:
         'Raise the global cap on a machine with cores to spare; lower it on a laptop you are also working on. The per-vendor cap is the one to lower if a vendor starts rate-limiting you.',
       whatCanGoWrong:
