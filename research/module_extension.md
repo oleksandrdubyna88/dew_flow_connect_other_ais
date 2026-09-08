@@ -79,6 +79,27 @@ when the borrow comes back empty, the emptiness is its own sentinel and not a by
 Each conversation runs in an empty temp directory of its own, made where the process is actually
 started and removed when the tab closes. It used to be made on every INVOCATION, including the ones
 that only reveal a tab already open, and removed never.
+
+Three more rules the code round of the gate settled, each of them about not deciding something on
+somebody's behalf:
+
+- **A model the person NAMED and which cannot answer is refused by that name.** `chatChoice` falls
+  back to the first row on offer only for an EMPTY setting, which is not a choice. A filled one that
+  cannot be honoured used to be replaced in silence — the passage went to a different vendor, billed
+  to an account nobody picked, answered in a voice nobody asked for, with no line anywhere saying so.
+- **The turns of one conversation are chained.** The session already refuses to interleave two turns
+  down one pipe, but the transcript lives in the command, and two overlapping asks wrote it out of
+  order: press the keybinding twice against an open tab and both questions stood above both answers.
+  The chain also catches a `send` that REJECTS, which the CLI session promises never to do and the
+  remote one has not been written yet to promise at all — without it, a rejection behind a detached
+  call left the composer locked with nothing on screen to say why.
+- **The clipboard marker is unique per capture.** A fixed sentinel is a string somebody can copy —
+  this repository's own source contains it — and copying it would have been reported as nothing
+  copied. A capture may fail for many reasons; the CONTENT of the selection is not allowed to be one.
+
+And the keybinding now says it is working: `withProgress` puts *Copying the selection…* in the status
+bar for the ~1.7 s PowerShell takes, because a shortcut that appears to do nothing gets pressed again,
+which is how one question becomes two.
 ### A conversation is a process, and it ends four ways (2026-09-08)
 
 ```mermaid

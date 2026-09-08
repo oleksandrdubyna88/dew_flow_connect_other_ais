@@ -79,3 +79,52 @@ export function chosenModel(list: ChatModelList, asked: string): string {
 
   return list.offered[0]?.id ?? '';
 }
+
+/** Either the model that will answer, or the sentence saying why none will. Never both. */
+export interface ChatChoice {
+  readonly modelId: string;
+  readonly refusal: string;
+}
+
+/**
+ * Which model answers, when the person may have NAMED one.
+ *
+ * <p>`chosenModel` falls back to the first row on offer, which is right for a blank setting and
+ * wrong for a filled one: `coai.chatModel` naming `codex` means the passage went to somebody else's
+ * model — billed to a vendor they did not choose, answered in a voice they did not ask for, and
+ * with no line anywhere saying so. A name that cannot be honoured is refused by that name.
+ * (codex, the code round.)</p>
+ *
+ * <p>An EMPTY setting is not a choice, so the first row on offer answers it exactly as before.</p>
+ */
+export function chatChoice(list: ChatModelList, asked: string): ChatChoice {
+  if (asked.length === 0) {
+    const first = list.offered[0]?.id ?? '';
+
+    return first.length > 0
+      ? { modelId: first, refusal: '' }
+      : { modelId: '', refusal: refusalWhenNothingIsOffered(list) };
+  }
+
+  if (list.offered.some((model) => model.id === asked)) {
+    return { modelId: asked, refusal: '' };
+  }
+
+  const refused = list.refused.find((row) => row.id === asked);
+
+  return {
+    modelId: '',
+    refusal: refused !== undefined
+      ? `${asked} cannot answer a chat: ${refused.reason}`
+      : `The chat is set to ${asked}, which is not a configured reviewer any more.`,
+  };
+}
+
+/** Every reason there is, rather than the first — the person has to fix all of them anyway. */
+function refusalWhenNothingIsOffered(list: ChatModelList): string {
+  const why = list.refused.map((row) => row.reason).join('; ');
+
+  return why.length > 0
+    ? `No model can answer a chat yet: ${why}`
+    : 'Enable a reviewer on the antigravity runtime to chat with it.';
+}

@@ -7,7 +7,7 @@ import { ChatSession } from './chatSession';
 import { ChatMessage, ChatModelChoice } from './chatPage';
 import { CliChatSession } from './cliChatSession';
 import { DEFAULT_BUDGETS } from './chatSession';
-import { chatModelsFrom, chosenModel } from './chatModels';
+import { chatChoice, chatModelsFrom } from './chatModels';
 import { chatSettingsFrom } from './chatSettings';
 import { chatUiScale, createChatPanel, pushChatDraft, pushChatState } from './chatPanel';
 import { captureSelection, COPY_SCRIPT, argvFor, ran } from './selectionCapture';
@@ -43,6 +43,16 @@ interface Thread {
   readonly models: readonly ChatModelChoice[];
   readonly modelId: string;
   messages: readonly ChatMessage[];
+  /**
+   * The turns of THIS conversation, one after another.
+   *
+   * <p>The session already refuses to interleave two turns down one pipe, but the transcript is
+   * kept here and two overlapping `ask` calls would write it out of order: pressing the keybinding
+   * twice against an open tab put both questions above both answers. The page cannot prevent it —
+   * it disables its own composer, and the keybinding does not go through the composer. So the
+   * chain is here, mirroring the one inside `cliChatSession`. (gemini, the code round.)</p>
+   */
+  turns: Promise<unknown>;
 }
 
 const threads = new WeakMap<object, Thread>();
@@ -70,6 +80,9 @@ function emptyTempDir(): ChatHome {
   return chatHome(
     () => fs.mkdtempSync(path.join(os.tmpdir(), 'coai-chat-')),
     (dir) => fs.rmSync(dir, { recursive: true, force: true }),
+    // Not a message box: nothing a person can do about a locked temp directory, and a modal for it
+    // would be worse than the leak. The extension host's own log is where this belongs.
+    (failure) => console.warn(`[coai] ${failure}`),
   );
 }
 
@@ -101,12 +114,40 @@ function show(entry: ChatEntry, running: boolean, failure: string): void {
 }
 
 /**
- * Ask, and put the answer on the page.
+ * Ask, once whatever this conversation is already doing has finished.
+ *
+ * <p>Two things the chain buys, and both were found by the gate. The transcript stays in order when
+ * the keybinding is pressed twice in a row. And a `send` that REJECTS — which `CliChatSession`
+ * promises never to do, but a `ChatSession` is an interface and the remote one is not written yet —
+ * cannot leave the composer locked forever behind a `void ask(...)` nobody is watching.</p>
+ */
+function ask(entry: ChatEntry, text: string): Promise<void> {
+  const thread = threads.get(entry.id);
+  if (thread === undefined) {
+    return Promise.resolve();
+  }
+  const mine = thread.turns
+    .then(() => oneTurn(entry, text))
+    .catch((reason: unknown) => {
+      show(entry, false, `the turn failed unexpectedly: ${asText(reason)}`);
+    });
+  thread.turns = mine;
+
+  return mine;
+}
+
+/** A thrown thing, as a sentence. */
+function asText(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
+}
+
+/**
+ * One turn, start to finish.
  *
  * <p>The question is appended BEFORE the turn is sent, so the page shows it while the model is
  * thinking — nine measured seconds of silence otherwise look like a tab that ignored a keypress.</p>
  */
-async function ask(entry: ChatEntry, text: string): Promise<void> {
+async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   const thread = threads.get(entry.id);
   if (thread === undefined) {
     return;
@@ -130,114 +171,105 @@ async function ask(entry: ChatEntry, text: string): Promise<void> {
   show(entry, false, '');
 }
 
-/** Everything needed to start one conversation, or the sentence saying why it cannot start. */
-interface Ready {
-  readonly vendor: Vendor;
-  readonly models: readonly ChatModelChoice[];
-  readonly modelId: string;
-  readonly refusal: string;
-}
+/**
+ * Everything needed to start one conversation, or the sentence saying why it cannot start.
+ *
+ * <p>Two arms rather than one shape with an empty field. The single-shape version had to put
+ * SOMETHING in `vendor` on the refusal path and reached for `vendors[0] as Vendor` — a cast that is
+ * `undefined` whenever the person has no vendors configured at all, and a promise to keep a shape
+ * by hand that comes due the first time somebody reads the field before checking the sentence.
+ * The compiler keeps that promise instead. (gemini, the code round.)</p>
+ */
+type Ready =
+  | {
+    readonly ok: true;
+    readonly vendor: Vendor;
+    readonly models: readonly ChatModelChoice[];
+    readonly modelId: string;
+  }
+  | { readonly ok: false; readonly refusal: string };
 
 function readyToChat(config: vscode.WorkspaceConfiguration, asked: string): Ready {
   const vendors = vendorsFrom(config.get('vendors'));
   const models = chatModelsFrom(vendors);
-  if (models.offered.length === 0) {
-    const why = models.refused.map((row) => row.reason).join('; ');
-
-    return {
-      vendor: vendors[0] as Vendor,
-      models: [],
-      modelId: '',
-      refusal: why.length > 0
-        ? `No model can answer a chat yet: ${why}`
-        : 'Enable a reviewer on the antigravity runtime to chat with it.',
-    };
+  // A model the person NAMED and which cannot answer is refused by that name — never quietly
+  // replaced by another vendor's, which is somebody else's model, billed, in a voice nobody chose.
+  const choice = chatChoice(models, asked);
+  if (choice.refusal.length > 0) {
+    return { ok: false, refusal: choice.refusal };
   }
 
-  const modelId = chosenModel(models, asked);
-  const vendor = vendors.find((row) => row.id === modelId);
+  const vendor = vendors.find((row) => row.id === choice.modelId);
+  if (vendor === undefined) {
+    return { ok: false, refusal: `The model ${choice.modelId} is no longer configured.` };
+  }
 
-  return vendor === undefined
-    ? { vendor: vendors[0] as Vendor, models: [], modelId: '', refusal: `The model ${modelId} is no longer configured.` }
-    : { vendor, models: models.offered, modelId, refusal: '' };
+  const refusal = chatRuntimeRefusal(vendor);
+
+  return refusal.length > 0
+    ? { ok: false, refusal }
+    : { ok: true, vendor, models: models.offered, modelId: choice.modelId };
 }
 
+/** The clipboard, as `selectionCapture` wants it. VS Code answers a Thenable, not a Promise. */
+const hostClipboard = {
+  read: async (): Promise<string> => vscode.env.clipboard.readText(),
+  write: async (value: string): Promise<void> => {
+    await vscode.env.clipboard.writeText(value);
+  },
+};
+
 /**
- * The command.
+ * Where the passage comes from, and a status line while it is being fetched.
  *
- * @param panels the registry of open conversations
- * @param args what VS Code handed it — a menu item passes the webview, a keybinding passes nothing
+ * <p>The keybinding path takes about 1.7 seconds — PowerShell's own startup, mostly — and until the
+ * tab appears there is nothing at all to see. A person who presses a shortcut and watches nothing
+ * happen presses it again, which is how one question becomes two. The menu path is instant and says
+ * nothing.</p>
  */
-export async function chatWithOtherAi(panels: ChatPanels, args: readonly unknown[]): Promise<void> {
-  const config = vscode.workspace.getConfiguration('coai');
-  const settings = chatSettingsFrom((key) => config.get(key));
-  const ready = readyToChat(config, settings.model);
-  if (ready.refusal.length > 0) {
-    void vscode.window.showWarningMessage(ready.refusal);
-
-    return;
+function passageFor(path: 'menu' | 'keyboard'): Promise<{ text: string; failure: string }> {
+  if (path === 'menu') {
+    return hostClipboard.read().then((text) => ({ text, failure: '' }));
   }
 
-  const plan = triggerPlan(args, settings.autoSend);
-  const passage = plan.path === 'menu'
-    ? { text: await vscode.env.clipboard.readText(), failure: '' }
-    : await captureSelection(pressCopy, {
-      // VS Code answers a Thenable, not a Promise; `async` is the cheapest honest bridge.
-      read: async () => vscode.env.clipboard.readText(),
-      write: async (value: string) => {
-        await vscode.env.clipboard.writeText(value);
-      },
-    });
-  if (passage.text.trim().length === 0) {
-    void vscode.window.showWarningMessage(
-      passage.failure.length > 0 ? passage.failure : 'Nothing to explain — copy the text first.',
-    );
+  return Promise.resolve(
+    vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Window, title: 'Copying the selection…' },
+      () => captureSelection(pressCopy, hostClipboard),
+    ),
+  );
+}
 
-    return;
-  }
-
+/** Which Claude Code session this belongs to, or nothing when it was not invoked from one. */
+function matchedSession(panels: ChatPanels): ReturnType<typeof sourceSession> {
   const { active, all } = snapshots();
-  const match = sourceSession(active, all, panels.known());
-  if (match === undefined) {
-    void vscode.window.showWarningMessage(
-      'Open this from a Claude Code session tab — the conversation is named after it.',
-    );
 
-    return;
-  }
-  if (match.kind === 'rekey') {
-    panels.rekey(match.from, match.key);
-  }
+  return sourceSession(active, all, panels.known());
+}
 
-  // Asked BEFORE anything is created, and the directory is made only where a process will actually
-  // run in it: pressing this against an already-open tab starts nothing, and used to leave an empty
-  // directory in %TEMP% behind every single time.
-  const refusal = chatRuntimeRefusal(ready.vendor);
-  if (refusal.length > 0) {
-    void vscode.window.showWarningMessage(refusal);
-
-    return;
-  }
-
-  const turn = openingTurn(settings.prompt, settings.language, passage.text);
-  const opened = panels.open(match.key, match.label, () => {
-    const home: ChatHome = emptyTempDir();
-    const spec = launchSpecFor(ready.vendor, home.dir);
-    const session = new CliChatSession(
-      () => launch(spec.executable, spec.args, { cwd: spec.cwd }),
-      DEFAULT_BUDGETS,
-    );
-    const entry = createChatPanel(
+/** Everything one new conversation is made of. Called ONLY when a tab has no panel yet. */
+function newConversation(
+  panels: ChatPanels,
+  ready: Extract<Ready, { ok: true }>,
+  state: { readonly title: string; readonly passage: string; readonly draft: string },
+): ChatEntry {
+  const home: ChatHome = emptyTempDir();
+  const spec = launchSpecFor(ready.vendor, home.dir);
+  const session = new CliChatSession(
+    () => launch(spec.executable, spec.args, { cwd: spec.cwd }),
+    DEFAULT_BUDGETS,
+  );
+  const entry = createChatPanel(
     {
-      title: match.label,
-      passage: passage.text,
+      title: state.title,
+      passage: state.passage,
       messages: [],
       models: ready.models,
       modelId: ready.modelId,
       running: false,
       capped: false,
       failure: '',
-      draft: plan.send ? '' : turn,
+      draft: state.draft,
       uiScale: chatUiScale(),
     },
     session,
@@ -250,6 +282,7 @@ export async function chatWithOtherAi(panels: ChatPanels, args: readonly unknown
       },
       onPick: () => undefined,
       onClosed: (id) => {
+        // The registry disposes the session; this takes the directory it ran in with it.
         panels.closeById(id);
         home.release();
       },
@@ -259,19 +292,67 @@ export async function chatWithOtherAi(panels: ChatPanels, args: readonly unknown
         void vscode.window.showWarningMessage(`The chat page reported: ${message}`);
       },
     },
-    );
-    // Recorded against the entry's OWN id, which `createChatPanel` made — not against the tab key,
-    // which can move under a live conversation. That distinction cost a whole code round.
-    threads.set(entry.id, {
-      session,
-      passage: passage.text,
-      models: ready.models,
-      modelId: ready.modelId,
-      messages: [],
-    });
-
-    return entry;
+  );
+  // Recorded against the entry's OWN id, which `createChatPanel` made — not against the tab key,
+  // which can move under a live conversation. That distinction cost a whole code round.
+  threads.set(entry.id, {
+    session,
+    passage: state.passage,
+    models: ready.models,
+    modelId: ready.modelId,
+    messages: [],
+    turns: Promise.resolve(),
   });
+
+  return entry;
+}
+
+/**
+ * The command.
+ *
+ * @param panels the registry of open conversations
+ * @param args what VS Code handed it — a menu item passes the webview, a keybinding passes nothing
+ */
+export async function chatWithOtherAi(panels: ChatPanels, args: readonly unknown[]): Promise<void> {
+  const config = vscode.workspace.getConfiguration('coai');
+  const settings = chatSettingsFrom((key) => config.get(key));
+  const ready = readyToChat(config, settings.model);
+  if (!ready.ok) {
+    void vscode.window.showWarningMessage(ready.refusal);
+
+    return;
+  }
+
+  const plan = triggerPlan(args, settings.autoSend);
+  const passage = await passageFor(plan.path);
+  if (passage.text.trim().length === 0) {
+    void vscode.window.showWarningMessage(
+      passage.failure.length > 0 ? passage.failure : 'Nothing to explain — copy the text first.',
+    );
+
+    return;
+  }
+
+  const match = matchedSession(panels);
+  if (match === undefined) {
+    void vscode.window.showWarningMessage(
+      'Open this from a Claude Code session tab — the conversation is named after it.',
+    );
+
+    return;
+  }
+  if (match.kind === 'rekey') {
+    panels.rekey(match.from, match.key);
+  }
+
+  const turn = openingTurn(settings.prompt, settings.language, passage.text);
+  // A factory, not a value: nothing is built — no process, no temp directory — for a tab that
+  // already holds a conversation.
+  const opened = panels.open(match.key, match.label, () => newConversation(panels, ready, {
+    title: match.label,
+    passage: passage.text,
+    draft: plan.send ? '' : turn,
+  }));
 
   opened.entry.panel.reveal();
   if (plan.send) {
