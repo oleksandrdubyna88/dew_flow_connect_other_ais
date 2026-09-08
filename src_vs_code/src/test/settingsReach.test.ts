@@ -20,6 +20,7 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   maxConcurrency: 7,
   maxPerProvider: 4,
   reviewerTimeoutMinutes: 12,
+  roundTimeoutMinutes: 25,
   credsKey: 'coai-key',
   escalationMinutes: 45,
   promptsPerRound: { SecurityReliability: ['sec-attack'] },

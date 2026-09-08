@@ -526,7 +526,18 @@ public sealed partial class PanelService
             var audit = new RoundAudit(_log, session.State.Stage.ToString(), session.State.RoundsRunThisStage + 1);
             var excluded = ExcludedFrom(stage.IsPlanStage);
             audit.Opening(work, workingDir, _settings.ReviewerTimeout, excluded);
-            var results = await _scheduler.RunAllAsync(work, _executor, ct, progress =>
+            // The ROUND's own deadline, derived from its shape unless somebody set one. A reviewer
+            // is bounded; a round was not, and the round is what a person watches — so a round could
+            // legitimately run for a long time while every reviewer inside it behaved, and the
+            // operator asked for a bound after one passed ten minutes.
+            //
+            // Linked rather than replacing `ct`: whichever fires first wins, so a person cancelling
+            // still cancels and the deadline does not outlive the caller.
+            var deadline = RoundDeadlineFor(work.Count);
+            using var roundClock = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            roundClock.CancelAfter(deadline);
+
+            var results = await _scheduler.RunAllAsync(work, _executor, roundClock.Token, progress =>
             {
                 live.Report(progress);
                 audit.Moved(progress);
@@ -544,7 +555,17 @@ public sealed partial class PanelService
                 }
             });
             // What ran, and — since 2026-09-07 — who was enabled for this stage and could not.
-            var summary = ReviewerSummaryFactory.From(results, excluded);
+            //
+            // The deadline is reported only when IT is what ended the round: `roundClock` fired and
+            // the caller's own token did not. Inferring it from cancelled reviewers would have called
+            // it a deadline the moment a PERSON cancelled a round, which is a different sentence and
+            // a wrong one.
+            var summary = ReviewerSummaryFactory.From(results, excluded) with
+            {
+                EndedByDeadline = roundClock.IsCancellationRequested && !ct.IsCancellationRequested
+                    ? deadline
+                    : null,
+            };
             var reviews = results.Select(r => r.Outcome).OfType<ReviewerOutcome.Ok>().Select(o => o.Review).ToList();
             // The ROLE is stamped here because this is the only place that holds both the invocation
             // and its answer. A threshold belongs to a role, so a finding has to remember whose it is.
@@ -1040,6 +1061,19 @@ public sealed partial class PanelService
         IReadOnlyList<ReviewRole> scheduled,
         bool hasRules) =>
         hasRules ? scheduled : [.. scheduled.Where(r => r != ReviewRole.Conventions)];
+
+    /// <summary>
+    /// How long this round may take: what was configured, or what its shape earns.
+    /// </summary>
+    /// <remarks>
+    /// The derivation is the default because the honest number is not a constant — see
+    /// <see cref="RoundBudget"/>. Shipping a fixed five or thirty minutes would cancel healthy
+    /// rounds on a machine with more vendors than the person who chose the number had.
+    /// </remarks>
+    private TimeSpan RoundDeadlineFor(int reviewers) =>
+        _settings.RoundTimeout > TimeSpan.Zero
+            ? _settings.RoundTimeout
+            : RoundBudget.For(_settings.ReviewerTimeout, reviewers, _settings.GlobalConcurrency);
 
     /// <summary>Whether the caller may go and build: an order to split follows permission.</summary>
     private static bool MayProceed(RoundVerdict verdict) =>

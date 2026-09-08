@@ -60,6 +60,16 @@ export interface CoaiSettings {
   readonly maxConcurrency: number;
   readonly maxPerProvider: number;
   readonly reviewerTimeoutMinutes: number;
+  /**
+   * How long a whole ROUND may take, or 0 to derive it from the round's own shape.
+   *
+   * <p>Zero is the default and it is not laziness: a round runs `vendors × roles` reviewers through
+   * the machine's cap, so it takes as many WAVES as that division needs and each wave can
+   * legitimately last a whole reviewer timeout. Three vendors, four code roles and a cap of three
+   * is four waves — forty minutes of entirely healthy work. A fixed number shipped in its place
+   * would cancel real rounds on any machine with more vendors than whoever chose it.</p>
+   */
+  readonly roundTimeoutMinutes: number;
   readonly credsKey: string;
   readonly escalationMinutes: number;
   /** Per role, the prompt id each round uses — index 0 is round 1. Empty = the universal one. */
@@ -169,6 +179,7 @@ export const DEFAULTS: CoaiSettings = {
   maxConcurrency: 3,
   maxPerProvider: 2,
   reviewerTimeoutMinutes: 10,
+  roundTimeoutMinutes: 0,
   credsKey: '',
   escalationMinutes: 30,
   promptsPerRound: {},
@@ -195,7 +206,7 @@ export type SettingsOverlay = Readonly<Record<string, unknown>>;
  */
 export const OVERLAID_SETTINGS: readonly string[] = [
   'vendors', 'rounds', 'thresholds', 'onExhausted', 'maxConcurrency', 'maxPerProvider',
-  'reviewerTimeoutMinutes', 'credsKey', 'escalationMinutes', 'promptsPerRound',
+  'reviewerTimeoutMinutes', 'roundTimeoutMinutes', 'credsKey', 'escalationMinutes', 'promptsPerRound',
   'dealPlanLenses', 'dealCodeLenses', 'autonomous', 'splitPlan', 'splitWithFable', 'codeWorkspace',
 ];
 
@@ -243,6 +254,8 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     maxConcurrency: asPositive(read('maxConcurrency'), DEFAULTS.maxConcurrency),
     maxPerProvider: asPositive(read('maxPerProvider'), DEFAULTS.maxPerProvider),
     reviewerTimeoutMinutes: asPositive(read('reviewerTimeoutMinutes'), DEFAULTS.reviewerTimeoutMinutes),
+    // `asCount`, not `asPositive`: zero is the meaningful value here — it means "derive it".
+    roundTimeoutMinutes: asCount(read('roundTimeoutMinutes'), DEFAULTS.roundTimeoutMinutes),
     credsKey: asString(read('credsKey')),
 
     escalationMinutes: asPositive(read('escalationMinutes'), DEFAULTS.escalationMinutes),
@@ -312,6 +325,9 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
   }
   if (settings.reviewerTimeoutMinutes !== DEFAULTS.reviewerTimeoutMinutes) {
     env['COAI_REVIEWER_TIMEOUT_MINUTES'] = String(settings.reviewerTimeoutMinutes);
+  }
+  if (settings.roundTimeoutMinutes !== DEFAULTS.roundTimeoutMinutes) {
+    env['COAI_ROUND_TIMEOUT_MINUTES'] = String(settings.roundTimeoutMinutes);
   }
   if (settings.credsKey) {
     env['COAI_CREDS_KEY'] = settings.credsKey;

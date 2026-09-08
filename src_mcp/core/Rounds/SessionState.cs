@@ -143,6 +143,19 @@ public sealed record ReviewerSummary(
 {
     public static ReviewerSummary AllAnswered(int asked) => new(asked, asked, []);
 
+    /// <summary>
+    /// Set to the round's deadline ONLY when reaching it is what ended the round.
+    /// </summary>
+    /// <remarks>
+    /// <para>Null for every round that finished in time, which is nearly all of them — and the
+    /// sentence says nothing about a deadline that was not reached, because a change to every
+    /// round's wording in service of the rare one is a change nobody asked for.</para>
+    /// <para><b>Passed in, never inferred.</b> Cancelling the outstanding reviewers makes each of
+    /// them abandoned, and counting abandoned reviewers would call it a deadline the moment a PERSON
+    /// cancels a round. Raised on the plan's own code round, before any of it was built.</para>
+    /// </remarks>
+    public TimeSpan? EndedByDeadline { get; init; }
+
     /// <remarks>
     /// The excluded clause is APPENDED rather than folded in, so a round with nothing to add reads
     /// exactly as it always did. A change to every round's sentence in service of the rare one is a
@@ -155,15 +168,21 @@ public sealed record ReviewerSummary(
             var answered = Answered == Asked
                 ? $"all {Asked} reviewers answered"
                 : $"{Answered} of {Asked} reviewers answered; failed: {string.Join(", ", Failures)}";
+            // The deadline clause comes FIRST of the two additions, because it explains the
+            // failures the sentence has just listed: they were cut off, not incompetent.
+            var withDeadline = EndedByDeadline is { } limit
+                ? $"{answered}; the round reached its {limit.TotalMinutes:0} minute limit "
+                  + "and the reviewers still running were cancelled"
+                : answered;
             var left = Excluded.IsDefaultOrEmpty ? [] : Excluded;
             if (left.Length == 0)
             {
-                return answered;
+                return withDeadline;
             }
 
             var plural = left.Length == 1 ? string.Empty : "s";
 
-            return $"{answered}; {left.Length} enabled reviewer{plural} "
+            return $"{withDeadline}; {left.Length} enabled reviewer{plural} "
                 + $"could not run: {string.Join("; ", left)}";
         }
     }
