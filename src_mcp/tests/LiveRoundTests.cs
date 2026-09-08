@@ -24,6 +24,39 @@ public sealed class LiveRoundTests
     private static ReviewerWork Work(string provider, ReviewRole role) =>
         new(new ReviewerInvocation(provider, role, new ProcessRequest("cli", [], ".")));
 
+    /// <summary>The same JSON with one property name removed, wherever it appears.</summary>
+    private static void WriteWithout(
+        System.Text.Json.JsonElement element,
+        string drop,
+        System.Text.Json.Utf8JsonWriter writer)
+    {
+        switch (element.ValueKind)
+        {
+            case System.Text.Json.JsonValueKind.Object:
+                writer.WriteStartObject();
+                foreach (var property in element.EnumerateObject().Where(p => p.Name != drop))
+                {
+                    writer.WritePropertyName(property.Name);
+                    WriteWithout(property.Value, drop, writer);
+                }
+
+                writer.WriteEndObject();
+                break;
+            case System.Text.Json.JsonValueKind.Array:
+                writer.WriteStartArray();
+                foreach (var item in element.EnumerateArray())
+                {
+                    WriteWithout(item, drop, writer);
+                }
+
+                writer.WriteEndArray();
+                break;
+            default:
+                element.WriteTo(writer);
+                break;
+        }
+    }
+
     private static NormalisedReview Review(int findings) =>
         new(
             [.. Enumerable.Range(0, findings).Select(i =>
@@ -63,6 +96,32 @@ public sealed class LiveRoundTests
     }
 
     [Fact]
+    public void ANullOrWhitespaceModel_IsRecordedAsNone()
+    {
+        // The two inputs the "launched without a model" test does NOT reach: it uses the invocation's
+        // own default, which is already empty, so neither the coalesce nor the trim ever runs. A
+        // reviewer on the code round asked for them by name.
+        //
+        // `null!` is the point rather than a shortcut: an invocation that came back through JSON with
+        // a null model IS null at runtime whatever the annotation says, and that is the case the
+        // coalesce exists for.
+        var store = new SessionStore(_dir);
+        var session = Session();
+        store.Save(session);
+
+        var codex = Work("codex", ReviewRole.Architecture);
+        var local = Work("local", ReviewRole.SecurityReliability);
+        _ = new LiveRound(store, session, [
+            codex with { Invocation = codex.Invocation with { Model = null! } },
+            local with { Invocation = local.Invocation with { Model = "   " } },
+        ]);
+
+        store.Load("D:/repo", "feature/x")!.Rounds.Single().ReviewerStates
+            .Should().OnlyContain(s => s.Model == string.Empty,
+                "a model that is null or only whitespace is no model, and neither may throw");
+    }
+
+    [Fact]
     public void ASessionFileWrittenBeforeTheModelField_StillLoads()
     {
         // The promise a trailing default makes, kept by reading a file that predates it.
@@ -71,10 +130,27 @@ public sealed class LiveRoundTests
         store.Save(session);
         _ = new LiveRound(store, session, [Work("codex", ReviewRole.Architecture)]);
 
+        // Removed STRUCTURALLY, not by string surgery. The first draft replaced `"model": "",`
+        // — and `Model` is the trailing property, so there is no comma after it, so the replacement
+        // matched nothing and this test reloaded a CURRENT-format file while claiming to prove
+        // something about an older one. Caught on the code round; it is the same vacuous shape as a
+        // test that compares a function with itself.
         var path = Directory.EnumerateFiles(Path.Combine(_dir, "sessions"), "session-*.json").Single();
-        var withoutModel = File.ReadAllText(path).Replace("\"model\": \"\",", string.Empty);
-        File.WriteAllText(path, withoutModel);
+        var legacy = File.ReadAllText(path);
+        legacy.Should().Contain("\"model\"", "the fixture must start from a file that HAS the field");
 
+        using (var document = System.Text.Json.JsonDocument.Parse(legacy))
+        {
+            using var buffer = new MemoryStream();
+            using (var writer = new System.Text.Json.Utf8JsonWriter(buffer))
+            {
+                WriteWithout(document.RootElement, "model", writer);
+            }
+
+            File.WriteAllBytes(path, buffer.ToArray());
+        }
+
+        File.ReadAllText(path).Should().NotContain("\"model\"", "the field really is gone now");
         store.Load("D:/repo", "feature/x")!.Rounds.Single().ReviewerStates
             .Single().Model.Should().BeEmpty();
     }

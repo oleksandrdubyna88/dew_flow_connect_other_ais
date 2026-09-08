@@ -2,9 +2,10 @@
 
 ## Unreleased
 
-**The rounds log names the model.** Every reviewer row now reads
+**The rounds log names the model.** A reviewer row that has one now reads
 `remsoftdev-claude/Architecture · claude-haiku-4-5 — done (3 findings)` instead of stopping at the
-role. It is also searchable: the log page's filter reads these rows, so typing a model name finds
+role. A reviewer launched without a model — a local engine with none configured — reads exactly as
+it did. It is also searchable: the log page's filter reads these rows, so typing a model name finds
 the rounds that used it.
 
 **Read it as the model that was ASKED for.** For a local CLI that is the model that ran. For a Team

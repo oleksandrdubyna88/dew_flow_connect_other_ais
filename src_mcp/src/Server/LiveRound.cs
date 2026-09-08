@@ -39,18 +39,21 @@ public sealed class LiveRound
                 // The invocation has carried this since the adapters were written; the round simply
                 // never wrote it down, so the log could say WHO reviewed but not WITH WHAT.
                 //
-                // Trimmed, because a configured model of " " is not a model and the renderer's
-                // `s.model ? ...` would treat it as one — a separator with nothing after it. Raised
-                // twice on the plan round.
-                //
-                // The null coalesce is NOT belt-and-braces on a non-nullable string: an invocation
-                // that came back through JSON with `"model": null` is null at runtime whatever the
-                // annotation says, and `.Trim()` on it would throw before the round is persisted or
-                // any reviewer starts. Two reviewers on the code round, and the one place where a
-                // nullable-reference annotation is a claim rather than a guarantee.
-                Model: (w.Invocation.Model ?? string.Empty).Trim()));
+                Model: Normalise(w.Invocation.Model)));
         Persist();
     }
+
+    /// <summary>A model, or nothing — the two ways of having none, made one.</summary>
+    /// <remarks>
+    /// <para>Trimmed, because a configured model of " " is not a model and the renderer's truthiness
+    /// check would treat it as one: a separator with nothing after it.</para>
+    /// <para>The null coalesce is NOT belt-and-braces on a non-nullable string. An invocation that
+    /// came back through JSON with a null model IS null at runtime whatever the annotation says, and
+    /// `.Trim()` on it would throw before the round is persisted or any reviewer starts — the one
+    /// place in this file where a nullable-reference annotation is a claim rather than a
+    /// guarantee.</para>
+    /// </remarks>
+    private static string Normalise(string? model) => (model ?? string.Empty).Trim();
 
     /// <summary>One reviewer moved. Called from the fan-out's threads, hence the lock.</summary>
     public void Report(ReviewerProgress progress)

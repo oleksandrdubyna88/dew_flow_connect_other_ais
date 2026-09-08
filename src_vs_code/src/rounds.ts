@@ -148,6 +148,20 @@ export function reviewerLines(round: RoundRecord): readonly string[] {
   return reviewerRows(round).map((row) => `${row.provider}${row.rest}`);
 }
 
+/**
+ * Everything after the provider: the role, the model when there is one, the status, the detail.
+ *
+ * <p>A function rather than one template because it was three nested ones, which Sonar flags and
+ * which had genuinely stopped being readable — the model's separator and the detail's brackets were
+ * both conditional inside a literal that was itself inside a literal.</p>
+ */
+function restOf(state: ReviewerState, model: string, detail: readonly string[]): string {
+  const named = model ? ` · ${model}` : '';
+  const said = detail.length > 0 ? ` (${detail.join(', ')})` : '';
+
+  return `/${state.role}${named} — ${state.status}${said}`;
+}
+
 /** The model this state names, or empty — anything that is not a usable string is absent. */
 function modelOf(state: ReviewerState): string {
   return typeof state.model === 'string' ? state.model.trim() : '';
@@ -181,8 +195,7 @@ export function reviewerRows(round: RoundRecord): readonly ReviewerRow[] {
       // validation, and a session carrying `model: 42` would reach `.trim()` and throw while the
       // log was being built — blanking a page to render one row. Anything that is not a string is
       // absent. Raised on the code round.
-      rest: `/${s.role}${modelOf(s) ? ` · ${modelOf(s)}` : ''} — ${s.status}`
-        + `${detail.length > 0 ? ` (${detail.join(', ')})` : ''}`,
+      rest: restOf(s, modelOf(s), detail),
     };
   });
 }

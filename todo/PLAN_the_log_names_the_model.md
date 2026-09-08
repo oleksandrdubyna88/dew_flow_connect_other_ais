@@ -1,6 +1,6 @@
 # PLAN — the rounds log names the model, and the one that actually ran
 
-> Status: **plan only, nothing implemented yet.** Scope: `ReviewerState` and the panel's rounds
+> Status: **step 1 IMPLEMENTED 2026-09-08; steps 2 and 3 are open.** Scope: `ReviewerState` and the panel's rounds
 > log, `ReviewStatusDto` on the Team server, and the client that reads it.
 >
 > Related docs: [module_server.md](../research/module_server.md),
@@ -100,9 +100,19 @@ skew scare (2026-09-08) is the reason to state explicitly rather than assume.
 
 ## Definition of Done
 
-- [ ] The rounds log names a model for every reviewer.
+**Step 1, done 2026-09-08:**
+
+- [x] The rounds log names the model a reviewer was LAUNCHED with, where there is one. Deliberately
+      not "for every reviewer", which the first draft of this line said: a local engine with no
+      model configured has none, and inventing a name for it would be worse than the blank. A code
+      round pointed out that the wording and the behaviour disagreed.
+- [x] Sessions written before the field still load — proved by removing the property structurally
+      from a real file, not by string surgery that turned out to match nothing.
+- [x] Module docs and the CHANGELOG describe where the model comes from and why it is not the whole
+      answer, the CHANGELOG because that is where a user reads.
+
+**Steps 2 and 3, open:**
+
 - [ ] A Team-server run shows the model the SERVER ran, not the one the client asked for.
 - [ ] An older server, which reports none, leaves the configured name in place and fails nothing.
 - [ ] The usage ledger and the log agree, because they read the same value.
-- [ ] Sessions written before the field still load.
-- [ ] Module docs describe where the model comes from and why the configured one is not trusted.
