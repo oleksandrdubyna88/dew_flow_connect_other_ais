@@ -76,7 +76,11 @@ skew scare (2026-09-08) is the reason to state explicitly rather than assume.
 
 1. RED: a reviewer state carries the model it was launched with; the log renders it.
 2. RED: a persisted session written before this field still loads (the defaulted-parameter promise).
-3. Implement 1, ship it — the local case is complete and correct at this point.
+3. Implement 1, ship it — the local case is complete and correct at this point. **The
+   documentation step is part of that, not after it**: `module_server.md` says where the value
+   comes from, and the CHANGELOG says the same thing in the place a USER reads, because a caveat
+   that lives only in a docstring is a caveat nobody affected by it will see. A code round pointed
+   out that the Definition of Done named the documentation while the build order did not.
 4. RED, on the server: a finished job reports the model that ran, and it is the account's resolved
    model rather than the request's.
 5. RED, on the client: a non-empty model from the server WINS over the configured one; an empty one
@@ -90,6 +94,7 @@ skew scare (2026-09-08) is the reason to state explicitly rather than assume.
 | The state carries the launched model | `src_mcp/tests` | step 1 |
 | An old session file without the field loads | `src_mcp/tests` | nothing on disk is invalidated |
 | The rounds log shows the model | `src_vs_code/src/test` | the surface the task is about |
+| A reviewer with an EMPTY or whitespace model gets no separator | `src_vs_code/src/test` | the case an "older file" test does not cover — a current round can carry `""` |
 | A finished job reports its resolved model | `src_server/tests` | step 2 |
 | A server's model overrides the configured one; empty does not | `src_mcp/tests` | the trap above |
 

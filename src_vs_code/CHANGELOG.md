@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+**The rounds log names the model.** Every reviewer row now reads
+`remsoftdev-claude/Architecture · claude-haiku-4-5 — done (3 findings)` instead of stopping at the
+role. It is also searchable: the log page's filter reads these rows, so typing a model name finds
+the rounds that used it.
+
+**Read it as the model that was ASKED for.** For a local CLI that is the model that ran. For a Team
+server it is what your panel requested — the server picks the account, and it does not yet report
+back which model answered, so an escalation or a server-side substitution is not visible here. That
+gap is the next piece of work, and this entry exists so the number is not read as more than it is.
+
+Rounds recorded before this release name no model, which is the truth about them.
+
 ## Extension 0.31.7 — 2026-09-08
 
 **Conventions is its own reviewer now.** There is a fourth box in the code stage, above

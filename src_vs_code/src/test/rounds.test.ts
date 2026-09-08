@@ -66,6 +66,23 @@ test('a reviewer row names the model it was launched with', () => {
   ]);
 });
 
+test('a reviewer launched without a model gets no separator, not an empty one', () => {
+  // The case the "older round" test below does NOT cover, and a reviewer on the plan round was
+  // right to separate them: an old file has no field at all, while a CURRENT round can carry an
+  // empty string — a local engine with no model configured. Both must read the same.
+  const noModel = round({
+    reviewerStates: [
+      { provider: 'local', role: 'Architecture', status: 'done', findings: 0, note: '', model: '' },
+      { provider: 'local', role: 'SecurityReliability', status: 'done', findings: 0, note: '', model: '   ' },
+    ],
+  });
+
+  assert.deepEqual(reviewerLines(noModel), [
+    'local/Architecture — done (0 findings)',
+    'local/SecurityReliability — done (0 findings)',
+  ]);
+});
+
 test('a round from before the field reads exactly as it did', () => {
   const older = round({
     reviewerStates: [{ provider: 'codex', role: 'Architecture', status: 'done', findings: 1, note: '' }],
