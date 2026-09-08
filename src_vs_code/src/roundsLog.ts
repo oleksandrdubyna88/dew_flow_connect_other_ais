@@ -5,7 +5,7 @@ import { ModelPrice } from './modelPrices';
 import { UsageEntry, Window, WINDOWS } from './usage';
 import { Vendor } from './vendors';
 import { MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
-import { vendorColour } from './vendorColour';
+import { vendorPalette, VendorPalette } from './vendorColour';
 import { BlindSpot, DbFinding, DbLog, decisionsByRound, EMPTY_LOG, findingsByRound, roundKeyOf } from './roundsDb';
 import { escapeHtml, jsonForScript } from './webviewHtml';
 
@@ -131,13 +131,18 @@ export function rowsFrom(
   priceOf: PriceOfModel = () => undefined,
   usage: readonly UsageEntry[] = [],
   log: DbLog = EMPTY_LOG,
+  vendorIds: readonly string[] = [],
 ): LogRow[] {
   const byRound = findingsByRound(log);
   const decided = decisionsByRound(log);
+  // The CONFIGURED vendors, the same list the panel's cards are coloured from — not the providers
+  // these rounds happen to name. A log holding a vendor somebody has since removed still colours it,
+  // from its own name, and only such a stray may share a hue with a live reviewer.
+  const colour = vendorPalette(vendorIds);
 
   return sessions
     .flatMap((session) =>
-      session.rounds.map((round) => rowFrom(session, round, nowMs, priceOf, usage, byRound, decided)))
+      session.rounds.map((round) => rowFrom(session, round, nowMs, priceOf, usage, byRound, decided, colour)))
     .sort((a, b) => (b.startedUtc || b.completedUtc).localeCompare(a.startedUtc || a.completedUtc));
 }
 
@@ -149,6 +154,7 @@ function rowFrom(
   usage: readonly UsageEntry[],
   byRound: Map<string, readonly DbFinding[]> = new Map(),
   decidedBy: Map<string, { accepted: number; rejected: number }> = new Map(),
+  colour: VendorPalette = vendorPalette([]),
 ): LogRow {
   const cost = costOf(round, priceOf, usage, nowMs);
   const key = roundKeyOf(
@@ -182,7 +188,7 @@ function rowFrom(
     answered: round.reviewers,
     vendors: [...new Set(states.map((s) => s.provider))],
     reviewers: reviewerLines(round),
-    reviewerColours: rows.map((r) => vendorColour(r.provider)),
+    reviewerColours: rows.map((r) => colour(r.provider)),
     found,
   };
 }

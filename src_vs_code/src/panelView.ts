@@ -14,7 +14,7 @@ import { ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './mo
 import { CONVENTIONS_ROLE_SINCE, ROLES, promptsFor, selectedFor } from './prompts';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
-import { vendorColour } from './vendorColour';
+import { vendorPalette, VendorPalette } from './vendorColour';
 import { CliStatus, cliStatusNote, updateAvailable, UNKNOWN_CLI } from './cliVersions';
 import { SnippetStatus, snippetNote } from './claudeSnippet';
 import { LocalEngine, remoteWarning } from './localEngines';
@@ -170,7 +170,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     section('teamServers', 'Team servers', open, teamServersBody(state.teamServers ?? [], state.latestTeamServerVersion ?? '')),
     section('side', 'This side', open, sideBody(state)),
     section('server', 'MCP server', open, serverBody(state)),
-    section('rounds', 'Active rounds', open, `<div id="live-rounds">${roundsBody(state.sessions, nowMs)}</div>`),
+    section('rounds', 'Active rounds', open, `<div id="live-rounds">${roundsBody(state.sessions, nowMs, state.vendors.map((v) => v.id))}</div>`),
   ].join('\n');
 
   return `<!DOCTYPE html>
@@ -309,7 +309,12 @@ function updateLabel(id: string, cli: CliStatus): string {
 }
 
 function reviewersBody(state: PanelState): string {
+  // Built ONCE, from the whole configured list: "no two reviewers share a colour" is a statement
+  // about the list, and it cannot be decided one card at a time.
+  const colour = vendorPalette(state.vendors.map((v) => v.id));
+
   return `${state.vendors.map((v) => vendorCard(v, {
+    colour: colour(v.id),
     codexModels: state.codexModels,
     agyModels: state.agyModels,
     cli: state.cliStatus[v.id] ?? UNKNOWN_CLI,
@@ -450,6 +455,8 @@ interface CardContext {
   readonly allowedRemote: RemoteProvenance;
   /** What the SERVER says it can run — displayed, never re-decided here. */
   readonly reported: Readonly<Record<string, ProviderHealth>>;
+  /** This vendor's colour, already decided against every other configured vendor. */
+  readonly colour: string;
 }
 
 /**
@@ -505,7 +512,7 @@ function runtimeFields(vendor: Vendor, id: string, local: boolean, remote: boole
 }
 
 function vendorCard(vendor: Vendor, context: CardContext): string {
-  const { codexModels, cli, price, localEngine, agyModels, allowedRemote, reported } = context;
+  const { codexModels, cli, price, localEngine, agyModels, allowedRemote, reported, colour } = context;
   const id = escapeHtml(vendor.id);
   const local = vendor.runtime === 'local';
   // A Team server row is configured ON THE SERVER, not here: its endpoint is the server's address,
@@ -516,7 +523,7 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
   const endpoint = endpointField(vendor, id, local, remote);
   const executable = runtimeFields(vendor, id, local, remote, price);
 
-  return `<div class="vendor" style="border-left-color:${vendorColour(vendor.id)}">
+  return `<div class="vendor" style="border-left-color:${colour}">
   <div class="head">
     <input type="checkbox" id="v-${id}" data-setting="enabled" data-vendor="${id}"${vendor.enabled ? ' checked' : ''}
            title="${escapeHtml(HELP.vendorEnabled)}">
@@ -986,6 +993,8 @@ export function usageRegion(
     .map((s) => teamUsageBlock(s, shortNumber))
     .join('\n');
   const scope = usageScopeControl(teamServers, usageScope);
+  // The same canonical list the cards are drawn from, so a vendor is one colour on both.
+  const colour = vendorPalette(vendors.map((v) => v.id));
   const rows = totalsByVendor(within(usage, window, new Date()), vendors, (modelId) => prices[modelId]);
   if (rows.length === 0) {
     return `<div class="empty">Nothing recorded on this machine in this window yet.</div>
@@ -998,7 +1007,7 @@ ${team}${scope}`;
       const total = r.tokensIn + r.tokensOut;
       const failed = r.failed === 0 ? '' : ` · <span class="warn">${r.failed} failed</span>`;
       return `<div class="spend">
-  <div class="head"><span class="name" style="color:${vendorColour(r.provider)}">${escapeHtml(r.provider)}</span><span class="cost">${spend(r)}</span>
+  <div class="head"><span class="name" style="color:${colour(r.provider)}">${escapeHtml(r.provider)}</span><span class="cost">${spend(r)}</span>
     <button class="link forget" data-command="forgetUsage" data-id="${escapeHtml(r.provider)}"
             title="Clear ${escapeHtml(r.provider)}'s recorded runs from this chart. Nothing is deleted from the ledger — the row simply stops counting what is already there, and comes back the next time this vendor runs."
             aria-label="Forget ${escapeHtml(r.provider)}'s recorded spending">✕</button></div>
@@ -1036,7 +1045,11 @@ ${team}${scope}`;
  * has happened is a log, and a log is a page with a table. A running round is shown whole, because
  * its reviewers are what somebody is waiting on; a finished one is not shown at all.</p>
  */
-export function roundsBody(sessions: readonly SessionFile[], nowMs: number = Date.now()): string {
+export function roundsBody(
+  sessions: readonly SessionFile[],
+  nowMs: number = Date.now(),
+  vendorIds: readonly string[] = [],
+): string {
   const running = sessions
     .flatMap((s) => s.rounds.map((r) => ({ branch: s.state.branch, ...r })))
     .filter(isRunning)
@@ -1045,7 +1058,12 @@ export function roundsBody(sessions: readonly SessionFile[], nowMs: number = Dat
     return '<div class="empty">Nothing is running. Every round, finished or not, is in <b>Show review rounds</b>.</div>';
   }
 
-  return running.map((r) => roundCard(r, nowMs)).join('\n');
+  // One palette for every round on screen, from the configured list rather than from whoever
+  // happens to appear in these sessions — two views that each inferred their own list would paint
+  // one vendor two colours the moment the lists differed by a name.
+  const colour = vendorPalette(vendorIds);
+
+  return running.map((r) => roundCard(r, nowMs, colour)).join('\n');
 }
 
 /**
@@ -1059,12 +1077,12 @@ export function roundKey(round: RoundRecord & { branch: string }): string {
 }
 
 /** One running round, whole: what it is, how far it has got, and every reviewer's line. */
-function roundCard(round: RoundRecord & { branch: string }, nowMs: number): string {
+function roundCard(round: RoundRecord & { branch: string }, nowMs: number, colour: VendorPalette): string {
   // Only the vendor's WORD carries the colour; the rest of the row is exactly as it was. Both
   // halves come out of a session file somebody else wrote, so both are escaped.
   const reviewers = reviewerRows(round)
     .map((row) =>
-      `<div class="reviewer"><span class="who" style="color:${vendorColour(row.provider)}">`
+      `<div class="reviewer"><span class="who" style="color:${colour(row.provider)}">`
       + `${escapeHtml(row.provider)}</span>${escapeHtml(row.rest)}</div>`)
     .join('\n');
   const took = elapsed(round, nowMs);
@@ -1091,7 +1109,7 @@ ${reviewers}</div>`;
  */
 export function liveRegions(state: PanelState, nowMs: number = Date.now()): { questions: string; rounds: string } {
   return {
-    questions: questionsSection(state.questions), rounds: roundsBody(state.sessions, nowMs) };
+    questions: questionsSection(state.questions), rounds: roundsBody(state.sessions, nowMs, state.vendors.map((v) => v.id)) };
 }
 
 /**

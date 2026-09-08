@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "Your AI writes the code; other vendors' models review it \u2014 the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.31.7",
+  "version": "0.31.8",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -19,6 +19,128 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "colors": [
+      {
+        "id": "coai.vendorColour1",
+        "description": "Reviewer colour 1 — Blue — codex",
+        "defaults": {
+          "dark": "#6E9BF0",
+          "light": "#2A4FA8",
+          "highContrast": "#93B8FF",
+          "highContrastLight": "#1C3B86"
+        }
+      },
+      {
+        "id": "coai.vendorColour2",
+        "description": "Reviewer colour 2 — Amber",
+        "defaults": {
+          "dark": "#E8B02A",
+          "light": "#8F6200",
+          "highContrast": "#FFC64D",
+          "highContrastLight": "#7A5300"
+        }
+      },
+      {
+        "id": "coai.vendorColour3",
+        "description": "Reviewer colour 3 — Red",
+        "defaults": {
+          "dark": "#FF8A76",
+          "light": "#C0392B",
+          "highContrast": "#FFA595",
+          "highContrastLight": "#A32B1F"
+        }
+      },
+      {
+        "id": "coai.vendorColour4",
+        "description": "Reviewer colour 4 — Cyan — antigravity",
+        "defaults": {
+          "dark": "#5BC8DE",
+          "light": "#0E7490",
+          "highContrast": "#7FDCEF",
+          "highContrastLight": "#0B5F77"
+        }
+      },
+      {
+        "id": "coai.vendorColour5",
+        "description": "Reviewer colour 5 — Green — gemini",
+        "defaults": {
+          "dark": "#5CC46F",
+          "light": "#2A7D36",
+          "highContrast": "#7ADB8B",
+          "highContrastLight": "#21682B"
+        }
+      },
+      {
+        "id": "coai.vendorColour6",
+        "description": "Reviewer colour 6 — Pink",
+        "defaults": {
+          "dark": "#FF8FBC",
+          "light": "#B0396B",
+          "highContrast": "#FFAAD0",
+          "highContrastLight": "#96285A"
+        }
+      },
+      {
+        "id": "coai.vendorColour7",
+        "description": "Reviewer colour 7 — Purple — claude",
+        "defaults": {
+          "dark": "#B482F5",
+          "light": "#6A28C0",
+          "highContrast": "#C9A3FF",
+          "highContrastLight": "#591FA5"
+        }
+      },
+      {
+        "id": "coai.vendorColour8",
+        "description": "Reviewer colour 8 — Brown",
+        "defaults": {
+          "dark": "#C0906A",
+          "light": "#7A4A2E",
+          "highContrast": "#D8AA85",
+          "highContrastLight": "#663A22"
+        }
+      },
+      {
+        "id": "coai.vendorColour9",
+        "description": "Reviewer colour 9 — Turquoise",
+        "defaults": {
+          "dark": "#4FCBB0",
+          "light": "#0F7A66",
+          "highContrast": "#72E0C7",
+          "highContrastLight": "#0C6553"
+        }
+      },
+      {
+        "id": "coai.vendorColour10",
+        "description": "Reviewer colour 10 — Lime",
+        "defaults": {
+          "dark": "#B9C742",
+          "light": "#5E6D0C",
+          "highContrast": "#D0DE5E",
+          "highContrastLight": "#4E5B08"
+        }
+      },
+      {
+        "id": "coai.vendorColour11",
+        "description": "Reviewer colour 11 — Orange — local",
+        "defaults": {
+          "dark": "#FF9147",
+          "light": "#B24A00",
+          "highContrast": "#FFAE7A",
+          "highContrastLight": "#963C00"
+        }
+      },
+      {
+        "id": "coai.vendorColour12",
+        "description": "Reviewer colour 12 — Slate",
+        "defaults": {
+          "dark": "#8FA8C8",
+          "light": "#3E5670",
+          "highContrast": "#AFC4DC",
+          "highContrastLight": "#33485F"
+        }
+      }
+    ],
     "commands": [
       {
         "command": "coai.help",

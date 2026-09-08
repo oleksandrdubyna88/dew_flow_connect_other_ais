@@ -967,6 +967,17 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       : shared;
   }
 
+  /**
+   * The configured reviewer ids — the ONE list every view colours from.
+   *
+   * <p>Public because the rounds-log page is rendered outside this class and must not infer its own
+   * list from the rounds it happens to hold: two lists differing by a single name are two different
+   * colour assignments for the same vendor. See `vendorColour.ts`.</p>
+   */
+  vendorIds(): readonly string[] {
+    return this.vendorsHere().map((v) => v.id);
+  }
+
   /** The vendors as THIS side has them. */
   private vendorsHere(): readonly Vendor[] {
     return vendorsFrom(this.read(vscode.workspace.getConfiguration('coai'))('vendors'));

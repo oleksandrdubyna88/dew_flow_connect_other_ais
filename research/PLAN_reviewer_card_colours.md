@@ -5,6 +5,12 @@
 >
 > Related docs: [module_extension.md](module_extension.md),
 > [PLAN_rounds_collapse_and_vendor_colour.md](PLAN_rounds_collapse_and_vendor_colour.md).
+>
+> **Superseded in part, 2026-09-08.** The card wears the colour, and that half stands. The palette
+> underneath it does not: the six-colour hash this plan reused put `local` and `remsoftdev-codex` on
+> one orange the same day, which is what
+> [PLAN_vendor_colours_never_repeat.md](PLAN_vendor_colours_never_repeat.md) replaced. Where this
+> document says `vendorColour(name)`, the function is now `vendorPalette(configuredIds)`.
 
 ## The goal
 
