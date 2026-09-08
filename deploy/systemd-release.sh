@@ -11,8 +11,10 @@
 #   ./systemd-release.sh --rollback  pop one deployment off the trail, no build, seconds
 #   ./systemd-release.sh --list      what is retained and what is live
 #
-# COAI_TOKEN must hold a Team-server session token for the canary. It is never passed on argv:
-# curl reads it from a 0600 config file, so it appears in no `ps` listing and in no shell history.
+# The canary needs a Team-server session token. Give it as COAI_TOKEN_FILE — a path to a 0600
+# file holding the token — in preference to COAI_TOKEN, because a value on the command line
+# reaches `ps aux` and `~/.bash_history` and a path does not. Either way curl reads it from a
+# config file rather than from argv.
 set -euo pipefail
 
 ROOT=${COAI_ROOT:-/opt/coai}
@@ -61,11 +63,23 @@ switch_to() {
 # `systemctl is-active` and /api/health say the process started. They said exactly that every
 # day this server ran without ever completing a single review. What proves a release is one
 # real review per configured vendor, reaching `done` with a non-empty answer.
+# A path beats a value: COAI_TOKEN_FILE keeps the credential out of the process table and out
+# of shell history, which COAI_TOKEN=… on the command line cannot.
+session_token() {
+    if [[ -n "${COAI_TOKEN_FILE:-}" ]]; then
+        [[ -r "$COAI_TOKEN_FILE" ]] || die "COAI_TOKEN_FILE is set but $COAI_TOKEN_FILE cannot be read"
+        tr -d '\r\n' <"$COAI_TOKEN_FILE"
+        return 0
+    fi
+
+    printf '%s' "${COAI_TOKEN:?neither COAI_TOKEN_FILE nor COAI_TOKEN is set — the canary needs a session token}"
+}
+
 canary() {
     local vendor=$1 model=$2 budget=${3:-180} id status body waited cfg
     cfg=$(mktemp)
     chmod 600 "$cfg"
-    printf 'header = "Authorization: Bearer %s"\n' "${COAI_TOKEN:?COAI_TOKEN is not set}" >"$cfg"
+    printf 'header = "Authorization: Bearer %s"\n' "$(session_token)" >"$cfg"
     trap 'rm -f "$cfg"' RETURN
 
     id=$(curl -sS -K "$cfg" -X POST "$URL/api/reviews" -H 'Content-Type: application/json' \
