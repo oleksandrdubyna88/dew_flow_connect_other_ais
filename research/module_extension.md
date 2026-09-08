@@ -24,6 +24,31 @@ Two details are load-bearing and easy to lose. The exit event fires on **`close`
 `exit` can arrive with output still buffered, and a truncated banner parses to no version at all.
 And every subscription is late-safe — a listener added after the event still hears it — because a
 target that does not exist fails before the caller’s next line runs.
+### What the code round did to the launcher (2026-09-08)
+
+Twelve reviewers read the extraction and found seven things in it worth fixing. Two of them would
+have taken the whole extension host down: an EPIPE on the child’s stdin arrives ASYNCHRONOUSLY, so
+no try/catch around `write` can see it, and unhandled it is fatal — the guard is an error listener
+on stdin; the same is true of `taskkill`, whose own spawn had no error listener and would have
+crashed the host on a machine where it could not start.
+
+One was silent rather than fatal, and it is the one this feature could least afford: `chunk.toString()`
+decodes each chunk alone, so a Cyrillic character split across a chunk boundary became two
+replacement characters. The passages this launcher carries are routinely Russian. `setEncoding("utf8")`
+on the stream keeps the decoder’s state across chunks; the test writes a Cyrillic word in two
+halves and fails without it.
+
+The other four are about the long-lived case the widening exists for. Output that arrives before
+anybody subscribes is REPLAYED to the first subscriber — a child can print its whole answer and
+close before the caller’s next statement runs. `onLine` and `onStdout` return an unsubscribe, because
+a chat session that registers per turn would otherwise deliver turn 100’s answer to ninety-nine stale
+handlers. A shell launched with no working directory now defaults to the temp directory rather than
+inheriting the opened workspace, so the `cmd.exe`-searches-the-cwd hole is closed for every caller
+instead of for the one that remembered. And a failure that never produced a process now carries its
+reason in `stderrTail`, so "could not be read" can be told apart from "not installed".
+
+`onPath` moved BACK to `versionProbe.ts` in the same round: it needs `unquoted` from `cliVersions`,
+and a process primitive that imports a CLI-domain module has its layers inverted.
 ### The copied block is a path, and nothing else (2026-09-06)
 
 `envBlock` used to fill the pasted `mcpServers` block with every setting that differed from the

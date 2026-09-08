@@ -81,9 +81,14 @@ export function sourceSession(
     return { kind: 'existing', key: byIdentity.key, label: active.label };
   }
 
-  // Only a panel whose own tab has GONE may be re-attached by name. A label match while that tab is
-  // still open is two tabs sharing a name, which is the collapse this module refuses.
-  const orphaned = known.find((panel) => panel.label === active.label && !stillOpen(panel, tabs));
+  // Only a panel whose own tab has GONE may be re-attached by name, and only when the name points at
+  // exactly ONE of them. Two conditions, not one: the first version checked only that the panel it
+  // found was closed, so with two panels called `main` — one closed, one still open — a new `main`
+  // tab was re-keyed onto the closed one while the live namesake sat beside it. That is the same
+  // silent wrong-conversation this module exists to prevent, re-entering through the fallback.
+  // (codex, the code round on this very file.)
+  const sameLabel = known.filter((panel) => panel.label === active.label);
+  const orphaned = sameLabel.length === 1 && !stillOpen(sameLabel[0]!, tabs) ? sameLabel[0]! : undefined;
   if (orphaned !== undefined) {
     return { kind: 'rekey', from: orphaned.key, key: active.key, label: active.label };
   }
