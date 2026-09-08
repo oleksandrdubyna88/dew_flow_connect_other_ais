@@ -1,12 +1,12 @@
 # PLAN — a release must not be visible before it is whole
 
-> Status: **plan only, nothing implemented yet.** Scope: `.github/workflows/release.yml` — the
+> Status: **IMPLEMENTED, 2026-09-08.** Scope: `.github/workflows/release.yml` — the
 > `mcp-binaries`, `server-binaries` and `extension` jobs and the completeness check beside them.
 >
 > Related docs: [POST_DEPLOY.md](../POST_DEPLOY.md) item 1,
-> [module_extension.md](../research/module_extension.md),
-> `PLAN_the_server_has_a_release_line.md` (in review as PR #106) — whose completeness job
-> checks this AFTER the fact.
+> [module_extension.md](module_extension.md),
+> [PLAN_the_server_has_a_release_line.md](PLAN_the_server_has_a_release_line.md) — whose
+> completeness job checked this AFTER the fact, and is now the thing that publishes.
 
 ## The symptom, observed twice
 
@@ -77,7 +77,7 @@ Three consequences worth stating:
   that is a second belt; the release being honest about its own state is the braces, and braces
   first.
 - It does not fix the flaky test that made `win-arm64` fail. That is its own change:
-  [PLAN_the_shim_scenario_waits_too_briefly.md](../research/PLAN_the_shim_scenario_waits_too_briefly.md).
+  [PLAN_the_shim_scenario_waits_too_briefly.md](PLAN_the_shim_scenario_waits_too_briefly.md).
 - It does not re-cut `mcp-v0.18.13`. Re-running the failed leg uploads the missing asset to the
   existing release, which is cheaper than burning a tag and is what was done on the day.
 
@@ -101,3 +101,20 @@ All four read the workflow text, beside the tests that already hold this file
 - [ ] `POST_DEPLOY.md` item 1 keeps working, and its entry records that a draft release is now the
       state a failed matrix leaves behind.
 - [ ] `research/module_extension.md` records why the update check can trust `…/releases` again.
+
+## What shipped, and what shipped differently
+
+- **All three lines draft**, not only the two with a matrix. The extension line has one job and one
+  asset, so it drafts, uploads and publishes inside that job — the draft is still worth its line,
+  because "the window is small" is exactly what the mcp line's window was called before it cost a
+  release twice.
+- **`mcp-release-complete` is new** and does both jobs at once: it verifies each expected asset by
+  NAME and it is the only thing on that line that publishes. The server line's job gained the same
+  publish.
+- **`POST_DEPLOY.md` gained a paragraph rather than an item.** The checklist is capped at twelve and
+  item 1 already asks the question; what changed is the STATE a failure leaves behind — a draft
+  nobody can see rather than a partial release somebody is installing from — and that belongs beside
+  the item, not as an eleventh one.
+- Not done, deliberately: the extension is still not defensive about a missing asset. It could check
+  before offering, and that is a second belt; a release being honest about its own state is the
+  braces, and braces first.

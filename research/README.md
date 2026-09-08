@@ -8,6 +8,7 @@ is not finished until it is.
 | Document | What it covers |
 |---|---|
 | [PLAN_the_log_refuses_to_open.md](PLAN_the_log_refuses_to_open.md) | IMPLEMENTED 2026-09-08 — the rounds log threw `Webview is disposed` and `e.replace is not a function` at the one moment a question was waiting on a person. The sidebar releases its view now, the write is re-read after the awaits and the painted key recorded only after the paint, and every escaper coerces — a question with bad metadata stays ANSWERABLE, which is what the plan round inverted |
+| [PLAN_a_release_is_visible_before_it_is_whole.md](PLAN_a_release_is_visible_before_it_is_whole.md) | IMPLEMENTED 2026-09-08 — every release line creates a DRAFT and publishes it only from the job that verified each expected asset by name, so the update check can never be offered a download from a release that is still uploading |
 | [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) | IMPLEMENTED 2026-08-31 — the master plan: architecture, protocol, the counting rule, every decision and its reason |
 | [architecture.md](architecture.md) | System overview, container diagram, module map, cross-cutting decisions |
 | [PLAN_epic_01_foundation.md](PLAN_epic_01_foundation.md) | IMPLEMENTED 2026-08-31 — repository foundation: conventions mount, solution + logging skeleton, CI |

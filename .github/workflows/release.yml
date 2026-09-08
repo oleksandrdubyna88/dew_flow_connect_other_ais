@@ -13,6 +13,13 @@ name: release
 #                      (src_vs_code/src/installer.ts), so a bare tag is invisible to it.
 # (The guard-without-a-trigger trap is documented in creds' release.yml — a job's `if` is not a
 # workflow trigger, so every tag shape is listed here.)
+#
+# EVERY line creates its release as a DRAFT and publishes it only once something has verified
+# the assets are all there. A release is created by whichever matrix leg finishes FIRST, and the
+# extension's update check reads `…/releases` immediately — so a published-while-uploading
+# release offers links that answer 404 honestly. Measured twice: `mcp-v0.16.0` (tag burned) and
+# `mcp-v0.18.13`, where an operator pressed Install and got a 404 on an asset uploaded seconds
+# later. A draft is invisible to `GET /releases`, so the window does not exist.
 on:
   push:
     tags:
@@ -229,15 +236,74 @@ jobs:
         shell: bash
         run: sha256sum "$ASSET" > "$ASSET.sha256"
 
-      - name: Attach to the release
+      # A DRAFT, and that is the fix for a real 404. A release created here is created by whichever
+      # matrix leg finishes FIRST, and the extension's update check reads `…/releases` immediately —
+      # so for the whole length of the matrix the release used to be published, visible, and missing
+      # five of its six assets. Measured 2026-09-08: an operator pressed Install and got a 404 on
+      # `coai-mcp-0.18.13-win-x64.zip`, which was uploaded at 17:31:54Z, after the click. Every link
+      # it offered in that window answered 404 honestly.
+      #
+      # A draft is invisible to `GET /releases` for anyone but a writer, so there is no window at
+      # all. `mcp-release-complete` publishes it once every expected asset is there — and a matrix
+      # leg cannot make that decision, because it cannot see its five siblings.
+      - name: Attach to the draft release
         if: startsWith(github.ref, 'refs/tags/mcp-v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          gh release create "$GITHUB_REF_NAME" --title "coai-mcp ${GITHUB_REF_NAME#mcp-v}" --notes "Native AOT builds of the ConnectOtherAIs MCP server." 2>/dev/null || true
+          gh release create "$GITHUB_REF_NAME" --draft --title "coai-mcp ${GITHUB_REF_NAME#mcp-v}" --notes "Native AOT builds of the ConnectOtherAIs MCP server." 2>/dev/null || true
           gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber
           gh release upload "$GITHUB_REF_NAME" "$ASSET.sha256" --clobber
+
+  # The check the mcp line never had, and the line that has now shipped incomplete TWICE:
+  # `mcp-v0.16.0` (no win-x64, the tag was burned) and `mcp-v0.18.13` (no win-arm64, one leg's test
+  # timed out on that runner alone). Both were found by a person pressing Install, not by CI.
+  #
+  # It is also the publish. Until it runs the release is a draft — invisible to `GET /releases`, so
+  # the extension's update check cannot offer a download from a release that is still uploading.
+  mcp-release-complete:
+    name: the mcp release carries every platform
+    if: startsWith(github.ref, 'refs/tags/mcp-v')
+    needs: [mcp-binaries]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Every expected asset is there, by NAME — then publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#mcp-v}"
+          # By name rather than by count: six wrongly-named archives satisfy a tally, and the one
+          # that goes missing is the platform somebody is installing on right now.
+          RIDS=(linux-x64 linux-arm64 win-x64 win-arm64 osx-x64 osx-arm64)
+          EXPECTED=6
+          [ "${#RIDS[@]}" -eq "$EXPECTED" ] || { echo "the RID list and EXPECTED disagree"; exit 1; }
+
+          ASSETS=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')
+          printf '%s\n' "$ASSETS"
+
+          MISSING=""
+          for rid in "${RIDS[@]}"; do
+            case "$rid" in win-*) EXT=zip ;; *) EXT=tar.gz ;; esac
+            for name in "coai-mcp-$VERSION-$rid.$EXT" "coai-mcp-$VERSION-$rid.$EXT.sha256"; do
+              printf '%s\n' "$ASSETS" | grep -qx "$name" || MISSING="$MISSING $name"
+            done
+          done
+
+          if [ -n "$MISSING" ]; then
+            echo "the release is incomplete — missing:$MISSING"
+            exit 1
+          fi
+          echo "the release carries all $EXPECTED platforms, each with its checksum"
+
+          gh release edit "$GITHUB_REF_NAME" --draft=false
+          echo "published $GITHUB_REF_NAME"
 
   extension:
     name: extension
@@ -287,14 +353,21 @@ jobs:
       - name: Package
         run: npx @vscode/vsce package --no-dependencies
 
-      - name: Attach to the release
+      # Drafted and published in one step, because this line is ONE job producing ONE asset — there
+      # are no siblings to wait for and nothing a separate job could see that this one cannot. The
+      # draft still earns its place: the window between create and upload is small, and "small" is
+      # what the mcp line's window was called before it cost a release.
+      - name: Attach to the release, then publish it
         if: startsWith(github.ref, 'refs/tags/extension-v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          gh release create "$GITHUB_REF_NAME" --title "ConnectOtherAIs ${GITHUB_REF_NAME#extension-v}" --notes "The VS Code extension." 2>/dev/null || true
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" --draft --title "ConnectOtherAIs ${GITHUB_REF_NAME#extension-v}" --notes "The VS Code extension." 2>/dev/null || true
           gh release upload "$GITHUB_REF_NAME" *.vsix --clobber
+          # Only now, and only because the asset above is the whole of this release.
+          gh release edit "$GITHUB_REF_NAME" --draft=false
 
       # Publishing needs a Marketplace PAT (https://dev.azure.com → Personal Access Tokens,
       # scope "Marketplace: Manage") stored as the VSCE_PAT repository secret. Absent, this step
@@ -514,13 +587,13 @@ jobs:
       # Six matrix legs race to create ONE release, so the create is expected to fail five times —
       # and `|| true` would swallow every OTHER failure with it, which is how a release ends up
       # with five archives and a green run. Tolerated only when `gh release view` then finds it.
-      - name: Attach to the release
+      - name: Attach to the draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          if ! gh release create "$GITHUB_REF_NAME" \
+          if ! gh release create "$GITHUB_REF_NAME" --draft \
                 --title "coai-server ${GITHUB_REF_NAME#server-v}" \
                 --notes "Native AOT builds of the ConnectOtherAIs Team server, and the multi-arch image at ghcr.io/${{ github.repository_owner }}/coai-server:${GITHUB_REF_NAME#server-v}." 2>/dev/null; then
             gh release view "$GITHUB_REF_NAME" >/dev/null \
@@ -576,6 +649,13 @@ jobs:
             exit 1
           fi
           echo "the release carries all $EXPECTED platforms, each with its checksum"
+
+          # The publish, and the only one on this line. Until now the release is a DRAFT: invisible
+          # to `GET /releases`, so no client can be offered a download from a release that is still
+          # uploading. A failed leg therefore leaves a draft nobody sees, rather than five platforms
+          # of six with the sixth answering 404 — which is what happened on 2026-09-08.
+          gh release edit "$GITHUB_REF_NAME" --draft=false
+          echo "published $GITHUB_REF_NAME"
 
   # ---------------------------------------------------------------------------
   # The Team server, as a multi-arch image.
