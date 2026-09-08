@@ -5,7 +5,7 @@
 > `src_vs_code/src/test/install.test.ts` that hold the workflow to its promises.
 >
 > Related docs: [deploy/README.md](../deploy/README.md),
-> [research/module_server.md](../research/module_server.md).
+> [research/module_team_server.md](../research/module_team_server.md).
 
 ## The symptom
 
@@ -69,15 +69,35 @@ a binary what it is instead of remembering what it downloaded, so a stamping ste
 stopped working would put a lie back into that line one release later.
 
 `osx-x64` keeps the mcp job's skip-with-a-named-reason (`Bad CPU type in executable`), and only
-that reason.
+that reason — but it must fire BEFORE the poll, not after it. The mcp smoke runs a command that
+exits; this one starts a SERVER and waits for a port. A cross-built binary that cannot exec would
+otherwise be polled for the whole deadline and then reported as a server that failed to start.
+(gemini, plan round.)
+
+The smoke is therefore bounded on every side, because a matrix job that hangs is worse than one
+that fails: the process is started in the background, the port is polled to a **60-second
+deadline**, its stdout and stderr are captured to a file and PRINTED on any failure, and the
+process is killed in a step that runs `if: always()`. A server that hangs at startup, never binds,
+or ignores SIGTERM must produce a red job in a bounded time on every one of the six runners.
+(codex, plan round.)
 
 ### 2. The release itself
 
-The mcp job's shape, unchanged: `gh release create "$GITHUB_REF_NAME" … || true` then
-`gh release upload --clobber` per asset. Each archive carries the binary **and
-`appsettings.json`** — the publish output's non-symbol files — because the server reads its
-Serilog levels and its rate-limit defaults from it, and a binary shipped alone starts with
+The mcp job's shape: `gh release create "$GITHUB_REF_NAME" …` then `gh release upload --clobber`
+per asset, each archive beside its `.sha256`. Each archive carries the binary **and every
+`appsettings*.json`** the publish output emits — not just the base file — because the server reads
+its Serilog levels and its rate-limit defaults from them, and a binary shipped alone starts with
 different behaviour than the one that was tested.
+
+Two things the mcp job does that this one must NOT copy blindly:
+
+- `|| true` on `gh release create` swallows every failure, not only the "it already exists" one it
+  is there for. Six parallel matrix jobs racing to create the same release make that swallow
+  necessary — so the guard becomes specific: create, and tolerate the failure ONLY when
+  `gh release view` then finds the release. Anything else fails the job. (codex, plan round.)
+- Nothing today checks that the release ended up COMPLETE. A final job verifies the tag carries
+  six archives and six checksums; a release with five is a release someone downloads the missing
+  platform from. (codex, plan round.)
 
 The header comment at `release.yml:8-10` currently states the opposite of what this plan does
 (*"there is nothing to attach to a release — the artefact IS the image"*). It was true when the
@@ -92,12 +112,17 @@ rename, a trail that a second consecutive rollback still reads correctly, and a 
 **one real review per configured vendor** because `systemctl is-active` said "healthy" every day
 the server ran without completing a single review.
 
-So the workflow's whole job is: get the host to the right commit, and run that script.
+So the workflow's whole job is: put the PUBLISHED artefact on the host and run that script.
 
 ```
-workflow_dispatch(version) → environment: production (approval) → ssh → git fetch --tags
-  → git checkout server-v<version> → deploy/systemd-release.sh <version>
-  → curl https://coai.remsoft.dev/api/health, assert version == <version>
+workflow_dispatch(version)
+  → the version matches ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ or the run stops
+  → the release and its linux-x64 asset exist, or the run stops
+  → environment: production (approval)
+  → gh release download server-v<version> → verify the .sha256 → scp to a host temp dir
+  → ssh: unpack, deploy/systemd-release.sh --from <dir> <version>
+  → loopback health over ssh, then https://coai.remsoft.dev/api/health with retries
+  → on either failing: ssh deploy/systemd-release.sh --rollback, and report that it ran
 ```
 
 Deliberate choices, each with its reason:
@@ -109,16 +134,40 @@ Deliberate choices, each with its reason:
 - **`environment: production`.** It is where a required reviewer and the deploy secrets both live;
   a workflow that could reach the host from any branch is a workflow anyone with push access can
   point at the company's subscriptions.
+- **The version is VALIDATED before it reaches a root shell.** It arrives as free text from a
+  dispatch form and ends up in a command run as root over ssh, so `0.5.5; systemctl disable
+  coai-server` is a plausible input rather than a hypothetical one. It is matched against a strict
+  pattern, refused if it does not fit, and passed as a positional argument — never interpolated
+  into a command string. (codex, plan round.)
+- **The release is checked BEFORE the approval and before the ssh.** `gh release view` must find
+  the tag and the linux-x64 asset. Dispatching a version whose release failed halfway is the
+  ordinary mistake, and the honest place to stop is before anything touches the host.
+- **The artefact is DOWNLOADED, not rebuilt.** Both gemini and codex caught the plan contradicting
+  itself here: §4 exists so the host stops building, and the sequence above ran the script with no
+  `--from`, which is the build path. The workflow downloads the release asset, checks its
+  `.sha256`, and hands the unpacked directory to the script.
 - **Plain `ssh`, no third-party action.** One fewer supply-chain surface on the job that holds a
   root key, and nothing to pin.
-- **The host key is checked.** `StrictHostKeyChecking=yes` against a `KNOWN_HOSTS` secret. A blind
-  first connection is how a deploy key is handed to whoever answers on port 22.
+- **The host key is checked**, `StrictHostKeyChecking=yes` against a `KNOWN_HOSTS` secret — and
+  there is NO fallback, because a fallback is the vulnerability. What the plan adds instead is a
+  preflight `ssh -o BatchMode=yes true` whose failure prints the sentence that says which of the
+  three it was: unreachable host, wrong key (the host was rebuilt — update the secret), or refused
+  credential. A generic `Host key verification failed` in the middle of a deploy is what sends an
+  operator to retry a network problem they do not have.
 - **Missing secrets fail LOUDLY**, in their own step, naming each one — the family's rule for the
   `VSCE_PAT` skip, applied to a job whose silent no-op would be a server everyone believes was
   updated.
-- The final health assertion is made **by the workflow**, not read from the script's output: the
-  script's canary proves reviews work, this proves the version serving the internet is the one
-  that was asked for.
+- **The post-deploy assertion ROLLS BACK.** The script's canary proves reviews work behind the
+  swap; the workflow's own check proves the version answering the internet is the one that was
+  asked for. A failure after the swap used to leave the new release serving with the workflow
+  merely red — so any failure of the loopback check, the public check, or the version comparison
+  runs `systemd-release.sh --rollback` and says in the job summary that it did. (codex, plan
+  round.)
+- **Retries, not one shot.** nginx and the unit do not come back in the same millisecond, and a
+  single curl one second after a restart measures the restart. The public check polls to a
+  deadline. The premise that it might need auth was raised and is **wrong**: `/api/health` is
+  registered before the caller gate (`Program.cs:272`) and `Coai:AllowedDomains` bounds EMAIL
+  domains, not HTTP hosts. The retry stays; the auth does not.
 
 ### 4. `systemd-release.sh` takes a published binary (`--from <dir>`)
 

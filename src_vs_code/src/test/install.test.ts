@@ -121,17 +121,158 @@ test('a Mac gets its own build, because .NET calls that platform osx and node ca
   assert.equal(ridFor('darwin', 'x64'), 'osx-x64');
 });
 
+/** One job's block out of a workflow file: from its own key to the next job key. */
+function jobBlock(workflow: string, job: string): string {
+  const start = workflow.indexOf(`\n  ${job}:\n`);
+  assert.notEqual(start, -1, `the workflow has no ${job} job`);
+  const rest = workflow.slice(start + 1);
+  const next = rest.search(/\n {2}[a-z][a-z0-9-]*:\n/);
+  return next === -1 ? rest : rest.slice(0, next);
+}
+
+// Read with CR stripped. These files are checked out with native line endings on Windows, and a
+// job header is matched as `\n  name:\n` — which is a line every one of these tests would have
+// declared missing on the machine most of them are written on.
+const workflowText = (file: string) =>
+  fs
+    .readFileSync(path.join(__dirname, '..', '..', '..', '.github', 'workflows', file), 'utf8')
+    .split('\r\n')
+    .join('\n');
+
+const releaseWorkflow = () => workflowText('release.yml');
+
+const deployWorkflow = () => workflowText('deploy-server.yml');
+
+const ridsBuiltBy = (job: string) =>
+  [...jobBlock(releaseWorkflow(), job).matchAll(/^\s+- rid:\s*(\S+)\s*$/gm)]
+    .map((m) => m[1]!)
+    .sort();
+
 test('every RID the workflow builds is a RID the extension will install', () => {
   // The two lists live in different files and different languages; this is what holds them
   // together. A build added to the matrix that the extension does not know is a download nobody
   // can start; one the extension knows and the matrix does not build is a 404 at install time.
-  const workflow = fs.readFileSync(
-    path.join(__dirname, '..', '..', '..', '.github', 'workflows', 'release.yml'),
+  //
+  // Scoped to the mcp job rather than to the whole file. Scraping every `- rid:` line was the same
+  // thing while one matrix existed and became wrong the moment the server got its own: the
+  // extension downloads coai-mcp and nothing else, so a server RID in this list would demand it
+  // learn to install a binary nobody ever asks it for.
+  assert.deepEqual(ridsBuiltBy('mcp-binaries'), [...COAI_RIDS].sort());
+});
+
+test('a server tag builds the same six platforms the mcp line does', () => {
+  // The Team server is DEPLOYED rather than downloaded, so no extension list holds this one
+  // honest — which is why it needs a test of its own. The host runs a Native AOT binary under
+  // systemd (deploy/README.md); the release line published container images only, so the one
+  // artefact the deployment actually consumes was the one thing the tag did not produce.
+  assert.deepEqual(ridsBuiltBy('server-binaries'), [...COAI_RIDS].sort());
+});
+
+test('a server tag creates a GitHub RELEASE, because that is what the panel reads', () => {
+  // The panel asks `api.github.com/repos/…/releases` and filters by tag prefix, so a bare tag is
+  // invisible to it: `newestServerTag` had nothing to find and the update line could never fire.
+  // This is the fact neither file can state alone — the reader is TypeScript, the writer is a
+  // workflow step, and between them sat an assumption.
+  const server = jobBlock(releaseWorkflow(), 'server-binaries');
+  const installer = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'installer.ts'),
     'utf8',
   );
-  const built = [...workflow.matchAll(/^\s+- rid:\s*(\S+)\s*$/gm)].map((m) => m[1]!);
 
-  assert.deepEqual([...built].sort(), [...COAI_RIDS].sort());
+  assert.match(installer, /releases\?per_page=/, 'the panel reads RELEASES, not tags');
+  assert.match(server, /gh release create "\$GITHUB_REF_NAME"/, 'so the server tag creates one');
+  assert.match(server, /gh release upload "\$GITHUB_REF_NAME" "\$ASSET"/, 'and attaches its archive');
+  assert.match(server, /sha256sum "\$ASSET"/, 'beside a checksum');
+});
+
+test('the server release is verified COMPLETE, not merely attempted', () => {
+  // `gh release create … || true` swallows every failure, not only the "another matrix job got
+  // there first" one it exists for — so five archives and a swallowed error look exactly like six.
+  // The completeness check is its own job because no single matrix leg can see the others.
+  const verify = jobBlock(releaseWorkflow(), 'server-release-complete');
+
+  assert.match(verify, /needs:\s*\[\s*server-binaries/, 'it runs after every archive is uploaded');
+  assert.match(verify, /gh release view/, 'and asks GitHub what the release actually carries');
+  assert.match(verify, /EXPECTED=6/, 'against the number of platforms this line promises');
+});
+
+test('the server smoke asks the binary its version the only way a server can be asked', () => {
+  // coai-mcp answers `--version` on stdout; the server has no argument surface at all — it answers
+  // /api/health with {ok, version} from the assembly's informational version. A smoke copied from
+  // the mcp job without adapting it would grep stdout that never comes and pass on the empty
+  // string, testing nothing on six runners at once.
+  const server = jobBlock(releaseWorkflow(), 'server-binaries');
+  const program = fs.readFileSync(
+    path.join(__dirname, '..', '..', '..', 'src_server', 'src', 'Program.cs'),
+    'utf8',
+  );
+
+  assert.match(program, /MapGet\("\/api\/health"/, 'the endpoint the smoke depends on exists');
+  assert.match(server, /api\/health/, 'and the smoke asks it');
+  assert.match(
+    server,
+    /the published binary reports/,
+    'and FAILS when the answer is not the version this release stamps',
+  );
+});
+
+test('the server smoke cannot hang: a deadline, the log printed, the process killed', () => {
+  // The mcp smoke runs a command that exits. This one starts a SERVER, so every failure mode is a
+  // wait: a binary that never binds, one that hangs inside Startup.Guard, one that ignores its
+  // termination. A matrix job that hangs is worse than one that fails — it fails eventually, after
+  // six hours, with no reason anywhere.
+  const server = jobBlock(releaseWorkflow(), 'server-binaries');
+
+  assert.match(server, /DEADLINE=/, 'the port is polled to a deadline');
+  assert.match(server, /cat "\$LOG"/, 'and the captured output is printed when it is not reached');
+  assert.match(server, /if: always\(\)/, 'and the process is killed even when the job failed');
+});
+
+test('the deploy workflow refuses to start without the secrets it needs, naming them', () => {
+  // A deploy whose secrets are missing must not be a green job that did nothing: the entire point
+  // of this workflow is that somebody believes the server was updated afterwards.
+  const deploy = deployWorkflow();
+
+  for (const secret of [
+    'COAI_DEPLOY_HOST',
+    'COAI_DEPLOY_USER',
+    'COAI_DEPLOY_KEY',
+    'COAI_DEPLOY_KNOWN_HOSTS',
+  ]) {
+    assert.match(deploy, new RegExp(secret), `${secret} is read`);
+  }
+  assert.match(deploy, /is not set/, 'and a missing one stops the run, by name');
+});
+
+test('the deploy workflow validates the version before it reaches a root shell', () => {
+  // The version arrives as free text from a dispatch form and ends up in a command that runs as
+  // root over ssh. `0.5.5; systemctl disable coai-server` is an ordinary thing to type into a
+  // text box, and an approval gate does not read what it approves.
+  const deploy = deployWorkflow();
+
+  assert.match(deploy, /\^\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+/, 'a strict version pattern');
+  assert.match(deploy, /is not a version/, 'and anything else stops the run');
+});
+
+test('the deploy workflow runs the release script rather than its own steps', () => {
+  // The script on the host owns the release trail, the atomic symlink swap, the per-vendor canary
+  // and the rollback. The day a workflow step starts doing its own systemctl restart, all four are
+  // gone and nothing says so.
+  const deploy = deployWorkflow();
+
+  assert.match(deploy, /systemd-release\.sh --from/, 'it hands the PUBLISHED artefact to the script');
+  assert.match(deploy, /systemd-release\.sh --rollback/, 'and rolls back through the same script');
+  assert.doesNotMatch(deploy, /systemctl restart/, 'and never restarts the unit behind its back');
+});
+
+test('a deploy that swapped the binary and then failed its own check rolls back', () => {
+  // The script canaries behind the swap; the workflow proves the version answering the internet is
+  // the one that was asked for. A failure BETWEEN those two used to leave the new release serving,
+  // with nothing but a red job to say otherwise.
+  const deploy = deployWorkflow();
+
+  assert.match(deploy, /api\/health/, 'the public endpoint is asserted');
+  assert.match(deploy, /rolled back/, 'and the failure path says the rollback ran');
 });
 
 test('the release carries the native library the binary opens its database through', () => {
