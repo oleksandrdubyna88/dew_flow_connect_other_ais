@@ -371,26 +371,13 @@ public sealed partial class PanelService
                     .Select(Enum.Parse<ReviewRole>)
                     .ToList();
 
-                // A conventions pass with nothing to judge against would invent a standard, which is
-                // worse than the review it displaced. That reasoning is older than the role: it used
-                // to gate a round-1 substitution, and it gates the ROLE now. Said out loud rather
-                // than dropped quietly — a round that reviewed less than it was asked to must say so.
-                // Derived, not removed. `roles.Remove(...)` read tidily — one call that both filters
-                // and answers whether it filtered — and it is the exact shape coding-style.md names as
-                // wrong: mutate in place rather than produce a new value. Two reviewers said so
-                // independently. Nothing shared was at risk (both lists are freshly materialised), but
-                // a rule that holds only where the damage is visible is not a rule.
-                var skipping = !rules.HasRules && scheduled.Contains(ReviewRole.Conventions);
-                var roles = skipping
-                    ? scheduled.Where(r => r != ReviewRole.Conventions).ToList()
-                    : scheduled;
-
-                if (skipping)
+                var roles = RolesWithRulesInMind(scheduled, rules.HasRules);
+                if (roles.Count != scheduled.Count)
                 {
                     _log.Warning(
                         "round {Round}: the Conventions reviewers are skipped — this repository has no "
-                        + "written rules for them to judge against (CLAUDE.md, AGENTS.md, GEMINI.md, "
-                        + ".claude/rules)", round);
+                        + "written rules for them to judge against ({Sources})",
+                        round, string.Join(", ", RuleFiles.SourceNames));
                 }
                 _log.Information("round {Round} runs {Count} role(s): {Roles}", round, roles.Count, string.Join(", ", roles));
                 return BuildWork(roles, workingDir, context, round, isPlanStage: false,
@@ -983,6 +970,26 @@ public sealed partial class PanelService
                 choice.Id));
         }
     }
+
+    /// <summary>
+    /// The roles a code round runs, once the repository has been asked whether it wrote any rules.
+    /// </summary>
+    /// <remarks>
+    /// <para>A conventions pass with nothing to judge against would invent a standard, which is worse
+    /// than the review it displaced. That reasoning is older than the role — it used to gate a
+    /// round-1 prompt substitution, and it gates the ROLE now.</para>
+    /// <para><b>Pure, and extracted for two reasons that arrived together.</b> It was written inline
+    /// as `roles.Remove(...)`, which reads tidily — one call that both filters and answers whether it
+    /// filtered — and is the exact mutate-in-place shape coding-style.md names as wrong; two gate
+    /// reviewers said so. Then a review of the fix pointed out that the branch had no test at all,
+    /// which was true and worse: the behaviour is only reachable through a method that needs a
+    /// session, a checkout and a git repository. A function is the answer to both.</para>
+    /// <para>Derived rather than removed, so nothing observes a list changing under it.</para>
+    /// </remarks>
+    internal static IReadOnlyList<ReviewRole> RolesWithRulesInMind(
+        IReadOnlyList<ReviewRole> scheduled,
+        bool hasRules) =>
+        hasRules ? scheduled : [.. scheduled.Where(r => r != ReviewRole.Conventions)];
 
     /// <summary>Whether the caller may go and build: an order to split follows permission.</summary>
     private static bool MayProceed(RoundVerdict verdict) =>

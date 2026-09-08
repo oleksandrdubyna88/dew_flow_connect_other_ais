@@ -78,6 +78,19 @@ public static class RuleFiles
         [(".claude/rules", "*.md"), (".cursor/rules", "*.mdc"), (".cursor/rules", "*.md")];
 
     /// <summary>
+    /// Every place this looks, as a person would read them out — for the messages that name them.
+    /// </summary>
+    /// <remarks>
+    /// A message telling somebody their repository has no rules is telling them where to put some,
+    /// so a hand-written list that names four of the six sends them to write a file this never
+    /// reads. There was such a list; it named `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` and
+    /// `.claude/rules`, and left out `.github/copilot-instructions.md` and `.cursor/rules` — which
+    /// is exactly the drift a second copy has. One list, derived from the two the reader uses.
+    /// </remarks>
+    public static readonly string[] SourceNames =
+        [.. InstructionFiles, .. RuleFolders.Select(f => f.Dir).Distinct(StringComparer.Ordinal)];
+
+    /// <summary>
     /// Rules are text and a prompt is finite. 80 KB is about a dozen and a half real rule files.
     /// </summary>
     /// <remarks>

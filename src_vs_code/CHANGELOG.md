@@ -14,8 +14,9 @@ found counted against that role's threshold. Now it has a budget of its own.
 **Architecture drops to one round.** It had two because the first was the conventions pass and the
 second its own question; take the pass away and the second is the only real round it had.
 
-A repository that wrote no rules down — no `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` or `.claude/rules`
-— has these reviewers skipped, and the server says so. A pass with nothing to judge against would
+A repository that wrote no rules down — nothing in `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`,
+`.github/copilot-instructions.md`, `.claude/rules` or `.cursor/rules` — has these reviewers skipped,
+and the server says so, naming those six so you know where to put some. A pass with nothing to judge against would
 invent a standard, which is worse than the review it displaced.
 
 **Wants `coai-mcp` 0.18.10.** An older server has four roles and does not know the fifth, so it
