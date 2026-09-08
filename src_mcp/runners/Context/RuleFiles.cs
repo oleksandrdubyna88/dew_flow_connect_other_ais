@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Git;
 
 namespace CoaiMcp.Runners.Context;
@@ -245,18 +246,8 @@ public static class RuleFiles
     // a cryptographic generator cannot give at all. Swapping it would break the tests and protect
     // nothing.
 #pragma warning disable S2245 // Random is not used for security here — see above.
-    private static string[] Shuffled(IReadOnlyList<string> paths, int? seed)
-    {
-        var random = seed is { } fixed_ ? new Random(fixed_) : Random.Shared;
-        var drawn = paths.ToArray();
-        for (var index = drawn.Length - 1; index > 0; index--)
-        {
-            var swap = random.Next(index + 1);
-            (drawn[index], drawn[swap]) = (drawn[swap], drawn[index]);
-        }
-
-        return drawn;
-    }
+    private static string[] Shuffled(IReadOnlyList<string> paths, int? seed) =>
+        [.. SeededShuffle.Of(paths, seed is { } fixed_ ? new Random(fixed_) : Random.Shared)];
 #pragma warning restore S2245
 
     /// <summary>Every rule file under the rule folders, de-duplicated and in a stable order.</summary>
