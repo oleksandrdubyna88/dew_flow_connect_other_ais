@@ -17,10 +17,18 @@
  * else's question — which is why two of the plan gate's reviewers refused the label design.</p>
  */
 
-/** What the registry needs from a panel. `vscode.WebviewPanel` satisfies it; so does a fake. */
+/**
+ * What the registry needs from a panel: bring it forward, close it, and push it something.
+ *
+ * <p>`post` is here rather than left to the caller to cast its way to, because the alternative was
+ * `entry.panel as unknown as vscode.WebviewPanel` at the one place that pushes state — a cast that
+ * says the type is wrong and asks the reader to trust the author instead. A fake satisfies all three
+ * in a line, which is what keeps the registry's tests free of a host.</p>
+ */
 export interface RevealablePanel {
   reveal(): void;
   dispose(): void;
+  post(message: unknown): void;
 }
 
 /** What the registry needs from a conversation: only that it can be ended. */

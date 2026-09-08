@@ -10,18 +10,29 @@ import { ChatEntry, ChatPanels } from '../chatPanels';
  * hold — a correct key handed to a registry that merged on label would fail just as silently.</p>
  */
 
-function fakes(label: string): { entry: ChatEntry; revealed: () => number; disposed: () => number } {
+function fakes(label: string): {
+  entry: ChatEntry;
+  revealed: () => number;
+  disposed: () => number;
+  posted: () => readonly unknown[];
+} {
   let reveals = 0;
   let disposals = 0;
+  const messages: unknown[] = [];
 
   return {
     entry: {
       label,
-      panel: { reveal: () => { reveals += 1; }, dispose: () => undefined },
+      panel: {
+        reveal: () => { reveals += 1; },
+        dispose: () => undefined,
+        post: (message: unknown) => { messages.push(message); },
+      },
       session: { dispose: () => { disposals += 1; } },
     },
     revealed: () => reveals,
     disposed: () => disposals,
+    posted: () => messages,
   };
 }
 
@@ -127,6 +138,23 @@ test('a re-key never overwrites a conversation that is already there', () => {
   assert.strictEqual(panels.rekey(from, to), false, 'the re-key ate an open conversation');
   assert.strictEqual(panels.get(to), sitting.entry);
   assert.strictEqual(panels.size, 2);
+});
+
+test('a state pushed to one conversation is not seen by the other', () => {
+  const panels = new ChatPanels();
+  const keyA = {};
+  const keyB = {};
+  const a = fakes('a');
+  const b = fakes('b');
+  panels.open(keyA, () => a.entry);
+  panels.open(keyB, () => b.entry);
+
+  panels.get(keyA)?.panel.post({ type: 'state', running: true });
+
+  // An answer that lands in the wrong tab is the same silent failure as a follow-up asked of the
+  // wrong conversation, arriving from the other direction.
+  assert.deepStrictEqual(a.posted(), [{ type: 'state', running: true }]);
+  assert.deepStrictEqual(b.posted(), []);
 });
 
 test('the registry can describe itself to the key resolver', () => {
