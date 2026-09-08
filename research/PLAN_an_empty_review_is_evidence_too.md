@@ -1,12 +1,12 @@
 # PLAN — a reviewer that found nothing is as inspectable as one that failed
 
-> Status: **plan only, nothing implemented yet.** Scope:
+> Status: **IMPLEMENTED, 2026-09-08.** Scope:
 > `src_mcp/runners/Reviewers/ReviewerExecutor.cs`, `src_mcp/src/Server/PanelService.cs`, and the
 > round audit line in `src_mcp/src/Server/RoundAudit.cs`.
 >
-> Related docs: [module_runners.md](../research/module_runners.md),
-> [module_server.md](../research/module_server.md),
-> [PLAN_empty_vendor_answer.md](../research/PLAN_empty_vendor_answer.md) — which did this for the
+> Related docs: [module_runners.md](module_runners.md),
+> [module_server.md](module_server.md),
+> [PLAN_empty_vendor_answer.md](PLAN_empty_vendor_answer.md) — which did this for the
 > answer that fails to PARSE. This is the other half.
 
 ## The symptom, measured
@@ -88,20 +88,55 @@ round is already looking.
 |---|---|---|
 | 1 | `AReviewWithNoFindings_KeepsWhatTheVendorActuallySaid` | The defect: the raw answer of a zero-finding review survives the round |
 | 2 | `AReviewWithFindings_KeepsNothing` | The other side — the healthy case writes no files, so the directory means what it says |
-| 3 | `TheEmptyAnswerIsKeptSeparatelyFromTheUnparseableOne` | Two questions, two directories: a reader after one is not handed the other |
-| 4 | `KeepingEvidenceNeverFailsARound` | Already true of the unparseable path (`catch (IOException) => null`) and must stay true of this one |
-| 5 | `TheContextLineNamesTheDiffAndTheRules` | The log line carries diff bytes, file count, elided count and rules bytes |
-| 6 | `AnElidedDiffSaysSo` | The number that decides whether a reviewer's silence is evidence at all |
+| 3 | `TheEmptyAnswerIsKeptSeparatelyFromTheUnparseableOne` | Two questions, two directories |
+| 4 | `AKeptAnswerNamesTheReviewerThatGaveIt` | The name is the index — twelve files, and one belongs to codex/Architecture |
+| 5 | `KeepingEvidenceNeverFailsARound` | A blocked path leaves the outcome `Ok` with no evidence, never an exception |
+| 6 | `AKeptAnswerIsWholeOrAbsent_NeverHalfWritten` | No `.writing` sibling survives a successful keep |
+| 7 | `ARoundThatFoundNothing_SaysWhatItSent_AndKeepsWhatItWasTold` | **The scenario test.** A whole plan round and code round in which every reviewer answers empty: both `context for review:` lines, each reviewer's prompt size in the opening line, and the eight answers on disk. Catalogued in `research/module_tests.md` |
 
-`src_mcp/tests` already drives `ReviewerExecutor` with a fake launcher and asserts on kept files;
-these go beside those.
+The first draft of this table named two unit tests for the context line (`TheContextLineNamesTheDiffAndTheRules`,
+`AnElidedDiffSaysSo`) and they were not written. The code round caught the mismatch, and it was right
+to: those two would have asserted a format string against itself. What the line has to be trusted
+about is that it describes a round that really ran — three classes joining up — which is a scenario,
+not a unit. Test 7 replaces both, and its teeth were checked by breaking the line's own text and
+watching it go red.
 
 ## Definition of Done
 
-- [ ] A zero-finding review's raw answer is kept, in its own directory, named in that reviewer's log line.
-- [ ] The round logs what it sent: diff bytes, files, elided, plan bytes, rules bytes.
-- [ ] Tests 1–6 written, watched fail, and passing.
-- [ ] `research/module_runners.md` records what is kept and what is not, and why an empty answer is
-      not an error.
-- [ ] `research/RESULTS_*` or this plan carries the 2026-09-08 measurement, so the next person
-      reading a silent round has the numbers.
+- [x] A zero-finding review's raw answer is kept, in its own directory, named in that reviewer's log line.
+- [x] The round logs what it sent: diff bytes, files, elided, plan bytes, rules bytes — at BOTH stages.
+- [x] Each reviewer's own prompt size is logged, so the line describes a payload rather than an intention.
+- [x] Tests 1–7 written, watched fail, and passing.
+- [x] `research/module_runners.md` and `research/module_server.md` record what is kept and what is not.
+- [x] The 2026-09-08 measurement is recorded here, so the next person reading a silent round has the numbers.
+
+## What shipped differently, and what the gate changed
+
+Fifteen reviewers over a plan round and a code round.
+
+- **The plan's own test table was wrong.** It named two unit tests for the context line that were
+  never written, and gemini caught the mismatch. They would have asserted a format string against
+  itself; what the line must be trusted about is that it describes a round that REALLY RAN — three
+  classes joining up — so a scenario test replaced both, and `research/module_tests.md` names it.
+- **`PromptBytes` defaulted to zero**, which is a measurement that was never taken rendering as a
+  number. `0 bytes` in an audit line is a claim that a reviewer was sent an empty prompt, and the
+  field exists to be believed on exactly that. It is `int?` now, and the audit omits it when absent.
+  Raised twice, by codex, from two different roles.
+- **The catch set was too narrow.** `IOException` and `UnauthorizedAccessException` covered the
+  obvious cases; `SecurityException`, `ArgumentException` and `NotSupportedException` were not
+  caught, so a policy or an invalid path could still turn a review the vendor answered perfectly
+  into a failed round. Four reviewers, independently.
+- **A failed write left its `.writing` sibling behind** — an artefact in an evidence directory that
+  is neither an answer nor an absence, accumulating one per failure. Deleted on the failure path now.
+- **Nothing said why evidence was not kept.** Returning null silently means an empty directory later
+  reads as "no round was ever silent here". The executor takes a note callback, and the panel logs it.
+- **The context line existed only for CODE rounds.** A plan round has no diff and no rules, and now
+  says so in the same shape — a person reading a silent round looks in one place either way.
+- **A per-file cap and a filename sanitiser** were added: the answers this collects are a few hundred
+  bytes, and both guards exist for the case that is not that.
+
+Rejected, with reasons recorded in the session: three findings claiming `File.Move` sits outside the
+try (it does not), one claiming `TestContext.Current` implies the VSTest runner (it is xUnit v3's own
+API, and the suite runs as an executable), one asking to rename a method to itself, and the
+suggestion to make the evidence write asynchronous — 4 KB per round, once per reviewer, at the end
+of a run measured in seconds to minutes.

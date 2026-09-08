@@ -9,7 +9,11 @@ namespace CoaiMcp.Runners.Reviewers;
 /// the known lengths of the catalog files, which is not a thing anyone should have to do.
 /// </param>
 /// <param name="PromptBytes">
-/// UTF-8 bytes of the prompt this reviewer was actually given.
+/// UTF-8 bytes of the prompt this reviewer was actually given, or NULL where nothing measured it.
+/// <para>Nullable rather than defaulting to zero, because a measurement that was never taken must
+/// not render as a number: `0 bytes` in an audit line is a claim that a reviewer was sent an empty
+/// prompt, and this field exists precisely to be trusted about that. Raised twice on the code
+/// round.</para>
 /// <para>Recorded because a round could describe what it ASSEMBLED and prove nothing about what any
 /// reviewer received: the context is built once and composed per reviewer, and anything between the
 /// two — a prompt template that dropped a section, a choice resolved to the wrong text — leaves a
@@ -21,7 +25,7 @@ public sealed record ReviewerWork(
     ReviewerInvocation Invocation,
     ReviewerInvocation? Repair = null,
     string Prompt = "",
-    int PromptBytes = 0);
+    int? PromptBytes = null);
 
 /// <summary>
 /// One reviewer crossing a line, reported the moment it happens.

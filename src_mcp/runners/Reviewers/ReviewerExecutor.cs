@@ -163,7 +163,8 @@ public static class RateLimit
 public sealed class ReviewerExecutor(
     IProcessLauncher launcher,
     string? keepUnparseableIn = null,
-    string? keepEmptyIn = null)
+    string? keepEmptyIn = null,
+    Action<string>? note = null)
 {
     private const int StdErrTail = 400;
 
@@ -201,31 +202,90 @@ public sealed class ReviewerExecutor(
     /// and the same cure; it is not shared code because that one also retries a `Replace` against a
     /// reader holding the destination, and here the destination is a name nothing else knows.</para>
     /// </remarks>
-    private static string? KeepIn(string? directory, ReviewerInvocation invocation, string? raw)
+    private string? KeepIn(string? directory, ReviewerInvocation invocation, string? raw)
     {
         if (directory is null || raw is null)
         {
             return null;
         }
 
+        var pending = string.Empty;
         try
         {
             Directory.CreateDirectory(directory);
             var file = Path.Combine(
                 directory,
-                $"{invocation.Provider}-{invocation.Role}-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.txt");
-            var pending = file + ".writing";
-            File.WriteAllText(pending, raw);
+                $"{Safe(invocation.Provider)}-{Safe(invocation.Role.ToString())}"
+                    + $"-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.txt");
+            pending = file + ".writing";
+            File.WriteAllText(pending, Bounded(raw));
             File.Move(pending, file, overwrite: true);
             return file;
         }
-        catch (IOException)
+        // The whole expected filesystem set, not the two that were obvious. Keeping evidence may
+        // never be what fails a round, and `Directory.CreateDirectory` on a path that is really a
+        // file, an invalid character reaching `Path.Combine`, or a policy refusing the write are
+        // each a way to turn a review the vendor answered perfectly into a failed one. Raised by
+        // four reviewers on the code round; `IOException` already covered the disk-full and
+        // path-too-long cases, and these are the rest.
+        catch (Exception e) when (e is IOException
+                                      or UnauthorizedAccessException
+                                      or System.Security.SecurityException
+                                      or ArgumentException
+                                      or NotSupportedException)
         {
-            return null; // keeping evidence must never be what fails a round
-        }
-        catch (UnauthorizedAccessException)
-        {
+            // Never silently: a round that could not keep its evidence must say so, or the empty
+            // directory later reads as "nothing was ever silent here". The note goes to the caller
+            // because this class has no logger of its own and should not grow one.
+            note?.Invoke($"the answer could not be kept in {directory}: {e.Message}");
+
+            // The sibling, if the write got that far. A `.writing` file left in an evidence
+            // directory is neither an answer nor an absence, and repeated failures accumulate them.
+            Discard(pending);
             return null;
+        }
+    }
+
+    /// <summary>A path component that cannot escape its directory or refuse to be a file name.</summary>
+    /// <remarks>
+    /// `Provider` is operator-configured text and `Role` is an enum today, so nothing observed has
+    /// ever carried a separator. That is a fact about today's callers rather than about this
+    /// function, and it is the callers that change.
+    /// </remarks>
+    private static string Safe(string part) =>
+        string.Concat(part.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+
+    /// <summary>
+    /// The cap on ONE kept answer.
+    /// </summary>
+    /// <remarks>
+    /// The answers this directory collects are 40 to 90 output tokens — a few hundred bytes — so the
+    /// cap never fires on the case it was written for. It exists for the case it was NOT: a vendor
+    /// that returns a megabyte of prose around an empty findings array is a different animal, and
+    /// evidence is for reading rather than for archiving whatever arrives.
+    /// </remarks>
+    private const int EvidenceCap = 64 * 1024;
+
+    private static string Bounded(string raw) =>
+        raw.Length <= EvidenceCap
+            ? raw
+            : raw[..EvidenceCap] + $"{Environment.NewLine}{Environment.NewLine}"
+                + $"[truncated at {EvidenceCap} characters]";
+
+    private static void Discard(string pending)
+    {
+        if (pending.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            File.Delete(pending);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Nothing further to do: this is the cleanup path of a failure that is already reported.
         }
     }
 
