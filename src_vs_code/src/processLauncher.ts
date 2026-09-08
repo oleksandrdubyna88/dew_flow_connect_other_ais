@@ -322,11 +322,34 @@ function killTree(child: ReturnType<typeof spawn>, shell: boolean): string {
     return '';
   }
 
+  const failed = spawnTaskkill(pid);
+  child.kill();
+
+  return failed;
+}
+
+/**
+ * The second `spawn` in this file, in a function named so an audit can find it.
+ *
+ * <p>A guard that counts spawn calls will see two here and should see two: killing a tree is not
+ * launching a child. It takes no handle, produces no output anybody reads, and is unref'd at once.
+ * It is a named function rather than a line inside `killTree` for exactly that reason — the
+ * exception should be greppable, not buried. (local, the second code round.)</p>
+ *
+ * <p>Both options are load-bearing, not copied habit. `windowsHide` keeps a console window from
+ * flashing over the editor every time a probe times out — eight seconds apart, for as long as the
+ * panel repaints. `cwd` is the temp directory for the same reason every shell launch gets one:
+ * `CreateProcess` searches the working directory before the system one.</p>
+ *
+ * <p>`.on('error')` comes BEFORE `.unref()`: a taskkill that fails to spawn emits `error` on a child
+ * nobody is listening to, and node turns that into a fatal exception in the extension host.
+ * (gemini, the first code round.)</p>
+ *
+ * @returns why it could not be started, or an empty string
+ */
+function spawnTaskkill(pid: number): string {
   let failed = '';
   try {
-    // `.on('error')` BEFORE `.unref()`: a taskkill that fails to spawn emits `error` on a child
-    // nobody is listening to, and node turns that into a fatal exception in the extension host.
-    // (gemini, the code round.)
     spawn(TASKKILL, ['/pid', String(pid), '/t', '/f'], { windowsHide: true, cwd: tmpdir() })
       .on('error', (reason: Error) => {
         failed = reason.message;
@@ -335,10 +358,19 @@ function killTree(child: ReturnType<typeof spawn>, shell: boolean): string {
   } catch (reason) {
     failed = reason instanceof Error ? reason.message : String(reason);
   }
-  child.kill();
 
   return failed;
 }
 
-/** The system utility, not whatever is called that on the PATH or in a workspace. */
-const TASKKILL = join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'taskkill.exe');
+/**
+ * The system utility, not whatever is called that on the PATH or in a workspace.
+ *
+ * <p>`WINDIR` before the literal: a Windows installed on `D:` with `SystemRoot` stripped from a
+ * custom child environment would otherwise point the tree kill at a path that does not exist, and
+ * the failure would be silent apart from a line in the stderr tail. (gemini, the second code round.)</p>
+ */
+const TASKKILL = join(
+  process.env['SystemRoot'] ?? process.env['WINDIR'] ?? 'C:\\Windows',
+  'System32',
+  'taskkill.exe',
+);
