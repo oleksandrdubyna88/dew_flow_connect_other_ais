@@ -1,7 +1,8 @@
 # PLAN — Chat with other AIs, from a selection
 
-> Status: **phase 0 complete (2026-09-08), plan reviewed by the gate and revised; nothing else
-> implemented yet.** Scope: `src_vs_code` only — one command, one webview panel per Claude Code
+> Status: **phases 0–3 built and through the gate (2026-09-08); phases 4–6 open.** The trigger
+> works end to end on this machine — a selection in a Claude Code session, one keypress, a tab named
+> after that session holding the other vendor’s answer. Scope: `src_vs_code` only — one command, one webview panel per Claude Code
 > session tab, a long-lived vendor-CLI process behind each panel, and the Team server's existing job
 > endpoint for remote models. **No change to `src_mcp` or `src_server` is needed.**
 >
@@ -298,13 +299,16 @@ helper used by both `capture` and the session — widened, not copied.
 thinking indicator and the disabled-while-running composer are part of this phase, not polish: the
 measurement says the page sits silent for eight seconds.
 
-**Phase 3 — the trigger.** `sessionKey.ts`, `selectionCapture.ts`, `chatCommand.ts`, the
+**Phase 3 — the trigger. DONE (2026-09-08).** `sessionKey.ts`, `selectionCapture.ts`,
+`chatCommand.ts`, `chatSettings.ts`, `chatTrigger.ts`, `chatModels.ts`, `cliChatLaunch.ts`, the
 `package.json` command + keybinding + `webview/context` contribution, and `coai.chatAutoSend` with
-its three values.
+its three values. `chatModels.ts` and the four settings arrived here rather than in phase 4 because
+the trigger cannot choose a model or a prompt without them; what phase 4 still owns is the panel
+SECTION that edits them.
 
-**Phase 4 — the section and the models.** `chatModels.ts`, the `Chat other AIs` section beside
-`Reviewers`, `coai.chatLanguage`, `coai.chatPrompt`, and the per-model command ids that make a
-personal keybinding possible.
+**Phase 4 — the section.** The `Chat other AIs` section beside `Reviewers`, editing the four
+settings phase 3 already reads, and the per-model command ids that make a personal keybinding
+possible.
 
 **Phase 5 — `remoteChatSession.ts`.** The Team-server path: submit, poll, `429` backoff, bounded
 transcript with its visible limit, cancel, and the picker rows that say what a remote model cannot do.
@@ -339,9 +343,11 @@ record the observed timings beside the ones measured above.
 
 ## Risks and open questions
 
-1. **`Tab` object identity is an assumption about the host.** It is the best identity VS Code offers
-   and it is tested, but if a future version hands back new objects for live tabs, the label fallback
-   carries the cost. The two-tabs-one-label test is what would catch it.
+1. ~~**`Tab` object identity is an assumption about the host.**~~ **Measured 2026-09-08 and it
+   holds.** A reviewer called it Blocking on the claim that VS Code recreates `Tab` objects on any
+   tab-group change; the probe extension logged identity across three invocations with a tab switch
+   between them and reported SAME object every time. The label fallback stays as a fallback, for a
+   future host rather than for this one.
 2. **PowerShell startup dominates the keybinding path** — 1725 ms measured, for four WinAPI calls.
    A native binding would cut it to milliseconds and shrink the clipboard window with it; not worth
    the build complexity today, and the sequence-number guard removes the harm rather than the delay.
@@ -363,8 +369,18 @@ record the observed timings beside the ones measured above.
       above, with the one refuted repair.
 - [x] **The plan passed this product's own gate** — three reviewers, 15 findings, 14 accepted and
       folded in, 1 rejected against a measurement, every decision recorded through `resolve`.
-- [ ] Selecting a passage in a Claude Code session and invoking the command opens a tab named after
-      that session, holding a conversation with the chosen model in the configured language.
+- [x] **Phase 3 passed the gate on its own** (2026-09-08) — 15 findings, 5 accepted, 10 rejected
+      against the code or a measurement. What was taken: the copy helper now WAITS for the person’s
+      own modifiers to come up (`GetAsyncKeyState`) instead of forcing them up under their fingers;
+      a clipboard that reads back empty — an image, a file — is never written to, because it can
+      never be given back; the conversation’s temp directory is made where a process actually runs
+      and removed when the tab closes, instead of once per keypress and never; and the manifest
+      wiring is now a test rather than a live check nobody reruns.
+- [x] **Selecting a passage in a Claude Code session and invoking the command opens a tab named
+      after that session, holding a conversation with the chosen model in the configured language.**
+      Seen live on 2026-09-08 in 0.31.9: the tab carried the session’s own name, the passage stood
+      at the top, the opening turn read `Explain` / `Answer in English.` over the fence, and the
+      answer arrived in the tab with the composer waiting under it.
 - [ ] Two sessions **sharing a label** get two panels, and a follow-up never lands in the other one.
 - [ ] Follow-up questions are answered in the same conversation without re-sending the passage on the
       local path, and correctly with a bounded transcript on the remote one.

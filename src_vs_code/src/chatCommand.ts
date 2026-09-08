@@ -11,7 +11,7 @@ import { chatModelsFrom, chosenModel } from './chatModels';
 import { chatSettingsFrom } from './chatSettings';
 import { chatUiScale, createChatPanel, pushChatDraft, pushChatState } from './chatPanel';
 import { captureSelection, COPY_SCRIPT, argvFor, ran } from './selectionCapture';
-import { launchSpecFor } from './cliChatLaunch';
+import { ChatHome, chatHome, chatRuntimeRefusal, launchSpecFor } from './cliChatLaunch';
 import { launch } from './processLauncher';
 import { openingTurn } from './chatPrompt';
 import { sourceSession, TabSnapshot } from './sessionKey';
@@ -65,9 +65,12 @@ function snapshots(): { active: TabSnapshot | undefined; all: TabSnapshot[] } {
   return { active: all.find((tab) => tab.key === activeTab), all };
 }
 
-/** A directory with nothing in it. See `cliChatLaunch` for why the workspace will not do. */
-function emptyTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'coai-chat-'));
+/** A directory with nothing in it, and the way to take it away. See `cliChatLaunch` for both. */
+function emptyTempDir(): ChatHome {
+  return chatHome(
+    () => fs.mkdtempSync(path.join(os.tmpdir(), 'coai-chat-')),
+    (dir) => fs.rmSync(dir, { recursive: true, force: true }),
+  );
 }
 
 /** Run the copy helper, and resolve when it has finished however it finished. */
@@ -206,15 +209,20 @@ export async function chatWithOtherAi(panels: ChatPanels, args: readonly unknown
     panels.rekey(match.from, match.key);
   }
 
-  const spec = launchSpecFor(ready.vendor, emptyTempDir());
-  if (spec.refusal.length > 0) {
-    void vscode.window.showWarningMessage(spec.refusal);
+  // Asked BEFORE anything is created, and the directory is made only where a process will actually
+  // run in it: pressing this against an already-open tab starts nothing, and used to leave an empty
+  // directory in %TEMP% behind every single time.
+  const refusal = chatRuntimeRefusal(ready.vendor);
+  if (refusal.length > 0) {
+    void vscode.window.showWarningMessage(refusal);
 
     return;
   }
 
   const turn = openingTurn(settings.prompt, settings.language, passage.text);
   const opened = panels.open(match.key, match.label, () => {
+    const home: ChatHome = emptyTempDir();
+    const spec = launchSpecFor(ready.vendor, home.dir);
     const session = new CliChatSession(
       () => launch(spec.executable, spec.args, { cwd: spec.cwd }),
       DEFAULT_BUDGETS,
@@ -243,6 +251,7 @@ export async function chatWithOtherAi(panels: ChatPanels, args: readonly unknown
       onPick: () => undefined,
       onClosed: (id) => {
         panels.closeById(id);
+        home.release();
       },
       onRestart: () => undefined,
       onUseLocal: () => undefined,
