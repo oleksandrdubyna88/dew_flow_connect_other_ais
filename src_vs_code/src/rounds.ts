@@ -148,6 +148,11 @@ export function reviewerLines(round: RoundRecord): readonly string[] {
   return reviewerRows(round).map((row) => `${row.provider}${row.rest}`);
 }
 
+/** The model this state names, or empty — anything that is not a usable string is absent. */
+function modelOf(state: ReviewerState): string {
+  return typeof state.model === 'string' ? state.model.trim() : '';
+}
+
 export function reviewerRows(round: RoundRecord): readonly ReviewerRow[] {
   return (round.reviewerStates ?? []).map((s) => {
     const detail = [
@@ -167,11 +172,16 @@ export function reviewerRows(round: RoundRecord): readonly ReviewerRow[] {
       // like its vendor and its role, not something it did. An older round carries none and reads
       // exactly as it did.
       //
-      // TRIMMED here as well as where it is written. The writer trims because a configured model of
-      // " " is not a model; this side does not trust that, because a state can arrive from an older
-      // server or a hand-edited file — and a bare truthiness check turned "   " into a separator
-      // with nothing after it, which is what the test below caught.
-      rest: `/${s.role}${s.model?.trim() ? ` · ${s.model.trim()}` : ''} — ${s.status}`
+      // NORMALISED here as well as where it is written. The writer trims because a configured model
+      // of " " is not a model; this side does not trust that, because a state can arrive from an
+      // older server or a hand-edited file — and a bare truthiness check turned "   " into a
+      // separator with nothing after it, which is what the test below caught.
+      //
+      // The TYPE check is the same distrust one step further: an interface is not runtime
+      // validation, and a session carrying `model: 42` would reach `.trim()` and throw while the
+      // log was being built — blanking a page to render one row. Anything that is not a string is
+      // absent. Raised on the code round.
+      rest: `/${s.role}${modelOf(s) ? ` · ${modelOf(s)}` : ''} — ${s.status}`
         + `${detail.length > 0 ? ` (${detail.join(', ')})` : ''}`,
     };
   });

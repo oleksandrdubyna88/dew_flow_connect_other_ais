@@ -41,9 +41,14 @@ public sealed class LiveRound
                 //
                 // Trimmed, because a configured model of " " is not a model and the renderer's
                 // `s.model ? ...` would treat it as one — a separator with nothing after it. Raised
-                // twice on the plan round. It cannot be null: `ReviewerInvocation.Model` is a
-                // non-nullable string defaulting to empty.
-                Model: w.Invocation.Model.Trim()));
+                // twice on the plan round.
+                //
+                // The null coalesce is NOT belt-and-braces on a non-nullable string: an invocation
+                // that came back through JSON with `"model": null` is null at runtime whatever the
+                // annotation says, and `.Trim()` on it would throw before the round is persisted or
+                // any reviewer starts. Two reviewers on the code round, and the one place where a
+                // nullable-reference annotation is a claim rather than a guarantee.
+                Model: (w.Invocation.Model ?? string.Empty).Trim()));
         Persist();
     }
 
