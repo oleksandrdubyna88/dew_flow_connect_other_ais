@@ -121,4 +121,51 @@ public sealed class VendorsTests : IDisposable
 
         Vendors.Read(file).Should().BeEmpty();
     }
+
+    /// <summary>
+    /// A Team-server row carries the SERVER's own name for its vendor, all the way through.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Measured, not imagined.</b> A campaign of twelve plan rounds against
+    /// <c>coai.remsoft.dev</c> produced twelve `call_human` verdicts in seven seconds each, zero
+    /// tokens, and one sentence repeated thirty-six times: <i>"'remsoftdev-claude' is not a vendor
+    /// here"</i>. The bench had rebuilt every vendor without `remoteVendor`, so the server was sent
+    /// the ROW ID — which is `&lt;server&gt;-&lt;vendor&gt;` precisely so two Team servers offering
+    /// `codex` do not collide, and which no server has ever heard of.</para>
+    /// <para>This is the same defect the extension had for the whole life of the `remote` runtime,
+    /// in the same field, found the same way — and it is the exact failure this file's own docstring
+    /// is about: a bench that rebuilds vendors from what it happened to read measures a machine
+    /// nobody has. The field was added to the panel after this reader was written, and nothing
+    /// carried it across.</para>
+    /// </remarks>
+    [Fact]
+    public void ARemoteVendorKeepsTheNameItsServerKnows()
+    {
+        var file = SettingsWith(
+            """[{"id":"remsoftdev-claude","runtime":"remote","model":"haiku","baseUrl":"https://coai.remsoft.dev","remoteVendor":"claude"}]""");
+
+        var read = Vendors.Read(file).Should().ContainSingle().Subject;
+
+        read.RemoteVendor.Should().Be("claude", "the row id is not what the server calls this vendor");
+    }
+
+    [Fact]
+    public void TheNameSurvivesBeingHandedBackToTheServer()
+    {
+        // Reading it is half. The bench SERIALISES the list again for the server it starts, and that
+        // is where it was lost: every field the round needs has to survive the round trip.
+        var written = Vendors.AsSetting(
+            [new VendorConfig("remsoftdev-claude", "remote", "haiku", "https://coai.remsoft.dev") { RemoteVendor = "claude" }]);
+
+        written.Should().Contain("\"remoteVendor\":\"claude\"");
+    }
+
+    [Fact]
+    public void AVendorThatIsNotRemote_SaysNothingAboutIt()
+    {
+        // Written only when there IS one, like the panel: a local vendor's env block carries no
+        // empty field for a concept that does not apply to it.
+        Vendors.AsSetting([new VendorConfig("codex", "codex", "gpt-5.6-luna")])
+            .Should().NotContain("remoteVendor");
+    }
 }
