@@ -492,6 +492,12 @@ public sealed partial class PanelService
             return Error(refused.Sentence);
         }
 
+        // The round's clock starts HERE, not when the reviewers do. Resolving a sha, mounting a
+        // worktree and shaping a diff are minutes on a large repository, and they are minutes the
+        // person watching is waiting through — a budget that began after them would let a round
+        // exceed its stated limit by however long its setup took. Raised on the plan round.
+        var started = System.Diagnostics.Stopwatch.StartNew();
+
         try
         {
             var sha = await _worktrees.ResolveShaAsync(repoPath, branch);
@@ -531,11 +537,17 @@ public sealed partial class PanelService
             // legitimately run for a long time while every reviewer inside it behaved, and the
             // operator asked for a bound after one passed ten minutes.
             //
-            // Linked rather than replacing `ct`: whichever fires first wins, so a person cancelling
-            // still cancels and the deadline does not outlive the caller.
-            var deadline = RoundDeadlineFor(work.Count);
-            using var roundClock = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            roundClock.CancelAfter(deadline);
+            // The timer is its OWN source and the two are linked, rather than the timer being set on
+            // a source the caller can also trip. Both readings then come from the thing that fired:
+            // `clock` means the deadline, `ct` means a person. Inferring it from one linked source
+            // would have had to guess between them, which two reviewers said would misattribute a
+            // person cancelling at the moment the deadline struck.
+            //
+            // Whichever fires first still wins, so a person cancelling still cancels and the
+            // deadline cannot outlive its caller.
+            var deadline = RoundDeadlineFor(work.Count, started.Elapsed);
+            using var clock = new CancellationTokenSource(deadline);
+            using var roundClock = CancellationTokenSource.CreateLinkedTokenSource(ct, clock.Token);
 
             var results = await _scheduler.RunAllAsync(work, _executor, roundClock.Token, progress =>
             {
@@ -562,7 +574,11 @@ public sealed partial class PanelService
             // a wrong one.
             var summary = ReviewerSummaryFactory.From(results, excluded) with
             {
-                EndedByDeadline = roundClock.IsCancellationRequested && !ct.IsCancellationRequested
+                // Read from the TIMER, and only when the caller did not also cancel. A person who
+                // cancels at the moment the deadline strikes is reported as a person: the round was
+                // going to end either way, and blaming the clock for their decision is the wrong
+                // half of an ambiguity to keep.
+                EndedByDeadline = clock.IsCancellationRequested && !ct.IsCancellationRequested
                     ? deadline
                     : null,
             };
@@ -1070,10 +1086,31 @@ public sealed partial class PanelService
     /// <see cref="RoundBudget"/>. Shipping a fixed five or thirty minutes would cancel healthy
     /// rounds on a machine with more vendors than the person who chose the number had.
     /// </remarks>
-    private TimeSpan RoundDeadlineFor(int reviewers) =>
-        _settings.RoundTimeout > TimeSpan.Zero
+    private TimeSpan RoundDeadlineFor(int reviewers, TimeSpan spentOnSetup)
+    {
+        var whole = _settings.RoundTimeout > TimeSpan.Zero
             ? _settings.RoundTimeout
             : RoundBudget.For(_settings.ReviewerTimeout, reviewers, _settings.GlobalConcurrency);
+
+        // An explicit setting below one reviewer's own deadline cannot be honoured without
+        // cancelling a reviewer that has not finished its FIRST attempt. Said out loud rather than
+        // silently obeyed: a person who set five minutes against a ten-minute reviewer has made a
+        // configuration mistake, and the round that follows would look like a bug in the gate.
+        if (whole < _settings.ReviewerTimeout)
+        {
+            _log.Warning(
+                "the round limit of {Limit:0} minute(s) is shorter than one reviewer's own "
+                + "{Reviewer:0} — reviewers will be cancelled before they can finish",
+                whole.TotalMinutes, _settings.ReviewerTimeout.TotalMinutes);
+        }
+
+        // What is LEFT of it, because the clock started when the stage did. Never below zero, and
+        // never so small that the reviewers are cancelled before they start: a setup that has
+        // already eaten the whole budget means the budget was wrong, not that the round is over.
+        var left = whole - spentOnSetup;
+
+        return left > _settings.ReviewerTimeout ? left : _settings.ReviewerTimeout;
+    }
 
     /// <summary>Whether the caller may go and build: an order to split follows permission.</summary>
     private static bool MayProceed(RoundVerdict verdict) =>

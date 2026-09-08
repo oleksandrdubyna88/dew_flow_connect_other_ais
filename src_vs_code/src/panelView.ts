@@ -165,7 +165,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     section('reviewers', 'Reviewers', open, reviewersBody(state)),
     section('prompts', 'Prompts per round', open, promptsBody(state)),
     section('gate', 'The gate', open, gateBody(state.settings)),
-    section('limits', 'Limits', open, limitsBody(state.settings)),
+    section('limits', 'Limits', open, limitsBody(state.settings, state.vendors.filter((v) => v.enabled).length)),
     section('keys', 'Vendor keys', open, keysBody(state)),
     section('teamServers', 'Team servers', open, teamServersBody(state.teamServers ?? [], state.latestTeamServerVersion ?? '')),
     section('side', 'This side', open, sideBody(state)),
@@ -592,7 +592,7 @@ function gateBody(s: CoaiSettings): string {
 </div>`;
 }
 
-function limitsBody(s: CoaiSettings): string {
+function limitsBody(s: CoaiSettings, enabledVendors: number): string {
   return `<div class="field inline">
   ${labelled('maxConcurrency', 'Reviewers at once', 'maxConcurrency')}
   <input type="number" id="maxConcurrency" min="1" data-setting="maxConcurrency" value="${s.maxConcurrency}">
@@ -606,8 +606,9 @@ function limitsBody(s: CoaiSettings): string {
   <input type="number" id="reviewerTimeoutMinutes" min="1" data-setting="reviewerTimeoutMinutes" value="${s.reviewerTimeoutMinutes}">
 </div>
 <div class="field inline">
-  ${labelled('roundTimeoutMinutes', 'Round limit, minutes (0 = work it out)', 'roundTimeout')}
+  ${labelled('roundTimeoutMinutes', 'Round limit, minutes', 'roundTimeout')}
   <input type="number" id="roundTimeoutMinutes" min="0" data-setting="roundTimeoutMinutes" value="${s.roundTimeoutMinutes}">
+  <span class="hint">${escapeHtml(roundLimitNote(s, enabledVendors))}</span>
 </div>
 <div class="field inline">
   ${labelled('escalationMinutes', 'Wait for you, minutes', 'escalationMinutes')}
@@ -765,6 +766,32 @@ const ROLE_TONE: Record<string, string> = {
   SecurityReliability: 'sec',
   UxDxPerformance: 'uxdx',
 };
+
+/**
+ * What the round limit will actually be, shown beside the box that sets it.
+ *
+ * <p>Zero means "work it out", and a reviewer on the plan round called that a hidden dependency —
+ * rightly: raise the reviewer timeout and the round doubles, with nothing on screen saying so. The
+ * derivation is the same arithmetic the server does, in the numbers currently configured, so the
+ * person changing either one can see the consequence rather than read about it.</p>
+ *
+ * <p>It cannot be exact for a repository with no written rules, where the server drops the
+ * Conventions reviewers and the round is one wave narrower — the same "up to" the fan-out sentence
+ * carries, and for the same reason.</p>
+ */
+function roundLimitNote(s: CoaiSettings, enabledVendors: number): string {
+  if (s.roundTimeoutMinutes > 0) {
+    return s.roundTimeoutMinutes < s.reviewerTimeoutMinutes
+      ? `shorter than one reviewer's ${s.reviewerTimeoutMinutes} min — reviewers will be cut off`
+      : 'set by hand';
+  }
+
+  const reviewers = Math.max(1, enabledVendors) * ROLES.filter((r) => r.stage === 'code').length;
+  const waves = Math.max(1, Math.ceil(reviewers / Math.max(1, s.maxConcurrency)));
+
+  return `worked out: ${waves} wave${waves === 1 ? '' : 's'} × ${s.reviewerTimeoutMinutes} min `
+    + `= ${waves * s.reviewerTimeoutMinutes} min`;
+}
 
 /**
  * The fan-out, multiplied out loud.
