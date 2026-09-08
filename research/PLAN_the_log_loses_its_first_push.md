@@ -1,10 +1,10 @@
 # PLAN — one lost message empties the log page for ever
 
-> Status: **plan only, nothing implemented yet, 2026-09-08.** Scope:
-> `src_vs_code/src/roundsLogPanel.ts`, `src_vs_code/src/roundsLog.ts` (the page script),
-> `src_vs_code/src/extension.ts`.
+> Status: **IMPLEMENTED, 2026-09-08.** Scope: `src_vs_code/src/pushLedger.ts` (new),
+> `src_vs_code/src/roundsLogMessages.ts` (new), `src_vs_code/src/roundsLogPanel.ts`,
+> `src_vs_code/src/roundsLog.ts` (the page script).
 >
-> Related docs: [module_extension.md](../research/module_extension.md).
+> Related docs: [module_extension.md](module_extension.md).
 
 ## The symptom
 
@@ -94,8 +94,51 @@ constructed in this suite otherwise.
 
 ## Definition of Done
 
-- [ ] The page posts `ready`; the panel answers with a forced push.
-- [ ] No `lastPayload` / `lastUsage` / `lastSpots` is recorded for a push that was not delivered.
-- [ ] Tests 1–5 written, watched fail, and passing.
-- [ ] `research/module_extension.md` records the handshake and why a blind `postMessage` after
+- [x] The page posts `ready`; the panel answers with a forced push.
+- [x] No `lastPayload` / `lastUsage` / `lastSpots` is recorded for a push that was not delivered.
+- [x] Tests 1–5 written, watched fail, and passing.
+- [x] `research/module_extension.md` records the handshake and why a blind `postMessage` after
       `webview.html = …` is not safe.
+
+## What shipped differently
+
+**The decision layer became its own module.** The plan proposed a webview seam thin enough to fake.
+What was built instead is `pushLedger.ts` — no `vscode` import, so no seam is needed: the panel keeps
+the API calls and the ledger keeps every decision about what to send and what to record. It is the
+same move `chatMessages.ts` records, and it is the reason the six ledger tests exercise the real
+logic rather than a test double of it.
+
+**A generation number, which the plan did not have.** Two reviewers raised the same race from
+opposite directions on the plan round: two pushes are in flight whenever an ordinary tick meets the
+forced answer to `ready`, and an older one resolving second would record content the page does not
+hold — leaving it stale until something else changed, which is the very defect this plan is about.
+Every push now carries a generation, `settle` refuses one older than the newest recorded for its
+region, and the posts themselves are serialised through one promise chain.
+
+**A 5 s fallback timer, raised as blocking by two reviewers.** Gating every push on `ready` would
+leave a page whose script threw before attaching its listener empty for ever, with nothing anywhere
+saying why. After `ASSUME_READY_MS` the panel warns and pushes anyway — which is exactly what it did
+before this change, so the failure mode is no worse than the one being fixed.
+
+**The message vocabulary moved out too** (`roundsLogMessages.ts`, `logCommandOf`). `ready` is
+load-bearing: a typo in that one branch ships with every test green and leaves the page as empty as
+the reported defect. Inside a class importing `vscode` no test in this suite could reach it.
+
+**Both tabs open on a hint rather than on nothing.** An empty div made a push that never arrived look
+identical to one that had not arrived yet — which is why the report could not say which it was.
+
+## Evidence
+
+Ten tests in `src_vs_code/src/test/theLogLosesItsFirstPush.test.ts`; whole suite **805 tests, 804
+pass, 0 fail, 1 skipped**; lint clean.
+
+The teeth, proved by putting each half of the defect back:
+
+| reverted | test | failure |
+|---|---|---|
+| `settle` records regardless of `arrived` | `a push that was not delivered is sent again` | `AssertionError: an undelivered push is made again` |
+| the page's `ready` post deleted | `the page says it is listening, and only once it actually is` | `AssertionError: the page never told the panel it was listening` |
+| `ready` posted before the message listener | same test | `AssertionError: the page said ready BEFORE attaching its message listener` |
+
+The last row is why that test RUNS the page script through a stub DOM rather than matching its source:
+what has to hold is an order, and a regexp cannot see one.
