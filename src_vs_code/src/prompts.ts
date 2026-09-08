@@ -21,12 +21,21 @@ export interface PromptChoice {
 
 export const ROLES: readonly { readonly id: string; readonly label: string; readonly stage: string }[] = [
   { id: 'PlanCritique', label: 'Plan review', stage: 'plan' },
+  // FIRST among the code roles: a broken written rule is the cheapest finding to act on and the
+  // least arguable — there is a sentence to point at. That is why the conventions pass used to be
+  // forced into round 1; as a role of its own it keeps the position and gains a budget.
+  { id: 'Conventions', label: 'Conventions', stage: 'code' },
   { id: 'Architecture', label: 'Architecture', stage: 'code' },
   { id: 'SecurityReliability', label: 'Security & reliability', stage: 'code' },
   { id: 'UxDxPerformance', label: 'Performance & UX-DX', stage: 'code' },
 ];
 
 export const PROMPTS: readonly PromptChoice[] = [
+  // The one prompt of the Conventions role, and therefore its universal one. It judges the
+  // change against what the project WROTE DOWN and nothing else — the standard its human authors
+  // are held to, which no other reviewer was applying.
+  { id: 'conventions', role: 'Conventions', label: 'Conventions', purpose: 'Only the rules this project wrote down — CLAUDE.md, AGENTS.md, GEMINI.md, .claude/rules. A convention the reviewer believes in but the project never wrote is not a finding.', universal: true },
+
   { id: 'plan-critique', role: 'PlanCritique', label: 'Universal', purpose: 'The whole plan: assumptions, failure paths, order, testability.', universal: true },
   { id: 'plan-assumptions', role: 'PlanCritique', label: 'Assumptions & verification', purpose: 'What the plan takes for granted, and what it promises but never checks.', universal: false },
   { id: 'plan-human-path', role: 'PlanCritique', label: 'The human path', purpose: 'What a person does with it, and what happens when they do it wrong.', universal: false },
@@ -34,7 +43,6 @@ export const PROMPTS: readonly PromptChoice[] = [
   { id: 'plan-operability', role: 'PlanCritique', label: 'Operability', purpose: 'What it is like to run this at 3 a.m.: what is observable, what is alertable, what is diagnosable.', universal: false },
   { id: 'plan-scope-creep', role: 'PlanCritique', label: 'Scope & budget', purpose: 'What this plan quietly takes on beyond its goal, and what it will cost to keep.', universal: false },
 
-  { id: 'conventions', role: 'Architecture', label: 'Conventions', purpose: 'Only the rules this project wrote down — CLAUDE.md, AGENTS.md, GEMINI.md, .claude/rules. A convention the reviewer believes in but the project never wrote is not a finding.', universal: false },
   { id: 'architecture', role: 'Architecture', label: 'Universal', purpose: 'Boundaries, abstractions, consistency, and the plan-to-code gap.', universal: true },
   { id: 'arch-boundaries', role: 'Architecture', label: 'Boundaries & duplication', purpose: 'Dependency direction, layers reaching around each other, capabilities implemented twice.', universal: false },
   { id: 'arch-evolution', role: 'Architecture', label: 'Cost of the next change', purpose: 'What this change makes harder, and what is hard-coded that will have to vary.', universal: false },
@@ -42,7 +50,6 @@ export const PROMPTS: readonly PromptChoice[] = [
   { id: 'arch-naming', role: 'Architecture', label: 'Names & the shape they imply', purpose: 'Where a name promises a shape the code does not have — the misreading it invites next.', universal: false },
   { id: 'arch-testability', role: 'Architecture', label: 'Testability of the seams', purpose: 'Which decision here can only be tested by starting a server, a browser or a clock.', universal: false },
 
-  { id: 'conventions', role: 'SecurityReliability', label: 'Conventions', purpose: 'Only the rules this project wrote down — CLAUDE.md, AGENTS.md, GEMINI.md, .claude/rules. A convention the reviewer believes in but the project never wrote is not a finding.', universal: false },
   { id: 'security-reliability', role: 'SecurityReliability', label: 'Universal', purpose: 'Secrets, input, failure behaviour, state, trust boundaries.', universal: true },
   { id: 'sec-memory-leaks', role: 'SecurityReliability', label: 'What it holds and leaves', purpose: 'Secrets that outlive their use, resources leaked on the error path, what a kill -9 leaves behind.', universal: false },
   { id: 'sec-attack', role: 'SecurityReliability', label: 'Attack surface', purpose: 'What is trusted that was never checked, injection, privilege, and checks that fail open.', universal: false },
@@ -50,7 +57,6 @@ export const PROMPTS: readonly PromptChoice[] = [
   { id: 'sec-concurrency', role: 'SecurityReliability', label: 'Two at once', purpose: 'The same code running twice, a millisecond apart, over the state they share.', universal: false },
   { id: 'sec-supply-chain', role: 'SecurityReliability', label: 'What this change trusts', purpose: 'Every input, dependency and endpoint it believes without checking — and who can change them.', universal: false },
 
-  { id: 'conventions', role: 'UxDxPerformance', label: 'Conventions', purpose: 'Only the rules this project wrote down — CLAUDE.md, AGENTS.md, GEMINI.md, .claude/rules. A convention the reviewer believes in but the project never wrote is not a finding.', universal: false },
   { id: 'uxdx-performance', role: 'UxDxPerformance', label: 'Universal', purpose: 'Performance, UI state as code, and the ergonomics of a new API.', universal: true },
   { id: 'perf-scale', role: 'UxDxPerformance', label: 'Cost at scale', purpose: 'Which input grows, and what this code does when it does.', universal: false },
   { id: 'dx-ergonomics', role: 'UxDxPerformance', label: 'Ergonomics & waiting', purpose: 'Names that mislead, errors that name no cure, and work a person waits on.', universal: false },
@@ -72,17 +78,16 @@ export function universalFor(role: string): PromptChoice {
 export const CONVENTIONS_ID = 'conventions';
 
 /**
- * The first coai-mcp whose round 1 is the conventions pass for ARCHITECTURE alone.
+ * The first coai-mcp that knows `Conventions` is a ROLE.
  *
- * <p>Before it, every code role's round 1 was the conventions pass. The panel and the server decide
- * this SEPARATELY — one in `selectedFor`, one in `PromptCatalog.ForRound` — and they are installed
- * separately too: an extension updates itself, a server is a binary somebody presses a button to
- * replace. So a panel ahead of its server shows `Universal` for a round the server runs
- * `conventions` in, which is precisely the divergence this pair is written to avoid. The Prompts
- * section says so while that is true, rather than leaving it to be discovered from a round's
- * findings.</p>
+ * <p>Older servers have four roles, not five: they would be asked to run a role their own enum
+ * cannot parse. That is worse than the mismatch this constant used to guard — a panel showing
+ * `Universal` for a round that ran `conventions` was a wrong prompt; this is a round that does not
+ * start. The panel and the server are installed separately (an extension updates itself, a server
+ * is a binary somebody presses a button to replace), so the Prompts section says so while it is
+ * true rather than leaving it to be found in a failed round.</p>
  */
-export const CONVENTIONS_NARROWED_IN = '0.18.9';
+export const CONVENTIONS_ROLE_SINCE = '0.18.10';
 
 /**
  * What the panel shows as selected for one round — the stored choice, or what the server would
@@ -90,36 +95,19 @@ export const CONVENTIONS_NARROWED_IN = '0.18.9';
  *
  * <p><b>This function is a claim about another program.</b> Every branch here has to be the same
  * branch `PromptCatalog.ForRound` takes, and `panelServerPromptAgreement.test.ts` is what holds the
- * two together. There used to be a third branch — rotate through the lenses when a round is unset
- * — fed by the panel's DEAL switch, which the server's rotation never read; the picker named
- * prompts nobody ran. A branch that only one of the two programs has is not a feature.</p>
+ * two together. It has lost two branches to that rule. A rotation fed by the panel's DEAL switch,
+ * which the server's rotation never read — the picker named prompts nobody ran. And a round-1
+ * conventions default, which existed because the conventions pass had no budget of its own; now
+ * that Conventions is a ROLE there is nothing to substitute, and `hasRules` went with it.</p>
  */
 export function selectedFor(
   role: string,
   round: number,
   stored: Readonly<Record<string, readonly string[]>>,
-  hasRules = true,
 ): string {
   const chosen = stored[role]?.[round - 1];
-  if (chosen !== undefined && promptsFor(role).some((p) => p.id === chosen)) {
-    return chosen;
-  }
-  // ROUND ONE of a CODE role is the conventions pass, mirroring PromptCatalog.ForRound on the
-  // server. Without this the panel showed `Universal` for a round the server would run
-  // `conventions` in — the panel saying one thing while the server does another, which is the
-  // defect this product keeps producing. Its twin is ConventionsPassTests in the C# suite.
-  //
-  // `hasRules` is optimistic here because the panel cannot know: the server decides at round time
-  // by looking in the worktree. The section text says so, and a repo with no written rules falls
-  // back to the universal prompt on the server side.
-  // ARCHITECTURE only, since 2026-09-07 — `PromptCatalog.ForRound` says the same in the same
-  // words, and `panelServerPromptAgreement.test.ts` is what holds the two to it. It took round 1 of
-  // all three code roles first: three reviewers reading the same written rules in the same round
-  // produce the same findings three times, and a role with one round then spent it on conventions
-  // and never asked its own question at all. Architecture keeps it because it has two rounds.
-  if (hasRules && round === 1 && role === 'Architecture') {
-    return CONVENTIONS_ID;
-  }
 
-  return universalFor(role).id;
+  return chosen !== undefined && promptsFor(role).some((p) => p.id === chosen)
+    ? chosen
+    : universalFor(role).id;
 }

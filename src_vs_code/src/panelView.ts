@@ -11,7 +11,7 @@ import { CoaiSettings } from './settingsShape';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
-import { CONVENTIONS_NARROWED_IN, ROLES, promptsFor, selectedFor } from './prompts';
+import { CONVENTIONS_ROLE_SINCE, ROLES, promptsFor, selectedFor } from './prompts';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorColour } from './vendorColour';
@@ -756,6 +756,7 @@ export
 /** Which tone wraps each role. The colour is never the only signal — the name is always written. */
 const ROLE_TONE: Record<string, string> = {
   PlanCritique: 'plan',
+  Conventions: 'conv',
   Architecture: 'arch',
   SecurityReliability: 'sec',
   UxDxPerformance: 'uxdx',
@@ -772,15 +773,17 @@ const ROLE_TONE: Record<string, string> = {
  */
 function fanOut(state: PanelState): string {
   const vendors = state.vendors.filter((v) => v.enabled).length;
-  const reviewers = vendors * 3;
+  // Both numbers come from ROLES rather than from a literal beside a list of the same names. They
+  // were a hardcoded `3` and a hardcoded array until Conventions became a role, and the sentence
+  // then said "3 roles" while four boxes sat under it.
+  const codeRoles = ROLES.filter((r) => r.stage === 'code');
+  const reviewers = vendors * codeRoles.length;
   // Derived, not stored: it is the widest CODE role's budget, and a stored copy would be a
   // second source of truth for a number that already exists.
-  const rounds = Math.max(
-    1,
-    ...['Architecture', 'SecurityReliability', 'UxDxPerformance'].map((r) => state.settings.rounds[r] ?? 2),
-  );
+  const rounds = Math.max(1, ...codeRoles.map((r) => state.settings.rounds[r.id] ?? 1));
+
   return (
-    `${vendors} vendor${vendors === 1 ? '' : 's'} × 3 roles = ${reviewers} reviewer${reviewers === 1 ? '' : 's'} ` +
+    `${vendors} vendor${vendors === 1 ? '' : 's'} × ${codeRoles.length} roles = ${reviewers} reviewer${reviewers === 1 ? '' : 's'} ` +
     `per round, each runs once per round, up to ${rounds} round${rounds === 1 ? '' : 's'}`
   );
 }
@@ -788,25 +791,24 @@ function fanOut(state: PanelState): string {
 /**
  * Said out loud while the installed server would not do what these pickers show.
  *
- * <p>The panel and `coai-mcp` decide an unset round's prompt separately and are installed
- * separately: an extension updates itself, a server is a binary somebody presses a button to
- * replace. Below {@link CONVENTIONS_NARROWED_IN} the server makes round 1 of EVERY code role the
- * conventions pass, so this panel would show `Universal` for a round that runs `conventions` —
- * exactly the kind of quiet disagreement this pair exists to prevent. Three reviewers raised it on
- * the round that shipped the change.</p>
+ * <p>The panel and `coai-mcp` know the same roles, and are installed separately: an extension
+ * updates itself, a server is a binary somebody presses a button to replace. Below
+ * {@link CONVENTIONS_ROLE_SINCE} the server has four roles and no `Conventions` among them, so a
+ * code round asks it for a role its own enum cannot parse and fails to start. Louder than the
+ * mismatch this warning first carried, and worth saying before the round rather than after.</p>
  *
  * <p>A sentence rather than a block: the fix is the Update button one section down, and this stops
  * being true the moment somebody presses it.</p>
  */
 function conventionsSkew(server: ServerStatus): string {
   const known = server.kind !== 'absent' && server.version.length > 0;
-  if (!known || compareVersions(CONVENTIONS_NARROWED_IN, server.version) <= 0) {
+  if (!known || compareVersions(CONVENTIONS_ROLE_SINCE, server.version) <= 0) {
     return '';
   }
 
-  return `  <div class="stale">The coai-mcp you have installed (${escapeHtml(server.version)}) still runs `
-    + `<b>Conventions</b> on round 1 of every code role, whatever these pickers say. `
-    + `Update it to ${escapeHtml(CONVENTIONS_NARROWED_IN)} or later — the <b>MCP server</b> section below.</div>`;
+  return `  <div class="stale">The coai-mcp you have installed (${escapeHtml(server.version)}) does not `
+    + `know <b>Conventions</b> is a role, so a code round will fail rather than skip it. `
+    + `Update it to ${escapeHtml(CONVENTIONS_ROLE_SINCE)} or later — the <b>MCP server</b> section below.</div>`;
 }
 
 function promptsBody(state: PanelState): string {
@@ -1260,6 +1262,9 @@ const CSS = `
      theme that defines them wins and one that does not still gets the intended colour. */
   :root {
     --tone-plan: var(--vscode-charts-purple, #c586c0);
+    /* Conventions takes yellow: it reads as "check this first", and the four code roles
+       then span the palette instead of crowding blue-orange-green. */
+    --tone-conv: var(--vscode-charts-yellow, #d7ba7d);
     --tone-arch: var(--vscode-charts-blue, #569cd6);
     --tone-sec: var(--vscode-charts-orange, #ce9178);
     --tone-uxdx: var(--vscode-charts-green, #b5cea8);
@@ -1279,6 +1284,7 @@ const CSS = `
   .role-arch { border-left-color: var(--tone-arch); }
   .role-sec { border-left-color: var(--tone-sec); }
   .role-uxdx { border-left-color: var(--tone-uxdx); }
+  .role-conv { border-left-color: var(--tone-conv); }
   .role-code { border-left-color: var(--tone-code); }
   .tabs { display: flex; gap: 4px; margin: 0 0 8px; }
   .tab { flex: 1; padding: 3px 6px; font: inherit; color: var(--vscode-foreground);

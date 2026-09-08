@@ -163,8 +163,8 @@ export const DEFAULTS: CoaiSettings = {
   // where a real change could not pass: a plan round that regularly produces six findings and a
   // code role that produces five are not failures, and a gate that says they are gets ignored,
   // which is the one failure mode a gate cannot survive.
-  rounds: { PlanCritique: 1, Architecture: 2, SecurityReliability: 1, UxDxPerformance: 1 },
-  thresholds: { PlanCritique: 6, Architecture: 5, SecurityReliability: 5, UxDxPerformance: 5 },
+  rounds: { PlanCritique: 1, Conventions: 1, Architecture: 1, SecurityReliability: 1, UxDxPerformance: 1 },
+  thresholds: { PlanCritique: 6, Conventions: 5, Architecture: 5, SecurityReliability: 5, UxDxPerformance: 5 },
   onExhausted: 'human',
   maxConcurrency: 3,
   maxPerProvider: 2,

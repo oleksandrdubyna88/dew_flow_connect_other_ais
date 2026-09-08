@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CONVENTIONS_ID, CONVENTIONS_NARROWED_IN, selectedFor, universalFor } from '../prompts';
+import { CONVENTIONS_ROLE_SINCE, selectedFor, universalFor } from '../prompts';
 import { panelHtml, PanelState } from '../panelView';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
@@ -48,24 +48,25 @@ const baseState = (): PanelState => ({
  * When the server's branch changes, this line changes with it — and that is the moment somebody has
  * to look at both.</p>
  *
- * <p>2026-09-07: the conventions pass narrowed from every code role to <b>Architecture</b> alone.</p>
+ * <p>2026-09-08: there is no branch left to transcribe. The conventions pass took round 1 — of every
+ * code role, then of Architecture alone — because it had no budget of its own; as a ROLE it has one,
+ * so both programs are back to "what was chosen, else this role's universal prompt". A rule that
+ * fits on one line is a rule two programs can hold.</p>
  */
-function whatTheServerRuns(role: string, round: number, hasRules: boolean): string {
-  return hasRules && round === 1 && role === 'Architecture' ? CONVENTIONS_ID : universalFor(role).id;
+function whatTheServerRuns(role: string): string {
+  return universalFor(role).id;
 }
 
-const ROLES = ['PlanCritique', 'Architecture', 'SecurityReliability', 'UxDxPerformance'];
+const ROLES = ['PlanCritique', 'Conventions', 'Architecture', 'SecurityReliability', 'UxDxPerformance'];
 
-test('an unset round shows what the server runs, with rules and without', () => {
+test('an unset round shows what the server runs, for every role and every round', () => {
   for (const role of ROLES) {
     for (const round of [1, 2, 3, 4]) {
-      for (const hasRules of [true, false]) {
-        assert.equal(
-          selectedFor(role, round, {}, hasRules),
-          whatTheServerRuns(role, round, hasRules),
-          `${role} round ${round} with hasRules=${hasRules}: the panel and the server disagree`,
-        );
-      }
+      assert.equal(
+        selectedFor(role, round, {}),
+        whatTheServerRuns(role),
+        `${role} round ${round}: the panel and the server disagree`,
+      );
     }
   }
 });
@@ -73,35 +74,33 @@ test('an unset round shows what the server runs, with rules and without', () => 
 /**
  * The one case the transcription above cannot cover: the two programs are versioned separately.
  *
- * <p>`selectedFor` and `PromptCatalog.ForRound` agree in the SOURCE, and are installed apart — an
- * extension updates itself, a server is a binary somebody presses a button to replace. Below
- * {@link CONVENTIONS_NARROWED_IN} the server still makes round 1 of every code role the conventions
- * pass, so this panel would show `Universal` for a round that runs `conventions`. Raised by three
- * reviewers independently on the round that shipped the narrowing, and it is the only one of their
- * version-skew findings that a test can hold.</p>
+ * <p>The two agree in the SOURCE, and are installed apart — an extension updates itself, a server
+ * is a binary somebody presses a button to replace. Below {@link CONVENTIONS_ROLE_SINCE} the server
+ * does not know `Conventions` is a role at all, so a code round asks for a role its enum cannot
+ * parse. Raised by three reviewers as version skew when the warning was about a wrong prompt; the
+ * skew got worse, and the warning with it.</p>
  */
 test('a panel ahead of its server says so, instead of showing a round the server will not run', () => {
   const withServer = (server: PanelState['server']): string =>
     panelHtml({ ...baseState(), server }, 'n0nce');
 
   const behind = withServer({ kind: 'known', version: '0.18.7', remembered: true, updateOffered: true });
-  assert.ok(behind.includes('still runs'), 'an older server is named');
+  assert.ok(behind.includes('does not'), 'an older server is named');
   assert.ok(behind.includes('0.18.7'), 'and so is the version that is there');
 
-  // 0.18.8 by name, because it is the one everybody has: it shipped the Team-server reviewer fix
-  // hours before this change and does NOT carry the narrowed conventions rule. The constant moved
-  // from 0.18.8 to 0.18.9 for that reason, and this line is what would catch it moving back.
-  const released = withServer({ kind: 'known', version: '0.18.8', remembered: true, updateOffered: true });
-  assert.ok(released.includes('still runs'), '0.18.8 predates the narrowing and must say so');
+  // 0.18.9 by name, because it is the one everybody has: it is yesterday's release and it has
+  // four roles. This line is what would catch the constant sliding back onto it.
+  const released = withServer({ kind: 'known', version: '0.18.9', remembered: true, updateOffered: true });
+  assert.ok(released.includes('does not know'), '0.18.9 predates the role and must say so');
 
-  const current = withServer({ kind: 'known', version: CONVENTIONS_NARROWED_IN, remembered: true, updateOffered: false });
-  assert.ok(!current.includes('still runs'), 'the server that agrees says nothing');
+  const current = withServer({ kind: 'known', version: CONVENTIONS_ROLE_SINCE, remembered: true, updateOffered: false });
+  assert.ok(!current.includes('does not know'), 'the server that agrees says nothing');
 
   const newer = withServer({ kind: 'known', version: '0.19.0', remembered: true, updateOffered: false });
-  assert.ok(!newer.includes('still runs'), 'nor does a later one');
+  assert.ok(!newer.includes('does not know'), 'nor does a later one');
 
   const absent = withServer({ kind: 'absent', version: '', remembered: false, updateOffered: false });
-  assert.ok(!absent.includes('still runs'), 'a server nobody has installed is not behind');
+  assert.ok(!absent.includes('does not know'), 'a server nobody has installed is not behind');
 });
 
 test('a later round never shows a lens nobody selected', () => {

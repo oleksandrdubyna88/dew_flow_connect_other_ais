@@ -9,6 +9,13 @@ namespace CoaiMcp.Runners.Reviewers;
 public enum ReviewRole
 {
     PlanCritique,
+
+    /// <summary>
+    /// The written rules and nothing else. First among the code roles, and a role since
+    /// 2026-09-08: before that it was a PROMPT the other code roles could be given, so it had to
+    /// borrow one of their rounds and its findings counted against their threshold.
+    /// </summary>
+    Conventions,
     Architecture,
     SecurityReliability,
     UxDxPerformance,

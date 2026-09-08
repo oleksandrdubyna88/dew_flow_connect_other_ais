@@ -17,10 +17,15 @@ const reader = (values: Record<string, unknown>) => (section: string) => values[
  */
 test('defaults match the master plan configuration table', () => {
   assert.equal(DEFAULTS.rounds['PlanCritique'], 1, 'one plan round: the later ones re-raise');
-  assert.equal(DEFAULTS.rounds['Architecture'], 2, 'conventions first, then the broad question');
+  assert.equal(DEFAULTS.rounds['Conventions'], 1, 'the written rules, once');
+  // ONE round since Conventions became a role. Architecture had two because the first was
+  // the conventions pass and the second its own question; take the pass away and the second
+  // is the only real round it had.
+  assert.equal(DEFAULTS.rounds['Architecture'], 1);
   assert.equal(DEFAULTS.rounds['SecurityReliability'], 1);
   assert.equal(DEFAULTS.rounds['UxDxPerformance'], 1);
   assert.equal(DEFAULTS.thresholds['PlanCritique'], 6, 'six findings on a plan is a Tuesday');
+  assert.equal(DEFAULTS.thresholds['Conventions'], 5);
   assert.equal(DEFAULTS.thresholds['Architecture'], 5);
   assert.equal(DEFAULTS.thresholds['SecurityReliability'], 5);
   assert.equal(DEFAULTS.thresholds['UxDxPerformance'], 5);

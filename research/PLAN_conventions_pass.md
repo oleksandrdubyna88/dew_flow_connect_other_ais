@@ -1,21 +1,22 @@
 # PLAN — the gate reads the project's own rules, and one pass checks nothing else
 
-> Status: **IMPLEMENTED, 2026-09-01 — and NARROWED on 2026-09-07.** Scope: `src_mcp/core/Rounds`
-> (per-stage config, prompt catalog), `src_mcp/runners/Context` (rule discovery),
-> `src_mcp/src/Server/PanelService.cs`, `src_mcp/src/prompts/`, and the panel's Prompts and Gate
-> sections.
+> Status: **IMPLEMENTED 2026-09-01, RESHAPED 2026-09-07, and SUPERSEDED 2026-09-08.** Scope:
+> `src_mcp/core/Rounds` (per-stage config, prompt catalog), `src_mcp/runners/Context` (rule
+> discovery), `src_mcp/src/Server/PanelService.cs`, `src_mcp/src/prompts/`, and the panel's Prompts
+> and Gate sections.
 >
-> **The default is ARCHITECTURE round 1 now, not every code role's round 1.** Read the design below
-> as written — the pass itself, the prompt, the rule discovery and the "default, not a lock" rule
-> are all unchanged, and the picker still offers `Conventions` to all three roles. What changed is
-> which round gets it without being asked.
+> **The pass is a ROLE now, and the mechanism this plan describes is gone.** Read it for the
+> reasoning — why a reviewer holding a change to the project's own written rules is worth a pass of
+> its own, what the prompt may and may not call a finding, how the rules are discovered — all of
+> that is current. What is obsolete is the delivery: a prompt substituted into round 1 of a code
+> role, guarded by `hasRules`.
 >
-> Why: running it on all three showed the same written rules read by three reviewers in the same
-> round, producing the same findings three times — and with the shipped budget now at ONE round for
-> Security & reliability and for Performance & UX-DX, that round was spent on conventions and the
-> role never asked its own question at all. Architecture keeps it because it has two rounds, the
-> rules and then the broad question, so nothing it used to ask is lost. The operator's decision, on
-> the budget they run.
+> It moved three times because the mechanism was always fighting the same problem: the pass had no
+> budget. It borrowed round 1 of every code role, then (2026-09-07) of Architecture alone, and each
+> time the borrowing was the complaint — a role that spent its only round on conventions never asked
+> its own question. `Conventions` is a role with its own rounds and its own threshold now, and
+> `PromptCatalog.ForRound` has no special case left in either program. See
+> [PLAN_conventions_is_its_own_role.md](PLAN_conventions_is_its_own_role.md).
 >
 > Related docs: [module_server.md](module_server.md), [module_runners.md](module_runners.md),
 > [module_extension.md](module_extension.md),

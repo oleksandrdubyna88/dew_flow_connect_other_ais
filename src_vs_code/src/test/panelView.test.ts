@@ -656,9 +656,11 @@ test('the code stage states its own arithmetic, in the numbers actually configur
     'n0nce',
   );
 
-  assert.match(html, /2 vendors × 3 roles = 6 reviewers/);
+  // Four code roles since Conventions became one of them, and the sentence counts ROLES
+  // rather than a literal — which is what let it say "3 roles" under four boxes.
+  assert.match(html, /2 vendors × 4 roles = 8 reviewers/);
   assert.match(html, /each runs once per round/i, 'the answer to the question that was actually asked');
-  assert.match(html, /up to 2 rounds/);
+  assert.match(html, /up to 1 round/);
 });
 
 test('a disabled vendor is not counted in the arithmetic', () => {
@@ -672,7 +674,7 @@ test('a disabled vendor is not counted in the arithmetic', () => {
     'n0nce',
   );
 
-  assert.match(html, /1 vendor × 3 roles = 3 reviewers/, 'a reviewer that will not run is not one');
+  assert.match(html, /1 vendor × 4 roles = 4 reviewers/, 'a reviewer that will not run is not one');
 });
 
 test('the panel names the side it is about to keep settings for', () => {

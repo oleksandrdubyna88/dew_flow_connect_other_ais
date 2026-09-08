@@ -36,6 +36,18 @@ public sealed record PromptChoice(string Id, string Role, string Label, string P
 public static class PromptCatalog
 {
     public const string PlanRole = "PlanCritique";
+
+    /// <summary>
+    /// The conventions pass, a ROLE since 2026-09-08 rather than a prompt the other code roles
+    /// could be given.
+    /// </summary>
+    /// <remarks>
+    /// It had no budget of its own before: it competed for a role's rounds, so giving it one took
+    /// a round away from architecture or security, and its findings counted against that role's
+    /// threshold. It behaved like a role, and now it is one — listed first, because a broken
+    /// written rule is the cheapest finding to act on and the least arguable.
+    /// </remarks>
+    public const string ConventionsRole = "Conventions";
     public const string ArchitectureRole = "Architecture";
     public const string SecurityRole = "SecurityReliability";
     public const string UxDxRole = "UxDxPerformance";
@@ -49,6 +61,8 @@ public static class PromptCatalog
 
     public static readonly ImmutableArray<PromptChoice> All =
     [
+        new(ConventionsId, ConventionsRole, "Conventions", ConventionsPurpose, true),
+
         new("plan-critique", PlanRole, "Universal", "The whole plan: assumptions, failure paths, order, testability.", true),
         new("plan-assumptions", PlanRole, "Assumptions & verification", "What the plan takes for granted, and what it promises but never checks.", false),
         new("plan-human-path", PlanRole, "The human path", "What a person does with it, and what happens when they do it wrong.", false),
@@ -56,7 +70,6 @@ public static class PromptCatalog
         new("plan-operability", PlanRole, "Operability", "What it is like to run this at 3 a.m.: what is observable, what is alertable, what is diagnosable.", false),
         new("plan-scope-creep", PlanRole, "Scope & budget", "What this plan quietly takes on beyond its goal, and what it will cost to keep.", false),
 
-        new(ConventionsId, ArchitectureRole, "Conventions", ConventionsPurpose, false),
         new("architecture", ArchitectureRole, "Universal", "Boundaries, abstractions, consistency, and the plan-to-code gap.", true),
         new("arch-boundaries", ArchitectureRole, "Boundaries & duplication", "Dependency direction, layers reaching around each other, capabilities implemented twice.", false),
         new("arch-evolution", ArchitectureRole, "Cost of the next change", "What this change makes harder, and what is hard-coded that will have to vary.", false),
@@ -64,7 +77,6 @@ public static class PromptCatalog
         new("arch-naming", ArchitectureRole, "Names & the shape they imply", "Where a name promises a shape the code does not have — the misreading it invites next.", false),
         new("arch-testability", ArchitectureRole, "Testability of the seams", "Which decision here can only be tested by starting a server, a browser or a clock.", false),
 
-        new(ConventionsId, SecurityRole, "Conventions", ConventionsPurpose, false),
         new("security-reliability", SecurityRole, "Universal", "Secrets, input, failure behaviour, state, trust boundaries.", true),
         new("sec-memory-leaks", SecurityRole, "What it holds and leaves", "Secrets that outlive their use, resources leaked on the error path, what a kill -9 leaves behind.", false),
         new("sec-attack", SecurityRole, "Attack surface", "What is trusted that was never checked, injection, privilege, and checks that fail open.", false),
@@ -72,7 +84,6 @@ public static class PromptCatalog
         new("sec-concurrency", SecurityRole, "Two at once", "The same code running twice, a millisecond apart, over the state they share.", false),
         new("sec-supply-chain", SecurityRole, "What this change trusts", "Every input, dependency and endpoint it believes without checking — and who can change them.", false),
 
-        new(ConventionsId, UxDxRole, "Conventions", ConventionsPurpose, false),
         new("uxdx-performance", UxDxRole, "Universal", "Performance, UI state as code, and the ergonomics of a new API.", true),
         new("perf-scale", UxDxRole, "Cost at scale", "Which input grows, and what this code does when it does.", false),
         new("dx-ergonomics", UxDxRole, "Ergonomics & waiting", "Names that mislead, errors that name no cure, and work a person waits on.", false),
@@ -96,15 +107,10 @@ public static class PromptCatalog
     /// blank or unknown falls through to the rotation or the universal prompt, so a stale setting
     /// can never leave a round with no prompt at all.
     /// </param>
-    /// <param name="hasRules">
-    /// Whether the repository under review actually wrote any conventions down. Round 1 of a code
-    /// role is the conventions pass only when it did.
-    /// </param>
     public static PromptChoice ForRound(
         string role,
         int round,
-        IReadOnlyList<string> chosen,
-        bool hasRules = false)
+        IReadOnlyList<string> chosen)
     {
         var index = Math.Max(round, 1) - 1;
         if (index < chosen.Count && For(role).FirstOrDefault(p => p.Id == chosen[index]) is { } picked)
@@ -112,30 +118,15 @@ public static class PromptCatalog
             return picked;
         }
 
-        // ROUND ONE of the code stage belongs to the written rules, when there are any.
+        // No special case for round one any more. It used to substitute the conventions pass —
+        // for every code role, then for Architecture alone — because that pass had no budget of
+        // its own and had to borrow somebody's round. `ConventionsRole` has its own rounds now, so
+        // there is nothing to substitute and nothing here that the panel's `selectedFor` has to
+        // mirror beyond "what was chosen, else this role's universal prompt".
         //
-        // Three reviewers already cover architecture, security and performance, each with its own
-        // taste; the one thing none of them was doing is holding the change to the standard the
-        // project WROTE DOWN — which is the standard its human authors are held to, so the two
-        // halves were being judged differently by construction. It takes round 1 because a broken
-        // written rule is the cheapest finding to act on and the least arguable: there is a sentence
-        // to point at.
-        //
-        // Only when rules were actually found. A conventions pass with nothing to judge against
-        // would invent a standard, which is worse than the review it displaced. And an explicit
-        // choice above still wins: this is a default, not a lock.
-        // ARCHITECTURE only, since 2026-09-07. It took round 1 of all three code roles first, and
-        // running that way showed why it should not: three reviewers reading the same written rules
-        // in the same round produce the same findings three times, and the two rounds a security or
-        // performance role gets by default are then one round of conventions and none of its own
-        // subject. Architecture keeps it because that role has two rounds — the rules, then the
-        // broad question — so nothing it was asked before is lost. The operator's call, on the
-        // budget they run.
-        if (hasRules && index == 0 && role == ArchitectureRole)
-        {
-            return For(role).First(p => p.Id == ConventionsId);
-        }
-
+        // `hasRules` left with the branch. Whether the repository wrote any rules down decides
+        // whether the Conventions ROLE runs at all, which is a question for the caller assembling
+        // the round, not for a prompt lookup.
         return For(role).First(p => p.Universal);
     }
 }

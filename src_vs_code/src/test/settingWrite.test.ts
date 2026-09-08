@@ -2,6 +2,7 @@ import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { panelHtml } from '../panelView';
+import { ROLES } from '../prompts';
 import {
   DEFAULTS,
   OVERLAID_SETTINGS,
@@ -114,7 +115,10 @@ test('every role id the panel writes to is a role, and no vendor shares the name
 
   const roles = new Set([...html.matchAll(/data-role="([^"]+)"/g)].map((m) => m[1]!));
 
-  assert.deepEqual([...roles].sort(), ['Architecture', 'PlanCritique', 'SecurityReliability', 'UxDxPerformance']);
+  // Against ROLES rather than a written-out list: this test is about the panel writing to a
+  // REAL role and not colliding with a vendor id, and spelling the roles here made it a
+  // second assertion about which roles exist — red the day one was added.
+  assert.deepEqual([...roles].sort(), ROLES.map((r) => r.id).sort());
   for (const role of roles) {
     assert.ok(!VENDOR_IDS.includes(role), `${role} collides with a vendor id, which is how this defect hid`);
   }
