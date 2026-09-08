@@ -1,0 +1,263 @@
+name: deploy the Team server
+
+# Updates `coai.remsoft.dev` to a published `server-v*` release.
+#
+# What this workflow does NOT do is the point of it: it does not restart the unit, swap a symlink,
+# keep a release trail or decide that a deployment is healthy. `deploy/systemd-release.sh` on the
+# host owns all four, and it is far better at them than a workflow step would ever grow to be — an
+# immutable version-addressed release directory, `bin` swapped by ONE rename syscall, a trail a
+# second consecutive rollback still reads correctly, and a canary that runs one real review per
+# configured vendor because `systemctl is-active` reported healthy every day the server ran
+# without completing a single review.
+#
+# So this file's whole job is: check the request, put the PUBLISHED artefact on the host, run that
+# script, and prove afterwards that the version answering the internet is the one that was asked
+# for — rolling back through the same script when it is not.
+#
+# Dispatch rather than `on: release`: a deploy that fired itself on a tag would have restarted the
+# live server in the middle of the load campaign that ran against it on 2026-09-08. Cutting a
+# release and choosing to interrupt live reviews are the same person's decisions here, but they
+# are not the same decision.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The published server version to deploy, e.g. 0.5.5'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  # The RID the host runs. A knob rather than a literal, because the other five exist and an arm64
+  # box is a plausible move for this server; it is NOT an input, because the person dispatching a
+  # deploy is choosing a version, not an architecture.
+  HOST_RID: linux-x64
+
+jobs:
+  # Deliberately OUTSIDE the production environment: a typo must not spend somebody's approval, and
+  # a version whose release failed halfway must be refused before anything touches the host.
+  preflight:
+    name: the request is answerable
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.check.outputs.tag }}
+      asset: ${{ steps.check.outputs.asset }}
+    steps:
+      - id: check
+        env:
+          # Through the environment, never interpolated into the script. A `${{ }}` inside a `run:`
+          # block is substituted BEFORE bash sees the text, so a version containing a quote and a
+          # semicolon would become part of the command rather than an argument to it.
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The strict shape, because this value ends up as an argument to a command that runs as
+          # root on the host. `0.5.5; systemctl disable coai-server` is an ordinary thing to type
+          # into a text box, and an approval gate does not read what it approves.
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$'; then
+            echo "'$VERSION' is not a version — expected 0.5.5, or 0.5.5-rc.1"
+            exit 1
+          fi
+
+          TAG="server-v$VERSION"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "there is no release $TAG — cut the tag first, and let the release workflow finish"
+            exit 1
+          fi
+
+          # The archive for the RID the host actually runs. A release that built five of six
+          # platforms is green from every angle except this one.
+          ASSET="coai-server-$VERSION-$HOST_RID.tar.gz"
+          if ! gh release view "$TAG" --json assets --jq '.assets[].name' | grep -qx "$ASSET"; then
+            echo "release $TAG carries no $ASSET — the host runs $HOST_RID and there is nothing to deploy"
+            gh release view "$TAG" --json assets --jq '.assets[].name'
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "asset=$ASSET" >> "$GITHUB_OUTPUT"
+          echo "$TAG carries $ASSET"
+
+  deploy:
+    name: deploy to coai.remsoft.dev
+    needs: preflight
+    runs-on: ubuntu-latest
+    # Where the required reviewer and the deploy secrets both live. Without it, a workflow that can
+    # reach the host from any branch is a workflow anyone with push access can point at the
+    # company's paid subscriptions.
+    environment: production
+    steps:
+      # Its own step, naming each one. A deploy whose secrets are missing must never be a green job
+      # that did nothing — the entire point of this workflow is that somebody believes the server
+      # was updated afterwards.
+      - name: The secrets this needs
+        env:
+          COAI_DEPLOY_HOST: ${{ secrets.COAI_DEPLOY_HOST }}
+          COAI_DEPLOY_USER: ${{ secrets.COAI_DEPLOY_USER }}
+          COAI_DEPLOY_KEY: ${{ secrets.COAI_DEPLOY_KEY }}
+          COAI_DEPLOY_KNOWN_HOSTS: ${{ secrets.COAI_DEPLOY_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          MISSING=""
+          for name in COAI_DEPLOY_HOST COAI_DEPLOY_USER COAI_DEPLOY_KEY COAI_DEPLOY_KNOWN_HOSTS; do
+            [ -n "${!name:-}" ] || MISSING="$MISSING $name"
+          done
+          if [ -n "$MISSING" ]; then
+            echo "::error::this deploy cannot run:$MISSING is not set on the production environment"
+            exit 1
+          fi
+
+      - name: The key and the host key
+        env:
+          COAI_DEPLOY_KEY: ${{ secrets.COAI_DEPLOY_KEY }}
+          COAI_DEPLOY_KNOWN_HOSTS: ${{ secrets.COAI_DEPLOY_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$COAI_DEPLOY_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$COAI_DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      # There is NO `StrictHostKeyChecking=no` fallback anywhere in this file, because a fallback
+      # is the vulnerability it would be protecting against: it hands a root key to whoever answers
+      # on port 22. What this step adds instead is a sentence, because `Host key verification
+      # failed` in the middle of a deploy sends an operator to retry a network problem they do not
+      # have — the host was rebuilt, and the secret is what needs updating.
+      - name: Reach the host, and say which failure it is when it cannot
+        env:
+          HOST: ${{ secrets.COAI_DEPLOY_HOST }}
+          USER_NAME: ${{ secrets.COAI_DEPLOY_USER }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          OUT=$(ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes \
+                    -o ConnectTimeout=15 "$USER_NAME@$HOST" \
+                    'test -x /opt/coai/src/deploy/systemd-release.sh && echo ok' 2>&1)
+          STATUS=$?
+          printf '%s\n' "$OUT"
+          if [ "$STATUS" -ne 0 ]; then
+            case "$OUT" in
+              *"Host key verification failed"*|*"REMOTE HOST IDENTIFICATION HAS CHANGED"*)
+                echo "::error::the host key does not match COAI_DEPLOY_KNOWN_HOSTS — if $HOST was rebuilt, update that secret; if it was not, do NOT deploy" ;;
+              *"Permission denied"*)
+                echo "::error::$USER_NAME@$HOST refused the deploy key — COAI_DEPLOY_KEY is not authorised there" ;;
+              *"Connection timed out"*|*"Could not resolve"*|*"No route to host"*)
+                echo "::error::$HOST is unreachable from this runner" ;;
+              *)
+                echo "::error::the release script is not executable at /opt/coai/src/deploy/systemd-release.sh" ;;
+            esac
+            exit 1
+          fi
+
+      # Downloaded, not rebuilt. Building on the host costs three minutes of a 3.8 GB box whose
+      # unit carries `MemoryMax=1500M`, to produce a binary this repository already built, tested
+      # and smoked for exactly this RID.
+      - name: Take the published artefact, and check it is the one
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.preflight.outputs.tag }}
+          ASSET: ${{ needs.preflight.outputs.asset }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --pattern "$ASSET" --pattern "$ASSET.sha256" --dir .
+          sha256sum -c "$ASSET.sha256"
+          tar tzf "$ASSET" | head -20
+
+      - name: Put it on the host and run the release script
+        env:
+          HOST: ${{ secrets.COAI_DEPLOY_HOST }}
+          USER_NAME: ${{ secrets.COAI_DEPLOY_USER }}
+          VERSION: ${{ inputs.version }}
+          ASSET: ${{ needs.preflight.outputs.asset }}
+          # A PATH on the host, not a value: a token on a command line reaches `ps aux` and the
+          # shell history of a root session. The file is the host operator's to place.
+          TOKEN_FILE: ${{ vars.COAI_CANARY_TOKEN_FILE || '/etc/coai-canary.token' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          scp -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes \
+              "$ASSET" "$USER_NAME@$HOST:/tmp/$ASSET"
+
+          # One remote command, no inline script. The unpacking that would otherwise live in a
+          # heredoc here belongs to `--from`, which takes the archive itself — a shell fragment
+          # embedded in a workflow is the copy of the release procedure nobody would ever test.
+          #
+          # `$VERSION` reaches the remote shell as its own argv element, and it passed the pattern
+          # in `preflight` before this job existed: it holds digits, dots and dashes, so there is
+          # nothing here for a shell to re-parse into a second command.
+          ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes \
+              "$USER_NAME@$HOST" \
+              env "COAI_TOKEN_FILE=$TOKEN_FILE" \
+              /opt/coai/src/deploy/systemd-release.sh --from "/tmp/$ASSET" "$VERSION"
+
+      # The script's canary proves reviews work behind the swap. This proves the version answering
+      # the internet is the one that was asked for — loopback first, so a failure separates "the
+      # unit is wrong" from "the edge is wrong" instead of blaming whichever is checked.
+      #
+      # Retried, because nginx and the unit do not come back in the same millisecond and a single
+      # curl one second after a restart measures the restart.
+      - name: The version serving the internet is the one that was asked for
+        id: verify
+        env:
+          HOST: ${{ secrets.COAI_DEPLOY_HOST }}
+          USER_NAME: ${{ secrets.COAI_DEPLOY_USER }}
+          VERSION: ${{ inputs.version }}
+          PUBLIC_URL: ${{ vars.COAI_PUBLIC_URL || 'https://coai.remsoft.dev' }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          SSH="ssh -i $HOME/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes"
+
+          LOCAL=$($SSH "$USER_NAME@$HOST" 'curl -fsS --max-time 5 http://127.0.0.1:8090/api/health' 2>&1 || true)
+          echo "loopback: $LOCAL"
+
+          PUBLIC=""
+          for _ in $(seq 1 30); do
+            PUBLIC=$(curl -fsS --max-time 5 "$PUBLIC_URL/api/health" 2>/dev/null || true)
+            printf '%s' "$PUBLIC" | grep -q "\"version\":\"$VERSION\"" && break
+            sleep 2
+          done
+          echo "public: $PUBLIC"
+
+          if ! printf '%s' "$PUBLIC" | grep -q "\"version\":\"$VERSION\""; then
+            echo "::error::$PUBLIC_URL reports '$PUBLIC' after deploying $VERSION"
+            exit 1
+          fi
+          echo "$PUBLIC_URL is serving $VERSION"
+
+      # The window this closes: the script swaps `bin` and canaries behind it, and everything after
+      # that used to be a red job over a live server still running the new release. `--rollback`
+      # pops the trail — it BUILDS nothing and takes seconds — and the summary says it ran, because
+      # a rollback nobody is told about is a second incident.
+      - name: Roll back, because the deploy did not prove itself
+        if: failure() && steps.verify.outcome == 'failure'
+        env:
+          HOST: ${{ secrets.COAI_DEPLOY_HOST }}
+          USER_NAME: ${{ secrets.COAI_DEPLOY_USER }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          OUT=$(ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes \
+                    "$USER_NAME@$HOST" '/opt/coai/src/deploy/systemd-release.sh --rollback' 2>&1)
+          STATUS=$?
+          printf '%s\n' "$OUT"
+          if [ "$STATUS" -eq 0 ]; then
+            echo "### The deploy was rolled back" >> "$GITHUB_STEP_SUMMARY"
+            echo "The new release did not answer with its own version, so the previous deployment was restored." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::the rollback ALSO failed — the server may be down; read /opt/coai/logs and run systemd-release.sh --list on the host"
+            echo "### The rollback failed" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          printf '%s\n' "$OUT" >> "$GITHUB_STEP_SUMMARY"

@@ -638,3 +638,38 @@ Behind the **host** nginx on the CredsForDevs VM — not the vault's container, 
 and terminates no TLS. `coai.remsoft.dev` has its own site file and its own certificate; the app
 binds `127.0.0.1:8090` and nothing else can reach it. See the plan's *Deployment* section for the
 topology and for why the box's 3.8 GB of RAM is a design input rather than a footnote.
+
+## How it is released, and how it is deployed (2026-09-08)
+
+A `server-v*` tag publishes **two shapes, because two deployments consume different things**:
+
+| Artefact | Who it is for |
+|---|---|
+| `ghcr.io/<owner>/coai-server:<version>` + `:latest`, multi-arch | a container host — `deploy/update.sh` |
+| six Native AOT archives, on a **GitHub Release** | this host, and anyone reading `…/releases` |
+
+The binaries were missing until 2026-09-08, and the gap was not academic: the host runs the AOT
+binary under systemd, so the one artefact the real deployment consumes was the only thing the tag
+did not produce. **0.5.5 reached the internet built by hand on the box**, from a commit no tag
+names, into a directory called `0.5.5-STAMP` — the version placeholder unsubstituted, which is how
+far a number can drift from anything checkable.
+
+The **Release** matters separately from the tag: the panel's update check reads
+`api.github.com/repos/…/releases` and filters by prefix (`src_vs_code/src/installer.ts`), so a bare
+`server-v*` tag is invisible to it and *latest published server* could never fire.
+
+**The smoke is not the mcp job's.** `coai-mcp` answers `--version` and exits; this server has no
+argument surface — the only way to ask a binary what it is, is to run it and read `/api/health`. So
+the smoke starts the published binary on `127.0.0.1:5099` with `Auth:Local` and one allowed domain
+(exactly what `Startup.Guard` demands), polls to a 60-second deadline, prints the captured output
+on failure, and kills the process in a step that runs whatever happened. Every failure mode of a
+server is a WAIT, and a matrix job that hangs fails eventually with no reason anywhere.
+
+**Deploying** is [deploy-server.yml](../.github/workflows/deploy-server.yml), dispatched by hand,
+gated on the `production` environment. It validates the version against a strict pattern *before*
+anything reaches a root shell, refuses a release with no `linux-x64` archive before an approval is
+spent, downloads the archive and checks its `.sha256`, and then **runs `deploy/systemd-release.sh
+--from`** — it does not restart the unit, swap a symlink or judge health itself. Afterwards it
+asserts that the public URL reports the deployed version, and rolls back through the same script
+when it does not: the window between the script's canary and a person noticing used to be a live
+server on an unproven release with only a red job to say so.

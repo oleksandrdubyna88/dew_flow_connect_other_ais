@@ -75,8 +75,51 @@ builds nothing and is **one command**, and a look inside the artefact before it 
 | | |
 |---|---|
 | `systemd-release.sh 0.5.4` | publish → inspect → switch → canary, rolling itself back if any step fails |
+| `systemd-release.sh --from <path> 0.5.4` | the same, from an artefact CI already built — a directory or the release `.tar.gz` |
 | `systemd-release.sh --rollback` | pop one deployment off the trail. No build. Seconds. |
 | `systemd-release.sh --list` | what is live and what is retained |
+
+### From CI — `deploy the Team server`
+
+Since the `server-v*` release line publishes binaries, the ordinary way to update this host is the
+**[deploy-server.yml](../.github/workflows/deploy-server.yml)** workflow: *Actions → deploy the Team
+server → Run workflow*, and type the version.
+
+```
+version 0.5.5
+  → refuses anything that is not a version, before an approval is spent
+  → refuses a version whose release has no linux-x64 archive
+  → production environment: someone approves
+  → downloads the archive, checks its .sha256, scp to the host
+  → systemd-release.sh --from /tmp/<archive> 0.5.5   ← the same script, the same canary
+  → asserts https://coai.remsoft.dev/api/health reports 0.5.5
+  → on any failure after the swap: systemd-release.sh --rollback, and says so
+```
+
+It **runs the script rather than replacing it**: the release trail, the atomic symlink swap, the
+per-vendor canary and the rollback stay in one place that a person can also run by hand. What the
+workflow adds is what a person cannot do from the host: the artefact comes from a build that was
+tested and smoked on this RID, so the box stops linking Native AOT under a `MemoryMax=1500M` unit,
+and the version answering the public URL is asserted afterwards by something that is not the server.
+
+It is **dispatched, never automatic**. A deploy that fired itself on a tag would have restarted this
+server in the middle of the load campaign that ran against it on 2026-09-08.
+
+Four secrets on the `production` environment, and the run stops naming any that is missing:
+
+| Secret | What it is |
+|---|---|
+| `COAI_DEPLOY_HOST` | the host to reach |
+| `COAI_DEPLOY_USER` | the account to reach it as |
+| `COAI_DEPLOY_KEY` | its private key |
+| `COAI_DEPLOY_KNOWN_HOSTS` | the host's public key — `ssh-keyscan <host>`. There is no `StrictHostKeyChecking=no` anywhere in that file, because a fallback hands a deploy key to whoever answers on port 22. If the host is rebuilt, this secret is what needs updating, and the failure says so in those words. |
+
+Two optional repository *variables*: `COAI_PUBLIC_URL` (default `https://coai.remsoft.dev`) and
+`COAI_CANARY_TOKEN_FILE` (default `/etc/coai-canary.token`) — a PATH on the host, because the token
+itself must never cross into a workflow.
+
+The manual sequence above is not replaced: it is what an offline release, a commit no tag names, and
+a host that cannot reach GitHub still use.
 
 What it does that the old hand-run sequence did not:
 

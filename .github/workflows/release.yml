@@ -5,9 +5,12 @@ name: release
 #   extension-v0.8.0 → the .vsix, attached to the release AND published to the Marketplace
 #                      when the VSCE_PAT secret exists (without it, the publish step skips
 #                      OUT LOUD and the .vsix still lands on the release for a manual upload).
-#   server-v0.5.1    → a multi-arch `coai-server` image on ghcr.io. The Team server, which is
-#                      deployed rather than downloaded, so there is nothing to attach to a
-#                      release — the artefact IS the image.
+#   server-v0.5.1    → six Native AOT `coai-server` binaries AND a multi-arch image on ghcr.io.
+#                      Both, because the two deployment shapes consume different things: a
+#                      container host pulls the image, and `coai.remsoft.dev` runs the binary
+#                      under systemd (deploy/README.md). The GitHub RELEASE is not decoration
+#                      either — the panel's update check reads `…/releases`, not the tag list
+#                      (src_vs_code/src/installer.ts), so a bare tag is invisible to it.
 # (The guard-without-a-trigger trap is documented in creds' release.yml — a job's `if` is not a
 # workflow trigger, so every tag shape is listed here.)
 on:
@@ -307,6 +310,235 @@ jobs:
             exit 0
           fi
           npx @vscode/vsce publish --no-dependencies --packagePath *.vsix -p "$VSCE_PAT"
+
+  # ---------------------------------------------------------------------------
+  # The Team server, as six Native AOT binaries.
+  #
+  # The images below are what a CONTAINER deployment consumes. `coai.remsoft.dev` is not one: it
+  # runs the AOT binary under systemd, because the three vendor CLIs are already installed on that
+  # host and an image that installed its own copies would add ~750 MB to duplicate them
+  # (deploy/README.md). So the artefact the real deployment uses was, until this job existed, the
+  # one thing a `server-v*` tag did not produce — and 0.5.5 reached the internet as a binary built
+  # by hand on the host, from a commit no tag names, in a directory called `0.5.5-STAMP`.
+  #
+  # A sibling of `mcp-binaries` above, deliberately: the six-RID matrix, the retired-x64-runner
+  # story, the Linux toolchain step and the stamp-then-assert discipline were all solved there.
+  # ---------------------------------------------------------------------------
+  server-binaries:
+    name: coai-server (${{ matrix.rid }})
+    if: startsWith(github.ref, 'refs/tags/server-v')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            runner: ubuntu-latest
+          - rid: linux-arm64
+            runner: ubuntu-24.04-arm
+          - rid: win-x64
+            runner: windows-latest
+          - rid: win-arm64
+            runner: windows-11-arm
+          # Both macOS slices on the same arm64 runner, for the reason spelled out in the mcp
+          # matrix: `macos-13` was retired and a job targeting it QUEUES rather than fails.
+          - rid: osx-arm64
+            runner: macos-latest
+          - rid: osx-x64
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Toolchain (linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang zlib1g-dev
+
+      # The server's own suite, on this architecture, before its binary is published — the same
+      # rule the mcp job states: never ship a binary that has not passed its own tests here.
+      - name: Build and test
+        shell: bash
+        run: |
+          dotnet build dew_flow_connect_other_ais.slnx -c Release
+          if [ "${{ matrix.rid }}" = "osx-x64" ]; then
+            echo "osx-x64 is cross-built on an arm64 runner; its tests run in the osx-arm64 job."
+          else
+            ./src_server/tests/bin/Release/net10.0/CoaiServer.Tests${{ runner.os == 'Windows' && '.exe' || '' }}
+          fi
+
+      - name: The version this release stamps
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#server-v}" >> "$GITHUB_ENV"
+
+      - name: Publish
+        shell: bash
+        run: dotnet publish src_server/src/CoaiServer.csproj -c Release -r ${{ matrix.rid }} -p:Version=$VERSION -o out
+
+      # The smoke, and the one step of this job that is NOT the mcp job's.
+      #
+      # `coai-mcp` answers `--version` on stdout. The server has no argument surface at all: it
+      # answers `/api/health` with `{ok, version}` (src_server/src/Program.cs), from the assembly's
+      # informational version. So the only way to ask this binary what it is, is to RUN it — which
+      # makes every failure mode a wait rather than an exit code, and that is what the deadline,
+      # the captured log and the unconditional kill below are for.
+      #
+      # The three settings are exactly what `Startup.Guard` demands: an authentication scheme and a
+      # domain boundary. `Auth:Local` is the scheme that needs no tenant, and the guard REFUSES it
+      # beside a real provider — so this configuration cannot silently weaken a real one.
+      - name: Smoke the published binary
+        id: smoke
+        shell: bash
+        run: |
+          set -uo pipefail
+          EXE=./out/coai-server${{ runner.os == 'Windows' && '.exe' || '' }}
+          LOG="$RUNNER_TEMP/server.log"
+          DATA="$RUNNER_TEMP/data"
+          mkdir -p "$DATA"
+
+          Coai__DataDir="$DATA" \
+          Coai__AllowedDomains=example.test \
+          Coai__RequireForwardedHttps=false \
+          Auth__Local__SigningKey=smoke-only-key-that-is-long-enough-32 \
+          ASPNETCORE_URLS=http://127.0.0.1:5099 \
+            "$EXE" >"$LOG" 2>&1 &
+          echo "PID=$!" >> "$GITHUB_ENV"
+
+          # A cross-built binary cannot run here at all, and the message that says so is the ONE
+          # failure allowed to skip. It is checked FIRST, before any polling: the mcp smoke runs a
+          # command that exits, so it could test the message afterwards. Polling a process that
+          # never started would burn the whole deadline and then report "the server did not bind",
+          # which names the wrong problem.
+          sleep 2
+          if grep -q 'Bad CPU type' "$LOG" 2>/dev/null; then
+            echo "osx-x64 cannot be executed on this arm64 runner; smoke skipped for this RID."
+            exit 0
+          fi
+
+          DEADLINE=60
+          HEALTH=""
+          for _ in $(seq 1 "$DEADLINE"); do
+            HEALTH=$(curl -fsS --max-time 2 http://127.0.0.1:5099/api/health 2>/dev/null || true)
+            [ -n "$HEALTH" ] && break
+            sleep 1
+          done
+
+          if [ -z "$HEALTH" ]; then
+            echo "the published binary did not answer /api/health within ${DEADLINE}s — its output follows"
+            cat "$LOG"
+            exit 1
+          fi
+
+          # The binary must report the version this release is stamping, for the reason the mcp job
+          # gives: the panel asks a file what it is instead of remembering what it downloaded, so a
+          # stamping step that silently stopped working would put that lie back one release later.
+          if ! printf '%s' "$HEALTH" | grep -q "\"version\":\"$VERSION\""; then
+            echo "the published binary reports $HEALTH but this release is 'coai-server $VERSION'"
+            cat "$LOG"
+            exit 1
+          fi
+          echo "healthy: $HEALTH"
+
+      # Unconditional, because the failure this exists for is a server that IGNORES its
+      # termination: a job that leaks the process can hold its runner until the workflow timeout.
+      - name: Stop the smoked server
+        if: always()
+        shell: bash
+        run: kill "${PID:-0}" 2>/dev/null || true
+
+      # The binary AND every `appsettings*.json` the publish emitted. The server reads its Serilog
+      # levels and its rate-limit defaults from those files, so a binary shipped alone starts with
+      # different behaviour than the one that was just smoked — and `Production` overrides, if this
+      # project ever grows them, are exactly the ones a deployment needs.
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          NAME="coai-server-$VERSION-${{ matrix.rid }}"
+          mkdir "$NAME"
+          BIN=coai-server${{ runner.os == 'Windows' && '.exe' || '' }}
+          cp "out/$BIN" "$NAME/"
+          SETTINGS=$(ls out/appsettings*.json 2>/dev/null || true)
+          if [ -z "$SETTINGS" ]; then
+            echo "the publish output carries no appsettings*.json — the shipped server would start on defaults nobody tested"
+            ls -la out
+            exit 1
+          fi
+          cp out/appsettings*.json "$NAME/"
+
+          if [[ "${{ matrix.rid }}" == win-* ]]; then
+            7z a "$NAME.zip" "$NAME" > /dev/null
+            echo "ASSET=$NAME.zip" >> "$GITHUB_ENV"
+            LISTING=$(7z l "$NAME.zip")
+          else
+            tar czf "$NAME.tar.gz" "$NAME"
+            echo "ASSET=$NAME.tar.gz" >> "$GITHUB_ENV"
+            LISTING=$(tar tzf "$NAME.tar.gz")
+          fi
+
+          # The ARCHIVE, not the directory it was made from — the same lesson the mcp job records
+          # about its native library: checking the publish output proves a file was BUILT, and what
+          # ships is this file, with a copy that silently did nothing sitting between the two.
+          # Separators normalised because `tar tzf` and `7z l` do not print the same shape.
+          if ! printf '%s' "$LISTING" | tr '\134' '/' | grep -Eq "(^|[[:space:]/])$NAME/appsettings"; then
+            echo "the archive does not carry appsettings beside the binary"
+            printf '%s' "$LISTING"
+            exit 1
+          fi
+
+      - name: Checksum
+        shell: bash
+        run: sha256sum "$ASSET" > "$ASSET.sha256"
+
+      # Six matrix legs race to create ONE release, so the create is expected to fail five times —
+      # and `|| true` would swallow every OTHER failure with it, which is how a release ends up
+      # with five archives and a green run. Tolerated only when `gh release view` then finds it.
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release create "$GITHUB_REF_NAME" \
+                --title "coai-server ${GITHUB_REF_NAME#server-v}" \
+                --notes "Native AOT builds of the ConnectOtherAIs Team server, and the multi-arch image at ghcr.io/${{ github.repository_owner }}/coai-server:${GITHUB_REF_NAME#server-v}." 2>/dev/null; then
+            gh release view "$GITHUB_REF_NAME" >/dev/null \
+              || { echo "the release could not be created and does not exist"; exit 1; }
+          fi
+          gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber
+          gh release upload "$GITHUB_REF_NAME" "$ASSET.sha256" --clobber
+
+  # A release with five archives and a swallowed error looks exactly like one with six from inside
+  # any single matrix leg. This job is the only place that can see all of them.
+  server-release-complete:
+    name: the server release carries every platform
+    if: startsWith(github.ref, 'refs/tags/server-v')
+    needs: [server-binaries, server-manifest]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Count what the release actually carries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED=6
+          ASSETS=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')
+          ARCHIVES=$(printf '%s\n' "$ASSETS" | grep -cE '\.(zip|tar\.gz)$' || true)
+          SUMS=$(printf '%s\n' "$ASSETS" | grep -cE '\.sha256$' || true)
+          printf '%s\n' "$ASSETS"
+          if [ "$ARCHIVES" -ne "$EXPECTED" ] || [ "$SUMS" -ne "$EXPECTED" ]; then
+            echo "expected $EXPECTED archives and $EXPECTED checksums, found $ARCHIVES and $SUMS"
+            exit 1
+          fi
+          echo "the release carries all $EXPECTED platforms, each with its checksum"
 
   # ---------------------------------------------------------------------------
   # The Team server, as a multi-arch image.

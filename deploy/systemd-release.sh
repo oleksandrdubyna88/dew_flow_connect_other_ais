@@ -8,6 +8,9 @@
 # command, and a look inside the artefact before it is trusted.
 #
 #   ./systemd-release.sh 0.5.4       publish, inspect, switch, canary — rolls itself back on failure
+#   ./systemd-release.sh --from <path> 0.5.4
+#                                    the same, from an artefact CI already built for this RID —
+#                                    a directory or the release .tar.gz. What deploy-server.yml uses.
 #   ./systemd-release.sh --rollback  pop one deployment off the trail, no build, seconds
 #   ./systemd-release.sh --list      what is retained and what is live
 #
@@ -174,6 +177,37 @@ take_the_lock() {
 }
 
 # ── commands ─────────────────────────────────────────────────────────────────────────────
+# ── where the artefact comes from ────────────────────────────────────────────────────────
+# Empty means BUILD it here, which is how this script started and stays the default: an offline
+# or air-gapped release must remain possible, and so must releasing a commit no tag names.
+#
+# `--from` takes what CI already built, tested and smoked for this RID — a directory, or the
+# release archive itself. That matters on this host specifically: the unit next door carries
+# `MemoryMax=1500M` on a 3.8 GB box, and a Native AOT link is the heaviest thing that ever runs
+# here. The artefact inspection below is deliberately NOT skipped for this path; it matters more,
+# because a download landing the wrong file is a failure a build cannot have.
+FROM=""
+if [[ "${1:-}" == "--from" ]]; then
+    FROM=${2:-}
+    [[ -n "$FROM" ]] || die "--from needs a directory or a .tar.gz — usage: $0 --from <path> <version>"
+    [[ -e "$FROM" ]] || die "--from $FROM does not exist"
+    shift 2
+    [[ "${1:-}" != --* ]] || die "--from takes a version, not '$1'"
+fi
+
+# Copy a published artefact into the new release directory. An archive is unpacked past its top
+# level, which is the shape `release.yml` packages: `coai-server-<version>-<rid>/coai-server`.
+stage_from() {
+    local source=$1 target=$2
+    mkdir -p "$target"
+    if [[ -d "$source" ]]; then
+        cp -a "$source/." "$target/"
+    else
+        tar xzf "$source" -C "$target" --strip-components=1
+    fi
+    chmod +x "$target/$SERVICE" 2>/dev/null || true
+}
+
 case "${1:-}" in
     --list)
         say "live:     $(readlink -f "$LIVE" 2>/dev/null || echo "$LIVE (not a symlink yet)")"
@@ -195,10 +229,10 @@ case "${1:-}" in
         exit 0
         ;;
     "")
-        die "usage: $0 <version> | --rollback | --list"
+        die "usage: $0 [--from <path>] <version> | --rollback | --list"
         ;;
     --*)
-        die "unknown option '$1' — usage: $0 <version> | --rollback | --list"
+        die "unknown option '$1' — usage: $0 [--from <path>] <version> | --rollback | --list"
         ;;
     *)
         : # a version to release; handled below
@@ -211,8 +245,13 @@ STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 RELEASE="$RELEASES/$VERSION-$STAMP"
 mkdir -p "$RELEASES"
 
-say "publishing $VERSION → $RELEASE"
-dotnet publish "$ROOT/src/src_server/src/CoaiServer.csproj" -c Release -o "$RELEASE" -p:Version="$VERSION"
+if [[ -n "$FROM" ]]; then
+    say "staging $VERSION from $FROM → $RELEASE"
+    stage_from "$FROM" "$RELEASE"
+else
+    say "publishing $VERSION → $RELEASE"
+    dotnet publish "$ROOT/src/src_server/src/CoaiServer.csproj" -c Release -o "$RELEASE" -p:Version="$VERSION"
+fi
 
 # Look INSIDE the artefact before trusting it. A build that reported success while silently
 # copying nothing is the measured trap this rule exists for, and a clean `0 error(s)` is not
