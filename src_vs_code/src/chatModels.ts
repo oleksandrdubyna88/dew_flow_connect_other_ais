@@ -1,4 +1,5 @@
 import { ChatModelChoice } from './chatPage';
+import { CHAT_RUNTIMES } from './cliChatLaunch';
 import { Vendor } from './vendors';
 
 /**
@@ -18,9 +19,6 @@ import { Vendor } from './vendors';
  * `vendor-routing.md` is explicit that a Claude model never goes through `agy`, and silently doing
  * it would be the exact failure that rule was written for.</p>
  */
-
-/** The runtimes this feature can actually talk to. One today; three when the adapter plan lands. */
-export const CHAT_RUNTIMES: readonly string[] = ['antigravity'];
 
 /** Why a row is not on offer, in words a person can act on. */
 export interface RefusedModel {

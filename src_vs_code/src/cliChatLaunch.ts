@@ -1,4 +1,3 @@
-import { CHAT_RUNTIMES } from './chatModels';
 import { Vendor } from './vendors';
 
 /**
@@ -12,6 +11,17 @@ import { Vendor } from './vendors';
  * is the argv half of that story, brought forward because the trigger needs it; the ledger half
  * stays open, and the plan still says so.</p>
  */
+
+/**
+ * The runtimes this feature can actually talk to. One today; three when the adapter plan lands.
+ *
+ * <p>It lives HERE, next to the argv that implements it, rather than in `chatModels.ts` where the
+ * picker is built. A capability belongs with the code that provides it: the old direction had the
+ * launch layer importing a constant out of a module that imports the PAGE, so a change to what the
+ * chat can speak began in the presentation half. Adding a runtime is now one file — this one — and
+ * the picker follows it. (codex, the second code round.)</p>
+ */
+export const CHAT_RUNTIMES: readonly string[] = ['antigravity'];
 
 /** What the chat needs from a launch, decided without touching the world. */
 export interface LaunchSpec {

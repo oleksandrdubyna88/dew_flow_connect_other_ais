@@ -32,16 +32,20 @@ import { Vendor, vendorsFrom } from './vendors';
 /** What a conversation is, beyond its process. Keyed by the entry's own id, weak so it dies with it. */
 interface Thread {
   /**
-   * The conversation itself.
+   * The conversation itself — REPLACED when the person picks another model.
    *
    * <p>Held here rather than widened into `ChatPanels`: the registry was written to need only
    * that a session can be ENDED, which is what makes its tests a dozen lines of fakes. Asking it
    * to know how a turn is sent would buy nothing and cost that.</p>
    */
-  readonly session: ChatSession;
+  session: ChatSession;
+  /** The directory that session runs in. Replaced with it, and released with it. */
+  home: ChatHome;
   readonly passage: string;
   readonly models: readonly ChatModelChoice[];
-  readonly modelId: string;
+  modelId: string;
+  /** The next answer comes from a process that never heard the earlier turns. Said once, then off. */
+  restarted: boolean;
   messages: readonly ChatMessage[];
   /**
    * The turns of THIS conversation, one after another.
@@ -163,8 +167,11 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   }
 
   // A restart is said in the transcript, not only in a flag nobody sees: the answer genuinely does
-  // not remember the earlier turns, and a reader comparing it with them deserves to know why.
-  const answer = result.contextLost === true
+  // not remember the earlier turns, and a reader comparing it with them deserves to know why. A
+  // model the PERSON switched to is the same situation arrived at deliberately, and says the same.
+  const restarted = result.contextLost === true || thread.restarted;
+  thread.restarted = false;
+  const answer = restarted
     ? `(the conversation restarted — this answer does not remember the earlier ones)\n\n${result.answer}`
     : result.answer;
   thread.messages = [...thread.messages, { role: 'model', text: answer }];
@@ -247,18 +254,65 @@ function matchedSession(panels: ChatPanels): ReturnType<typeof sourceSession> {
   return sourceSession(active, all, panels.known());
 }
 
+/** A vendor process in an empty directory of its own, and the directory, held together. */
+function started(vendor: Vendor): { session: ChatSession; home: ChatHome } {
+  const home: ChatHome = emptyTempDir();
+  const spec = launchSpecFor(vendor, home.dir);
+
+  return {
+    session: new CliChatSession(() => launch(spec.executable, spec.args, { cwd: spec.cwd }), DEFAULT_BUDGETS),
+    home,
+  };
+}
+
+/** The vendor row behind a model id, read fresh — the person may have edited settings since. */
+function vendorFor(modelId: string): Vendor | undefined {
+  return vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors')).find((row) => row.id === modelId);
+}
+
+/**
+ * The person chose a different model in the open tab.
+ *
+ * <p>A conversation is a process, so this is a new process: the old one is ended, its directory
+ * goes with it, and the next answer says the conversation restarted — the same sentence a death
+ * gets, because it is the same fact. The alternative was a picker that changed a caption and
+ * nothing else, which is a control that lies. (gemini, the second code round.)</p>
+ */
+function switchModel(entry: ChatEntry, modelId: string): void {
+  const thread = threads.get(entry.id);
+  if (thread === undefined || thread.modelId === modelId) {
+    return;
+  }
+  const vendor = vendorFor(modelId);
+  const refusal = vendor === undefined
+    ? `The model ${modelId} is no longer configured.`
+    : chatRuntimeRefusal(vendor);
+  if (vendor === undefined || refusal.length > 0) {
+    void vscode.window.showWarningMessage(refusal);
+    // The page has already moved its own select; put the state back so it stops claiming otherwise.
+    show(entry, false, refusal);
+
+    return;
+  }
+
+  thread.session.dispose();
+  thread.home.release();
+  const replacement = started(vendor);
+  thread.session = replacement.session;
+  thread.home = replacement.home;
+  thread.modelId = modelId;
+  thread.restarted = true;
+  show(entry, false, '');
+}
+
 /** Everything one new conversation is made of. Called ONLY when a tab has no panel yet. */
 function newConversation(
   panels: ChatPanels,
   ready: Extract<Ready, { ok: true }>,
   state: { readonly title: string; readonly passage: string; readonly draft: string },
 ): ChatEntry {
-  const home: ChatHome = emptyTempDir();
-  const spec = launchSpecFor(ready.vendor, home.dir);
-  const session = new CliChatSession(
-    () => launch(spec.executable, spec.args, { cwd: spec.cwd }),
-    DEFAULT_BUDGETS,
-  );
+  const first = started(ready.vendor);
+  const session = first.session;
   const entry = createChatPanel(
     {
       title: state.title,
@@ -280,11 +334,20 @@ function newConversation(
           void ask(found, text);
         }
       },
-      onPick: () => undefined,
+      onPick: (id, modelId) => {
+        const found = panels.entryOf(id);
+        if (found !== undefined) {
+          switchModel(found, modelId);
+        }
+      },
       onClosed: (id) => {
-        // The registry disposes the session; this takes the directory it ran in with it.
+        // The registry disposes the session the ENTRY was created with, which after a model switch
+        // is no longer the one that is running. So the thread's own current session is ended here
+        // too — disposal is idempotent, and the alternative is an authenticated child nobody owns.
+        const thread = threads.get(id);
         panels.closeById(id);
-        home.release();
+        thread?.session.dispose();
+        thread?.home.release();
       },
       onRestart: () => undefined,
       onUseLocal: () => undefined,
@@ -297,9 +360,11 @@ function newConversation(
   // which can move under a live conversation. That distinction cost a whole code round.
   threads.set(entry.id, {
     session,
+    home: first.home,
     passage: state.passage,
     models: ready.models,
     modelId: ready.modelId,
+    restarted: false,
     messages: [],
     turns: Promise.resolve(),
   });
@@ -323,16 +388,10 @@ export async function chatWithOtherAi(panels: ChatPanels, args: readonly unknown
     return;
   }
 
-  const plan = triggerPlan(args, settings.autoSend);
-  const passage = await passageFor(plan.path);
-  if (passage.text.trim().length === 0) {
-    void vscode.window.showWarningMessage(
-      passage.failure.length > 0 ? passage.failure : 'Nothing to explain — copy the text first.',
-    );
-
-    return;
-  }
-
+  // ASKED FIRST, before anything expensive or anything that touches what belongs to the person.
+  // The keybinding is scoped to the assistant panel, but the command palette is not: invoked from
+  // the wrong tab this used to spend 1.7 seconds, borrow the clipboard and synthesise a keystroke,
+  // and only then say it was the wrong tab. (gemini, the second code round.)
   const match = matchedSession(panels);
   if (match === undefined) {
     void vscode.window.showWarningMessage(
@@ -343,6 +402,16 @@ export async function chatWithOtherAi(panels: ChatPanels, args: readonly unknown
   }
   if (match.kind === 'rekey') {
     panels.rekey(match.from, match.key);
+  }
+
+  const plan = triggerPlan(args, settings.autoSend);
+  const passage = await passageFor(plan.path);
+  if (passage.text.trim().length === 0) {
+    void vscode.window.showWarningMessage(
+      passage.failure.length > 0 ? passage.failure : 'Nothing to explain — copy the text first.',
+    );
+
+    return;
   }
 
   const turn = openingTurn(settings.prompt, settings.language, passage.text);
