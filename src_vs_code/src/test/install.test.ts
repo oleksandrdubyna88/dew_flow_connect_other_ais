@@ -151,6 +151,28 @@ const deployScript = (file: string) =>
     .split('\r\n')
     .join('\n');
 
+/**
+ * The verify-and-publish script both release lines call.
+ *
+ * <p>The polling, the expected-name list and the publish used to be sixty lines duplicated
+ * between two jobs; the code round called that what the reuse-first rule calls it, and the
+ * logic moved here. These tests moved with it: the guarantee did not change, its home did.</p>
+ */
+const releaseScript = () =>
+  fs
+    .readFileSync(
+      path.join(__dirname, '..', '..', '..', '.github', 'scripts', 'verify-and-publish-release.sh'),
+      'utf8',
+    )
+    .replace(/\r\n/g, '\n');
+
+/** The platforms the shared script expects, which is now the ONE list. */
+const ridsExpectedByTheScript = () => {
+  const declared = /RIDS=\(([^)]*)\)/.exec(releaseScript());
+  assert.ok(declared, 'the script declares the platforms it expects');
+  return declared[1]!.trim().split(/\s+/).sort();
+};
+
 const ridsBuiltBy = (job: string) =>
   [...jobBlock(releaseWorkflow(), job).matchAll(/^\s+- rid:\s*(\S+)\s*$/gm)]
     .map((m) => m[1]!)
@@ -173,24 +195,13 @@ test('the server matrix and the check that the release is complete name the same
   // honest — which is why it needs a test of its own. The host runs a Native AOT binary under
   // systemd (deploy/README.md); the release line published container images only, so the one
   // artefact the deployment actually consumes was the one thing the tag did not produce.
-  //
-  // Held against the completeness job's OWN list rather than against COAI_RIDS. The two artefacts
-  // have independent lifecycles: a server-only RID — an arm64 host, say — would otherwise turn
-  // this red until the extension published a coai-mcp for it and added it to its install contract,
-  // which is a coupling between two release lines that share nothing but a repository.
-  // (codex, code round.)
-  const complete = jobBlock(releaseWorkflow(), 'server-release-complete');
-  const declared = /RIDS=\(([^)]*)\)/.exec(complete);
-  assert.ok(declared, 'the completeness job declares the platforms it expects');
-
-  assert.deepEqual(ridsBuiltBy('server-binaries'), declared[1]!.trim().split(/\s+/).sort());
+  assert.deepEqual(ridsBuiltBy('server-binaries'), ridsExpectedByTheScript());
 });
 
 test('the deploy pulls a RID the server release actually builds', () => {
   // The third place the same fact lives, and the one that fails LAST: a preflight looking for
   // `linux-x64` in a release that never built it stops with nothing to download, after somebody
   // has already been asked to approve a production deploy.
-  const complete = jobBlock(releaseWorkflow(), 'server-release-complete');
   const hostRid = /HOST_RID:\s*(\S+)/.exec(deployWorkflow());
   assert.ok(hostRid, 'the deploy names the RID the host runs');
 
@@ -198,7 +209,7 @@ test('the deploy pulls a RID the server release actually builds', () => {
     ridsBuiltBy('server-binaries').includes(hostRid[1]!),
     `the release line builds ${hostRid[1]}`,
   );
-  assert.match(complete, new RegExp(hostRid[1]!), 'and the completeness check expects it');
+  assert.ok(ridsExpectedByTheScript().includes(hostRid[1]!), 'and the completeness check expects it');
 });
 
 test('a server tag creates a GitHub RELEASE, because that is what the panel reads', () => {
@@ -221,7 +232,8 @@ test('a server tag creates a GitHub RELEASE, because that is what the panel read
   const server = jobBlock(workflow, 'server-binaries');
   assert.match(server, /gh release upload "\$GITHUB_REF_NAME" "\$ASSET"/, 'and attaches its archive');
   assert.match(server, /sha256sum "\$ASSET"/, 'beside a checksum');
-  assert.match(jobBlock(workflow, 'server-release-complete'), /--draft=false/, 'and it is published');
+  assert.match(jobBlock(workflow, 'server-release-complete'), /verify-and-publish-release\.sh server/,
+    'and the job that verified it is what publishes it');
 });
 
 test('the server release is verified COMPLETE, not merely attempted', () => {
@@ -231,13 +243,9 @@ test('the server release is verified COMPLETE, not merely attempted', () => {
   const verify = jobBlock(releaseWorkflow(), 'server-release-complete');
 
   assert.match(verify, /needs:\s*\[\s*server-binaries/, 'it runs after every archive is uploaded');
-  assert.match(verify, /gh release view/, 'and asks GitHub what the release actually carries');
-  assert.match(verify, /EXPECTED=6/, 'against the number of platforms this line promises');
-  // By NAME, not by tally: six wrongly-named files satisfy a count, and the one that matters is
-  // the RID the live host installs — a release missing exactly that passes a count and fails the
-  // next deploy at its preflight.
-  assert.match(verify, /coai-server-\$VERSION-\$rid/, 'each expected asset name is looked for');
-  assert.match(verify, /the release is incomplete — missing:/, 'and the missing ones are named');
+  assert.match(verify, /verify-and-publish-release\.sh server/, 'and hands its product to the script');
+  assert.match(releaseScript(), /gh release view "\$TAG" --json assets/, 'which asks what it carries');
+  assert.equal(ridsExpectedByTheScript().length, 6, 'against the platforms this line promises');
 });
 
 test('the native release line does not wait on the container line', () => {
@@ -933,15 +941,18 @@ test('no release line publishes before something has checked it is whole', () =>
 });
 
 test('a release is published only by the job that verified it', () => {
-  // `--draft=false` is the publish, and it belongs to the job that counted the assets — never to a
+  // `--draft=false` is the publish, and it belongs to whatever counted the assets — never to a
   // matrix leg, which cannot see its five siblings.
   const workflow = releaseWorkflow();
-  const publishes = [...workflow.matchAll(/gh release edit[^\n]*--draft=false/g)].map((m) => m[0]);
 
-  assert.equal(publishes.length, 3, 'one publish per release line, and no more');
-  for (const job of ['mcp-release-complete', 'server-release-complete', 'extension']) {
-    assert.match(jobBlock(workflow, job), /--draft=false/, `${job} publishes what it verified`);
+  // ONE publish for the two matrix lines, because they share one script now; the extension line has
+  // its own, inside the single job that produced its single asset.
+  assert.match(releaseScript(), /gh release edit "\$TAG" --draft=false/, 'the script is what publishes');
+  for (const job of ['mcp-release-complete', 'server-release-complete']) {
+    assert.match(jobBlock(workflow, job), /verify-and-publish-release\.sh/, `${job} calls it`);
+    assert.doesNotMatch(jobBlock(workflow, job), /--draft=false/, `${job} does not publish by hand`);
   }
+  assert.match(jobBlock(workflow, 'extension'), /--draft=false/, 'and the extension publishes its own');
 });
 
 test('the mcp line checks every expected asset by NAME', () => {
@@ -951,8 +962,10 @@ test('the mcp line checks every expected asset by NAME', () => {
   const verify = jobBlock(releaseWorkflow(), 'mcp-release-complete');
 
   assert.match(verify, /needs:\s*\[\s*mcp-binaries/, 'it runs after every archive is uploaded');
-  assert.match(verify, /coai-mcp-\$VERSION-\$rid/, 'each expected asset name is looked for');
-  assert.match(verify, /the release is incomplete — missing:/, 'and the missing ones are named');
+  assert.match(verify, /verify-and-publish-release\.sh mcp/, 'and hands its product to the script');
+  assert.match(releaseScript(), /coai-\$PRODUCT-\$\(version\)-\$rid\.\$ext/,
+    'which builds each expected asset name');
+  assert.match(releaseScript(), /the release is incomplete — missing:/, 'and names the missing ones');
 });
 
 test('a completeness job waits for every leg of its matrix', () => {
@@ -986,26 +999,55 @@ test('a draft is created ONCE, outside the matrix', () => {
   for (const maker of ['mcp-draft', 'server-draft']) {
     const block = jobBlock(workflow, maker);
     assert.doesNotMatch(block, /strategy:/, `${maker} must not be a matrix itself`);
-    assert.match(block, /gh release view "\$GITHUB_REF_NAME" >\/dev\/null 2>&1/,
+    // And reuses only a DRAFT: `gh release view` succeeds for a PUBLISHED release too, so a re-run
+    // against a tag somebody had published by hand would otherwise send six legs uploading into a
+    // release clients can already see.
+    assert.match(block, /--json isDraft --jq '\.isDraft'/,
       `${maker} reuses an existing draft rather than making a second one on a re-run`);
+    assert.match(block, /refusing to upload into a visible release/,
+      `${maker} refuses a release that is already published`);
   }
 });
 
 test('the expected asset set is the whole matrix, win-arm64 included', () => {
   // `mcp-v0.18.13` shipped five platforms of six because win-arm64's leg failed. A completeness
   // check whose expected list quietly held five names would pass on exactly that release.
+  //
+  // ONE list now, in the shared script — which is also the answer to "the matrix and the check are
+  // independent sources of truth": both matrices are held against it, here.
+  const expected = ridsExpectedByTheScript();
+
+  assert.deepEqual(expected, [...COAI_RIDS].sort(), 'the script expects every platform');
+  assert.ok(expected.includes('win-arm64'), 'the one that went missing on 0.18.13 is in the list');
+  assert.deepEqual(ridsBuiltBy('mcp-binaries'), expected, 'and the mcp matrix builds exactly those');
+  assert.deepEqual(ridsBuiltBy('server-binaries'), expected, 'and so does the server matrix');
+});
+
+test('a manual build is not skipped by the draft job it does not need', () => {
+  // The defect the draft restructure introduced, and five reviewers caught: `mcp-draft` is
+  // tag-only, so a workflow_dispatch build skips it — and GitHub skips a job whose NEEDED job was
+  // skipped, whatever that job's own `if` says. The manual build path silently produced nothing.
+  //
+  // `always()` is what lets a job decide for itself, so it is the thing to hold.
   const workflow = releaseWorkflow();
 
-  for (const [job, rid] of [['mcp-release-complete', 'mcp'], ['server-release-complete', 'server']]) {
-    const declared = /RIDS=\(([^)]*)\)/.exec(jobBlock(workflow, job!));
-    assert.ok(declared, `${job} declares the platforms it expects`);
-    const names = declared[1]!.trim().split(/\s+/);
+  // The CONDITION, not the block: the first version of this test matched `always()` in the comment
+  // that explains it, so it passed against a workflow with the guard removed. A structural test
+  // that can be satisfied by prose is not a test.
+  const condition = (leg: string) => {
+    const match = /\n {4}if: >-\n((?: {6}.*\n)+)/.exec(jobBlock(workflow, leg));
+    assert.ok(match, `${leg} states its condition as a folded block`);
+    return match[1]!.split('\n').map((l) => l.trim()).join(' ');
+  };
 
-    assert.deepEqual(names.sort(), [...COAI_RIDS].sort(), `${job} expects every platform`);
-    assert.ok(names.includes('win-arm64'), 'the one that went missing is in the list');
-    assert.ok(
-      jobBlock(workflow, job!).includes(`coai-${rid}-$VERSION-$rid.$EXT`),
-      'and each RID maps to one expected asset name',
-    );
+  for (const leg of ['mcp-binaries', 'server-binaries']) {
+    assert.match(condition(leg), /always\(\)/, `${leg} must judge its own condition, not inherit a skip`);
+    assert.match(condition(leg), /!cancelled\(\)/, `${leg} still stops when the run is cancelled`);
+    assert.match(condition(leg), /needs\.[\w-]+-draft\.result == 'success'/,
+      `${leg} requires the draft only where a draft exists`);
   }
+
+  // The dispatch target reaches the mcp matrix without a draft at all — there is no tag to draft.
+  assert.match(jobBlock(workflow, 'mcp-binaries'), /inputs\.target == 'mcp'/,
+    'and a dispatch build still runs');
 });

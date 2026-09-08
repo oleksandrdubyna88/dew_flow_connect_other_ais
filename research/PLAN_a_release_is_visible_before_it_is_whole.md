@@ -162,3 +162,38 @@ Rejected, with reasons in the session: that a leg failing after the draft exists
 wait for every leg (it does), that two runs of one tag could race (a tag is pushed once), and that
 actionlint should replace the workflow-text tests — the two facts that mattered here live in
 GitHub's API semantics, which only an API call could answer, and it did.
+
+## What the CODE round then changed
+
+- **The manual build path was broken by the fix.** `mcp-draft` is tag-only, so a
+  `workflow_dispatch` build skips it — and GitHub skips a job whose NEEDED job was skipped, whatever
+  that job's own `if` says. `mcp-binaries` therefore produced nothing on a dispatch. Five reviewers
+  caught it. Both matrices now judge their own condition with `always() && !cancelled() && …`,
+  requiring the draft only where a draft exists.
+- **The two completeness jobs were one implementation written twice** — sixty lines of polling,
+  expected names and publishing, duplicated. The repository's reuse-first rule names that a defect
+  from the moment it compiles; it is
+  [`.github/scripts/verify-and-publish-release.sh`](../.github/scripts/verify-and-publish-release.sh)
+  now, called with `mcp` or `server`, and its expected-name logic was exercised against the real
+  `mcp-v0.18.13` before it was wired in: empty when complete, and naming
+  `coai-mcp-0.18.13-win-arm64.zip` when that archive is removed — the exact asset that went missing.
+- **A draft was reused without checking it is still a draft.** `gh release view` succeeds for a
+  PUBLISHED release too, so a re-run against a tag somebody had published by hand would have skipped
+  creation and sent six legs uploading into a release clients can already see. It now reads
+  `isDraft` and refuses a published one by name.
+- **The publish verification raced its own edit.** Reading `isDraft` immediately after
+  `--draft=false` could see the old value and report a live release as unpublishable. The read is
+  inside the retry loop now.
+- **`concurrency: release-<ref>`**, because check-then-create is not atomic: two runs of one tag
+  could both see nothing and both create a draft. Never `cancel-in-progress` — cancelling a release
+  halfway is how a draft ends up half-uploaded with nobody watching.
+- The extension line lost its `|| true`, gained the same `isDraft` reuse, and asks the release what
+  it holds before publishing.
+- Constants are named, the asset check is one awk pass rather than up to 120 greps per attempt, and
+  a missing-asset failure lists the names one per line.
+
+**And a test of mine was wrong in a way worth recording.** `a manual build is not skipped by the
+draft job it does not need` matched `always()` anywhere in the job block — including the COMMENT
+explaining it — so it passed against a workflow with the guard removed. It reads the `if:` condition
+itself now. A structural test that prose can satisfy is not a test, and I found this only by putting
+the defect back and watching it stay green.
