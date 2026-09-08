@@ -217,6 +217,18 @@ export function pushChatState(entry: ChatEntry, state: ChatPushState): boolean {
   return true;
 }
 
+/**
+ * Put text into an open tab’s composer, unsent.
+ *
+ * <p>The menu path’s whole shape: the passage arrives, the person reads it, and one keypress
+ * sends it. A separate message from the state push because it must NOT be idempotent — pushing
+ * the same state twice should change nothing, while inviting a second passage into the composer
+ * is exactly what a second invocation means.</p>
+ */
+export function pushChatDraft(entry: ChatEntry, draft: string): void {
+  entry.panel.post({ type: 'state', draft });
+}
+
 /** The scale the page opens at, so a new tab matches the ones already open. */
 export function chatUiScale(): number {
   return currentUiScale();

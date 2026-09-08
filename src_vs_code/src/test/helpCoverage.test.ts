@@ -60,6 +60,10 @@ const SELF_EVIDENT: Record<string, string> = {
 };
 
 const SETTING_ALIAS: Record<string, string> = {
+  'coai.chatPrompt': 'the prompt the passage travels with',
+  'coai.chatLanguage': 'the language the other ai answers in',
+  'coai.chatAutoSend': 'whether it sends at once or waits',
+  'coai.chatModel': 'which reviewer answers a chat',
   'coai.vendors': 'each row is one vendor',
   'coai.teamServers': 'a team server is the other way to get a reviewer',
   'coai.onExhausted': 'when the rounds run out',

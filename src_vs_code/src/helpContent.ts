@@ -223,6 +223,28 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     },
   },
   {
+    id: 'chat-with-other-ai',
+    en: {
+      title:
+        'Chat with other AI: ask a second model about a passage',
+      whatItIs:
+        'Select a paragraph in your assistant’s answer, press `Ctrl+Alt+A`, and it opens a tab where '
+        + 'another vendor’s model explains it — in your language, in a conversation you can carry on. '
+        + 'The same thing is in the right-click menu as **Chat with other AI**.',
+      why:
+        'A dense English answer is not always a clear one, and asking the model that wrote it to '
+        + 'explain itself gets you the same words again. A different vendor reads it cold. Doing that by '
+        + 'hand is five steps — select, copy, switch to a browser, new chat, paste — several times an '
+        + 'hour; this is one keypress, and the answer stays in the editor.',
+      setup:
+        'Nothing, if a reviewer on the `antigravity` runtime is already enabled — that is which reviewer answers a chat, and the first one that can is used unless you name another. Four settings are yours: the prompt the passage travels with (one word, `Explain`, by default), the language the other AI answers in (English by default, and deliberately not the language of these help pages), and whether it sends at once or waits.',
+      usage:
+        'The keybinding copies the selection for you and asks straight away. The right-click item cannot — closing that menu takes the selection out of the panel — so it takes whatever you last copied and puts it in the box for you to send, which is also why the passage is shown at the top of the tab: you can see what is about to be asked. One tab per assistant session, so two conversations never mix.',
+      whatCanGoWrong:
+        'Copying the selection needs Windows; elsewhere the keybinding says so and points you at the menu, which works everywhere. If the model’s process dies the answer after it says the conversation restarted, because it genuinely does not remember the earlier turns. A reviewer on another runtime is refused by name rather than quietly missing — the chat speaks one protocol so far.',
+    },
+  },
+  {
     id: 'recent-rounds',
     en: {
       title: "Active rounds: what is running right now",

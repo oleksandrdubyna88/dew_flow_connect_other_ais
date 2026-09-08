@@ -8,6 +8,14 @@ import { HelpBody } from './helpContent';
  * that is missing here falls back to the English body, visibly — see `bodyFor`.</p>
  */
 export const ES: Readonly<Record<string, HelpBody>> = {
+  "chat-with-other-ai": {
+    title: "Chat with other AI: preguntar a un segundo modelo sobre un pasaje",
+    whatItIs: "Seleccione un párrafo en la respuesta de su asistente y pulse `Ctrl+Alt+A`: se abre una pestaña donde el modelo de otro proveedor lo explica en su idioma, y la conversación puede continuar. Lo mismo está en el menú contextual como **Chat with other AI**.",
+    why: "Una respuesta densa en inglés no siempre es clara, y pedirle una explicación al mismo modelo devuelve las mismas palabras. Otro proveedor la lee sin prejuicios. A mano son cinco pasos — seleccionar, copiar, pasar al navegador, chat nuevo, pegar — varias veces por hora; aquí es una tecla, y la respuesta se queda en el editor.",
+    setup: "Nada, si ya hay un revisor activo en el runtime `antigravity`. Sus ajustes: el prompt con el que viaja el pasaje (por defecto la palabra `Explain`), el idioma de la respuesta (inglés por defecto, y deliberadamente no el de estas páginas), qué modelo responde y si se envía de inmediato.",
+    usage: "La combinación de teclas copia la selección por usted y pregunta enseguida. El elemento del menú no puede — cerrar ese menú saca la selección del panel —, así que toma lo último copiado y lo deja en el cuadro, y usted lo envía. Por eso el pasaje se muestra arriba de la pestaña: se ve qué va a preguntarse. Una pestaña por sesión del asistente, para que dos conversaciones nunca se mezclen.",
+    whatCanGoWrong: "Copiar la selección requiere Windows; en otros sistemas la tecla lo dice y le remite al menú, que funciona en todas partes. Si el proceso del modelo muere, la respuesta siguiente avisa de que la conversación volvió a empezar. Un revisor en otro runtime se rechaza por su nombre, en lugar de faltar en silencio.",
+  },
   "install-the-server": {
     title: "Empiece aquí: instale el servidor MCP",
     whatItIs: "La extensión es la cara. Quien hace la revisión es `coai-mcp`, un programa pequeño que arranca su asistente de IA. Mientras no esté instalado, no revisa nadie.",

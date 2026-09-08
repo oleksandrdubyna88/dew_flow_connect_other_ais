@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { ChatPanels } from './chatPanels';
+import { chatWithOtherAi } from './chatCommand';
 import { coaiDataDir } from './dataDir';
 import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
@@ -95,6 +97,9 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   mirrorSettings(settingsSync);
 
+  // One registry per window: a conversation belongs to a Claude Code tab, and tabs are per window.
+  const chatPanels = new ChatPanels();
+
   context.subscriptions.push(
     {
       dispose: () => {
@@ -114,6 +119,15 @@ export function activate(context: vscode.ExtensionContext): void {
     watcher,
     vscode.window.registerWebviewViewProvider(PanelProvider.viewType, panel),
     vscode.commands.registerCommand('coai.help', showHelp),
+    // Chat with another vendor about a passage. Two doors reach it — this keybinding and the
+    // 'Chat with other AI' item in Claude Code's own right-click menu — and the command tells them
+    // apart by what VS Code hands it, because only one of them can copy the selection itself.
+    vscode.commands.registerCommand('coai.chatWithOtherAi', (...args: unknown[]) => {
+      void chatWithOtherAi(chatPanels, args);
+    }),
+    // Deactivation is not a tab closing: nobody has told VS Code about these panels, so both the
+    // panel and the vendor process behind it have to be ended here or they outlive the extension.
+    { dispose: () => chatPanels.closeAll() },
     // Both doors repaint. The panel's own button used to be the only path that did — it awaits
     // the command and then renders — so an update started from THIS menu left the Server section
     // showing the version it had replaced, which is the very symptom the button was fixed for.

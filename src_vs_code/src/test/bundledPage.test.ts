@@ -282,6 +282,7 @@ function bundledChatPage(): { bundle: string; html: string } {
       modelId: 'antigravity',
       running: false,
       failure: '',
+      draft: '',
       uiScale: 0,
     },
     'n0nce',

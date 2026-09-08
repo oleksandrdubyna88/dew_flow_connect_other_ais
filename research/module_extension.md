@@ -42,6 +42,27 @@ sat beside it. The fallback now requires the label to name exactly one panel.
 tested: closing one tab disposes ONE session, its own. A vendor process that outlives its tab is an
 authenticated child nobody can see and nobody will stop; one that dies with a stranger’s tab loses a
 conversation somebody is still reading.
+### The two doors into a chat, and why they behave differently (2026-09-08)
+
+`coai.chatWithOtherAi` is reachable two ways, and they are not the same door. From the KEYBINDING
+(`Ctrl+Alt+A`, scoped to the Claude Code panel) the webview still holds the keyboard, so the command
+copies the selection itself with a synthetic `Ctrl+C` and asks straight away. From the CONTEXT MENU
+it cannot: closing that menu takes the selection or the focus out of the webview, and the clipboard
+is not even touched. Both measured with a throwaway probe extension before either was written.
+
+So the menu path takes whatever is on the clipboard and, by default, does NOT send — it fills the
+composer and waits for one keypress. It cannot know how old that clipboard is, and a wrong-content
+vendor call costs money. `coai.chatAutoSend` lets the person overrule that in either direction.
+
+The copy helper is WinAPI (`keybd_event`) and not .NET’s `SendKeys`, which was measured to deliver
+NOTHING to an Electron window: 0 characters against 17107 in the same window in the same second. It
+releases every modifier first, because a keybinding leaves Ctrl and Alt physically held and a
+synthetic `Ctrl+C` on top of a held Alt is `Ctrl+Alt+C`. It travels to PowerShell base64-encoded, so
+no layer of shell quoting can touch it.
+
+**The clipboard is borrowed, never taken.** It is saved, used as a channel, and put back only if
+nothing else wrote to it during the window — which is over a second wide, and long enough for
+somebody to copy something in another window.
 ### A conversation is a process, and it ends four ways (2026-09-08)
 
 ```mermaid
