@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CONVENTIONS_ID, CONVENTIONS_ROLE_SINCE, selectedFor, universalFor } from '../prompts';
+import fs from 'node:fs';
+import path from 'node:path';
+import { CONVENTIONS_ID, CONVENTIONS_ROLE_SINCE, PROMPTS, ROLES, selectedFor, universalFor } from '../prompts';
 import { panelHtml, PanelState } from '../panelView';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
@@ -41,30 +43,59 @@ const baseState = (): PanelState => ({
 });
 
 /**
- * What `PromptCatalog.ForRound` returns for an unset round.
+ * What `PromptCatalog.ForRound` returns for an unset round — READ from the C#, not restated here.
  *
- * <p>Transcribed from the C# by hand, on purpose: the point of this file is that two programs agree,
- * and a shared implementation would make the agreement true by construction rather than checked.
- * When the server's branch changes, this line changes with it — and that is the moment somebody has
- * to look at both.</p>
+ * <p><b>It used to be `universalFor(role).id`, and that was worth nothing.</b> `selectedFor` falls
+ * back to `universalFor` too, so the assertion below compared a function with itself: the two
+ * "programs" could have moved together forever and this file would have stayed green. Caught on
+ * this change's own pull request, and it is the same defect this suite exists to prevent — one
+ * implementation standing in for two.</p>
  *
- * <p>2026-09-08: there is no branch left to transcribe. The conventions pass took round 1 — of every
- * code role, then of Architecture alone — because it had no budget of its own; as a ROLE it has one,
- * so both programs are back to "what was chosen, else this role's universal prompt". A rule that
- * fits on one line is a rule two programs can hold.</p>
+ * <p>So the expected ids come out of `PromptCatalog.cs`: the rows whose last argument is `true` are
+ * the universal ones, and each names its role through a constant declared in the same file. If the
+ * server renames a universal prompt or moves it to another role, this goes red — which is the whole
+ * job, and a hand transcription could only do it if somebody remembered to retype the line.</p>
  */
-function whatTheServerRuns(role: string): string {
-  return universalFor(role).id;
+const promptCatalog = fs.readFileSync(
+  path.join(__dirname, '..', '..', '..', 'src_mcp', 'core', 'Rounds', 'PromptCatalog.cs'), 'utf8');
+
+/** `public const string PlanRole = "PlanCritique";` -> PlanRole: PlanCritique */
+function csharpConstants(): ReadonlyMap<string, string> {
+  const out = new Map<string, string>();
+  for (const m of promptCatalog.matchAll(/const string (\w+)\s*=\s*"([^"]+)"/g)) {
+    out.set(m[1]!, m[2]!);
+  }
+  return out;
 }
 
-const ROLES = ['PlanCritique', 'Conventions', 'Architecture', 'SecurityReliability', 'UxDxPerformance'];
+/** The universal prompt id the SERVER ships for each role name. */
+function serverUniversals(): ReadonlyMap<string, string> {
+  const constants = csharpConstants();
+  const resolve = (token: string): string =>
+    token.startsWith('"') ? token.slice(1, -1) : (constants.get(token) ?? token);
+
+  const out = new Map<string, string>();
+  for (const m of promptCatalog.matchAll(/new\((("[^"]+")|\w+),\s*(\w+),[^\n]*,\s*true\)/g)) {
+    out.set(resolve(m[3]!), resolve(m[1]!));
+  }
+  return out;
+}
 
 test('an unset round shows what the server runs, for every role and every round', () => {
-  for (const role of ROLES) {
+  const universals = serverUniversals();
+
+  // The roles come from the panel's own catalog rather than a list retyped here: a role the panel
+  // gained and this file did not would otherwise go unchecked, which is the second half of the
+  // same finding.
+  assert.ok(ROLES.length > 0);
+  for (const { id: role } of ROLES) {
+    const server = universals.get(role);
+    assert.ok(server, `${role} has no universal prompt in PromptCatalog.cs — the panel knows a role the server does not`);
+
     for (const round of [1, 2, 3, 4]) {
       assert.equal(
         selectedFor(role, round, {}),
-        whatTheServerRuns(role),
+        server,
         `${role} round ${round}: the panel and the server disagree`,
       );
     }
@@ -76,9 +107,10 @@ test('an unset round shows what the server runs, for every role and every round'
  *
  * <p>The two agree in the SOURCE, and are installed apart — an extension updates itself, a server
  * is a binary somebody presses a button to replace. Below {@link CONVENTIONS_ROLE_SINCE} the server
- * does not know `Conventions` is a role at all, so a code round asks for a role its enum cannot
- * parse. Raised by three reviewers as version skew when the warning was about a wrong prompt; the
- * skew got worse, and the warning with it.</p>
+ * does not know `Conventions` is a role at all, so it does not run it: the box is in the panel and
+ * the reviewer never appears. Raised by three reviewers as version skew when the warning was about
+ * a wrong prompt — and all three, and this comment before them, called it a failed round. It is not:
+ * the server reads its gate from its own list of roles and never parses a name the panel sends.</p>
  */
 test('a panel ahead of its server says so, instead of showing a round the server will not run', () => {
   const withServer = (server: PanelState['server']): string =>
@@ -113,9 +145,17 @@ test('a panel ahead of its server says so, instead of showing a round the server
 test('a later round never shows a lens nobody selected', () => {
   // The whole class of defect in one assertion: no unset round may resolve to a narrow lens,
   // because nothing on the server side would run one without an explicit pick.
-  for (const role of ROLES) {
+  //
+  // Asserted as a PROPERTY of what came back — is this prompt the role's universal one — rather
+  // than by recomputing the answer with `universalFor`, which is the shape that made the test
+  // above vacuous for a day.
+  for (const { id: role } of ROLES) {
     for (const round of [2, 3, 4]) {
-      assert.equal(selectedFor(role, round, {}), universalFor(role).id);
+      const shown = selectedFor(role, round, {});
+      assert.ok(
+        PROMPTS.some((p) => p.id === shown && p.role === role && p.universal),
+        `${role} round ${round} shows ${shown}, which is not this role's universal prompt`,
+      );
     }
   }
 });
