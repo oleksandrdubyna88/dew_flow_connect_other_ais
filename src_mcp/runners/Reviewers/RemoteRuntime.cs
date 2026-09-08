@@ -332,20 +332,37 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
     /// </remarks>
     private static void Replace(string pending, string jobFile)
     {
-        const int attempts = 5;
-        for (var attempt = 1; attempt <= attempts; attempt++)
+        for (var attempt = 1; attempt <= ReplaceAttempts; attempt++)
         {
             try
             {
                 File.Move(pending, jobFile, overwrite: true);
                 return;
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException && attempt < attempts)
+            catch (Exception e) when (WorthRetrying(e, attempt))
             {
-                Thread.Sleep(Random.Shared.Next(5, 15) * attempt);
+                // Jittered, because several writers backing off in lock-step retry in lock-step.
+                Thread.Sleep(Random.Shared.Next(MinBackoffMs, MaxBackoffMs) * attempt);
             }
         }
     }
+
+    /// <summary>A transient refusal with an attempt left, rather than a failure to report.</summary>
+    /// <remarks>
+    /// A predicate rather than a compound `when` clause: the loop it guards was over the doctrine's
+    /// complexity ceiling with the filter inline, and this is the clause that reads as a sentence.
+    /// </remarks>
+    private static bool WorthRetrying(Exception e, int attempt) =>
+        e is IOException or UnauthorizedAccessException && attempt < ReplaceAttempts;
+
+    /// <summary>Five, because the contention is one reader at most — not the session store's crowd.</summary>
+    private const int ReplaceAttempts = 5;
+
+    /// <inheritdoc cref="ReplaceAttempts"/>
+    private const int MinBackoffMs = 5;
+
+    /// <inheritdoc cref="ReplaceAttempts"/>
+    private const int MaxBackoffMs = 15;
 
     /// <summary>The job reached a terminal state by itself; there is nothing to cancel.</summary>
     public static void Forget(string jobFile)

@@ -20,7 +20,7 @@ namespace CoaiMcp.Tests;
 /// for the file to EXIST and then killed the shim, which on a slower machine is a kill inside the
 /// write. The flake and the defect are the same fact.</para>
 /// </remarks>
-public class ClaimIsWrittenAtomicallyTests
+public sealed class ClaimIsWrittenAtomicallyTests
 {
     private static string TempFile() =>
         Path.Combine(Path.GetTempPath(), $"coai-claim-{Guid.NewGuid():N}.json");
@@ -47,6 +47,39 @@ public class ClaimIsWrittenAtomicallyTests
 
         Directory.EnumerateFiles(dir).Should().Equal([jobFile]);
         RemoteRuntime.ReadClaim(jobFile).JobId.Should().Be("job-4");
+        Directory.Delete(dir, recursive: true);
+    }
+
+    /// <summary>
+    /// The write goes THROUGH the sibling — asserted deterministically, with no seam in the product.
+    /// </summary>
+    /// <remarks>
+    /// <para>The gate asked for this twice and was right both times: the kill test reproduces the CI
+    /// failure but cannot be made to fail on a fast machine, so a return to a direct
+    /// `File.WriteAllText` could have slipped past every other test here. A synchronisation point
+    /// injected into the shim would have proved it, at the cost of test-only machinery on a path that
+    /// runs in production.</para>
+    /// <para>The filesystem is the seam instead. Block the SIBLING's path — put a directory where the
+    /// `.writing` file must go — and the two implementations answer differently and deterministically:
+    /// a create-then-rename writer cannot write and reports why, while a direct writer neither needs
+    /// the sibling nor notices it and publishes the claim happily. Verified by reverting the fix: this
+    /// test goes red with `Claim` returning empty and a claim on disk.</para>
+    /// </remarks>
+    [Fact]
+    public void WithTheSiblingsPathBlocked_NoClaimIsPublished()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"coai-blocked-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        var jobFile = Path.Combine(dir, "job.json");
+        // A directory cannot be opened for writing, so the sibling write is refused.
+        Directory.CreateDirectory(jobFile + ".writing");
+
+        var failure = RemoteRuntime.Claim(jobFile, "https://coai.example.com", "job-77", "t.json");
+
+        failure.Should().NotBeEmpty("the write could not reach its sibling and must say so");
+        File.Exists(jobFile).Should().BeFalse(
+            "a claim that never went through the sibling was written straight at the destination, "
+            + "which is the truncate-then-write this whole change removed");
         Directory.Delete(dir, recursive: true);
     }
 
