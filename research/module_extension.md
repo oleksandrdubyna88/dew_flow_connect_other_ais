@@ -1251,6 +1251,40 @@ push happens only when the serialised rows or questions changed, so the tick re-
 a page where nothing moved. The duration column carries the sidebar's own cap: a year-one start date
 from an older server is no duration rather than a billion seconds.
 
+**A push is not delivery, and a page that exists is not a page that is listening (2026-09-08).** The
+operator reported the log with no accepted/rejected counts and an entirely empty *What it keeps
+missing* tab. Nothing was wrong with the data, and every step of the way to it was measured: the
+installed binary emitted 207 rounds, 24 blind spots and 205 decisions in 143 ms, `parseLog` read all
+of it, `blindSpotsHtml` built 2968 characters from it. What was wrong is how the page was told.
+
+The first paint is deliberately database-free — `showRoundsLog` calls `rowsFrom(…, undefined, …)`
+because reading the log spawns a process and nobody should wait on one to see their log — so the page
+opens with no decisions and no spots, and a push a moment later fills them in. That push was
+`void postMessage(…)` with the delivery record assigned BEFORE it. `postMessage` answers a
+`Thenable<boolean>`, and it answers `true` for a webview that merely EXISTS — one does from the moment
+`webview.html` is assigned, for the whole window before the page's script attaches its listener. So a
+message could be accepted by VS Code, delivered to nobody, and recorded as delivered; every later tick
+then compared against that record, found nothing changed, and sent nothing. **One lost message,
+permanent** — until the tab was closed and reopened, and the same race could take that one too.
+
+Two halves, each covering what the other cannot. **The page says `ready`** immediately after
+attaching its message listener (`roundsLog.ts`), and the panel answers with a forced push of all three
+regions; a page rebuilt by VS Code says it again and recovers, rather than staying blank for good.
+**`PushLedger` records a region only when its push actually arrived** (`pushLedger.ts`): `postMessage`
+is awaited, a `false` or a throw leaves the region unrecorded so the next tick sends it again, and a
+push carries a GENERATION so an older one resolving second cannot overwrite a newer one's record — two
+are in flight whenever an ordinary tick meets the forced answer to `ready`. The posts themselves are
+serialised through one promise chain.
+
+Three details are deliberate. A page whose script throws before attaching its listener never says
+`ready`, so a 5 s timer assumes it is listening and pushes anyway — no worse than the old behaviour,
+and the alternative was a page empty for ever with nothing saying why. Both tabs now open on
+*Reading the log…* rather than on nothing, because an empty div made a push that never arrived look
+identical to one that had not arrived yet. And the message vocabulary moved out to
+`roundsLogMessages.ts`, the same move `chatMessages.ts` records and for the same reason: the branch
+that reads `ready` is load-bearing, and inside a class importing `vscode` no test in this suite could
+reach it. Design record: [PLAN_the_log_loses_its_first_push.md](PLAN_the_log_loses_its_first_push.md).
+
 **The sidebar shows what is running, and nothing else (2026-09-05).** *Recent rounds* became
 *Active rounds*. A round in flight is shown whole — its reviewers, their durations, what each has found
 so far — because that is what somebody is waiting on; a finished round is not in the sidebar at all. The

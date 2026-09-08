@@ -685,6 +685,19 @@ function defendedHtml(defended: readonly DbFinding[]): string {
     + `<div class="findings">${items}</div>`;
 }
 
+/**
+ * What a tab shows between the first paint and its first push.
+ *
+ * <p>The first paint is deliberately database-free — reading the log spawns a process, and nobody
+ * should wait on one to see their log — so both of these regions open empty and are filled a moment
+ * later. An empty div said nothing, which is precisely how a push that never arrived came to look
+ * identical to one that simply had not arrived yet: the tab the operator opened on 2026-09-08 was
+ * blank, and blank is also what it correctly shows for the first half-second of every open.</p>
+ */
+function waitingFor(what: string): string {
+  return `<div class="empty">Reading the log for ${escapeHtml(what)}…</div>`;
+}
+
 export function roundsLogHtml(
   rows: readonly LogRow[],
   questions: readonly Escalation[],
@@ -800,8 +813,8 @@ export function roundsLogHtml(
 <div id="empty" class="empty"${rows.length === 0 ? '' : ' hidden'}>No rounds yet. A session appears once an AI calls <code>open</code> for a repository and branch.</div>
 <div class="hint">Showing <b>today</b> — <b>All dates</b> clears the range, and the pickers take a time as well as a day. Cost is <b>in / out / total</b> — <code>~</code> means worked out from a public price list rather than billed, <code>+</code> means one reviewer's model had no listed price so the total is a floor. Click a column to sort, a row to see its reviewers. The table advances by itself while a round runs; your sort, filters and search stay.</div>
 </section>
-<section id="tab-usage" hidden><div id="usage-body">${usageHtml}</div></section>
-<section id="tab-spots" hidden><div id="spots-body">${spotsHtml}</div></section>
+<section id="tab-usage" hidden><div id="usage-body">${usageHtml || waitingFor('spending')}</div></section>
+<section id="tab-spots" hidden><div id="spots-body">${spotsHtml || waitingFor('what it keeps missing')}</div></section>
 <script nonce="${nonce}">
 (function () {
   // A page that fails must say so on the page. The first release of this page came up as a header
@@ -1051,6 +1064,13 @@ export function roundsLogHtml(
     }
     try { render(); } catch (e) { failed(String(e && e.message ? e.message : e)); }
   });
+  // The listener is attached, so from this moment a push can actually be RECEIVED. Until this word
+  // the panel sends nothing: postMessage answers true for a webview that merely exists, and one
+  // exists from the moment its html is assigned — a message sent in that window reaches nobody, and
+  // that is what left this page without its decision counts and with an empty spots tab. Sent again
+  // every time VS Code rebuilds the page, which is what makes the surface recoverable rather than
+  // one-shot.
+  vscode.postMessage({ type: 'ready' });
   try {
     // Today by default. Everything older is one click away on "All dates"; the hint says so.
     setToday();

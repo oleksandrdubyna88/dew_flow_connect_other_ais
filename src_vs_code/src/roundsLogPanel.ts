@@ -2,6 +2,8 @@ import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
 import { Escalation } from './escalations';
 import { LogRow, questionsHtml, roundsLogHtml } from './roundsLog';
+import { Push, PushLedger, Region } from './pushLedger';
+import { LogCommand, logCommandOf, LogPageMessage } from './roundsLogMessages';
 
 /** What the page can ask the extension to do. Everything else is page state and never comes back. */
 export interface RoundsLogHooks {
@@ -14,6 +16,14 @@ export interface RoundsLogHooks {
 }
 
 /**
+ * How long the panel waits for the page to say it is listening before assuming it is.
+ *
+ * <p>Long enough that a slow machine is not mistaken for a broken page, short enough that a person
+ * who opened the log does not sit in front of an empty tab wondering.</p>
+ */
+const ASSUME_READY_MS = 5_000;
+
+/**
  * The rounds log page: one webview panel per window, reused while open.
  *
  * <p>The provider only ever PUSHES data. Sorting, filtering, searching, the date range and
@@ -21,7 +31,7 @@ export interface RoundsLogHooks {
  * deliberate, and the lesson of the sidebar's disclosures: a page state that round-trips through
  * the extension host is a page state that can be re-applied by a patch and fire its own event
  * again. The three things that DO come back are commands: answer a question, choose a spending
- * window, forget a vendor's spending.</p>
+ * window, forget a vendor's spending — and one word, `ready`.</p>
  *
  * <p>A push happens only when the rows, the questions or the spending region actually changed.
  * The watcher ticks every five seconds whether or not anything did, and a page re-rendering its
@@ -29,10 +39,38 @@ export interface RoundsLogHooks {
  */
 export class RoundsLogPanel {
   private panel: vscode.WebviewPanel | undefined;
-  private lastPayload = '';
-  private lastUsage = '';
-  /** The same for the blind-spot region: pushed only when it actually changed. */
-  private lastSpots = '';
+
+  /**
+   * What the page has actually been TOLD, rather than what was sent at it.
+   *
+   * <p>It was three `last…` strings assigned BEFORE a `void postMessage(…)`, so a message the page
+   * never received was recorded as delivered and every later tick found nothing changed and sent
+   * nothing. That is what emptied the blind-spot tab and the accepted/rejected counts on
+   * 2026-09-08: the first paint is database-free by design, and the push that fills it in was the
+   * one that went missing.</p>
+   */
+  private readonly ledger = new PushLedger();
+
+  /** The newest of everything, so a page that says `ready` can be answered from here. */
+  private latest: {
+    rows: readonly LogRow[];
+    questions: readonly Escalation[];
+    usage: string;
+    spots: string;
+  } = { rows: [], questions: [], usage: '', spots: '' };
+
+  /**
+   * The belt to the handshake's braces.
+   *
+   * <p>A page whose script throws before attaching its listener never says `ready`, and gating every
+   * push on that word would leave such a page empty for ever with nothing anywhere saying why. So
+   * after this long the panel assumes it is listening and pushes anyway — which is exactly what it
+   * did before this change, and therefore no worse. Raised as blocking by two reviewers.</p>
+   */
+  private assumeReadyIn: NodeJS.Timeout | undefined;
+
+  /** Posts, in order. Two are in flight whenever a tick meets the forced answer to `ready`. */
+  private inFlight: Promise<void> = Promise.resolve();
 
   constructor(private readonly hooks: RoundsLogHooks) {}
 
@@ -57,25 +95,15 @@ export class RoundsLogPanel {
     );
     this.panel = panel;
     panel.webview.html = roundsLogHtml(rows, questions, crypto.randomBytes(16).toString('hex'), usageHtml, spotsHtml);
-    this.lastPayload = payloadOf(rows, questions);
-    this.lastUsage = usageHtml;
-    this.lastSpots = spotsHtml;
-    panel.webview.onDidReceiveMessage((message: { type?: string; command?: string; id?: string }) => {
-      if (message.type !== 'command' || typeof message.id !== 'string') {
-        return;
-      }
-      const handlers: Record<string, (id: string) => Promise<void>> = {
-        answer: this.hooks.onAnswer,
-        usageWindow: this.hooks.onUsageWindow,
-        forgetUsage: this.hooks.onForget,
-      };
-      void handlers[message.command ?? '']?.(message.id);
-    });
+    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml };
+    this.rebuilt();
+
+    panel.webview.onDidReceiveMessage((message: LogPageMessage) => this.received(logCommandOf(message)));
+
     panel.onDidDispose(() => {
       this.panel = undefined;
-      this.lastPayload = '';
-      this.lastUsage = '';
-      this.lastSpots = '';
+      this.clearAssumption();
+      this.ledger.rebuilt();
     });
   }
 
@@ -84,18 +112,102 @@ export class RoundsLogPanel {
     if (this.panel === undefined) {
       return;
     }
-    const payload = payloadOf(rows, questions);
-    if (force || payload !== this.lastPayload) {
-      this.lastPayload = payload;
-      void this.panel.webview.postMessage({ type: 'rows', rows, questions: questionsHtml(questions) });
+    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml };
+    void this.pushAll(force);
+  }
+
+  /**
+   * One decided message, acted on.
+   *
+   * <p>`ready` is the load-bearing one: the page's script is running and its listeners are attached,
+   * so a push can now actually be RECEIVED. Until this word one is accepted by VS Code and delivered
+   * to nobody — `postMessage` answers true for a webview that merely exists, and one exists from the
+   * moment `webview.html` is assigned.</p>
+   */
+  private received(command: LogCommand): void {
+    if (command.kind === 'ready') {
+      this.ledger.ready();
+      this.clearAssumption();
+      void this.pushAll(true);
+
+      return;
     }
-    if (force || usageHtml !== this.lastUsage) {
-      this.lastUsage = usageHtml;
-      void this.panel.webview.postMessage({ type: 'usage', html: usageHtml });
+    if (command.kind === 'answer') {
+      void this.hooks.onAnswer(command.id);
     }
-    if (force || spotsHtml !== this.lastSpots) {
-      this.lastSpots = spotsHtml;
-      void this.panel.webview.postMessage({ type: 'spots', html: spotsHtml });
+    if (command.kind === 'usageWindow') {
+      void this.hooks.onUsageWindow(command.window);
+    }
+    if (command.kind === 'forget') {
+      void this.hooks.onForget(command.provider);
+    }
+  }
+
+  /** A page was built: it has been told nothing, and it has not yet said it is listening. */
+  private rebuilt(): void {
+    this.ledger.rebuilt();
+    this.clearAssumption();
+    this.assumeReadyIn = setTimeout(() => {
+      console.warn('ConnectOtherAIs: the rounds log never said it was ready; pushing anyway');
+      this.ledger.ready();
+      void this.pushAll(true);
+    }, ASSUME_READY_MS);
+  }
+
+  private clearAssumption(): void {
+    if (this.assumeReadyIn !== undefined) {
+      clearTimeout(this.assumeReadyIn);
+      this.assumeReadyIn = undefined;
+    }
+  }
+
+  /**
+   * Send each region the page does not already hold, and record only what arrived.
+   *
+   * <p>SERIALISED, because two pushes are in flight whenever an ordinary tick meets the forced
+   * answer to `ready` — and an older one resolving second would otherwise record content the page
+   * does not have. The ledger refuses a stale generation; this keeps the posts themselves in
+   * order.</p>
+   */
+  private async pushAll(force: boolean): Promise<void> {
+    this.inFlight = this.inFlight.then(() => this.pushEach(force)).catch(() => undefined);
+
+    return this.inFlight;
+  }
+
+  private async pushEach(force: boolean): Promise<void> {
+    const { rows, questions, usage, spots } = this.latest;
+    const regions: ReadonlyArray<[Region, string, () => unknown]> = [
+      ['rows', payloadOf(rows, questions), () => ({ type: 'rows', rows, questions: questionsHtml(questions) })],
+      ['usage', usage, () => ({ type: 'usage', html: usage })],
+      ['spots', spots, () => ({ type: 'spots', html: spots })],
+    ];
+
+    for (const [region, content, message] of regions) {
+      const push = this.ledger.next(region, content, force);
+      if (push !== undefined) {
+        await this.send(push, message());
+      }
+    }
+  }
+
+  /**
+   * One post, and the truth about whether it landed.
+   *
+   * <p>A rejection is a failure like any other — a webview disposed mid-push answers that way — and
+   * it must leave the region UNRECORDED so the next tick sends it again, rather than becoming an
+   * unhandled rejection that says nothing to anybody.</p>
+   */
+  private async send(push: Push, message: unknown): Promise<void> {
+    const panel = this.panel;
+    if (panel === undefined) {
+      return;
+    }
+
+    try {
+      this.ledger.settle(push, await panel.webview.postMessage(message));
+    } catch {
+      this.ledger.settle(push, false);
     }
   }
 }
