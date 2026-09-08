@@ -99,6 +99,26 @@ What it does that the old hand-run sequence did not:
   listing and in no `~/.bash_history`. Putting it in `-H "Authorization: Bearer $TOKEN"` — which is
   what this README said for one commit — publishes a live credential to every other account on the box.
 
+The canary's token is given as **`COAI_TOKEN_FILE`** — a path to a `0600` file — rather than
+`COAI_TOKEN=<value>`, for the same reason it never reaches `-H`: a value on the command line is in
+the process table for every account on the box and in `~/.bash_history` afterwards. A path is not.
+
+### One-time, on a host that predates this layout
+
+`bin` has to become a symlink before the script can swap it, and the build that is already serving
+should be the first entry in the trail rather than something to be re-published. Run once
+(`coai.remsoft.dev` was migrated this way on 2026-09-08):
+
+```bash
+cd /opt/coai && mkdir -p releases
+FIRST="releases/<the live version>-$(date -u +%Y%m%dT%H%M%SZ)"
+cp -a bin "$FIRST"                          # copy, so the running unit keeps its files
+printf '%s\n' "/opt/coai/$FIRST" > releases/.trail
+mv bin bin.premigration && ln -sfn "/opt/coai/$FIRST" bin
+systemctl restart coai-server && curl -sS https://coai.remsoft.dev/api/health
+rm -rf bin.premigration                     # only after the health check answers
+```
+
 ### The canary decides, not `systemctl`
 
 The script submits **one real review per vendor in `vendors.json`** and polls each to a terminal
