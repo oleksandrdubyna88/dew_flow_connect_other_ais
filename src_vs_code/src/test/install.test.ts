@@ -1051,3 +1051,23 @@ test('a manual build is not skipped by the draft job it does not need', () => {
   assert.match(jobBlock(workflow, 'mcp-binaries'), /inputs\.target == 'mcp'/,
     'and a dispatch build still runs');
 });
+
+test('every shell script this repository runs is executable in git', () => {
+  // Found by looking, after the release logic moved into a script: git had recorded it `100644`,
+  // so `run: .github/scripts/verify-and-publish-release.sh` would have failed with "Permission
+  // denied" on every release — and `deploy/systemd-release.sh` was the same, which is what the
+  // deploy workflow's own preflight tests with `test -x`. Nothing else here would have noticed
+  // until a release did.
+  const { execFileSync } = require('node:child_process') as typeof import('node:child_process');
+  const root = path.join(__dirname, '..', '..', '..');
+
+  const listed = execFileSync('git', ['ls-files', '-s', '*.sh'], { cwd: root, encoding: 'utf8' })
+    .split('\n')
+    .filter((line) => line.trim().length > 0);
+
+  assert.ok(listed.length >= 4, `there are scripts to check; found ${listed.length}`);
+  for (const line of listed) {
+    const [mode, , , file] = line.split(/\s+/);
+    assert.equal(mode, '100755', `${file} must be executable — a 644 script is a "Permission denied"`);
+  }
+});
