@@ -83,6 +83,20 @@ test('a reviewer launched without a model gets no separator, not an empty one', 
   ]);
 });
 
+test('a session carrying a model that is not a string renders as if it had none', () => {
+  // An interface is not runtime validation. A hand-edited or foreign session file reaches the
+  // renderer as-is, and `.trim()` on a number would throw while the log was being built — blanking
+  // a whole page to render one row. Raised on the code round; the cast is the only way to express
+  // "this file is not what the type says", which is the situation being tested.
+  const nonsense = round({
+    reviewerStates: [
+      { provider: 'local', role: 'Architecture', status: 'done', findings: 0, note: '', model: 42 as unknown as string },
+    ],
+  });
+
+  assert.deepEqual(reviewerLines(nonsense), ['local/Architecture — done (0 findings)']);
+});
+
 test('a round from before the field reads exactly as it did', () => {
   const older = round({
     reviewerStates: [{ provider: 'codex', role: 'Architecture', status: 'done', findings: 1, note: '' }],
