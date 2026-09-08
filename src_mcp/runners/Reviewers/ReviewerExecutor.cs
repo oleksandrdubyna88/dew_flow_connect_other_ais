@@ -242,8 +242,12 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
                 usage);
         }
 
+        // The LESSER of the two, not whichever was computed last. The scheduler may already have
+        // shortened this repair on a retry, and overwriting that with the executor's own remainder
+        // would hand it back time the ladder had taken away. Raised on the code round.
+        var repairBudget = left < repair.Request.Timeout ? left : repair.Request.Timeout;
         var (repairOutcome, repaired, repairUsage, repairAnswer, repairEvidence) =
-            await RunOnceAsync(repair with { Request = repair.Request with { Timeout = left } }, ct);
+            await RunOnceAsync(repair with { Request = repair.Request with { Timeout = repairBudget } }, ct);
         return repairOutcome
                ?? (repaired is { } fixedReview
                    // Both launches are billed, so both are counted — a repaired reviewer that
