@@ -245,6 +245,15 @@ disposal removes one entry and kills one process rather than clearing a field.
 holds — but the person must, because the difference shows up in latency, in cost and in the
 conversation's length limit. The model picker says so on the remote rows.
 
+### Which vendors can answer
+
+The build split recorded that only `antigravity` had an adapter, because `claude`’s stream-json
+schema differs and `codex exec` was believed to have no multi-turn stdin. The owner asked for all
+three on 2026-09-08 and the belief was then MEASURED: `codex` holds a conversation through session
+resume, and `claude` holds one exactly as `agy` does — and faster. That work is its own plan,
+[PLAN_three_chat_adapters.md](PLAN_three_chat_adapters.md), because it changes the session’s shape
+rather than this feature’s surface. Until it lands, a non-`antigravity` row is refused by name.
+
 ### Settings
 
 - `coai.uiScale` (existing) — the ± zoom, already pushed to every open page.
