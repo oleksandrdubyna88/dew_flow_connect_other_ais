@@ -133,13 +133,18 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
     /// wanted, belongs to the client that asked. Raised as a contradiction on the plan round by
     /// gemini and by local; there is none, but the boundary is worth naming where it lives.</para>
     /// </remarks>
-    private static ReviewAttempt Read(ReviewerLaunch launch) =>
-        launch.Terminal is { } terminal
-            ? new ReviewAttempt.Failed(terminal)
-            : string.IsNullOrWhiteSpace(launch.Answer)
-                ? new ReviewAttempt.Failed(new ReviewerOutcome.Unparseable(
-                    "the vendor exited cleanly without writing an answer", launch.Usage))
-                : new ReviewAttempt.Answered(launch.Answer, launch.Usage.TokensIn, launch.Usage.TokensOut);
+    private static ReviewAttempt Read(ReviewerLaunch launch) => launch switch
+    {
+        { Terminal: { } terminal } => new ReviewAttempt.Failed(terminal),
+        { Answer: null or "" } => Nothing(launch.Usage),
+        { Answer: { } answer } when string.IsNullOrWhiteSpace(answer) => Nothing(launch.Usage),
+        { Answer: { } answer } => new ReviewAttempt.Answered(answer, launch.Usage.TokensIn, launch.Usage.TokensOut),
+    };
+
+    /// <summary>A clean exit that produced no answer — a failure, and NOT <c>NotStarted</c>.</summary>
+    private static ReviewAttempt Nothing(Usage usage) =>
+        new ReviewAttempt.Failed(new ReviewerOutcome.Unparseable(
+            "the vendor exited cleanly without writing an answer", usage));
 
     /// <summary>The role a client named. Validated at the endpoint, so a bad one cannot arrive here.</summary>
     private static ReviewRole RoleOf(string role) =>
