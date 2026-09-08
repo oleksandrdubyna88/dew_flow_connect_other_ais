@@ -1,11 +1,38 @@
 # PLAN — a round has a deadline, not only a reviewer
 
-> Status: **plan only, nothing implemented yet, 2026-09-08.** Scope: one setting in the panel and its manifest,
-> one bound in `PanelService.RunStageAsync`, and the sentence a round prints when it hits it.
+> Status: **IMPLEMENTED, 2026-09-08.** A round is bounded by a deadline derived from its own shape —
+> `RoundBudget.For`, floored at one full wave and capped at eight hours — with
+> `COAI_ROUND_TIMEOUT_MINUTES` overriding it and zero meaning derive. Reaching it cancels the
+> outstanding reviewers and gates on what answered, and the summary says the ROUND ran out.
 >
-> Related docs: [module_server.md](../research/module_server.md),
-> [module_runners.md](../research/module_runners.md),
-> [RESULTS_reviewer_input_sizes.md](../research/RESULTS_reviewer_input_sizes.md).
+> Related docs: [module_server.md](module_server.md), [module_runners.md](module_runners.md),
+> [RESULTS_reviewer_input_sizes.md](RESULTS_reviewer_input_sizes.md).
+>
+> **Deviations, and this plan gained more from its two gate rounds than any other today:**
+>
+> 1. **The floor was applied to the wrong thing, and the code round caught it.** The first build
+>    floored EVERY budget at one reviewer timeout — including a number a person had typed — so an
+>    explicit five minutes silently became ten while the panel warned that reviewers would be cut
+>    off. A setting ignored and a warning that lied about the same number. The floor belongs to the
+>    DERIVATION, inside `RoundBudget`, and an explicit value is now honoured exactly.
+> 2. **Two bounds nobody planned for.** A derivation with no ceiling builds a round nobody is waiting
+>    for (an hour per reviewer at a concurrency of one is twenty hours), so it caps at eight. And a
+>    `CancellationTokenSource` takes an int of milliseconds, so `COAI_ROUND_TIMEOUT_MINUTES=80000`
+>    would have thrown before a reviewer started — a config value crashing the round it was meant to
+>    bound. `Expressible` clamps any budget to what a timer can hold.
+> 3. **The clock had to start earlier than planned.** It began when the reviewers did, so a round
+>    that spent minutes resolving a sha and mounting a worktree could exceed its stated limit by
+>    however long its setup took. It starts with the STAGE, and the timer gets what is left.
+> 4. **Attribution is read, not inferred.** The timer has its own `CancellationTokenSource` linked
+>    with the caller's, because a single linked source would have had to guess between a deadline and
+>    a person cancelling at the same moment. Where both fired it resolves toward the person.
+> 5. **The panel shows the derivation.** "Zero means derive" was a hidden dependency — raise the
+>    reviewer timeout and the round doubles with nothing on screen saying so. It reads `at most`,
+>    because the server derives from the reviewers a round ACTUALLY schedules: fewer when a
+>    repository wrote no rules down, fewer again when the lenses are dealt.
+> 6. **Open question 2 was answered by building it:** the deadline does bound the Team server's
+>    queue, because the clock is wall-clock from the moment the stage opens and a job waiting on a
+>    server is time the person spends waiting too.
 
 ## What the operator asked for
 
@@ -111,10 +138,13 @@ here before it is written.
 
 ## Definition of Done
 
-- [ ] A round that exceeds its budget cancels what is outstanding and still reports a verdict.
-- [ ] The summary says the ROUND ran out, not that a reviewer failed.
-- [ ] The default is derived from the reviewer timeout, the role count and the concurrency cap, and
-      a test asserts it cannot fall below one full wave.
-- [ ] The setting's description says what lowering it cuts into.
-- [ ] The panel and the server agree on the default — the precondition `envBlock` needs, and the
-      one that was silently broken for a day in September.
+- [x] A round that exceeds its budget cancels what is outstanding and still reports a verdict.
+- [x] The summary says the ROUND ran out, not that a reviewer failed.
+- [x] The default is derived from the reviewer timeout, the role count and the concurrency cap, and
+      a test asserts it cannot fall below one full wave — over six shapes, including nonsense inputs.
+- [x] The setting's description says what lowering it cuts into, in the help ARTICLE as well as the
+      tooltip, because a repository guard requires it there.
+- [x] The panel and the server agree on the default: zero on both sides, meaning derive. There is no
+      number to keep in step, which is how this one avoids the failure of September's gate defaults.
+- [x] Two bounds the plan did not foresee: a ceiling on the derivation, and a clamp to what a
+      `CancellationTokenSource` can express.

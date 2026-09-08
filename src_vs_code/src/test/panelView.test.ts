@@ -754,6 +754,29 @@ test('the round limit says what it works out to, and warns when it cannot be met
     'a limit under one reviewer cannot be met, and the panel says so where it is set',
   );
 
+  // A vendor that reviews plans only is not a code reviewer, and dealing sends each lens to ONE
+  // vendor rather than to all of them — two ways the naive "every enabled vendor, every role" count
+  // is too big. Both raised on the code round.
+  const planOnly = panelHtml(
+    state({
+      settings: { ...DEFAULTS, roundTimeoutMinutes: 0, reviewerTimeoutMinutes: 10, maxConcurrency: 3 },
+      vendors: DEFAULT_VENDORS.map((v) => ({ ...v, enabled: true, code: false })),
+      openSections: ['limits'],
+    }),
+    'n0nce',
+  );
+  const noCode = /worked out: at most (\d+) waves?/.exec(planOnly);
+  assert.ok(noCode && Number(noCode[1]) >= 1, 'a round with no code vendors still allows one wave');
+
+  const dealt = withSettings({ roundTimeoutMinutes: 0, reviewerTimeoutMinutes: 10, maxConcurrency: 3, dealCodeLenses: true });
+  const dealtWaves = /worked out: at most (\d+) waves?/.exec(dealt);
+  const undealtWaves = /worked out: at most (\d+) waves?/.exec(derived);
+  assert.ok(dealtWaves && undealtWaves);
+  assert.ok(
+    Number(dealtWaves[1]) <= Number(undealtWaves[1]),
+    'dealing sends each lens to one vendor, so a dealt round is never wider than an undealt one',
+  );
+
   const byHand = withSettings({ roundTimeoutMinutes: 90, reviewerTimeoutMinutes: 10 });
   assert.ok(byHand.includes('set by hand'), 'a workable explicit limit needs no arithmetic');
   // "worked out:" with the colon — the note's own form. The help article on the same page says

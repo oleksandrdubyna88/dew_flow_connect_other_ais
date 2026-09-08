@@ -165,7 +165,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     section('reviewers', 'Reviewers', open, reviewersBody(state)),
     section('prompts', 'Prompts per round', open, promptsBody(state)),
     section('gate', 'The gate', open, gateBody(state.settings)),
-    section('limits', 'Limits', open, limitsBody(state.settings, state.vendors.filter((v) => v.enabled).length)),
+    section('limits', 'Limits', open, limitsBody(state.settings, state.vendors.filter((v) => v.enabled && v.code).length)),
     section('keys', 'Vendor keys', open, keysBody(state)),
     section('teamServers', 'Team servers', open, teamServersBody(state.teamServers ?? [], state.latestTeamServerVersion ?? '')),
     section('side', 'This side', open, sideBody(state)),
@@ -786,7 +786,11 @@ function roundLimitNote(s: CoaiSettings, enabledVendors: number): string {
       : 'set by hand';
   }
 
-  const reviewers = Math.max(1, enabledVendors) * ROLES.filter((r) => r.stage === 'code').length;
+  // Dealing changes the arithmetic rather than scaling it: every lens goes to ONE vendor instead of
+  // to all of them, so a dealt round launches one reviewer per ROLE however many vendors are on.
+  // That is half the round at two vendors, and the panel would have promised the undealt number.
+  const codeRoles = ROLES.filter((r) => r.stage === 'code').length;
+  const reviewers = s.dealCodeLenses ? codeRoles : Math.max(1, enabledVendors) * codeRoles;
   const waves = Math.max(1, Math.ceil(reviewers / Math.max(1, s.maxConcurrency)));
 
   // "AT MOST", because the server derives from the reviewers a round ACTUALLY schedules, and it

@@ -578,12 +578,7 @@ public sealed partial class PanelService
                 // cancels at the moment the deadline strikes is reported as a person: the round was
                 // going to end either way, and blaming the clock for their decision is the wrong
                 // half of an ambiguity to keep.
-                // The WHOLE budget, not what was left of it after setup: "the round reached its 30
-                // minute limit" when the limit is forty is a sentence nobody can act on. Raised on
-                // the code round.
-                EndedByDeadline = clock.IsCancellationRequested && !ct.IsCancellationRequested
-                    ? budget
-                    : null,
+                EndedByDeadline = WhatEndedIt(clock.Token, ct, budget),
             };
             var reviews = results.Select(r => r.Outcome).OfType<ReviewerOutcome.Ok>().Select(o => o.Review).ToList();
             // The ROLE is stamped here because this is the only place that holds both the invocation
@@ -1089,12 +1084,31 @@ public sealed partial class PanelService
     /// <see cref="RoundBudget"/>. Shipping a fixed five or thirty minutes would cancel healthy
     /// rounds on a machine with more vendors than the person who chose the number had.
     /// </remarks>
+    /// <summary>
+    /// The round's own budget when the DEADLINE ended the round, and null for every other ending.
+    /// </summary>
+    /// <remarks>
+    /// <para>Read from the timer's own token rather than from the linked one, so the answer comes
+    /// from the thing that fired instead of a guess between two.</para>
+    /// <para>Where both fired it resolves toward the PERSON deliberately: they were going to end the
+    /// round either way, and blaming the clock for their decision is the wrong half of an ambiguity
+    /// to keep. Two reviewers raised the race; this is which side of it to land on.</para>
+    /// <para>The WHOLE budget, not what was left of it after setup — "the round reached its 30
+    /// minute limit" when the limit is forty is a sentence nobody can act on.</para>
+    /// </remarks>
+    private static TimeSpan? WhatEndedIt(CancellationToken deadline, CancellationToken caller, TimeSpan budget) =>
+        deadline.IsCancellationRequested && !caller.IsCancellationRequested ? budget : null;
+
     /// <returns>The whole budget, and what is left of it for the reviewers.</returns>
     private (TimeSpan Whole, TimeSpan Left) RoundDeadlineFor(int reviewers, TimeSpan spentOnSetup)
     {
-        var whole = _settings.RoundTimeout > TimeSpan.Zero
+        // `Expressible` on the explicit path too: a `CancellationTokenSource` takes an int of
+        // milliseconds and refuses anything past about 24.8 days, so 80,000 minutes would have
+        // thrown before a reviewer started. A number the timer cannot hold is not a longer deadline,
+        // it is no deadline at all. Raised on the code round.
+        var whole = RoundBudget.Expressible(_settings.RoundTimeout > TimeSpan.Zero
             ? _settings.RoundTimeout
-            : RoundBudget.For(_settings.ReviewerTimeout, reviewers, _settings.GlobalConcurrency);
+            : RoundBudget.For(_settings.ReviewerTimeout, reviewers, _settings.GlobalConcurrency));
 
         // An explicit setting below one reviewer's own deadline cannot be honoured without
         // cancelling a reviewer that has not finished its FIRST attempt. Said out loud rather than
