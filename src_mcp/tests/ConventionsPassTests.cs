@@ -1,4 +1,7 @@
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Context;
+using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
 
@@ -69,6 +72,62 @@ public sealed class ConventionsPassTests
                 $"{role} round 1 is {role}'s own question now");
             PromptCatalog.ForRound(role, 2, NoChoice).Id.Should().Be(universal);
         }
+    }
+
+    /// <summary>
+    /// A repository that wrote nothing down does not get a conventions reviewer — and the round is
+    /// otherwise untouched.
+    /// </summary>
+    /// <remarks>
+    /// <para>The behaviour existed for an hour with NO test, which a review of the round caught. It
+    /// was unreachable except through <c>ReviewCodeAsync</c>, which needs a session, a checkout and
+    /// a git repository — so it stayed unasserted rather than being asserted badly. Extracting the
+    /// decision into a pure function is what made it a test instead of an integration fixture.</para>
+    /// <para>A reviewer that invents a standard is worse than no reviewer: the finding it raises
+    /// cannot be argued with, because there is no sentence to point at.</para>
+    /// </remarks>
+    [Fact]
+    public void WithNoWrittenRules_TheConventionsReviewersAreDropped_AndNobodyElseIs()
+    {
+        ReviewRole[] scheduled =
+            [ReviewRole.Conventions, ReviewRole.Architecture, ReviewRole.SecurityReliability, ReviewRole.UxDxPerformance];
+
+        PanelService.RolesWithRulesInMind(scheduled, hasRules: false)
+            .Should().Equal([ReviewRole.Architecture, ReviewRole.SecurityReliability, ReviewRole.UxDxPerformance]);
+    }
+
+    [Fact]
+    public void WithWrittenRules_TheRoundIsExactlyWhatWasScheduled()
+    {
+        ReviewRole[] scheduled = [ReviewRole.Conventions, ReviewRole.Architecture];
+
+        PanelService.RolesWithRulesInMind(scheduled, hasRules: true).Should().Equal(scheduled);
+    }
+
+    [Fact]
+    public void ARoundThatNeverScheduledConventions_IsUntouchedEitherWay()
+    {
+        // The plan stage, and any code round whose Conventions budget is spent. Dropping nothing
+        // must not be spelled as a special case anywhere.
+        ReviewRole[] scheduled = [ReviewRole.Architecture, ReviewRole.SecurityReliability];
+
+        PanelService.RolesWithRulesInMind(scheduled, hasRules: false).Should().Equal(scheduled);
+        PanelService.RolesWithRulesInMind(scheduled, hasRules: true).Should().Equal(scheduled);
+    }
+
+    /// <summary>
+    /// The sentence that names where to put rules names every place that is actually read.
+    /// </summary>
+    /// <remarks>
+    /// It was hand-written and listed four of the six, omitting `.github/copilot-instructions.md`
+    /// and `.cursor/rules` — so it told somebody with no rules to write a file the reader never
+    /// opens. The list is derived from `RuleFiles`' own two now.
+    /// </remarks>
+    [Fact]
+    public void TheSourcesNamedToAPersonAreTheSourcesActuallyRead()
+    {
+        RuleFiles.SourceNames.Should().Contain(
+            ["CLAUDE.md", "AGENTS.md", "GEMINI.md", ".github/copilot-instructions.md", ".claude/rules", ".cursor/rules"]);
     }
 
     [Fact]
