@@ -41,9 +41,31 @@ export interface ChatPageState {
   readonly modelId: string;
   /** A turn is in flight: the composer is locked and the thinking line is shown. */
   readonly running: boolean;
+  /**
+   * The conversation has reached its limit and cannot take another turn.
+   *
+   * <p>Only a remote model reaches this: it holds no conversation, so turn four re-sends everything
+   * said so far for the fourth time, and the thread's cost grows while its usefulness does not. The
+   * owner capped it at three on 2026-09-08. A capped page must OFFER something — a locked box with
+   * no way out is the failure the gate named — so it shows the two honest actions, start again or
+   * move the thread to a local model, which does have memory.</p>
+   */
+  readonly capped: boolean;
   /** Empty when nothing failed. A sentence when something did. */
   readonly failure: string;
   readonly uiScale: number;
+}
+
+/** What a capped conversation offers instead of a composer nobody can use. */
+export function chatCappedHtml(capped: boolean): string {
+  if (!capped) {
+    return '';
+  }
+
+  return '<div class="capped"><p>This model keeps no conversation, so every follow-up re-sends the whole '
+    + 'thread. Three turns is the limit.</p>'
+    + '<button type="button" id="restart">Start a new conversation</button> '
+    + '<button type="button" id="useLocal">Continue with a local model</button></div>';
 }
 
 /** The messages region on its own, so the host can push it without re-rendering the page. */
@@ -108,6 +130,8 @@ export function chatPageHtml(state: ChatPageState, nonce: string): string {
   textarea { width: 100%; box-sizing: border-box; min-height: 64px; font: inherit; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); border-radius: 4px; padding: 8px; }
   textarea[disabled] { opacity: .6; }
   .hint { font-size: .85em; opacity: .6; margin-top: 4px; }
+  .capped { border: 1px solid var(--vscode-panel-border); border-radius: 4px; padding: 10px 12px; margin: 0 0 10px; }
+  .capped p { margin: 0 0 8px; }
 ${ZOOM_CSS}
 </style>
 </head>
@@ -117,8 +141,9 @@ ${ZOOM_CSS}
 <div id="failure">${state.failure.length === 0 ? '' : `<div class="failure">${escapeHtml(state.failure)}</div>`}</div>
 <div id="messages">${chatMessagesHtml(state.messages)}</div>
 <div id="thinking">${state.running ? '<p class="thinking">Thinking…</p>' : ''}</div>
+<div id="capped">${chatCappedHtml(state.capped)}</div>
 ${chatPickerHtml(state.models, state.modelId)}
-<textarea id="say" rows="3" placeholder="Ask about the text above…"${state.running ? ' disabled' : ''}></textarea>
+<textarea id="say" rows="3" placeholder="Ask about the text above…"${state.running || state.capped ? ' disabled' : ''}></textarea>
 <div class="hint">Enter sends · Shift+Enter for a new line</div>
 <script nonce="${nonce}">
 (function () {
@@ -129,6 +154,9 @@ ${chatPickerHtml(state.models, state.modelId)}
   window.onerror = function (message) {
     const box = document.getElementById('failure');
     if (box) { box.textContent = 'The page hit an error: ' + message; }
+    // And TELL the host. A trap that only writes into the page leaves the extension believing the
+    // conversation is fine while the tab has stopped answering Enter. (gemini, the plan round.)
+    vscode.postMessage({ type: 'pageError', message: String(message) });
   };
   ${zoomScript()}
   function send() {
@@ -153,15 +181,32 @@ ${chatPickerHtml(state.models, state.modelId)}
       vscode.postMessage({ type: 'command', command: 'pick', id: model.value });
     });
   }
+  function wireCapped() {
+    const restart = document.getElementById('restart');
+    if (restart) {
+      restart.addEventListener('click', function () {
+        vscode.postMessage({ type: 'command', command: 'restart' });
+      });
+    }
+    const useLocal = document.getElementById('useLocal');
+    if (useLocal) {
+      useLocal.addEventListener('click', function () {
+        vscode.postMessage({ type: 'command', command: 'useLocal' });
+      });
+    }
+  }
+  wireCapped();
   window.addEventListener('message', function (event) {
     const data = event.data || {};
     if (data.type !== 'state') { return; }
+    const capped = document.getElementById('capped');
+    if (capped) { capped.innerHTML = data.cappedHtml || ''; wireCapped(); }
     const messages = document.getElementById('messages');
     if (messages && typeof data.messagesHtml === 'string') { messages.innerHTML = data.messagesHtml; }
     const thinking = document.getElementById('thinking');
     if (thinking) { thinking.innerHTML = data.running ? '<p class="thinking">Thinking…</p>' : ''; }
     const box = document.getElementById('say');
-    if (box) { box.disabled = !!data.running; }
+    if (box) { box.disabled = !!data.running || !!data.capped; }
     const failure = document.getElementById('failure');
     if (failure) { failure.innerHTML = data.failureHtml || ''; }
     const passage = document.getElementById('passage');

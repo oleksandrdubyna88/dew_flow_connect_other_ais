@@ -18,6 +18,15 @@
  * conversation is still wanted. Then, and only then, a label match re-keys the existing panel onto
  * the new object. A label match while the old object is still on screen means two real tabs, and it
  * must NOT re-key: that is exactly the collapse this module exists to prevent.</p>
+ *
+ * <p><b>What happens if `Tab` objects turn out to be EPHEMERAL.</b> A reviewer called this design
+ * Blocking on the claim that VS Code recreates them whenever tab-group state changes. If that is so,
+ * the identity branch misses every time and the fallback carries the feature: a uniquely named tab
+ * re-keys and keeps its conversation, and an ambiguously named one opens a SECOND chat tab. That is
+ * the degradation this shape was chosen for — the worst case is an extra tab, never a follow-up
+ * delivered to somebody else's conversation, which is what a label key gives you on its best day.
+ * The claim is answered by measurement rather than argument: `~/.vscode/extensions/coai-probe` logs
+ * `tab identity: SAME|NEW` across invocations, and three keypresses settle it.</p>
  */
 
 /**

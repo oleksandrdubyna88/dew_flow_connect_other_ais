@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ChatModelChoice, ChatPageState, chatMessagesHtml, chatPageHtml, chatPickerHtml } from '../chatPage';
+import { ChatModelChoice, ChatPageState, chatCappedHtml, chatMessagesHtml, chatPageHtml, chatPickerHtml } from '../chatPage';
 
 /**
  * The page, as a string.
@@ -24,6 +24,7 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
     models: MODELS,
     modelId: 'antigravity',
     running: false,
+    capped: false,
     failure: '',
     uiScale: 0,
     ...over,
@@ -127,4 +128,30 @@ test('both sides of the conversation are named', () => {
   assert.ok(html.includes('You'));
   assert.ok(html.includes('The other AI'));
   assert.ok(html.indexOf('why') < html.indexOf('because'), 'the conversation is out of order');
+});
+
+test('a capped conversation offers a way out rather than a locked box', () => {
+  const html = chatPageHtml(state({ capped: true }), 'n0nce');
+
+  // The owner capped remote threads at three turns. A page that only disabled the composer would
+  // leave somebody with a conversation they cannot continue and no idea what to do next - which is
+  // the failure the plan round named. (gemini and codex, independently.)
+  assert.ok(html.includes('Start a new conversation'), 'the capped page offers no restart');
+  assert.ok(html.includes('Continue with a local model'), 'the capped page does not name the way out');
+  assert.ok(/<textarea[^>]*disabled/.test(html), 'a fourth turn could still be typed');
+});
+
+test('an uncapped conversation says nothing about a limit', () => {
+  const html = chatPageHtml(state(), 'n0nce');
+
+  assert.strictEqual(chatCappedHtml(false), '');
+  assert.ok(!html.includes('Start a new conversation'), 'a limit was announced before it was reached');
+});
+
+test('the page tells the host when it traps an error, not only itself', () => {
+  const html = chatPageHtml(state(), 'n0nce');
+
+  // A trap that only writes into the page leaves the extension believing the conversation is fine
+  // while the tab has stopped answering Enter.
+  assert.match(html, /postMessage\(\{ type: 'pageError'/, 'the error trap reports to nobody');
 });
