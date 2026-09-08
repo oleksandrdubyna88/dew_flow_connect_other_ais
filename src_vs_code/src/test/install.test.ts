@@ -206,16 +206,22 @@ test('a server tag creates a GitHub RELEASE, because that is what the panel read
   // invisible to it: `newestServerTag` had nothing to find and the update line could never fire.
   // This is the fact neither file can state alone — the reader is TypeScript, the writer is a
   // workflow step, and between them sat an assumption.
-  const server = jobBlock(releaseWorkflow(), 'server-binaries');
+  const workflow = releaseWorkflow();
   const installer = fs.readFileSync(
     path.join(__dirname, '..', '..', 'src', 'installer.ts'),
     'utf8',
   );
 
   assert.match(installer, /releases\?per_page=/, 'the panel reads RELEASES, not tags');
-  assert.match(server, /gh release create "\$GITHUB_REF_NAME"/, 'so the server tag creates one');
+  // The create moved OUT of the matrix on 2026-09-08 — six legs racing it made six drafts rather
+  // than five clean failures — so the release is created once, uploaded to by every leg, and
+  // published by the job that counted the assets.
+  assert.match(jobBlock(workflow, 'server-draft'), /gh release create "\$GITHUB_REF_NAME" --draft/,
+    'so the server tag creates one, once');
+  const server = jobBlock(workflow, 'server-binaries');
   assert.match(server, /gh release upload "\$GITHUB_REF_NAME" "\$ASSET"/, 'and attaches its archive');
   assert.match(server, /sha256sum "\$ASSET"/, 'beside a checksum');
+  assert.match(jobBlock(workflow, 'server-release-complete'), /--draft=false/, 'and it is published');
 });
 
 test('the server release is verified COMPLETE, not merely attempted', () => {
@@ -955,4 +961,51 @@ test('a completeness job waits for every leg of its matrix', () => {
 
   assert.match(jobBlock(workflow, 'mcp-release-complete'), /needs:\s*\[\s*mcp-binaries\s*\]/);
   assert.match(jobBlock(workflow, 'server-release-complete'), /needs:\s*\[\s*server-binaries\s*\]/);
+});
+
+test('a draft is created ONCE, outside the matrix', () => {
+  // Measured against the live API on 2026-09-08, with a real existing tag:
+  //
+  //   gh release create <tag> --draft  ->  releases/tag/untagged-4edbbf29…  exit 0
+  //   gh release create <tag> --draft  ->  releases/tag/untagged-ebd3e8b4…  exit 0
+  //
+  // A draft carries no tag of its own, so GitHub makes a SECOND one under the same name rather
+  // than refusing. Six matrix legs would produce six drafts holding one asset each — and the
+  // `|| true` that made the old published-release race safe is exactly what would have hidden it.
+  //
+  // So `create` may not appear in a job that has a matrix. That is the rule this holds.
+  const workflow = releaseWorkflow();
+
+  for (const leg of ['mcp-binaries', 'server-binaries']) {
+    const block = jobBlock(workflow, leg);
+    assert.match(block, /strategy:/, `${leg} is the matrix this rule is about`);
+    assert.doesNotMatch(block, /gh release create/, `${leg} must not create the release`);
+    assert.match(block, /needs:\s*\[\s*(mcp|server)-draft\s*\]/, `${leg} waits for the one that does`);
+  }
+
+  for (const maker of ['mcp-draft', 'server-draft']) {
+    const block = jobBlock(workflow, maker);
+    assert.doesNotMatch(block, /strategy:/, `${maker} must not be a matrix itself`);
+    assert.match(block, /gh release view "\$GITHUB_REF_NAME" >\/dev\/null 2>&1/,
+      `${maker} reuses an existing draft rather than making a second one on a re-run`);
+  }
+});
+
+test('the expected asset set is the whole matrix, win-arm64 included', () => {
+  // `mcp-v0.18.13` shipped five platforms of six because win-arm64's leg failed. A completeness
+  // check whose expected list quietly held five names would pass on exactly that release.
+  const workflow = releaseWorkflow();
+
+  for (const [job, rid] of [['mcp-release-complete', 'mcp'], ['server-release-complete', 'server']]) {
+    const declared = /RIDS=\(([^)]*)\)/.exec(jobBlock(workflow, job!));
+    assert.ok(declared, `${job} declares the platforms it expects`);
+    const names = declared[1]!.trim().split(/\s+/);
+
+    assert.deepEqual(names.sort(), [...COAI_RIDS].sort(), `${job} expects every platform`);
+    assert.ok(names.includes('win-arm64'), 'the one that went missing is in the list');
+    assert.ok(
+      jobBlock(workflow, job!).includes(`coai-${rid}-$VERSION-$rid.$EXT`),
+      'and each RID maps to one expected asset name',
+    );
+  }
 });

@@ -40,9 +40,78 @@ permissions:
   contents: read
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # ONE job creates the draft, before any matrix leg runs.
+  #
+  # It was six legs racing a `gh release create --draft`, five expected to lose. **They do not
+  # lose.** Measured against the live API on 2026-09-08, with a real existing tag:
+  #
+  #   gh release create <tag> --draft   ->  releases/tag/untagged-4edbbf29...   exit 0
+  #   gh release create <tag> --draft   ->  releases/tag/untagged-ebd3e8b4...   exit 0
+  #
+  # A draft carries no tag of its own yet, so GitHub happily makes a second one under the same
+  # name. Six legs would therefore produce six drafts holding one asset each, and the completeness
+  # job would resolve one of them, find one archive, and fail. The `|| true` that made the old
+  # published-release race safe is exactly what would have hidden this one.
+  #
+  # (What was NOT the problem, also measured: `gh release upload <tag>` resolves a DRAFT by tag
+  # perfectly well - `isDraft: true`, asset present. The plan round raised that as blocking, and it
+  # is simply not so.)
+  mcp-draft:
+    name: the mcp release, as a draft
+    if: startsWith(github.ref, 'refs/tags/mcp-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Create it, once
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Idempotent for a re-run: a draft this workflow already made is REUSED rather than
+          # duplicated, which is the whole failure above.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "$GITHUB_REF_NAME already exists; reusing it"
+            exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" --draft \
+            --title "coai-mcp ${GITHUB_REF_NAME#mcp-v}" \
+            --notes "Native AOT builds of the ConnectOtherAIs MCP server."
+
+  server-draft:
+    name: the server release, as a draft
+    if: startsWith(github.ref, 'refs/tags/server-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Create it, once
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "$GITHUB_REF_NAME already exists; reusing it"
+            exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" --draft \
+            --title "coai-server ${GITHUB_REF_NAME#server-v}" \
+            --notes "Native AOT builds of the ConnectOtherAIs Team server, and the multi-arch image at ghcr.io/${{ github.repository_owner }}/coai-server:${GITHUB_REF_NAME#server-v}."
+
   mcp-binaries:
     name: coai-mcp (${{ matrix.rid }})
     if: startsWith(github.ref, 'refs/tags/mcp-v') || inputs.target == 'mcp'
+    # A leg no longer CREATES anything: `mcp-draft` did that once, and six legs racing a create
+    # made six drafts rather than five clean failures. A dispatch build skips the draft job (no
+    # tag) and uploads nothing either -- its Attach step is already guarded on the tag.
+    needs: [mcp-draft]
     strategy:
       fail-fast: false
       matrix:
@@ -252,7 +321,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          gh release create "$GITHUB_REF_NAME" --draft --title "coai-mcp ${GITHUB_REF_NAME#mcp-v}" --notes "Native AOT builds of the ConnectOtherAIs MCP server." 2>/dev/null || true
+          set -euo pipefail
           gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber
           gh release upload "$GITHUB_REF_NAME" "$ASSET.sha256" --clobber
 
@@ -285,16 +354,25 @@ jobs:
           EXPECTED=6
           [ "${#RIDS[@]}" -eq "$EXPECTED" ] || { echo "the RID list and EXPECTED disagree"; exit 1; }
 
-          ASSETS=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')
-          printf '%s\n' "$ASSETS"
-
+          # POLLED, not read once. `needs` proves every upload RETURNED; it does not prove GitHub's
+          # release listing has caught up with them, and a listing lagging by a second would fail a
+          # release that is in fact complete. Bounded, so a genuinely missing asset still fails.
           MISSING=""
-          for rid in "${RIDS[@]}"; do
-            case "$rid" in win-*) EXT=zip ;; *) EXT=tar.gz ;; esac
-            for name in "coai-mcp-$VERSION-$rid.$EXT" "coai-mcp-$VERSION-$rid.$EXT.sha256"; do
-              printf '%s\n' "$ASSETS" | grep -qx "$name" || MISSING="$MISSING $name"
+          ASSETS=""
+          for attempt in $(seq 1 10); do
+            ASSETS=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')
+            MISSING=""
+            for rid in "${RIDS[@]}"; do
+              case "$rid" in win-*) EXT=zip ;; *) EXT=tar.gz ;; esac
+              for name in "coai-mcp-$VERSION-$rid.$EXT" "coai-mcp-$VERSION-$rid.$EXT.sha256"; do
+                printf '%s\n' "$ASSETS" | grep -qx "$name" || MISSING="$MISSING $name"
+              done
             done
+            [ -z "$MISSING" ] && break
+            echo "attempt $attempt: still missing:$MISSING"
+            sleep 6
           done
+          printf '%s\n' "$ASSETS"
 
           if [ -n "$MISSING" ]; then
             echo "the release is incomplete — missing:$MISSING"
@@ -302,7 +380,16 @@ jobs:
           fi
           echo "the release carries all $EXPECTED platforms, each with its checksum"
 
-          gh release edit "$GITHUB_REF_NAME" --draft=false
+          # Retried, because everything above already passed: the assets ARE all there, and leaving
+          # a complete release stranded as a draft over one transient API error is the only failure
+          # this job can still cause by itself.
+          for attempt in 1 2 3; do
+            gh release edit "$GITHUB_REF_NAME" --draft=false && break
+            echo "publish attempt $attempt failed; retrying"
+            sleep 5
+          done
+          gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft' | grep -qx false \
+            || { echo "complete, but it could not be published — publish it by hand"; exit 1; }
           echo "published $GITHUB_REF_NAME"
 
   extension:
@@ -366,7 +453,15 @@ jobs:
           set -euo pipefail
           gh release create "$GITHUB_REF_NAME" --draft --title "ConnectOtherAIs ${GITHUB_REF_NAME#extension-v}" --notes "The VS Code extension." 2>/dev/null || true
           gh release upload "$GITHUB_REF_NAME" *.vsix --clobber
-          # Only now, and only because the asset above is the whole of this release.
+
+          # Asked of the RELEASE, not assumed from an exit code. `set -e` catches an upload that
+          # fails; it does not catch one that uploaded something other than a .vsix, and this line
+          # is the same guarantee the other two lines get from their completeness job. Raised on
+          # the plan round: an unconditional publish here would have broken the promise that
+          # nothing is visible until its asset is.
+          gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' | grep -q '\.vsix$' \
+            || { echo "no .vsix on the release — refusing to publish an empty one"; exit 1; }
+
           gh release edit "$GITHUB_REF_NAME" --draft=false
 
       # Publishing needs a Marketplace PAT (https://dev.azure.com → Personal Access Tokens,
@@ -400,6 +495,7 @@ jobs:
   server-binaries:
     name: coai-server (${{ matrix.rid }})
     if: startsWith(github.ref, 'refs/tags/server-v')
+    needs: [server-draft]
     strategy:
       fail-fast: false
       matrix:
@@ -593,12 +689,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! gh release create "$GITHUB_REF_NAME" --draft \
-                --title "coai-server ${GITHUB_REF_NAME#server-v}" \
-                --notes "Native AOT builds of the ConnectOtherAIs Team server, and the multi-arch image at ghcr.io/${{ github.repository_owner }}/coai-server:${GITHUB_REF_NAME#server-v}." 2>/dev/null; then
-            gh release view "$GITHUB_REF_NAME" >/dev/null \
-              || { echo "the release could not be created and does not exist"; exit 1; }
-          fi
           gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber
           gh release upload "$GITHUB_REF_NAME" "$ASSET.sha256" --clobber
 
@@ -633,16 +723,24 @@ jobs:
           EXPECTED=6
           [ "${#RIDS[@]}" -eq "$EXPECTED" ] || { echo "the RID list and EXPECTED disagree"; exit 1; }
 
-          ASSETS=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')
-          printf '%s\n' "$ASSETS"
-
+          # Polled for the same reason the mcp line polls: `needs` proves the uploads returned, not
+          # that the listing has caught up with them.
           MISSING=""
-          for rid in "${RIDS[@]}"; do
-            case "$rid" in win-*) EXT=zip ;; *) EXT=tar.gz ;; esac
-            for name in "coai-server-$VERSION-$rid.$EXT" "coai-server-$VERSION-$rid.$EXT.sha256"; do
-              printf '%s\n' "$ASSETS" | grep -qx "$name" || MISSING="$MISSING $name"
+          ASSETS=""
+          for attempt in $(seq 1 10); do
+            ASSETS=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')
+            MISSING=""
+            for rid in "${RIDS[@]}"; do
+              case "$rid" in win-*) EXT=zip ;; *) EXT=tar.gz ;; esac
+              for name in "coai-server-$VERSION-$rid.$EXT" "coai-server-$VERSION-$rid.$EXT.sha256"; do
+                printf '%s\n' "$ASSETS" | grep -qx "$name" || MISSING="$MISSING $name"
+              done
             done
+            [ -z "$MISSING" ] && break
+            echo "attempt $attempt: still missing:$MISSING"
+            sleep 6
           done
+          printf '%s\n' "$ASSETS"
 
           if [ -n "$MISSING" ]; then
             echo "the release is incomplete — missing:$MISSING"
@@ -654,7 +752,16 @@ jobs:
           # to `GET /releases`, so no client can be offered a download from a release that is still
           # uploading. A failed leg therefore leaves a draft nobody sees, rather than five platforms
           # of six with the sixth answering 404 — which is what happened on 2026-09-08.
-          gh release edit "$GITHUB_REF_NAME" --draft=false
+          # Retried, because everything above already passed: the assets ARE all there, and leaving
+          # a complete release stranded as a draft over one transient API error is the only failure
+          # this job can still cause by itself.
+          for attempt in 1 2 3; do
+            gh release edit "$GITHUB_REF_NAME" --draft=false && break
+            echo "publish attempt $attempt failed; retrying"
+            sleep 5
+          done
+          gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft' | grep -qx false \
+            || { echo "complete, but it could not be published — publish it by hand"; exit 1; }
           echo "published $GITHUB_REF_NAME"
 
   # ---------------------------------------------------------------------------
