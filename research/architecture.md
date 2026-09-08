@@ -78,6 +78,22 @@ throughout, which is the property this section is about: a seam neither containe
 neither container's tests reach. Recorded, with the fix, in
 [PLAN_team_server_reviewer_never_called.md](PLAN_team_server_reviewer_never_called.md).
 
+### A setting whose default lives on BOTH sides (2026-09-08)
+
+`COAI_ROUND_TIMEOUT_MINUTES` is the newest crossing of the same seam, and it is shaped to make the
+seam harmless. The extension writes the key only when it DIFFERS from its own default, so a pristine
+panel sends nothing and the server's fallback is what runs — which means the two defaults are one
+contract, not two numbers that happen to agree. That contract broke once already, for a day, when a
+release moved the panel's gate defaults and left the server's alone: a new install read *1 round,
+threshold 6* off the screen and ran three rounds at threshold 2.
+
+The round limit avoids repeating it by making ZERO the default on both sides and meaning *derive*.
+There is no number to keep in step: the server computes the budget from the round's own shape
+(`RoundBudget`), and the panel shows the same arithmetic beside the box so a person can see what the
+zero comes to. The panel's figure is an upper bound and says so — the server derives from the
+reviewers a round actually schedules, which is fewer when a repository wrote no rules down and the
+Conventions reviewers are dropped.
+
 ## How the Team server is deployed (2026-09-06)
 
 `coai.remsoft.dev` runs as a **systemd unit on the host**, not as a container, and the reason is the

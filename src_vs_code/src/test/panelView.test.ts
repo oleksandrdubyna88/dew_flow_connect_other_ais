@@ -743,7 +743,7 @@ test('the round limit says what it works out to, and warns when it cannot be met
   // default that moves, and a test that hard-codes it fails for a reason that has nothing to do
   // with the arithmetic under test.
   const derived = withSettings({ roundTimeoutMinutes: 0, reviewerTimeoutMinutes: 10, maxConcurrency: 3 });
-  const said = /worked out: (\d+) waves? × 10 min = (\d+) min/.exec(derived);
+  const said = /worked out: at most (\d+) waves? × 10 min = (\d+) min/.exec(derived);
   assert.ok(said, `the derivation is shown; the note read: ${derived.slice(derived.indexOf('worked out') - 20, 200)}`);
   assert.ok(Number(said[1]) >= 1, 'at least one wave');
   assert.equal(Number(said[2]), Number(said[1]) * 10, 'and the total is the waves times the reviewer timeout');
