@@ -6,17 +6,19 @@ import { ChatSession, TurnBudgets, TurnResult } from './chatSession';
  *
  * <p>The protocol was MEASURED, not read out of a manual: `agy --input-format stream-json
  * --output-format stream-json` takes one NDJSON message per line and answers `init`, then
- * `step_update`s, then a `result`, per turn. Three turns down one pipe were answered by one process
- * with the context preserved — turn 3 resolved "now simpler" against turn 2 without the passage
- * being repeated. The schema came out of the binary's own error strings after it refused `type:`
- * with `stream input message is missing the "event" field`.</p>
+ * `step_update`s, then a `result`. Three turns down one pipe were answered by one process with the
+ * context preserved — turn 3 resolved "now simpler" against turn 2 without the passage being
+ * repeated. The schema came out of the binary's own error strings after it refused `type:` with
+ * `stream input message is missing the "event" field`.</p>
  *
  * <p><b>A long-lived child has four ways to end, and only one of them is a person closing a tab.</b>
  * The first version of the plan described that one; the gate raised the other three as five separate
  * findings. They are the shape of this file:</p>
  *
  * <ol>
- *   <li><b>Disposal</b> — the tab closed. The tree is killed.</li>
+ *   <li><b>Disposal</b> — the tab closed. The tree is killed, and anything waiting is told at once,
+ *       including a start that has not finished: without that, closing a tab left the caller waiting
+ *       the whole thirty-second startup budget for an answer nobody was going to read.</li>
  *   <li><b>It exits on its own</b> — token exhaustion, a crash, an OS kill. The turn in flight fails
  *       with a sentence, and the NEXT send starts a new process rather than writing into a closed
  *       pipe. `EPIPE` is a state to report, never an unhandled rejection.</li>
@@ -26,6 +28,13 @@ import { ChatSession, TurnBudgets, TurnResult } from './chatSession';
  *   <li><b>It never answers</b> — no `result` inside the turn budget. Killed, so the next turn is
  *       not asked of a process that has already stopped listening.</li>
  * </ol>
+ *
+ * <p><b>A conversation that restarts says so.</b> A dead process takes the conversation with it —
+ * the replacement never heard the passage or anything already said, and its answer reads as a model
+ * that has lost the thread. The session cannot prevent that; what it must not do is hide it. The
+ * failure that reports the death says the conversation has to start again, and the first answer
+ * afterwards carries `contextLost`. It is counted from the first turn SENT, not the first ANSWERED:
+ * a process that died before answering still took a question with it.</p>
  *
  * <p><b>One turn at a time, enforced here rather than hoped for in the page.</b> The page disables
  * its composer, but a page is a suggestion: two `send` calls arriving together must not interleave
@@ -66,12 +75,15 @@ interface Pending {
   readonly cancelBudget: () => void;
 }
 
+const CLOSED = 'the conversation was closed';
+
 export class CliChatSession implements ChatSession {
   private child: ProcessHandle | undefined;
   private unsubscribe: Unsubscribe | undefined;
   private ready = false;
   private pending: Pending | undefined;
   private waitingForInit: ((started: string) => void) | undefined;
+  private cancelStartBudget: (() => void) | undefined;
   /**
    * What the start already came to, when it came to it before anybody was waiting.
    *
@@ -81,8 +93,16 @@ export class CliChatSession implements ChatSession {
    * sent and hung for the entire startup budget on every turn. Found by its own tests.</p>
    */
   private startOutcome: string | undefined;
-  /** Whether this conversation has ever been answered - a first turn cannot have lost a context. */
-  private everAnswered = false;
+  /**
+   * Which child the callbacks belong to.
+   *
+   * <p>A killed child can deliver its `exit` AFTER the next send has started a replacement, and the
+   * stale callback would then clear the new child and fail its turn. Every subscription carries the
+   * generation it was made in and does nothing once that generation is over. (codex, the code round.)</p>
+   */
+  private generation = 0;
+  /** Whether anything has been asked yet — a first turn has no conversation to lose. */
+  private everSent = false;
   /** The next answer comes from a process that never heard the earlier turns. Told once, then cleared. */
   private contextLost = false;
   private queue: Promise<unknown> = Promise.resolve();
@@ -106,23 +126,32 @@ export class CliChatSession implements ChatSession {
 
   send(text: string): Promise<TurnResult> {
     // The queue IS the serialisation. Chaining on the previous turn's settlement means a second
-    // caller waits rather than opening a second turn on the same pipe.
-    const mine = this.queue.then(() => this.turn(text));
-    this.queue = mine.catch(() => undefined);
+    // caller waits rather than opening a second turn on the same pipe. The catch is not decoration:
+    // `send` promises never to reject, and an injected launcher that throws would otherwise break
+    // that promise and the queue with it. (Four reviewers, one finding.)
+    const mine = this.queue.then(() => this.turn(text)).catch((reason: unknown) => failed(reason));
+    this.queue = mine;
 
     return mine;
   }
 
   dispose(): void {
     this.disposed = true;
-    this.settle({ ok: false, failure: 'the conversation was closed' });
+    // A start that has not finished is waiting too, and nobody was telling it. Closing a tab used to
+    // leave the caller waiting the whole startup budget. (codex, the code round, twice.)
+    this.cancelStartBudget?.();
+    this.cancelStartBudget = undefined;
+    const waiting = this.waitingForInit;
+    this.waitingForInit = undefined;
+    waiting?.(CLOSED);
+    this.settle({ ok: false, failure: CLOSED });
     this.stop();
   }
 
   /** One turn, start to finish, with nothing else in the pipe. */
   private async turn(text: string): Promise<TurnResult> {
     if (this.disposed) {
-      return { ok: false, failure: 'the conversation was closed' };
+      return { ok: false, failure: CLOSED };
     }
 
     const started = await this.ensureStarted();
@@ -130,6 +159,7 @@ export class CliChatSession implements ChatSession {
       return { ok: false, failure: started };
     }
 
+    this.everSent = true;
     const line = JSON.stringify({ event: 'user', message: { role: 'user', content: text } });
     if (this.child?.writeLine(line) !== true) {
       // The pipe went between the last event and this write. Not an error to throw: the next send
@@ -144,7 +174,7 @@ export class CliChatSession implements ChatSession {
         // Killed, not merely abandoned: a process that has stopped answering must not be handed the
         // next turn as though nothing happened.
         this.stop();
-        this.settle({ ok: false, failure: 'the model did not answer in time' });
+        this.settle({ ok: false, failure: this.withRestart('the model did not answer in time') });
       });
       this.pending = { settle: resolve, cancelBudget };
     });
@@ -157,10 +187,17 @@ export class CliChatSession implements ChatSession {
     }
 
     this.startOutcome = undefined;
-    const child = this.start();
+    let child: ProcessHandle;
+    try {
+      child = this.start();
+    } catch (reason) {
+      // `send` promises never to reject, and an injected launcher is somebody else's code.
+      return Promise.resolve(`the model’s process could not be started: ${message(reason)}`);
+    }
     this.child = child;
     this.ready = false;
-    this.listen(child);
+    this.generation += 1;
+    this.listen(child, this.generation);
 
     // Ask what happened rather than wait to be told: the replay above may already have delivered it.
     if (this.ready) {
@@ -173,6 +210,7 @@ export class CliChatSession implements ChatSession {
     return new Promise<string>((resolve) => {
       const cancelBudget = this.timers.after(this.budgets.startupMs, () => {
         this.waitingForInit = undefined;
+        this.cancelStartBudget = undefined;
         // What the child managed to say before giving up is the difference between "not installed"
         // and "installed, and refusing your sign-in". Read BEFORE the kill, which reads better
         // beside it. (local, the plan round.)
@@ -180,20 +218,27 @@ export class CliChatSession implements ChatSession {
         this.stop();
         resolve(said.length === 0
           ? 'the model’s process did not start'
-          : 'the model’s process did not start: ' + said);
+          : `the model’s process did not start: ${said}`);
       });
+      this.cancelStartBudget = cancelBudget;
       this.waitingForInit = (failure: string) => {
         cancelBudget();
+        this.cancelStartBudget = undefined;
         this.waitingForInit = undefined;
         resolve(failure);
       };
     });
   }
 
-  private listen(child: ProcessHandle): void {
-    this.unsubscribe = child.onLine((line) => this.onLine(line));
-    child.onError((reason) => this.onGone(`the model’s process failed to run: ${reason}`));
-    child.onExit(() => this.onGone(`the model’s process ended: ${child.stderrTail().trim().slice(-400)}`));
+  private listen(child: ProcessHandle, generation: number): void {
+    const mine = (run: () => void): void => {
+      if (generation === this.generation) {
+        run();
+      }
+    };
+    this.unsubscribe = child.onLine((line) => mine(() => this.onLine(line)));
+    child.onError((reason) => mine(() => this.onGone(`the model’s process failed to run: ${reason}`)));
+    child.onExit(() => mine(() => this.onGone(ended(child.stderrTail()))));
   }
 
   /** One line of NDJSON. Anything unreadable is skipped: a CLI may log where it pleases. */
@@ -221,7 +266,6 @@ export class CliChatSession implements ChatSession {
     if (status === 'SUCCESS') {
       const lost = this.contextLost;
       this.contextLost = false;
-      this.everAnswered = true;
       this.settle(lost
         ? { ok: true, answer: answer.trim(), contextLost: true }
         : { ok: true, answer: answer.trim() });
@@ -238,13 +282,19 @@ export class CliChatSession implements ChatSession {
   private onGone(failure: string): void {
     this.child = undefined;
     this.ready = false;
-    // Only a conversation that HAD something to lose can lose it. A process that never answered
-    // takes nothing with it, and saying "the conversation restarted" about a first turn would be
-    // noise where the real news is that it failed at all.
-    this.contextLost = this.contextLost || this.everAnswered;
+    // Only a conversation that HAD something to lose can lose it, and what it takes is the question
+    // as much as the answer: a process that died before replying still swallowed a turn.
+    this.contextLost = this.contextLost || this.everSent;
     this.startOutcome = failure;
     this.waitingForInit?.(failure);
-    this.settle({ ok: false, failure });
+    this.settle({ ok: false, failure: this.withRestart(failure) });
+  }
+
+  /** The same sentence, saying that the thread is gone when it is. */
+  private withRestart(failure: string): string {
+    return this.everSent && this.contextLost
+      ? `${failure}. The conversation has to start again — the next answer will not remember this one`
+      : failure;
   }
 
   /** End whatever turn is waiting, once. */
@@ -262,12 +312,31 @@ export class CliChatSession implements ChatSession {
   private stop(): void {
     // A killed process takes the conversation with it exactly as a dead one does - the budget that
     // killed it does not make the loss less real, and the next answer must still say so.
-    this.contextLost = this.contextLost || this.everAnswered;
+    this.contextLost = this.contextLost || this.everSent;
     const child = this.child;
     this.child = undefined;
     this.ready = false;
+    // Past this line no callback of that child is ours any more.
+    this.generation += 1;
     this.unsubscribe?.();
     this.unsubscribe = undefined;
     child?.kill();
   }
+}
+
+/** What a child left behind, or that it left nothing — never a sentence ending in a bare colon. */
+function ended(stderr: string): string {
+  const tail = stderr.trim().slice(-400);
+
+  return tail.length === 0 ? 'the model’s process ended unexpectedly' : `the model’s process ended: ${tail}`;
+}
+
+/** A thrown thing, as a sentence. */
+function message(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
+}
+
+/** The last resort: a turn that threw where nothing was supposed to. */
+function failed(reason: unknown): TurnResult {
+  return { ok: false, failure: `the turn failed unexpectedly: ${message(reason)}` };
 }

@@ -349,7 +349,8 @@ test('the next turn after a death starts a new process rather than writing into 
   await flush();
   current.say(ok('back again'));
 
-  assert.deepStrictEqual(await second, { ok: true, answer: 'back again' });
+  // The dead process took the first question with it, so this answer says the thread restarted.
+  assert.deepStrictEqual(await second, { ok: true, answer: 'back again', contextLost: true });
   assert.strictEqual(launches, 2, 'the dead process was asked a second question');
 });
 
@@ -551,4 +552,102 @@ test('a process that dies before init says what it left on stderr', async () => 
   const result = await answering as { ok: boolean; failure?: string };
   assert.strictEqual(result.ok, false);
   assert.match(result.failure ?? '', /IneligibleTierError/);
+});
+
+/* ------------------------------------------------------------------------------------------------
+ * The code round of story 1.3. Seventeen findings accepted; these are the three that were defects
+ * rather than wording, and each fails against the version reviewed.
+ * ---------------------------------------------------------------------------------------------- */
+
+test('a launcher that throws is a failure, not a rejection', async () => {
+  // `send` promises never to reject. The launcher is injected - somebody else's code - and node
+  // refuses a `.cmd` without a shell with a synchronous EINVAL, so this is not hypothetical.
+  // (Four reviewers, one finding.)
+  const session = new CliChatSession(
+    () => {
+      throw new Error('spawn EINVAL');
+    },
+    BUDGETS,
+    fakeTimers(),
+  );
+
+  const result = await session.send('hello') as { ok: boolean; failure?: string };
+
+  assert.strictEqual(result.ok, false);
+  assert.match(result.failure ?? '', /EINVAL/);
+});
+
+test('closing the tab during a start settles the wait at once, not in thirty seconds', async () => {
+  // dispose() cancelled the process but never the START, so a caller waited the whole startup budget
+  // for an answer nobody was going to read. (codex, the code round, twice.)
+  const child = fakeChild();
+  const timers = fakeTimers();
+  const session = new CliChatSession(() => child.handle, BUDGETS, timers);
+
+  const answering = session.send('hello');
+  await flush();
+  session.dispose();
+
+  const result = await answering as { ok: boolean; failure?: string };
+  assert.strictEqual(result.ok, false);
+  assert.match(result.failure ?? '', /closed/);
+  assert.strictEqual(timers.armed(), 0, 'the startup budget was left running after the close');
+});
+
+test('a killed child cannot disturb the process that replaced it', async () => {
+  // A killed child delivers its exit event LATER. Without a generation on the subscription, that
+  // stale callback cleared the new child and failed its turn. (codex, the code round.)
+  let current = fakeChild();
+  const stale = current;
+  const session = new CliChatSession(() => current.handle, BUDGETS, fakeTimers());
+
+  const { answering: first } = await asking(session, current, 'one');
+  current.say(ok('answer one'));
+  await first;
+
+  current.exit();
+  current = fakeChild();
+  const second = session.send('two');
+  current.say(INIT);
+  await flush();
+
+  // The old child speaks up after its replacement is already listening.
+  stale.exit();
+  current.say(ok('answer two'));
+
+  const result = await second as { ok: boolean; answer?: string };
+  assert.strictEqual(result.ok, true, 'a dead child killed the conversation that replaced it');
+  assert.strictEqual(result.answer, 'answer two');
+});
+
+test('a process that ends saying nothing does not end a sentence with a colon', async () => {
+  const child = fakeChild();
+  const session = new CliChatSession(() => child.handle, BUDGETS, fakeTimers());
+
+  const { answering } = await asking(session, child, 'hello');
+  child.exit();
+
+  const result = await answering as { ok: boolean; failure?: string };
+  assert.strictEqual(result.ok, false);
+  assert.doesNotMatch(result.failure ?? '', /ended: *($|\.)/, 'the failure ends in a bare colon');
+  assert.match(result.failure ?? '', /unexpectedly/);
+});
+
+test('a death after a question, before any answer, still counts as a lost conversation', async () => {
+  // everAnswered was the wrong gate: a process that died before replying still swallowed a turn,
+  // and the replacement never heard it. (codex, the code round.)
+  let current = fakeChild();
+  const session = new CliChatSession(() => current.handle, BUDGETS, fakeTimers());
+
+  const { answering: first } = await asking(session, current, 'one');
+  current.exit();
+  await first;
+
+  current = fakeChild();
+  const second = session.send('two');
+  current.say(INIT);
+  await flush();
+  current.say(ok('answer two'));
+
+  assert.deepStrictEqual(await second, { ok: true, answer: 'answer two', contextLost: true });
 });

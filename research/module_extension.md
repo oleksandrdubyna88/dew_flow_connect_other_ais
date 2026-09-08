@@ -44,6 +44,27 @@ authenticated child nobody can see and nobody will stop; one that dies with a st
 conversation somebody is still reading.
 ### A conversation is a process, and it ends four ways (2026-09-08)
 
+```mermaid
+stateDiagram-v2
+  [*] --> Idle
+  Idle --> Starting: send, no process
+  Starting --> Ready: init
+  Starting --> Failed: startup budget · launcher threw · died before init
+  Ready --> Asking: one NDJSON line
+  Asking --> Ready: result SUCCESS
+  Asking --> Ready: result ERROR (the model refused; the process lives)
+  Asking --> Failed: turn budget · exit · error
+  Failed --> Starting: the next send, with contextLost
+  Ready --> [*]: dispose
+  Starting --> [*]: dispose (the waiter is told at once)
+```
+
+Four ends, one of them a person closing a tab. `Failed` always kills the tree: a process that has
+stopped answering must not be handed the next turn. The edge back into `Starting` is the one that
+carries `contextLost` — the replacement never heard the passage, and the first answer afterwards
+says so rather than reading as a model that has lost the thread.
+
+
 `cliChatSession.ts` holds one long-lived vendor process per conversation. The protocol was measured
 rather than read: `agy --input-format stream-json --output-format stream-json` takes one NDJSON
 message per line and answers `init`, then `step_update`s, then a `result`. The message schema came
