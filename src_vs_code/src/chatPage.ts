@@ -222,9 +222,12 @@ function chatScript(state: ChatPageState): string {
     const passage = document.getElementById('passage');
     if (passage && typeof data.passage === 'string') { passage.textContent = data.passage; }
     const box = document.getElementById('say');
-    if (box) {
+    // Only a real boolean moves the lock. A state that says nothing about running - a partial push,
+    // or a null across the bridge - must leave the composer as it is rather than quietly unlocking
+    // it while a turn is still in flight. (local, the second code round.)
+    if (box && typeof data.running === 'boolean' && typeof data.capped === 'boolean') {
       const wasLocked = box.disabled;
-      box.disabled = !!data.running || !!data.capped;
+      box.disabled = data.running || data.capped;
       // Back to the box when the turn ends. Without this every single follow-up costs a mouse click,
       // nine seconds after the last one — which is the whole conversation, one click at a time.
       if (wasLocked && !box.disabled && typeof box.focus === 'function') { box.focus(); }

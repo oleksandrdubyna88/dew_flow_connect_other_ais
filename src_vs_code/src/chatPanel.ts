@@ -74,10 +74,14 @@ export function createChatPanel(
   state: ChatPageState,
   session: DisposableSession,
   hooks: ChatPanelHooks,
-  known: (modelId: string) => boolean,
 ): ChatEntry {
   // The conversation's own identity, created once and never replaced. See the module comment.
   const id = { conversation: state.title };
+  // What this conversation is allowed to be answered by, kept from the state it was opened with and
+  // replaced by every push. A separate predicate handed in at creation was the alternative, and it
+  // would have drifted the moment a Team server's catalog arrived: two places deciding what a valid
+  // model is, one of them frozen. (gemini, the second code round.)
+  offered.set(id, new Set(state.models.map((model) => model.id)));
 
   const panel = vscode.window.createWebviewPanel(
     'coaiChat',
@@ -91,7 +95,7 @@ export function createChatPanel(
   panel.webview.onDidReceiveMessage((message: PageMessage) => {
     // A detached boundary: nothing awaits this, so a rejection here would have no owner and the
     // extension host would report it as unhandled instead of the tab saying anything. (codex.)
-    void handle(id, message, hooks, known).catch((reason: unknown) => {
+    void handle(id, message, hooks).catch((reason: unknown) => {
       hooks.onPageError(id, reason instanceof Error ? reason.message : String(reason));
     });
   });
@@ -123,12 +127,7 @@ export function createChatPanel(
  * left here is the dispatch. That split exists because a wrong message type would otherwise have
  * shipped with every test green — a person's send quietly ignored. (codex, the plan round.)</p>
  */
-async function handle(
-  id: object,
-  message: PageMessage,
-  hooks: ChatPanelHooks,
-  known: (modelId: string) => boolean,
-): Promise<void> {
+async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): Promise<void> {
   const command = chatCommandOf(message);
   switch (command.kind) {
     case 'zoom':
@@ -143,7 +142,7 @@ async function handle(
       // A page can post any id it likes — a stale retained webview certainly will, and a tampered
       // one might. Choosing a model is choosing who gets paid, so the host checks the name against
       // what this conversation was actually offered rather than trusting the page. (codex.)
-      if (known(command.id)) {
+      if (offered.get(id)?.has(command.id) === true) {
         hooks.onPick(id, command.id);
       } else {
         hooks.onPageError(id, `that model is not one this conversation offers: ${command.id}`);
@@ -177,6 +176,9 @@ async function handle(
  */
 const lastPushed = new WeakMap<object, string>();
 
+/** Which models each conversation currently offers — the one source the pick check reads. */
+const offered = new WeakMap<object, Set<string>>();
+
 /**
  * Push what changed into an open page.
  *
@@ -202,6 +204,8 @@ export function pushChatState(entry: ChatEntry, state: ChatPushState): boolean {
     pickerHtml: chatPickerHtml(state.models, state.modelId),
     modelId: state.modelId,
   };
+
+  offered.set(entry.id, new Set(state.models.map((model) => model.id)));
 
   const serialised = JSON.stringify(payload);
   if (lastPushed.get(entry.id) === serialised) {
