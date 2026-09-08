@@ -198,21 +198,37 @@ fi
 # Copy a published artefact into the new release directory. An archive is unpacked past its top
 # level, which is the shape `release.yml` packages: `coai-server-<version>-<rid>/coai-server`.
 stage_from() {
-    local source=$1 target=$2
+    local source=$1 target=$2 scratch found
     mkdir -p "$target"
+
     if [[ -d "$source" ]]; then
         cp -a "$source/." "$target/"
     else
-        tar xzf "$source" -C "$target" --strip-components=1 \
-            || die "$source did not unpack — is it the release .tar.gz?"
+        # Unpacked WHOLE, then the layout is looked at — rather than `--strip-components=1`, which
+        # is a guess about the archive's shape that removes the files when it is wrong. The release
+        # workflow packages `coai-server-<version>-<rid>/coai-server`, but `--from` also takes an
+        # archive somebody made by hand, and one packed from INSIDE the directory would have been
+        # stripped down to nothing with only "no binary" to explain it. (gemini, code round.)
+        scratch=$(mktemp -d "$target/.unpack.XXXXXX")
+        tar xzf "$source" -C "$scratch" || die "$source did not unpack — is it the release .tar.gz?"
+
+        if [[ -f "$scratch/$SERVICE" ]]; then
+            found=$scratch
+        else
+            found=$(dirname "$(find "$scratch" -mindepth 2 -maxdepth 2 -name "$SERVICE" -type f | head -1)")
+        fi
+        [[ -f "$found/$SERVICE" ]] \
+            || die "$source carries no $SERVICE at its top level or one below it"
+
+        cp -a "$found/." "$target/"
+        rm -rf "$scratch"
     fi
 
     # Said HERE rather than left to the inspection below, because the two failures need different
-    # sentences: "the archive had no top-level directory, so --strip-components=1 removed
-    # everything" is a packaging mistake, and "the binary does not contain this version" is a wrong
-    # download. One message for both would send the reader to the wrong half.
-    [[ -f "$target/$SERVICE" ]] \
-        || die "$source produced no $SERVICE in $target — a flat archive, or the wrong file"
+    # sentences: "this archive does not contain a server at all" is a packaging mistake, and "the
+    # binary does not contain this version" is a wrong download. One message for both would send
+    # the reader to the wrong half.
+    [[ -f "$target/$SERVICE" ]] || die "$source produced no $SERVICE in $target"
     # No `|| true`: a staged binary that cannot be made executable is a release that will not
     # start, and swallowing it here means finding out from `switch_to` two steps later.
     chmod +x "$target/$SERVICE" || die "cannot make $target/$SERVICE executable"

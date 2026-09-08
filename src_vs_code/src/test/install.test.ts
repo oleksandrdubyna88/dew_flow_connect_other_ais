@@ -160,12 +160,37 @@ test('every RID the workflow builds is a RID the extension will install', () => 
   assert.deepEqual(ridsBuiltBy('mcp-binaries'), [...COAI_RIDS].sort());
 });
 
-test('a server tag builds the same six platforms the mcp line does', () => {
+test('the server matrix and the check that the release is complete name the same platforms', () => {
   // The Team server is DEPLOYED rather than downloaded, so no extension list holds this one
   // honest — which is why it needs a test of its own. The host runs a Native AOT binary under
   // systemd (deploy/README.md); the release line published container images only, so the one
   // artefact the deployment actually consumes was the one thing the tag did not produce.
-  assert.deepEqual(ridsBuiltBy('server-binaries'), [...COAI_RIDS].sort());
+  //
+  // Held against the completeness job's OWN list rather than against COAI_RIDS. The two artefacts
+  // have independent lifecycles: a server-only RID — an arm64 host, say — would otherwise turn
+  // this red until the extension published a coai-mcp for it and added it to its install contract,
+  // which is a coupling between two release lines that share nothing but a repository.
+  // (codex, code round.)
+  const complete = jobBlock(releaseWorkflow(), 'server-release-complete');
+  const declared = /RIDS=\(([^)]*)\)/.exec(complete);
+  assert.ok(declared, 'the completeness job declares the platforms it expects');
+
+  assert.deepEqual(ridsBuiltBy('server-binaries'), declared[1]!.trim().split(/\s+/).sort());
+});
+
+test('the deploy pulls a RID the server release actually builds', () => {
+  // The third place the same fact lives, and the one that fails LAST: a preflight looking for
+  // `linux-x64` in a release that never built it stops with nothing to download, after somebody
+  // has already been asked to approve a production deploy.
+  const complete = jobBlock(releaseWorkflow(), 'server-release-complete');
+  const hostRid = /HOST_RID:\s*(\S+)/.exec(deployWorkflow());
+  assert.ok(hostRid, 'the deploy names the RID the host runs');
+
+  assert.ok(
+    ridsBuiltBy('server-binaries').includes(hostRid[1]!),
+    `the release line builds ${hostRid[1]}`,
+  );
+  assert.match(complete, new RegExp(hostRid[1]!), 'and the completeness check expects it');
 });
 
 test('a server tag creates a GitHub RELEASE, because that is what the panel reads', () => {

@@ -458,7 +458,14 @@ jobs:
       - name: Stop the smoked server
         if: always()
         shell: bash
-        run: kill "${PID:-0}" 2>/dev/null || true
+        run: |
+          PID="${PID:-0}"
+          kill "$PID" 2>/dev/null || true
+          # And then insist. A server that ignores SIGTERM is one of the failure modes this whole
+          # step exists for, and leaving it holding port 5099 on a runner that a re-run may reuse
+          # turns one broken build into two. Raised on the code round.
+          sleep 2
+          kill -9 "$PID" 2>/dev/null || true
 
       # The binary AND every `appsettings*.json` the publish emitted. The server reads its Serilog
       # levels and its rate-limit defaults from those files, so a binary shipped alone starts with
