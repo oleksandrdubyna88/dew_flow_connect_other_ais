@@ -542,10 +542,16 @@ public static class ReviewerSummaryFactory
     /// prints anything like them. The vocabulary above is left exactly as it was.</para>
     /// </remarks>
     private static bool IsScaffolding(string line) =>
-        RemoteAsk.IsProgress(line) ||
-        line.StartsWith("at ", StringComparison.Ordinal) ||
-        line.StartsWith('^') ||
-        line.StartsWith("throw ", StringComparison.Ordinal) ||
-        line.StartsWith("Node.js v", StringComparison.Ordinal) ||
-        line.StartsWith("file:///", StringComparison.Ordinal);
+        RemoteAsk.IsProgress(line) || IsRuntimeFrame(line);
+
+    /// <summary>The noise a crashing runtime prints AROUND its message.</summary>
+    /// <remarks>
+    /// Split out to keep <see cref="IsScaffolding"/> inside the complexity limit the repository's
+    /// own rule sets, once the progress check joined it — five alternatives plus one is six.
+    /// (CodeRabbit, PR 93.)
+    /// </remarks>
+    private static bool IsRuntimeFrame(string line) =>
+        Frames.Any(f => line.StartsWith(f, StringComparison.Ordinal));
+
+    private static readonly string[] Frames = ["at ", "^", "throw ", "Node.js v", "file:///"];
 }

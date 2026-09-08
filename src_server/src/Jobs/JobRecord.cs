@@ -129,12 +129,27 @@ public static class JobTransitions
             FinishedUtc = nowUtc,
         };
 
-    public static JobRecord Fail(JobRecord job, FailureKind kind, string reason, DateTimeOffset nowUtc) =>
+    /// <param name="tokensIn">
+    /// What the attempt actually cost, when the failure carries it. A vendor that answered unusably
+    /// still BILLED for the call, and leaving these at zero writes a usage line saying the company
+    /// spent nothing — which is precisely the vendor somebody would want to find in that report.
+    /// Defaulted, because most failures genuinely have no usage to carry: nothing ran.
+    /// (CodeRabbit, PR 93.)
+    /// </param>
+    public static JobRecord Fail(
+        JobRecord job,
+        FailureKind kind,
+        string reason,
+        DateTimeOffset nowUtc,
+        long tokensIn = 0,
+        long tokensOut = 0) =>
         job with
         {
             Status = JobStatus.Failed,
             Failure = kind,
             Reason = reason,
+            TokensIn = tokensIn,
+            TokensOut = tokensOut,
             FinishedUtc = nowUtc,
         };
 

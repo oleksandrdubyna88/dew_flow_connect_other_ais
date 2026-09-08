@@ -340,6 +340,29 @@ public sealed class JobRunnerTests : IDisposable
         job.Reason.Should().Contain("without writing an answer");
     }
 
+    /// <summary>
+    /// A vendor that answered unusably still BILLED for it.
+    /// </summary>
+    /// <remarks>
+    /// `Unparseable` is the one failure that carries usage, and the transition discarded it — so the
+    /// spending report said a persistently broken vendor cost the company nothing, which is exactly
+    /// the vendor somebody would want to find in that report. Raised by CodeRabbit on PR 93.
+    /// </remarks>
+    [Fact]
+    public async Task AVendorThatBilledForAnUnusableAnswer_StillHasItsTokensRecorded()
+    {
+        var (jobs, runner, _) = Build(new ReviewAttempt.Failed(
+            new ReviewerOutcome.Unparseable("nothing usable came back", new Usage(4_211, 77, null))));
+        jobs.Submit(Job());
+
+        await runner.PumpAsync("codex", CancellationToken.None);
+
+        var job = jobs.All().Single();
+        job.TokensIn.Should().Be(4_211);
+        job.TokensOut.Should().Be(77);
+        File.ReadAllLines(Path.Combine(_dir, "usage.jsonl"))[0].Should().Contain("4211");
+    }
+
     [Fact]
     public async Task AnExceptionFromTheInfrastructureStillEndsTheJob()
     {
