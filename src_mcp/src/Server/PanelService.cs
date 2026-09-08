@@ -492,11 +492,21 @@ public sealed partial class PanelService
             return Error(refused.Sentence);
         }
 
-        // The round's clock starts HERE, not when the reviewers do. Resolving a sha, mounting a
-        // worktree and shaping a diff are minutes on a large repository, and they are minutes the
-        // person watching is waiting through — a budget that began after them would let a round
-        // exceed its stated limit by however long its setup took. Raised on the plan round.
-        var started = System.Diagnostics.Stopwatch.StartNew();
+        // ARMED BEFORE THE SETUP, not after it. The first build computed the budget from `work.Count`
+        // and so could only start the timer once the work existed — which left resolving a sha,
+        // mounting a worktree and shaping a diff outside the deadline entirely: a five-minute round
+        // could spend ten minutes in setup and only then be told its time was up. Subtracting the
+        // setup from what the reviewers get bounded the REVIEWING, not the round, and a reviewer
+        // said so twice.
+        //
+        // The count comes from the CONFIGURED vendors and roles instead, which are known before any
+        // of that happens and are the same numbers the panel derives its figure from. `work.Count`
+        // can only be smaller — a vendor that serves the other stage, a repository with no rules —
+        // so basing the budget on the configured shape is the generous direction, which is the one
+        // to be wrong in.
+        var budget = RoundDeadlineFor(ConfiguredReviewers(stage.IsPlanStage));
+        using var clock = new CancellationTokenSource(budget);
+        using var roundClock = CancellationTokenSource.CreateLinkedTokenSource(ct, clock.Token);
 
         try
         {
@@ -537,18 +547,6 @@ public sealed partial class PanelService
             // legitimately run for a long time while every reviewer inside it behaved, and the
             // operator asked for a bound after one passed ten minutes.
             //
-            // The timer is its OWN source and the two are linked, rather than the timer being set on
-            // a source the caller can also trip. Both readings then come from the thing that fired:
-            // `clock` means the deadline, `ct` means a person. Inferring it from one linked source
-            // would have had to guess between them, which two reviewers said would misattribute a
-            // person cancelling at the moment the deadline struck.
-            //
-            // Whichever fires first still wins, so a person cancelling still cancels and the
-            // deadline cannot outlive its caller.
-            var (budget, deadline) = RoundDeadlineFor(work.Count, started.Elapsed);
-            using var clock = new CancellationTokenSource(deadline);
-            using var roundClock = CancellationTokenSource.CreateLinkedTokenSource(ct, clock.Token);
-
             var results = await _scheduler.RunAllAsync(work, _executor, roundClock.Token, progress =>
             {
                 live.Report(progress);
@@ -1099,8 +1097,18 @@ public sealed partial class PanelService
     private static TimeSpan? WhatEndedIt(CancellationToken deadline, CancellationToken caller, TimeSpan budget) =>
         deadline.IsCancellationRequested && !caller.IsCancellationRequested ? budget : null;
 
-    /// <returns>The whole budget, and what is left of it for the reviewers.</returns>
-    private (TimeSpan Whole, TimeSpan Left) RoundDeadlineFor(int reviewers, TimeSpan spentOnSetup)
+    /// <summary>How many reviewers this stage is CONFIGURED to run, before any work is built.</summary>
+    /// <remarks>
+    /// The same arithmetic the panel shows: vendors that serve this stage, times the roles it
+    /// schedules. It is an upper bound on the real fan-out — a repository with no written rules
+    /// loses its Conventions reviewers, and dealing sends each lens to one vendor — and an upper
+    /// bound is the right direction for a deadline to be wrong in.
+    /// </remarks>
+    private int ConfiguredReviewers(bool isPlanStage) =>
+        _settings.Providers.Count(p => p.Serves(isPlanStage))
+        * (isPlanStage ? 1 : PanelConfig.CodeRoleNames.Length);
+
+    private TimeSpan RoundDeadlineFor(int reviewers)
     {
         // `Expressible` on the explicit path too: a `CancellationTokenSource` takes an int of
         // milliseconds and refuses anything past about 24.8 days, so 80,000 minutes would have
@@ -1122,22 +1130,17 @@ public sealed partial class PanelService
                 whole.TotalMinutes, _settings.ReviewerTimeout.TotalMinutes);
         }
 
-        // What is LEFT of it, because the clock started when the stage did — and NOT floored at a
-        // reviewer's own deadline. The first draft floored everything, which quietly turned an
-        // explicit five minutes into ten while warning that reviewers would be cut off: a setting
-        // ignored and a warning that lied about the same number. Two reviewers caught it.
+        // NOT floored at a reviewer's own deadline. The first draft floored everything, which
+        // quietly turned an explicit five minutes into ten while warning that reviewers would be cut
+        // off: a setting ignored and a warning that lied about the same number. Two reviewers caught
+        // it. The derived path has its floor already, inside `RoundBudget`, where it belongs — a
+        // DERIVATION should never produce a budget too small to finish one reviewer, while a person
+        // who types a smaller number has said what they want and is told what it costs.
         //
-        // The derived path has its floor already, inside `RoundBudget`, where it belongs: a
-        // DERIVATION should never produce a budget that cannot finish one reviewer. A person who
-        // types a smaller number has said what they want, and is told what it costs.
-        //
-        // Zero rather than negative when setup ate the whole budget: a `CancellationTokenSource`
-        // refuses a negative delay and would throw before any reviewer started, turning a slow
-        // checkout into a crash. Zero cancels at once, which is the honest outcome — the round's
-        // time was spent getting ready for it.
-        var left = whole - spentOnSetup;
-
-        return (whole, left > TimeSpan.Zero ? left : TimeSpan.Zero);
+        // Nothing is subtracted here any more either. The timer is armed before the setup now, so
+        // the setup spends the budget by simply taking time — which is what a deadline on a ROUND
+        // has to mean, and is what subtracting-after-the-fact only approximated.
+        return whole;
     }
 
     /// <summary>Whether the caller may go and build: an order to split follows permission.</summary>
