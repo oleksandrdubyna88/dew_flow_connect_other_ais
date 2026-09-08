@@ -106,6 +106,24 @@ function normalise(vendor: string): string {
 }
 
 /**
+ * Total order over names, by UTF-16 code unit — and deliberately NOT `localeCompare`.
+ *
+ * <p>The analyser asks for `localeCompare` whenever strings are sorted, and here that advice is
+ * backwards. This sort decides which of two colliding vendors gets first pick of a colour, so what
+ * it must be is the SAME order on every machine. `localeCompare` is collation: it depends on the
+ * runtime's locale and on how much of ICU that runtime was built with, so two people looking at one
+ * Team server could order the same two names differently and see the colours swapped. Code units do
+ * not vary.</p>
+ */
+function byCodeUnit(left: string, right: string): number {
+  if (left === right) {
+    return 0;
+  }
+
+  return left < right ? -1 : 1;
+}
+
+/**
  * The slot this name would like, from the name alone.
  *
  * <p>FNV-1a, 32-bit, unsigned throughout: `>>> 0` after the multiply keeps it out of the sign bit,
@@ -160,7 +178,7 @@ export type VendorPalette = (vendor: string) => string;
  * round is never uncoloured.</p>
  */
 export function vendorPalette(configured: readonly string[]): VendorPalette {
-  const names = [...new Set(configured.map(normalise))].filter((name) => name.length > 0).sort();
+  const names = [...new Set(configured.map(normalise))].filter((name) => name.length > 0).sort(byCodeUnit);
   const claimed = new Set<number>();
   const slots = new Map<string, number>();
 
