@@ -322,9 +322,13 @@ function round4(value: number): number {
   return Math.round(value * 10_000) / 10_000;
 }
 
-function repoNameOf(repoPath: string): string {
-  const parts = repoPath.replace(/\\/g, '/').replace(/\/+$/, '').split('/');
-  return parts[parts.length - 1] ?? repoPath;
+export function repoNameOf(repoPath: string): string {
+  // Coerced for the reason the escapers are: this reads `session.state.repoPath` straight out of a
+  // JSON file that nothing validates, and `.replace` on a number is the error that stopped a person
+  // opening the log on 2026-09-08 — at the moment a question was waiting on them.
+  const text = repoPath === undefined || repoPath === null ? '' : String(repoPath);
+  const parts = text.replace(/\\/g, '/').replace(/\/+$/, '').split('/');
+  return parts[parts.length - 1] ?? text;
 }
 
 /**

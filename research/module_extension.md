@@ -399,6 +399,45 @@ flowchart LR
 - **Every default vendor is also a preset.** Gemini shipped as a default and was missing from
   "Add a reviewer", so removing it was a one-way door. `vendors.test.ts` now holds that shut.
 
+## A view is disposed when it is HIDDEN, and JSON on disk is not a string (2026-09-08)
+
+Two errors, one session, at the worst possible moment: a person ran a plan review, the gate asked
+them a question, and opening the rounds log to ANSWER it produced `Webview is disposed` and
+`e.replace is not a function`.
+
+**The sidebar outlived its own view.** `PanelProvider` held a `vscode.WebviewView` and never
+subscribed to `onDidDispose` — while `helpPanel` and `roundsLogPanel`, the two other webview owners
+here, both did and both nulled their handle there. VS Code disposes a view when it is hidden, and
+opening the log hides the sidebar; the escalation watcher then repainted into a dead view every five
+seconds. Both write paths were affected: `webview.html = …` throws synchronously, and a
+`void webview.postMessage(…)` becomes an unhandled rejection, which is what VS Code shows as a
+notification.
+
+The rules now live in `ViewHandle` (`viewHandle.ts`), with no `vscode` import, because a decision
+inside the provider is a decision no test can reach — the provider keeps the API and the handle
+keeps the rules. Two of them are not obvious:
+
+- **A disposal clears the handle only if that view is still the one held.** VS Code re-creates a
+  hidden view when it is shown again, so the order can be A resolved → A hidden → B resolved → A's
+  callback fires. An unconditional clear there blanks the LIVE view.
+- **A null check cannot close the window it opens before.** `render()` awaits several times between
+  its check and its write, and `onDidDispose` can fire in any of them, so the write is guarded as
+  well — and only the disposal is swallowed. A live view refusing a message (a payload that cannot
+  be cloned, a host channel that fell over) keeps its reporter.
+
+**And every escaper now coerces.** `escapeHtml` is typed `(text: string)`, TypeScript erases that at
+run time, and every value it escapes comes from JSON on disk — a session file, a question file —
+which `parseEscalation` validates two fields of. `null`/`undefined` escape to nothing rather than to
+the words; everything else is shown. The in-page twin, `esc` in `roundsLog.ts`, had always done this:
+half the codebase had learned the lesson.
+
+**What was NOT done, and why.** The first plan said to validate every declared field and SKIP a file
+that failed. Both gemini and codex refused it on the plan round, and they were right: the file being
+validated IS the question a person is waiting to answer, so dropping it because `branch` is a number
+leaves the round gated with nothing on screen — a crash traded for a hang, which is worse, because a
+crash at least says that something happened. `id` and `question` remain the only two that decide
+whether a question can be shown; the rest is metadata, and metadata is rendered, not adjudicated.
+
 ## Verified
 
 90 `node:test` cases over the pure modules; `.vsix` packaged in CI and installed by hand on

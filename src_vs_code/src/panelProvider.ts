@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
+import { ViewHandle, isDisposedRejection } from './viewHandle';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { discoverEngine, LocalEngine, openAiBaseOf, probeEngine } from './localEngines';
 import { EscalationWatcher } from './escalationWatcher';
@@ -138,7 +139,21 @@ const MINT_BACKOFF_MS = 10 * 60 * 1000;
 export class PanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'coai.panel';
 
-  private view?: vscode.WebviewView;
+  /**
+   * The live view, held through a handle that knows about disposal.
+   *
+   * <p>It used to be a bare `vscode.WebviewView?` assigned in `resolveWebviewView` and never
+   * cleared, while both sibling panels (`helpPanel`, `roundsLogPanel`) subscribed to
+   * `onDidDispose` and nulled theirs. VS Code disposes a view when it is HIDDEN, so on
+   * 2026-09-08 a person who opened the rounds log to answer a question the gate had asked them
+   * got `Webview is disposed` — the escalation watcher had gone on painting into it every five
+   * seconds.</p>
+   */
+  private readonly held = new ViewHandle<vscode.WebviewView>();
+
+  private get view(): vscode.WebviewView | undefined {
+    return this.held.view;
+  }
   private codexModels: ModelChoice[] = [];
   /**
    * What `agy models` last listed, and when it was asked.
@@ -224,7 +239,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   ) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
-    this.view = view;
+    this.held.hold(view);
+    // Only ever clears the handle when THIS view is still the one held: VS Code re-creates a hidden
+    // view when it is shown again, so a late callback from a replaced view would otherwise blank
+    // the live one and stop the sidebar updating until something else resolved it.
+    view.onDidDispose(() => this.held.release(view));
     view.webview.options = { enableScripts: true };
     view.webview.onDidReceiveMessage(
       (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string; open?: boolean; role?: string; round?: number }) => {
@@ -463,7 +482,18 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const key = staticKey(state);
     if (key !== this.paintedKey) {
       this.paintedKey = key;
-      this.view.webview.html = panelHtml(state, this.nonce);
+      // Guarded as well as null-checked, because `onDidDispose` can fire between the check at the
+      // top of this method and this line — every `await` above is a place the event loop can run
+      // it — and a null check cannot close a window it opens before. Raised on the plan round.
+      try {
+        this.view.webview.html = panelHtml(state, this.nonce);
+      } catch (error) {
+        if (!isDisposedRejection(error)) {
+          throw error;
+        }
+
+        return;
+      }
       void this.refreshTeamServers();
 
       return;
@@ -473,7 +503,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // lands. A render that waited on a Team server would be a panel that hangs when one is slow.
     void this.refreshTeamServers();
 
-    void this.view.webview.postMessage({ type: 'live', ...liveRegions(state) });
+    // The disposal is expected and dropped; anything else keeps its reporter, because a LIVE view
+    // refusing a message — a payload that cannot be cloned, a host channel that fell over — leaves
+    // a stale sidebar and has nothing else to say so.
+    this.view.webview.postMessage({ type: 'live', ...liveRegions(state) }).then(undefined, (error: unknown) => {
+      if (!isDisposedRejection(error)) {
+        console.error('ConnectOtherAIs: the panel could not be updated', error);
+      }
+    });
   }
 
   /**
