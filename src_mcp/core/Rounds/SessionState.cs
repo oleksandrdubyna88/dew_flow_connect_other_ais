@@ -75,21 +75,23 @@ public sealed record PanelConfig(
 
     /// <summary>The role names this config knows, in the order a round runs them.</summary>
     public static readonly string[] AllRoles =
-        ["PlanCritique", "Conventions", "Architecture", "SecurityReliability", "UxDxPerformance"];
+        [PromptCatalog.PlanRole, PromptCatalog.ConventionsRole, PromptCatalog.ArchitectureRole,
+         PromptCatalog.SecurityRole, PromptCatalog.UxDxRole];
 
     public static readonly string[] CodeRoleNames =
-        ["Conventions", "Architecture", "SecurityReliability", "UxDxPerformance"];
+        [PromptCatalog.ConventionsRole, PromptCatalog.ArchitectureRole,
+         PromptCatalog.SecurityRole, PromptCatalog.UxDxRole];
 
     public IReadOnlyDictionary<string, RoleGate> Roles { get; init; } = Roles ?? Defaults();
 
     private static Dictionary<string, RoleGate> Defaults() =>
-        AllRoles.ToDictionary(r => r, r => r == "PlanCritique" ? PlanDefault : CodeDefault);
+        AllRoles.ToDictionary(r => r, r => r == PromptCatalog.PlanRole ? PlanDefault : CodeDefault);
 
     /// <summary>This role's numbers, falling back to its stage's default for an unknown name.</summary>
     public RoleGate For(string role) =>
         Roles.TryGetValue(role, out var gate)
             ? gate
-            : role == "PlanCritique" ? PlanDefault : CodeDefault;
+            : role == PromptCatalog.PlanRole ? PlanDefault : CodeDefault;
 
     /// <summary>The stage's budget: its widest role, because the stage counts rounds once.</summary>
     public StageGate For(Stage stage)
@@ -105,7 +107,7 @@ public sealed record PanelConfig(
         [.. RolesOf(stage).Where(r => For(r).MaxRounds >= Math.Max(round, 1))];
 
     private static string[] RolesOf(Stage stage) =>
-        stage == Stage.CodeReview ? CodeRoleNames : ["PlanCritique"];
+        stage == Stage.CodeReview ? CodeRoleNames : [PromptCatalog.PlanRole];
 
     /// <summary>
     /// The same gate for every role — what the legacy single-value settings mean, and what a test
