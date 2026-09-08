@@ -1,6 +1,10 @@
 # Changelog
 
-## Extension 0.31.7 — 2026-09-07
+## Extension 0.31.7 — 2026-09-08
+
+**Each reviewer now wears its own colour.** The card in *Reviewers* has a coloured left edge, and it
+is the same colour that reviewer’s name has in *Active rounds* and in the rounds log — so you can
+follow one vendor from where you set it up to where it is running without reading either.
 
 **If you are an admin on a Team server, its row now tells you what is published.** One line under
 the status: the newest released `coai-server` version, and a `⬆` when it is newer than the one your

@@ -914,6 +914,18 @@ list, the spending chart and the next restart teaches a mapping that then lies. 
 is coloured; the rest of the row is exactly as it was. The anchors are not decoration: a plain hash
 put the three shipped vendors into two colours out of six, caught by the test on its first run.
 
+**Since 2026-09-08 a reviewer's CARD carries the same colour**, as a 3px left edge in the
+*Reviewers* section — so a vendor can be followed from where it is configured to where it is
+running without reading either. The edge, not a filled box, for the reason the role cards already
+gave: four coloured slabs is not a settings panel, and an edge survives a light theme. The width is
+in the stylesheet with a neutral fallback and the COLOUR is inline, because it is computed per
+vendor rather than named by a class.
+
+The synchronisation is free and must stay that way: the card is keyed by `vendor.id` and a round
+records the same string as `provider`, so one call to `vendorColour` answers for both. A second
+mapping would satisfy "the card is coloured" and break the only thing that was asked for — the test
+asserts the card's colour against the function rather than against a hex, for exactly that reason.
+
 A round from a server older than `seconds` shows its reviewers with no duration rather than `0s`:
 absent is unknown, and printing a zero would be a measurement nobody made. The list is also twice as
 tall (640px) — a sidebar is usually far taller than 320px, and five rounds filled it with room to

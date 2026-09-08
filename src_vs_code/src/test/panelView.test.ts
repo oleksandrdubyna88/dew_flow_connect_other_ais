@@ -522,6 +522,30 @@ test('a running round shows its status, its reviewers and what it has cost', () 
 });
 
 /**
+ * A reviewer's card and its name in a round are the same colour, and stay that way.
+ *
+ * <p>The operator asked for coloured edges on the reviewer cards and pinned the requirement that
+ * matters: *"цвета нужно синхронизировать с цветам из списка раундов"*. So the assertion is not
+ * about a hex — it is that ONE function answers for both places. A second palette would satisfy
+ * "the card is coloured" and break the only thing that was asked for.</p>
+ */
+test('a reviewer card wears the colour that vendor has in the rounds list', () => {
+  const html = panelHtml(state(), 'n0nce');
+
+  for (const vendor of DEFAULT_VENDORS) {
+    assert.ok(
+      html.includes(`<div class="vendor" style="border-left-color:${vendorColour(vendor.id)}">`),
+      `${vendor.id}'s card should carry ${vendorColour(vendor.id)}`,
+    );
+  }
+
+  // Per VENDOR, not one colour for the section: two different ids must not paint the same edge, or
+  // the loop above would pass against a constant and say nothing.
+  const colours = DEFAULT_VENDORS.map((v) => vendorColour(v.id));
+  assert.strictEqual(new Set(colours).size, colours.length, 'each vendor gets its own colour');
+});
+
+/**
  * Two sections must not fight over one class name.
  *
  * <p>`.usage` was defined twice — once for the per-round usage line in Recent rounds

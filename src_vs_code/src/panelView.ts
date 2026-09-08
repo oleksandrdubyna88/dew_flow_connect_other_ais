@@ -516,7 +516,7 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
   const endpoint = endpointField(vendor, id, local, remote);
   const executable = runtimeFields(vendor, id, local, remote, price);
 
-  return `<div class="vendor">
+  return `<div class="vendor" style="border-left-color:${vendorColour(vendor.id)}">
   <div class="head">
     <input type="checkbox" id="v-${id}" data-setting="enabled" data-vendor="${id}"${vendor.enabled ? ' checked' : ''}
            title="${escapeHtml(HELP.vendorEnabled)}">
@@ -1175,8 +1175,14 @@ const CSS = `
     opacity: .8; flex: 0 0 auto;
   }
   .help:hover { opacity: 1; }
+  /* The left edge carries the vendor's colour — the same one its name has in Active rounds and in
+     the rounds log, so a reviewer can be followed from its settings to its running round without
+     reading. The width is here and the COLOUR is inline, because it is computed per vendor rather
+     than named by a class; the fallback keeps a card deliberate when there is no colour to give it.
+     Same reasoning as the role cards below, and deliberately the same shape. */
   .vendor {
     border: 1px solid var(--vscode-panel-border);
+    border-left: 3px solid var(--vscode-panel-border);
     border-radius: 3px; padding: 8px; margin: 8px 0;
   }
   .vendor .head { display: flex; align-items: center; gap: 6px; }
