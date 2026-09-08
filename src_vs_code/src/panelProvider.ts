@@ -151,9 +151,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    */
   private readonly held = new ViewHandle<vscode.WebviewView>();
 
-  private get view(): vscode.WebviewView | undefined {
-    return this.held.view;
-  }
+
   private codexModels: ModelChoice[] = [];
   /**
    * What `agy models` last listed, and when it was asked.
@@ -433,7 +431,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
   /** Re-read everything and repaint: the configuration, the sessions, the ledger and the probes. */
   async render(): Promise<void> {
-    if (this.view === undefined) {
+    if (this.held.view === undefined) {
       return;
     }
     const config = vscode.workspace.getConfiguration('coai');
@@ -479,12 +477,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // So a change to the CONTROLS repaints (rare, and always the person's own doing), while the
     // live regions — the round in flight, a question waiting on an answer — are posted as HTML
     // and patched into place, touching nothing else.
-    // Re-read AFTER the awaits above, and never through `this.view` again below. The check at the
+    // Re-read AFTER the awaits above, and never through `this.held.view` again below. The check at the
     // top of this method proves nothing by the time we get here: every `await` is a place the event
-    // loop can run `onDidDispose`, and `this.view` then becomes undefined — so `this.view.webview`
+    // loop can run `onDidDispose`, and `this.held.view` then becomes undefined — so `this.held.view.webview`
     // throws a TypeError, which is NOT the disposal error and would be rethrown. Raised on the code
     // round, by two reviewers, on both write paths.
-    const live = this.view;
+    const live = this.held.view;
     if (live === undefined) {
       return;
     }

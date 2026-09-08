@@ -1,4 +1,4 @@
-import { asText } from './escapeHtml';
+import { asText } from './asText';
 /**
  * The one HTML escaper the three webview renderers share.
  *

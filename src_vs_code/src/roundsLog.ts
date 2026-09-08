@@ -1,4 +1,4 @@
-import { asText } from './escapeHtml';
+import { asText } from './asText';
 import { Escalation } from './escalations';
 import { roundKey, usageRegion } from './panelView';
 import { TeamServerState } from './teamServerView';
