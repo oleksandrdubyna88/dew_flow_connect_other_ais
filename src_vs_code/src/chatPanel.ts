@@ -1,7 +1,8 @@
 import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
+import { PageMessage, chatCommandOf } from './chatMessages';
 import { ChatEntry, DisposableSession, RevealablePanel } from './chatPanels';
-import { ChatMessage, ChatPageState, chatMessagesHtml, chatPageHtml } from './chatPage';
+import { ChatMessage, ChatPageState, chatCappedHtml, chatMessagesHtml, chatPageHtml } from './chatPage';
 import { escapeHtml } from './webviewHtml';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
@@ -27,15 +28,12 @@ export interface ChatPanelHooks {
   readonly onPick: (key: object, modelId: string) => void;
   /** VS Code closed the tab — the registry must forget it and end its session. */
   readonly onClosed: (key: object) => void;
-}
-
-/** A message from the page. Narrowed here so the handler below reads as a decision, not a cast. */
-interface PageMessage {
-  readonly type?: string;
-  readonly command?: string;
-  readonly text?: string;
-  readonly id?: string;
-  readonly delta?: number;
+  /** Start again with the same passage. */
+  readonly onRestart: (key: object) => void;
+  /** Move the thread to a model that keeps a conversation. */
+  readonly onUseLocal: (key: object) => void;
+  /** The page trapped an error and said so. */
+  readonly onPageError: (key: object, message: string) => void;
 }
 
 /**
@@ -81,26 +79,42 @@ export function createChatPanel(
 /**
  * One message from the page.
  *
- * <p>A table rather than a chain of `if`s, so adding a command is adding a row — the shape
- * `roundsLogPanel.ts` already uses. Anything unknown is ignored: a page and a host that ship
- * separately will disagree about the vocabulary sooner or later, and the older half must not throw
- * because the newer one learned a word.</p>
+ * <p>The READING of the message is `chatMessages.ts`, which needs no host and is tested; what is
+ * left here is the dispatch. That split exists because a wrong message type would otherwise have
+ * shipped with every test green — a person’s send quietly ignored. (codex, the plan round.)</p>
  */
 async function handle(key: object, message: PageMessage, hooks: ChatPanelHooks): Promise<void> {
-  if (message.type === 'zoom') {
-    await applyZoomDelta(message.delta ?? 0);
+  const command = chatCommandOf(message);
+  switch (command.kind) {
+    case 'zoom':
+      await applyZoomDelta(command.delta);
 
-    return;
-  }
-  if (message.type !== 'command') {
-    return;
-  }
+      return;
+    case 'send':
+      hooks.onSend(key, command.text);
 
-  const handlers: Record<string, () => void> = {
-    send: () => hooks.onSend(key, message.text ?? ''),
-    pick: () => hooks.onPick(key, message.id ?? ''),
-  };
-  handlers[message.command ?? '']?.();
+      return;
+    case 'pick':
+      hooks.onPick(key, command.id);
+
+      return;
+    case 'restart':
+      hooks.onRestart(key);
+
+      return;
+    case 'useLocal':
+      hooks.onUseLocal(key);
+
+      return;
+    case 'pageError':
+      hooks.onPageError(key, command.message);
+
+      return;
+    default:
+      // Ignored on purpose: a webview retained across a reload can be older than the extension that
+      // talks to it, and the older half must not break because the newer one learned a word.
+      return;
+  }
 }
 
 /**
@@ -115,11 +129,14 @@ export function pushChatState(
   messages: readonly ChatMessage[],
   running: boolean,
   failure: string,
+  capped = false,
 ): void {
   entry.panel.post({
     type: 'state',
     messagesHtml: chatMessagesHtml(messages),
     running,
+    capped,
+    cappedHtml: chatCappedHtml(capped),
     failureHtml: failure.length === 0 ? '' : `<div class="failure">${escapeHtml(failure)}</div>`,
   });
 }
