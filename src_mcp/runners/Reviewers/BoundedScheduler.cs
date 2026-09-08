@@ -422,8 +422,8 @@ public sealed class BoundedScheduler(
             attempts += 1;
             // What is LEFT of the deadline, never the whole of it again.
             outcome = await executor.RunAsync(
-                WithinRemaining(w.Invocation, watch.Elapsed, budget),
-                w.Repair is null ? null : WithinRemaining(w.Repair, watch.Elapsed, budget),
+                RetryLadder.WithinRemaining(w.Invocation, watch.Elapsed, budget),
+                w.Repair is null ? null : RetryLadder.WithinRemaining(w.Repair, watch.Elapsed, budget),
                 ct);
         }
 
@@ -432,12 +432,6 @@ public sealed class BoundedScheduler(
             : outcome;
     }
 
-    /// <summary>The same launch, allowed only the time this reviewer has left.</summary>
-    private static ReviewerInvocation WithinRemaining(ReviewerInvocation invocation, TimeSpan elapsed, TimeSpan budget) =>
-        invocation with
-        {
-            Request = invocation.Request with { Timeout = RetryLadder.Remaining(elapsed, budget) },
-        };
 }
 
 /// <summary>Folds a fan-out's outcomes into the core's honest per-round summary.</summary>
