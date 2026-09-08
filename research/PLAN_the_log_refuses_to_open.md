@@ -1,10 +1,10 @@
 # PLAN — two errors that stop a person answering a question
 
-> Status: **plan only, nothing implemented yet.** Scope:
+> Status: **IMPLEMENTED, 2026-09-08.** Scope:
 > `src_vs_code/src/panelProvider.ts`, `src_vs_code/src/escapeHtml.ts`,
 > `src_vs_code/src/escalations.ts`, `src_vs_code/src/roundsLog.ts`.
 >
-> Related docs: [module_extension.md](../research/module_extension.md).
+> Related docs: [module_extension.md](module_extension.md).
 
 ## The symptom
 
@@ -82,10 +82,13 @@ to hide the question.
    bare `String(value)`, because the bare form renders a missing field as the word `undefined`.
    One line each, and it removes the whole class from every caller at once.
 2. `repoNameOf` coerces the same way.
-3. `parseEscalation` keeps its two-field check and SANITISES the rest: every declared string field
-   becomes a string, `openFindings` keeps only entries that are objects, and a question is skipped
-   only when `id` or `question` is unusable — which is what it already did. A field that had to be
-   sanitised is named in the log, so a `[object Object]` on screen has a reporter.
+3. `parseEscalation` keeps its two-field check **and is otherwise unchanged**. This is the second
+   thing the review moved: the plan said it should also normalise every declared field and name each
+   sanitised one in the log, and the code round pointed out that the plan and the code then disagree
+   — `parseEscalation` still spreads arbitrary JSON through `as Escalation`. Rather than build a
+   second trust boundary, the contract is stated plainly here: **coercion happens at RENDER**, in the
+   escapers every value passes through anyway, and `Escalation` is a shape the reader hopes for
+   rather than one the parser enforces. One boundary, at the place that cannot be bypassed.
 4. `panelProvider` subscribes to `onDidDispose` and clears its handle **only when the disposed view
    is still the current one** — a delayed callback from view A must not blank view B after a
    re-resolve. The render is additionally wrapped, because `onDidDispose` can fire between the null
@@ -126,3 +129,38 @@ Every one fails first.
   `escalations/` file can be captured, it is worth one look — but the fix does not wait on it.
 - It does not add a schema validator library. Four field checks in a function that already exists
   are cheaper than a dependency, and the interface is the schema.
+
+## What shipped differently, and what the gate changed
+
+Fifteen reviewers across a plan round and a code round.
+
+- **The plan round inverted the whole second half.** The first draft said `parseEscalation` should
+  validate every declared field and SKIP a file that failed. gemini and codex both refused it: that
+  file IS the question a person is waiting to answer, and dropping it leaves the round gated with
+  nothing on screen — a crash traded for a hang. `id` and `question` stay the only two that decide
+  whether a question can be shown.
+- **The code round found two defects in the FIX itself**, and both would have been silent:
+  - `paintedKey` was recorded BEFORE the html write, so a disposal during that write left it
+    claiming the state was painted. The view VS Code creates when the sidebar is shown again then
+    matched the key, skipped the html entirely, and posted live regions into an empty document — a
+    blank sidebar with no controls and no way back. Found by gemini, twice, from two roles.
+  - `this.view` was still dereferenced after the awaits. Disposal in any of them makes it
+    `undefined`, and `this.view.webview` then throws a TypeError — which is NOT the disposal error,
+    so the guard rethrows it to exactly the notification this change exists to remove. The view is
+    read once, after the awaits, and nothing writes through the field again.
+- **`asText` was written twice and inlined a third time.** The repository's own reuse-first rule
+  names that as a defect from the moment it compiles; it lives in `escapeHtml.ts` and the other two
+  import it.
+- **The structural test listed its webview owners by hand.** `chatPanel.ts` appeared on main while
+  this change was in review, which is the argument: the owners are DISCOVERED by scanning for
+  `createWebviewPanel`/`resolveWebviewView`, with a known instance so a scan that matches nothing
+  cannot pass.
+
+Rejected, with reasons recorded in the session: six findings claiming this branch deletes the chat
+subsystem — the gate diffs `origin/main..HEAD` with two dots, main gained the chat work mid-review,
+and a three-dot diff shows nine files and no chat file at all. That is the defect
+[../todo/PLAN_the_gate_diffs_from_a_moving_base.md](../todo/PLAN_the_gate_diffs_from_a_moving_base.md)
+was written for this morning. Also rejected: two findings asking to drop the nullish check and use a
+bare `String()` (which renders a missing field as the word `undefined`, and a test asserts against
+it), one asking to release the handle unconditionally (the race the handle exists for), and one
+claiming `module_extension.md` needs a plan status line — it is a module document.

@@ -7,6 +7,7 @@ is not finished until it is.
 
 | Document | What it covers |
 |---|---|
+| [PLAN_the_log_refuses_to_open.md](PLAN_the_log_refuses_to_open.md) | IMPLEMENTED 2026-09-08 — the rounds log threw `Webview is disposed` and `e.replace is not a function` at the one moment a question was waiting on a person. The sidebar releases its view now, the write is re-read after the awaits and the painted key recorded only after the paint, and every escaper coerces — a question with bad metadata stays ANSWERABLE, which is what the plan round inverted |
 | [PLAN_connect_other_ais.md](PLAN_connect_other_ais.md) | IMPLEMENTED 2026-08-31 — the master plan: architecture, protocol, the counting rule, every decision and its reason |
 | [architecture.md](architecture.md) | System overview, container diagram, module map, cross-cutting decisions |
 | [PLAN_epic_01_foundation.md](PLAN_epic_01_foundation.md) | IMPLEMENTED 2026-08-31 — repository foundation: conventions mount, solution + logging skeleton, CI |

@@ -142,16 +142,53 @@ test('every webview this extension holds is released when it is disposed', () =>
   const read = (file: string) =>
     fs.readFileSync(path.join(__dirname, '..', '..', 'src', file), 'utf8');
 
-  const owners = ['panelProvider.ts', 'helpPanel.ts', 'roundsLogPanel.ts'];
+  // DISCOVERED, not listed. A hand-written list is a list that goes stale the day somebody adds a
+  // fifth webview — and `chatPanel.ts` had already appeared while this very change was in review.
+  const dir = path.join(__dirname, '..', '..', 'src');
+  const owners = fs.readdirSync(dir)
+    .filter((file) => file.endsWith('.ts'))
+    .filter((file) => /createWebviewPanel\(|resolveWebviewView\(/.test(read(file)));
+
+  assert.ok(owners.length >= 4, `every webview owner is checked; found ${owners.join(', ')}`);
   for (const owner of owners) {
     assert.match(read(owner), /onDidDispose\(/, `${owner} must release the view it holds`);
   }
 
-  // The known instance: the two panels that always did this are matched by the same pattern, so a
-  // green result here means the pattern still finds a real subscription.
+  // The known instance, so a scan that stopped matching anything cannot pass by matching nothing.
+  assert.ok(owners.includes('panelProvider.ts'), 'the sidebar is one of the owners this finds');
   assert.match(read('helpPanel.ts'), /panel\.onDidDispose\(/);
 
   // And the sidebar releases through the handle, so a late callback from a replaced view cannot
   // blank the live one — the half a bare `this.view = undefined` would have got wrong.
   assert.match(read('panelProvider.ts'), /this\.held\.release\(view\)/);
+});
+
+test('the painted key is recorded only after the paint succeeded', () => {
+  // The defect gemini found in the FIX: `paintedKey` was set before the html write, so a disposal
+  // during that write left it claiming this state was painted. The view VS Code creates when the
+  // sidebar is shown again then matched the key, skipped the html entirely, and posted live regions
+  // into an empty document — a blank sidebar with no controls and no way back.
+  //
+  // Structural because `panelProvider` imports `vscode` and cannot be instantiated here; it is an
+  // ORDERING inside one method, and the order is the whole guarantee.
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8');
+
+  const paint = source.indexOf('webview.html = panelHtml');
+  const record = source.indexOf('this.paintedKey = key;');
+
+  assert.ok(paint > 0 && record > 0, 'both lines are still there to be ordered');
+  assert.ok(record > paint, 'the key is recorded after the paint, never before it');
+});
+
+test('the view is re-read after the awaits, not carried from the check', () => {
+  // The other half of the same race: `render()` awaits several times between its null check and its
+  // writes, and `this.view` becomes undefined if disposal lands in any of them — so `this.view.webview`
+  // throws a TypeError, which is not the disposal error and would be rethrown to a notification.
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8');
+
+  const after = source.slice(source.indexOf('const live = this.view;'));
+  assert.ok(after.length > 0, 'the view is captured once, after the awaits');
+  assert.doesNotMatch(after, /this\.view\.webview/, 'and nothing writes through the field again');
 });

@@ -1,3 +1,4 @@
+import { asText } from './escapeHtml';
 import { Escalation } from './escalations';
 import { roundKey, usageRegion } from './panelView';
 import { TeamServerState } from './teamServerView';
@@ -326,7 +327,7 @@ export function repoNameOf(repoPath: string): string {
   // Coerced for the reason the escapers are: this reads `session.state.repoPath` straight out of a
   // JSON file that nothing validates, and `.replace` on a number is the error that stopped a person
   // opening the log on 2026-09-08 — at the moment a question was waiting on them.
-  const text = repoPath === undefined || repoPath === null ? '' : String(repoPath);
+  const text = asText(repoPath);
   const parts = text.replace(/\\/g, '/').replace(/\/+$/, '').split('/');
   return parts[parts.length - 1] ?? text;
 }
