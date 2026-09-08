@@ -32,13 +32,7 @@ public sealed class LiveRound
         _session = session;
         _states = work.ToDictionary(
             w => Key(w.Invocation.Provider, w.Invocation.Role.ToString()),
-            w => new ReviewerState(
-                w.Invocation.Provider,
-                w.Invocation.Role.ToString(),
-                ReviewerState.Queued,
-                // The invocation has carried this since the adapters were written; the round simply
-                // never wrote it down, so the log could say WHO reviewed but not WITH WHAT.
-                Model: w.Invocation.Model));
+            w => new ReviewerState(w.Invocation.Provider, w.Invocation.Role.ToString(), ReviewerState.Queued));
         Persist();
     }
 

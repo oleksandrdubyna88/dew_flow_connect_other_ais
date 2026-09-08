@@ -42,34 +42,3 @@ test('a start date from an older server does not render as a billion minutes', (
   // .NET's default date is year ONE, and the subtraction produced "1065396701m 44s" in the panel.
   assert.equal(elapsed(round({ startedUtc: '0001-01-01T00:00:00' }), Date.parse('2026-09-01T09:00:00Z')), '');
 });
-
-/**
- * The log names the model, and says nothing where it does not know one.
- *
- * <p>A round that names its vendor and its role but not its model cannot answer the question people
- * actually ask about a slow or a weak reviewer — which is how the claude row came to be investigated
- * by reading a spending ledger instead of the log
- * (`research/RESULTS_reviewer_input_sizes.md`).</p>
- *
- * <p>The absent case matters as much: every round written before this field exists has none, and
- * must read exactly as it did rather than growing an empty separator.</p>
- */
-test('a reviewer row names the model it was launched with', () => {
-  const withModel = round({
-    reviewerStates: [
-      { provider: 'remsoftdev-claude', role: 'Architecture', status: 'done', findings: 3, note: '', model: 'claude-haiku-4-5' },
-    ],
-  });
-
-  assert.deepEqual(reviewerLines(withModel), [
-    'remsoftdev-claude/Architecture · claude-haiku-4-5 — done (3 findings)',
-  ]);
-});
-
-test('a round from before the field reads exactly as it did', () => {
-  const older = round({
-    reviewerStates: [{ provider: 'codex', role: 'Architecture', status: 'done', findings: 1, note: '' }],
-  });
-
-  assert.deepEqual(reviewerLines(older), ['codex/Architecture — done (1 finding)']);
-});
