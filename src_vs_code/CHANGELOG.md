@@ -1,5 +1,32 @@
 # Changelog
 
+## Extension 0.31.11 — 2026-09-08
+
+**The rounds log gets its findings back.** The *What it keeps missing* tab was empty and the table
+had stopped showing how many findings were accepted and rejected. Nothing was wrong with the data,
+and that was checked at every step: the server emitted 207 rounds, 24 blind spots and 205 decisions
+in 143 ms, the parser read all of it, and the tab's HTML was built correctly from it — 2968
+characters of it, going nowhere.
+
+**One lost message did it, and it stayed lost.** The page is painted without reading the database on
+purpose: reading it starts a process, and nobody should wait on one to see their log. The findings
+arrive a moment later in a push — and that push was sent blind. VS Code answers *delivered* for a
+page that merely EXISTS, which one does from the moment its HTML is set and before its script is
+running, and the extension recorded the push as delivered before it had even made it. Every later
+tick compared against that record, found nothing changed, and sent nothing. Closing and reopening the
+tab was the only cure, and the same race could take that one too.
+
+Now the page says when it is listening and is answered with everything; a push is recorded only when
+it actually arrived, so a lost one is simply sent again on the next tick. If a page never speaks up,
+the extension keeps pushing at it anyway rather than leaving it blank — and both tabs open on
+*Reading the log…* rather than on nothing, so a section that never receives its data says so, on the
+page, instead of looking like a section with nothing to show.
+
+This one went through the product's own gate twice, and the code round is worth naming: fifteen
+reviewers found that the fix had reintroduced its own defect in its fallback path — pushes at a page
+that could not receive them were still being recorded as delivered. Four of them said so
+independently, from three different roles.
+
 ## Extension 0.31.10 — 2026-09-08
 
 **Ask another vendor’s model about a passage, without leaving the editor.** Select a paragraph in
