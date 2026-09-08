@@ -30,6 +30,55 @@ public sealed class LiveRoundTests
                 new Finding(Severity.Major, Category.Security, "a.cs", i + 1, $"f{i}", "why", "fix", ["codex"]))],
             []);
 
+    /// <summary>
+    /// The round writes down WHICH MODEL each reviewer was launched with.
+    /// </summary>
+    /// <remarks>
+    /// <para>The invocation has carried the model since the adapters were written; the round simply
+    /// never wrote it down, so the log could say who reviewed and not with what. That is how a slow
+    /// claude reviewer came to be investigated by reading a spending ledger instead of the log
+    /// (`research/RESULTS_reviewer_input_sizes.md`).</para>
+    /// <para>The field is trailing and defaulted, so every session file already on disk stays valid:
+    /// an older round names no model, which is the truth about it rather than a gap.</para>
+    /// </remarks>
+    [Fact]
+    public void EachReviewerRecordsTheModelItWasLaunchedWith()
+    {
+        var store = new SessionStore(_dir);
+        var session = Session();
+        store.Save(session);
+
+        _ = new LiveRound(store, session, [
+            Work("codex", ReviewRole.Architecture) with
+            {
+                Invocation = Work("codex", ReviewRole.Architecture).Invocation with { Model = "gpt-5-codex" },
+            },
+            Work("local", ReviewRole.SecurityReliability),
+        ]);
+
+        var states = store.Load("D:/repo", "feature/x")!.Rounds.Single().ReviewerStates;
+        states.Single(s => s.Provider == "codex").Model.Should().Be("gpt-5-codex");
+        states.Single(s => s.Provider == "local").Model.Should().BeEmpty(
+            "a reviewer launched without a model names none rather than inventing one");
+    }
+
+    [Fact]
+    public void ASessionFileWrittenBeforeTheModelField_StillLoads()
+    {
+        // The promise a trailing default makes, kept by reading a file that predates it.
+        var store = new SessionStore(_dir);
+        var session = Session();
+        store.Save(session);
+        _ = new LiveRound(store, session, [Work("codex", ReviewRole.Architecture)]);
+
+        var path = Directory.EnumerateFiles(Path.Combine(_dir, "sessions"), "session-*.json").Single();
+        var withoutModel = File.ReadAllText(path).Replace("\"model\": \"\",", string.Empty);
+        File.WriteAllText(path, withoutModel);
+
+        store.Load("D:/repo", "feature/x")!.Rounds.Single().ReviewerStates
+            .Single().Model.Should().BeEmpty();
+    }
+
     [Fact]
     public void TheRoundIsOnDisk_BeforeAnyReviewerHasAnswered()
     {

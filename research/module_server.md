@@ -440,6 +440,19 @@ was named for making them the ones that run. `panelServerDefaultsAgreement.test.
 constants out of `SessionState.cs` rather than transcribing them, and a second test asserts that a
 default panel writes no gate key at all.
 
+**A round writes down which MODEL each reviewer was launched with (2026-09-08).** `ReviewerState`
+carries it and the rounds log renders it beside the role — a round that named its vendor and its role
+but not its model could not answer the question people actually ask about a slow or a weak reviewer,
+which is how one came to be investigated by reading the spending ledger instead
+([RESULTS_reviewer_input_sizes.md](RESULTS_reviewer_input_sizes.md)). The field is trailing and
+defaulted, so sessions already on disk stay valid and simply name none.
+
+**It is what was ASKED for, not necessarily what answered.** A Team server picks the model for the
+account it claims and reports none back, and an escalation can run a stronger one. Closing that gap
+needs a field on `ReviewStatusDto` and is written up as
+[PLAN_the_log_names_the_model.md](../todo/PLAN_the_log_names_the_model.md); until then the log shows
+the client's side and the docstring says so rather than letting the number imply more than it knows.
+
 **The vendors are offered in a shuffled order (2026-09-08).** `BuildWork` builds a round
 vendor-major and the scheduler starts one task per row against one machine-wide semaphore, which
 hands slots out in the order they were asked for — so the list's order is the order reviewers reach
