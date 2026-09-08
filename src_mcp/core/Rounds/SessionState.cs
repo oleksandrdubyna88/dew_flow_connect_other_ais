@@ -129,12 +129,12 @@ public sealed record PanelConfig(
     {
         var roles = EnabledRolesOf(stage);
         return roles.Count == 0
-            ? NoRoles
+            ? NoEnabledRoles
             : new StageGate(roles.Max(r => For(r).MaxRounds), roles.Max(r => For(r).Threshold));
     }
 
     /// <summary>What a stage whose every role is switched off is worth: no round, nothing open.</summary>
-    public static readonly StageGate NoRoles = new(0, 0);
+    public static readonly StageGate NoEnabledRoles = new(0, 0);
 
     /// <summary>
     /// Which roles take part in a given round of a stage — those switched on whose budget reaches it.

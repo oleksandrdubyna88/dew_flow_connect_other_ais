@@ -38,6 +38,17 @@ flowchart LR
 
 ## The decisions a reader needs
 
+- **A role can be absent from a round for two different reasons, and they are not interchangeable.**
+  Its budget is spent — it reviewed and has no round left, a fact about THIS round — or the operator
+  switched it off, a fact about the whole stage. `RoleGate.Enabled` carries the second, defaulted to
+  `true` positionally so every construction site that predates it keeps meaning what it meant and
+  "absent means on" holds by construction rather than by a rule somebody has to remember.
+  `EnabledRolesOf(stage)` is the member both `RolesForRound` and `For(Stage)` read, so a switched-off
+  role lends the stage neither its round budget nor its threshold — leaving either in would keep a
+  stage running rounds nobody reviews, or hold the gate open against a number no reviewer can bring
+  down. With every code role off it answers empty and `For(Stage)` is `NoEnabledRoles` — `(0, 0)` —
+  rather than an exception out of `Max`, because the caller that must refuse the round needs a value
+  to read, not a throw to catch.
 - **Verdict at completion, stage advance at resolve.** `CompleteRound` computes the verdict and sets
   `AdvanceOnResolve`; only `Resolve` moves the stage. So findings are never left undecided: even a
   passing round's minors must be accepted/rejected before the next stage opens.

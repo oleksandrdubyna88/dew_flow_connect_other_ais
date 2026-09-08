@@ -78,6 +78,22 @@ throughout, which is the property this section is about: a seam neither containe
 neither container's tests reach. Recorded, with the fix, in
 [PLAN_team_server_reviewer_never_called.md](PLAN_team_server_reviewer_never_called.md).
 
+### A setting whose ABSENCE must mean something (2026-09-08)
+
+`COAI_ENABLED_<ROLE>` crosses the same seam and is shaped by the same lesson, pushed one step
+further: it is written only when a role is switched OFF, so the absent state has to carry a meaning
+rather than be a gap. Both sides therefore encode "absent means on" structurally rather than by
+agreement — the server's `RoleGate.Enabled` is a positional default of `true`, and the panel's
+`asRoleFlags` reads the stored record one KEY at a time so a partial object (written before the key
+existed, or holding only the role somebody unticked) still answers on for everything else.
+
+Only the four spellings of false disable a role, on both sides. The asymmetry is deliberate and it is
+a property of the seam rather than of either half: a role wrongly ON costs one extra reviewer pass,
+while a role wrongly OFF is a review nobody performed, with nothing on either side saying so. This is
+also the first crossing where an OLD server fails BACKWARDS — it never looks for the key and runs the
+role anyway — so the panel carries `ROLE_SWITCH_SINCE` and says out loud which roles the installed
+server would run regardless of the boxes.
+
 ### A setting whose default lives on BOTH sides (2026-09-08)
 
 `COAI_ROUND_TIMEOUT_MINUTES` is the newest crossing of the same seam, and it is shaped to make the

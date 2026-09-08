@@ -352,6 +352,12 @@ public sealed partial class PanelService
         // open for ever and the next `review_code` would be refused for the wrong reason.
         if (_settings.Rounds.EnabledRolesOf(Stage.CodeReview).Count == 0)
         {
+            // Named in the log as well as in the answer. The caller gets a sentence about the panel;
+            // whoever is reading a log afterwards is usually holding a `mcpServers` block instead,
+            // and "which four" is the question they have.
+            _log.Warning(
+                "review_code refused: every code role is switched off ({Roles})",
+                string.Join(", ", PanelConfig.CodeRoleNames));
             return Task.FromResult(Error(NoCodeRolesRefusal));
         }
 
