@@ -1276,14 +1276,47 @@ push carries a GENERATION so an older one resolving second cannot overwrite a ne
 are in flight whenever an ordinary tick meets the forced answer to `ready`. The posts themselves are
 serialised through one promise chain.
 
-Three details are deliberate. A page whose script throws before attaching its listener never says
-`ready`, so a 5 s timer assumes it is listening and pushes anyway — no worse than the old behaviour,
-and the alternative was a page empty for ever with nothing saying why. Both tabs now open on
-*Reading the log…* rather than on nothing, because an empty div made a push that never arrived look
-identical to one that had not arrived yet. And the message vocabulary moved out to
-`roundsLogMessages.ts`, the same move `chatMessages.ts` records and for the same reason: the branch
-that reads `ready` is load-bearing, and inside a class importing `vscode` no test in this suite could
-reach it. Design record: [PLAN_the_log_loses_its_first_push.md](PLAN_the_log_loses_its_first_push.md).
+```mermaid
+sequenceDiagram
+  participant P as RoundsLogPanel
+  participant L as PushLedger
+  participant W as the webview page
+  P->>W: webview.html = … (no database: rows only)
+  Note over L: rebuilt() — page n+1, told nothing, not listening
+  P-)P: assumeReadyIn = 5 s
+  W->>W: attach the message listener
+  W->>P: { type: 'ready' }
+  Note over L: ready() — listening AND trusted
+  P->>L: next(region, content, force = true)
+  L-->>P: Push { generation, page }
+  P->>W: await postMessage(rows | usage | spots)
+  W-->>P: true (arrived) / false / throw
+  P->>L: settle(push, arrived)
+  Note over L: recorded only if arrived AND trusted AND push.page is current
+  loop every 5 s
+    P->>L: next(region, content)
+    Note over L: nothing when the page already holds it
+  end
+```
+
+The unhappy path is the other half of the design. If the page never says `ready` — its script threw
+before attaching the listener, or never ran — the 5 s timer calls `assumeListening()`, **not**
+`ready()`: the panel pushes anyway, because an empty tab for ever is worse than a repaint, but the
+ledger records nothing, so every tick sends again for as long as the page stays silent. Treating that
+fallback as delivery was the first version's own bug, and it reintroduced the exact false-delivery
+boundary the change exists to remove — raised on the code round by both remote vendors across three
+roles. The page carries the visible half: both tabs open on *Reading the log…* rather than on nothing,
+and a section that opened on that placeholder and has still been told nothing 15 s later replaces it
+with what went wrong and what to do (a loading state that never resolves is worse than the silence it
+replaced, because it promises something is coming). Which sections opened empty is stated by the
+render as a `WAITING` constant rather than read back out of the DOM — the spending tab IS painted on
+the first render, and telling somebody their spending never arrived because no push changed it would
+be a lie.
+
+Finally, the message vocabulary moved out to `roundsLogMessages.ts`, the same move `chatMessages.ts`
+records and for the same reason: the branch that reads `ready` is load-bearing, and inside a class
+importing `vscode` no test in this suite could reach it. Design record:
+[PLAN_the_log_loses_its_first_push.md](PLAN_the_log_loses_its_first_push.md).
 
 **The sidebar shows what is running, and nothing else (2026-09-05).** *Recent rounds* became
 *Active rounds*. A round in flight is shown whole — its reviewers, their durations, what each has found

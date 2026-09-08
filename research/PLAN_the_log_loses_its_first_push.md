@@ -98,7 +98,10 @@ constructed in this suite otherwise.
 - [x] No `lastPayload` / `lastUsage` / `lastSpots` is recorded for a push that was not delivered.
 - [x] Tests 1–5 written, watched fail, and passing.
 - [x] `research/module_extension.md` records the handshake and why a blind `postMessage` after
-      `webview.html = …` is not safe.
+      `webview.html = …` is not safe, with a sequence diagram of the flow it changes.
+- [x] The plan completion check from
+      [planning-docs.md](../.claude/rules/shared/common/planning-docs.md) was run: this plan's status
+      line was re-read against the shipped code, and the plan promoted in the same task.
 
 ## What shipped differently
 
@@ -127,9 +130,37 @@ the reported defect. Inside a class importing `vscode` no test in this suite cou
 **Both tabs open on a hint rather than on nothing.** An empty div made a push that never arrived look
 identical to one that had not arrived yet — which is why the report could not say which it was.
 
+## What the code round changed
+
+The first version's own fallback reintroduced the defect. Four findings, from both remote vendors
+across three roles, said the same thing: the 5 s timer called `ledger.ready()`, so every push it made
+was RECORDED as delivered on the strength of a `postMessage` that answers `true` for a webview that
+merely exists — the retry stopped, and the tab read *Reading the log…* for ever with only a
+`console.warn` in the extension host, which nobody opens.
+
+- `assumeListening()` is now distinct from `ready()`: the panel pushes at a silent page, and records
+  nothing, so every tick sends again until something acknowledges.
+- The page carries its own deadline. A section that opened on the placeholder and has still been told
+  nothing after 15 s says what went wrong and what to do. A section painted with real data — which
+  the spending tab always is — is never overwritten; which sections opened empty is stated by the
+  render as a `WAITING` constant rather than sniffed out of the DOM.
+- A `page` counter on every push. The generation orders pushes within one page and cannot order them
+  across two: a push in flight when the page was replaced would otherwise be recorded against its
+  successor.
+- The fallback timer got a catch-all (`reliability.md`: the outermost edge of a detached execution),
+  the promise chain and the `postMessage` catch now log instead of swallowing (`coding-style.md`),
+  and the region list became a `Record<Region, …>` so a new region without a push is a compile error.
+- A sequence diagram in `module_extension.md`, and the placeholder lost its region name — the
+  template that took one produced *"Reading the log for what it keeps missing…"*.
+
+Six findings were rejected with reasons; the two that claimed a runtime crash (`newest` read before
+its field initialiser) and a memory leak (the rolling `inFlight` reference read as a growing chain)
+are recorded in the round because both are plausible-sounding and neither survives contact with how
+class fields and promise reactions actually work.
+
 ## Evidence
 
-Ten tests in `src_vs_code/src/test/theLogLosesItsFirstPush.test.ts`; whole suite **805 tests, 804
+Fifteen tests in `src_vs_code/src/test/theLogLosesItsFirstPush.test.ts`; whole suite **856 tests, 855
 pass, 0 fail, 1 skipped**; lint clean.
 
 The teeth, proved by putting each half of the defect back:
@@ -139,6 +170,10 @@ The teeth, proved by putting each half of the defect back:
 | `settle` records regardless of `arrived` | `a push that was not delivered is sent again` | `AssertionError: an undelivered push is made again` |
 | the page's `ready` post deleted | `the page says it is listening, and only once it actually is` | `AssertionError: the page never told the panel it was listening` |
 | `ready` posted before the message listener | same test | `AssertionError: the page said ready BEFORE attaching its message listener` |
+| the fallback calls `ready()` | `a page only ASSUMED to be listening is pushed at, and never recorded as told` | `AssertionError: but a true from postMessage is not evidence it arrived` |
+| no `page` on a push | `a push made for a page that has since been replaced is not recorded` | `AssertionError: the new page has been told nothing` |
+| no page-side deadline | `a page that is never told anything says so, where the person is looking` | `AssertionError: usage-body still claims to be reading` |
+| the `WAITING` guard removed | `a section painted with real data is never replaced by the deadline` | `AssertionError: the spending section was written over` |
 
-The last row is why that test RUNS the page script through a stub DOM rather than matching its source:
+The third row is why the page tests RUN the script through a stub DOM rather than matching its source:
 what has to hold is an order, and a regexp cannot see one.

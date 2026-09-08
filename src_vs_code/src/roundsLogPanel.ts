@@ -148,9 +148,16 @@ export class RoundsLogPanel {
     this.ledger.rebuilt();
     this.clearAssumption();
     this.assumeReadyIn = setTimeout(() => {
-      console.warn('ConnectOtherAIs: the rounds log never said it was ready; pushing anyway');
-      this.ledger.ready();
-      void this.pushAll(true);
+      // A catch-all at the outermost edge of a detached execution, per `reliability.md`: nothing is
+      // above this frame, so a throw here would be an unhandled rejection in the extension host and
+      // would leave the panel believing it had started pushing. (gemini and local, the code round.)
+      try {
+        console.warn('ConnectOtherAIs: the rounds log never said it was ready; pushing at it anyway');
+        this.ledger.assumeListening();
+        void this.pushAll(true);
+      } catch (reason: unknown) {
+        console.error('ConnectOtherAIs: the rounds log fallback push failed', reason);
+      }
     }, ASSUME_READY_MS);
   }
 
@@ -170,23 +177,36 @@ export class RoundsLogPanel {
    * order.</p>
    */
   private async pushAll(force: boolean): Promise<void> {
-    this.inFlight = this.inFlight.then(() => this.pushEach(force)).catch(() => undefined);
+    this.inFlight = this.inFlight
+      .then(() => this.pushEach(force))
+      // Never silently, per `coding-style.md`: a region that failed to build its message is left
+      // unrecorded and retried on the next tick, but a page stuck stale with nothing anywhere saying
+      // why is the shape of the defect this file exists for. (codex and gemini, the code round.)
+      .catch((reason: unknown) => {
+        console.error('ConnectOtherAIs: a rounds log push failed', reason);
+      });
 
     return this.inFlight;
   }
 
   private async pushEach(force: boolean): Promise<void> {
     const { rows, questions, usage, spots } = this.latest;
-    const regions: ReadonlyArray<[Region, string, () => unknown]> = [
-      ['rows', payloadOf(rows, questions), () => ({ type: 'rows', rows, questions: questionsHtml(questions) })],
-      ['usage', usage, () => ({ type: 'usage', html: usage })],
-      ['spots', spots, () => ({ type: 'spots', html: spots })],
-    ];
+    // A RECORD over `Region` rather than a list: adding a region to the union without giving it a
+    // push here is then a compile error rather than a region that silently never updates.
+    // (gemini, the code round.)
+    const regions: Record<Region, { readonly content: string; readonly message: () => unknown }> = {
+      rows: {
+        content: payloadOf(rows, questions),
+        message: () => ({ type: 'rows', rows, questions: questionsHtml(questions) }),
+      },
+      usage: { content: usage, message: () => ({ type: 'usage', html: usage }) },
+      spots: { content: spots, message: () => ({ type: 'spots', html: spots }) },
+    };
 
-    for (const [region, content, message] of regions) {
-      const push = this.ledger.next(region, content, force);
+    for (const region of Object.keys(regions) as Region[]) {
+      const push = this.ledger.next(region, regions[region].content, force);
       if (push !== undefined) {
-        await this.send(push, message());
+        await this.send(push, regions[region].message());
       }
     }
   }
@@ -206,7 +226,10 @@ export class RoundsLogPanel {
 
     try {
       this.ledger.settle(push, await panel.webview.postMessage(message));
-    } catch {
+    } catch (reason: unknown) {
+      // Logged, not swallowed: a disposed webview is the ordinary case and says nothing new, but any
+      // other reason for a region going stale has to be findable. (codex, the code round.)
+      console.error(`ConnectOtherAIs: the rounds log did not take its ${push.region}`, reason);
       this.ledger.settle(push, false);
     }
   }
