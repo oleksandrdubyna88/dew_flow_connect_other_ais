@@ -169,6 +169,64 @@ public sealed class ReviewerExecutor(
     private const int StdErrTail = 400;
 
     /// <summary>
+    /// How much of a failing CLI's stderr travels with its exit code — in WHOLE LINES.
+    /// </summary>
+    /// <remarks>
+    /// <para>It used to be the last <see cref="StdErrTail"/> characters, full stop, and the cut
+    /// landed wherever it landed. Measured on a real gate, 2026-09-08:
+    /// <c>local/Conventions FAILED after 290.0s: exit 69: l Qwen3.5-35B-A3B-Q5_vk128:latest,
+    /// pid 52068)</c> — a sentence that begins mid-word, because the reason-picker takes the first
+    /// line of this tail and the first line of this tail was half of one.</para>
+    /// <para><b>Whole lines by CONSTRUCTION, not by a flag.</b> The plan proposed telling the picker
+    /// that the tail had been truncated so it could drop the first line; all three plan reviewers
+    /// found the same two holes in that, from three directions. A 400-character cut can land exactly
+    /// on a newline, and dropping the first line then discards a complete diagnostic; and a stderr
+    /// with no newline inside the budget has no first line to drop, so dropping it leaves a real
+    /// failure reported as blank. Trimming here — where the whole stderr is in hand and the boundary
+    /// is knowable — costs the picker no new parameter and leaves it no case to get wrong.</para>
+    /// <para>The one thing this cannot do is fit a line longer than the whole budget. Its OPENING is
+    /// kept, which is the half <c>Because</c> shows anyway.</para>
+    /// </remarks>
+    public static string TailOf(string stdErr)
+    {
+        var written = stdErr.Trim();
+        if (written.Length <= StdErrTail)
+        {
+            return written;
+        }
+
+        var kept = WholeLinesFrom(written);
+
+        return kept.Length > 0 ? kept : OpeningOfLastLine(written);
+    }
+
+    /// <summary>As many complete trailing lines as the budget holds, and never half of one.</summary>
+    private static string WholeLinesFrom(string written)
+    {
+        var cut = written[^StdErrTail..];
+
+        // The cut begins a line only when what it followed was a newline. Anything else means it
+        // landed inside one, and everything up to the next break is a fragment.
+        if (written[^(StdErrTail + 1)] == '\n')
+        {
+            return cut.Trim();
+        }
+
+        var firstBreak = cut.IndexOf('\n');
+
+        return firstBreak < 0 ? string.Empty : cut[(firstBreak + 1)..].Trim();
+    }
+
+    /// <summary>One diagnostic longer than the whole budget: its beginning, where the reason is.</summary>
+    private static string OpeningOfLastLine(string written)
+    {
+        var lastBreak = written.LastIndexOf('\n');
+        var line = (lastBreak < 0 ? written : written[(lastBreak + 1)..]).TrimStart();
+
+        return (line.Length <= StdErrTail ? line : line[..StdErrTail]).Trim();
+    }
+
+    /// <summary>
     /// Where an answer that would not parse is KEPT, so the next person can read what the vendor
     /// actually said.
     /// </summary>
@@ -592,8 +650,7 @@ public sealed class ReviewerExecutor(
 
         if (result.ExitCode != 0)
         {
-            var tail = result.StdErr.Length <= StdErrTail ? result.StdErr : result.StdErr[^StdErrTail..];
-            return new ReviewerLaunch(new ReviewerOutcome.NonZeroExit(result.ExitCode, tail.Trim()), null, Usage.None, string.Empty);
+            return new ReviewerLaunch(new ReviewerOutcome.NonZeroExit(result.ExitCode, TailOf(result.StdErr)), null, Usage.None, string.Empty);
         }
 
         // Both reads go through the vendor's own adapter: where the answer lands and how the run

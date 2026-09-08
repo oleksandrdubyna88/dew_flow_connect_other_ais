@@ -366,9 +366,12 @@ internal static class Program
             using var lease = await Runners.Reviewers.EngineLease.AcquireAsync(
                 engineKey,
                 untilUtc,
+                // Built where it is RECOGNISED, never here. Composed inline, this sentence had
+                // nothing tying it to whatever was supposed to tell it apart from a verdict — and
+                // nothing did: on 2026-09-08 a round reported forty-five characters of it, cut
+                // mid-word, in place of the cure printed directly underneath.
                 (soFar, ahead) => Note(
-                    $"waiting for the local engine at {endpoint}: {ahead} ahead, {soFar.TotalSeconds:F0}s so far "
-                        + $"(model {model}, pid {Environment.ProcessId})"));
+                    Runners.Reviewers.LocalAsk.WaitingMessage(endpoint, ahead, soFar, model, Environment.ProcessId)));
 
             if (lease is null)
             {
