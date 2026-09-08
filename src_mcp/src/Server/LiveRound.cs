@@ -38,7 +38,12 @@ public sealed class LiveRound
                 ReviewerState.Queued,
                 // The invocation has carried this since the adapters were written; the round simply
                 // never wrote it down, so the log could say WHO reviewed but not WITH WHAT.
-                Model: w.Invocation.Model));
+                //
+                // Trimmed, because a configured model of " " is not a model and the renderer's
+                // `s.model ? ...` would treat it as one — a separator with nothing after it. Raised
+                // twice on the plan round. It cannot be null: `ReviewerInvocation.Model` is a
+                // non-nullable string defaulting to empty.
+                Model: w.Invocation.Model.Trim()));
         Persist();
     }
 

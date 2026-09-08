@@ -166,7 +166,12 @@ export function reviewerRows(round: RoundRecord): readonly ReviewerRow[] {
       // The model rides with the ROLE rather than in the detail list: it is what the reviewer IS,
       // like its vendor and its role, not something it did. An older round carries none and reads
       // exactly as it did.
-      rest: `/${s.role}${s.model ? ` · ${s.model}` : ''} — ${s.status}`
+      //
+      // TRIMMED here as well as where it is written. The writer trims because a configured model of
+      // " " is not a model; this side does not trust that, because a state can arrive from an older
+      // server or a hand-edited file — and a bare truthiness check turned "   " into a separator
+      // with nothing after it, which is what the test below caught.
+      rest: `/${s.role}${s.model?.trim() ? ` · ${s.model.trim()}` : ''} — ${s.status}`
         + `${detail.length > 0 ? ` (${detail.join(', ')})` : ''}`,
     };
   });
