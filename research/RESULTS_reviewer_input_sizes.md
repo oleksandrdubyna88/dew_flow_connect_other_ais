@@ -1,17 +1,28 @@
 # RESULTS — what each reviewer is actually handed, measured from the ledger
 
-> Measured 2026-09-08 from `usage.jsonl` (the append-only spending record), over the 813 reviewer
-> runs since 2026-09-06. No experiment was run: these are real rounds on this repository.
+> **Subject:** the reviewer rounds this repository ran between 2026-09-06 and 2026-09-08, against
+> `coai-mcp` 0.18.6–0.18.10 as installed at the time. Pinned: `reviewerTimeoutMinutes` 10,
+> `maxConcurrency` 3, `maxPerProvider` 2, Team server `https://coai.remsoft.dev`. Repository at
+> `cb71762` when this was written.
+>
+> **Harness:** none, deliberately. The numbers are read straight out of the append-only spending
+> ledger — one line per reviewer launch, written by `src_mcp/runners/Reviewers/UsageLedger.cs` into
+> `usage.jsonl` under the data directory — filtered by its `utc` field and grouped by `provider`. No
+> experiment was run and no arm was configured: these are real rounds, which is both the strength of
+> the document and its limit.
+>
+> **Machine:** the operator's Windows workstation for the local rows, the Team server's box for the
+> `remsoftdev-*` rows. That distinction matters for the seconds and not for the tokens.
 >
 > Related: [module_runners.md](module_runners.md), [module_team_server.md](module_team_server.md),
 > [PLAN_team_server_reviewer_never_called.md](PLAN_team_server_reviewer_never_called.md).
 
 ## Why this was measured
 
-The operator's report was about SPEED: *"разобраться с хайку. она неадекватно долго работает"* —
-the claude reviewer takes unreasonably long. Speed is the symptom people notice; the ledger records
-what was actually consumed, so it can say whether a slow reviewer is a slow MODEL or a reviewer
-being handed more to read.
+The operator's report was about SPEED: *look into haiku, it takes unreasonably long.* (Translated
+from their Russian; this repository's documentation is English.) Speed is the symptom people notice;
+the ledger records what was actually consumed, so it can say whether a slow reviewer is a slow MODEL
+or a reviewer being handed more to read.
 
 ## One round, three vendors, the same diff and the same prompts
 
@@ -29,14 +40,20 @@ Code round of 2026-09-07, 21:26–21:47. Every cell is one reviewer launch.
 | **remsoftdev-claude** | SecurityReliability | **352.3** | **107,991** | 23,652 |
 | **remsoftdev-claude** | UxDxPerformance | **668.8** | **487,037** | 29,754 |
 
-**The finding: it is not the model, it is the input.** Codex is flat at ~42,100 tokens across all
-three roles — the prompt plus the diff, and nothing else. Antigravity is flat at ~42,500 with one
-outlier. Claude ranges from 108k to **487k on the same round**, which is 11× what codex was given
-for the same question, and the seconds track it almost exactly.
+**What these numbers license, and no more.** In this round the rows labelled `remsoftdev-claude`
+received between 2.5× and 11× the input tokens of the rows labelled `remsoftdev-codex` for the same
+three roles, and their durations rose with that input. Codex is flat at ~42,100 tokens across all
+three roles; antigravity is flat at ~42,500 with one outlier; claude ranges from 108k to **487k on
+the same round**.
 
-A number that is FLAT across three roles is a number that comes from the round. A number that
-varies elevenfold within one round comes from the reviewer's own behaviour — an agentic CLI reading
-files.
+The flat-versus-varying shape is the suggestive part: a number that does not move across three
+different questions plausibly comes from the round, and one that moves elevenfold inside it
+plausibly comes from the reviewer's own behaviour — an agentic CLI reading files.
+
+**"Plausibly" is as far as this goes.** One round is one sample, nothing was controlled, and the
+data cannot separate the model from the CLI, from the workspace it was given, or from what the Team
+server does before launching it. What it does establish is where to look — at the input rather than
+at the model's speed — which is a different and much cheaper question to answer next.
 
 ## The same shape across three days
 

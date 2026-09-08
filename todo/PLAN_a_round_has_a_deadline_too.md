@@ -1,6 +1,6 @@
 # PLAN — a round has a deadline, not only a reviewer
 
-> Status: **plan only, nothing implemented yet.** Scope: one setting in the panel and its manifest,
+> Status: **plan only, nothing implemented yet, 2026-09-08.** Scope: one setting in the panel and its manifest,
 > one bound in `PanelService.RunStageAsync`, and the sentence a round prints when it hits it.
 >
 > Related docs: [module_server.md](../research/module_server.md),
@@ -9,8 +9,9 @@
 
 ## What the operator asked for
 
-> "значет нужно добавить и настройку макс время на раунд" — *so a max-time-per-round setting is
-> needed too.*
+> So a max-time-per-round setting is needed too.
+
+*(translated from the operator's Russian; this repository's documentation is English.)*
 
 Said immediately after reporting that the existing limit had not worked. Half of that report was a
 real defect and is fixed: `reviewerTimeoutMinutes` bounded each LAUNCH, and a reviewer makes up to
@@ -40,6 +41,32 @@ lost, and a verdict nobody can explain. The default must be derived, not chosen:
 
 with the safety margin stated in the setting's own description, so a person lowering it can see
 what they are cutting into.
+
+## Where it goes, verified
+
+| Seam | Where |
+|---|---|
+| The stage that would carry the bound | `src_mcp/src/Server/PanelService.cs:470` (`RunStageAsync`) |
+| Its two callers, plan and code | `PanelService.cs:310` and `PanelService.cs:345` |
+| The reviewer budget it must clear | `src_vs_code/src/settingsShape.ts:171` (`reviewerTimeoutMinutes: 10`) |
+| The concurrency cap in the arithmetic | `src_vs_code/src/settingsShape.ts:169` (`maxConcurrency: 3`) |
+| The setting's own type and reader | `settingsShape.ts:62` and `settingsShape.ts:245` |
+| The list a new key must join | `settingsShape.ts:198` |
+| The server's side of the budget | `src_mcp/src/Server/PanelSettings.cs` (`RoleGates`, beside the other budgets) |
+
+## What this adds that GROWS, and who retires it
+
+Almost nothing, and saying so is the point of the rule rather than a formality:
+
+| Surface | Size | Who retires it |
+|---|---|---|
+| One `CancellationTokenSource` per ROUND, linked to the caller's | one object, a few dozen bytes | the `using` that creates it, when the stage returns — the same lifetime the stage already has |
+| One integer setting in `settings.json` | one key, written only when it differs from the default | the panel, when the control returns to its default (`envBlock` removes it) |
+| Round records already written by `SessionStore` | unchanged — a cancelled round writes the same one row a finished round does | the existing session store and its sweep |
+
+Nothing new is appended, cached or spawned. If that stops being true — for example if a cancelled
+round were to keep its partial reviewer answers on disk for diagnosis — that is the thing to name
+here before it is written.
 
 ## Open questions to settle before building
 

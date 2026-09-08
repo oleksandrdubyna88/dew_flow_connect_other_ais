@@ -100,6 +100,22 @@ public sealed class RepairRunsInsideTheBudgetTests
     }
 
     [Fact]
+    public async Task ARepairAlreadyShortened_KeepsItsShorterBudget()
+    {
+        // The scheduler shortens a repair on a retry, and this method computes its own remainder.
+        // Whichever is smaller has to win, or the executor would hand back the time the ladder took
+        // away. Here the reviewer has ten seconds and the repair carries a tenth of one: the repair
+        // must run out, not be given the ten.
+        var outcome = await _executor.RunAsync(
+            FakeCliInvocations.Invoke("vendor", ["sleep", "10"], TimeSpan.FromSeconds(10)),
+            FakeCliInvocations.Invoke("vendor", ["sleep", "800"], TimeSpan.FromMilliseconds(100)),
+            TestContext.Current.CancellationToken);
+
+        outcome.Should().BeOfType<ReviewerOutcome.TimedOut>(
+            "the repair's own budget was the smaller one and had to be honoured");
+    }
+
+    [Fact]
     public void ASpentBudget_LeavesNoTimeRatherThanNegativeTime()
     {
         // The arithmetic itself, at the edge a process cannot be given: never below zero.
