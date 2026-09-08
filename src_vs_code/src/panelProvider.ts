@@ -479,14 +479,26 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // So a change to the CONTROLS repaints (rare, and always the person's own doing), while the
     // live regions — the round in flight, a question waiting on an answer — are posted as HTML
     // and patched into place, touching nothing else.
+    // Re-read AFTER the awaits above, and never through `this.view` again below. The check at the
+    // top of this method proves nothing by the time we get here: every `await` is a place the event
+    // loop can run `onDidDispose`, and `this.view` then becomes undefined — so `this.view.webview`
+    // throws a TypeError, which is NOT the disposal error and would be rethrown. Raised on the code
+    // round, by two reviewers, on both write paths.
+    const live = this.view;
+    if (live === undefined) {
+      return;
+    }
+
     const key = staticKey(state);
     if (key !== this.paintedKey) {
-      this.paintedKey = key;
-      // Guarded as well as null-checked, because `onDidDispose` can fire between the check at the
-      // top of this method and this line — every `await` above is a place the event loop can run
-      // it — and a null check cannot close a window it opens before. Raised on the plan round.
+      // Guarded as well as null-checked, because disposal can still land between the line above and
+      // this one — and recorded only AFTER the paint succeeded. Setting it first was a defect of
+      // its own: a disposal here left `paintedKey` claiming this state was painted, so the view VS
+      // Code creates when the sidebar is shown again matched the key, skipped the html write
+      // entirely, and posted live regions into an empty document — a blank sidebar with no controls
+      // and no way back. Found by gemini on the code round, twice.
       try {
-        this.view.webview.html = panelHtml(state, this.nonce);
+        live.webview.html = panelHtml(state, this.nonce);
       } catch (error) {
         if (!isDisposedRejection(error)) {
           throw error;
@@ -494,6 +506,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
         return;
       }
+      this.paintedKey = key;
       void this.refreshTeamServers();
 
       return;
@@ -506,7 +519,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // The disposal is expected and dropped; anything else keeps its reporter, because a LIVE view
     // refusing a message — a payload that cannot be cloned, a host channel that fell over — leaves
     // a stale sidebar and has nothing else to say so.
-    this.view.webview.postMessage({ type: 'live', ...liveRegions(state) }).then(undefined, (error: unknown) => {
+    live.webview.postMessage({ type: 'live', ...liveRegions(state) }).then(undefined, (error: unknown) => {
       if (!isDisposedRejection(error)) {
         console.error('ConnectOtherAIs: the panel could not be updated', error);
       }

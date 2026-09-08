@@ -32,7 +32,7 @@
  * <p>The in-page twin of this escaper — `esc` in `roundsLog.ts` — has always done the coercing
  * half. Half of this codebase had learned the lesson.</p>
  */
-function asText(value: unknown): string {
+export function asText(value: unknown): string {
   return value === undefined || value === null ? '' : String(value);
 }
 
