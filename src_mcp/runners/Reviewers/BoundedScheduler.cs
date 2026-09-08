@@ -174,8 +174,15 @@ public sealed class BoundedScheduler(
                 Report(onProgress, w.Invocation, "queued", note: QueueNote(w.Invocation));
             }
 
-            var tasks = work.Select(async w =>
+            // Started in a SHUFFLED order and reported in the given one. Everybody's vendor list is
+            // built the same way, so a fixed dispatch order sends everybody's first Team-server
+            // review to the same single shared account while the last vendor's sits idle — see
+            // SubmissionOrder, which moves remote reviewers only, and only among the positions
+            // remote reviewers already hold.
+            var dispatch = SubmissionOrder.For(work, _roll);
+            var tasks = dispatch.Select(async index =>
             {
+                var w = work[index];
                 var name = w.Invocation.Provider;
                 var provider = perProvider[name];
                 var engine = w.Invocation.SharedResource;
@@ -277,7 +284,18 @@ public sealed class BoundedScheduler(
                     global.Release();
                 }
             });
-            return await Task.WhenAll(tasks);
+
+            // Back into the order the CALLER gave, which is what the rounds list, the log and every
+            // person watching read. The dispatch order is a load decision; the reported order is a
+            // reading decision, and they are allowed to differ.
+            var finished = await Task.WhenAll(tasks);
+            var byOriginalPosition = new (ReviewerInvocation, ReviewerOutcome)[finished.Length];
+            for (var i = 0; i < finished.Length; i++)
+            {
+                byOriginalPosition[dispatch[i]] = finished[i];
+            }
+
+            return byOriginalPosition;
         }
         finally
         {

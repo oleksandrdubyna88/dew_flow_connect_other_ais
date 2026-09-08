@@ -130,6 +130,17 @@ public sealed class JobStoreTests
         store.TryClaim("codex", "a", Now).Should().BeNull();
     }
 
+    /// <summary>
+    /// The claim is FIFO, and it must stay FIFO.
+    /// </summary>
+    /// <remarks>
+    /// Named here because a sibling change made the temptation concrete: clients now SUBMIT a
+    /// round's Team-server reviewers in a shuffled order, so that everybody's first review does not
+    /// land on the same shared account (`SubmissionOrder`). Randomising the CLAIM as well would look
+    /// like more of the same fix and is the opposite of it — fairness here is what makes a queue
+    /// position mean anything, and without it a person's wait stops being long and starts being
+    /// unpredictable. The load fix belongs entirely on the submitting side.
+    /// </remarks>
     [Fact]
     public void TheOldestQueuedJobGoesFirst()
     {

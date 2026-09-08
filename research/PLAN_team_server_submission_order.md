@@ -1,11 +1,29 @@
 # PLAN — the Team server's queue is not served in the order everybody typed
 
-> Status: **plan only, nothing implemented yet.** Scope: the SUBMISSION order a client uses when it
-> sends a round's reviewers to a Team server — `src_mcp/src/AskRemote.cs`, `RemoteRuntime`, and the
-> scheduler that fans a round out. The server's own FIFO claim is explicitly out of scope.
+> Status: **IMPLEMENTED, 2026-09-08.** `SubmissionOrder.For` permutes a round's REMOTE reviewers
+> among the positions remote reviewers already hold, and `BoundedScheduler` dispatches in that order
+> while returning results in the caller's. Local reviewers keep their exact place; the server's
+> `JobStore.TryClaim` was not touched.
 >
-> Related docs: [module_team_server.md](../research/module_team_server.md),
-> [architecture.md](../research/architecture.md), [PLAN_team_server.md](../research/PLAN_team_server.md).
+> Deviations from the plan. The open question "shuffle or rotate by a per-client offset" was settled
+> as SHUFFLE: a rotation needs a stable client id this side does not have, and the reporting
+> requirement it was meant to protect is met a better way — by shuffling the DISPATCH order and
+> reordering the results, so a person watching sees no movement at all. The remote marker is the
+> invocation's `JobFile`, which only `RemoteRuntime` writes, rather than a new flag: a second field
+> saying the same thing is a second field to forget. The plan's own test plan was tightened after
+> CodeRabbit's note on it — the distribution test asserts flatness within a tenth of the fair share
+> rather than "not always the same vendor", which a badly skewed shuffle would also satisfy.
+>
+> The FIFO guard the plan asked for already existed as `JobTests.TheOldestQueuedJobGoesFirst`; it
+> gained the remark saying why it must not be relaxed now that the submitting side is random.
+>
+> Still open, deliberately: the depth-aware alternative below — a client submitting to the SHORTEST
+> queue first, which needs the server to report per-vendor queue depth. Random removes the systematic
+> bias; depth-aware would actually balance. Do the cheap one first and measure whether the second
+> still earns its cost.
+>
+> Related docs: [module_runners.md](module_runners.md), [module_team_server.md](module_team_server.md),
+> [PLAN_team_server.md](PLAN_team_server.md).
 
 ## The symptom, before anyone has felt it
 
@@ -73,6 +91,6 @@ The load is not skewed because of demand. It is skewed because of a **list order
 ## Where this came from
 
 Asked for by the operator on 2026-09-07, the same evening the Team server completed its first review
-ever ([research/PLAN_team_server_reviewer_never_called.md](../research/PLAN_team_server_reviewer_never_called.md)
+ever ([research/PLAN_team_server_reviewer_never_called.md](PLAN_team_server_reviewer_never_called.md)
 and the three defects fixed after it). It is a load question that only appears once the feature works
 at all — which, until that day, it did not.

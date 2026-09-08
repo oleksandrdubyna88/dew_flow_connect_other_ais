@@ -184,6 +184,23 @@ Three failures cost hours because the reason was discarded at the last step:
   the outcome naming the file. The one replayed by hand afterwards succeeded, which is precisely
   the case where the raw text is the whole story.
 
+### The dispatch order is shuffled; the reported order is not (2026-09-08)
+
+`BoundedScheduler` starts a round's reviewers through `SubmissionOrder.For`, which permutes the
+REMOTE entries among the positions remote entries already hold, and puts the results back into the
+caller's order before returning.
+
+The two halves are deliberate and pull against each other. A Team server holds one company account
+per vendor, and everybody's client submits in the same order, because everybody's vendor list is
+built the same way — the catalog's order, appended as vendors are added, preserved by the settings
+file. With ten people submitting inside a minute, the vendor sitting first in everyone's list takes
+ten reviews into a queue of depth one while the third vendor's account is idle. Meanwhile a person
+watching the rounds list must not see their reviewers move between runs, which is why the shuffle
+touches dispatch and not reporting, and why a local reviewer keeps its exact place.
+
+The server's own `JobStore.TryClaim` stays strictly FIFO. Fairness there is what makes a queue
+position mean anything; randomising the CLAIM would turn a long wait into an unpredictable one.
+
 ### A progress note is never a reason (2026-09-07)
 
 The fourth of those, and the one that shows the limit of "choose by content". The remote shim writes
