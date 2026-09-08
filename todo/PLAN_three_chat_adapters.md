@@ -1,6 +1,6 @@
 # PLAN — All three CLIs answer a chat, not just one
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code` — one new seam
+> Status: **phase 0 measured (2026-09-08); nothing implemented yet.** Scope: `src_vs_code` — one new seam
 > (`chatAdapter.ts`) plus two implementations beside the one `cliChatSession.ts` already has.
 >
 > Related docs: [PLAN_chat_with_other_ais.md](PLAN_chat_with_other_ais.md) (the master plan this
@@ -40,9 +40,9 @@ run on this machine.
 2. **`codex` needs a directory, not just a binary.** It refuses outside a trusted git repository
    unless `--skip-git-repo-check` is passed — and that flag's own help says it runs "without
    persisting session files to disk", which is what `resume` reads. The measurement that worked ran
-   inside the repository. **Whether `--skip-git-repo-check` and `resume` can coexist is the one thing
-   still unmeasured**, and phase 0 settles it, because the master plan's empty-temp-directory rule
-   depends on the answer.
+   inside the repository. **Whether `--skip-git-repo-check` and `resume` could coexist was the one thing
+   left unmeasured — **and it was measured before this plan was committed. They can.** See phase 0
+   below.
 
 ## The seam
 
@@ -87,11 +87,21 @@ measured now. The rejection is recorded in that round; this plan is what superse
 
 ## Build order
 
-**Phase 0 — measure what is still unmeasured.** Two questions, both cheap: does `codex exec resume`
-work with `--skip-git-repo-check` (and therefore in an empty temp directory), and does `claude`'s
-`system/init` arriving once per TURN break the session's "ready" latch. Nothing is written until both
-are answered — the master plan's temp-directory rule and the session's startup latch both depend on
-them.
+**Phase 0 — DONE, 2026-09-08.** Both questions answered before anything else was written.
+
+**Does `codex exec resume` work with `--skip-git-repo-check`, outside a repository?** **Yes** — and
+the flag's own help is misleading. Run in a directory that is not a git repository at all
+(`fatal: not a git repository`), `codex exec --skip-git-repo-check` planted the number 8842 in 4.5 s,
+and `codex exec resume --last --skip-git-repo-check` returned **8842** in 4.7 s. The session store
+survives the flag whose own help says it runs "without persisting session files to disk"; `--last`
+finds it anyway. So the master plan's empty-temp-directory rule holds for `codex` too, and the
+deviation this plan was braced for is not needed.
+
+**Does `claude`'s per-turn `init` break the ready latch?** **No**, and the answer is in the code
+rather than in a run: the startup budget is armed only inside `ensureStarted`, which returns early
+once `ready` is set, so a second `init` mid-conversation re-sets a flag that is already true and
+arms nothing. `waitingForInit` is cleared by then, so it resolves nothing either. The adapter still
+has to CLASSIFY `system/init` as "ready" rather than as an answer, which is phase 2's job.
 
 **Phase 1 — `chatAdapter.ts` + `agyAdapter.ts`.** The seam, with the CURRENT behaviour moved behind
 it. `cliChatSession.test.ts` must pass unchanged: this phase is a refactor, and a green suite is what
@@ -119,17 +129,16 @@ still binds — a Claude model goes through the `claude` CLI and never through `
 
 ## Risks
 
-1. **`codex --skip-git-repo-check` may disable the session store**, which would make `resume`
-   impossible outside a repository. Phase 0 measures it; if true, the codex adapter runs in the
-   workspace rather than a temp directory, and that is a deviation the master plan's "empty temp
-   directory" rule must record rather than silently break.
+1. ~~**`codex --skip-git-repo-check` may disable the session store.**~~ **Retired by measurement**
+   (phase 0): it does not. `resume --last` recovered a planted number from outside a git repository
+   with the flag set, so the empty-temp-directory rule needs no exception.
 2. **`claude` emits `init` per turn.** The session latches `ready` on the first one; a second `init`
    mid-conversation must not re-arm the startup budget. Cheap to handle, easy to miss.
 3. **Three adapters is three vendor bills.** The live checks cost real turns on three accounts.
 
 ## Definition of Done
 
-- [ ] Phase 0's two measurements are recorded here, with what was run.
+- [x] Phase 0's two measurements are recorded here, with what was run.
 - [ ] All three vendors hold a two-turn conversation where the second turn depends on the first,
       verified live, with timings recorded.
 - [ ] `cliChatSession.test.ts` passes unchanged after the seam is introduced.
