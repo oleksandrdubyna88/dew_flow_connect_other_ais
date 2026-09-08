@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { ProcessHandle } from './processLauncher';
 
 /**
@@ -47,9 +48,15 @@ export const CLIPBOARD_SENTINEL = 'COAI-CHAT-NOTHING-WAS-COPIED';
  * <p>A fixed sentinel is a string somebody can copy — this file's own source contains it, and
  * selecting that line would have been reported as "nothing was copied". A capture may fail for a
  * hundred reasons, but never for the CONTENT of what was selected. (local, the code round.)</p>
+ *
+ * <p>`randomUUID` rather than `Math.random`, and not because a clipboard marker needs to resist an
+ * attacker: nothing here is a secret and the string lives for a second. It is that arguing the case
+ * costs more than the import — SonarCloud reads `Math.random` as a security question (S2245) and
+ * marked the whole change C for it, and a reviewer reading this line a year from now would have to
+ * make the same argument again.</p>
  */
 export function markerFor(): string {
-  return `${CLIPBOARD_SENTINEL}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return `${CLIPBOARD_SENTINEL}-${randomUUID()}`;
 }
 
 /**
