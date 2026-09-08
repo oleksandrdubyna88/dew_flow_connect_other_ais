@@ -19,6 +19,14 @@ expect after a failure. Before this, the same failure left five platforms of six
 release and the sixth answering 404 to whoever was installing on it; it happened on `mcp-v0.16.0`
 and again on `mcp-v0.18.13`, and both times a person found it rather than CI.
 
+**A release stuck as a draft is recovered by re-running, never by publishing it blind.** The
+completeness job is the only thing that publishes, so if it never ran (a leg failed) or failed
+itself, the release stays a draft. Use *Re-run failed jobs* — the completeness job depends on the
+matrix, so re-running the failed leg re-runs the check and the publish with it. If it is the
+CHECK that is failing, read what it says is missing rather than publishing by hand: it names the
+asset, and a release published without it is the exact 404 this whole shape exists to prevent.
+The manual last resort, once you have looked: `gh release edit <tag> --draft=false`.
+
 **A slow `npm ci` is not a hung release, and cancelling one costs a re-run.** Measured here on
 extension-v0.29.2: the step sat at seven minutes against a whole-job history of 2m33s, was cancelled
 as hung, and the re-attempt took 7m26s and published cleanly. The registry is simply slower some

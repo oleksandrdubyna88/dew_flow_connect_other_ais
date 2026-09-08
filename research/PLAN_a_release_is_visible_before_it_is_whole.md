@@ -104,6 +104,31 @@ All four read the workflow text, beside the tests that already hold this file
 
 ## What shipped, and what shipped differently
 
+**The plan's own sequence was wrong, and a measurement found it.** The diagram said *"matrix leg
+(first) → `gh release create --draft`"*, exactly as the published-release version had worked, on the
+assumption that the other five creates fail harmlessly. The plan round called that out as blocking;
+the reviewer's stated mechanism was wrong, but the instinct was right, so it was checked against the
+live API with a real existing tag:
+
+```
+gh release create <tag> --draft   ->  releases/tag/untagged-4edbbf29…   exit 0
+gh release create <tag> --draft   ->  releases/tag/untagged-ebd3e8b4…   exit 0
+```
+
+**A draft carries no tag of its own, so GitHub makes a SECOND one rather than refusing.** Six legs
+would have produced six drafts holding one asset each; the completeness job would have resolved one
+of them, found one archive, and failed the release. The `|| true` that made the old race safe is
+precisely what would have hidden this one.
+
+So the shape changed: **`mcp-draft` and `server-draft` create their release ONCE**, before the
+matrix, and every leg only uploads. The legs `needs:` them.
+
+The same measurement refuted the other half of that finding: `gh release upload <tag>` resolves a
+DRAFT by tag perfectly well (`isDraft: true`, asset present). Both facts are recorded in the
+workflow's own comment, because they are the kind of thing the next person will otherwise re-derive
+from a broken release.
+
+
 - **All three lines draft**, not only the two with a matrix. The extension line has one job and one
   asset, so it drafts, uploads and publishes inside that job — the draft is still worth its line,
   because "the window is small" is exactly what the mcp line's window was called before it cost a
@@ -118,3 +143,22 @@ All four read the workflow text, beside the tests that already hold this file
 - Not done, deliberately: the extension is still not defensive about a missing asset. It could check
   before offering, and that is a second belt; a release being honest about its own state is the
   braces, and braces first.
+
+Also taken from the code round's plan stage:
+
+- **The listing is POLLED, not read once.** `needs` proves every upload returned; it does not prove
+  GitHub's release listing has caught up with them, and a listing lagging by a second would fail a
+  release that is in fact complete. Bounded at ten attempts, so a genuinely missing asset still fails.
+- **The publish is retried** and then verified. Everything above it has already passed, so leaving a
+  complete release stranded as a draft over one transient API error is the only failure that job can
+  still cause by itself.
+- **The extension line asks the RELEASE what it holds** before publishing, rather than trusting an
+  exit code — the same guarantee the other two lines get from their completeness job.
+- **`POST_DEPLOY.md` gained the recovery path**: a stuck draft is re-run, never published blind, and
+  a failing CHECK names the asset that is missing.
+
+Rejected, with reasons in the session: that a leg failing after the draft exists leaves it "visible"
+(a draft is not visible to a client — that is the mechanism), that `needs: [mcp-binaries]` might not
+wait for every leg (it does), that two runs of one tag could race (a tag is pushed once), and that
+actionlint should replace the workflow-text tests — the two facts that mattered here live in
+GitHub's API semantics, which only an API call could answer, and it did.
