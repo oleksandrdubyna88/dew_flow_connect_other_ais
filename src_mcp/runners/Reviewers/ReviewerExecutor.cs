@@ -225,8 +225,25 @@ public sealed class ReviewerExecutor(IProcessLauncher launcher, string? keepUnpa
         // deadline, reporting `ok`. `reviewerTimeoutMinutes` bounded each LAUNCH, so a reviewer that
         // needed a repair could take twice what it was given — and the operator who reported "the
         // limit did not work again" was reading a real number.
+        var left = RetryLadder.Remaining(spent.Elapsed, budget);
+        if (left <= TimeSpan.Zero)
+        {
+            // A launch with nothing left would start a process and cancel it in the same breath —
+            // `ProcessLauncher` calls `CancelAfter(request.Timeout)` — and report a timeout, which
+            // describes the repair rather than the answer that needed one. The first launch's
+            // complaint is the useful one, so it is what comes back. Raised by two reviewers on the
+            // plan round, and the reason it is not merely tidy: a `TimedOut` here would have hidden
+            // exactly the diagnosis somebody is looking for.
+            return new ReviewerOutcome.Unparseable(
+                Because(
+                    Said(answer, Complaint(evidence)),
+                    "and the reviewer's deadline was spent before it could be repaired",
+                    Keep(invocation, evidence)),
+                usage);
+        }
+
         var (repairOutcome, repaired, repairUsage, repairAnswer, repairEvidence) =
-            await RunOnceAsync(RetryLadder.WithinRemaining(repair, spent.Elapsed, budget), ct);
+            await RunOnceAsync(repair with { Request = repair.Request with { Timeout = left } }, ct);
         return repairOutcome
                ?? (repaired is { } fixedReview
                    // Both launches are billed, so both are counted — a repaired reviewer that
