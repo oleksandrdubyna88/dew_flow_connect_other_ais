@@ -253,14 +253,45 @@ public sealed partial class PanelService
             return Error($"'{repoPath}' is not a directory on this machine");
         }
 
+        // READ-ONLY validation first: it changes nothing, and a caller who named a branch that
+        // does not exist deserves that sentence rather than a busy one.
         try
         {
             await _worktrees.ResolveShaAsync(repoPath, branch);
+        }
+        catch (WorktreeException e)
+        {
+            return Error(e.Message);
+        }
+
+        // The claim comes BEFORE every mutating step, and the prune is one of them. It used to run
+        // first, and a prune removes `coai-wt-*` trees by name — including the one a review running
+        // in another process is reading from at that moment. `open` would delete a live reviewer's
+        // checkout and only then discover the session was busy, so the refusal arrived after the
+        // damage. Nothing here creates, deletes or writes until the claim is held.
+        using var claim = SessionClaim.TryTake(_settings.DataDir, repoPath, branch);
+        if (claim is null)
+        {
+            return Error(SessionClaim.Busy(branch));
+        }
+
+        try
+        {
             await _worktrees.PruneOursAsync(repoPath);
         }
         catch (WorktreeException e)
         {
             return Error(e.Message);
+        }
+
+        // A round whose process died still says `running`, and its slot would refuse every later
+        // round. Holding the claim is what makes it safe to say so — see `ReleaseOrphanedRounds`.
+        ReleaseOrphanedRounds(repoPath, branch);
+
+        var caughtUp = ApplyOwedUpdates(repoPath, branch);
+        if (caughtUp > 0)
+        {
+            _log.Information("caught up {Count} session update(s) a finished round still owed", caughtUp);
         }
 
         var session = _store.Load(repoPath, branch)
@@ -308,7 +339,7 @@ public sealed partial class PanelService
         // would have told the person why. The floor belongs to the code stage, where the scope has
         // something to be checked against.
         RunStageAsync(repoPath, branch, planText, new StageRun(RoundMachine.BeginPlanRound, NeedsWorktree: false, IsPlanStage: true,
-            (session, workingDir, _) => Task.FromResult<IReadOnlyList<ReviewerWork>>(
+            (session, workingDir, _, _) => Task.FromResult<IReadOnlyList<ReviewerWork>>(
                 BuildWork([ReviewRole.PlanCritique], workingDir, $"## The plan under review\n\n{planText}",
                     session.State.RoundsRunThisStage + 1,
                     isPlanStage: true,
@@ -330,20 +361,27 @@ public sealed partial class PanelService
     /// it was already agreed by both halves, and asking for it twice is how a caller ends up
     /// sending nothing.</para>
     /// </remarks>
-    public Task<string> ReviewCodeAsync(string repoPath, string branch, string baseRef, string planText, CancellationToken ct = default)
-    {
-        var scope = Scope(repoPath, branch, planText);
-        // Only once the stage itself is reachable. "The plan stage has not passed" is the more
-        // useful sentence for a caller who skipped it, and telling them to send a scope for a
-        // round that could not have run either way sends them to fix the wrong thing.
-        if (_store.Load(repoPath, branch) is { State.PlanProceeded: true } && !CodeScope.IsSubstantial(scope))
-        {
-            // Refused before any worktree, any launcher, any token: nothing has to run to know it.
-            return Task.FromResult(Error(CodeScope.Refusal));
-        }
+    /// <remarks>
+    /// The scope is NOT resolved here. An empty <c>planText</c> falls back to the one the plan stage
+    /// agreed, which lives in the session — and reading it before the claim is taken means a
+    /// concurrent <c>resolve</c> can change it between the read and the round, so the reviewers
+    /// would be handed a scope that no longer describes the session they are reviewing. The fallback
+    /// happens inside <see cref="RunStageAsync"/>, under the claim, from the session it loaded.
+    /// </remarks>
+    public Task<string> ReviewCodeAsync(string repoPath, string branch, string baseRef, string planText, CancellationToken ct = default) =>
+        RunStageAsync(repoPath, branch, planText, CodeStage(repoPath, branch, baseRef, ct), ct);
 
-        return RunStageAsync(repoPath, branch, scope, new StageRun(RoundMachine.BeginCodeRound, NeedsWorktree: true, IsPlanStage: false,
-            async (session, workingDir, sha) =>
+    /// <summary>
+    /// The code stage's work, as a value — so the addressable path runs the SAME stage.
+    /// </summary>
+    /// <remarks>
+    /// Extracted rather than duplicated. `run_round` needs this stage with a pinned SHA and a
+    /// locator attached, and a second copy of the role selection, the rules pass and the diff
+    /// assembly would drift from this one on the first change to either.
+    /// </remarks>
+    private StageRun CodeStage(string repoPath, string branch, string baseRef, CancellationToken ct) =>
+        new(RoundMachine.BeginCodeRound, NeedsWorktree: true, IsPlanStage: false,
+            async (session, workingDir, sha, scope) =>
             {
                 var files = await _context.CollectAsync(repoPath, baseRef, sha, ct: ct);
                 var shaped = DiffShaper.Shape(files);
@@ -383,9 +421,19 @@ public sealed partial class PanelService
                 return BuildWork(roles, workingDir, context, round, isPlanStage: false,
                     seed: StableSeed(session.State.SessionId, round),
                     deal: _settings.DealCodeLenses);
-            }),
-            ct);
-    }
+            })
+        {
+            // Only the code stage falls back, and only it is checked for substance: a plan round
+            // carries its own document by definition, and a three-line plan is a BAD plan the
+            // reviewers should say so about rather than a refusal at the gate.
+            AllowSessionScopeFallback = true,
+            Precheck = (session, scope) =>
+                // Only once the stage itself is reachable. "The plan stage has not passed" is the
+                // more useful sentence for a caller who skipped it, and telling them to send a
+                // scope for a round that could not have run either way sends them to fix the wrong
+                // thing. Refused before any worktree, any launcher, any token.
+                session.State.PlanProceeded && !CodeScope.IsSubstantial(scope) ? CodeScope.Refusal : null,
+        };
 
     /// <summary>
     /// The plan lenses this session has not spent yet, one for each vendor that can run.
@@ -467,17 +515,29 @@ public sealed partial class PanelService
     private string Scope(string repoPath, string branch, string planText) =>
         planText.Trim().Length > 0 ? planText : _store.Load(repoPath, branch)?.PlanText ?? string.Empty;
 
+    /// <param name="held">
+    /// A claim the caller already holds. `run_round` takes it before it claims the round itself, so
+    /// a locator is never marked running by a call that then finds the session busy.
+    /// </param>
     private async Task<string> RunStageAsync(
         string repoPath,
         string branch,
-        string planText,
+        string requestedScope,
         StageRun stage,
-        CancellationToken ct)
+        CancellationToken ct,
+        SessionClaim? held = null)
     {
-        if (planText.Length == 0)
+        // One mutating call per session, across every process on this machine. Taken before the
+        // session is read, because everything from here to the save is one read-modify-write over a
+        // document the next round's ordinal comes from — and because the fallback scope is read
+        // out of that document.
+        using var mine = held is null ? SessionClaim.TryTake(_settings.DataDir, repoPath, branch) : null;
+        if (held is null && mine is null)
         {
-            return Error("planText is required — a reviewer that cannot see the intent reviews its own guess");
+            return Error(SessionClaim.Busy(branch));
         }
+
+        AfterClaimTaken?.Invoke();
 
         var session = _store.Load(repoPath, branch);
         if (session is null)
@@ -487,6 +547,26 @@ public sealed partial class PanelService
 
         session = ApplyAnyHumanDecision(session);
 
+        // The scope this round actually runs with. An explicit one is used verbatim; an empty one
+        // falls back to what the plan stage agreed, read from the session HERE — under the claim —
+        // so a concurrent `resolve` cannot change it between the read and the round.
+        var planText = requestedScope.Trim().Length > 0
+            ? requestedScope
+            : stage.AllowSessionScopeFallback ? session.PlanText : string.Empty;
+        // The stage's own refusal comes FIRST, because it is the more useful sentence when it
+        // applies: a code round past the plan gate with nothing to review has a scope problem, and
+        // "planText is required" does not tell that caller which field it means. A stage with no
+        // precheck, or one whose rule does not fire, falls through to the general refusal.
+        if (stage.Precheck?.Invoke(session, planText) is { } refusal)
+        {
+            return Error(refusal);
+        }
+
+        if (planText.Length == 0)
+        {
+            return Error("planText is required — a reviewer that cannot see the intent reviews its own guess");
+        }
+
         if (stage.Begin(session.State) is Transition.Refused refused)
         {
             return Error(refused.Sentence);
@@ -494,15 +574,29 @@ public sealed partial class PanelService
 
         try
         {
-            var sha = await _worktrees.ResolveShaAsync(repoPath, branch);
+            if (BeforeWorktree is { } inject)
+            {
+                await inject();
+            }
+
+            // Resolved ONCE, or not at all when the caller already pinned one. The pinned SHA is
+            // what the reservation attested, and it is what reaches the worktree and the diff: a
+            // second `rev-parse` here would silently pick up a commit that landed since, and the
+            // answer would carry the old attestation over the new code.
+            var sha = stage.PinnedSha ?? await _worktrees.ResolveShaAsync(repoPath, branch);
             // The plan stage gets an empty scratch directory instead of a checkout — there is
             // nothing there to wander into, which is the point.
+            // An addressable round names its worktree by its ROUND ID. The ordinal is derived
+            // from the session file, so two rounds of one session compute the same one and would
+            // collide on the directory; the locator is unique by construction.
             await using var lease = stage.NeedsWorktree
-                ? await _worktrees.AddAsync(repoPath, sha, session.State.SessionId, session.State.RoundsRunThisStage + 1)
+                ? await _worktrees.AddAsync(
+                    repoPath, sha, session.State.SessionId,
+                    stage.Locator is { } pinned ? pinned.RoundId : (session.State.RoundsRunThisStage + 1).ToString())
                 : null;
             using var scratch = stage.NeedsWorktree ? null : new ScratchDirectory();
             var workingDir = lease?.Path ?? scratch!.Path;
-            var work = await stage.MakeWork(session, workingDir, sha);
+            var work = await stage.MakeWork(session, workingDir, sha, planText);
 
             // A stage nobody serves is a REFUSAL, not an empty round. With no reviewer the round
             // runs nothing, merges nothing, and passes the gate — reporting `proceed` having
@@ -608,37 +702,94 @@ public sealed partial class PanelService
                 Commands = commands.Count == 0 ? null : commands,
                 CommandsPreamble = commands.Count == 0 ? null : Core.Commands.GateCommands.Preamble,
             };
-            // REQUIRED, and the previous attempt at this was worse than the bug it fixed. Making it
-            // best-effort stopped the round dying and started it LYING: the caller was handed
-            // findings, numbered, and told to resolve them — while `resolve` reads the pending list
-            // from a file that was never written, so the round sat at `running` with nothing to
-            // decide on. An answer whose findings cannot be resolved is not an answer.
-            _store.Save(session with
+            // ---- the durable commit point ----
+            //
+            // For an ADDRESSABLE round this happens BEFORE the session file is written, and the
+            // order is the whole fix. The locator's answer, the round row, its reviewers and its
+            // findings go into one SQLite transaction; only then is the session trail updated. A
+            // crash in between leaves a round that reads back `completed` with its whole answer and
+            // a session whose trail has not caught up — recoverable, and never the reverse. Writing
+            // the session first would create exactly the state this pass exists to remove: a round
+            // finished everywhere except the locator that names it.
+            //
+            // It is also not best-effort here. Everywhere else a database that will not write is a
+            // log line; for an addressable round it is the only place the answer lives, so a
+            // failure is reported rather than swallowed.
+            // The bytes the update will be written OVER, read now rather than before the round.
+            // `LiveRound` rewrites this file on every reviewer transition — that is how the panel
+            // shows a round while it runs — so a hash taken at the start describes a document that
+            // no longer exists by the time the round finishes, and every recovery would read as a
+            // conflict.
+            var before = _store.RawText(repoPath, branch);
+
+            // What the session will look like after this round — decided HERE, so it can be
+            // written into the same transaction as the answer and applied afterwards.
+            var next = session with
             {
                 State = completed.State,
                 Rounds = [.. session.Rounds, record],
                 Pending = [.. merged],
-                // The lenses this round spent, so the next one asks the ones nobody has yet.
                 UsedPrompts = [.. session.UsedPrompts.Union(work.Select(w => w.Prompt).Where(p => p.Length > 0))],
-                // The scope is kept with the session so the CODE stage has it without the caller
-                // sending it twice. Asking for it again is how a caller ends up sending nothing,
-                // and a reviewer handed a bare diff answers a different question than the one the
-                // gate exists to ask.
                 PlanText = planText,
-            });
+            };
+            var completion = stage.Locator is { } addressable
+                ? new Store.RoundCompletion(
+                    addressable,
+                    WithAttestation(
+                        Json(answer, ServerJsonContext.Default.ReviewAnswer),
+                        addressable,
+                        // The attestation the RESERVATION made, and the SHA that actually reached
+                        // the worktree, asserted to be the same thing. They are equal by
+                        // construction — `PinnedSha` is this attestation's head — so a mismatch is
+                        // a bug in the wiring, not a moved branch, and it must never be published.
+                        Attested(stage, sha)),
+                    OwedSessionUpdate(addressable, repoPath, branch, before, next))
+                : null;
+            if (completion is not null)
+            {
+                using var db = Store.RoundsDb.Open(_settings.DataDir, _log)
+                    ?? throw new SessionStoreException(
+                        "the rounds database could not be opened, and an addressable round has nowhere "
+                        + "else to store its answer",
+                        new IOException("RoundsDb.Open returned null"));
+                db.RecordRound(
+                    completed.State, record, merged,
+                    new Store.RoundContext(planText, sha, caller, [.. gate.Discounted], WhatTheCallerWasDoing(session, record)),
+                    completion);
+                AfterDurableCompletion?.Invoke();
+                // The outbox is now owed this update. Applying it is a separate, repeatable step,
+                // so a crash here costs a catch-up on the next `open` rather than a round whose
+                // findings nothing can resolve.
+                ApplyOwedUpdates(repoPath, branch);
+            }
+            else
+            {
+                // REQUIRED, and the previous attempt at this was worse than the bug it fixed. Making
+                // it best-effort stopped the round dying and started it LYING: the caller was handed
+                // findings, numbered, and told to resolve them — while `resolve` reads the pending
+                // list from a file that was never written, so the round sat at `running` with
+                // nothing to decide on. An answer whose findings cannot be resolved is not an answer.
+                _store.Save(next);
+            }
             audit.Closing(answer.Verdict, gate.GatingCount, summary.Sentence, record);
             audit.Findings(merged);
             // And into the database, with what the round was ABOUT. Best-effort by construction:
             // the round is already answered and saved, and a projection that cannot be written must
             // never take it down.
-            Project(db => db.RecordRound(
-                completed.State,
-                record,
-                merged,
-                new Store.RoundContext(
-                    planText, sha, caller, [.. gate.Discounted], WhatTheCallerWasDoing(session, record))));
+            if (completion is null)
+            {
+                Project(db => db.RecordRound(
+                    completed.State,
+                    record,
+                    merged,
+                    new Store.RoundContext(
+                        planText, sha, caller, [.. gate.Discounted], WhatTheCallerWasDoing(session, record))));
+            }
             NotifyIfAPersonMustDecide(completed.Verdict, session, merged);
-            return Json(answer, ServerJsonContext.Default.ReviewAnswer);
+
+            // The addressable reply is the DOCUMENT that was stored, so the answer a caller holds
+            // and the answer a read-back returns cannot differ.
+            return completion?.ResultJson ?? Json(answer, ServerJsonContext.Default.ReviewAnswer);
         }
         catch (SessionStoreException e)
         {
@@ -1122,6 +1273,14 @@ public sealed partial class PanelService
 
     public Task<string> ResolveAsync(string repoPath, string branch, string decisionsJson, bool humanSaysProceed = false)
     {
+        // `resolve` advances the stage and clears the pending list — the same document a round
+        // rewrites, so it contends for the same claim.
+        using var claim = SessionClaim.TryTake(_settings.DataDir, repoPath, branch);
+        if (claim is null)
+        {
+            return Task.FromResult(Error(SessionClaim.Busy(branch)));
+        }
+
         var session = _store.Load(repoPath, branch);
         if (session is null)
         {
@@ -1383,4 +1542,35 @@ internal sealed record StageRun(
     Func<SessionState, Transition> Begin,
     bool NeedsWorktree,
     bool IsPlanStage,
-    Func<PersistedSession, string, string, Task<IReadOnlyList<ReviewerWork>>> MakeWork);
+    Func<PersistedSession, string, string, string, Task<IReadOnlyList<ReviewerWork>>> MakeWork)
+{
+    /// <summary>
+    /// May an empty <c>planText</c> fall back to the scope the plan stage agreed?
+    /// </summary>
+    /// <remarks>
+    /// Resolved inside the run, under the claim, from the session it loaded — never by a read taken
+    /// before the claim, which a concurrent <c>resolve</c> can invalidate between the read and the
+    /// round. An explicitly supplied scope is used exactly as sent and never replaced.
+    /// </remarks>
+    public bool AllowSessionScopeFallback { get; init; }
+
+    /// <summary>A refusal decided from the session and the effective scope, under the claim.</summary>
+    public Func<PersistedSession, string, string?>? Precheck { get; init; }
+
+    /// <summary>
+    /// The commit this round is pinned to, when the caller already resolved one.
+    /// </summary>
+    /// <remarks>
+    /// Null is the ordinary call: resolve the branch tip now. An addressable round supplies the SHA
+    /// its reservation attested, and it must reach the worktree UNCHANGED — resolving the branch a
+    /// second time here is what let a commit landing between the check and the checkout be reviewed
+    /// under the previous commit's attestation.
+    /// </remarks>
+    public string? PinnedSha { get; init; }
+
+    /// <summary>The addressable round this run belongs to, finished with its own answer.</summary>
+    public RoundLocator? Locator { get; init; }
+
+    /// <summary>What that round's reservation attested. Carried, never recomputed mid-round.</summary>
+    public SubjectAttestation? Attestation { get; init; }
+}

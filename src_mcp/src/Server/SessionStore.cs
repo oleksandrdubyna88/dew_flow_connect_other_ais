@@ -249,6 +249,74 @@ public sealed class SessionStore(string dataDir)
     }
 
 
+    /// <summary>The session file's exact bytes, or empty when there is no file yet.</summary>
+    /// <remarks>
+    /// The TEXT, not a parsed session: the outbox compares hashes, and a value that survived a
+    /// round trip through the parser would hash differently from what is on disk the moment either
+    /// side of that trip changes.
+    /// </remarks>
+    public string RawText(string repoPath, string branch)
+    {
+        var file = FileFor(repoPath, branch);
+        if (!File.Exists(file))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            return ReadShared(file);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
+
+    /// <summary>Exactly what <see cref="Save"/> would write for this session.</summary>
+    public static string Serialise(PersistedSession session) =>
+        JsonSerializer.Serialize(session, ServerJsonContext.Default.PersistedSession);
+
+    /// <summary>Writes a document the caller has already serialised, under the same turn.</summary>
+    /// <remarks>
+    /// Used by the outbox, which must write the EXACT text it decided on and hashed. Re-serialising
+    /// a parsed session here would risk a document that differs from the one recovery is comparing
+    /// against, and the difference would show up as a permanent conflict.
+    /// </remarks>
+    public void WriteExact(string repoPath, string branch, string json)
+    {
+        try
+        {
+            Directory.CreateDirectory(SessionsDir);
+            var file = FileFor(repoPath, branch);
+            using (var turn = SessionTurn.Take(file))
+            {
+                if (turn.Held)
+                {
+                    File.WriteAllText(file, json);
+
+                    return;
+                }
+            }
+
+            var temp = $"{file}.{Environment.ProcessId}-{Guid.NewGuid().ToString("N")[..8]}.tmp";
+            File.WriteAllText(temp, json);
+            try
+            {
+                MoveOverExisting(temp, file);
+            }
+            finally
+            {
+                TryDelete(temp);
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            throw new SessionStoreException(
+                $"the session for '{branch}' could not be written: {e.Message}", e);
+        }
+    }
+
     public void Save(PersistedSession session)
     {
         try

@@ -35,6 +35,9 @@ public sealed class ScenarioCoverageTests
         ["review_code"] = "EndToEndTests + StageGateTests (refused before a plan proceeds)",
         ["resolve"] = "EndToEndTests + RoundAuditTests (a decision is recorded for every finding)",
         ["status"] = "McpContractTests + CallerSessionsTests",
+        ["reserve_round"] = "AnAddressableRoundSurvivesARestartTests — a locator before any reviewer runs",
+        ["run_round"] = "AnAddressableRoundSurvivesARestartTests — one dispatch per locator, replayed on retry",
+        ["round_status"] = "AnAddressableRoundSurvivesARestartTests — a lost answer recovered after a restart",
     };
 
     /// <summary>

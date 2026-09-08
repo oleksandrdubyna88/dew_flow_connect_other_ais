@@ -124,6 +124,19 @@ if (args0.Length >= 2 && args0[0] == "count")
 
 switch (args0)
 {
+    // Holds a file the way SessionClaim does — exclusively — and then waits to be killed. It is
+    // how a test proves the claim is an OS handle rather than a record: a lock nobody released,
+    // whose owner was killed, must be takeable by the next process with no expiry and no repair.
+    case ["hold", var path]:
+        using (new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+        {
+            Console.Out.WriteLine("held");
+            Console.Out.Flush();
+            Thread.Sleep(TimeSpan.FromMinutes(5));
+        }
+
+        return 0;
+
     case ["emit", var text]:
         Console.Out.Write(text);
         return 0;

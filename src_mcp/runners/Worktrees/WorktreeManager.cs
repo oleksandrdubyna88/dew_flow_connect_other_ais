@@ -45,10 +45,22 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
             : throw new WorktreeException("rev-parse", $"cannot resolve '{branch}': {result.StdErr.Trim()}");
     }
 
-    public async Task<WorktreeLease> AddAsync(string repoPath, string sha, string sessionId, int round)
+    /// <summary>A tree for one round of a session, named by that round's ordinal.</summary>
+    public Task<WorktreeLease> AddAsync(string repoPath, string sha, string sessionId, int round) =>
+        AddAsync(repoPath, sha, sessionId, round.ToString());
+
+    /// <summary>
+    /// A tree named by an arbitrary label rather than an ordinal.
+    /// </summary>
+    /// <remarks>
+    /// The ordinal is derived from the session file, so two rounds of one session compute the same
+    /// one and would be handed the same directory. An addressable round passes its round id, which
+    /// is unique by construction; the ordinal overload above is what every other caller wants.
+    /// </remarks>
+    public async Task<WorktreeLease> AddAsync(string repoPath, string sha, string sessionId, string label)
     {
         Directory.CreateDirectory(storageRoot);
-        var path = Path.Combine(storageRoot, $"{Prefix}{sessionId}-r{round}");
+        var path = Path.Combine(storageRoot, $"{Prefix}{sessionId}-r{label}");
         var result = await Git(repoPath, "worktree", "add", "--detach", path, sha);
         if (result.ExitCode != 0)
         {

@@ -4,7 +4,10 @@
 > config key (which is what prefixes the tools: `mcp__coai__review_plan`). Built by hand on the
 > `ModelContextProtocol` SDK — the hosted default logs to stdout, and stdout carries JSON-RPC.
 
-## The seven tools
+## The ten tools
+
+The original seven, plus the three that make a code round addressable. The seven are unchanged in
+shape and meaning: a caller reaches the new contract only by asking for it by name.
 
 | Tool | Backed by | Refuses when |
 |---|---|---|
@@ -15,6 +18,9 @@
 | `resolve` | `ResolveAsync` — reasoned decisions by finding index | bad index; reject without a reason |
 | `status` | persisted session + round trail | no session |
 | `ask_human` | `Escalations` — a question FILE the extension watches | only an empty question; otherwise it WAITS the budget, then answers `no_answer_yet` telling the model to ask in the chat |
+| `reserve_round` | `ReserveRoundAsync` — a locator and a pinned attestation, before any reviewer | no session; a ref that will not resolve; no `clientToken`; **the database will not open** |
+| `run_round` | `RunRoundAsync` — dispatches exactly the reserved round | an incomplete locator; one this server never issued; one already running or spent; a checkout that moved since the reservation |
+| `round_status` | `RoundStatusAsync` — read-back for ONE locator | never; an unknown locator is an answer (`unknown`), not a refusal |
 
 ## Flow of one stage
 
@@ -315,6 +321,157 @@ role and vendor, and the findings raised again over a standing rejection (`Store
 extension owns no SQLite for the same reason it owns no native module — the alternative was a
 WebAssembly build in the VSIX to query a file this binary already writes. Version skew is ordinary:
 a server without the flag exits 64 and the page shows what it always showed.
+
+## A round can be named before it runs (`round_locators`, 2026-09-08)
+
+`review_code` creates a round and runs it in one call, and the round is named — by its stage and an
+ordinal — only once it has started. So a caller whose answer was lost had three ways to find it
+again and all three are guesses: the last round, the ordinal it predicted, or the session's
+aggregate. Sessions are keyed by repo+branch and shared by every client on that pair, so any of
+those can return a stranger's verdict; writing that into the caller's own record is worse than
+having no recovery, because it looks like recovery. `status` cannot settle it either — it carries
+finding COUNTS, never the findings — and the pending list in the session file is the LAST round's
+and nothing else.
+
+**The three tools.** `reserve_round` returns a locator — `{providerId, sessionId, roundId}` — and
+the attestation of what that round will read, before any reviewer starts and without moving the
+round budget. `run_round` dispatches exactly that locator. `round_status` reads exactly that locator
+back: `not_started` | `running` | `completed` | `failed` | `unknown`, with a completed round's WHOLE
+answer.
+
+**Why new tools rather than optional arguments.** An optional `roundId` on `review_code` would give
+one tool two idempotency contracts chosen by a field — "create and run a round now" for the callers
+who never send it, "run the one I reserved" for the callers who do. That is a silent change of
+meaning for everyone in the first group. The seven keep their exact shape; `review_code` still
+returns what it always returned, with no locator and no attestation added to it.
+
+**What that does NOT buy, said plainly.** Every existing tool's SIGNATURE and reply are unchanged,
+but `tools/list` now returns TEN entries instead of seven. A client that asserts the exact set — and
+Agent Relay's own contract test did, which is how this was noticed here — fails against this server
+until it is updated. So the two sides are coupled at the tool-list level even though no call
+changed: this build cannot be installed under a strict-seven client on its own, and rolling it out
+means updating that client in the same step. The alternative, hiding the new tools behind a flag,
+was rejected because a tool that exists only sometimes is a worse contract than one that is
+announced.
+
+**The attestation is checkable, not asserted.** Four git ids, all of them the caller's to recompute:
+the repository's absolute git dir, the base commit, the head commit, and the head commit's TREE —
+git's own content hash of every reviewed byte. `SubjectAttestation.SubjectHash` folds them with a
+version tag so one string compares all of it. It is computed here and never accepted from a caller,
+and `run_round` re-resolves it before dispatching: a branch that moved since the reservation is a
+different subject, and the round is refused with the reservation left unspent.
+
+**Idempotency belongs to the caller.** `clientToken` is the caller's own durable id for the round.
+Reserving twice with one token returns the same locator instead of a second round, so a crashed
+caller's retry is safe; the unique index on `(session_id, client_token)` is what arbitrates when two
+clients race on one repo+branch. Running a completed locator replays its stored answer and starts
+nothing.
+
+**This table is not a projection, and that is the one difference.** Everything else in `coai.db`
+records what already happened and could be rebuilt from the session files, so its writes are
+best-effort. A reservation is the ONLY record that a round was ever named, so `reserve_round`
+REFUSES when the database will not open — handing back a locator this server cannot store would be
+a name nothing answers to. The answer is stored whole (`result_json`) rather than reassembled from
+the findings table, so a read-back and the original reply are the same document.
+
+**One round of a session runs at a time, and the claim is a row count.** Two corrections the first
+cut needed, both about a race it could not see. `Begin` used to return the row it had just updated,
+and the winner and the loser of a race read the same `running` back — so both went on to launch a
+fan-out of a non-idempotent call. The claim is now the number of rows the guarded UPDATE moved, and
+only `Claimed` may dispatch. Separately, a partial unique index on `(session_id) WHERE state =
+'running'` allows one running round per session: the session file is a read-modify-write document
+whose round ordinal comes from it, so two rounds in flight over one session race on the trail, the
+stage state and the worktree path whichever locators they carry. An addressable round also names its
+worktree by its round id rather than that ordinal.
+
+**The pinned SHA reaches the worktree, or nothing runs.** `run_round` used to check the reserved
+head and then call the ordinary code path, which resolved the branch AGAIN — so a commit landing in
+between was reviewed and published under the previous commit's attestation. The reservation's SHA is
+now carried through `StageRun.PinnedSha` and is what reaches `WorktreeManager` and the diff; the
+answer attests that same SHA, asserted equal to what actually ran rather than assumed.
+
+**The answer is written once.** The round row, its reviewers, its findings and the locator's stored
+result commit in ONE SQLite transaction, and for an addressable round that transaction happens
+BEFORE the session file is written. A crash in between leaves a round that reads back `completed`
+with its whole answer and a session trail that has not caught up — recoverable, and never the
+reverse. The previous shape recorded the round and then completed the locator in a second call,
+so a crash between them left a finished round whose locator had nothing to give back. The locator
+also takes its `round_ref` from that INSERT rather than looking one up by "the last round of this
+stage", which another round of the same session can win.
+
+**A finished round always reaches its session (`session_commits`, the outbox).** Ordering SQLite
+before the session file stopped losing the ANSWER and started losing the SESSION: a crash between
+them left a round that read back `completed` while `resolve` saw no pending findings and the next
+round was refused. Nothing can commit to SQLite and a JSON file at once, so the session update is
+now DECIDED inside the answer's transaction and written there as an intention — the exact document
+to write, and the hash the file must still carry for that document to be the right one. Applying it
+is a separate, repeatable step: the normal path does it immediately, and `open` — a mutating call
+already — catches up whatever a crash left owed. Re-applying is a no-op, because an update is
+written only over the state it was computed from and a file already carrying the result is
+recognised as done; so recovery adds no round, repeats no finding and spends no budget. A session
+that is neither state is a CONFLICT, recorded and left unapplied: somebody advanced it while a
+finished round still owed it an update, and overwriting would destroy what they did. The round's
+answer stays readable by its locator either way. `round_status` never runs any of this.
+
+The hash is taken at the moment the round finishes, not when it starts — `LiveRound` rewrites the
+session on every reviewer transition so the panel can show a round while it runs, so a hash from the
+start describes a document that no longer exists and every recovery would read as a conflict.
+
+**One mutating call per session, across processes (`SessionClaim`).** The locator's running slot
+guards `run_round` against itself and nothing else: `review_plan` and `review_code` take no locator,
+so a legacy round and an addressable one on the same repo+branch ran together, both computing the
+next ordinal from the same file, and the loser's round vanished from a document it thought it had
+updated. Every mutating stage call — `review_plan`, `review_code`, `run_round`, `resolve` and the
+`open` recovery — now takes one OS file handle per session identity, held for the whole call. A
+caller that cannot take it is refused BEFORE any reviewer starts. `status`, `round_status` and
+`providers` take nothing and never queue behind a round.
+
+It is an exclusive file handle rather than a lease because there is no honest expiry: a code round is
+however long six vendor CLIs take, and any timeout short enough to clear a dead owner is short enough
+to fire under a live review. The kernel releases the handle when a process dies — crashed, killed or
+exited — so there is nothing to expire and no stale lock to break. Proved by a test that starts a
+real second process holding the claim, KILLS it, and takes the claim afterwards.
+
+**`open` owns the session before it deletes anything.** It used to prune first and ask afterwards:
+`PruneOursAsync` removes every `coai-wt-*` tree by name — including the one a review in another
+process is reading at that moment — so `open` could delete a live reviewer's checkout and only then
+report the session busy. The refusal arrived after the damage. Resolving the branch is read-only and
+stays first, because a caller who named a branch that does not exist deserves that sentence rather
+than a busy one; nothing creates, deletes or writes until the claim is held.
+
+**A dead round does not hold a session for ever.** Process death releases the claim, but the locator
+row still said `running` and the one-running-round index then refused every later round of that
+session, with nothing to expire it — deliberately, since there is no lease. A claimed round now
+records its owner (machine, pid, and a per-instance id, because a pid alone is reused), and `open`,
+holding the claim, releases what is left. **Holding the claim IS the proof**: every mutating call on
+the session takes it for its whole duration, so a row still saying `running` belongs to a process
+that died. No clock is consulted. The round becomes `failed` — never `not_started`, which would
+license a free retry of a call that may have run, and never `completed`, which would invent an
+answer. Nothing is re-dispatched: a new round needs a new token and a deliberate `run_round`. A
+round owned by ANOTHER machine is left exactly as it is and said so in the log, because a file
+handle proves liveness only where the filesystem is local.
+
+**The fallback scope is read under the claim.** An empty `planText` falls back to the scope the plan
+stage agreed, and that read used to happen in `ReviewCodeAsync` before `RunStageAsync` took the
+claim — so a concurrent `resolve` could change the session between the read and the round, and the
+reviewers would be told about a scope the session no longer carried. It is resolved inside the run
+now, from the session that run loaded. An explicit scope is used exactly as sent and never replaced.
+
+**What the database holds down rather than the one writer.** `CHECK` constraints on every locator
+part and the client token — half a locator looks answerable and names nothing, and an empty string
+is that failure wearing a value. A unique index on `round_ref`, so one local round belongs to
+exactly one locator. And a `BEFORE UPDATE` trigger that refuses to move a locator, rewrite what it
+attested, or walk a completed round back: the answer was checked AGAINST those fields, so letting
+the answer rewrite them would make the check circular. Attacked directly with raw SQL on a second
+connection in `ARoundCanBeNamedBeforeItRunsTests`, because a rule kept only by the code that
+happens to call it holds until somebody writes a second caller. A completed round's result is
+immutable for the same reason: a second `Complete` carrying a different answer changes nothing, and
+the first result — the one every later check was made against — stands.
+
+**A token names one round.** Reserving again with a token that already exists is a resume only when
+the repository, branch, base and subject are the SAME. Anything else is refused, naming the field
+that disagrees, rather than handing back a pin on other code as though it matched what was asked
+for.
 
 ## The audit trail
 

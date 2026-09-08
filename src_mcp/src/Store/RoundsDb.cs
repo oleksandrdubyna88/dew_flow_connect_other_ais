@@ -25,7 +25,7 @@ namespace CoaiMcp.Store;
 /// directory — WAL lets them write in turn while a reader (the panel) sees a consistent snapshot
 /// rather than a torn page. Writes are short and single-statement-ish for the same reason.</para>
 /// </remarks>
-public sealed class RoundsDb : IDisposable
+public sealed partial class RoundsDb : IDisposable
 {
     /// <summary>The file, in the data directory beside the sessions it projects.</summary>
     public const string FileName = "coai.db";
@@ -109,21 +109,42 @@ public sealed class RoundsDb : IDisposable
     /// <summary>
     /// One finished round, with its reviewers and the findings it produced.
     /// </summary>
+    /// <param name="completion">
+    /// An addressable round to finish in the SAME transaction as the row it belongs to.
+    /// </param>
     /// <remarks>
-    /// The findings arrive in the order <c>resolve</c> numbers them, and that ordinal is stored: it
-    /// is how a decision made in a later call finds the finding it was about.
+    /// <para>The findings arrive in the order <c>resolve</c> numbers them, and that ordinal is
+    /// stored: it is how a decision made in a later call finds the finding it was about.</para>
+    /// <para>A <paramref name="completion"/> is passed in rather than applied by a second call,
+    /// because a second call is a window. The round row, its reviewers, its findings and the
+    /// locator's stored answer commit together or not at all — so there is no instant at which the
+    /// round is recorded as finished while the locator that names it has no result to give
+    /// back.</para>
+    /// <para>The locator also takes the row id from this INSERT rather than looking one up
+    /// afterwards by "the last round of this stage", which is a guess another round of the same
+    /// session can win.</para>
     /// </remarks>
     public void RecordRound(
         SessionState state,
         RoundRecord round,
         IReadOnlyList<Finding> findings,
-        RoundContext context = default)
+        RoundContext context = default,
+        RoundCompletion? completion = null)
     {
         using var transaction = _db.BeginTransaction();
         RecordSession(state);
         var roundId = RecordRoundRow(state, round, context);
         RecordReviewers(roundId, round);
         RecordFindings(roundId, findings, context);
+        if (completion is { } finish)
+        {
+            CompleteHere(finish.Locator, roundId, finish.ResultJson);
+            if (finish.SessionCommit is { } owed)
+            {
+                RecordCommitHere(owed);
+            }
+        }
+
         transaction.Commit();
     }
 

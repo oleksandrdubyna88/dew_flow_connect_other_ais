@@ -71,7 +71,7 @@ public sealed class McpContractTests : IDisposable
     }
 
     [Fact]
-    public async Task Initialize_ThenToolsList_NamesTheSevenTools_AndStdoutStaysPure()
+    public async Task Initialize_ThenToolsList_NamesEveryTool_AndStdoutStaysPure()
     {
         using var server = Start();
         try
@@ -91,8 +91,14 @@ public sealed class McpContractTests : IDisposable
                 .ToList();
 
             names.Should().BeEquivalentTo(
-                ["providers", "open", "review_plan", "review_code", "resolve", "status", "ask_human"],
-                "the seven tools, unprefixed — the client's `coai` namespace is the only one");
+                [
+                    "providers", "open", "review_plan", "review_code", "resolve", "status", "ask_human",
+                    // The addressable code round, added beside the original seven rather than folded
+                    // into them: `review_code` and `status` keep the exact shape every caller in the
+                    // field depends on, and a caller reaches the new contract only by name.
+                    "reserve_round", "run_round", "round_status",
+                ],
+                "the ten tools, unprefixed — the client's `coai` namespace is the only one");
         }
         finally
         {

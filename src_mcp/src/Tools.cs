@@ -137,6 +137,85 @@ internal static class Tools
                 ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false,
             });
 
+        // ---- the addressable code round: reserve, run, read back ----
+        //
+        // Three NEW tools rather than optional arguments on `review_code` and `status`. Those two
+        // have one meaning each today — "create and run a round now", "tell me about this session"
+        // — and every caller in the field depends on it. An optional `roundId` would give each of
+        // them a second contract chosen by a field, so the same call would mean different things to
+        // callers who send it and callers who never heard of it. Old tools keep their exact shape;
+        // a caller reaches the new semantics only by asking for them by name.
+
+        yield return McpServerTool.Create(
+            async (string repoPath, string branch, string baseRef, string clientToken) =>
+                await host.Current.ReserveRoundAsync(repoPath, branch, baseRef, clientToken),
+            new McpServerToolCreateOptions
+            {
+                Name = "reserve_round",
+                Title = "Name a code round before it runs, and pin what it will read",
+                Description = """
+                    Reserves a code round and returns its LOCATOR — `{providerId, sessionId,
+                    roundId}` — plus the attestation of exactly what that round will read: the base
+                    and head commits, the head commit's git tree id, and a canonical subject hash
+                    folding them together. No reviewer runs, no round budget moves; this writes a
+                    row.
+
+                    It exists because `review_code` names its round only after it has run, so a
+                    caller whose answer was lost has nothing to ask about. Reserve first, write the
+                    locator down, then call `run_round`.
+
+                    `clientToken` is YOUR idempotency key for this round — your own durable id for
+                    it. Reserving twice with the same token returns the SAME locator instead of a
+                    second round, so a retry after a crash is safe. Use a new token for a new round.
+                    """,
+                ReadOnly = false, Idempotent = true, Destructive = false, OpenWorld = false,
+            });
+
+        yield return McpServerTool.Create(
+            async (string providerId, string sessionId, string roundId, string planText) =>
+                await host.Current.RunRoundAsync(providerId, sessionId, roundId, planText),
+            new McpServerToolCreateOptions
+            {
+                Name = "run_round",
+                Title = "Run exactly the reserved round named by this locator",
+                Description = """
+                    Runs the round `reserve_round` named, and only that one. Same reviewers, same
+                    reply and the same `resolve` duty as `review_code`, with the locator and the
+                    attestation added to the answer.
+
+                    Calling it again cannot produce a second round: a completed locator replays its
+                    stored answer, a running one is refused, and a spent one stays spent. The
+                    checkout is re-resolved first — if the branch moved since the reservation, the
+                    round is refused and stays reserved rather than reviewing a different subject
+                    under a locator that attested the old one.
+
+                    `planText` is the SCOPE, exactly as `review_code` requires it.
+                    """,
+                ReadOnly = false, Idempotent = false, Destructive = false, OpenWorld = true,
+            });
+
+        yield return McpServerTool.Create(
+            async (string providerId, string sessionId, string roundId) =>
+                await host.Current.RoundStatusAsync(providerId, sessionId, roundId),
+            new McpServerToolCreateOptions
+            {
+                Name = "round_status",
+                Title = "Read back one round by its locator, without starting anything",
+                Description = """
+                    Strictly read-only, for one locator: `not_started` (reserved, never dispatched
+                    — nothing external has run), `running`, `completed`, `failed` (dispatched and
+                    ended without an answer), or `unknown`.
+
+                    `unknown` means this server has no such round. It is NOT evidence that no
+                    review ran, and it never licenses dispatching again.
+
+                    A `completed` round comes back with its WHOLE answer — every finding, and the
+                    same attestation the original reply carried. Survives a server restart, so a
+                    caller that lost its answer recovers it here instead of spending a second round.
+                    """,
+                ReadOnly = true, Idempotent = true, Destructive = false, OpenWorld = false,
+            });
+
         yield return McpServerTool.Create(
             async (string repoPath, string branch, string question) =>
                 await host.Current.AskHumanAsync(repoPath, branch, question),

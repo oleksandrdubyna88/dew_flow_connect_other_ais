@@ -96,6 +96,60 @@ public sealed record HumanAnswer(string Status, string Answer, string AnswerOrig
 /// <summary>The wire shape of one decision passed to `resolve`.</summary>
 public sealed record DecisionDto(int Finding, string Action, string Reason = "");
 
+/// <summary>The locator, on the wire. All three parts, always — a subset names no round.</summary>
+public sealed record LocatorDto(string ProviderId, string SessionId, string RoundId);
+
+/// <summary>
+/// What the round read, as ids the caller can recompute from its own checkout.
+/// </summary>
+/// <param name="TreeSha">
+/// Git's content hash of the whole reviewed tree — the part that changes when any reviewed byte
+/// does, and the reason this is evidence rather than a label.
+/// </param>
+/// <param name="SubjectHash">
+/// The canonical fold of the other five, so a caller comparing one string compares all of them.
+/// Computed here and never accepted from a caller.
+/// </param>
+public sealed record AttestationDto(
+    string RepoIdentity,
+    string BaseRef,
+    string BaseSha,
+    string HeadSha,
+    string TreeSha,
+    string SubjectHash);
+
+/// <summary>What `reserve_round` returns: the locator, and what it is pinned to.</summary>
+/// <param name="AlreadyReserved">
+/// True when this token had already reserved a round and this is that same one. A caller's retry
+/// after a crash is answered rather than refused, and told that it is a resume.
+/// </param>
+public sealed record ReservationAnswer(
+    LocatorDto Locator,
+    AttestationDto Attestation,
+    string State,
+    bool AlreadyReserved,
+    string Instruction);
+
+/// <summary>
+/// What `round_status` returns for exactly one locator.
+/// </summary>
+/// <param name="State">
+/// <c>not_started</c> | <c>running</c> | <c>completed</c> | <c>failed</c> | <c>unknown</c>.
+/// <c>unknown</c> means this server has no such locator — never that nothing ran.
+/// </param>
+/// <remarks>
+/// A completed round's whole answer is added as a <c>review</c> property carrying the stored
+/// document VERBATIM, rather than a typed field here. Deserialising it into <see cref="ReviewAnswer"/>
+/// and writing it out again dropped the locator and the attestation the stored reply carries — they
+/// are not fields of that record — so the read-back and the original reply disagreed about the two
+/// things a recovery most needs.
+/// </remarks>
+public sealed record RoundStatusAnswer(
+    LocatorDto Locator,
+    string State,
+    string Instruction,
+    AttestationDto? Attestation = null);
+
 [JsonSourceGenerationOptions(
     PropertyNameCaseInsensitive = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
@@ -111,5 +165,9 @@ public sealed record DecisionDto(int Finding, string Action, string Reason = "")
 [JsonSerializable(typeof(ErrorAnswer))]
 [JsonSerializable(typeof(HumanAnswer))]
 [JsonSerializable(typeof(List<DecisionDto>))]
+[JsonSerializable(typeof(ReservationAnswer))]
+[JsonSerializable(typeof(RoundStatusAnswer))]
+[JsonSerializable(typeof(LocatorDto))]
+[JsonSerializable(typeof(AttestationDto))]
 [JsonSerializable(typeof(Store.LoggedLog))]
 internal sealed partial class ServerJsonContext : JsonSerializerContext;
