@@ -25,7 +25,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class SubmissionOrderTests : IDisposable
 {
-    private PanelService Service(params string[] vendors) =>
+    private static PanelService Service(params string[] vendors) =>
         new(new PanelSettings
         {
             DataDir = Path.Combine(Path.GetTempPath(), $"coai-order-{Guid.NewGuid():N}"),
@@ -64,6 +64,10 @@ public sealed class SubmissionOrderTests : IDisposable
         return path;
     }
 
+    /// <summary>A handful of session ids, shared rather than rebuilt per call.</summary>
+    private static readonly string[] Sessions =
+        ["s-alpha", "s-bravo", "s-charlie", "s-delta", "s-echo", "s-foxtrot"];
+
     /// <summary>The vendors in the order this round would offer them, first appearance first.</summary>
     private List<string> ProviderOrder(int seed)
     {
@@ -78,7 +82,7 @@ public sealed class SubmissionOrderTests : IDisposable
     public void TwoSessions_DoNotAskTheSameVendorFirst()
     {
         // Seeds as they actually arrive: PanelService.StableSeed over a session id and a round.
-        var orders = new[] { "s-alpha", "s-bravo", "s-charlie", "s-delta", "s-echo", "s-foxtrot" }
+        var orders = Sessions
             .Select(id => string.Join(",", ProviderOrder(PanelService.StableSeed(id, 1))))
             .ToList();
 
@@ -140,7 +144,7 @@ public sealed class SubmissionOrderTests : IDisposable
     {
         // Reordering that drops or duplicates a row would be a far worse bug than the one being
         // fixed, and it is the failure mode a hand-written shuffle actually has.
-        foreach (var id in (string[])["s-alpha", "s-bravo", "s-charlie", "s-delta", "s-echo"])
+        foreach (var id in Sessions)
         {
             var work = Service("alpha", "bravo", "charlie").BuildWork(
                 [ReviewRole.Conventions, ReviewRole.Architecture],

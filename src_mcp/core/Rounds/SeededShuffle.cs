@@ -16,6 +16,13 @@ namespace CoaiMcp.Core.Rounds;
 /// </remarks>
 public static class SeededShuffle
 {
+    // S2245 — `Random` is not used for security here, and cannot be replaced by one that is.
+    // Everything this shuffles is a PUBLIC ordering: which vendor is asked first, which lens a
+    // reviewer draws, which rule files fit in a budget. Nothing is a secret, nothing is a token, and
+    // the whole value of the class is that a SEED reproduces an order — which a cryptographic
+    // generator cannot do at all. The justification travelled here with the loop: it lived beside
+    // `RuleFiles.Shuffled` before these two copies were merged.
+#pragma warning disable S2245
     /// <summary>A new list in a random order drawn from <paramref name="random"/>.</summary>
     /// <remarks>
     /// Read-only on the way out: a caller who could reorder the result in place would make the
@@ -36,4 +43,5 @@ public static class SeededShuffle
 
     /// <summary>The same seed always produces the same order.</summary>
     public static IReadOnlyList<T> Of<T>(IReadOnlyList<T> items, int seed) => Of(items, new Random(seed));
+#pragma warning restore S2245
 }
