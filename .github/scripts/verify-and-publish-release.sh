@@ -17,12 +17,16 @@
 # script is the only thing that publishes.
 set -euo pipefail
 
-PRODUCT=${1:?usage: verify-and-publish-release.sh <mcp|server> <tag>}
-TAG=${2:?usage: verify-and-publish-release.sh <mcp|server> <tag>}
+PRODUCT=${1:?usage: verify-and-publish-release.sh <product> <tag> [rid...]}
+TAG=${2:?usage: verify-and-publish-release.sh <product> <tag> [rid...]}
+shift 2
 
-# The platforms every line builds. One list, so "the matrix says six and the check says five" is a
-# thing that cannot be written here — the test suite holds this against the workflow's own matrices.
-RIDS=(linux-x64 linux-arm64 win-x64 win-arm64 osx-x64 osx-arm64)
+# The platforms THIS line builds, passed by its caller. Defaulted to the six both lines build
+# today, because that is what they build — but a parameter, because the two lines have independent
+# lifecycles and a server-only RID must not silently become an mcp release's expectation. Raised by
+# two reviewers on the code round. The test suite holds each caller's list against its own matrix.
+RIDS=("$@")
+[ ${#RIDS[@]} -gt 0 ] || RIDS=(linux-x64 linux-arm64 win-x64 win-arm64 osx-x64 osx-arm64)
 
 # Named, because a bare `seq 1 10` beside a bare `sleep 6` is two numbers nobody can weigh.
 POLL_ATTEMPTS=10        # `needs` proves the uploads returned, not that the listing caught up

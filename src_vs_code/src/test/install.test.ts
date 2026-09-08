@@ -166,11 +166,26 @@ const releaseScript = () =>
     )
     .replace(/\r\n/g, '\n');
 
-/** The platforms the shared script expects, which is now the ONE list. */
+/** The create-or-reuse script both draft jobs call. */
+const draftScript = () =>
+  fs
+    .readFileSync(
+      path.join(__dirname, '..', '..', '..', '.github', 'scripts', 'draft-release.sh'),
+      'utf8',
+    )
+    .replace(/\r\n/g, '\n');
+
+/**
+ * The platforms the shared script falls back to when a caller names none.
+ *
+ * <p>A PARAMETER since the code round: the two release lines have independent lifecycles, and a
+ * server-only RID must not silently become an mcp release's expectation. The default is what both
+ * lines build today, and these tests hold it against both matrices.</p>
+ */
 const ridsExpectedByTheScript = () => {
-  const declared = /RIDS=\(([^)]*)\)/.exec(releaseScript());
-  assert.ok(declared, 'the script declares the platforms it expects');
-  return declared[1]!.trim().split(/\s+/).sort();
+  const declared = /RIDS=\(linux-x64[^)]*\)/.exec(releaseScript());
+  assert.ok(declared, 'the script declares the platforms it defaults to');
+  return declared[0]!.replace('RIDS=(', '').replace(')', '').trim().split(/\s+/).sort();
 };
 
 const ridsBuiltBy = (job: string) =>
@@ -227,8 +242,9 @@ test('a server tag creates a GitHub RELEASE, because that is what the panel read
   // The create moved OUT of the matrix on 2026-09-08 — six legs racing it made six drafts rather
   // than five clean failures — so the release is created once, uploaded to by every leg, and
   // published by the job that counted the assets.
-  assert.match(jobBlock(workflow, 'server-draft'), /gh release create "\$GITHUB_REF_NAME" --draft/,
+  assert.match(jobBlock(workflow, 'server-draft'), /draft-release\.sh "\$GITHUB_REF_NAME"/,
     'so the server tag creates one, once');
+  assert.match(draftScript(), /gh release create "\$TAG" --draft/, 'and it is created as a draft');
   const server = jobBlock(workflow, 'server-binaries');
   assert.match(server, /gh release upload "\$GITHUB_REF_NAME" "\$ASSET"/, 'and attaches its archive');
   assert.match(server, /sha256sum "\$ASSET"/, 'beside a checksum');
@@ -999,14 +1015,16 @@ test('a draft is created ONCE, outside the matrix', () => {
   for (const maker of ['mcp-draft', 'server-draft']) {
     const block = jobBlock(workflow, maker);
     assert.doesNotMatch(block, /strategy:/, `${maker} must not be a matrix itself`);
-    // And reuses only a DRAFT: `gh release view` succeeds for a PUBLISHED release too, so a re-run
-    // against a tag somebody had published by hand would otherwise send six legs uploading into a
-    // release clients can already see.
-    assert.match(block, /--json isDraft --jq '\.isDraft'/,
-      `${maker} reuses an existing draft rather than making a second one on a re-run`);
-    assert.match(block, /refusing to upload into a visible release/,
-      `${maker} refuses a release that is already published`);
+    assert.match(block, /draft-release\.sh/, `${maker} creates it through the one script`);
   }
+
+  // And that script reuses only a DRAFT: `gh release view` succeeds for a PUBLISHED release too, so
+  // a re-run against a tag somebody had published by hand would otherwise send six legs uploading
+  // into a release clients can already see.
+  assert.match(draftScript(), /--json isDraft --jq '\.isDraft'/,
+    'an existing draft is reused rather than duplicated on a re-run');
+  assert.match(draftScript(), /refusing to upload into a visible release/,
+    'and a release that is already published is refused');
 });
 
 test('the expected asset set is the whole matrix, win-arm64 included', () => {
@@ -1069,5 +1087,20 @@ test('every shell script this repository runs is executable in git', () => {
   for (const line of listed) {
     const [mode, , , file] = line.split(/\s+/);
     assert.equal(mode, '100755', `${file} must be executable — a 644 script is a "Permission denied"`);
+  }
+});
+
+test('every job that publishes a release may write to contents', () => {
+  // Found by reading the permissions beside what each job actually DOES: `server-release-complete`
+  // was `contents: read`, correct while it only counted assets and wrong the moment it became the
+  // thing that publishes. `gh release edit` would have been refused on every server release, and
+  // the script's own verification would then have reported a complete release as unpublishable.
+  const workflow = releaseWorkflow();
+  const publishers = ['mcp-draft', 'server-draft', 'mcp-release-complete', 'server-release-complete', 'extension'];
+
+  for (const job of publishers) {
+    const block = jobBlock(workflow, job);
+    assert.match(block, /permissions:\s*(?:#[^\n]*\n\s*)*(?:#[^\n]*\n\s*)*contents: write/,
+      `${job} creates, edits or publishes a release — it needs contents: write`);
   }
 });

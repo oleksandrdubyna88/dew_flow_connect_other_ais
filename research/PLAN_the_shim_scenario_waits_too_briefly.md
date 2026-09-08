@@ -4,7 +4,7 @@
 > production code was touched — this is a test fixing a test.
 >
 > Related docs: [module_tests.md](module_tests.md),
-> [PLAN_a_release_is_visible_before_it_is_whole.md](../todo/PLAN_a_release_is_visible_before_it_is_whole.md)
+> [PLAN_a_release_is_visible_before_it_is_whole.md](PLAN_a_release_is_visible_before_it_is_whole.md)
 > — the release this cost.
 
 ## The symptom, measured
