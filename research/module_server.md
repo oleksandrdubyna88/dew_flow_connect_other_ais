@@ -444,7 +444,7 @@ default panel writes no gate key at all.
 carries it and the rounds log renders it beside the role — a round that named its vendor and its role
 but not its model could not answer the question people actually ask about a slow or a weak reviewer,
 which is how one came to be investigated by reading the spending ledger instead
-([RESULTS_reviewer_input_sizes.md](RESULTS_reviewer_input_sizes.md)). The field is trailing and
+(`RESULTS_reviewer_input_sizes.md`, which lands with the reviewer-deadline fix). The field is trailing and
 defaulted, so sessions already on disk stay valid and simply name none.
 
 **It is what was ASKED for, not necessarily what answered.** A Team server picks the model for the
