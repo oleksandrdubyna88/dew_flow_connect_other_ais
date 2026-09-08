@@ -3,6 +3,24 @@
 > `src_vs_code` — the human surface. Four commands, zero runtime dependencies, no background work
 > and **no port**: the review itself lives in `coai-mcp`, which an MCP client owns and starts.
 
+### One webview per SESSION, which no other page in here does (2026-09-08)
+
+Every other webview in this extension is a singleton — the rounds log and the help page each keep
+one panel in one field, revealed while open. The chat tab keeps a MAP, because the requirement is
+that session 1’s conversation lives in its tab, session 2 opens its own, and both stay open while
+somebody moves between them.
+
+The key is the host’s own `vscode.Tab` object, never the tab’s label. Two Claude Code tabs can both
+be called `main`, and a registry keyed by name hands the second one the first one’s conversation —
+an answer that arrives and is simply about somebody else’s question. Two of the plan gate’s three
+reviewers refused the label design independently, and a third finding on the code round showed the
+same hole had survived in the FALLBACK: re-attaching a closed panel by label while a live namesake
+sat beside it. The fallback now requires the label to name exactly one panel.
+
+`chatPanels.ts` is the registry and knows nothing about `vscode`, so the rule that matters can be
+tested: closing one tab disposes ONE session, its own. A vendor process that outlives its tab is an
+authenticated child nobody can see and nobody will stop; one that dies with a stranger’s tab loses a
+conversation somebody is still reading.
 ### One spawn site, and why it grew a handle (2026-09-08)
 
 `processLauncher.ts` owns the only `spawn` in `src/` that this extension controls. It is the version
