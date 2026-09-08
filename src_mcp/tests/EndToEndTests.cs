@@ -120,7 +120,10 @@ public sealed class EndToEndTests : IAsyncLifetime
         result.ExitCode.Should().Be(0, $"git {string.Join(' ', args)}: {result.StdErr}");
     }
 
-    private PanelService Service(StagePolicy onExhausted = StagePolicy.Human, int maxRounds = 3) =>
+    private PanelService Service(
+        StagePolicy onExhausted = StagePolicy.Human,
+        int maxRounds = 3,
+        Serilog.ILogger? log = null) =>
         new(
             new PanelSettings
             {
@@ -133,7 +136,7 @@ public sealed class EndToEndTests : IAsyncLifetime
             VaultKeys.None("no vault in tests"),
             default,
             _launcher,
-            Logger.None);
+            log ?? Logger.None);
 
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
 
@@ -141,6 +144,63 @@ public sealed class EndToEndTests : IAsyncLifetime
         JsonSerializer.Serialize(
             Enumerable.Range(0, answer.GetProperty("findings").GetArrayLength())
                 .Select(i => new { finding = i, action = "accept" }));
+
+    /// <summary>
+    /// A whole round that answers NOTHING, and everything a person needs to ask it why.
+    /// </summary>
+    /// <remarks>
+    /// <para>The scenario behind this: 2026-09-08, 16:12 UTC, eight remote reviewers answered
+    /// <c>{"findings": []}</c> on a diff the local reviewer found eleven things in. Neither question
+    /// could be asked afterwards — the round log named the RULES it sent and never the diff, and an
+    /// `ok` outcome with zero findings dropped the vendor's raw text.</para>
+    /// <para>Driven end to end rather than asserted on the pieces, because the three facts live in
+    /// three different classes and the defect was that nothing joined them: `PanelService` assembles
+    /// the context, `RoundAudit` writes the lines, and `ReviewerExecutor` keeps the file.</para>
+    /// </remarks>
+    [Fact]
+    public async Task ARoundThatFoundNothing_SaysWhatItSent_AndKeepsWhatItWasTold()
+    {
+        var sink = new ListSink();
+        var service = Service(log: new Serilog.LoggerConfiguration().WriteTo.Sink(sink).CreateLogger());
+        await service.OpenAsync(_repo, "feature");
+
+        Script(Clean);
+        await service.ReviewPlanAsync(_repo, "feature", "a plan nobody objects to");
+        // The sink's own `{Message:lj}` rendering, never `RenderMessage()`: the latter quotes every
+        // string property, so the test would be asserting against an artefact of itself instead of
+        // the line that lands in the log file.
+        var lines = () => sink.Lines;
+
+        lines().Should().ContainMatch("context for review: plan * bytes*",
+            "a plan round has no diff, and says so in the same shape the code round uses");
+
+        await service.ResolveAsync(_repo, "feature", "[]");
+        Script(Clean);
+        await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
+
+        // What it ASSEMBLED. Every number was already computed before this change and thrown away,
+        // which is why "did they see the diff" had to be answered by subtracting a rules byte count
+        // from a token total in the ledger.
+        lines().Should().ContainMatch("context for review: diff * bytes over * file(s), * elided; plan * bytes; rules * bytes");
+
+        // What each reviewer RECEIVED. The two are the same number only while nothing between them
+        // is broken, and that is precisely what could not be established.
+        lines().Should().ContainMatch("*opening: 6 reviewer(s)*bytes]*");
+
+        // And what it was told. Two reviewers on the plan round and six on the code round answered
+        // with nothing, so eight answers are on disk — each named for the reviewer that gave it,
+        // which is the whole point: a person reading a silent round has twelve of these and needs
+        // the one belonging to codex/Architecture. The two PlanCritique files land in the same
+        // MILLISECOND and do not collide, because the provider and the role are in the name.
+        var kept = Directory.GetFiles(Path.Combine(_data, "empty")).Select(Path.GetFileName).ToList();
+        kept.Should().HaveCount(8, "every reviewer that found nothing kept what it actually said");
+        kept.Should().ContainMatch("codex-Architecture-*").And.ContainMatch("gemini-PlanCritique-*");
+        lines().Should().ContainMatch("*answered in *0 finding(s)*its answer was kept at*",
+            "and the reviewer's own line names the file, which is where somebody chasing a silent round reads");
+        (await File.ReadAllTextAsync(
+                Path.Combine(_data, "empty", kept[0]!), TestContext.Current.CancellationToken))
+            .Should().Contain("findings", "the file holds what the vendor said, not a note that it said nothing");
+    }
 
     [Fact]
     public async Task FullLoop_FlawedPlan_RevisesToTheGate_ThenCodeRounds_ThenDone()

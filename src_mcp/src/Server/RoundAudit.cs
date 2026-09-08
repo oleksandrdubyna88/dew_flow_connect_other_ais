@@ -43,8 +43,7 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
             // this says what each reviewer was handed, and the two are only the same while nothing
             // between them is broken. On 2026-09-08 that distinction had to be reconstructed from a
             // ledger, because nothing anywhere recorded it.
-            string.Join(", ", work.Select(w =>
-                $"{w.Invocation.Provider}/{w.Invocation.Role}[{w.Prompt}, {w.PromptBytes} bytes]")),
+            string.Join(", ", work.Select(Describe)),
             workingDir, Humanised(timeout));
 
         // A separate line rather than a longer one: this is the exceptional case, and folding it into
@@ -89,7 +88,7 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
                     // operator reading a silent round is looking for. Named here rather than in the
                     // round's reply: every clean round would carry that sentence, and a sentence on
                     // every clean round is one nobody reads on the round that matters.
-                    ok.Evidence.Length > 0 ? $" (its answer was kept at {ok.Evidence})" : string.Empty);
+                    ok.Evidence.Length > 0 ? $" (its answer was kept at '{ok.Evidence}')" : string.Empty);
                 break;
 
             case ReviewerState.Failed when progress.Outcome is { } outcome:
@@ -126,6 +125,17 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
         f.File.Length == 0 ? string.Empty : $"{f.File}:{f.Line} — ";
 
     /// <summary>A timeout a person reads, not a quoted TimeSpan.</summary>
+    /// <summary>One reviewer in the opening line: what it will run, and how big what it was handed is.</summary>
+    /// <remarks>
+    /// The size is omitted rather than printed as zero when nobody measured it. `0 bytes` reads as a
+    /// claim that this reviewer was sent an empty prompt, and the whole reason the number is here is
+    /// to be believed on exactly that question.
+    /// </remarks>
+    private static string Describe(ReviewerWork w) =>
+        w.PromptBytes is { } bytes
+            ? $"{w.Invocation.Provider}/{w.Invocation.Role}[{w.Prompt}, {bytes} bytes]"
+            : $"{w.Invocation.Provider}/{w.Invocation.Role}[{w.Prompt}]";
+
     private static string Humanised(TimeSpan span) =>
         span.TotalMinutes >= 1 ? $"{span.TotalMinutes:0} min" : $"{span.TotalSeconds:0}s";
 

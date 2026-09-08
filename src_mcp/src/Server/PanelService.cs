@@ -62,7 +62,12 @@ public sealed partial class PanelService
             // Its own directory beside that one: "it said nothing" and "it said something
             // I could not read" are different questions, and a person chasing one must not
             // have to wade through the other.
-            Path.Combine(settings.DataDir, "empty"));
+            Path.Combine(settings.DataDir, "empty"),
+            // A failure to keep evidence is reported rather than swallowed. It cannot fail the
+            // round — a review the vendor answered must not become a failure because a disk was
+            // full — but an empty evidence directory that says nothing is one a reader later
+            // takes as proof that no round was ever silent.
+            problem => _log.Warning("evidence: {Problem}", problem));
         _prompts = new RolePrompts(settings.DataDir);
         _escalations = new Escalations(settings.DataDir);
         _ledger = new UsageLedger(settings.DataDir);
@@ -328,13 +333,24 @@ public sealed partial class PanelService
         // would have told the person why. The floor belongs to the code stage, where the scope has
         // something to be checked against.
         RunStageAsync(repoPath, branch, planText, new StageRun(RoundMachine.BeginPlanRound, NeedsWorktree: false, IsPlanStage: true,
-            (session, workingDir, _) => Task.FromResult<IReadOnlyList<ReviewerWork>>(
-                BuildWork([ReviewRole.PlanCritique], workingDir, $"## The plan under review\n\n{planText}",
-                    session.State.RoundsRunThisStage + 1,
-                    isPlanStage: true,
-                    seed: StableSeed(session.State.SessionId, session.State.RoundsRunThisStage + 1),
-                    planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session) : null,
-                    deal: _settings.DealPlanLenses))),
+            (session, workingDir, _) =>
+            {
+                // The same sentence the code stage writes, carrying the one number this stage has:
+                // a plan round has no diff and no rules. Said in the same shape on purpose — a
+                // person reading a round that answered nothing looks in one place, whichever stage
+                // it was. Raised on the code round, where this line existed only for code rounds.
+                _log.Information(
+                    "context for review: plan {PlanBytes} bytes; no diff and no rules at this stage",
+                    System.Text.Encoding.UTF8.GetByteCount(planText));
+
+                return Task.FromResult<IReadOnlyList<ReviewerWork>>(
+                    BuildWork([ReviewRole.PlanCritique], workingDir, $"## The plan under review\n\n{planText}",
+                        session.State.RoundsRunThisStage + 1,
+                        isPlanStage: true,
+                        seed: StableSeed(session.State.SessionId, session.State.RoundsRunThisStage + 1),
+                        planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session) : null,
+                        deal: _settings.DealPlanLenses));
+            }),
             ct);
 
     /// <summary>
