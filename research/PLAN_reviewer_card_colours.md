@@ -10,8 +10,10 @@
 
 The operator, 2026-09-07:
 
-> запиши завтра сделать цветные рамки на каждого агента … цвета нужно синхронизировать с цветам из
-> списка раундов
+> Note for tomorrow: give every agent a coloured border … the colours need to be synchronised
+> with the colours from the rounds list
+
+*(translated from the operator's Russian; this repository's documentation is English.)*
 
 Every reviewer card in **REVIEWERS** gets a coloured edge, and the colour is the one that reviewer's
 name already has in **ACTIVE ROUNDS** — so `remsoftdev-claude` is the same colour in both places and

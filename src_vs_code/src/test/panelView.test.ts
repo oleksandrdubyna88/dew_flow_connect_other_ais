@@ -525,7 +525,7 @@ test('a running round shows its status, its reviewers and what it has cost', () 
  * A reviewer's card and its name in a round are the same colour, and stay that way.
  *
  * <p>The operator asked for coloured edges on the reviewer cards and pinned the requirement that
- * matters: *"цвета нужно синхронизировать с цветам из списка раундов"*. So the assertion is not
+ * matters: the colours must be synchronised with the colours in the rounds list. So the assertion is not
  * about a hex — it is that ONE function answers for both places. A second palette would satisfy
  * "the card is coloured" and break the only thing that was asked for.</p>
  */

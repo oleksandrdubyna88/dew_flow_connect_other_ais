@@ -101,6 +101,13 @@ test('a panel ahead of its server says so, instead of showing a round the server
 
   const absent = withServer({ kind: 'absent', version: '', remembered: false, updateOffered: false });
   assert.ok(!absent.includes('does not know'), 'a server nobody has installed is not behind');
+
+  // It counts ROLES, and the distinction is not pedantry: reviewers are vendors x roles, so with
+  // two vendors an old server runs six reviewer calls, not three. The warning said "three
+  // reviewers, not four" until two reviewers on the code round pointed at the panel's own fan-out
+  // sentence, which multiplies by the vendor count three lines further down the same page.
+  assert.ok(behind.includes('three code roles, not four'), 'the unit is roles');
+  assert.ok(!behind.includes('three reviewers'), 'a reviewer count would contradict the fan-out line');
 });
 
 test('a later round never shows a lens nobody selected', () => {

@@ -28,10 +28,12 @@ import { ROLES } from '../prompts';
 const sessionState = path.join(__dirname, '..', '..', '..', 'src_mcp', 'core', 'Rounds', 'SessionState.cs');
 
 /** `public static readonly RoleGate PlanDefault = new(3, 2);` -> `{ rounds: 3, threshold: 2 }`. */
+/** Read once. The loop below asks for a default per role and they come from one file. */
+const sessionStateSource = fs.readFileSync(sessionState, 'utf8');
+
 function serverDefault(name: string): { readonly rounds: number; readonly threshold: number } {
-  const cs = fs.readFileSync(sessionState, 'utf8');
   const pattern = new RegExp('RoleGate\\s+' + name + '\\s*=\\s*new\\((\\d+),\\s*(\\d+)\\)');
-  const m = pattern.exec(cs);
+  const m = pattern.exec(sessionStateSource);
 
   assert.ok(m, name + ' not found in SessionState.cs — the shape this test reads has changed');
   return { rounds: Number(m[1]), threshold: Number(m[2]) };

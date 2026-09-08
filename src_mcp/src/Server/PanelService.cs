@@ -366,7 +366,7 @@ public sealed partial class PanelService
                 // and a role stops taking part when its rounds are spent, so architecture can be
                 // worth two passes while performance is worth one.
                 var round = session.State.RoundsRunThisStage + 1;
-                var roles = _settings.Rounds
+                var scheduled = _settings.Rounds
                     .RolesForRound(Stage.CodeReview, round)
                     .Select(Enum.Parse<ReviewRole>)
                     .ToList();
@@ -375,7 +375,17 @@ public sealed partial class PanelService
                 // worse than the review it displaced. That reasoning is older than the role: it used
                 // to gate a round-1 substitution, and it gates the ROLE now. Said out loud rather
                 // than dropped quietly — a round that reviewed less than it was asked to must say so.
-                if (!rules.HasRules && roles.Remove(ReviewRole.Conventions))
+                // Derived, not removed. `roles.Remove(...)` read tidily — one call that both filters
+                // and answers whether it filtered — and it is the exact shape coding-style.md names as
+                // wrong: mutate in place rather than produce a new value. Two reviewers said so
+                // independently. Nothing shared was at risk (both lists are freshly materialised), but
+                // a rule that holds only where the damage is visible is not a rule.
+                var skipping = !rules.HasRules && scheduled.Contains(ReviewRole.Conventions);
+                var roles = skipping
+                    ? scheduled.Where(r => r != ReviewRole.Conventions).ToList()
+                    : scheduled;
+
+                if (skipping)
                 {
                     _log.Warning(
                         "round {Round}: the Conventions reviewers are skipped — this repository has no "
