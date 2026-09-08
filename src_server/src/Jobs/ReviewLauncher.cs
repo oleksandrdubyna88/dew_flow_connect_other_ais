@@ -142,8 +142,8 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
     };
 
     /// <summary>A clean exit that produced no answer — a failure, and NOT <c>NotStarted</c>.</summary>
-    private static ReviewAttempt Nothing(Usage usage) =>
-        new ReviewAttempt.Failed(new ReviewerOutcome.Unparseable(
+    private static ReviewAttempt.Failed Nothing(Usage usage) =>
+        new(new ReviewerOutcome.Unparseable(
             "the vendor exited cleanly without writing an answer", usage));
 
     /// <summary>The role a client named. Validated at the endpoint, so a bad one cannot arrive here.</summary>
