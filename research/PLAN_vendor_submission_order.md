@@ -101,10 +101,11 @@ a much larger change than the contention it would remove.
 That the work list's order is the order reviewers actually start. It holds because `RunAllAsync`
 builds its tasks with `work.Select(async ...)` — an async lambda runs synchronously to its first
 await, which is the GLOBAL semaphore — and `Task.WhenAll` enumerates in list order, so every
-reviewer reaches the machine's gate in list order and `SemaphoreSlim` releases FIFO. The machine's
-cap being taken BEFORE the per-provider one is the other half: with a cap smaller than the round,
-list order decides who gets the machine. `SubmissionOrderIsTheDispatchOrderTests` pins it with the
-cap at one.
+reviewer reaches the machine's gate in list order. **The FIRST start is what that guarantees**, and
+it is the one this change is about: which vendor a client queues for before anybody else's. Who gets
+a RELEASED slot afterwards is `SemaphoreSlim`'s business and .NET documents no order for it, so the
+tail is not asserted. `SubmissionOrderIsTheDispatchOrderTests` pins the first start with the cap at
+one, and that every reviewer still runs exactly once.
 
 ## Open question, to settle before building
 
@@ -151,5 +152,5 @@ incidental one, that assumption is what changes.
 - [x] The guarantee is stated as spreading rather than distinctness, with the residual collision named.
 - [x] The dispatch-order assumption is a test rather than a paragraph.
 - [x] The merge of the two shuffles is proved to change no permutation.
-- [ ] Module docs describe the ordering and why it is seeded rather than random.
+- [x] Module docs describe the ordering and why it is seeded rather than random.
 - [ ] Any existing test that was silently depending on provider order is named in the summary.

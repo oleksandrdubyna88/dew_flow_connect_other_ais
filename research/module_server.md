@@ -445,7 +445,11 @@ vendor-major and the scheduler starts one task per row against one machine-wide 
 hands slots out in the order they were asked for — so the list's order is the order reviewers reach
 a Team server, and every client ships the same vendor list. The providers are shuffled with the
 round's own seed (`StableSeed(sessionId, round)`, the seed the prompt deal already uses), so two
-sessions differ while one session replays. It SPREADS the load rather than guaranteeing distinct
+sessions differ while one session replays. **Replay means the same session, the same round AND the
+same runnable set**: the shuffle is applied to the providers that pass `Serves(stage)` and `CanRun`,
+so a vendor whose health flips changes the shuffle's INPUT rather than only its order. And only the
+FIRST start is deterministic — the machine's slots that are free when a round opens are taken in
+list order, while who gets a released slot afterwards is `SemaphoreSlim`'s business. It SPREADS the load rather than guaranteeing distinct
 orders: with two vendors there are two possible orders and half of all client pairs still collide.
 Nothing on the server changes — `JobStore.TryClaim` is FIFO by design, and a fair queue fed in a
 biased order is fixed at the feeding end.

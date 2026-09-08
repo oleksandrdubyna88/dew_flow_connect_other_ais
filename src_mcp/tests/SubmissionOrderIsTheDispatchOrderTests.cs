@@ -23,10 +23,23 @@ namespace CoaiMcp.Tests;
 /// test. A test that allowed two at once would be asserting a race.</para>
 /// </remarks>
 [Collection("fakecli-env")]
-public sealed class SubmissionOrderIsTheDispatchOrderTests
+public sealed class SubmissionOrderIsTheDispatchOrderTests : IDisposable
 {
     private readonly ReviewerExecutor _executor = new(new ProcessLauncher());
     private readonly string _dir = Directory.CreateTempSubdirectory("coai-order-").FullName;
+
+    /// <summary>Swept whether the assertions pass or throw — xUnit's own teardown.</summary>
+    public void Dispose()
+    {
+        try
+        {
+            Directory.Delete(_dir, recursive: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // A temp directory that outlives one run is litter, not a failed test.
+        }
+    }
 
     [Fact]
     public async Task WithOneSlot_ReviewersStartInTheOrderTheyWereListed()
@@ -55,8 +68,15 @@ public sealed class SubmissionOrderIsTheDispatchOrderTests
             }
         });
 
-        started.Should().Equal(vendors,
-            "the list's order is the order reviewers reach a Team server, which is what makes "
-            + "shuffling the providers change anything at all");
+        // The FIRST start is the deterministic one, and it is the one the change is about: which
+        // vendor's shared accounts a client queues for before anybody else's. The tail is whichever
+        // waiter SemaphoreSlim releases next, and .NET promises no order for that — asserting the
+        // whole sequence would have been asserting an implementation detail. Raised on the code
+        // round, and the comment beside the shuffle already said as much: this test now agrees
+        // with it.
+        started.Should().StartWith(["delta"],
+            "the first row in the list is the first reviewer to reach a Team server, which is what "
+            + "makes shuffling the providers change anything at all");
+        started.Should().BeEquivalentTo(vendors, "and every reviewer still runs, exactly once");
     }
 }
