@@ -319,8 +319,12 @@ internal static class AskRemote
     {
         var now = state.State switch
         {
-            RemoteState.Queued => $"queued on the Team server at {job.Server}, {state.Position} ahead of it",
-            RemoteState.Running => $"running on the Team server at {job.Server}",
+            // Both sentences are authored in RemoteAsk beside the verdicts, because the reason-picker
+            // in the runners library has to be able to recognise them: a progress note must never be
+            // mistaken for the reason a reviewer stopped. Two copies of these strings is how that
+            // recognition would quietly stop working.
+            RemoteState.Queued => RemoteAsk.QueuedMessage(job.Server, state.Position),
+            RemoteState.Running => RemoteAsk.RunningMessage(job.Server),
             _ => string.Empty,
         };
 

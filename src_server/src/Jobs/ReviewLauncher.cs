@@ -78,11 +78,16 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
                 new ReviewerOutcome.NotStarted($"no runtime adapter for '{vendor.Runtime}'"));
         }
 
-        // Its own directory per job, deleted by the runner in a finally. The vendor writes its answer
-        // here and nowhere near another job's.
-        var work = Directory.CreateTempSubdirectory("coai-server-job-").FullName;
+        // Its own directory per job. The vendor writes its answer here and nowhere near another
+        // job's — and the CREATION is inside the try, so the finally that deletes it covers
+        // everything that can throw after it exists. It used to sit above, which meant a throw from
+        // `Build` or from writing the schema skipped the cleanup entirely and orphaned the
+        // directory on the server's disk for good. (antigravity, code round.)
+        var work = string.Empty;
         try
         {
+            work = Directory.CreateTempSubdirectory("coai-server-job-").FullName;
+
             // WRITTEN, not merely named. Every adapter but claude's passes this path straight to its
             // CLI — `--json-schema` for antigravity, `--output-schema` for codex — and a path to a
             // file nobody wrote is a CLI that refuses before it reads the prompt. Measured against
@@ -141,6 +146,13 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
         Enum.TryParse<ReviewRole>(role, ignoreCase: true, out var parsed) ? parsed : default;
     private void Delete(string directory)
     {
+        // Empty means the creation itself threw, so there is nothing to remove and nothing to
+        // report — the exception that stopped it is already travelling.
+        if (directory.Length == 0)
+        {
+            return;
+        }
+
         try
         {
             Directory.Delete(directory, recursive: true);

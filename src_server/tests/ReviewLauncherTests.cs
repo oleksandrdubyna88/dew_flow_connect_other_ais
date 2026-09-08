@@ -128,7 +128,7 @@ public sealed class ReviewLauncherTests
     {
         var watching = new Watching(new ProcessResult(0, Envelope, string.Empty, TimedOut: false));
 
-        await Run(watching, runtime: "antigravity", vendorId: "antigravity");
+        await Run(watching, runtime: "antigravity", vendorId: "antigravity", model: "gemini-3.8-flash-low");
 
         watching.SchemaFound.Should().BeTrue(
             "the adapter passes this path to its CLI with --json-schema, and the CLI opens it");
@@ -139,18 +139,27 @@ public sealed class ReviewLauncherTests
         ProcessResult result, string runtime = "claude", string vendorId = "claude") =>
         await Run(new Fixed(result), runtime, vendorId);
 
+    /// <param name="model">
+    /// A model this VENDOR actually serves. It was hard-coded to `haiku` for every runtime, so the
+    /// antigravity case paired a Claude model with the agy CLI — which
+    /// `.claude/rules/common/vendor-routing.md` forbids in as many words, and which antigravity
+    /// itself caught reviewing this change.
+    /// </param>
     private static async Task<ReviewAttempt> Run(
-        IProcessLauncher launcher, string runtime = "claude", string vendorId = "claude")
+        IProcessLauncher launcher,
+        string runtime = "claude",
+        string vendorId = "claude",
+        string model = "haiku")
     {
         var slot = new AccountSlot(
-            "claude", "a", Path.GetTempPath(), DateTimeOffset.UtcNow, null, false, string.Empty, 0);
+            vendorId, "a", Path.GetTempPath(), DateTimeOffset.UtcNow, null, false, string.Empty, 0);
         var job = new JobRecord(
-            JobId.New(), "dev@example.com", "claude", "haiku", "PlanCritique", "review this",
+            JobId.New(), "dev@example.com", vendorId, model, "PlanCritique", "review this",
             JobStatus.Running, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(10),
             TimeSpan.FromSeconds(60));
 
         return await new ReviewLauncher(launcher).RunAsync(
-            new VendorConfig(vendorId, runtime, ["haiku"], ["a"]),
+            new VendorConfig(vendorId, runtime, [model], ["a"]),
             slot,
             job,
             new Dictionary<string, string?>(),

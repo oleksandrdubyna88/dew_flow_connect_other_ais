@@ -520,44 +520,29 @@ public static class ReviewerSummaryFactory
     }
 
     private static bool Announces(string line) =>
-        Announcements.Any(a => line.Contains(a, StringComparison.OrdinalIgnoreCase)) || SaysSomethingFailed(line);
+        Announcements.Any(a => line.Contains(a, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// "… failed" as a VERDICT, never as a tally.
+    /// Stack frames, source echoes, version banners — and our own shim's progress notes.
     /// </summary>
     /// <remarks>
-    /// <para>The word earns its place from a real gate: our OWN remote shim writes progress notes
-    /// and its verdict to one stderr, and its verdict — "the Team server's claude reviewer failed
-    /// (…)" — announced nothing the list above knew. The fallback then took the first meaningful
-    /// line, a progress note, and the round reported a stopped reviewer as
-    /// <c>running on the Team server</c>.</para>
-    /// <para>It is NOT in the list, because a plain substring would hand the sentence to the first
-    /// line reading <c>0 failed, 3 passed</c> — a tally announces nothing, and a CLI that prints one
-    /// before its real error would reintroduce exactly the defect this fixes. Gemini raised that on
-    /// the plan round, with that example. A digit introducing the word is what separates the two.</para>
+    /// <para><b>A progress note is scaffolding, not a candidate.</b> The remote shim writes both its
+    /// progress and its verdict to one stderr, and on a real gate the round reported
+    /// <c>exit 70: [coai-mcp] claude: running on the Team server at …</c> — a reviewer described as
+    /// RUNNING in the sentence announcing that it had stopped. The verdict was sitting directly
+    /// underneath; the fallback takes the first line that is not scaffolding, and a progress note is
+    /// the first line there is.</para>
+    /// <para><b>Excluding progress beats teaching the picker the word "failed", which was the first
+    /// attempt and does not work.</b> Three reviewers broke it independently on the code round:
+    /// <c>0 failed, 3 passed</c> and <c>3 tests failed</c> are tallies that announce nothing, while
+    /// <c>Step 3 failed</c> and <c>Job 12 failed</c> are real verdicts with a digit in front — no
+    /// rule over that one word can have it both ways, and every variant traded one wrong answer for
+    /// another. The two progress sentences, by contrast, are OURS: <see cref="RemoteAsk.IsProgress"/>
+    /// owns them beside the verdicts they compete with, there are exactly two, and no vendor CLI
+    /// prints anything like them. The vocabulary above is left exactly as it was.</para>
     /// </remarks>
-    private static bool SaysSomethingFailed(string line)
-    {
-        for (var at = Failed(line, 0); at >= 0; at = Failed(line, at + 1))
-        {
-            if (!Counted(line, at))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static int Failed(string line, int from) =>
-        from > line.Length ? -1 : line.IndexOf("failed", from, StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>Whether the word at <paramref name="at"/> is the tail of "0 failed" / "3 failed".</summary>
-    private static bool Counted(string line, int at) =>
-        line[..at].TrimEnd() is { Length: > 0 } before && char.IsDigit(before[^1]);
-
-    /// <summary>Stack frames, source echoes and version banners — the noise around the message.</summary>
     private static bool IsScaffolding(string line) =>
+        RemoteAsk.IsProgress(line) ||
         line.StartsWith("at ", StringComparison.Ordinal) ||
         line.StartsWith('^') ||
         line.StartsWith("throw ", StringComparison.Ordinal) ||

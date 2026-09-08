@@ -58,57 +58,64 @@ usable. Tightening this means re-installing the CLIs and re-signing every slot a
 apt-get install -y clang            # Native AOT links with the platform toolchain
 git clone --depth 1 -b main https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais.git /opt/coai/src
 
-# each release — publish BESIDE the running binary, never over it
+# each release — one command; it publishes, inspects, switches, canaries and self-rolls-back
 cd /opt/coai/src && git fetch origin main && git reset --hard origin/main
-dotnet publish src_server/src/CoaiServer.csproj -c Release -o /opt/coai/bin.new -p:Version=<version>
-
-rm -rf /opt/coai/bin.rollback && cp -a /opt/coai/bin /opt/coai/bin.rollback
-systemctl stop coai-server
-cp -a /opt/coai/bin.new/. /opt/coai/bin/
-systemctl start coai-server
+COAI_TOKEN=<a Team-server session token> deploy/systemd-release.sh <version>
 ```
 
 The AOT publish takes several minutes — run it detached rather than inside a command with a timeout.
 
-**Publish to `bin.new`, not to `bin`.** Publishing straight over `/opt/coai/bin` fails with
-`Text file busy` the moment the unit is running — which is every time — and a publish that dies
-half-way has already overwritten some of the files it will not finish writing. Stopping the unit for
-the copy makes the swap a two-second window instead of the several minutes an in-place AOT build
-takes.
+### The release script, and why it is a script
 
-### Rolling back
+[`systemd-release.sh`](systemd-release.sh) is the whole procedure, because the family rule
+(`.claude/rules/shared/common/development-workflow.md`) asks for things a list of commands in a README
+cannot give: an immutable version-addressed artefact, the last three retrievable, a rollback that
+builds nothing and is **one command**, and a look inside the artefact before it is trusted.
 
-`bin.rollback` is the binary that was serving before the swap, kept by the step above. Going back is
-the same two commands in reverse, and takes seconds:
+| | |
+|---|---|
+| `systemd-release.sh 0.5.4` | publish → inspect → switch → canary, rolling itself back if any step fails |
+| `systemd-release.sh --rollback` | pop one deployment off the trail. No build. Seconds. |
+| `systemd-release.sh --list` | what is live and what is retained |
 
-```bash
-systemctl stop coai-server
-cp -a /opt/coai/bin.rollback/. /opt/coai/bin/
-systemctl start coai-server
-curl -sS https://coai.remsoft.dev/api/health        # the version says which one is live
-```
+What it does that the old hand-run sequence did not:
 
-**What to check before deciding, and the bounded canary that decides it.** A release is not proven
-by the service coming up: `/api/health` answering only says the process started. Submit one real
-review and watch it reach a terminal state:
+- **Every release is its own directory**, `/opt/coai/releases/<version>-<utc>`, never written to
+  again. `/opt/coai/bin` is a **symlink**, swapped with one `mv -T` — a single rename, so there is no
+  instant at which the live tree is half-new. Copying file-by-file over the running directory (the
+  previous instructions) leaves old and new assemblies mixed if it is interrupted, and the unit then
+  starts a combination nobody has tested.
+- **Four are kept** — the current one plus the three the rule requires — and the oldest is pruned only
+  *after* a release passes its canary. The previous instructions did `rm -rf bin.rollback` **before**
+  copying the replacement, so two bad releases in a row left nothing to go back to, and an interruption
+  between the two commands left nothing at all.
+- **`--rollback` pops a trail**, it does not overwrite a single "previous" pointer. That exact defect
+  was measured in this family: a rollback that did not record where it rolled back *from*, so a second
+  consecutive rollback returned to the place it had just left.
+- **The artefact is opened before it is trusted**: the binary must exist and must contain the version
+  string it was asked to build. A build reporting success while silently copying nothing is the trap
+  the rule was written for, and a clean `0 error(s)` is not evidence about the file.
+- **The token never reaches argv.** `curl` reads it from a `600` config file, so it is in no `ps aux`
+  listing and in no `~/.bash_history`. Putting it in `-H "Authorization: Bearer $TOKEN"` — which is
+  what this README said for one commit — publishes a live credential to every other account on the box.
 
-```bash
-ID=$(curl -s -X POST https://coai.remsoft.dev/api/reviews -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"vendor":"claude","model":"haiku","prompt":"Answer with exactly this JSON and nothing else: {\"findings\":[]}","role":"PlanCritique","timeoutSeconds":120}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
-curl -s "https://coai.remsoft.dev/api/reviews/$ID?wait=90" -H "Authorization: Bearer $TOKEN"
-tail -1 /opt/coai/data/usage.jsonl
-```
+### The canary decides, not `systemctl`
 
-It must come back `"status":"done"` with a non-empty `answer`, and the usage line must read
-`"outcome":"ok"`. Anything else — a `failed` status, an empty `answer` on a `done`, or no new usage
-line at all — is a failed release: roll back with the commands above, and only then investigate.
+The script submits **one real review per vendor in `vendors.json`** and polls each to a terminal
+state — never judging on a single bounded wait, because a `wait` shorter than the review's own budget
+returns `running` for a healthy slow reviewer and calling that a failure rolls back a deployment that
+was fine.
+
+A release passes only when every vendor reaches `done` with a non-empty answer. Anything else — a
+`failed`, an empty answer, or no terminal state inside the budget — rolls back automatically and exits
+non-zero.
 
 That check is not ceremony. Until 2026-09-07 this server had never completed a single review: every
 one was recorded `NotStarted` while the vendor CLI's own transcript showed a perfect answer, and
 `usage.jsonl` held exactly two lines, weeks apart, both failures. `systemctl is-active` was green
-throughout. One canary review would have found it the day it was deployed.
+throughout, and so was `/api/health`. One canary review would have found it the day it was deployed —
+and a canary that asked only about `claude` would still have missed the two vendors whose CLIs need a
+schema file on disk, which is why it asks about every vendor the catalog offers.
 
 ### Checking it
 
