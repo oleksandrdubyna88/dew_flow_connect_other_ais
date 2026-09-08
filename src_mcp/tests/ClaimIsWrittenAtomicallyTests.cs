@@ -98,6 +98,39 @@ public sealed class ClaimIsWrittenAtomicallyTests
         File.Delete(jobFile);
     }
 
+    /// <summary>
+    /// A destination nothing can replace is REPORTED, after the retries have been spent on it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The retry loop exists because a rename over an open file can be refused for an instant
+    /// by a scanner, an indexer, or a reader that is not this code — the lesson `SessionStore` paid
+    /// for and left a measurement about. A handle held for the whole call is the deterministic
+    /// version of that refusal: every attempt fails, the last one is caught, and `Claim` returns the
+    /// reason rather than throwing, which is the contract the shim prints.</para>
+    /// <para>It also leaves nothing behind. The sibling is removed on the way out, so a destination
+    /// somebody else has locked costs one message and no litter.</para>
+    /// </remarks>
+    [Fact]
+    public void ADestinationHeldOpen_IsReportedRatherThanThrown_AndLeavesNoSibling()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"coai-locked-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        var jobFile = Path.Combine(dir, "job.json");
+        RemoteRuntime.Claim(jobFile, "https://coai.example.com", "job-1", "t.json").Should().BeEmpty();
+
+        string failure;
+        using (var _ = new FileStream(jobFile, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            failure = RemoteRuntime.Claim(jobFile, "https://coai.example.com", "job-2", "t.json");
+        }
+
+        failure.Should().NotBeEmpty("a destination that cannot be replaced is the shim's to report");
+        RemoteRuntime.ReadClaim(jobFile).JobId.Should().Be("job-1",
+            "the claim that was already there survives a write that could not land");
+        Directory.EnumerateFiles(dir).Should().Equal([jobFile], "the sibling is cleaned up");
+        Directory.Delete(dir, recursive: true);
+    }
+
     [Fact]
     public void AClaimIntoAMissingDirectory_ReportsWhyRatherThanThrowing()
     {
