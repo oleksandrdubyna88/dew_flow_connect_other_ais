@@ -181,6 +181,11 @@ keeping — the worst possible moment to discover a limit.
 - The transcript carries a **character budget**, checked before the request is built, not after it is
   refused. Approaching it is visible in the panel; crossing it offers the two honest actions —
   start again, or drop the oldest turns — and never silently truncates.
+- **A remote conversation is capped at THREE turns.** The owner’s decision, 2026-09-08. A server
+  model holds no conversation, so turn four re-sends everything said so far for the fourth time;
+  the cost of a thread grows quadratically while its usefulness does not. At the cap the panel says
+  so and offers the two honest actions - start again, or move this thread to a local model, which
+  does have memory. A cap is kinder than a budget nobody can see coming.
 - **`429` is transient, not terminal.** It means the queue is full, and the server says so with a
   `Retry-After`. The session backs off and retries within the turn's budget, reporting "waiting for a
   free account", and gives up only when the budget is gone.
@@ -333,11 +338,14 @@ record the observed timings beside the ones measured above.
    the build complexity today, and the sequence-number guard removes the harm rather than the delay.
 3. **Windows-only capture.** The keybinding path refuses elsewhere with a sentence naming the menu
    path, and that refusal is tested. The menu path is cross-platform as it stands.
-4. **Cost.** Every turn is a real vendor turn. The spending view already tracks these vendors; whether
-   chat turns should be counted there — and separated from review turns — is open, and the owner
-   decides it.
-5. **The transcript budget's number is not chosen yet.** It should come from a measurement of what the
-   server actually refuses, not from a guess, and phase 5 is where that measurement happens.
+4. **Cost is counted, and counted separately.** The owner’s decision, 2026-09-08: chat turns go
+   into the spending view like review turns, and are DISTINGUISHED from them. Same vendors, two
+   different questions - "what did the gate cost me" and "what did asking cost me" - and a single
+   total answers neither. The turn carries which it was; the view groups on it.
+5. **The transcript budget’s number is MEASURED, not chosen.** Confirmed by the owner, 2026-09-08.
+   Phase 5 finds what the real server actually refuses and cites it; a number picked on the day
+   would be a guess wearing a limit’s clothes. The three-turn cap above bounds the thread while
+   that measurement is still outstanding.
 
 ## Definition of Done
 
@@ -357,6 +365,9 @@ record the observed timings beside the ones measured above.
 - [ ] `coai.chatAutoSend` decides who sends: at the default the keybinding sends and the menu waits
       with the composer filled and focused, and both other values behave as the table says. The
       clipboard is never restored over something newer.
+- [ ] A remote conversation stops at three turns, saying so and offering the local model that has
+      memory - rather than growing a transcript until the server refuses it.
+- [ ] Chat turns appear in the spending view, separated from review turns.
 - [ ] The model picker lists local rows and, when a Team server answers, its catalog rows too.
 - [ ] The section holds a multi-line prompt box, defaulting to the single word `Explain`, and what it
       holds is what the passage is actually sent with.
