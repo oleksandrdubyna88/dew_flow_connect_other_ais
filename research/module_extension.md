@@ -42,6 +42,31 @@ sat beside it. The fallback now requires the label to name exactly one panel.
 tested: closing one tab disposes ONE session, its own. A vendor process that outlives its tab is an
 authenticated child nobody can see and nobody will stop; one that dies with a stranger’s tab loses a
 conversation somebody is still reading.
+### A conversation is a process, and it ends four ways (2026-09-08)
+
+`cliChatSession.ts` holds one long-lived vendor process per conversation. The protocol was measured
+rather than read: `agy --input-format stream-json --output-format stream-json` takes one NDJSON
+message per line and answers `init`, then `step_update`s, then a `result`. The message schema came
+out of the binary’s own refusal - `stream input message is missing the "event" field` - after
+`type:` was the first guess and the wrong one.
+
+The file is shaped by the four ways such a process ends, three of which the first plan did not
+mention and the gate raised as five separate findings: disposal, an exit of its own, a start that
+never reaches `init`, and a turn that is never answered. The last two are separate budgets with
+separate sentences, because **it would not start** and **it will not answer** send a person to
+different places. Both kill the process; a child that has stopped answering must not be handed the
+next turn as though nothing happened.
+
+Turns are serialised in the session, not merely discouraged in the page. The page disables its
+composer, but a page is a suggestion - two sends arriving together must not interleave two turns
+down one pipe, and the second waits rather than being refused, because refusing loses what somebody
+typed.
+
+**One defect found by its own tests, worth keeping.** The launcher REPLAYS what a child said before
+its first subscriber, which is what makes a fast `init` safe - and the session subscribed and only
+then registered the waiter, so the replayed `init` arrived with nobody to tell. Every turn hung for
+the whole startup budget. It now ASKS what happened after subscribing rather than waiting for a
+signal already sent.
 ### One spawn site, and why it grew a handle (2026-09-08)
 
 `processLauncher.ts` owns the only `spawn` in `src/` that this extension controls. It is the version
