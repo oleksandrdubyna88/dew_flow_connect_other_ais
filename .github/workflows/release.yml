@@ -39,6 +39,15 @@ on:
 permissions:
   contents: read
 
+# One run per tag. The draft job checks for an existing release and then creates one, and
+# those two steps are not atomic: two runs of the same tag could both see nothing and both
+# create a draft, which is the failure this whole shape exists to prevent. A tag is normally
+# pushed once, so this costs nothing and closes the re-run case. Never `cancel-in-progress`:
+# cancelling a release halfway is how a draft ends up half-uploaded with nobody watching.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # ---------------------------------------------------------------------------
   # ONE job creates the draft, before any matrix leg runs.
@@ -74,9 +83,18 @@ jobs:
           set -euo pipefail
           # Idempotent for a re-run: a draft this workflow already made is REUSED rather than
           # duplicated, which is the whole failure above.
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "$GITHUB_REF_NAME already exists; reusing it"
-            exit 0
+          # Reused only when it is still a DRAFT. `gh release view` succeeds for a PUBLISHED release
+          # too, so a re-run against a tag somebody had published by hand would skip creation and
+          # send six legs uploading into a release clients can already see — the exact window this
+          # change removes. Raised twice on the code round.
+          if EXISTING=$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft' 2>/dev/null); then
+            if [ "$EXISTING" = "true" ]; then
+              echo "$GITHUB_REF_NAME is already a draft; reusing it"
+              exit 0
+            fi
+            echo "$GITHUB_REF_NAME is already PUBLISHED — refusing to upload into a visible release."
+            echo "Cut a new tag, or delete that release if it was published in error."
+            exit 1
           fi
           gh release create "$GITHUB_REF_NAME" --draft \
             --title "coai-mcp ${GITHUB_REF_NAME#mcp-v}" \
@@ -97,9 +115,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "$GITHUB_REF_NAME already exists; reusing it"
-            exit 0
+          # Reused only when it is still a DRAFT. `gh release view` succeeds for a PUBLISHED release
+          # too, so a re-run against a tag somebody had published by hand would skip creation and
+          # send six legs uploading into a release clients can already see — the exact window this
+          # change removes. Raised twice on the code round.
+          if EXISTING=$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft' 2>/dev/null); then
+            if [ "$EXISTING" = "true" ]; then
+              echo "$GITHUB_REF_NAME is already a draft; reusing it"
+              exit 0
+            fi
+            echo "$GITHUB_REF_NAME is already PUBLISHED — refusing to upload into a visible release."
+            echo "Cut a new tag, or delete that release if it was published in error."
+            exit 1
           fi
           gh release create "$GITHUB_REF_NAME" --draft \
             --title "coai-server ${GITHUB_REF_NAME#server-v}" \
@@ -107,10 +134,17 @@ jobs:
 
   mcp-binaries:
     name: coai-mcp (${{ matrix.rid }})
-    if: startsWith(github.ref, 'refs/tags/mcp-v') || inputs.target == 'mcp'
+    # `always()` because of what a SKIPPED dependency does. `mcp-draft` is tag-only, so a
+    # workflow_dispatch build skips it — and GitHub skips a job whose needed job was skipped,
+    # whatever this job's own `if` says. That silently turned the manual build path into a run
+    # that produced nothing. Five reviewers caught it on the code round. So: run for a tag once
+    # the draft succeeded, run for a dispatch regardless, and never run after a cancel.
+    if: >-
+      always() && !cancelled()
+      && ((startsWith(github.ref, 'refs/tags/mcp-v') && needs.mcp-draft.result == 'success')
+          || inputs.target == 'mcp')
     # A leg no longer CREATES anything: `mcp-draft` did that once, and six legs racing a create
-    # made six drafts rather than five clean failures. A dispatch build skips the draft job (no
-    # tag) and uploads nothing either -- its Attach step is already guarded on the tag.
+    # made six drafts rather than five clean failures.
     needs: [mcp-draft]
     strategy:
       fail-fast: false
@@ -340,57 +374,14 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Every expected asset is there, by NAME — then publish
+      - uses: actions/checkout@v7
+
+      - name: Verify every expected asset, then publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#mcp-v}"
-          # By name rather than by count: six wrongly-named archives satisfy a tally, and the one
-          # that goes missing is the platform somebody is installing on right now.
-          RIDS=(linux-x64 linux-arm64 win-x64 win-arm64 osx-x64 osx-arm64)
-          EXPECTED=6
-          [ "${#RIDS[@]}" -eq "$EXPECTED" ] || { echo "the RID list and EXPECTED disagree"; exit 1; }
+        run: .github/scripts/verify-and-publish-release.sh mcp "$GITHUB_REF_NAME"
 
-          # POLLED, not read once. `needs` proves every upload RETURNED; it does not prove GitHub's
-          # release listing has caught up with them, and a listing lagging by a second would fail a
-          # release that is in fact complete. Bounded, so a genuinely missing asset still fails.
-          MISSING=""
-          ASSETS=""
-          for attempt in $(seq 1 10); do
-            ASSETS=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')
-            MISSING=""
-            for rid in "${RIDS[@]}"; do
-              case "$rid" in win-*) EXT=zip ;; *) EXT=tar.gz ;; esac
-              for name in "coai-mcp-$VERSION-$rid.$EXT" "coai-mcp-$VERSION-$rid.$EXT.sha256"; do
-                printf '%s\n' "$ASSETS" | grep -qx "$name" || MISSING="$MISSING $name"
-              done
-            done
-            [ -z "$MISSING" ] && break
-            echo "attempt $attempt: still missing:$MISSING"
-            sleep 6
-          done
-          printf '%s\n' "$ASSETS"
-
-          if [ -n "$MISSING" ]; then
-            echo "the release is incomplete — missing:$MISSING"
-            exit 1
-          fi
-          echo "the release carries all $EXPECTED platforms, each with its checksum"
-
-          # Retried, because everything above already passed: the assets ARE all there, and leaving
-          # a complete release stranded as a draft over one transient API error is the only failure
-          # this job can still cause by itself.
-          for attempt in 1 2 3; do
-            gh release edit "$GITHUB_REF_NAME" --draft=false && break
-            echo "publish attempt $attempt failed; retrying"
-            sleep 5
-          done
-          gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft' | grep -qx false \
-            || { echo "complete, but it could not be published — publish it by hand"; exit 1; }
-          echo "published $GITHUB_REF_NAME"
 
   extension:
     name: extension
@@ -451,7 +442,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release create "$GITHUB_REF_NAME" --draft --title "ConnectOtherAIs ${GITHUB_REF_NAME#extension-v}" --notes "The VS Code extension." 2>/dev/null || true
+
+          # No `|| true`. It hid a permission failure, an API failure and a malformed release alike,
+          # and the job then uploaded into a state nobody had established. Reused only when it is
+          # still a DRAFT, exactly as the two matrix lines do it.
+          if EXISTING=$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft' 2>/dev/null); then
+            [ "$EXISTING" = "true" ] \
+              || { echo "$GITHUB_REF_NAME is already PUBLISHED — refusing to upload into a visible release"; exit 1; }
+            echo "$GITHUB_REF_NAME is already a draft; reusing it"
+          else
+            gh release create "$GITHUB_REF_NAME" --draft \
+              --title "ConnectOtherAIs ${GITHUB_REF_NAME#extension-v}" \
+              --notes "The VS Code extension."
+          fi
+
           gh release upload "$GITHUB_REF_NAME" *.vsix --clobber
 
           # Asked of the RELEASE, not assumed from an exit code. `set -e` catches an upload that
@@ -494,7 +498,12 @@ jobs:
   # ---------------------------------------------------------------------------
   server-binaries:
     name: coai-server (${{ matrix.rid }})
-    if: startsWith(github.ref, 'refs/tags/server-v')
+    # As the mcp matrix: a skipped `server-draft` would otherwise skip this whole job. The server
+    # line has no dispatch target today, and the condition is written the same way so that adding
+    # one cannot resurrect the defect.
+    if: >-
+      always() && !cancelled()
+      && startsWith(github.ref, 'refs/tags/server-v') && needs.server-draft.result == 'success'
     needs: [server-draft]
     strategy:
       fail-fast: false
@@ -708,86 +717,15 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Every expected asset is there, by NAME
+      - uses: actions/checkout@v7
+
+      - name: Verify every expected asset, then publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#server-v}"
-          # By name rather than by count: six wrongly-named archives satisfy a count, and the one
-          # that matters is `linux-x64` — the RID the live host installs. A release missing exactly
-          # that one would pass a tally and fail the next deploy.
-          RIDS=(linux-x64 linux-arm64 win-x64 win-arm64 osx-x64 osx-arm64)
-          EXPECTED=6
-          [ "${#RIDS[@]}" -eq "$EXPECTED" ] || { echo "the RID list and EXPECTED disagree"; exit 1; }
+        run: .github/scripts/verify-and-publish-release.sh server "$GITHUB_REF_NAME"
 
-          # Polled for the same reason the mcp line polls: `needs` proves the uploads returned, not
-          # that the listing has caught up with them.
-          MISSING=""
-          ASSETS=""
-          for attempt in $(seq 1 10); do
-            ASSETS=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')
-            MISSING=""
-            for rid in "${RIDS[@]}"; do
-              case "$rid" in win-*) EXT=zip ;; *) EXT=tar.gz ;; esac
-              for name in "coai-server-$VERSION-$rid.$EXT" "coai-server-$VERSION-$rid.$EXT.sha256"; do
-                printf '%s\n' "$ASSETS" | grep -qx "$name" || MISSING="$MISSING $name"
-              done
-            done
-            [ -z "$MISSING" ] && break
-            echo "attempt $attempt: still missing:$MISSING"
-            sleep 6
-          done
-          printf '%s\n' "$ASSETS"
 
-          if [ -n "$MISSING" ]; then
-            echo "the release is incomplete — missing:$MISSING"
-            exit 1
-          fi
-          echo "the release carries all $EXPECTED platforms, each with its checksum"
-
-          # The publish, and the only one on this line. Until now the release is a DRAFT: invisible
-          # to `GET /releases`, so no client can be offered a download from a release that is still
-          # uploading. A failed leg therefore leaves a draft nobody sees, rather than five platforms
-          # of six with the sixth answering 404 — which is what happened on 2026-09-08.
-          # Retried, because everything above already passed: the assets ARE all there, and leaving
-          # a complete release stranded as a draft over one transient API error is the only failure
-          # this job can still cause by itself.
-          for attempt in 1 2 3; do
-            gh release edit "$GITHUB_REF_NAME" --draft=false && break
-            echo "publish attempt $attempt failed; retrying"
-            sleep 5
-          done
-          gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft' | grep -qx false \
-            || { echo "complete, but it could not be published — publish it by hand"; exit 1; }
-          echo "published $GITHUB_REF_NAME"
-
-  # ---------------------------------------------------------------------------
-  # The Team server, as a multi-arch image.
-  #
-  # One job per architecture on a NATIVE runner, then a manifest stitched from the two
-  # digests. Native AOT does not cross-compile inside qemu — an arm64 image built on an
-  # x64 runner under emulation either fails to link or takes long enough that it may as
-  # well have. This is the same shape creds' release uses, for the same reason.
-  # ---------------------------------------------------------------------------
-  # NOT a matrix, and that is the fix for a real defect rather than a style choice: every leg of a
-  # matrix writes into ONE job-output namespace, so `digest-amd64` and `digest-arm64` would be
-  # whatever the leg that finished LAST happened to set — one of them always empty, and
-  # `imagetools create` then fails on an empty reference. Two jobs have two namespaces. Caught on
-  # the code round; the workflow this was copied from has the same bug.
-  # ---------------------------------------------------------------------------
-  # The actions below are pinned to COMMIT SHAs, not tags.
-  #
-  # A tag is mutable: `actions/checkout@v7` is whatever that ref points at when the job runs, so a
-  # compromised or careless publisher can change what executes here — with a token that can push to
-  # ghcr. SonarCloud raises it as a vulnerability on new code and it is right to.
-  #
-  # The trailing comment carries the human-readable version, which is the only thing lost by pinning.
-  # The jobs ABOVE this line still use tags: pinning them is a real improvement and a diff that
-  # belongs to its own change rather than to a deployment PR. Named here rather than done silently.
-  # ---------------------------------------------------------------------------
   server-image-amd64:
     name: coai-server image (amd64)
     if: startsWith(github.ref, 'refs/tags/server-v')
