@@ -194,6 +194,77 @@ test('the server release is verified COMPLETE, not merely attempted', () => {
   assert.match(verify, /needs:\s*\[\s*server-binaries/, 'it runs after every archive is uploaded');
   assert.match(verify, /gh release view/, 'and asks GitHub what the release actually carries');
   assert.match(verify, /EXPECTED=6/, 'against the number of platforms this line promises');
+  // By NAME, not by tally: six wrongly-named files satisfy a count, and the one that matters is
+  // the RID the live host installs — a release missing exactly that passes a count and fails the
+  // next deploy at its preflight.
+  assert.match(verify, /coai-server-\$VERSION-\$rid/, 'each expected asset name is looked for');
+  assert.match(verify, /the release is incomplete — missing:/, 'and the missing ones are named');
+});
+
+test('the native release line does not wait on the container line', () => {
+  // The two artefacts have independent lifecycles. Coupling the completeness check to the image
+  // manifest means a registry outage leaves the shape that IS deployed with no signal at all —
+  // and the shape that is deployed is the binary, not the image.
+  const verify = jobBlock(releaseWorkflow(), 'server-release-complete');
+
+  assert.doesNotMatch(verify, /needs:[^\n]*server-manifest/, 'the image job is not in its needs');
+});
+
+test('neither release nor deploy can hang past a stated bound', () => {
+  // Every failure mode of a SERVER is a wait — one that never binds, one that ignores its
+  // termination, an ssh session to a host that stopped answering. Without a job bound the ceiling
+  // is the six-hour default: a release nobody watches finish, and an approval held all afternoon.
+  assert.match(jobBlock(releaseWorkflow(), 'server-binaries'), /timeout-minutes:/, 'the release leg');
+  assert.match(deployWorkflow(), /timeout-minutes:/, 'and the deploy job');
+
+  // And the smoke's own deadline is absolute rather than a loop count: 60 iterations of a 2-second
+  // curl plus a sleep is up to three minutes while the message says sixty seconds.
+  assert.match(
+    jobBlock(releaseWorkflow(), 'server-binaries'),
+    /UNTIL=\$\(\( \$\(date \+%s\) \+ DEADLINE \)\)/,
+    'the deadline is a wall-clock instant, not an iteration count',
+  );
+});
+
+test('every value that crosses into the remote root shell is validated first', () => {
+  // ssh joins its arguments back into ONE string and the remote shell re-parses it, so an argv
+  // element is not the boundary it looks like. The dispatch version was already pinned; the canary
+  // token PATH comes from a repository variable and reaches the same command.
+  const deploy = deployWorkflow();
+
+  assert.match(deploy, /\^\/\[A-Za-z0-9\._\/-\]\+\$/, 'the token path must be a plain absolute path');
+  assert.match(deploy, /is not a plain absolute path/, 'and anything else stops the run');
+  assert.doesNotMatch(deploy, /scp[^\n]*:\/tmp\//, 'and nothing is staged in world-writable /tmp');
+});
+
+test('a deploy that never took effect is not "rolled back"', () => {
+  // The rollback pops the release trail. Running it when the swap never happened takes a HEALTHY
+  // server back a version to fix a deployment that never landed — so the verify step distinguishes
+  // "still serving what it served before" from "serving something broken", and only the second
+  // rolls back.
+  const deploy = deployWorkflow();
+
+  assert.match(deploy, /state=unchanged/, 'the deploy-did-not-land case is named');
+  assert.match(deploy, /state=broken/, 'and is distinct from the broken case');
+  assert.match(
+    deploy,
+    /steps\.verify\.outputs\.state == 'broken'/,
+    'and only the broken one rolls back',
+  );
+  assert.match(deploy, /Nothing was rolled back, because nothing changed/, 'and it says so');
+});
+
+test('verification runs even when the deploy step itself failed', () => {
+  // The window: an ssh session that dies AFTER the script swapped `bin` fails the job with the new
+  // release live and unverified. A verification that only ran on success would never look.
+  const deploy = deployWorkflow();
+
+  assert.match(
+    deploy,
+    /if: always\(\) && steps\.install\.outcome != 'skipped'/,
+    'verification runs whenever the install was attempted',
+  );
+  assert.match(deploy, /127\.0\.0\.1:8090\/api\/health/, 'loopback is asked before the edge');
 });
 
 test('the server smoke asks the binary its version the only way a server can be asked', () => {
