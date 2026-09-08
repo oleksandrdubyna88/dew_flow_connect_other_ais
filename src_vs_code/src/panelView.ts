@@ -929,6 +929,7 @@ function promptsBody(state: PanelState): string {
            title="${escapeHtml(last ? HELP.lastRole : HELP.roleEnabled)}">
     <label class="name" for="role-${role.id}">${escapeHtml(role.label)}</label>`
       : `<span class="name">${escapeHtml(role.label)}</span>`}</div>
+${last ? `  <div class="hint">The only role still ticked — tick another one before turning this one off.</div>` : ''}
   <div class="field inline">
     ${labelled(`rounds-${role.id}`, 'Rounds', 'maxRounds')}
     <input type="number" id="rounds-${role.id}" min="1" max="6" data-setting="rounds" data-role="${role.id}"

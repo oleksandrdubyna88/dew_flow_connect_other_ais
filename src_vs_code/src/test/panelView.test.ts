@@ -853,6 +853,12 @@ test('the last role standing cannot be unticked', () => {
     /data-setting="roleEnabled" data-role="Conventions"(?![^>]*disabled)/,
     'the ones already off stay clickable, or there is no way back',
   );
+  // A disabled input shows no title tooltip and cannot be focused by keyboard, so the reason has to
+  // be on the page rather than under the pointer. Raised on the code round and it was right.
+  assert.ok(
+    html.includes('The only role still ticked — tick another one before turning this one off.'),
+    'a control that refuses without saying why reads as broken',
+  );
 });
 
 test('the fan-out sentence counts the roles that will actually run', () => {

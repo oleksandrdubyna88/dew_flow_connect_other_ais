@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULTS, envBlock, settingsFrom } from '../settingsShape';
 import { DEFAULT_VENDORS, normaliseId, Vendor, vendorsEnv, vendorsFrom } from '../vendors';
+import { ROLES } from '../prompts';
 
 /** A reader over a plain object, as VS Code's configuration behaves for our purposes. */
 const reader = (values: Record<string, unknown>) => (section: string) => values[section];
@@ -197,4 +198,21 @@ test('the manifest’s own default vendor list matches the one the code ships', 
   const shipped = manifest.contributes.configuration.properties['coai.vendors']!.default;
 
   assert.deepEqual(shipped, DEFAULT_VENDORS.map((v) => ({ ...v })));
+});
+
+/**
+ * The switchable roles and the code roles are ONE list, asserted rather than assumed.
+ *
+ * <p>Two places name the code roles: `ROLES`, which the panel renders from, and
+ * `DEFAULTS.roleEnabled`, which the reader iterates and the env block serialises. A fifth code role
+ * added to the first and forgotten in the second would render a tick box that looks live, count for
+ * nothing in the fan-out arithmetic, and never persist its switch — the panel and the server
+ * describing different rounds, silently. Named by the gate on the code round; this is the guard.</p>
+ */
+test('every code role has a switch, and every switch names a code role', () => {
+  const code = ROLES.filter((r) => r.stage === 'code').map((r) => r.id).sort();
+  const switchable = Object.keys(DEFAULTS.roleEnabled).sort();
+
+  assert.deepEqual(switchable, code, 'the switch list and the code role list have drifted apart');
+  assert.ok(!switchable.includes('PlanCritique'), 'the plan role must never gain a switch');
 });
