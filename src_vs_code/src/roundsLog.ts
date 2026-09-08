@@ -693,9 +693,14 @@ function defendedHtml(defended: readonly DbFinding[]): string {
  * later. An empty div said nothing, which is precisely how a push that never arrived came to look
  * identical to one that simply had not arrived yet: the tab the operator opened on 2026-09-08 was
  * blank, and blank is also what it correctly shows for the first half-second of every open.</p>
+ *
+ * <p>It names no region, because the reader is standing on the tab that names itself — and because
+ * a template that took one produced "Reading the log for what it keeps missing…". (The code
+ * round, twice.) A section still reading this after `STILL_NOTHING_MS` replaces it with what went
+ * wrong; see the page script.</p>
  */
-function waitingFor(what: string): string {
-  return `<div class="empty">Reading the log for ${escapeHtml(what)}…</div>`;
+function waitingFor(): string {
+  return '<div class="empty">Reading the log…</div>';
 }
 
 export function roundsLogHtml(
@@ -813,8 +818,8 @@ export function roundsLogHtml(
 <div id="empty" class="empty"${rows.length === 0 ? '' : ' hidden'}>No rounds yet. A session appears once an AI calls <code>open</code> for a repository and branch.</div>
 <div class="hint">Showing <b>today</b> — <b>All dates</b> clears the range, and the pickers take a time as well as a day. Cost is <b>in / out / total</b> — <code>~</code> means worked out from a public price list rather than billed, <code>+</code> means one reviewer's model had no listed price so the total is a floor. Click a column to sort, a row to see its reviewers. The table advances by itself while a round runs; your sort, filters and search stay.</div>
 </section>
-<section id="tab-usage" hidden><div id="usage-body">${usageHtml || waitingFor('spending')}</div></section>
-<section id="tab-spots" hidden><div id="spots-body">${spotsHtml || waitingFor('what it keeps missing')}</div></section>
+<section id="tab-usage" hidden><div id="usage-body">${usageHtml || waitingFor()}</div></section>
+<section id="tab-spots" hidden><div id="spots-body">${spotsHtml || waitingFor()}</div></section>
 <script nonce="${nonce}">
 (function () {
   // A page that fails must say so on the page. The first release of this page came up as a header
@@ -831,6 +836,11 @@ export function roundsLogHtml(
     failed(String(message) + ' (line ' + line + ':' + column + ')');
   };
   var vscode = acquireVsCodeApi();
+  // Which sections opened on the "Reading the log…" placeholder, stated by the render rather than
+  // read back out of the DOM: what a section CONTAINS is HTML from the database, and searching it
+  // for the placeholder's own words is a check that a blind spot titled "Reading the log" would
+  // defeat.
+  var WAITING = ${JSON.stringify({ usage: usageHtml === '', spots: spotsHtml === '' })};
   var ROWS = ${jsonForScript(rows)};
   // Assigned, never declared: the extension ships BUNDLED and minified, and a minifier renames a
   // function that is not a top-level export — so the declaration this embedded read
@@ -1046,14 +1056,20 @@ export function roundsLogHtml(
     for (var c = 0; c < selects.length; c++) { selects[c].value = ''; }
     render();
   });
+  // Which sections have actually been told something. A section still reading "Reading the log…"
+  // after STILL_NOTHING_MS is a section nothing ever reached, and it says so rather than promising
+  // for ever that something is coming.
+  var told = {};
   window.addEventListener('message', function (event) {
     var message = event.data;
     if (!message) { return; }
     if (message.type === 'spots' && typeof message.html === 'string') {
+      told.spots = true;
       document.getElementById('spots-body').innerHTML = message.html;
       return;
     }
     if (message.type === 'usage' && typeof message.html === 'string') {
+      told.usage = true;
       document.getElementById('usage-body').innerHTML = message.html;
       return;
     }
@@ -1071,6 +1087,23 @@ export function roundsLogHtml(
   // every time VS Code rebuilds the page, which is what makes the surface recoverable rather than
   // one-shot.
   vscode.postMessage({ type: 'ready' });
+  // And the page's own deadline, longer than the panel's five-second fallback so that fallback has
+  // its chance first. A loading state that never resolves is WORSE than the empty tab it replaced,
+  // because it promises something is coming — and the only diagnostic the extension side can leave
+  // is a console.warn in the extension host, which nobody opens. Four findings across both remote
+  // vendors and three roles said so on the code round.
+  setTimeout(function () {
+    var sections = [['usage', 'usage-body'], ['spots', 'spots-body']];
+    for (var w = 0; w < sections.length; w++) {
+      // Only a section that OPENED on the placeholder, and only one nothing ever reached. The
+      // spending tab is painted with real numbers on the first paint, and replacing those with an
+      // error because no push happened to change them would be a lie.
+      if (told[sections[w][0]] || !WAITING[sections[w][0]]) { continue; }
+      document.getElementById(sections[w][1]).innerHTML = '<div class="empty">This section never'
+        + ' received its data. Reload the window (Developer: Reload Window); if it comes back, copy'
+        + ' this into an issue.</div>';
+    }
+  }, 15000);
   try {
     // Today by default. Everything older is one click away on "All dates"; the hint says so.
     setToday();
