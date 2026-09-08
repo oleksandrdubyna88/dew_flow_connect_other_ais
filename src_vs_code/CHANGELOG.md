@@ -1,5 +1,40 @@
 # Changelog
 
+## Extension 0.31.10 — 2026-09-08
+
+**Ask another vendor’s model about a passage, without leaving the editor.** Select a paragraph in
+your assistant’s answer, press `Ctrl+Alt+A`, and a tab opens — named after that assistant session —
+where a different vendor’s model explains it in your language, in a conversation you can carry on.
+The same thing sits in the panel’s right-click menu as **Chat with other AI**.
+
+A dense English answer is not always a clear one, and asking the model that wrote it to explain
+itself gets you the same words again. Doing this by hand is five steps — select, copy, switch to a
+browser, new chat, paste — several times an hour.
+
+**The two doors behave differently, and they have to.** From the keybinding the panel still holds
+the keyboard, so the selection is copied for you and the question is asked at once. The menu cannot
+do that — closing it takes the selection out of the panel — so it takes what you last copied and
+puts it in the composer for you to send. `coai.chatAutoSend` overrules that in either direction, and
+the passage is shown at the top of the tab so you can see what is about to be asked.
+
+Four settings are yours: `coai.chatPrompt` (the prompt the passage travels with, one word `Explain`
+by default), `coai.chatLanguage` (the language the other AI answers in — English by default, and
+deliberately not the language of the help pages), `coai.chatAutoSend`, and `coai.chatModel`. They
+are edited in `settings.json` for now; a section beside *Reviewers* comes next.
+
+**What it will not do yet.** Only a reviewer on the `antigravity` runtime can answer a chat, and a
+row on any other runtime is refused BY NAME rather than quietly missing from the picker — a model
+you NAMED and which cannot answer is never silently replaced by another vendor’s. Copying the
+selection needs Windows; elsewhere the keybinding says so and points at the menu, which works
+everywhere. Picking a different model in an open tab starts a new process, and the answer after it
+says the conversation restarted, because it genuinely does not remember the earlier turns.
+
+The whole thing went through this product’s own gate three times — a plan round and two code rounds,
+eighteen reviewers between them — and what those rounds changed is worth naming: the copy helper
+now WAITS for your own modifiers to come up instead of forcing them up under your fingers; a
+clipboard it could not read (an image, a file) is never written to, because it could never be given
+back; and the clipboard it borrows is put back only if nothing else wrote to it while you waited.
+
 ## Extension 0.31.9 — 2026-09-08
 
 **A code-review role can be switched off.** Each of the four boxes — Conventions, Architecture,
