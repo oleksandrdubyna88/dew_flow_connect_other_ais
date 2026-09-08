@@ -178,4 +178,42 @@ public class RoundNamesTheExcludedTests
 
         With(Local(), off).ExcludedFrom(isPlanStage: true).Should().BeEmpty();
     }
+
+    /// <summary>
+    /// A round that ran out of TIME says so, and does not blame the reviewers it cut off.
+    /// </summary>
+    /// <remarks>
+    /// <para>Raised on the round-deadline plan's own code round, before any of it was built, which
+    /// is the cheapest moment to find a contract gap. Cancelling the outstanding reviewers makes
+    /// each of them abandoned, and `Describe` has no case for that — it renders "unknown", which is
+    /// the least useful word available for the one thing the feature exists to explain.</para>
+    /// <para>So the deadline is passed in EXPLICITLY rather than inferred from a count of abandoned
+    /// reviewers: inferring it would be wrong the moment a person cancels a round themselves.</para>
+    /// </remarks>
+    [Fact]
+    public void ARoundThatRanOutOfTime_SaysThatRatherThanNamingItsVictims()
+    {
+        var summary = new ReviewerSummary(9, 6, ["codex/Architecture: cancelled"])
+        {
+            EndedByDeadline = TimeSpan.FromMinutes(40),
+        };
+
+        summary.Sentence.Should().Contain("6 of 9 reviewers answered");
+        summary.Sentence.Should().Contain("the round reached its 40 minute limit",
+            "the person needs to know the ROUND ran out, not that six reviewers mysteriously failed");
+    }
+
+    [Fact]
+    public void ARoundWithinItsDeadline_SaysNothingAboutOne()
+    {
+        // The guard on the other side. Every round that finishes in time must read exactly as it
+        // always did, or this is a change to every round in service of the rare one.
+        //
+        // The property is named for the EVENT rather than the setting — `EndedByDeadline`, not
+        // `RoundDeadline` — because the first draft carried the limit on every summary and this
+        // test could not say what it meant: a round that finished in time has no deadline to
+        // report, whatever bound it was running under.
+        Answered(3).Sentence.Should().Be("all 3 reviewers answered");
+        Answered(3).EndedByDeadline.Should().BeNull("a round that finished in time was not ended by one");
+    }
 }

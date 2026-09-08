@@ -89,6 +89,20 @@ public sealed record PanelSettings
 
     public TimeSpan ReviewerTimeout { get; init; } = TimeSpan.FromMinutes(10);
 
+    /// <summary>
+    /// How long a whole ROUND may take, or zero to derive it from the round's own shape.
+    /// </summary>
+    /// <remarks>
+    /// <para>Zero rather than a number, because the honest default is not a constant: a round runs
+    /// `vendors × roles` reviewers through the machine's cap, so it takes as many WAVES as that
+    /// division needs and each wave can legitimately last a whole reviewer timeout. Twelve reviewers
+    /// at a cap of three is four waves — forty minutes of entirely healthy work at the shipped
+    /// settings. See <see cref="RoundBudget"/>.</para>
+    /// <para>A number here overrides that, and the panel says what lowering it cuts into. Nothing
+    /// stops somebody setting five minutes; what would be wrong is SHIPPING five minutes.</para>
+    /// </remarks>
+    public TimeSpan RoundTimeout { get; init; }
+
     /// <summary>How long a rate-limited reviewer waits before its one retry.</summary>
     /// <remarks>
     /// Kept as the panel's own setting and as the older way of saying "one retry, at this
@@ -261,6 +275,11 @@ public sealed record PanelSettings
         PerProviderConcurrency = IntVar(env, "COAI_MAX_PER_PROVIDER", 2),
         LocalConcurrency = IntVar(env, "COAI_LOCAL_CONCURRENCY", 1),
         ReviewerTimeout = TimeSpan.FromMinutes(IntVar(env, "COAI_REVIEWER_TIMEOUT_MINUTES", 10)),
+        // `CountVar` rather than `IntVar`, because ZERO is the meaningful value here: it means
+        // "derive it from the round's shape". IntVar refuses anything below one and would have
+        // turned a deliberate zero into a default nobody chose — the same disagreement between the
+        // two halves that CountVar was written for.
+        RoundTimeout = TimeSpan.FromMinutes(CountVar(env, "COAI_ROUND_TIMEOUT_MINUTES", 0)),
         RateLimitBackoff = TimeSpan.FromSeconds(IntVar(env, "COAI_RATE_LIMIT_BACKOFF_SECONDS", 15)),
         RetryLadder = LadderFrom(env),
         // Seconds win when set: minutes are the setting a person configures, seconds are for a
