@@ -43,12 +43,18 @@ function html(vendors: readonly Vendor[]): string {
  * pushed the price inputs out of that window — two tests failed for a reason that had nothing to do
  * with what they assert. A magic offset is a test that breaks when the markup grows; a boundary is
  * one that does not.</p>
+ *
+ * <p>The boundary is the opening tag WITHOUT its closing bracket, for the same reason one step
+ * further on: the card gained a `style` attribute when reviewer cards started carrying their
+ * vendor's colour, and a boundary that spelled the whole tag stopped matching — five tests failed
+ * over a colour none of them assert.</p>
  */
 function rowOf(page: string, id: string): string {
+  const card = '<div class="vendor"';
   const anchor = page.indexOf(`data-setting="enabled" data-vendor="${id}"`);
   assert.notEqual(anchor, -1, `${id} has no row`);
-  const start = page.lastIndexOf('<div class="vendor">', anchor);
-  const next = page.indexOf('<div class="vendor">', anchor);
+  const start = page.lastIndexOf(card, anchor);
+  const next = page.indexOf(card, anchor);
 
   return page.slice(start, next === -1 ? undefined : next);
 }
