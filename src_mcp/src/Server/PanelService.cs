@@ -545,7 +545,7 @@ public sealed partial class PanelService
             //
             // Whichever fires first still wins, so a person cancelling still cancels and the
             // deadline cannot outlive its caller.
-            var deadline = RoundDeadlineFor(work.Count, started.Elapsed);
+            var (budget, deadline) = RoundDeadlineFor(work.Count, started.Elapsed);
             using var clock = new CancellationTokenSource(deadline);
             using var roundClock = CancellationTokenSource.CreateLinkedTokenSource(ct, clock.Token);
 
@@ -578,8 +578,11 @@ public sealed partial class PanelService
                 // cancels at the moment the deadline strikes is reported as a person: the round was
                 // going to end either way, and blaming the clock for their decision is the wrong
                 // half of an ambiguity to keep.
+                // The WHOLE budget, not what was left of it after setup: "the round reached its 30
+                // minute limit" when the limit is forty is a sentence nobody can act on. Raised on
+                // the code round.
                 EndedByDeadline = clock.IsCancellationRequested && !ct.IsCancellationRequested
-                    ? deadline
+                    ? budget
                     : null,
             };
             var reviews = results.Select(r => r.Outcome).OfType<ReviewerOutcome.Ok>().Select(o => o.Review).ToList();
@@ -1086,7 +1089,8 @@ public sealed partial class PanelService
     /// <see cref="RoundBudget"/>. Shipping a fixed five or thirty minutes would cancel healthy
     /// rounds on a machine with more vendors than the person who chose the number had.
     /// </remarks>
-    private TimeSpan RoundDeadlineFor(int reviewers, TimeSpan spentOnSetup)
+    /// <returns>The whole budget, and what is left of it for the reviewers.</returns>
+    private (TimeSpan Whole, TimeSpan Left) RoundDeadlineFor(int reviewers, TimeSpan spentOnSetup)
     {
         var whole = _settings.RoundTimeout > TimeSpan.Zero
             ? _settings.RoundTimeout
@@ -1104,12 +1108,22 @@ public sealed partial class PanelService
                 whole.TotalMinutes, _settings.ReviewerTimeout.TotalMinutes);
         }
 
-        // What is LEFT of it, because the clock started when the stage did. Never below zero, and
-        // never so small that the reviewers are cancelled before they start: a setup that has
-        // already eaten the whole budget means the budget was wrong, not that the round is over.
+        // What is LEFT of it, because the clock started when the stage did — and NOT floored at a
+        // reviewer's own deadline. The first draft floored everything, which quietly turned an
+        // explicit five minutes into ten while warning that reviewers would be cut off: a setting
+        // ignored and a warning that lied about the same number. Two reviewers caught it.
+        //
+        // The derived path has its floor already, inside `RoundBudget`, where it belongs: a
+        // DERIVATION should never produce a budget that cannot finish one reviewer. A person who
+        // types a smaller number has said what they want, and is told what it costs.
+        //
+        // Zero rather than negative when setup ate the whole budget: a `CancellationTokenSource`
+        // refuses a negative delay and would throw before any reviewer started, turning a slow
+        // checkout into a crash. Zero cancels at once, which is the honest outcome — the round's
+        // time was spent getting ready for it.
         var left = whole - spentOnSetup;
 
-        return left > _settings.ReviewerTimeout ? left : _settings.ReviewerTimeout;
+        return (whole, left > TimeSpan.Zero ? left : TimeSpan.Zero);
     }
 
     /// <summary>Whether the caller may go and build: an order to split follows permission.</summary>

@@ -109,4 +109,42 @@ public sealed class RoundBudgetTests
                 "a single reviewer allowed longer than the ceiling is a deliberate setting, and "
                 + "capping under it would cancel that reviewer before its first attempt");
     }
+
+    /// <summary>
+    /// The two paths a budget can come from, and the floor that belongs to only one of them.
+    /// </summary>
+    /// <remarks>
+    /// The first draft floored EVERYTHING at one reviewer timeout, including a number a person had
+    /// typed — so an explicit five minutes silently became ten, while the panel warned that
+    /// reviewers would be cut off. A setting ignored and a warning that lied about the same number.
+    /// Two reviewers on the code round caught it.
+    /// </remarks>
+    [Fact]
+    public void TheFloorBelongsToTheDERIVATION_NotToANumberSomebodyTyped()
+    {
+        // The derivation cannot produce a budget too small to finish one reviewer...
+        RoundBudget.For(TenMinutes, reviewers: 1, concurrency: 99)
+            .Should().BeGreaterThanOrEqualTo(TenMinutes);
+
+        // ...and there is no path through it that returns less than the reviewer timeout it was
+        // given, which is the property the caller relies on when it stops flooring.
+        foreach (var reviewers in (int[])[0, 1, 2, 12, 40])
+        {
+            RoundBudget.For(TenMinutes, reviewers, concurrency: 100)
+                .Should().BeGreaterThanOrEqualTo(TenMinutes, $"{reviewers} reviewers on a wide machine");
+        }
+    }
+
+    [Fact]
+    public void APatientReviewerAndAWideRound_DoNotOverflowOnTheWayToTheCeiling()
+    {
+        // `TimeSpan.op_Multiply` throws on overflow, so the check has to happen BEFORE the
+        // multiplication — otherwise the derivation crashes on its way to the ceiling that exists
+        // to catch exactly this. Raised on the code round.
+        var patient = TimeSpan.FromMinutes(int.MaxValue);
+
+        var budget = RoundBudget.For(patient, reviewers: 1000, concurrency: 1);
+
+        budget.Should().BeGreaterThan(TimeSpan.Zero, "it returns a number rather than throwing");
+    }
 }

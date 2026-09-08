@@ -30,7 +30,11 @@ public static class RoundBudget
         // A configured zero is a configuration mistake, not a way to make a round instantaneous or
         // infinite — the same reading `BoundedScheduler` gives its own caps.
         var waves = Math.Max(1, (int)Math.Ceiling(Math.Max(1, reviewers) / (double)Math.Max(1, concurrency)));
-        var derived = reviewerTimeout * waves;
+
+        // Checked BEFORE multiplying rather than after. `TimeSpan.op_Multiply` throws on overflow,
+        // so a patient reviewer timeout and a wide round would have crashed the derivation on the
+        // way to the ceiling that exists to catch exactly that. Raised on the code round.
+        var derived = reviewerTimeout > Ceiling / waves ? Ceiling : reviewerTimeout * waves;
 
         // Capped, because a derivation with no ceiling is a way to build a round nobody is waiting
         // for any more: an hour per reviewer at a concurrency of one and twenty reviewers is twenty

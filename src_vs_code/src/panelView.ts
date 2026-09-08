@@ -789,7 +789,11 @@ function roundLimitNote(s: CoaiSettings, enabledVendors: number): string {
   const reviewers = Math.max(1, enabledVendors) * ROLES.filter((r) => r.stage === 'code').length;
   const waves = Math.max(1, Math.ceil(reviewers / Math.max(1, s.maxConcurrency)));
 
-  return `worked out: ${waves} wave${waves === 1 ? '' : 's'} × ${s.reviewerTimeoutMinutes} min `
+  // "AT MOST", because the server derives from the reviewers a round ACTUALLY schedules, and it
+  // schedules fewer than this in two cases the panel cannot see from here: a repository that wrote
+  // no rules down loses its Conventions reviewers, and a plan round runs one role rather than four.
+  // The fan-out sentence above carries the same hedge for the same reason.
+  return `worked out: at most ${waves} wave${waves === 1 ? '' : 's'} × ${s.reviewerTimeoutMinutes} min `
     + `= ${waves * s.reviewerTimeoutMinutes} min`;
 }
 
