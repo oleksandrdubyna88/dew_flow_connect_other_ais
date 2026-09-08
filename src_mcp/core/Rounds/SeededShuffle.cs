@@ -17,7 +17,12 @@ namespace CoaiMcp.Core.Rounds;
 public static class SeededShuffle
 {
     /// <summary>A new list in a random order drawn from <paramref name="random"/>.</summary>
-    public static List<T> Of<T>(IReadOnlyList<T> items, Random random)
+    /// <remarks>
+    /// Read-only on the way out: a caller who could reorder the result in place would make the
+    /// reproducibility this exists for a promise about the first line of the call site rather than
+    /// about the value. The copy stays inside.
+    /// </remarks>
+    public static IReadOnlyList<T> Of<T>(IReadOnlyList<T> items, Random random)
     {
         var order = items.ToList();
         for (var i = order.Count - 1; i > 0; i--)
@@ -30,5 +35,5 @@ public static class SeededShuffle
     }
 
     /// <summary>The same seed always produces the same order.</summary>
-    public static List<T> Of<T>(IReadOnlyList<T> items, int seed) => Of(items, new Random(seed));
+    public static IReadOnlyList<T> Of<T>(IReadOnlyList<T> items, int seed) => Of(items, new Random(seed));
 }
