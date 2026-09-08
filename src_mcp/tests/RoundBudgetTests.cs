@@ -147,4 +147,43 @@ public sealed class RoundBudgetTests
 
         budget.Should().BeGreaterThan(TimeSpan.Zero, "it returns a number rather than throwing");
     }
+
+    /// <summary>
+    /// A budget no timer can express is not a longer deadline — it is a crash before the round.
+    /// </summary>
+    /// <remarks>
+    /// `CancellationTokenSource` takes its delay in milliseconds as an int, so it refuses anything
+    /// past about 24.8 days. `COAI_ROUND_TIMEOUT_MINUTES=80000` is 55 days, and it would have thrown
+    /// before a single reviewer started: a configuration value crashing the round it was meant to
+    /// bound. Raised on the code round.
+    /// </remarks>
+    [Fact]
+    public void ABudgetPastWhatATimerHolds_IsBroughtInside()
+    {
+        RoundBudget.Expressible(TimeSpan.FromMinutes(80_000)).Should().Be(RoundBudget.TimerMaximum);
+        RoundBudget.Expressible(TimeSpan.FromDays(365)).Should().Be(RoundBudget.TimerMaximum);
+    }
+
+    [Fact]
+    public void AnOrdinaryBudget_PassesThroughUntouched()
+    {
+        // The guard on the other side: a clamp that moved real numbers would be a second policy
+        // wearing a platform limit's clothes.
+        RoundBudget.Expressible(TenMinutes).Should().Be(TenMinutes);
+        RoundBudget.Expressible(RoundBudget.Ceiling).Should().Be(RoundBudget.Ceiling);
+    }
+
+    [Fact]
+    public void TheTimerMaximum_IsSomethingACancellationTokenSourceAccepts()
+    {
+        // Asserted against the real type rather than against a number I believe about it: the
+        // constant exists to keep this constructor from throwing, so this is the only check of it
+        // that means anything.
+        var act = () =>
+        {
+            using var source = new CancellationTokenSource(RoundBudget.TimerMaximum);
+        };
+
+        act.Should().NotThrow();
+    }
 }

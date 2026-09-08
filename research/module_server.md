@@ -426,7 +426,7 @@ product's own rounds, where the plan stage passed at two and the code stage neve
 legacy `COAI_MAX_ROUNDS` / `COAI_GATE_THRESHOLD` become the value for BOTH stages rather than being
 dropped.
 
-**A ROUND has a deadline too (2026-09-08).** A reviewer was bounded and a round was not — and the
+**A ROUND has a deadline too ([PLAN_a_round_has_a_deadline_too.md](PLAN_a_round_has_a_deadline_too.md), 2026-09-08).** A reviewer was bounded and a round was not — and the
 round is what a person watches, so one could run for a long time while every reviewer inside it
 behaved. `RunStageAsync` links a `CancellationTokenSource` for the round's own budget: whichever
 fires first wins, so a person cancelling still cancels and the deadline cannot outlive its caller.

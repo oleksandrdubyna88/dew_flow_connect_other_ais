@@ -54,4 +54,22 @@ public static class RoundBudget
 
     /// <summary>The longest a DERIVED budget may reach. An explicit setting is the operator's own.</summary>
     public static readonly TimeSpan Ceiling = TimeSpan.FromHours(8);
+
+    /// <summary>
+    /// The longest ANY budget may be, explicit ones included — a platform limit, not a policy.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>CancellationTokenSource</c> takes its delay in milliseconds as an <c>int</c>, so it
+    /// refuses anything past about 24.8 days. `COAI_ROUND_TIMEOUT_MINUTES=80000` is 55 days and
+    /// would have thrown before a single reviewer started — a configuration value crashing the round
+    /// it was meant to bound. Raised on the code round.</para>
+    /// <para>This is not the ceiling above overruling the operator. A number the timer cannot
+    /// express is not a longer deadline; it is no deadline at all, and clamping is the only reading
+    /// that keeps the round running.</para>
+    /// </remarks>
+    public static readonly TimeSpan TimerMaximum = TimeSpan.FromDays(24);
+
+    /// <summary>Any budget, brought inside what a timer can actually hold.</summary>
+    public static TimeSpan Expressible(TimeSpan budget) =>
+        budget > TimerMaximum ? TimerMaximum : budget;
 }
