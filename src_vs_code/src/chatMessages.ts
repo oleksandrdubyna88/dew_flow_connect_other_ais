@@ -7,9 +7,15 @@
  * send quietly ignored, or delivered somewhere else. So the DECISION moved here and the `vscode` half
  * kept only the wiring, which is the part a test genuinely cannot reach.</p>
  *
- * <p>The page and the host ship in one `.vsix` today, but a webview retained across a reload can be
- * older than the extension that talks to it. An unknown message is therefore ignored rather than
- * thrown on: the older half must not break because the newer one learned a word.</p>
+ * <p><b>An unknown message is IGNORED, and that is a deliberate exception to a written rule.</b>
+ * `coding-style.md` says an unknown name fails naming the legal values rather than falling back
+ * silently, and that rule is right where it was written: a SETTING somebody typed, where a silent
+ * fallback hides a typo until the behaviour surprises them. This is not that boundary. A webview
+ * retained across a reload can be older — or newer — than the extension talking to it, and a host
+ * that refused a word it did not know would break the half that had done nothing wrong. The values
+ * are enumerated in `ChatCommand` and every one of them is tested, including the unknown case; what
+ * is silent is the ignoring, not the vocabulary. (codex, the code round, asked for this reconciled
+ * explicitly rather than left as two rules pointing opposite ways.)</p>
  */
 
 /** Anything the page might post. Every field optional, because the page is not to be trusted. */
@@ -38,11 +44,20 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-/** The zoom control posts its own shape, and it is not a `command`. */
+/**
+ * The zoom control posts its own shape, and it is not a `command`.
+ *
+ * <p>The delta is CLAMPED to one step, not merely checked for finiteness. `applyZoomDelta` clamps
+ * the resulting scale, so a huge value could not have broken the layout — but it would have jumped
+ * the size to a bound in one message, from a surface the host does not control. The control itself
+ * only ever sends ±1, so anything else is not a zoom. (gemini, the code round.)</p>
+ */
 function zoomOf(message: PageMessage): ChatCommand {
-  const delta = typeof message.delta === 'number' && Number.isFinite(message.delta) ? message.delta : 0;
+  if (typeof message.delta !== 'number' || !Number.isFinite(message.delta)) {
+    return { kind: 'zoom', delta: 0 };
+  }
 
-  return { kind: 'zoom', delta };
+  return { kind: 'zoom', delta: Math.max(-1, Math.min(1, Math.trunc(message.delta))) };
 }
 
 /**

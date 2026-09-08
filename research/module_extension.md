@@ -3,6 +3,27 @@
 > `src_vs_code` — the human surface. Four commands, zero runtime dependencies, no background work
 > and **no port**: the review itself lives in `coai-mcp`, which an MCP client owns and starts.
 
+### What the code round did to the chat tab (2026-09-08)
+
+Twelve reviewers read epic 2 and found two real defects in it, both of the same family: something
+that survives longer than the thing it was named after.
+
+A panel’s callbacks closed over the TAB KEY they were created with. When `sessionKey` re-keys a
+conversation onto a replacement tab object, every message from that page was then looked up under a
+key nobody held: sends dropped silently, and a close that could not find its entry left the vendor
+process running. A conversation now carries its own `id`, made once in `createChatPanel` and never
+replaced; hooks take the id, only the map takes the key.
+
+And `closeAll` disposed sessions without disposing panels. On a tab close that is right — VS Code
+has already disposed the panel — but deactivation is not a tab closing, and it left tabs open whose
+composer still took text with nothing behind it. `closeAll` now removes the entry FIRST and then
+disposes both, so the `onDidDispose` it triggers finds nothing and cannot dispose a session twice.
+
+Four smaller ones came with them: the model now travels in a pushed state (after `continue with a
+local model` the page would otherwise still show the remote one as selected while answers came from
+somewhere else), a pushed state that has not changed is not sent at all, a `pick` naming a model the
+conversation was never offered is refused at the host boundary rather than trusted, and the
+composer takes focus back when a turn ends — without which every follow-up costs a mouse click.
 ### One webview per SESSION, which no other page in here does (2026-09-08)
 
 Every other webview in this extension is a singleton — the rounds log and the help page each keep
