@@ -150,7 +150,12 @@ public sealed class RoundMachineTests
     {
         // Before exhaustion the gate decides, not the flag: a model must not skip the loop by
         // claiming permission it was never given.
-        var awaiting = ((Transition.Ok)RoundMachine.CompleteRound(Fresh(), Failing(), AllSix)).State;
+        // The config is explicit because the rule is "while rounds REMAIN": on the shipped
+        // single-round default there are none left after the first, and the override is then
+        // legitimately honoured rather than refused. Stating the budget is what keeps this test
+        // about the override instead of about a default.
+        var patient = new PanelConfig(new Dictionary<string, RoleGate> { ["PlanCritique"] = new(3, 2) });
+        var awaiting = ((Transition.Ok)RoundMachine.CompleteRound(Fresh(patient), Failing(), AllSix)).State;
 
         RoundMachine.Resolve(awaiting, [], humanSaysProceed: true)
             .Should().BeOfType<Transition.Refused>()
@@ -203,7 +208,10 @@ public sealed class RoundMachineTests
     {
         var partial = new ReviewerSummary(6, 4, ["gemini/perf: timeout", "codex/security: rate limited"]);
 
-        var ok = (Transition.Ok)RoundMachine.CompleteRound(Fresh(), Failing(), partial);
+        // A round must remain for the verdict to be Revise at all — with the shipped one-round
+        // budget the stage is spent and escalates, which says nothing about partial failures.
+        var patient = new PanelConfig(new Dictionary<string, RoleGate> { ["PlanCritique"] = new(3, 2) });
+        var ok = (Transition.Ok)RoundMachine.CompleteRound(Fresh(patient), Failing(), partial);
 
         var revise = ok.Verdict.Should().BeOfType<RoundVerdict.Revise>().Subject;
         revise.Reviewers.Sentence.Should().Contain("4 of 6").And.Contain("timeout");

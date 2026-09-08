@@ -23,19 +23,26 @@ public sealed class StageGateTests
     [Fact]
     public void EachStage_ReadsItsOwnNumbers()
     {
-        var config = new PanelConfig(new Dictionary<string, RoleGate> { ["PlanCritique"] = new(3, 2), ["Architecture"] = new(3, 3), ["SecurityReliability"] = new(3, 3), ["UxDxPerformance"] = new(3, 3) });
+        // Every code role is named. A stage's threshold is the WIDEST of its roles, so a role left
+        // out of this dictionary would answer from the shipped default and quietly set the number
+        // under test — which is exactly what happened when Conventions became the fourth code role.
+        var config = new PanelConfig(new Dictionary<string, RoleGate> { ["PlanCritique"] = new(3, 2), ["Conventions"] = new(3, 3), ["Architecture"] = new(3, 3), ["SecurityReliability"] = new(3, 3), ["UxDxPerformance"] = new(3, 3) });
 
         config.For(Stage.PlanReview).Threshold.Should().Be(2);
         config.For(Stage.CodeReview).Threshold.Should().Be(3, "a diff is not a document");
     }
 
     [Fact]
-    public void TheShippedDefaults_AreStricterOnThePlanThanOnTheDiff()
+    public void TheShippedDefaults_GiveEachStageOneRound()
     {
+        // One round, because the second and third re-raise what the first found rather than finding
+        // more; the thresholds are high because a gate that blocks every real change is a gate
+        // people route around. The plan is the LOOSER of the two now — it was the stricter one for
+        // as long as the plan stage had three rounds to spend.
         var config = new PanelConfig();
 
-        config.For(Stage.PlanReview).Should().Be(new StageGate(3, 2));
-        config.For(Stage.CodeReview).Should().Be(new StageGate(2, 3));
+        config.For(Stage.PlanReview).Should().Be(new StageGate(1, 6));
+        config.For(Stage.CodeReview).Should().Be(new StageGate(1, 5));
     }
 
     [Fact]
@@ -43,7 +50,8 @@ public sealed class StageGateTests
     {
         var config = new PanelConfig() with { Roles = new Dictionary<string, RoleGate> { ["PlanCritique"] = PanelConfig.PlanDefault, ["Architecture"] = new(3, 6), ["SecurityReliability"] = new(3, 6), ["UxDxPerformance"] = new(3, 6) } };
 
-        config.For(Stage.PlanReview).Threshold.Should().Be(2, "the stages are independent or they are not split");
+        config.For(Stage.PlanReview).Threshold.Should().Be(PanelConfig.PlanDefault.Threshold,
+            "the stages are independent or they are not split");
     }
 
     // ---------- the machine picks the gate; no call site chooses by hand ----------
@@ -60,14 +68,24 @@ public sealed class StageGateTests
     }
 
     [Fact]
-    public void ThePlanStage_WithThreeFindings_StillRevises()
+    public void AStageOverItsOwnThreshold_Revises_WhateverTheOtherStagesIs()
     {
-        var state = new SessionState("s", "D:/r", "main", new PanelConfig());
+        // Written against the SHIPPED plan threshold until that threshold moved to six and three
+        // findings started passing — the test then proved nothing about the rule it was named for.
+        // The gate under test is "over ITS threshold revises", so the threshold is stated here.
+        var config = new PanelConfig(new Dictionary<string, RoleGate>
+        {
+            ["PlanCritique"] = new(3, 2),
+            ["Conventions"] = new(1, 9), ["Architecture"] = new(1, 9),
+            ["SecurityReliability"] = new(1, 9), ["UxDxPerformance"] = new(1, 9),
+        });
+        var state = new SessionState("s", "D:/r", "main", config);
         var three = GateRule.Evaluate(
             [Gating("a"), Gating("b"), Gating("c")], [], state.Config.For(state.Stage).Threshold);
 
         var ok = (Transition.Ok)RoundMachine.CompleteRound(state, three, ReviewerSummary.AllAnswered(2));
-        ok.Verdict.Should().BeOfType<RoundVerdict.Revise>();
+        ok.Verdict.Should().BeOfType<RoundVerdict.Revise>(
+            "three findings is over the plan's threshold of two, and a round remains");
     }
 
     // ---------- a person who set the old keys does not get a changed gate ----------

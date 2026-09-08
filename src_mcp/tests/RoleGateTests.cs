@@ -11,9 +11,9 @@ namespace CoaiMcp.Tests;
 /// Rounds and threshold belong to a ROLE, not to a stage.
 /// </summary>
 /// <remarks>
-/// <para>The three code reviewers do different jobs and deserve different budgets: architecture may
-/// be worth two passes with different lenses, security three, performance one. One number for the
-/// whole stage forces the cheapest role to pay for the most expensive one.</para>
+/// <para>The four code reviewers do different jobs and deserve different budgets: architecture may
+/// be worth two passes with different lenses, security three, performance one, conventions one. One
+/// number for the whole stage forces the cheapest role to pay for the most expensive one.</para>
 /// <para>The consequence is that a finding must be counted against the threshold of the role that
 /// RAISED it, which is why <see cref="Finding.Role"/> exists.</para>
 /// </remarks>
@@ -59,9 +59,15 @@ public sealed class RoleGateTests
             (PromptCatalog.SecurityRole, 3, 3),
             (PromptCatalog.UxDxRole, 1, 3));
 
-        config.RolesForRound(Stage.CodeReview, round: 1).Should().HaveCount(3);
+        // Conventions is not in the config above and takes part anyway, on its DEFAULT gate — an
+        // unconfigured role is a role nobody changed, not a role nobody wants. This assertion used
+        // to be a bare `HaveCount(3)` and went red the day Conventions became a role; naming the
+        // roles is what makes the next addition read as a decision instead of an off-by-one.
+        config.RolesForRound(Stage.CodeReview, round: 1).Should().BeEquivalentTo(
+            [PromptCatalog.ConventionsRole, PromptCatalog.ArchitectureRole, PromptCatalog.SecurityRole, PromptCatalog.UxDxRole]);
         config.RolesForRound(Stage.CodeReview, round: 2).Should().BeEquivalentTo(
-            [PromptCatalog.ArchitectureRole, PromptCatalog.SecurityRole], "performance had one round");
+            [PromptCatalog.ArchitectureRole, PromptCatalog.SecurityRole],
+            "performance had one round, and conventions defaults to one");
         config.RolesForRound(Stage.CodeReview, round: 3).Should().BeEquivalentTo([PromptCatalog.SecurityRole]);
     }
 
@@ -140,12 +146,19 @@ public sealed class RoleGateTests
     }
 
     [Fact]
-    public void TheShippedDefaults_AreStillStricterOnThePlanThanOnTheDiff()
+    public void TheShippedDefaults_AreOneRoundEverywhere_AndAreThePanelsNumbers()
     {
+        // These four numbers are also the panel's DEFAULTS, and that is load-bearing rather than
+        // tidy: the panel writes a COAI_ROUNDS_* key only where the value DIFFERS from its own
+        // default, so a pristine install sends none and THIS is what runs. The two disagreed for a
+        // day — panel showing one round, server running three. `panelServerDefaultsAgreement.test.ts`
+        // reads these constants out of the C# and fails when they drift again.
         var config = new PanelConfig();
 
-        config.For(PromptCatalog.PlanRole).Should().Be(new RoleGate(3, 2));
-        config.For(PromptCatalog.ArchitectureRole).Threshold.Should().Be(3);
+        config.For(PromptCatalog.PlanRole).Should().Be(new RoleGate(1, 6));
+        config.For(PromptCatalog.ArchitectureRole).Should().Be(new RoleGate(1, 5));
+        config.For(PromptCatalog.ConventionsRole).Should().Be(new RoleGate(1, 5),
+            "a role nobody configured runs on the code default like every other code role");
     }
 
     [Fact]

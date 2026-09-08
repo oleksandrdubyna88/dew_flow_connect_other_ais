@@ -106,7 +106,8 @@ public sealed class SettingsReachTheServerTests : IDisposable
         // The panel writes the file again without that key, which is what returning a control to its
         // default looks like from here.
         PanelWrites();
-        host.Current.Settings.Rounds.For(Stage.PlanReview).MaxRounds.Should().Be(3, "a key that is gone is a value back at its default");
+        host.Current.Settings.Rounds.For(Stage.PlanReview).MaxRounds.Should().Be(
+            PanelConfig.PlanDefault.MaxRounds, "a key that is gone is a value back at its default");
     }
 
     [Fact]
