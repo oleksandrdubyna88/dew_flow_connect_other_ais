@@ -1,5 +1,26 @@
 # Changelog
 
+## Extension 0.31.12 — 2026-09-08
+
+**Switching the model in a chat tab now takes the conversation with it.** Both the questions and
+the answers: the model you switch to carries on from where the last one stopped, instead of
+starting again with nothing.
+
+A vendor CLI keeps its context inside its own process — there is no transcript to hand over and no
+session to resume — so the only way across is to say it all again. That happens once, inside your
+next question, and never again: from there the new process remembers exactly as the old one did.
+Nothing is sent at the moment you switch, so moving a conversation and then not continuing it costs
+nothing at all.
+
+What travels is bounded at 60 000 characters, newest first, and if a conversation is longer than
+that the turn says so rather than being silently cut by the vendor. A single answer bigger than the
+whole budget is cut with a marker instead of dropped. And because the conversation being carried is
+another AI's text, it is fenced with a one-time delimiter and every line is indented under whoever
+said it: a line inside an answer that reads like a new question cannot become one.
+
+A switch that cannot be made says so instead of leaving you on the old model quietly, and a switch
+asked for while an answer is still arriving tells you it is waiting for that answer first.
+
 ## Extension 0.31.11 — 2026-09-08
 
 **The rounds log gets its findings back.** The *What it keeps missing* tab was empty and the table
@@ -26,8 +47,6 @@ This one went through the product's own gate twice, and the code round is worth 
 reviewers found that the fix had reintroduced its own defect in its fallback path — pushes at a page
 that could not receive them were still being recorded as delivered. Four of them said so
 independently, from three different roles.
-
-## Extension 0.31.10 — 2026-09-08
 
 **Ask another vendor’s model about a passage, without leaving the editor.** Select a paragraph in
 your assistant’s answer, press `Ctrl+Alt+A`, and a tab opens — named after that assistant session —
