@@ -79,6 +79,27 @@ public sealed class ConventionsPassTests
             .Id.Should().Be("arch-boundaries");
     }
 
+    /// <summary>
+    /// The saved configuration of somebody who chose `Conventions` under Architecture yesterday.
+    /// </summary>
+    /// <remarks>
+    /// Two reviewers on the plan round asked what happens to that stored selection now that the
+    /// prompt has left the three code roles. Nothing needs to happen: an id that is not in the
+    /// role's list falls back to the role's own universal question, which is the same rule that
+    /// covers a renamed prompt. It is asserted by NAME here because "a stale value falls back" is
+    /// the generic sentence, and this is the specific selection this change orphaned.
+    /// </remarks>
+    [Fact]
+    public void AStoredConventionsChoice_UnderARoleThatNoLongerOffersIt_FallsBackToThatRolesOwnQuestion()
+    {
+        foreach (var role in (string[])[PromptCatalog.ArchitectureRole, PromptCatalog.SecurityRole, PromptCatalog.UxDxRole])
+        {
+            PromptCatalog.ForRound(role, 1, [PromptCatalog.ConventionsId])
+                .Id.Should().Be(PromptCatalog.For(role).First(p => p.Universal).Id,
+                    $"{role} no longer offers the conventions prompt, so a saved choice of it is stale");
+        }
+    }
+
     [Fact]
     public void AnUnknownChoice_FallsBackRatherThanLeavingTheRoundWithNothing()
     {

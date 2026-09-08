@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CONVENTIONS_ROLE_SINCE, selectedFor, universalFor } from '../prompts';
+import { CONVENTIONS_ID, CONVENTIONS_ROLE_SINCE, selectedFor, universalFor } from '../prompts';
 import { panelHtml, PanelState } from '../panelView';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
@@ -118,4 +118,19 @@ test('an explicit choice is still what is shown', () => {
     selectedFor('Architecture', 2, { Architecture: ['architecture', 'arch-evolution'] }),
     'arch-evolution',
   );
+});
+
+/**
+ * The saved configuration of somebody who chose Conventions under Architecture yesterday.
+ *
+ * <p>Two reviewers on the plan round asked what becomes of that stored selection now that the
+ * prompt has left the three code roles: silently ignored, or a round that fails on an id nobody
+ * offers? Neither — it falls back to the role's own universal question, by the same rule that
+ * covers a renamed prompt. Asserted by NAME because the generic sentence is already tested and
+ * this is the specific selection this change orphaned. Its twin is `ConventionsPassTests`.</p>
+ */
+test('a saved Conventions choice under a role that no longer offers it falls back', () => {
+  for (const role of ['Architecture', 'SecurityReliability', 'UxDxPerformance']) {
+    assert.equal(selectedFor(role, 1, { [role]: [CONVENTIONS_ID] }), universalFor(role).id);
+  }
 });
