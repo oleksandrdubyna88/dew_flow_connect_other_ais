@@ -238,3 +238,100 @@ test('the fixture lands on the local day the page opens on', () => {
       `the fixture's ${what} stamp is not on today's local day, so the page opens with it filtered out`);
   }
 });
+
+/* ------------------------------------------------------------------------------------------------
+ * The SECOND page. Until 2026-09-08 this file bundled one module, so "a page module imports nothing
+ * from the host" was a rule the chat page could have broken on its first day without anything
+ * noticing. The split adds a parameter rather than a copy: one bundler, two entry points.
+ * ---------------------------------------------------------------------------------------------- */
+
+/** Bundles one module the way `npm run bundle` does, and returns the text esbuild produced. */
+function bundleOf(module_: string, exported: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-bundle-'));
+  const entry = path.join(dir, 'entry.mjs');
+  const out = path.join(dir, 'bundle.cjs');
+  fs.writeFileSync(entry, `export { ${exported} } from ${JSON.stringify(path.join(ROOT, 'src', module_))};\n`);
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const esbuild = require('esbuild') as { buildSync: (options: Record<string, unknown>) => void };
+  esbuild.buildSync({
+    entryPoints: [entry], outfile: out, bundle: true, format: 'cjs', platform: 'node', minify: true,
+  });
+  const bundle = fs.readFileSync(out, 'utf8');
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  return bundle;
+}
+
+/** The chat page as it ships: bundled, minified, then rendered. */
+function bundledChatPage(): { bundle: string; html: string } {
+  const bundle = bundleOf('chatPage.ts', 'chatPageHtml');
+  const shim = { exports: {} as Record<string, unknown> };
+  new Function('module', 'exports', bundle)(shim, shim.exports);
+  const module_ = shim.exports as unknown as {
+    chatPageHtml: (state: unknown, nonce: string) => string;
+  };
+  const html = module_.chatPageHtml(
+    {
+      title: 'привет',
+      passage: 'The reviewers are read-only.',
+      messages: [{ role: 'model', text: 'because the worktree is pinned' }],
+      models: [
+        { id: 'antigravity', label: 'Gemini', caption: 'local' },
+        { id: 'remsoftdev-codex', label: 'GPT (team)', caption: 'remote · no memory' },
+      ],
+      modelId: 'antigravity',
+      running: false,
+      failure: '',
+      uiScale: 0,
+    },
+    'n0nce',
+  );
+
+  return { bundle, html };
+}
+
+test('the chat page carries nothing from the host into the webview', () => {
+  const { bundle } = bundledChatPage();
+
+  // The rule, as a check. A page module that reaches for `node:child_process` would be shipped into
+  // a webview that has no such thing, and the failure is a blank tab with a console nobody opens.
+  //
+  // WHAT THIS DOES NOT CATCH, measured by breaking it on purpose: a DEAD import. esbuild tree-shakes
+  // an import nothing on the rendering path uses, and the built-in disappears from the bundle with
+  // it — so `export const leak = spawn` passed this test while `spawn()` inside `chatPageHtml` fails
+  // both of these. That is the right boundary for a bundle check (it asserts on what SHIPS, and a
+  // dead import ships nothing) but it is not the boundary the sentence above implies, so it is
+  // written down rather than left to be re-discovered.
+  assert.ok(!bundle.includes('require("node:'), 'the chat page bundle pulled in a node built-in');
+  assert.ok(!bundle.includes('child_process'), 'the chat page bundle mentions child_process');
+});
+
+test('the chat page script the bundle produces parses and runs', () => {
+  const { html } = bundledChatPage();
+  const script = html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
+  const body = script.slice(script.indexOf('>') + 1);
+
+  assert.doesNotThrow(() => new Function(body), 'the chat page script is not valid JavaScript');
+
+  const seen: Record<string, Record<string, unknown>> = {};
+  const element = (): Record<string, unknown> => ({
+    innerHTML: '', textContent: '', value: '', disabled: false, hidden: false,
+    addEventListener() {}, dataset: {}, style: {},
+  });
+  const document_ = {
+    getElementById: (id: string) => (seen[id] ??= element()),
+    querySelectorAll: () => [],
+    body: { style: {} },
+    addEventListener() {},
+  };
+  const window_: Record<string, unknown> = { addEventListener() {} };
+
+  assert.doesNotThrow(
+    () => new Function('document', 'window', 'acquireVsCodeApi', body)(
+      document_, window_, () => ({ postMessage() {} })),
+    'the chat page script threw on its first render',
+  );
+  // The trap must be installed, not merely written: a webview swallows a thrown error, and a page
+  // that stops answering Enter with no sign of why is the defect it exists to name.
+  assert.strictEqual(typeof window_['onerror'], 'function', 'the page installed no error trap');
+});
