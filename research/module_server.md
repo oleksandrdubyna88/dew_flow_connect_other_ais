@@ -440,6 +440,16 @@ was named for making them the ones that run. `panelServerDefaultsAgreement.test.
 constants out of `SessionState.cs` rather than transcribing them, and a second test asserts that a
 default panel writes no gate key at all.
 
+**The vendors are offered in a shuffled order (2026-09-08).** `BuildWork` builds a round
+vendor-major and the scheduler starts one task per row against one machine-wide semaphore, which
+hands slots out in the order they were asked for — so the list's order is the order reviewers reach
+a Team server, and every client ships the same vendor list. The providers are shuffled with the
+round's own seed (`StableSeed(sessionId, round)`, the seed the prompt deal already uses), so two
+sessions differ while one session replays. It SPREADS the load rather than guaranteeing distinct
+orders: with two vendors there are two possible orders and half of all client pairs still collide.
+Nothing on the server changes — `JobStore.TryClaim` is FIFO by design, and a fair queue fed in a
+biased order is fixed at the feeding end.
+
 **The reviewers are shown the project's own rules.** `RuleFiles.Collect` (in `runners/Context`) reads
 `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.claude/rules/**` and
 `.cursor/rules/**` from the WORKTREE — the rules as of the commit under review, not as of this

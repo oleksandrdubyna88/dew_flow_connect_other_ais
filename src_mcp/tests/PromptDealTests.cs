@@ -88,4 +88,48 @@ public sealed class PromptDealTests
     {
         PromptDeal.Deal([], TwoVendors, seed: 1).Should().BeEmpty();
     }
+
+    /// <summary>
+    /// The hand a seed deals is the hand it dealt before the two shuffles were merged.
+    /// </summary>
+    /// <remarks>
+    /// <para>Asked for on the plan round, and it was the right question: `PromptDeal`'s private
+    /// Fisher-Yates and `RuleFiles`' copy were folded into one `SeededShuffle`, and merging two
+    /// implementations picks ONE. If they had differed, a seed that used to deal a particular hand
+    /// would quietly deal another — breaking the replayability this class exists to provide, inside
+    /// the change that claimed to protect it.</para>
+    /// <para>They differed only in their SIGNATURES, and reading both loops is how I knew. This is
+    /// how the next person knows: the expected hand is produced by the ORIGINAL loop, written out
+    /// here rather than reduced to three magic strings, so a future change to the shared helper goes
+    /// red against the algorithm it replaced instead of against a constant nobody can re-derive.</para>
+    /// </remarks>
+    [Fact]
+    public void AFixedSeed_DealsTheHandItDealtBeforeTheShufflesWereMerged()
+    {
+        string[] items = ["a", "b", "c", "d", "e", "f"];
+        string[] vendors = ["codex", "gemini"];
+
+        // `PromptDeal.Shuffled` as it stood before the merge, verbatim.
+        static List<string> OriginalShuffle(IReadOnlyList<string> input, int seed)
+        {
+            var random = new Random(seed);
+            var order = input.ToList();
+            for (var i = order.Count - 1; i > 0; i--)
+            {
+                var j = random.Next(i + 1);
+                (order[i], order[j]) = (order[j], order[i]);
+            }
+
+            return order;
+        }
+
+        foreach (var seed in (int[])[1, 42, 2026, 7919])
+        {
+            var expected = OriginalShuffle(items, seed)
+                .Select((item, index) => $"{item}->{vendors[index % vendors.Length]}");
+
+            PromptDeal.Deal(items, vendors, seed).Select(d => $"{d.Item}->{d.Vendor}")
+                .Should().Equal(expected, $"seed {seed} must deal what it always dealt");
+        }
+    }
 }
