@@ -56,18 +56,29 @@ public sealed record PanelConfig(
     IReadOnlyDictionary<string, RoleGate>? Roles = null,
     StagePolicy OnExhausted = StagePolicy.Human)
 {
-    /// <summary>Three attempts, at most two findings open. A page of text can be got right.</summary>
-    public static readonly RoleGate PlanDefault = new(3, 2);
+    /// <summary>One attempt, at most six findings open.</summary>
+    /// <remarks>
+    /// <para>One round because the second and third re-raise what the first found rather than
+    /// finding more; six because the old bound sat where a real change could not pass, and a gate
+    /// that blocks everything is a gate people route around.</para>
+    /// <para><b>These numbers are also the panel's, and that is a requirement rather than a
+    /// coincidence.</b> The panel writes a `COAI_ROUNDS_*` key only when the value DIFFERS from its
+    /// own default, so a pristine configuration sends nothing and this fallback is what runs. While
+    /// the two disagreed — they did, for a day — the panel displayed one round and the server ran
+    /// three. `panelServerDefaultsAgreement.test.ts` reads these two lines and fails when they
+    /// drift.</para>
+    /// </remarks>
+    public static readonly RoleGate PlanDefault = new(1, 6);
 
-    /// <summary>Two attempts, at most three. A diff carries more than a plan does.</summary>
-    public static readonly RoleGate CodeDefault = new(2, 3);
+    /// <summary>One attempt, at most five. Mirrored by the panel — see <see cref="PlanDefault"/>.</summary>
+    public static readonly RoleGate CodeDefault = new(1, 5);
 
     /// <summary>The role names this config knows, in the order a round runs them.</summary>
     public static readonly string[] AllRoles =
-        ["PlanCritique", "Architecture", "SecurityReliability", "UxDxPerformance"];
+        ["PlanCritique", "Conventions", "Architecture", "SecurityReliability", "UxDxPerformance"];
 
     public static readonly string[] CodeRoleNames =
-        ["Architecture", "SecurityReliability", "UxDxPerformance"];
+        ["Conventions", "Architecture", "SecurityReliability", "UxDxPerformance"];
 
     public IReadOnlyDictionary<string, RoleGate> Roles { get; init; } = Roles ?? Defaults();
 

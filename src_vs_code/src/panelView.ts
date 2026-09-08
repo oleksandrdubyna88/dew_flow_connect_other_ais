@@ -776,6 +776,10 @@ function fanOut(state: PanelState): string {
   // Both numbers come from ROLES rather than from a literal beside a list of the same names. They
   // were a hardcoded `3` and a hardcoded array until Conventions became a role, and the sentence
   // then said "3 roles" while four boxes sat under it.
+  //
+  // "UP TO", because the server drops the Conventions reviewers in a repository that wrote no
+  // rules down, and the panel cannot know that: whether rules exist is decided at round time by
+  // looking in the worktree. Announcing four where three run is the mismatch a reviewer caught.
   const codeRoles = ROLES.filter((r) => r.stage === 'code');
   const reviewers = vendors * codeRoles.length;
   // Derived, not stored: it is the widest CODE role's budget, and a stored copy would be a
@@ -783,7 +787,7 @@ function fanOut(state: PanelState): string {
   const rounds = Math.max(1, ...codeRoles.map((r) => state.settings.rounds[r.id] ?? 1));
 
   return (
-    `${vendors} vendor${vendors === 1 ? '' : 's'} × ${codeRoles.length} roles = ${reviewers} reviewer${reviewers === 1 ? '' : 's'} ` +
+    `${vendors} vendor${vendors === 1 ? '' : 's'} × up to ${codeRoles.length} roles = ${reviewers} reviewer${reviewers === 1 ? '' : 's'} ` +
     `per round, each runs once per round, up to ${rounds} round${rounds === 1 ? '' : 's'}`
   );
 }
@@ -793,9 +797,14 @@ function fanOut(state: PanelState): string {
  *
  * <p>The panel and `coai-mcp` know the same roles, and are installed separately: an extension
  * updates itself, a server is a binary somebody presses a button to replace. Below
- * {@link CONVENTIONS_ROLE_SINCE} the server has four roles and no `Conventions` among them, so a
- * code round asks it for a role its own enum cannot parse and fails to start. Louder than the
- * mismatch this warning first carried, and worth saying before the round rather than after.</p>
+ * {@link CONVENTIONS_ROLE_SINCE} the server has four roles and no `Conventions` among them.</p>
+ *
+ * <p><b>It degrades rather than breaking, and this sentence used to claim otherwise.</b> The server
+ * builds its gates by iterating ITS OWN role list (`PanelSettings`, over `PanelConfig.AllRoles`),
+ * so an env key naming a role it does not know is ignored — no unparseable enum, no failed round.
+ * What actually happens is quieter and worth saying: the box is in the panel, and the reviewer
+ * never runs. Three reviewers on the gate round called this a hard failure; checking the code is
+ * what corrected both them and the warning.</p>
  *
  * <p>A sentence rather than a block: the fix is the Update button one section down, and this stops
  * being true the moment somebody presses it.</p>
@@ -807,8 +816,9 @@ function conventionsSkew(server: ServerStatus): string {
   }
 
   return `  <div class="stale">The coai-mcp you have installed (${escapeHtml(server.version)}) does not `
-    + `know <b>Conventions</b> is a role, so a code round will fail rather than skip it. `
-    + `Update it to ${escapeHtml(CONVENTIONS_ROLE_SINCE)} or later — the <b>MCP server</b> section below.</div>`;
+    + `know <b>Conventions</b> is a role, so it will not run it — your code rounds are three `
+    + `reviewers, not four. Update it to ${escapeHtml(CONVENTIONS_ROLE_SINCE)} or later — the `
+    + `<b>MCP server</b> section below.</div>`;
 }
 
 function promptsBody(state: PanelState): string {

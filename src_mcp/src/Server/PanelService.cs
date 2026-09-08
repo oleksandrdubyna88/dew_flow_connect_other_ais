@@ -120,7 +120,7 @@ public sealed partial class PanelService
     public PanelSettings Settings => _settings;
 
     private static readonly ImmutableArray<ReviewRole> CodeRoles =
-        [ReviewRole.Architecture, ReviewRole.SecurityReliability, ReviewRole.UxDxPerformance];
+        [ReviewRole.Conventions, ReviewRole.Architecture, ReviewRole.SecurityReliability, ReviewRole.UxDxPerformance];
 
     // ---------- providers ----------
 
