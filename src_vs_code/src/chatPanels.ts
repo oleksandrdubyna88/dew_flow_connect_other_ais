@@ -70,6 +70,17 @@ interface Registered {
 export class ChatPanels {
   private readonly entries = new Map<object, Registered>();
 
+  /**
+   * Where each conversation currently sits, by its own id.
+   *
+   * <p>A second index rather than a scan. Every hook the page calls arrives with an id, so the
+   * lookup is on the hot path of every message; a linear walk over the open tabs would work today
+   * and become the wrong shape the moment anything streams. Maintained beside `entries` in the
+   * four places that change it — open, rekey, close, closeAll — which is the cost of having it.
+   * (gemini, the second code round.)</p>
+   */
+  private readonly whereById = new Map<object, object>();
+
   /** How many conversations are open. For the tests, and for a caller that wants to say so. */
   get size(): number {
     return this.entries.size;
@@ -91,24 +102,14 @@ export class ChatPanels {
    * the id exists.</p>
    */
   entryOf(id: object): ChatEntry | undefined {
-    for (const registered of this.entries.values()) {
-      if (registered.entry.id === id) {
-        return registered.entry;
-      }
-    }
+    const key = this.whereById.get(id);
 
-    return undefined;
+    return key === undefined ? undefined : this.entries.get(key)?.entry;
   }
 
   /** The key a conversation currently sits under, for a caller that must remove it by key. */
   keyOf(id: object): object | undefined {
-    for (const [key, registered] of this.entries) {
-      if (registered.entry.id === id) {
-        return key;
-      }
-    }
-
-    return undefined;
+    return this.whereById.get(id);
   }
 
   /** Every open panel, as the shape `sessionKey.ts` matches against. */
@@ -132,6 +133,7 @@ export class ChatPanels {
 
     const entry = create();
     this.entries.set(key, { entry, label });
+    this.whereById.set(entry.id, key);
 
     return { entry, outcome: 'created' };
   }
@@ -168,6 +170,7 @@ export class ChatPanels {
     }
     this.entries.delete(from);
     this.entries.set(to, known);
+    this.whereById.set(known.entry.id, to);
 
     return true;
   }
@@ -185,9 +188,24 @@ export class ChatPanels {
       return false;
     }
     this.entries.delete(key);
+    this.whereById.delete(known.entry.id);
     known.entry.session.dispose();
 
     return true;
+  }
+
+  /**
+   * The same, for a caller that holds the conversation rather than the tab.
+   *
+   * <p>Every hook is passed an id, so without this each of them would have to bridge id to key
+   * before closing — an asymmetric boundary where one call in the set works differently from the
+   * rest, and the kind of seam a second, drifting cleanup path grows out of. (gemini, the second
+   * code round.)</p>
+   */
+  closeById(id: object): boolean {
+    const key = this.whereById.get(id);
+
+    return key === undefined ? false : this.close(key);
   }
 
   /**
@@ -206,6 +224,7 @@ export class ChatPanels {
         continue;
       }
       this.entries.delete(key);
+      this.whereById.delete(known.entry.id);
       known.entry.session.dispose();
       known.entry.panel.dispose();
     }

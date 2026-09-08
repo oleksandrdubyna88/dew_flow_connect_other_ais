@@ -238,3 +238,52 @@ test('the registry can describe itself to the key resolver', () => {
 
   assert.deepStrictEqual(panels.known(), [{ key, label: 'привет' }]);
 });
+
+test('a conversation can be closed by its own id, from the hook that holds one', () => {
+  const panels = new ChatPanels();
+  const from = {};
+  const to = {};
+  const only = fakes();
+  panels.open(from, 'привет', () => only.entry);
+  panels.rekey(from, to);
+
+  // Every hook is passed an id, so without this each of them would have to bridge id to key before
+  // closing - an asymmetric boundary, and where a second cleanup path grows. (gemini, round 2.)
+  assert.strictEqual(panels.closeById(only.entry.id), true);
+  assert.strictEqual(panels.size, 0);
+  assert.strictEqual(only.sessionDisposed(), 1);
+});
+
+test('closing by an id nobody holds says so rather than closing somebody else', () => {
+  const panels = new ChatPanels();
+  const only = fakes();
+  panels.open({}, 'привет', () => only.entry);
+
+  assert.strictEqual(panels.closeById({}), false);
+  assert.strictEqual(panels.size, 1);
+  assert.strictEqual(only.sessionDisposed(), 0);
+});
+
+test('the id index does not survive its conversation', () => {
+  const panels = new ChatPanels();
+  const key = {};
+  const only = fakes();
+  panels.open(key, 'привет', () => only.entry);
+
+  panels.close(key);
+
+  // A stale index entry would resolve an id to a key whose conversation is gone, and the next look
+  // would hand back undefined from a map that still claimed to know it.
+  assert.strictEqual(panels.entryOf(only.entry.id), undefined);
+  assert.strictEqual(panels.keyOf(only.entry.id), undefined);
+});
+
+test('deactivation clears the id index too', () => {
+  const panels = new ChatPanels();
+  const only = fakes();
+  panels.open({}, 'привет', () => only.entry);
+
+  panels.closeAll();
+
+  assert.strictEqual(panels.entryOf(only.entry.id), undefined);
+});
