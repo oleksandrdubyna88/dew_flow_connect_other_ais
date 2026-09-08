@@ -53,8 +53,10 @@ are edited in `settings.json` for now; a section beside *Reviewers* comes next.
 row on any other runtime is refused BY NAME rather than quietly missing from the picker — a model
 you NAMED and which cannot answer is never silently replaced by another vendor’s. Copying the
 selection needs Windows; elsewhere the keybinding says so and points at the menu, which works
-everywhere. Picking a different model in an open tab starts a new process, and the answer after it
-says the conversation restarted, because it genuinely does not remember the earlier turns.
+everywhere. Picking a different model in an open tab takes the whole conversation with it — the
+questions and the answers both — so the new model carries on rather than starting again; a vendor CLI
+keeps its context inside its own process, so the only way across is to say it all again, which the
+next question does once and then never again.
 
 The whole thing went through this product’s own gate three times — a plan round and two code rounds,
 eighteen reviewers between them — and what those rounds changed is worth naming: the copy helper

@@ -13,7 +13,8 @@ import { chatUiScale, createChatPanel, pushChatDraft, pushChatState } from './ch
 import { captureSelection, COPY_SCRIPT, argvFor, ran } from './selectionCapture';
 import { ChatHome, chatHome, chatRuntimeRefusal, launchSpecFor } from './cliChatLaunch';
 import { launch } from './processLauncher';
-import { openingTurn } from './chatPrompt';
+import { carriedTurn, openingTurn } from './chatPrompt';
+import { LanguageCode } from './settingsShape';
 import { sourceSession, TabSnapshot } from './sessionKey';
 import { triggerPlan } from './chatTrigger';
 import { Vendor, vendorsFrom } from './vendors';
@@ -44,8 +45,16 @@ interface Thread {
   readonly passage: string;
   readonly models: readonly ChatModelChoice[];
   modelId: string;
-  /** The next answer comes from a process that never heard the earlier turns. Said once, then off. */
-  restarted: boolean;
+  /**
+   * The conversation to hand the NEXT turn, because the process it goes to never heard it.
+   *
+   * <p>Empty in the ordinary case. Filled when the person switches model: a vendor CLI keeps its
+   * context inside its own process, so the replacement starts with nothing, and the only way to
+   * carry the questions and the answers across is to say them again in the next turn. Cleared once
+   * that turn has been sent — from then on the new process remembers, exactly as the old one did,
+   * and nobody pays to re-send a conversation twice.</p>
+   */
+  carry: readonly ChatMessage[];
   messages: readonly ChatMessage[];
   /**
    * The turns of THIS conversation, one after another.
@@ -140,6 +149,11 @@ function ask(entry: ChatEntry, text: string): Promise<void> {
   return mine;
 }
 
+/** The answer language, read fresh: a follow-up turn is asked long after the command ran. */
+function chatLanguage(): LanguageCode {
+  return chatSettingsFrom((key) => vscode.workspace.getConfiguration('coai').get(key)).language;
+}
+
 /** A thrown thing, as a sentence. */
 function asText(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
@@ -159,19 +173,32 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   thread.messages = [...thread.messages, { role: 'you', text }];
   show(entry, true, '');
 
-  const result = await thread.session.send(text);
+  // What is SHOWN is what the person typed; what is SENT may carry the whole conversation with it,
+  // because the process it is going to never heard any of it. Putting the carried version in the
+  // transcript would print the entire history back at them under their own one-line question.
+  const carrying = thread.carry;
+  const sent = carrying.length > 0 ? carriedTurn(carrying, text, chatLanguage()) : text;
+
+  const result = await thread.session.send(sent);
   if (!result.ok) {
+    // The carry is NOT cleared here. A turn that failed carried nothing anywhere, and clearing it
+    // would mean the retry — the same question, one keypress later — reaches the new model with no
+    // conversation behind it, which is the exact thing the switch existed to prevent. (gemini, the
+    // plan round, twice.)
     show(entry, false, result.failure);
 
     return;
   }
+  // Cleared only now, and only once: from here the process remembers, and nobody pays to re-send a
+  // conversation twice. `thread.carry` rather than `carrying` — a switch may have queued another.
+  if (thread.carry === carrying) {
+    thread.carry = [];
+  }
 
   // A restart is said in the transcript, not only in a flag nobody sees: the answer genuinely does
   // not remember the earlier turns, and a reader comparing it with them deserves to know why. A
-  // model the PERSON switched to is the same situation arrived at deliberately, and says the same.
-  const restarted = result.contextLost === true || thread.restarted;
-  thread.restarted = false;
-  const answer = restarted
+  // model the person SWITCHED to is not this case — that one was handed the conversation.
+  const answer = result.contextLost === true
     ? `(the conversation restarted — this answer does not remember the earlier ones)\n\n${result.answer}`
     : result.answer;
   thread.messages = [...thread.messages, { role: 'model', text: answer }];
@@ -273,12 +300,25 @@ function vendorFor(modelId: string): Vendor | undefined {
 /**
  * The person chose a different model in the open tab.
  *
- * <p>A conversation is a process, so this is a new process: the old one is ended, its directory
- * goes with it, and the next answer says the conversation restarted — the same sentence a death
- * gets, because it is the same fact. The alternative was a picker that changed a caption and
- * nothing else, which is a control that lies. (gemini, the second code round.)</p>
+ * <p>A conversation is a process, so this is a new process — but not a new conversation. The whole
+ * transcript, questions and answers both, is handed to the next turn (`carriedTurn`), because that
+ * is the only way context crosses a process boundary here. Asked for directly by the owner, and the
+ * alternative shipped for about an hour: a switch that started again and said so.</p>
+ *
+ * <p>It waits for a turn in flight instead of killing it. The page disables its composer while the
+ * model is thinking but not its picker, and disposing the session under a running turn would fail
+ * that turn with "the conversation was closed" — an error about something the person did on
+ * purpose. The switch simply joins the queue the turns already run in.</p>
  */
 function switchModel(entry: ChatEntry, modelId: string): void {
+  const thread = threads.get(entry.id);
+  if (thread === undefined || thread.modelId === modelId) {
+    return;
+  }
+  thread.turns = thread.turns.then(() => switchNow(entry, modelId)).catch(() => undefined);
+}
+
+function switchNow(entry: ChatEntry, modelId: string): void {
   const thread = threads.get(entry.id);
   if (thread === undefined || thread.modelId === modelId) {
     return;
@@ -301,8 +341,17 @@ function switchModel(entry: ChatEntry, modelId: string): void {
   thread.session = replacement.session;
   thread.home = replacement.home;
   thread.modelId = modelId;
-  thread.restarted = true;
+  // Everything said so far travels with the next question. Not sent now: nobody should be billed
+  // for a conversation they moved and then never continued. Taken HERE rather than when the switch
+  // was asked for, because this runs after the turn queue has drained — so an answer that was still
+  // arriving when the person changed their mind is in the transcript by now. (codex, the plan round.)
+  thread.carry = thread.messages;
   show(entry, false, '');
+  // Said out loud: the next question costs more than the last one, because it carries everything
+  // above it. A person who is not told reads the first answer as a model that mysteriously knows.
+  void vscode.window.showInformationMessage(
+    `Now asking ${modelId}. Your next question carries this conversation across to it.`,
+  );
 }
 
 /** Everything one new conversation is made of. Called ONLY when a tab has no panel yet. */
@@ -364,7 +413,7 @@ function newConversation(
     passage: state.passage,
     models: ready.models,
     modelId: ready.modelId,
-    restarted: false,
+    carry: [],
     messages: [],
     turns: Promise.resolve(),
   });
