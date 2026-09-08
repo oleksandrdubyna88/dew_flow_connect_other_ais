@@ -97,6 +97,19 @@ somebody's behalf:
   this repository's own source contains it — and copying it would have been reported as nothing
   copied. A capture may fail for many reasons; the CONTENT of the selection is not allowed to be one.
 
+- **Picking a model in the tab starts a new process**, and the next answer says the conversation
+  restarted — the same sentence a process death gets, because it is the same fact. The picker was
+  wired rather than left as a caption that changed while nothing else did; a control that lies is
+  worse than no control. The old session is disposed and its directory goes with it, and the tab
+  closing ends whatever session the thread holds NOW, which after a switch is not the one the
+  entry was created with.
+- **Which tab this is gets asked FIRST**, before the capture. The keybinding is scoped to the
+  assistant panel but the command palette is not, and invoked from the wrong tab this used to
+  spend 1.7 s, borrow the clipboard and synthesise a keystroke before saying it was the wrong tab.
+- **`CHAT_RUNTIMES` lives in `cliChatLaunch.ts`**, beside the argv that implements it, rather than
+  in the module that builds the picker. A capability belongs with the code that provides it; the
+  old direction had the launch layer importing a constant out of a module that imports the page.
+
 And the keybinding now says it is working: `withProgress` puts *Copying the selection…* in the status
 bar for the ~1.7 s PowerShell takes, because a shortcut that appears to do nothing gets pressed again,
 which is how one question becomes two.

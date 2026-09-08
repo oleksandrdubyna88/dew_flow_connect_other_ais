@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CHAT_RUNTIMES, chatChoice, chatModelsFrom, chosenModel } from '../chatModels';
-import { AGY_ARGS, chatHome, launchSpecFor } from '../cliChatLaunch';
+import { chatChoice, chatModelsFrom, chosenModel } from '../chatModels';
+import { AGY_ARGS, CHAT_RUNTIMES, chatHome, launchSpecFor } from '../cliChatLaunch';
 import { Vendor } from '../vendors';
 
 /**
