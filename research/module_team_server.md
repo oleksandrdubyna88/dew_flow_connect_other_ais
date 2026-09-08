@@ -128,8 +128,57 @@ wrong choice *for CI* and the right one everywhere else.
 | `SlotRegistry`, `SlotLease` | `src/Slots/SlotRegistry.cs` | the cross-process lock and the persisted per-account state |
 | `VendorLogin` | `src/Slots/VendorLogin.cs` | `coai-server login <vendor> <slot>` — the only interactive path |
 | `CatalogEndpoints`, `VendorHealthCache` | `src/Vendors/CatalogEndpoints.cs` | `GET /api/catalog`, and the 60 s cache that stops a poll launching a CLI per request |
+| `ReviewAttempt`, `ReviewLauncher` | `src/Jobs/ReviewLauncher.cs` | what one launch came back with, and the seam that produces it. `ReviewAttempt` is a **closed two-shape union** — `Answered(Raw, TokensIn, TokensOut)` or `Failed(Outcome)` — see *A review that succeeds* below for why the shape is the whole point |
+| `JobRunner` | `src/Jobs/JobRunner.cs` | claims a slot, runs the launcher, maps the attempt to a terminal `JobRecord` and writes the usage line |
 
 ## The decisions a reader needs
+
+### A review that succeeds — three defects, each hidden by the one in front of it (2026-09-07)
+
+Until this date the Team server had **never completed a single review**. `data/usage.jsonl` held two
+lines, weeks apart, both `outcome: NotStarted`, while the vendor's own CLI transcript beside each one
+showed a complete valid answer. `systemctl is-active` and `/api/health` were green throughout.
+
+Nobody had noticed because nothing ever reached the server: the extension never wrote `remoteVendor`
+into its settings file, so every Team-server reviewer was excluded from every round before a request
+was made ([PLAN_team_server_reviewer_never_called.md](PLAN_team_server_reviewer_never_called.md)).
+Fixing that exposed the next defect, and fixing that one exposed the third.
+
+**1. Success was not representable.** `ReviewerExecutor.LaunchAsync` reports a good run by returning
+*no* terminal outcome — `ReviewerLaunch.Terminal` is null exactly when the process ran and exited
+zero, and its docstring says so. `ReviewLauncher` read that null as an absence of information and
+substituted `NotStarted("the executor returned no verdict")`, so `JobRunner.Record`'s success arm — a
+`_` fallthrough — was **unreachable for the life of the server**.
+
+It survived 171 green tests because the only thing that ever produced the success shape was the
+suite's own fake launcher, handing the runner a `ReviewerOutcome.Ok(null!, …)` the real launcher
+cannot construct: it holds the vendor's raw text, never a parsed review. Each side was green against
+itself — the failure class `.claude/rules/shared/common/testing.md` names.
+
+The fix is the TYPE. `ReviewAttempt` became `Answered | Failed`, so an `Answered` cannot be built
+without an answer and the compiler names every site that must choose. A clean exit with no answer is
+`Unparseable`, not `NotStarted`: the CLI *did* start, and saying otherwise sends a reader to look at
+accounts and sign-ins. "Empty" means whitespace on the raw ANSWER text — the vendor's own adapter has
+already lifted it out of its envelope, so this server still has no parser, and `{"findings":[]}` is a
+real answer that travels as one.
+
+**2. The schema file was named but never written.** `ReviewLauncher` handed `runtime.Build` a schema
+PATH and never created the file. Claude's adapter needs none — it puts the shape in the prompt — so
+claude alone appeared to work while codex and antigravity failed the instant their CLI opened the
+path: `Failed to read output schema file /tmp/coai-server-job-*/schema.json`. The writer already
+existed as `SchemaFile.Ensure` in the MCP binary, which this server cannot reference, so it **moved
+to `CoaiMcp.Core.Findings`** rather than being written a second time. One writer, one file name, both
+binaries.
+
+**3. The reason never reached the person** — a client-side defect, but it is what made the first two
+so hard to see. See `ReviewerSummaryFactory` and `RemoteAsk.IsProgress` in the runners module.
+
+**What this leaves behind for anyone deploying:** a release is proved by a real review, never by
+`is-active`. [`deploy/systemd-release.sh`](../deploy/systemd-release.sh) submits one per vendor in
+`vendors.json` and rolls itself back if any of them does not reach `done` with a non-empty answer —
+and it asks about *every* vendor precisely because a canary that asked only about claude would still
+have missed defect 2.
+
 
 ### Story 1.3 — the client half, and the two failures only a real server showed
 
