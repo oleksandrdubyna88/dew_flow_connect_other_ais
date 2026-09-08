@@ -26,6 +26,7 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
     running: false,
     capped: false,
     failure: '',
+    draft: '',
     uiScale: 0,
     ...over,
   };

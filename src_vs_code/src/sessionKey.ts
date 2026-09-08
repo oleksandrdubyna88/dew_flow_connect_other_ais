@@ -19,14 +19,18 @@
  * the new object. A label match while the old object is still on screen means two real tabs, and it
  * must NOT re-key: that is exactly the collapse this module exists to prevent.</p>
  *
- * <p><b>What happens if `Tab` objects turn out to be EPHEMERAL.</b> A reviewer called this design
- * Blocking on the claim that VS Code recreates them whenever tab-group state changes. If that is so,
- * the identity branch misses every time and the fallback carries the feature: a uniquely named tab
- * re-keys and keeps its conversation, and an ambiguously named one opens a SECOND chat tab. That is
- * the degradation this shape was chosen for — the worst case is an extra tab, never a follow-up
- * delivered to somebody else's conversation, which is what a label key gives you on its best day.
- * The claim is answered by measurement rather than argument: `~/.vscode/extensions/coai-probe` logs
- * `tab identity: SAME|NEW` across invocations, and three keypresses settle it.</p>
+ * <p><b>`Tab` objects are STABLE — measured, 2026-09-08.</b> A gate reviewer called this design
+ * Blocking on the claim that VS Code recreates them whenever tab-group state changes. The probe
+ * extension was taught to log object identity across invocations, and three calls answered it: a
+ * tab invoked on, left for another tab, and returned to reported <b>SAME object</b> both times
+ * (19:19:49 and 19:20:22 against a first sighting at 19:19:28; a second tab likewise SAME against
+ * 19:18:15). Switching the active tab does not replace the object, so the identity branch is the
+ * one that runs and the label is genuinely a fallback rather than the load-bearing path.</p>
+ *
+ * <p>The fallback is kept anyway, and that is not superstition: the measurement covers activation
+ * changes, which is what the reviewer claimed, not every future version of the host. If identity
+ * is ever lost, a uniquely named tab re-keys and keeps its conversation and an ambiguous one opens
+ * a second tab — an extra tab, never a follow-up delivered to somebody else.</p>
  */
 
 /**

@@ -8,6 +8,14 @@ import { HelpBody } from './helpContent';
  * that is missing here falls back to the English body, visibly — see `bodyFor`.</p>
  */
 export const DE: Readonly<Record<string, HelpBody>> = {
+  "chat-with-other-ai": {
+    title: "Chat with other AI: ein zweites Modell zu einer Stelle befragen",
+    whatItIs: "Markieren Sie einen Absatz in der Antwort Ihres Assistenten und drücken Sie `Ctrl+Alt+A` — es öffnet sich ein Tab, in dem das Modell eines anderen Anbieters ihn in Ihrer Sprache erklärt, und das Gespräch geht weiter. Dasselbe steht im Kontextmenü als **Chat with other AI**.",
+    why: "Eine dichte englische Antwort ist nicht immer eine klare, und dasselbe Modell um eine Erklärung zu bitten liefert dieselben Worte. Ein anderer Anbieter liest sie unvoreingenommen. Von Hand sind das fünf Schritte — markieren, kopieren, in den Browser wechseln, neuer Chat, einfügen — mehrmals pro Stunde; hier ist es ein Tastendruck, und die Antwort bleibt im Editor.",
+    setup: "Nichts, sofern bereits ein Reviewer auf der Laufzeit `antigravity` aktiv ist. Ihre Einstellungen: der Prompt, mit dem die Stelle reist (standardmäßig das eine Wort `Explain`), die Antwortsprache (standardmäßig Englisch und bewusst nicht die Sprache dieser Seiten), welches Modell antwortet und ob sofort gesendet wird.",
+    usage: "Die Tastenkombination kopiert die Auswahl selbst und fragt sofort. Der Menüeintrag kann das nicht — das Schließen des Menüs nimmt die Auswahl aus dem Panel —, also nimmt er das zuletzt Kopierte und legt es ins Feld, gesendet wird von Ihnen. Deshalb steht die Stelle oben im Tab: Sie sehen, was gleich gefragt wird. Ein Tab pro Assistenten-Sitzung, damit sich zwei Gespräche nie mischen.",
+    whatCanGoWrong: "Das Kopieren der Auswahl braucht Windows; anderswo sagt die Tastenkombination das und verweist auf das Menü, das überall funktioniert. Stirbt der Prozess des Modells, sagt die Antwort danach, dass das Gespräch neu begonnen hat. Ein Reviewer auf einer anderen Laufzeit wird namentlich abgelehnt, statt still zu fehlen.",
+  },
   "install-the-server": {
     title: "Hier anfangen: den MCP-Server installieren",
     whatItIs: "Die Erweiterung ist das Gesicht. Das Review macht `coai-mcp`, ein kleines Programm, das Ihr KI-Assistent startet. Solange es nicht installiert ist, reviewt niemand.",

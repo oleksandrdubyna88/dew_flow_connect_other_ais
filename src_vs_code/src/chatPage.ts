@@ -61,6 +61,15 @@ export interface ChatPageState {
   readonly capped: boolean;
   /** Empty when nothing failed. A sentence when something did. */
   readonly failure: string;
+  /**
+   * What the composer opens with, unsent.
+   *
+   * <p>The menu path fills it rather than sending: it took whatever was on the clipboard and
+   * cannot know how old that is, so the person presses send once and the wrong-content vendor
+   * call becomes impossible. A draft is therefore a first-class part of the page state, not a
+   * decoration — it is the whole difference between the two doors.</p>
+   */
+  readonly draft: string;
   readonly uiScale: number;
 }
 
@@ -145,7 +154,7 @@ function chatBody(state: ChatPageState): string {
 <div id="thinking">${state.running ? '<p class="thinking">Thinking…</p>' : ''}</div>
 <div id="capped">${chatCappedHtml(state.capped)}</div>
 <div id="pickerBox">${chatPickerHtml(state.models, state.modelId)}</div>
-<textarea id="say" rows="3" placeholder="Ask about the text above…"${locked ? ' disabled' : ''}></textarea>
+<textarea id="say" rows="3" placeholder="Ask about the text above…"${locked ? ' disabled' : ''}>${escapeHtml(state.draft)}</textarea>
 <div class="hint">Enter sends · Shift+Enter for a new line</div>`;
 }
 
@@ -221,6 +230,16 @@ function chatScript(state: ChatPageState): string {
     if (failure) { failure.innerHTML = data.failureHtml || ''; }
     const passage = document.getElementById('passage');
     if (passage && typeof data.passage === 'string') { passage.textContent = data.passage; }
+    // A draft pushed into an OPEN tab. Appended rather than assigned, so a half-typed follow-up
+    // is never thrown away by a second invocation - losing what somebody typed is the one thing
+    // the queue in the session was also built to avoid.
+    if (typeof data.draft === 'string' && data.draft.length > 0) {
+      const box2 = document.getElementById('say');
+      if (box2) {
+        box2.value = box2.value.length > 0 ? box2.value + '\\n\\n' + data.draft : data.draft;
+        if (typeof box2.focus === 'function') { box2.focus(); }
+      }
+    }
     const box = document.getElementById('say');
     // Only a real boolean moves the lock. A state that says nothing about running - a partial push,
     // or a null across the bridge - must leave the composer as it is rather than quietly unlocking
