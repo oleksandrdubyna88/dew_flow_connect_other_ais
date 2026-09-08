@@ -184,4 +184,131 @@ public sealed class LedgerAndEvidenceTests : IDisposable
         new FileInfo(file).Length.Should().BeGreaterThan(0, "an empty evidence file explains nothing");
         text.Should().Contain("stderr").And.Contain("quota check failed upstream");
     }
+
+    // ---------- a reviewer that found NOTHING ----------
+    //
+    // Measured 2026-09-08, 16:12 UTC: eight remote reviewers answered `{"findings": []}` on a diff
+    // the local reviewer found eleven things in — codex in 4.5 to 24.8 seconds, for 44 to 94 output
+    // tokens each. Across every code round since 2026-09-01 codex had done that ONCE in ~400 runs,
+    // and four of those runs are in that one round.
+    //
+    // It could not be diagnosed, because an `ok` outcome with zero findings kept nothing: the raw
+    // text was dropped, and only a PARSE failure reached `unparseable/`. So "did the model answer
+    // emptily, or was it handed a prompt that deserved an empty answer" had no artefact behind it.
+
+    private const string OneFinding = """
+        {"findings": [
+          {"severity": "major", "category": "security", "file": "app.cs", "line": 10,
+           "title": "token compared with ==", "why": "timing side channel", "fix": "FixedTimeEquals"}
+        ]}
+        """;
+
+    [Fact]
+    public async Task AReviewWithNoFindings_KeepsWhatTheVendorActuallySaid()
+    {
+        var empty = System.IO.Path.Combine(_dir, "empty");
+        var executor = new ReviewerExecutor(new ProcessLauncher(), keepEmptyIn: empty);
+
+        var outcome = await executor.RunAsync(
+            FakeCliInvocations.Invoke("gemini", ["emit", FakeCliInvocations.CleanReview]),
+            ct: TestContext.Current.CancellationToken);
+
+        outcome.Should().BeOfType<ReviewerOutcome.Ok>()
+            .Which.Review.Findings.Should().BeEmpty();
+        var file = Directory.GetFiles(empty).Should().ContainSingle().Subject;
+        var text = await File.ReadAllTextAsync(file, TestContext.Current.CancellationToken);
+        text.Should().Contain("findings",
+            "the whole point is reading what the vendor said, not being told that it said nothing");
+    }
+
+    [Fact]
+    public async Task AReviewWithFindings_KeepsNothing()
+    {
+        // The other side of it. A directory that also collects the healthy case is a directory
+        // whose name lies, and the file that matters is then one of hundreds.
+        var empty = System.IO.Path.Combine(_dir, "empty");
+        var executor = new ReviewerExecutor(new ProcessLauncher(), keepEmptyIn: empty);
+
+        var outcome = await executor.RunAsync(
+            FakeCliInvocations.Invoke("gemini", ["emit", OneFinding]),
+            ct: TestContext.Current.CancellationToken);
+
+        outcome.Should().BeOfType<ReviewerOutcome.Ok>()
+            .Which.Review.Findings.Should().HaveCount(1);
+        Directory.Exists(empty).Should().BeFalse("a reviewer that found something is not evidence of silence");
+    }
+
+    [Fact]
+    public async Task TheEmptyAnswerIsKeptSeparatelyFromTheUnparseableOne()
+    {
+        // Two different questions — "it said nothing" and "it said something I could not read" —
+        // and somebody chasing one must not have to wade through the other.
+        var unparseable = System.IO.Path.Combine(_dir, "unparseable");
+        var empty = System.IO.Path.Combine(_dir, "empty");
+        var executor = new ReviewerExecutor(new ProcessLauncher(), unparseable, empty);
+
+        await executor.RunAsync(
+            FakeCliInvocations.Invoke("gemini", ["emit", FakeCliInvocations.CleanReview]),
+            ct: TestContext.Current.CancellationToken);
+        var prose = FakeCliInvocations.Invoke("gemini", ["emit", "not JSON at all"]);
+        await executor.RunAsync(prose, repair: prose, ct: TestContext.Current.CancellationToken);
+
+        Directory.GetFiles(empty).Should().ContainSingle();
+        Directory.GetFiles(unparseable).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task AKeptAnswerNamesTheReviewerThatGaveIt()
+    {
+        // An operator reading a silent round has twelve reviewers and needs the file belonging to
+        // ONE of them. The name is the index; nothing else in the file identifies its author.
+        var empty = System.IO.Path.Combine(_dir, "empty");
+        var executor = new ReviewerExecutor(new ProcessLauncher(), keepEmptyIn: empty);
+
+        var outcome = await executor.RunAsync(
+            FakeCliInvocations.Invoke("codex", ["emit", FakeCliInvocations.CleanReview]),
+            ct: TestContext.Current.CancellationToken);
+
+        var kept = outcome.Should().BeOfType<ReviewerOutcome.Ok>().Which.Evidence;
+        kept.Should().NotBeEmpty("the outcome carries the path, so the round's log line can name it");
+        System.IO.Path.GetFileName(kept).Should().StartWith("codex-Architecture-");
+        File.Exists(kept).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task KeepingEvidenceNeverFailsARound()
+    {
+        // A full disk, a permission change, a directory that is really a file: none of them may
+        // turn a review the vendor answered perfectly well into a failed one. Already true of the
+        // unparseable path; it has to stay true of this one.
+        var blocked = System.IO.Path.Combine(_dir, "blocked");
+        await File.WriteAllTextAsync(blocked, "not a directory", TestContext.Current.CancellationToken);
+        var executor = new ReviewerExecutor(new ProcessLauncher(), keepEmptyIn: blocked);
+
+        var outcome = await executor.RunAsync(
+            FakeCliInvocations.Invoke("gemini", ["emit", FakeCliInvocations.CleanReview]),
+            ct: TestContext.Current.CancellationToken);
+
+        outcome.Should().BeOfType<ReviewerOutcome.Ok>()
+            .Which.Evidence.Should().BeEmpty("nothing was kept, and the round carried on regardless");
+    }
+
+    [Fact]
+    public async Task AKeptAnswerIsWholeOrAbsent_NeverHalfWritten()
+    {
+        // `File.WriteAllText` truncates first and writes second, so a process killed between those
+        // two steps leaves a file that exists and says nothing — which reads exactly like a vendor
+        // that answered with nothing. The same trap `RemoteRuntime.Claim` documents, and the same
+        // cure: write a sibling, then one rename.
+        var empty = System.IO.Path.Combine(_dir, "empty");
+        var executor = new ReviewerExecutor(new ProcessLauncher(), keepEmptyIn: empty);
+
+        await executor.RunAsync(
+            FakeCliInvocations.Invoke("gemini", ["emit", FakeCliInvocations.CleanReview]),
+            ct: TestContext.Current.CancellationToken);
+
+        Directory.GetFiles(empty, "*.writing").Should().BeEmpty("the sibling is renamed, never left behind");
+        Directory.GetFiles(empty).Should().ContainSingle()
+            .Which.Should().EndWith(".txt");
+    }
 }

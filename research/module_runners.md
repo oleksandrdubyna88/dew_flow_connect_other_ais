@@ -184,6 +184,50 @@ Three failures cost hours because the reason was discarded at the last step:
   the outcome naming the file. The one replayed by hand afterwards succeeded, which is precisely
   the case where the raw text is the whole story.
 
+### A reviewer that found NOTHING is evidence too (2026-09-08)
+
+The fifth, and the one that hid behind a success. A review that parses to an empty findings array is
+an `ok` outcome by every measure a round can take — its tokens counted, its seconds recorded — and
+the raw text was dropped, because only a PARSE failure reached `unparseable/`.
+
+**Measured, 16:12 UTC.** Eight remote reviewers answered `{"findings": []}` on a diff the local
+reviewer found eleven things in:
+
+| reviewer | input | output | seconds | findings |
+|---|---|---|---|---|
+| codex × 4 | 33.4k–33.6k | 44–94 | 4.5–24.8 | **0** |
+| gemini × 4 | 34k–42k | 38–1033 | 8.7–10.5 | **0** |
+| local × 4 | 21.6k | 600–911 | 21–45 | 3 / 2 / 3 / 3 |
+
+Dateable and not the build: across every code round since 2026-09-01 codex had produced an empty
+answer **once in ~400 runs**, four of them are in that one round, and seven minutes later the same
+process gave it 62.5k input and 2289–2533 output over 51–66 seconds on another branch. Whether those
+eight had SEEN the change could only be guessed at by subtracting a rules byte count from a token
+total, and why they said nothing could not be asked at all.
+
+So:
+
+- **A zero-finding review keeps its answer**, under `<dataDir>/empty/` — its own directory, because
+  "it said nothing" and "it said something I could not read" are different questions and a person
+  chasing one must not wade through the other. A review WITH findings keeps nothing; a directory
+  that also collected the healthy case would be a directory whose name lies.
+- **The outcome carries the path** (`ReviewerOutcome.Ok.Evidence`) and the reviewer's own audit line
+  names it. Not the round's reply: every clean round would carry that sentence, and a sentence on
+  every clean round is one nobody reads on the round that matters.
+- **The round says what it SENT**: `context for review: diff N bytes over M file(s), E elided; plan
+  N bytes; rules N bytes` — every number already computed and previously thrown away. `elided`
+  earns its place because a partial view is exactly the state in which a reviewer's silence means
+  nothing.
+- **And what each reviewer RECEIVED.** The opening line carries every reviewer's prompt size, because
+  the context is assembled once and composed per reviewer: anything between the two leaves a round
+  log confidently naming a diff nobody was sent.
+- The file is written to a sibling and renamed. `File.WriteAllText` truncates first and writes
+  second, so a killed process leaves a file that exists and holds nothing — which, in THIS
+  directory, reads exactly like a vendor that answered with nothing.
+
+Neither directory has a retention policy yet; `unparseable/` has not had one either. That is its own
+change, and it should cover both with one rule.
+
 ### A progress note is never a reason (2026-09-07)
 
 The fourth of those, and the one that shows the limit of "choose by content". The remote shim writes

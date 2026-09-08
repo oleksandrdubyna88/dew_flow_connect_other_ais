@@ -39,7 +39,12 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
         _log.Information(
             "round {Round} {Stage} opening: {Count} reviewer(s) — {Reviewers}; working dir {WorkingDir}, timeout {Timeout}",
             number, stage, work.Count,
-            string.Join(", ", work.Select(w => $"{w.Invocation.Provider}/{w.Invocation.Role}[{w.Prompt}]")),
+            // The prompt's SIZE beside its name. The round line above it says what was assembled;
+            // this says what each reviewer was handed, and the two are only the same while nothing
+            // between them is broken. On 2026-09-08 that distinction had to be reconstructed from a
+            // ledger, because nothing anywhere recorded it.
+            string.Join(", ", work.Select(w =>
+                $"{w.Invocation.Provider}/{w.Invocation.Role}[{w.Prompt}, {w.PromptBytes} bytes]")),
             workingDir, Humanised(timeout));
 
         // A separate line rather than a longer one: this is the exceptional case, and folding it into
@@ -75,11 +80,16 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
 
             case ReviewerState.Done when progress.Outcome is ReviewerOutcome.Ok ok:
                 _log.Information(
-                    "reviewer {Provider}/{Role} answered in {Seconds:0.0}s: {Findings} finding(s), {TokensIn} in / {TokensOut} out tokens{Cost}{Repaired}",
+                    "reviewer {Provider}/{Role} answered in {Seconds:0.0}s: {Findings} finding(s), {TokensIn} in / {TokensOut} out tokens{Cost}{Repaired}{Evidence}",
                     progress.Provider, progress.Role.ToString(), progress.Elapsed.TotalSeconds,
                     ok.Review.Findings.Count(), ok.Usage.TokensIn, ok.Usage.TokensOut,
                     ok.Usage.CostUsd is { } usd ? $", ${usd:0.0000}" : string.Empty,
-                    ok.Repaired ? " (after one repair)" : string.Empty);
+                    ok.Repaired ? " (after one repair)" : string.Empty,
+                    // Only ever present on a reviewer that found NOTHING, which is the one an
+                    // operator reading a silent round is looking for. Named here rather than in the
+                    // round's reply: every clean round would carry that sentence, and a sentence on
+                    // every clean round is one nobody reads on the round that matters.
+                    ok.Evidence.Length > 0 ? $" (its answer was kept at {ok.Evidence})" : string.Empty);
                 break;
 
             case ReviewerState.Failed when progress.Outcome is { } outcome:

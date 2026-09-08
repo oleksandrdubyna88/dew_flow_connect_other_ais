@@ -316,6 +316,21 @@ extension owns no SQLite for the same reason it owns no native module — the al
 WebAssembly build in the VSIX to query a file this binary already writes. Version skew is ordinary:
 a server without the flag exits 64 and the page shows what it always showed.
 
+## What a round can be asked afterwards (2026-09-08)
+
+Two lines and one directory, added because a round that answered nothing could not be questioned:
+
+| Written when | Line |
+|---|---|
+| the context is assembled | `context for review: diff 63104 bytes over 13 file(s), 0 elided; plan 4210 bytes; rules 78757 bytes` |
+| the round opens | each reviewer as `codex/Architecture[architecture, 141293 bytes]` — the prompt it was actually handed |
+| a reviewer answers with no findings | `… 0 finding(s), 33629 in / 83 out tokens (its answer was kept at …/empty/codex-Conventions-….txt)` |
+
+The first says what was ASSEMBLED, the second what each reviewer RECEIVED, and they are only the
+same number while nothing between them is broken — which is the state the measurement of
+2026-09-08 could not establish either way. See [module_runners.md](module_runners.md),
+*A reviewer that found NOTHING is evidence too*.
+
 ## The audit trail
 
 `RoundAudit` writes what the one-line round summary cannot: the roster and the exact argv (at
