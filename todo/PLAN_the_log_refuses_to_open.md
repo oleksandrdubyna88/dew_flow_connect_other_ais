@@ -64,19 +64,34 @@ in-page `esc` in `roundsLog.ts:836` does `String(value)` first. A page that rend
 is strictly better than a log that will not open — the person can still answer their question, and
 the wrong-looking value is visible rather than fatal.
 
-Coercing is not the whole answer, because a silent `[object Object]` is a defect with no reporter.
-So `parseEscalation` validates what its interface promises, and a question whose file is malformed
-is SKIPPED with a line in the log — the shape it already uses for a file that will not parse.
+Coercing is not the whole answer on its own, and the plan round inverted what the rest of it should
+be. **The first draft said `parseEscalation` should validate every field its interface declares and
+SKIP a file that does not match.** Both gemini and codex refused that, and they are right: the file
+being validated is the question a person is waiting to answer. Dropping it because `repoPath` is a
+number leaves the round gated with nothing on screen to answer — a crash traded for a hang, which is
+worse, because a crash at least says something happened.
+
+**So the existing two-field check is correct and stays.** `id` and `question` are what make a
+question answerable; everything else is metadata around it. Metadata is SANITISED rather than
+trusted or rejected — a missing `branch` renders as empty, not as `undefined`, and never as a reason
+to hide the question.
 
 ## Build order
 
-1. `escapeHtml` and `escapeHtmlForHighlighting` coerce, matching their in-page twin. One line each,
-   and it removes the whole class from every caller at once.
+1. `escapeHtml` and `escapeHtmlForHighlighting` coerce — `value == null ? '' : String(value)`, not a
+   bare `String(value)`, because the bare form renders a missing field as the word `undefined`.
+   One line each, and it removes the whole class from every caller at once.
 2. `repoNameOf` coerces the same way.
-3. `parseEscalation` checks every field the `Escalation` interface declares, and returns `undefined`
-   for a file that does not match — with the reason logged, so a skipped question is not a silent one.
-4. `panelProvider` subscribes to `onDidDispose`, clears its handle, and stops posting into a promise
-   nobody reads.
+3. `parseEscalation` keeps its two-field check and SANITISES the rest: every declared string field
+   becomes a string, `openFindings` keeps only entries that are objects, and a question is skipped
+   only when `id` or `question` is unusable — which is what it already did. A field that had to be
+   sanitised is named in the log, so a `[object Object]` on screen has a reporter.
+4. `panelProvider` subscribes to `onDidDispose` and clears its handle **only when the disposed view
+   is still the current one** — a delayed callback from view A must not blank view B after a
+   re-resolve. The render is additionally wrapped, because `onDidDispose` can fire between the null
+   check and the write, and a null check cannot close that window on its own.
+5. A rejected `postMessage` is dropped ONLY when it is the disposal we expect; anything else is
+   logged, because a live view refusing a message is a different problem with no other reporter.
 
 ## Test plan
 
@@ -85,20 +100,23 @@ Every one fails first.
 | # | Test | Holds |
 |---|---|---|
 | 1 | `TheSidebarStopsPaintingOnceItsViewIsDisposed` | A disposed view is cleared, and a render afterwards is a no-op rather than a throw |
-| 2 | `APostToADisposedViewIsNotAnUnhandledRejection` | The `void postMessage` that VS Code surfaces as a notification |
-| 3 | `EscapingSurvivesAValueThatIsNotAString` | The exact failure: a number, an object and `undefined` through `escapeHtml` |
-| 4 | `ARepoPathThatIsNotAStringDoesNotStopTheLog` | The same for `repoNameOf` |
-| 5 | `AQuestionFileMissingAFieldIsSkipped_NotRendered` | `parseEscalation` validates what its type claims |
-| 6 | `ASkippedQuestionSaysWhyInTheLog` | Skipping silently would trade a crash for a question nobody sees |
+| 2 | `ADisposalFromAnOldViewDoesNotBlankTheNewOne` | The re-resolve race: view A's late callback must not clear view B |
+| 3 | `ARenderThatLosesItsViewMidWayIsStillNotAThrow` | The window a null check cannot close |
+| 4 | `EscapingSurvivesAValueThatIsNotAString` | The exact failure: a number, an object, `null` and `undefined` through `escapeHtml` |
+| 5 | `AMissingValueEscapesToNothing_NotToTheWordUndefined` | `String(undefined)` is a defect of its own |
+| 6 | `ARepoPathThatIsNotAStringDoesNotStopTheLog` | The same for `repoNameOf` |
+| 7 | `AQuestionWithBadMetadataIsStillAnswerable` | **The inversion.** A question whose `branch` is a number renders and keeps its Answer button |
+| 8 | `AQuestionWithNoUsableIdIsSkipped` | The one case that still skips, and the guard that it is the only one |
 
 `src_vs_code/src/test` already tests both halves; these go beside them.
 
 ## Definition of Done
 
 - [ ] The sidebar cannot write to a disposed view, and a post to one is not an unhandled rejection.
-- [ ] No escaper or path helper throws on a non-string.
-- [ ] `parseEscalation` validates every field it declares, and says why it skipped a file.
-- [ ] Tests 1–6 written, watched fail, and passing.
+- [ ] A late disposal from a replaced view does not blank the live one.
+- [ ] No escaper or path helper throws on a non-string, and none renders `undefined` as a word.
+- [ ] A question with bad metadata is still ANSWERABLE; only an unusable id or question is skipped.
+- [ ] Tests 1–8 written, watched fail, and passing.
 - [ ] `research/module_extension.md` records the disposal rule for the sidebar view beside the two
       panels that already had it.
 
