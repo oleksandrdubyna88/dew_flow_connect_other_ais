@@ -142,8 +142,22 @@ export function rowsFrom(
 
   return sessions
     .flatMap((session) =>
-      session.rounds.map((round) => rowFrom(session, round, nowMs, priceOf, usage, byRound, decided, colour)))
+      session.rounds.map((round) => rowFrom(session, round, nowMs, priceOf, usage, { byRound, decidedBy: decided, colour })))
     .sort((a, b) => (b.startedUtc || b.completedUtc).localeCompare(a.startedUtc || a.completedUtc));
+}
+
+/**
+ * What every row of one call needs and none of them computes for itself.
+ *
+ * <p>Grouped rather than passed as three more parameters: the database lookups and the palette are
+ * all "worked out once for the whole call", which is a different kind of argument from the session
+ * and the round a row IS. `rowFrom` had reached eight parameters, which is where a reader stops
+ * being able to check the call site by eye.</p>
+ */
+interface RowContext {
+  readonly byRound: Map<string, readonly DbFinding[]>;
+  readonly decidedBy: Map<string, { accepted: number; rejected: number }>;
+  readonly colour: VendorPalette;
 }
 
 function rowFrom(
@@ -152,10 +166,9 @@ function rowFrom(
   nowMs: number,
   priceOf: PriceOfModel,
   usage: readonly UsageEntry[],
-  byRound: Map<string, readonly DbFinding[]> = new Map(),
-  decidedBy: Map<string, { accepted: number; rejected: number }> = new Map(),
-  colour: VendorPalette = vendorPalette([]),
+  context: RowContext = { byRound: new Map(), decidedBy: new Map(), colour: vendorPalette([]) },
 ): LogRow {
+  const { byRound, decidedBy, colour } = context;
   const cost = costOf(round, priceOf, usage, nowMs);
   const key = roundKeyOf(
     session.state.sessionId, session.state.repoPath, session.state.branch, round.stage, round.number);
