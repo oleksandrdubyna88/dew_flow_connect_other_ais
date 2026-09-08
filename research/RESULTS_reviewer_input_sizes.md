@@ -68,8 +68,9 @@ Code-stage launches since 2026-09-06 that returned an answer:
 | remsoftdev-codex | 24 | 42,096 | 79,415 |
 | local (Ollama) | 226 | 35,300 | 77,012 |
 
-The median claude reviewer reads **four times** what the median codex reviewer reads and **five
-times** the local one.
+The median claude reviewer reads **3.1×** what the median codex reviewer reads and **4.8×** the
+local one. (An earlier draft said "four times ... and five times"; the division was done from
+memory and the code round caught it. Divide the column: 169,823 / 54,454 and 169,823 / 35,300.)
 
 ## Durations, and the one that was over its deadline
 
@@ -107,5 +108,6 @@ Two things fall out of this table, and both were reported by the operator before
 
 The next step is not a model change. It is to find out what the Team server hands a claude reviewer
 and whether it can be given the same thing codex is given — 42k of prompt and diff, no checkout.
-Costed at the observed numbers, that is roughly a **4× reduction in input tokens** on the vendor
-that is both the slowest and the most expensive per round.
+Costed at the observed numbers — the same-round codex baseline of 42,096 tokens against claude's
+487,037 — that is up to an **11× reduction on that reviewer**, and roughly 3× on the medians. It is
+the vendor that is both the slowest and the most expensive per round.
