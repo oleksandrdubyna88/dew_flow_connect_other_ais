@@ -5,8 +5,8 @@
 >
 > Related docs: [POST_DEPLOY.md](../POST_DEPLOY.md) item 1,
 > [module_extension.md](../research/module_extension.md),
-> [PLAN_the_server_has_a_release_line.md](../research/PLAN_the_server_has_a_release_line.md) — whose
-> completeness job checks this AFTER the fact.
+> `PLAN_the_server_has_a_release_line.md` (in review as PR #106) — whose completeness job
+> checks this AFTER the fact.
 
 ## The symptom, observed twice
 
