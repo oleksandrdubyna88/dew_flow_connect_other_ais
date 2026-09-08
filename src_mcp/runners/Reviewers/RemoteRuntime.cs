@@ -293,7 +293,14 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
     {
         // Beside the destination, never in the temp directory: a move across volumes is a copy, and a
         // copy is the non-atomic write this exists to avoid.
-        var pending = jobFile + ".writing-" + Guid.NewGuid().ToString("N")[..8];
+        //
+        // The name is DERIVED, not random. A random one cannot be cleaned up after the very failure
+        // this function is about — a process killed between creating the sibling and renaming it runs
+        // no `finally`, and nothing would ever know the orphan's name. Derived from the job file,
+        // which is itself unique per invocation, the next attempt simply writes over it. Raised by
+        // two reviewers, who also pointed out that "cleaned up on the failure path" cannot be true
+        // for a kill.
+        var pending = jobFile + ".writing";
         try
         {
             File.WriteAllText(
@@ -301,7 +308,7 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
                 JsonSerializer.Serialize(
                     new RemoteClaim(TeamServerAuth.Normalise(serverUrl), jobId, tokenFile),
                     RemoteClaimContext.Default.RemoteClaim));
-            File.Move(pending, jobFile, overwrite: true);
+            Replace(pending, jobFile);
 
             return string.Empty;
         }
@@ -309,6 +316,34 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
         {
             Forget(pending);
             return e.Message;
+        }
+    }
+
+    /// <summary>Rename over the destination, retrying the refusals Windows hands out transiently.</summary>
+    /// <remarks>
+    /// <para>Copied in shape from <c>SessionStore</c>, which learned it the expensive way and left the
+    /// measurement in a comment: on Windows a rename over an open file needs that file's handle to
+    /// permit deletion, and a reader that is not this code — an antivirus scanner, an indexer, the
+    /// parent reading a claim at the moment a retry writes one — can refuse it for an instant.</para>
+    /// <para>Fewer attempts and a shorter step than the session store's, because the contention here
+    /// is nothing like the same: a claim is written once per shim, to a path unique to that
+    /// invocation. A reviewer asked why this fix omitted the retry its own cited prior art needed.
+    /// It no longer does.</para>
+    /// </remarks>
+    private static void Replace(string pending, string jobFile)
+    {
+        const int attempts = 5;
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            try
+            {
+                File.Move(pending, jobFile, overwrite: true);
+                return;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException && attempt < attempts)
+            {
+                Thread.Sleep(Random.Shared.Next(5, 15) * attempt);
+            }
         }
     }
 

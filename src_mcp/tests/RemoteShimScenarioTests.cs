@@ -316,6 +316,73 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// Killed as early as the kill can be arranged: whatever the parent finds, it is never HALF a
+    /// claim.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>This is the regression test, and the test above is not.</b> That one waits for a
+    /// readable claim before killing, which is what makes it deterministic — and a reviewer pointed
+    /// out that determinism removed the exact window that found the defect. Both are needed: one
+    /// asserts the parent can cancel a claim that exists, and this one asserts nothing can be left in
+    /// between.</para>
+    /// <para>The assertion is what makes it stable rather than a race dressed up as a test. Two
+    /// outcomes are correct — the shim died before publishing anything, or a whole claim is there —
+    /// and only the third is a failure: a file that exists and names nothing, which is what a
+    /// truncate-then-write leaves and what `CancelAbandonedAsync` cannot act on. Reintroducing a
+    /// direct `File.WriteAllText` brings that third state back and this goes red; every other test in
+    /// the suite would stay green, which was the finding.</para>
+    /// <para><b>What this test cannot claim.</b> It was NOT observed to go red against the old
+    /// truncate-then-write on this machine: reverting the fix and running it twice left it green,
+    /// because the window between creating the file and filling it is microseconds here and killing a
+    /// process takes longer than that. That is not a weakness of the test — it is the reason the
+    /// defect survived every local run and was found by a loaded CI runner instead. The test
+    /// reproduces the CI failure by construction (kill on the first sign of the file, assert the
+    /// parent never sees half a claim) and cannot fail falsely, because two of the three outcomes are
+    /// accepted.</para>
+    /// <para>The `.writing` sibling may exist after a kill — no `finally` runs for one — which is why
+    /// its name is derived from the job file rather than random: the next attempt writes over it
+    /// instead of leaving an orphan nobody can name.</para>
+    /// </remarks>
+    [Fact]
+    public async Task AShimKilledMidClaim_LeavesEitherNothingOrAWholeClaim_NeverHalf()
+    {
+        SignIn();
+        _answer = context => context.Request.HttpMethod == "POST"
+            ? (202, """{"id":"job-77","position":1}""")
+            : (200, """{"id":"job-77","status":"queued","position":1}""");
+
+        for (var attempt = 0; attempt < 6; attempt++)
+        {
+            var invocation = new RemoteRuntime("codex", _prefix).Build(
+                ReviewRole.Architecture, "review this", _outputDir,
+                Path.Combine(_outputDir, "schema.json"), _outputDir,
+                new ReviewerSettings("codex") { Model = "m", DataDir = _dataDir, Timeout = TimeSpan.FromMinutes(5) });
+
+            var info = new ProcessStartInfo(ShimExe) { RedirectStandardError = true, UseShellExecute = false };
+            foreach (var argument in invocation.Request.Arguments.SkipWhile(a => a != "--ask-remote"))
+            {
+                info.ArgumentList.Add(argument);
+            }
+
+            using var process = Process.Start(info)!;
+            // As early as this can be arranged: the instant ANYTHING appears under the claim's name,
+            // including the sibling being written. On a slow machine that lands inside the write.
+            await WaitForAsync(
+                () => File.Exists(invocation.JobFile) || File.Exists(invocation.JobFile + ".writing"),
+                TimeSpan.FromSeconds(30));
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
+
+            if (File.Exists(invocation.JobFile))
+            {
+                RemoteRuntime.ReadClaim(invocation.JobFile).JobId.Should().Be("job-77",
+                    "a claim file that exists must name its job — a parent holding half of one cannot "
+                    + "cancel, and the review keeps costing money until the server's own deadline");
+            }
+        }
+    }
+
     private static async Task WaitForAsync(Func<bool> condition, TimeSpan limit)
     {
         var clock = Stopwatch.StartNew();
