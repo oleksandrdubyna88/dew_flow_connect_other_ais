@@ -3,6 +3,27 @@
 > `src_vs_code` — the human surface. Four commands, zero runtime dependencies, no background work
 > and **no port**: the review itself lives in `coai-mcp`, which an MCP client owns and starts.
 
+### One spawn site, and why it grew a handle (2026-09-08)
+
+`processLauncher.ts` owns the only `spawn` in `src/` that this extension controls. It is the version
+probe’s own launcher, widened rather than copied: the synchronous-throw catch (node refuses a `.cmd`
+without a shell with an `EINVAL`, and the exception escaped `render` until it was caught at the call),
+the tree kill (`child.kill()` reaches `cmd.exe` and not the shim’s grandchild), `taskkill` by absolute
+path (`CreateProcess` searches the working directory first, so a bare name could be a file planted in
+an opened workspace) and the empty working directory for the shell branch. A second launcher would
+have had to learn all four; the one that already exists beside it, `wslNetwork.ts`, learned none and
+is left alone deliberately — it has a different stdio contract, and moving it inside a refactor would
+smuggle a behaviour change in under a de-duplication.
+
+It returns a HANDLE rather than a promise because two callers want different things from the same
+hardening. `capture` wants the whole output and then the exit code, and is re-expressed over the
+handle with its contract unchanged for its three callers. A chat session wants to write a line, read
+lines back, and keep the process for the next question — which a promise cannot express at all.
+
+Two details are load-bearing and easy to lose. The exit event fires on **`close`**, not `exit`:
+`exit` can arrive with output still buffered, and a truncated banner parses to no version at all.
+And every subscription is late-safe — a listener added after the event still hears it — because a
+target that does not exist fails before the caller’s next line runs.
 ### The copied block is a path, and nothing else (2026-09-06)
 
 `envBlock` used to fill the pasted `mcpServers` block with every setting that differed from the
