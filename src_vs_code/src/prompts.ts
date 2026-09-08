@@ -80,12 +80,16 @@ export const CONVENTIONS_ID = 'conventions';
 /**
  * The first coai-mcp that knows `Conventions` is a ROLE.
  *
- * <p>Older servers have four roles, not five: they would be asked to run a role their own enum
- * cannot parse. That is worse than the mismatch this constant used to guard — a panel showing
- * `Universal` for a round that ran `conventions` was a wrong prompt; this is a round that does not
- * start. The panel and the server are installed separately (an extension updates itself, a server
- * is a binary somebody presses a button to replace), so the Prompts section says so while it is
- * true rather than leaving it to be found in a failed round.</p>
+ * <p>Older servers have four roles, not five, and they DEGRADE rather than break — a distinction
+ * this comment got wrong first and three gate reviewers then got wrong after it. The server builds
+ * a round by iterating its OWN role list and reading one env key per role it knows, so a key naming
+ * `Conventions` is never looked up and no enum ever sees the name. Nothing fails to start: the box
+ * is drawn in the panel and the reviewer simply never runs.</p>
+ *
+ * <p>Which is quieter than a failure and worth saying out loud for exactly that reason. The panel
+ * and the server are installed separately — an extension updates itself, a server is a binary
+ * somebody presses a button to replace — so the Prompts section says a conventions check is visible
+ * and unreachable, while that is true.</p>
  */
 export const CONVENTIONS_ROLE_SINCE = '0.18.10';
 

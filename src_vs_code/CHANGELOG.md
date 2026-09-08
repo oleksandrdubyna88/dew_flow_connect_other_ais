@@ -18,12 +18,27 @@ A repository that wrote no rules down — no `CLAUDE.md`, `AGENTS.md`, `GEMINI.m
 — has these reviewers skipped, and the server says so. A pass with nothing to judge against would
 invent a standard, which is worse than the review it displaced.
 
-**Needs `coai-mcp` 0.18.10.** An older server has four roles and cannot parse a fifth; the Prompts
-section says so while that is true.
+**Wants `coai-mcp` 0.18.10.** An older server has four roles and does not know the fifth, so it
+simply will not run it: your code rounds are three code roles instead of four, with the box still
+drawn in the panel. Nothing fails — the server reads its gate from its own list of roles and ignores
+a key naming one it has never heard of — but a conventions check you can see and cannot get is worth
+a sentence, and the Prompts section carries it while it is true.
 
 **Each reviewer now wears its own colour.** The card in *Reviewers* has a coloured left edge, and it
 is the same colour that reviewer’s name has in *Active rounds* and in the rounds log — so you can
 follow one vendor from where you set it up to where it is running without reading either.
+
+**The gate you see is the gate that runs.** The panel writes a setting into the server's
+configuration only where it differs from the default, so that putting a control back removes the
+line instead of pinning a stale value. That quietly requires the panel's default and the server's
+fallback to be the same number, and for one day they were not: yesterday's release moved every round
+and threshold in the panel and left the server's own where they were. A fresh install read *1 round,
+threshold 6* off the screen and ran three rounds at threshold 2.
+
+They are the same number again — one round everywhere, six open findings allowed on a plan and five
+on a diff. **If you never touched these sliders, your rounds change with this release**: they become
+the ones the panel has been showing you. A test now reads the server's two constants out of its
+source rather than copying them, so this cannot drift again without going red.
 
 **If you are an admin on a Team server, its row now tells you what is published.** One line under
 the status: the newest released `coai-server` version, and a `⬆` when it is newer than the one your

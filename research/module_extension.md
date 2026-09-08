@@ -280,7 +280,8 @@ runtime this build knows is now a row in one table.
 
 ### Two frames, four colours, and a stage each (2026-09-01)
 
-The Prompts section is two frames: the plan role alone, and the three code roles together. Each role
+The Prompts section is two frames: the plan role alone, and the code roles together — three of them
+until `Conventions` became the fourth on 2026-09-08. Each role
 is a box with a coloured LEFT EDGE rather than a filled panel — it marks the role at a glance without
 turning a settings panel into four coloured slabs, and it survives a light theme unchanged. The
 palette is the sibling product's own token set (`creds/src_vs_code/src/entityFormStyles.ts`): a

@@ -11,7 +11,7 @@
 | `providers` | `PanelService.ProvidersAsync` — CLI probe + vault state | never; it reports |
 | `open` | `OpenAsync` — resolve branch, prune worktrees, load-or-create session | repo/branch unresolvable |
 | `review_plan` | `RunStageAsync` with one `PlanCritique` per provider | no session; round awaiting resolve |
-| `review_code` | `RunStageAsync` with the three code roles per provider | **no plan round reached `proceed`** |
+| `review_code` | `RunStageAsync` with the four code roles per provider — `Conventions` first | **no plan round reached `proceed`** |
 | `resolve` | `ResolveAsync` — reasoned decisions by finding index | bad index; reject without a reason |
 | `status` | persisted session + round trail | no session |
 | `ask_human` | `Escalations` — a question FILE the extension watches | only an empty question; otherwise it WAITS the budget, then answers `no_answer_yet` telling the model to ask in the chat |
@@ -221,7 +221,8 @@ a gate over them would break a configuration whose whole point is not to stop; a
 ## Prompts are a catalog, resolved per round
 
 `PromptCatalog` (in the core) holds twenty-five prompts — a universal one and five narrow lenses for
-each of the four roles, plus the conventions pass the three code roles share. The last twelve lenses
+each of the four lensed roles, plus the single prompt of `Conventions`, which since 2026-09-08 is a
+ROLE rather than a pass the code roles took turns hosting. The last twelve lenses
 were measured before they were added (`RESULTS_focused_prompts.md`): the finding that shaped them is
 that a lens written as a TASK to enact repeats itself across runs half again as often as the same
 question written as a checklist, while finding the same amount.
@@ -421,9 +422,23 @@ revealed: a plan is a document, so two findings still open is a lot of doubt abo
 diff is hundreds of lines across a dozen files, and three open there is an ordinary Tuesday. The
 number that made the plan gate strict made the code gate a permanent `call_human` — measured on this
 product's own rounds, where the plan stage passed at two and the code stage never passed at all.
-Defaults: plan 3 rounds / 2 findings, code 3 / 3. `PanelConfig.For(Stage)` is the only way to read
-them, so no call site picks a stage by hand, and the legacy `COAI_MAX_ROUNDS` /
-`COAI_GATE_THRESHOLD` become the value for BOTH stages rather than being dropped.
+`PanelConfig.For(Stage)` is the only way to read them, so no call site picks a stage by hand, and the
+legacy `COAI_MAX_ROUNDS` / `COAI_GATE_THRESHOLD` become the value for BOTH stages rather than being
+dropped.
+
+**The defaults are the panel's, and that is enforced (2026-09-08).** They are `PlanDefault = (1, 6)`
+and `CodeDefault = (1, 5)` — one round everywhere, six open findings tolerated on a plan and five on
+a diff. One round because the second and third re-raise what the first found rather than finding
+more; the thresholds are high because the earlier ones sat where a real change could not pass, and a
+gate that blocks everything is a gate people route around.
+
+The numbers must equal the extension's `DEFAULTS`, and the requirement is structural rather than
+tidy: `envBlock` writes a `COAI_ROUNDS_*` key only where the value DIFFERS from the panel's default,
+so a pristine configuration sends none and this fallback is what runs. They diverged for one day —
+the panel displayed one round, the server ran three, and the release that moved the panel's numbers
+was named for making them the ones that run. `panelServerDefaultsAgreement.test.ts` READS these two
+constants out of `SessionState.cs` rather than transcribing them, and a second test asserts that a
+default panel writes no gate key at all.
 
 **The reviewers are shown the project's own rules.** `RuleFiles.Collect` (in `runners/Context`) reads
 `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.claude/rules/**` and
