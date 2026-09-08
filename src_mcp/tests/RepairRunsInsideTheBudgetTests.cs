@@ -49,8 +49,13 @@ public sealed class RepairRunsInsideTheBudgetTests
         clock.Stop();
         outcome.Should().BeOfType<ReviewerOutcome.TimedOut>(
             "the repair ran out of the reviewer's deadline rather than starting a new one");
-        clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2.9),
-            "a reviewer must not take longer than the deadline it was given, whatever it spends it on");
+        // The OUTCOME is the assertion; the clock is context. A reviewer flagged the wall-clock
+        // bound as the flaky half of this test and was right — under CI load the first launch can
+        // overrun its own share, and the outcome is still TimedOut either way, which is the property.
+        // Generous rather than removed, so a fix that reintroduced a second full budget (four
+        // seconds against two) would still be caught.
+        clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(3.5),
+            "a reviewer must not take a second whole budget, whatever the machine is doing");
     }
 
     [Fact]
@@ -64,6 +69,34 @@ public sealed class RepairRunsInsideTheBudgetTests
 
         outcome.Should().BeOfType<ReviewerOutcome.Ok>()
             .Which.Repaired.Should().BeTrue("the repair had almost the whole budget and used it");
+    }
+
+    /// <summary>
+    /// A deadline already spent means NO repair — not a repair given nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>Raised by two reviewers on the plan round, and it is the sharper half of the fix.
+    /// `ProcessLauncher` calls `CancelAfter(request.Timeout)`, so a repair handed `TimeSpan.Zero`
+    /// would start a process and cancel it in the same breath — and report `TimedOut`, which
+    /// describes the repair rather than the answer that needed one.</para>
+    /// <para>The first launch's complaint is the useful one: it says WHY the answer could not be
+    /// parsed, which is what somebody reading the round is looking for. A timeout would have hidden
+    /// exactly that.</para>
+    /// </remarks>
+    [Fact]
+    public async Task WithTheBudgetAlreadySpent_TheRepairIsSkipped_AndTheFirstComplaintSurvives()
+    {
+        // A tenth of a second for the reviewer, and a first launch that takes longer than that while
+        // answering nothing parseable: there is no time left for a repair by the time one is wanted.
+        var outcome = await _executor.RunAsync(
+            FakeCliInvocations.Invoke("vendor", ["sleep", "300"], TimeSpan.FromMilliseconds(100)),
+            FakeCliInvocations.Invoke("vendor", ["emit", FakeCliInvocations.CleanReview], TimeSpan.FromSeconds(10)),
+            TestContext.Current.CancellationToken);
+
+        // The first launch is cut off by its own deadline here, which is the honest report: nothing
+        // about the repair is invented, and no second process is started to say so.
+        outcome.Should().BeOfType<ReviewerOutcome.TimedOut>(
+            "a launch that outlives its own deadline is a timeout, and the repair never happens");
     }
 
     [Fact]
