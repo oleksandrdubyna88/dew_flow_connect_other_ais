@@ -1,5 +1,6 @@
 import { ChatModelChoice } from './chatPage';
 import { CHAT_RUNTIMES } from './cliChatLaunch';
+import { REMOTE_TURNS } from './remoteAsk';
 import { Vendor } from './vendors';
 
 /**
@@ -32,9 +33,18 @@ export interface ChatModelList {
   readonly refused: readonly RefusedModel[];
 }
 
-/** What a person sees under a model's name — what it is, and what it cannot do. */
+/**
+ * What a person sees under a model's name — what it is, and what it cannot do.
+ *
+ * <p>The difference between the two kinds is not cosmetic and the person is the one who pays for it:
+ * a local CLI holds the conversation in its own process, and a Team server holds none at all, so
+ * every turn there re-sends everything said so far and the conversation stops at three. Said in the
+ * picker, before the model is chosen.</p>
+ */
 function captionOf(vendor: Vendor): string {
-  return `local · ${vendor.runtime} · keeps the conversation`;
+  return vendor.runtime === 'remote'
+    ? `team server · no memory, so each turn re-sends the conversation · ${REMOTE_TURNS} turns`
+    : `local · ${vendor.runtime} · keeps the conversation`;
 }
 
 /**
@@ -44,20 +54,26 @@ function captionOf(vendor: Vendor): string {
  * `codex` and finds the chat picker silently missing it has no way to tell a bug from a policy; a
  * line saying which runtimes can answer costs nothing and answers that.</p>
  */
+/** Whether this row can answer a chat at all — a CLI with an adapter, or a Team server. */
+export function canChat(vendor: Vendor): boolean {
+  return CHAT_RUNTIMES.includes(vendor.runtime) || vendor.runtime === 'remote';
+}
+
 export function chatModelsFrom(vendors: readonly Vendor[]): ChatModelList {
   const enabled = vendors.filter((vendor) => vendor.enabled);
   const offered = enabled
-    .filter((vendor) => CHAT_RUNTIMES.includes(vendor.runtime))
+    .filter(canChat)
     .map((vendor): ChatModelChoice => ({
       id: vendor.id,
       label: vendor.model.length > 0 ? `${vendor.id} · ${vendor.model}` : vendor.id,
       caption: captionOf(vendor),
     }));
   const refused = enabled
-    .filter((vendor) => !CHAT_RUNTIMES.includes(vendor.runtime))
+    .filter((vendor) => !canChat(vendor))
     .map((vendor): RefusedModel => ({
       id: vendor.id,
-      reason: `the chat can only speak to ${CHAT_RUNTIMES.join(', ')} so far — ${vendor.id} runs on ${vendor.runtime}`,
+      reason: `the chat can only speak to ${CHAT_RUNTIMES.join(', ')} and Team servers so far`
+        + ` — ${vendor.id} runs on ${vendor.runtime}`,
     }));
 
   return { offered, refused };

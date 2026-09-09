@@ -8,6 +8,11 @@ import { ChatMessage, ChatModelChoice } from './chatPage';
 import { CliChatSession, REAL_TIMERS } from './cliChatSession';
 import { DEFAULT_BUDGETS } from './chatSession';
 import { chatChoice, chatModelsFrom } from './chatModels';
+import { remoteIsFull } from './remoteAsk';
+import { remoteChatFor } from './chatRemote';
+import { rowBelongsTo, teamServersFrom } from './teamServers';
+import { readToken } from './teamServerAuth';
+import { coaiDataDir } from './dataDir';
 import { chatSettingsFrom } from './chatSettings';
 import { chatUiScale, createChatPanel, pushChatDraft, pushChatState } from './chatPanel';
 import { captureSelection, COPY_SCRIPT, argvFor, ran } from './selectionCapture';
@@ -49,6 +54,10 @@ interface Thread {
   modelId: string;
   /** Whether a turn is in flight. Only so a switch can say out loud that it is waiting for one. */
   running: boolean;
+  /** This model keeps no conversation of its own, so every turn re-sends one and they are counted. */
+  readonly forgetful: boolean;
+  /** How many turns have been ANSWERED. The cap is on turns, not on messages. */
+  asked: number;
   /**
    * The conversation to hand the NEXT turn, because the process it goes to never heard it.
    *
@@ -73,6 +82,17 @@ interface Thread {
 }
 
 const threads = new WeakMap<object, Thread>();
+
+/**
+ * Does this model keep no memory of its own?
+ *
+ * <p>A Team server answers one question and forgets it, so every turn must carry the conversation
+ * and the conversation must be capped — the bill for turn N is the bill for everything before it.
+ * A local CLI holds it in its own process and has neither problem.</p>
+ */
+function forgetful(vendor: Vendor): boolean {
+  return vendor.runtime === 'remote';
+}
 
 /** The tabs, narrowed to what `sessionKey` judges on. */
 function snapshots(): { active: TabSnapshot | undefined; all: TabSnapshot[] } {
@@ -123,7 +143,9 @@ function show(entry: ChatEntry, running: boolean, failure: string): void {
   pushChatState(entry, {
     messages: thread.messages,
     running,
-    capped: false,
+    // Built in epic 2 and set for the first time here: a remote conversation stops at three turns
+    // and the page offers the local model that has a memory instead.
+    capped: thread.forgetful && remoteIsFull(thread.asked),
     failure,
     models: thread.models,
     modelId: thread.modelId,
@@ -184,6 +206,14 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   thread.running = true;
   show(entry, true, '');
 
+  // A forgetful model is handed the conversation EVERY time, not only after a switch: the server
+  // answers one question and forgets it, so turn three without the transcript is turn one wearing
+  // a number. This is also why such a conversation is capped — the bill for turn N is the bill for
+  // everything before it.
+  if (thread.forgetful && thread.messages.length > 1) {
+    thread.carry = thread.messages.slice(0, -1);
+  }
+
   // What is SHOWN is what the person typed; what is SENT may carry the whole conversation with it,
   // because the process it is going to never heard any of it. Putting the carried version in the
   // transcript would print the entire history back at them under their own one-line question.
@@ -214,6 +244,7 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
     ? `(the conversation restarted — this answer does not remember the earlier ones)\n\n${result.answer}`
     : result.answer;
   thread.messages = [...thread.messages, { role: 'model', text: answer }];
+  thread.asked += 1;
   show(entry, false, '');
 }
 
@@ -301,7 +332,12 @@ function matchedSession(panels: ChatPanels): ReturnType<typeof sourceSession> {
  * id, and the id is not known until the first turn has been answered. A persistent vendor ignores
  * the argument entirely and gets the same argv every time.</p>
  */
-function started(vendor: Vendor, resolved: string): { session: ChatSession; home: ChatHome } {
+function started(vendor: Vendor, resolved: string, remote?: ChatSession): { session: ChatSession; home: ChatHome } {
+  if (remote !== undefined) {
+    // A Team server needs no process and no directory: the home is a stub whose release does
+    // nothing, so the rest of this file does not have to know which kind it holds.
+    return { session: remote, home: { dir: '', release: () => undefined } };
+  }
   const home: ChatHome = emptyTempDir();
   const adapter = adapterFor(vendor.runtime);
 
@@ -323,7 +359,33 @@ function started(vendor: Vendor, resolved: string): { session: ChatSession; home
  * resolves fails here with `ENOENT`. Asked once, before anything is created, so a missing CLI is a
  * message about a missing CLI rather than a conversation that dies at its first turn.</p>
  */
+/**
+ * The conversation for a REMOTE row, or the sentence saying why there is none.
+ *
+ * <p>Two things can be missing and they are different sentences: the server the row belongs to may
+ * have been removed from the settings, and this side may not be signed in to it. A person can act
+ * on either, and neither is "the model did not answer".</p>
+ */
+async function remoteFor(vendor: Vendor): Promise<{ session: ChatSession | undefined; refusal: string }> {
+  const servers = teamServersFrom(vscode.workspace.getConfiguration('coai').get('teamServers'));
+  const server = servers.find((one) => rowBelongsTo(vendor, one));
+  if (server === undefined) {
+    return { session: undefined, refusal: `${vendor.id} belongs to a Team server this side no longer has.` };
+  }
+  const token = await readToken(coaiDataDir(), server.url);
+  const session = remoteChatFor(vendor, server.url, token);
+
+  return session === undefined
+    ? { session: undefined, refusal: `Sign in to ${server.name} to chat with ${vendor.id}.` }
+    : { session, refusal: '' };
+}
+
 async function cliFor(vendor: Vendor): Promise<{ resolved: string; refusal: string }> {
+  if (forgetful(vendor)) {
+    // A Team server has no executable to find. Saying so here keeps the caller's shape: one
+    // question, one refusal, before anything is created.
+    return { resolved: '', refusal: '' };
+  }
   const asked = vendor.executablePath.length > 0 ? vendor.executablePath : defaultExecutableFor(vendor.runtime);
   const resolved = await resolvedExecutable(asked);
 
@@ -395,16 +457,18 @@ async function switchNow(entry: ChatEntry, modelId: string): Promise<void> {
   // whose CLI is not installed — and finding that out by spawning it would kill a conversation that
   // was working a moment ago.
   const cli = await cliFor(vendor);
-  if (cli.refusal.length > 0) {
-    void vscode.window.showWarningMessage(cli.refusal);
-    show(entry, false, cli.refusal);
+  const remote = forgetful(vendor) ? await remoteFor(vendor) : { session: undefined, refusal: '' };
+  const cannot = cli.refusal.length > 0 ? cli.refusal : remote.refusal;
+  if (cannot.length > 0) {
+    void vscode.window.showWarningMessage(cannot);
+    show(entry, false, cannot);
 
     return;
   }
 
   thread.session.dispose();
   thread.home.release();
-  const replacement = started(vendor, cli.resolved);
+  const replacement = started(vendor, cli.resolved, remote.session);
   thread.session = replacement.session;
   thread.home = replacement.home;
   thread.modelId = modelId;
@@ -427,8 +491,9 @@ function newConversation(
   ready: Extract<Ready, { ok: true }>,
   state: { readonly title: string; readonly passage: string; readonly draft: string },
   resolved: string,
+  remote: ChatSession | undefined,
 ): ChatEntry {
-  const first = started(ready.vendor, resolved);
+  const first = started(ready.vendor, resolved, remote);
   const session = first.session;
   const entry = createChatPanel(
     {
@@ -482,6 +547,8 @@ function newConversation(
     models: ready.models,
     modelId: ready.modelId,
     running: false,
+    forgetful: forgetful(ready.vendor),
+    asked: 0,
     carry: [],
     messages: [],
     turns: Promise.resolve(),
@@ -542,6 +609,12 @@ export async function chatWithOtherAi(panels: ChatPanels, args: readonly unknown
 
     return;
   }
+  const remote = forgetful(ready.vendor) ? await remoteFor(ready.vendor) : { session: undefined, refusal: '' };
+  if (remote.refusal.length > 0) {
+    void vscode.window.showWarningMessage(remote.refusal);
+
+    return;
+  }
 
   const turn = openingTurn(settings.prompt, settings.language, passage.text);
   // A factory, not a value: nothing is built — no process, no temp directory — for a tab that
@@ -550,7 +623,7 @@ export async function chatWithOtherAi(panels: ChatPanels, args: readonly unknown
     title: match.label,
     passage: passage.text,
     draft: plan.send ? '' : turn,
-  }, cli.resolved));
+  }, cli.resolved, remote.session));
 
   opened.entry.panel.reveal();
   if (plan.send) {

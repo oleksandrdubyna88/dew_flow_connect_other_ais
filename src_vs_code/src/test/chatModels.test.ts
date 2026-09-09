@@ -71,6 +71,18 @@ test('offered and refused are reported side by side', () => {
   assert.strictEqual(list.refused.length, 1);
 });
 
+test('a Team server row is offered too, and its caption says what it cannot do', () => {
+  // A remote model keeps no conversation, so every turn re-sends everything said so far and the
+  // conversation stops at three. The person paying for that is told before they choose it.
+  const list = chatModelsFrom([vendor({ id: 'remsoftdev-claude', runtime: 'remote' })]);
+
+  assert.strictEqual(list.offered.length, 1);
+  assert.match(list.offered[0]!.caption, /team server/);
+  assert.match(list.offered[0]!.caption, /no memory/);
+  assert.match(list.offered[0]!.caption, /3 turns/);
+  assert.deepStrictEqual(list.refused, []);
+});
+
 test('all three vendor CLIs are offered, which is what the adapter plan was for', () => {
   // The master plan recorded "claude's schema differs and codex exec has no multi-turn stdin" as a
   // limitation. Measured, half of it was wrong, and this is the assertion that keeps it wrong.
@@ -135,13 +147,13 @@ test('the model named and on offer is the one that answers', () => {
 
 test('nothing on offer at all reports every reason it has, not one of them', () => {
   const choice = chatChoice(
-    chatModelsFrom([vendor({ id: 'local-one', runtime: 'local' }), vendor({ id: 'a-server', runtime: 'remote' })]),
+    chatModelsFrom([vendor({ id: 'local-one', runtime: 'local' }), vendor({ id: 'old-gemini', runtime: 'gemini' })]),
     '',
   );
 
   assert.strictEqual(choice.modelId, '');
   assert.match(choice.refusal, /local-one/);
-  assert.match(choice.refusal, /a-server/);
+  assert.match(choice.refusal, /old-gemini/);
 });
 
 test('the launch carries the four flags, each of which was chosen against a failure', () => {
