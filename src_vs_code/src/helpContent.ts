@@ -241,7 +241,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       usage:
         'The keybinding copies the selection for you and asks straight away. The right-click item cannot — closing that menu takes the selection out of the panel — so it takes whatever you last copied and puts it in the box for you to send, which is also why the passage is shown at the top of the tab: you can see what is about to be asked. One tab per assistant session, so two conversations never mix.',
       whatCanGoWrong:
-        'Copying the selection needs Windows; elsewhere the keybinding says so and points you at the menu, which works everywhere. If the model’s process dies the answer after it says the conversation restarted, because it genuinely does not remember the earlier turns. A reviewer on another runtime is refused by name rather than quietly missing — the chat speaks one protocol so far.',
+        'Copying the selection needs Windows; elsewhere the keybinding says so and points you at the menu, which works everywhere. If the model’s process dies the answer after it says the conversation restarted, because it genuinely does not remember the earlier turns. A reviewer on another runtime is refused by name rather than quietly missing — the chat speaks one protocol so far. Reloading the window keeps what was SAID: every open chat tab comes back with its questions and answers, and a line saying the conversation was closed by the reload. The model behind it is gone — nothing is running until you ask again, and that first question carries the whole transcript across to a new session, which is what it costs.',
     },
   },
   {

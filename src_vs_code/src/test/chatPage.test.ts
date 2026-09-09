@@ -18,6 +18,7 @@ const MODELS: readonly ChatModelChoice[] = [
 
 function state(over: Partial<ChatPageState> = {}): ChatPageState {
   return {
+    id: 'conversation-1',
     title: 'привет',
     passage: 'The reviewers are read-only.',
     messages: [],

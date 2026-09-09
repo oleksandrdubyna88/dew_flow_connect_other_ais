@@ -920,6 +920,55 @@ because it could override the value out of sight. A second test in the file driv
 guard that cannot be described in a fixture is a guard nobody can trust. The discovery walks `.ts`,
 `.tsx`, `.mts` and `.cts`, so a panel arriving as a `.tsx` is not a panel nobody scans.
 
+## A conversation survives a window reload (2026-09-09)
+
+There was no `registerWebviewPanelSerializer` anywhere in this extension, so a window reload — or an
+extension update restarting the host — emptied every chat tab. `retainContextWhenHidden` keeps a
+panel alive while it is HIDDEN, which is a different thing entirely.
+
+**Identity is the whole design, and the plan round is why.** The first draft keyed the store by the
+tab's TITLE, because nothing was calling `setState` and a title is the only thing VS Code preserves
+by itself. Six reviewers took it apart independently and they were right on every count: two namesake
+tabs would overwrite each other on the way IN, so the collision could never even be detected on the
+way out; a `deserializeWebviewPanel` call cannot know whether another panel of the same name is still
+coming; and `workspaceState` is shared by two windows on one folder. So the conversation carries its
+own id — minted in `newConversation`, rendered into the page, handed straight back through
+`setState`, and returned to the serializer after a reload. That is the one line in `chatPage.ts`.
+
+**Nothing is started when a tab comes back.** The process that was answering died with the window,
+and most restored tabs are never spoken to again; opening a CLI for each of them at every reload
+would be a window full of vendor processes nobody asked for. The transcript is rendered, the composer
+works, and `reopened` starts the session inside the FIRST turn — re-running the same three checks the
+command makes before opening a tab at all, because a reload can be a week and a machine rebuild away
+from the conversation it restores. The transcript is already in `carry`, so the model that answers is
+handed the whole thread through `carriedTurn`: the handover a model switch already ships, which is
+why nothing here resumes a vendor thread and no adapter learns anything new.
+
+**A restored panel is built by `createChatPanel`, with the panel VS Code handed back.** That is what
+keeps the icon, the message wiring, the zoom hook and the disposal in one place; the icon plan's own
+test holds it from the other side. Two halves of the options are not the same: `webview.options` can
+be set again on a restored panel and is, but `retainContextWhenHidden` and `enableFindWidget` are
+fixed at creation with no API to change them, so whether a restored tab keeps its find bar is the
+workbench's decision and not ours.
+
+**Nothing is deleted when a tab closes**, and that is deliberate: a disposal cannot tell a person
+closing a tab from a reload tearing one down, and VS Code disposes every panel on reload. Deleting
+there would erase the transcript at exactly the moment it is needed — the code round named it, and it
+would have made the whole feature a no-op. A closed tab is simply never restored, because VS Code
+only deserializes panels that were open. The store is bounded instead: a record per conversation,
+newest first, cut at a week and at twenty, swept once on activation.
+
+`chatTabs.ts` holds all of that with no `vscode` import — what is written, what a damaged record does
+(dropped, never repaired: a transcript with a hole reads as a model that said nothing), what a
+different `version` does (discarded, never guessed at), and the write queue. The queue matters
+because every write is read-modify-write of one key: two tabs saving in the same moment would both
+read the same old value and the later write would drop the earlier one's conversation. It recovers
+from a rejection rather than staying poisoned, since a storage failure that silently stopped every
+later write would be indistinguishable from the bug this fixes.
+
+**The open tail.** A panel restored into a window where the conversation's record was pruned is
+disposed rather than left as an empty tab pretending to be one.
+
 ## The chat tab wears its own glyph (2026-09-09)
 
 Every chat tab wore the generic `≡`, because `createWebviewPanel` never set `iconPath` — there was
