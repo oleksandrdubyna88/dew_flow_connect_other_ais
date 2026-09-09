@@ -3,6 +3,7 @@ import { mkdtempSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { response } from './responseFixture';
 import {
   AuthHost,
   SignedIn,
@@ -62,7 +63,7 @@ function serverSaying(email: string): typeof fetch {
       ? JSON.stringify({ microsoftScope: GOOD_SCOPE, providers: ['microsoft'] })
       : JSON.stringify({ token: `token-for-${email}`, expiresUtc: '2027-01-01T00:00:00Z', email });
 
-    return { ok: true, status: 200, headers: new Headers(), text: async () => body } as Response;
+    return response({ status: 200, body: body });
   }) as typeof fetch;
 }
 
@@ -233,21 +234,19 @@ test('a silent mint that comes back as the WRONG account writes nothing', async 
       if ((init.method ?? 'GET') === 'DELETE') {
         ended.push(url);
 
-        return { ok: true, status: 204, headers: new Headers(), text: async () => '' } as Response;
+        return response({ status: 204 });
       }
 
-      return {
-        ok: true,
+      return response({
         status: 200,
-        headers: new Headers(),
-        text: async () => (url.endsWith('/api/client-config')
+        body: url.endsWith('/api/client-config')
           ? JSON.stringify({ microsoftScope: GOOD_SCOPE, providers: ['microsoft'] })
           : JSON.stringify({
             token: 'personal-token',
             expiresUtc: '2027-01-01T00:00:00Z',
             email: 'personal@example.com',
-          })),
-      } as Response;
+          }),
+      });
     }) as typeof fetch;
 
     const done = await reconcile(SERVER, host(dir, state, { side: WSL, fetchImpl: impl }), NOW);
@@ -366,7 +365,7 @@ test('a stale token is ENDED on the server before a new one is asked for', async
       if ((init.method ?? 'GET') === 'DELETE') {
         ended.push(String(input));
 
-        return { ok: true, status: 204, headers: new Headers(), text: async () => '' } as Response;
+        return response({ status: 204 });
       }
 
       return (await (serverSaying('a@b.c') as (i: unknown, o: unknown) => Promise<Response>)(input, init));
@@ -468,7 +467,7 @@ test('nothing to do is answered without touching the network', async () => {
     const counting = (async () => {
       called += 1;
 
-      return { ok: true, status: 200, headers: new Headers(), text: async () => '{}' } as Response;
+      return response({ status: 200, body: '{}' });
     }) as typeof fetch;
 
     const action = await plannedAction(
