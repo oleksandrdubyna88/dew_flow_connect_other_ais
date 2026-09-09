@@ -179,6 +179,24 @@ so hard to see. See `ReviewerSummaryFactory` and `RemoteAsk.IsProgress` in the r
 and it asks about *every* vendor precisely because a canary that asked only about claude would still
 have missed defect 2.
 
+**And who is allowed to run it (2026-09-09).** CI reaches this host through a key carrying a
+**forced command** — `restrict,command="/opt/coai/src/deploy/coai-deploy-cmd.sh"` — so the key can
+start nothing else: no shell, no pty, no forwarding, no `scp`. The wrapper honours exactly
+`deploy <version>`, `deploy --rollback` and `health`, validates the version on the server side
+before it reaches any command line, and refuses everything else with exit 90. The model is the one
+`dew_flow_creds_for_devs` has used on this same box since it shipped; ConnectOtherAIs deployed over
+an unrestricted root key until this landed, and never needed to.
+
+Two consequences worth naming, because both were defects before they were design:
+
+- **The wrapper pulls before it runs**, so the release script on the host can never be older than
+  the workflow calling it. The first real CI deploy died on `unknown option '--from'` for exactly
+  that reason — the checkout was three commits behind. Tracked local modifications are discarded on
+  the way, because the only ones this host ever collected were a hand `chmod +x` working around a
+  file committed non-executable, and a pull that aborts on them breaks every future deploy.
+- **The forced command names the file in the checkout**, not a copy under `/root`. A copy would have
+  been a second thing to keep in step — the same shape of defect, one level up.
+
 
 ### Story 1.3 — the client half, and the two failures only a real server showed
 

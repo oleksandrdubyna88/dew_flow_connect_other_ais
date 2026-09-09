@@ -90,15 +90,61 @@ version 0.5.5
   → refuses anything that is not a version, before an approval is spent
   → refuses a version whose release has no linux-x64 archive
   → production environment: someone approves
-  → downloads the archive, checks its .sha256, scp to ~/.coai-deploy on the host
-  → systemd-release.sh --from ~/.coai-deploy/<archive> 0.5.5   ← the same script, the same canary
+  → ssh "deploy 0.5.5"                     ← the ONE thing the key can say
+      the wrapper, on the host:
+        validates the version again, on this side of the connection
+        git pull --ff-only, so the release script is never behind the workflow
+        downloads the archive + .sha256 from the release, verifies both
+        systemd-release.sh --from <archive> 0.5.5   ← the same script, the same canary
   → asserts https://coai.remsoft.dev/api/health reports 0.5.5
-  → on any failure after the swap: systemd-release.sh --rollback, and says so
+  → on any failure after the swap: ssh "deploy --rollback", and says so
 ```
 
-Staged under the deploy account's home rather than `/tmp`: the script unpacks as **root**, and
-`/tmp` is world-writable — anything else on that box could pre-create the name as a symlink and
-have root extract through it. Raised on this change's code round.
+### The key is an update button, not root
+
+The CI key carries a **forced command** and can start nothing else — no shell, no pty, no
+forwarding, no `scp`:
+
+```
+# in /root/.ssh/authorized_keys, one line:
+restrict,command="/opt/coai/src/deploy/coai-deploy-cmd.sh" ssh-ed25519 AAAA…  coai-deploy-ci
+```
+
+The forced command points at the file **in the checkout**, not at a copy under `/root`, so a fix to
+the wrapper reaches this host the same way a fix to the release script does — the wrapper pulls, and
+the next run uses what it pulled. A copy under `/root` would have been a second thing to keep in
+step, which is exactly the defect this shape was adopted after: on 2026-09-08 the host's release
+script was three commits behind the workflow that invoked it and the deploy died on an option it had
+never heard of.
+
+Setting it up on a new host is two commands, and the checkout must exist first:
+
+```bash
+git clone https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais.git /opt/coai/src
+printf 'restrict,command="/opt/coai/src/deploy/coai-deploy-cmd.sh" %s
+' "$(cat deploy_key.pub)"   >> /root/.ssh/authorized_keys
+```
+
+The model is `dew_flow_creds_for_devs`', which has deployed to this same host that way since it
+shipped (`/root/rsd-deploy-cmd.sh`). Its own comment says it best: a leaked key is an update button,
+not root.
+
+The wrapper accepts three shapes and refuses everything else with exit 90:
+
+| sent over ssh | what happens |
+|---|---|
+| `deploy <version>` | pull, fetch that release's `linux-x64` archive, verify, `systemd-release.sh --from` |
+| `deploy --rollback` | pull, `systemd-release.sh --rollback` — no download, nothing to fetch |
+| `health` | what the unit itself answers on `127.0.0.1:8090/api/health`, before anything is refreshed |
+
+A trailing ` nopull` on either `deploy` form skips the refresh. It is stripped **before** the version
+is parsed, so the version token is validated on its own.
+
+The archive is fetched **by the host, from the release** rather than pushed from the runner. A forced
+command has no `scp`, and the file attached to the release is the one a person can verify — the
+runner's copy is one hop further from it. The staging directory is created under `/root` rather than
+`/tmp`: the script unpacks as **root**, and `/tmp` is world-writable, so anything else on that box
+could pre-create the name as a symlink and have root extract through it.
 
 It **runs the script rather than replacing it**: the release trail, the atomic symlink swap, the
 per-vendor canary and the rollback stay in one place that a person can also run by hand. What the

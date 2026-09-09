@@ -27,6 +27,13 @@ on:
         required: true
         type: string
 
+# Two deploys racing would interleave the release script's trail write with its symlink swap. The
+# script takes an flock of its own, so the second would be refused rather than corrupt anything —
+# this turns that refusal into a queue instead of a failed run.
+concurrency:
+  group: coai-server-deploy
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -138,6 +145,14 @@ jobs:
       # on port 22. What this step adds instead is a sentence, because `Host key verification
       # failed` in the middle of a deploy sends an operator to retry a network problem they do not
       # have — the host was rebuilt, and the secret is what needs updating.
+      # There is NO `StrictHostKeyChecking=no` fallback anywhere in this file, because a fallback
+      # is the vulnerability it would be protecting against: it hands the deploy key to whoever
+      # answers on port 22. What this step adds instead is a sentence, because `Host key
+      # verification failed` in the middle of a deploy sends an operator to retry a network problem
+      # they do not have — the host was rebuilt, and the secret is what needs updating.
+      #
+      # It asks the wrapper's own `health` verb. That proves three things at once and names no path
+      # on the host: the runner can reach it, the key is authorised, and the forced command runs.
       - name: Reach the host, and say which failure it is when it cannot
         env:
           HOST: ${{ secrets.COAI_DEPLOY_HOST }}
@@ -146,8 +161,7 @@ jobs:
         run: |
           set -uo pipefail
           OUT=$(ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes \
-                    -o ConnectTimeout=15 "$USER_NAME@$HOST" \
-                    'test -x /opt/coai/src/deploy/systemd-release.sh && echo ok' 2>&1)
+                    -o ConnectTimeout=15 "$USER_NAME@$HOST" 'health' 2>&1)
           STATUS=$?
           printf '%s\n' "$OUT"
           if [ "$STATUS" -ne 0 ]; then
@@ -158,31 +172,14 @@ jobs:
                 echo "::error::$USER_NAME@$HOST refused the deploy key — COAI_DEPLOY_KEY is not authorised there" ;;
               *"Connection timed out"*|*"Could not resolve"*|*"No route to host"*)
                 echo "::error::$HOST is unreachable from this runner" ;;
+              *refused:*)
+                echo "::error::the key reached the host but its forced command refused 'health' — the wrapper on the host is older than this workflow" ;;
               *)
-                echo "::error::the release script is not executable at /opt/coai/src/deploy/systemd-release.sh" ;;
+                echo "::error::the unit did not answer its own /api/health — the server is down before this deploy started" ;;
             esac
             exit 1
           fi
 
-      # Downloaded, not rebuilt. Building on the host costs three minutes of a 3.8 GB box whose
-      # unit carries `MemoryMax=1500M`, to produce a binary this repository already built, tested
-      # and smoked for exactly this RID.
-      - name: Take the published artefact, and check it is the one
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          TAG: ${{ needs.preflight.outputs.tag }}
-          ASSET: ${{ needs.preflight.outputs.asset }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh release download "$TAG" --pattern "$ASSET" --pattern "$ASSET.sha256" --dir .
-          sha256sum -c "$ASSET.sha256"
-          tar tzf "$ASSET" | head -20
-
-      # Read BEFORE anything is swapped, because it is what makes the rollback decision safe: a
-      # deploy that failed before the swap leaves a healthy server on this version, and rolling
-      # THAT back would downgrade a server nobody had a complaint about.
       - name: What the server is serving now
         id: before
         env:
@@ -194,70 +191,29 @@ jobs:
           echo "before: ${NOW:-<no answer>}"
           echo "health=$NOW" >> "$GITHUB_OUTPUT"
 
-      - name: Put it on the host and run the release script
+      # One verb over ssh, and that is the whole step. Everything it used to do by hand — staging a
+      # directory, scp'ing the archive, printing the trail, passing the token path through `env`,
+      # naming an absolute script on the host — is either impossible under a forced command or now
+      # owned by the side that holds the truth. The first real deploy through the old shape failed
+      # because the host's copy of the release script was three commits behind this file; nothing
+      # here can drift from the host any more, because nothing here describes it.
+      - name: Deploy, through the one verb the key accepts
         id: install
         env:
           HOST: ${{ secrets.COAI_DEPLOY_HOST }}
           USER_NAME: ${{ secrets.COAI_DEPLOY_USER }}
           VERSION: ${{ inputs.version }}
-          ASSET: ${{ needs.preflight.outputs.asset }}
-          # A PATH on the host, not a value: a token on a command line reaches `ps aux` and the
-          # shell history of a root session. The file is the host operator's to place.
-          TOKEN_FILE: ${{ vars.COAI_CANARY_TOKEN_FILE || '/etc/coai-canary.token' }}
         shell: bash
         run: |
           set -euo pipefail
 
-          # ssh joins its command arguments back into ONE string and the remote shell re-parses it,
-          # so an argv element is not the boundary it looks like. A repository variable reading
-          # `/etc/x;touch /root/pwned` would therefore execute on the host, as the deploy account.
-          # `$VERSION` was already pinned to a strict pattern in `preflight`; this is the other
-          # value that crosses, and it gets the same treatment. Raised on the code round.
-          if ! printf '%s' "$TOKEN_FILE" | grep -Eq '^/[A-Za-z0-9._/-]+$'; then
-            echo "::error::COAI_CANARY_TOKEN_FILE is not a plain absolute path: '$TOKEN_FILE'"
-            exit 1
-          fi
-
-          # The archive name is BUILT from a version that preflight already pinned, so it cannot
-          # carry a metacharacter today. Asserted anyway, because that is a fact about a different
-          # file: the day somebody derives this name from a release listing instead, the safety
-          # would quietly move without anything here noticing. One line, checked at the boundary.
-          if ! printf '%s' "$ASSET" | grep -Eq '^coai-server-[0-9A-Za-z.-]+\.tar\.gz$'; then
-            echo "::error::refusing to send an archive name this shape: '$ASSET'"
-            exit 1
-          fi
-
-          # NOT /tmp. The script runs as root and unpacks what it is given, and /tmp is
-          # world-writable: anything else on that box can pre-create the name as a symlink and have
-          # root extract through it. A directory under the deploy account's own home cannot be
-          # raced by a user who is not already that account. Raised on the code round.
-          STAGE=".coai-deploy"
+          # `$VERSION` was pinned to a strict pattern in `preflight`, and the wrapper validates it
+          # AGAIN on the host before it reaches any command line — the two checks are deliberate,
+          # because only the second one is still true when somebody reaches the host without this
+          # workflow.
           ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes \
-              "$USER_NAME@$HOST" "mkdir -p ~/$STAGE && chmod 700 ~/$STAGE"
-          scp -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes \
-              "$ASSET" "$USER_NAME@$HOST:$STAGE/$ASSET"
+              -o ConnectTimeout=15 "$USER_NAME@$HOST" "deploy $VERSION"
 
-          # What is live BEFORE the swap, in the job log. The script keeps a release trail and can
-          # print it, and printing it costs one ssh round trip: an operator reading a failed deploy
-          # afterwards should not have to log in to find out what it replaced.
-          ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes \
-              "$USER_NAME@$HOST" '/opt/coai/src/deploy/systemd-release.sh --list' || true
-
-          # One remote command, no inline script. The unpacking that would otherwise live in a
-          # heredoc here belongs to `--from`, which takes the archive itself — a shell fragment
-          # embedded in a workflow is the copy of the release procedure nobody would ever test.
-          ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes \
-              "$USER_NAME@$HOST" \
-              env "COAI_TOKEN_FILE=$TOKEN_FILE" \
-              /opt/coai/src/deploy/systemd-release.sh --from "\$HOME/$STAGE/$ASSET" "$VERSION"
-
-      # `always()`, and that is the fix for a real window: an ssh session that dies AFTER the script
-      # swapped `bin` fails this job with the new release live and unverified, and a verification
-      # that only runs on success would never look. It runs whenever the install was ATTEMPTED.
-      #
-      # Loopback first, so a failure separates "the unit is wrong" from "the edge is wrong" instead
-      # of blaming whichever end happened to be checked. Retried, because nginx and the unit do not
-      # come back in the same millisecond and a single curl after a restart measures the restart.
       - name: The version serving the internet is the one that was asked for
         id: verify
         if: always() && steps.install.outcome != 'skipped'
@@ -278,7 +234,7 @@ jobs:
           # judged here rather than on the host. (gemini, code round.)
           serves() { printf '%s' "$1" | jq -e --arg v "$VERSION" '.version == $v' >/dev/null 2>&1; }
 
-          LOCAL=$($SSH "$USER_NAME@$HOST" 'curl -fsS --max-time 5 http://127.0.0.1:8090/api/health' 2>&1 || true)
+          LOCAL=$($SSH "$USER_NAME@$HOST" 'health' 2>&1 || true)
           echo "loopback: ${LOCAL:-<no answer>}"
           if ! serves "$LOCAL"; then
             echo "the unit itself is not serving $VERSION — the edge is not the problem"
@@ -331,7 +287,7 @@ jobs:
         run: |
           set -uo pipefail
           OUT=$(ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=15 \
-                    "$USER_NAME@$HOST" '/opt/coai/src/deploy/systemd-release.sh --rollback' 2>&1)
+                    "$USER_NAME@$HOST" 'deploy --rollback' 2>&1)
           STATUS=$?
           printf '%s\n' "$OUT"
           if [ "$STATUS" -eq 0 ]; then
