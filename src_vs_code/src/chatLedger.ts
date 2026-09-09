@@ -153,7 +153,7 @@ export function ledgerName(ownerPid: number): string {
 
 /** The owner a ledger file belongs to, or 0 when the name is not one of ours. */
 export function ownerOf(fileName: string): number {
-  const found = /^chat-children-([0-9]{1,10})\.json$/.exec(fileName);
+  const found = /^chat-children-(\d{1,10})\.json$/.exec(fileName);
 
   return found === null ? 0 : Number(found[1]);
 }
@@ -231,4 +231,38 @@ export function killOutcome(exitCode: number, output: string): KillOutcome {
 /** A record is settled — struck out — unless nobody could tell what it was. */
 export function settled(outcome: KillOutcome): boolean {
   return outcome !== 'unknown';
+}
+
+/**
+ * Which ledger files this activation may open at all.
+ *
+ * <p>Three refusals, and the middle one is the whole reason the file name carries a pid: a file
+ * whose owner is still running belongs to another VS Code window that is using its children right
+ * now. Opening it would mean verifying processes that really are this extension's — every check
+ * would pass — and killing a conversation somebody is reading.</p>
+ *
+ * <p>Pure, with the liveness question injected, so the rule is a test rather than a claim.</p>
+ */
+export function filesToSweep(
+  names: readonly string[],
+  ownPid: number,
+  alive: (pid: number) => boolean,
+): readonly { readonly name: string; readonly owner: number }[] {
+  return names
+    .map((name) => ({ name, owner: ownerOf(name) }))
+    .filter((file) => file.owner !== 0 && file.owner !== ownPid && !alive(file.owner));
+}
+
+/** What to do with a ledger once its candidates have been asked about. */
+export type AfterSweep = 'remove' | 'rewrite';
+
+/**
+ * Remove the file, or write back what is left?
+ *
+ * <p>Removed only when everything in it was ASKED and everything answered. A sweep that ran out of
+ * time, or a record nobody could resolve, leaves a file — because a file kept too long costs a few
+ * hundred bytes and a file removed too early costs a process nobody can find.</p>
+ */
+export function afterSweep(kept: readonly ChildRecord[], askedEverything: boolean): AfterSweep {
+  return kept.length === 0 && askedEverything ? 'remove' : 'rewrite';
 }

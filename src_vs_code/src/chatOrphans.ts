@@ -3,6 +3,8 @@ import { readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   ChildRecord,
+  afterSweep,
+  filesToSweep,
   forgotten,
   imageOf,
   killOutcome,
@@ -201,22 +203,20 @@ export async function reconcile(storageDir: string, now = Date.now()): Promise<r
 
   const killed: string[] = [];
   const until = now + SWEEP_MS;
+  // Which files may be opened is a decision, and it lives with the other decisions: a file whose
+  // owner is still running belongs to a window using its children right now.
+  const ours = filesToSweep(names, process.pid, ownerAlive);
+  for (const file of ours) {
+    await tidy(join(storageDir, file.name), now, until, killed);
+  }
+  // The ones NOT swept because their owner looked alive: a pid the operating system has since handed
+  // to something long-lived would make a file invisible for ever. It cannot be acted on — but it can
+  // stop growing. (codex.)
+  const swept = new Set(ours.map((file) => file.name));
   for (const name of names) {
-    const owner = ownerOf(name);
-    const path = join(storageDir, name);
-    // Not a ledger, our own, or one whose window is still using it. The last is the important one:
-    // those children are alive on purpose.
-    if (owner === 0 || owner === process.pid) {
-      continue;
+    if (ownerOf(name) !== 0 && ownerOf(name) !== process.pid && !swept.has(name)) {
+      await removeIfLongDead(join(storageDir, name), now);
     }
-    if (ownerAlive(owner)) {
-      // A pid the operating system has since handed to something long-lived would make this file
-      // invisible for ever. It cannot be acted on — but it can stop growing. (codex.)
-      await removeIfLongDead(path, now);
-      continue;
-    }
-
-    await tidy(path, now, until, killed);
   }
 
   return killed;
@@ -255,7 +255,7 @@ async function tidy(path: string, now: number, until: number, killed: string[]):
   }
 
   try {
-    if (kept.length === 0 && asked) {
+    if (afterSweep(kept, asked) === 'remove') {
       await rm(path, { force: true });
     } else {
       writeAtomically(path, ledgerText(kept));
