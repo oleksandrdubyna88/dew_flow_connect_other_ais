@@ -54,6 +54,25 @@ const SWEEP_MS = 30_000;
 /** This host's own children, in memory. It is the only writer of its own file. */
 let mine: readonly ChildRecord[] = [];
 
+/**
+ * Where this host writes, bound ONCE.
+ *
+ * <p>It used to travel as an argument through six functions — the command, the conversation, the
+ * process factory — which meant a module-level list of children paired with a per-call directory:
+ * two things that must agree, with nothing making them. An extension host has one
+ * `globalStorageUri` for its whole life, so it is set at activation and never asked for again, and
+ * the code that starts a child no longer has to know where a ledger lives. (codex and gemini, the
+ * second code round.)</p>
+ *
+ * <p>Empty means no ledger: the tests, and any caller that never opened one.</p>
+ */
+let home = '';
+
+/** Bind the ledger's directory. Called once, from `activate`. */
+export function openLedger(storageDir: string): void {
+  home = storageDir;
+}
+
 /** Where this extension host writes. Nobody else writes here; nobody else reads it while we live. */
 export function ledgerPath(storageDir: string, ownerPid = process.pid): string {
   return join(storageDir, ledgerName(ownerPid));
@@ -73,31 +92,31 @@ function writeAtomically(path: string, text: string): void {
 }
 
 /** Say what went wrong rather than swallow it: a ledger that cannot be written is a child nobody can clean up. */
-function saved(storageDir: string): void {
+function saved(): void {
   try {
-    mkdirSync(storageDir, { recursive: true });
-    writeAtomically(ledgerPath(storageDir), ledgerText(mine));
+    mkdirSync(home, { recursive: true });
+    writeAtomically(ledgerPath(home), ledgerText(mine));
   } catch (reason) {
     console.warn(`[coai] the chat ledger could not be written: ${reason instanceof Error ? reason.message : reason}`);
   }
 }
 
 /** Write this child down, before it can be orphaned. Synchronous, on purpose — see the note above. */
-export function remember(storageDir: string, pid: number, executable: string, now = Date.now()): void {
-  if (pid <= 0 || storageDir.length === 0) {
+export function remember(pid: number, executable: string, now = Date.now()): void {
+  if (pid <= 0 || home.length === 0) {
     return;
   }
   mine = recorded(mine, { pid, image: imageOf(executable), startedMs: now });
-  saved(storageDir);
+  saved();
 }
 
 /** Strike it out. Called when the child ends, however it ends — an exit, an error, a kill. */
-export function forget(storageDir: string, pid: number): void {
-  if (pid <= 0 || storageDir.length === 0) {
+export function forget(pid: number): void {
+  if (pid <= 0 || home.length === 0) {
     return;
   }
   mine = forgotten(mine, pid);
-  saved(storageDir);
+  saved();
 }
 
 /**
