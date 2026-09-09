@@ -1,6 +1,8 @@
 # PLAN — the Team server should know a chat from a review, and outlive the client that asked
 
-> Status: **IMPLEMENTED, 2026-09-09.** All three shipped in Team server 0.5.6 and extension 0.31.17:
+> Status: **IMPLEMENTED and DEPLOYED, 2026-09-09.** Live on `coai.remsoft.dev` as 0.5.6, with every
+> row of the contract measured against it afterwards — see *What the live server said*.
+> All three shipped in Team server 0.5.6 and extension 0.31.17:
 > `kind` as a contract with `review` as the default, abandonment on two clocks, and an idempotency
 > key bound to a fingerprint of the request. The panel's spending block separates conversations from
 > rounds, which closes the owner's *"счиатть, отделять"* — the one item the chat plan had to leave open.
@@ -122,10 +124,49 @@ turn took 3.5s
 answer: OK
 ```
 
-A server that knows neither new field takes both and answers normally. **The deploy is the remaining
-step and it is deliberately a person's**: `deploy-server.yml` is `workflow_dispatch` only, because
-putting a new binary on the box everybody's reviews run through is a decision rather than a
-consequence of a tag.
+A server that knows neither new field takes both and answers normally. The deploy is deliberately a
+person's — `deploy-server.yml` is `workflow_dispatch` only, because putting a new binary on the box
+everybody's reviews run through is a decision rather than a consequence of a tag.
+
+**Deployed the same day, on the owner's instruction.** `0.5.5 → 0.5.6`, the release script's canary
+ran one real review per configured vendor, no rollback:
+
+```
+staging 0.5.6 → /opt/coai/releases/0.5.6-20260909T131030Z
+health: {"ok":true,"version":"0.5.6"}
+canary — one real review per configured vendor
+released 0.5.6
+public: {"ok":true,"version":"0.5.6"}
+```
+
+**And then the whole contract, asked of the server rather than of a test double.** Every row of the
+kind table, both directions of the key, and the answer the spending page reads:
+
+| asked | answered |
+|---|---|
+| absent kind + a role | 202 — the old client, unchanged |
+| absent kind + no role | 202 — the old chat, unchanged |
+| `review` + a role | 202 |
+| `review` + no role | 400 *"a job sent as kind 'review' needs a role. Allowed: …"* |
+| `chat` + no role | 202 |
+| `chat` + a role | 400 *"a chat carries no review role, and this one carries 'Architecture'"* |
+| `conversation` | 400 *"'conversation' is not a kind of job. Allowed: review, chat"* |
+| `"1"` | 400 — the same, so the numeric hole is shut on the real server too |
+| a key repeated with the same question | 202, **and the same review id** |
+| the same key, a different question | 409 *"…use a new key for a new question"* |
+| `../../etc/passwd` as a key | 400 *"an idempotency key must be 1-128 characters of…"* |
+
+Everything queued by that pass was cancelled again; the only vendor time spent was one real turn,
+answered in 3.2 s. And the line the owner asked for, read straight off the live server afterwards:
+
+```
+kinds: [{"kind":"review","runs":12,"tokensIn":253415,"tokensOut":575,"seconds":57.4},
+        {"kind":"chat",  "runs":1, "tokensIn":29496, "tokensOut":12, "seconds":3}]
+```
+
+One conversation, its own row, its own tokens, beside twelve rounds. That is *"счиатть, отделять"*
+end to end — from a `kind` on the wire, through the ledger, to a number on the page — and it is the
+production server saying it, not a fixture.
 
 ## Definition of Done
 
