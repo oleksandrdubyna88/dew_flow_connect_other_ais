@@ -1,12 +1,55 @@
 # PLAN — a conversation survives a window reload
 
-> Status: **plan only, nothing implemented yet — LOW PRIORITY, with a stop condition.** Kind:
-> **bug** (accepted 2026-09-09: *"не критично; если это легко — делай"*). Scope: `src_vs_code/src/chatPanel.ts`,
-> `chatPanels.ts`, `extension.ts` (a serializer registration), one storage key. Origin:
-> [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entry 16.
+> Status: **IMPLEMENTED, 2026-09-09.** Kind: **bug** (accepted 2026-09-09: *"не критично; если это
+> легко — делай"*). Shipped in pull request #164. Scope as built: a new `chatTabs.ts`,
+> `chatPanel.ts`, `chatCommand.ts`, `extension.ts`, one line in `chatPage.ts`, one `workspaceState`
+> key. Origin: [BUGS_2026-09-09.md](../todo/BUGS_2026-09-09.md), entry 16.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_chat_with_other_ais.md](../research/PLAN_chat_with_other_ais.md).
+> Related docs: [module_extension.md](module_extension.md) — *A conversation survives a window
+> reload* — and [PLAN_chat_with_other_ais.md](PLAN_chat_with_other_ais.md).
+
+## What shipped differently — and the one thing the operator had to decide
+
+**The plan forbade touching `chatPage.ts`, and that constraint was the whole difficulty.** With
+nothing calling `setState`, the only identity VS Code preserves is the tab's TITLE — and this
+repository already knows what a title-keyed registry does, because `chatPanels.ts` exists to avoid
+it. The plan round put six findings on that design and every one was right: two namesake tabs would
+overwrite each other **on the way in**, so the collision could never be detected on the way out; a
+`deserializeWebviewPanel` call cannot know whether another panel of the same name is still coming;
+and `workspaceState` is shared by two windows on one folder.
+
+So the cost was brought back rather than paid, which is what this plan's stop condition asks for —
+and the operator chose the one-line touch. The conversation carries its **own id**: minted in
+`newConversation`, rendered into the page, handed back through `vscode.setState`, returned to the
+serializer. Four Blocking findings dissolved with it, and the store became a straightforward
+per-conversation record with no namesake rule and no manifest.
+
+**Nothing is deleted when a tab closes.** This document says to drop the state on close; the code
+round showed that a disposal cannot tell a person closing a tab from a reload tearing one down, and
+VS Code disposes every panel on reload — so that deletion would have erased the transcript at exactly
+the moment it is needed, making the whole feature a no-op. A closed tab is simply never restored,
+because only open panels are deserialized; the store is bounded by age and count instead.
+
+**Nothing is started when a tab comes back.** `reopened` opens the session inside the FIRST turn, and
+the transcript rides across in `carry` through `carriedTurn` — the handover a model switch already
+ships. No vendor thread is resumed and no adapter learns anything new.
+
+**`workspaceState`, and it is this extension's first use of it.** Everything else here uses
+`globalState` deliberately, because a setting belongs to the person and is shared by every window of
+the profile. A chat tab is not.
+
+**What the code round then found in the implementation**: `show` runs on every state push, so the
+first version rewrote up to twenty whole transcripts into one key each time a queue position moved;
+and a question a restored conversation refuses was thrown away rather than returned to the composer,
+leaving the person to retype it to try the fix they had just been told to make.
+
+## The open tails
+
+1. A panel whose record was pruned is disposed silently rather than saying the conversation expired.
+2. `chatCommand.ts` reached 920 lines against the 800 the coding-style rule allows. The extraction is
+   named in `module_extension.md` and left as its own change: this diff had already been through its
+   code round, and two other plans are editing the same file.
+3. A real reload with two tabs open was not verified here — it needs a running workbench.
 
 ## The symptom
 
@@ -99,6 +142,6 @@ only when the whole ritual has run — not when the code works.
 
 Owns `chatPanel.ts` (the creation call and a serializer), `chatPanels.ts`, `extension.ts`
 (registration). **Does not touch `chatPage.ts`.** Queue it after
-[PLAN_a_page_nobody_can_search.md](../research/PLAN_a_page_nobody_can_search.md) and before or after
+[PLAN_a_page_nobody_can_search.md](PLAN_a_page_nobody_can_search.md) and before or after
 [PLAN_the_tab_wears_an_icon.md](PLAN_the_tab_wears_an_icon.md) — all three edit the same
 `createWebviewPanel` call, so they are sequenced in one lane, not parallel.

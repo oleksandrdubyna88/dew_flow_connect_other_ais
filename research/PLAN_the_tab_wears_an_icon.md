@@ -1,11 +1,40 @@
 # PLAN — the tab wears an icon
 
-> Status: **plan only, nothing implemented yet — the asset is done, the code is not.** Kind:
-> **feature**. The glyph was ours all along (`media/panel.svg`); the recoloured pair is in `media/`
-> since 2026-09-09. Scope: `src_vs_code/src/chatPanel.ts` (`iconPath`),
-> two files under `src_vs_code/media/`. Origin: [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entry 20.
+> Status: **IMPLEMENTED, 2026-09-09.** Kind: **feature**. Shipped in extension 0.31.21, pull request
+> #158. Scope as built: `src_vs_code/src/chatPanel.ts`, a new `chatIcon.ts`, the URI threaded through
+> `chatCommand.ts` and `extension.ts`, and two files under `src_vs_code/media/`. Origin:
+> [BUGS_2026-09-09.md](../todo/BUGS_2026-09-09.md), entry 20.
 >
-> Related docs: [module_extension.md](../research/module_extension.md).
+> Related docs: [module_extension.md](module_extension.md) — *The chat tab wears its own glyph*.
+
+## What shipped differently
+
+1. **The line was the small half.** `createChatPanel` had no context and no URI, and neither had
+   `newConversation` or `chatWithOtherAi`; `context` exists only in `activate`. The URI is threaded
+   through all three — the URI, not the whole `ExtensionContext`, because a function that needs a
+   media folder should say so and this one needs neither storage nor subscriptions.
+2. **The path lives in its own module, `chatIcon.ts`.** The only failure mode an icon has is a path
+   naming a file nobody shipped: nothing type-checks a `Uri`, and a wrong one produces the generic
+   icon and no error anywhere. The code round refused the first test's regex over `chatPanel.ts` and
+   was right — a regex proves somebody wrote a string down. The RESOLUTION is a pure function,
+   `chatTabIcon(join)`, handed `vscode.Uri.joinPath` by the panel and a joiner of its own by the
+   test, so both observe the same two paths and the test opens them on disk.
+3. **The contrast was measured rather than judged by eye**: 4.30:1 on white, 3.64:1 on a Light+ tab,
+   7.61:1 on Dark+, 8.10:1 on Dark Modern — all past the 3:1 WCAG asks of a graphical object.
+4. **The packaging guard was green over its own defect.** It asserted that no `.vscodeignore` line
+   starts with `media`; adding `**/*.svg` left it passing. Each pattern is expanded as a glob now, in
+   one character-by-character pass — a chain of `.replace` calls cannot do it, because the `.*` that
+   `**/` expands to contains a `*` the later `*` rule rewrites. Checked against four exclusions.
+5. **An open tail became a test, and it earned its keep the same day.** A panel restored by a
+   `WebviewPanelSerializer` would come back without an icon; there was no serializer then, so the
+   suite gained a scan that fails any file registering one without reaching `createChatPanel`. The
+   reload plan's first implementation went red on it.
+
+## The open tail
+
+The side-by-side against the Welcome tab needs a running workbench and a human eye. The geometry
+matches the numbers this plan measured, but **"indistinguishable in size" was never verified** and was
+not claimed.
 
 ## The goal
 
@@ -103,6 +132,6 @@ only when the whole ritual has run — not when the code works.
 ## Parallelism
 
 Owns two files in `media/` and one line in `chatPanel.ts`. Sequenced with
-[PLAN_a_page_nobody_can_search.md](../research/PLAN_a_page_nobody_can_search.md) and
+[PLAN_a_page_nobody_can_search.md](PLAN_a_page_nobody_can_search.md) and
 [PLAN_a_conversation_survives_a_reload.md](PLAN_a_conversation_survives_a_reload.md) on the same
 `createWebviewPanel` call; otherwise free. Nothing waits on anybody — the asset is in the tree.
