@@ -795,20 +795,48 @@ after focus leaves paints what this one could not. A transition between two cont
 edge — the focusout of the one being left arrives before the focusin of the one being entered, and a
 repaint in between would land on a caret that is on its way.
 
-**The hold is capped at 30 seconds, absolute from the moment focus was gained.** Not renewed by
-typing: a hold a keystroke renews has no bound, and `focusout` is not guaranteed — switch to another
-application mid-sentence and the panel would never learn the box was abandoned. Nothing is lost when
-the cap expires, because the value was written 400 ms after the last keystroke and the paint carries
-`PanelState.focus`, which the page uses to put the caret back at the end of the box. That name is
-echoed from a message the WEBVIEW sent and is written into the page's own script, so it is refused
-unless it matches `[A-Za-z0-9_]+` — dropped rather than escaped, because no legitimate setting name
-needs a quote.
+**The hold is capped at 30 seconds, from the start of the editing SESSION.** Not renewed by typing,
+and not by tabbing to the next control either — the code round found that half, and it is the same
+defect twice: a cap a keystroke or a focus change renews is a cap with no bound. `focusout` is not
+guaranteed on top of that: switch to another application mid-sentence and the panel would never learn
+the box was abandoned, which is the whole reason there is a cap at all. Closing the sidebar fires no
+`focusout` either, so disposal forgets the editing state outright; without that a view resolved again
+inside the cap would refuse to paint and would refocus a control from a page that no longer exists.
+
+**Nothing is lost when the cap expires.** The value was written 400 ms after the last keystroke, and
+the paint carries `PanelState.focus` — `{ id, start, end }`. The id is `setting|vendor|role`, not the
+setting name: a role-keyed control and a vendor-keyed one both carry `data-setting="rounds"`, and a
+name would refocus whichever of them the document held first. The caret rides on the debounced write
+that already happens, so it costs no message of its own, and it is clamped to the length of the value
+the rebuilt page holds. The page compares the id as DATA against ids it builds from its own
+attributes — it never becomes a selector. On the way out it is refused unless it matches
+`[A-Za-z0-9_.-]+\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*`, the caret is coerced to two ordered
+non-negative integers, and the serialised result has `<` escaped: a whitelist alone is a guarantee
+that depends on nobody widening it.
+
+**One write per change, not two.** `change` compares a control with the value it held when it gained
+FOCUS, not with the value last sent — so typing, pausing past the write, then clicking away wrote the
+same string twice. The page remembers what it last posted per control and skips a repeat.
 
 **Writes queue, and a render waits for them.** `onDidReceiveMessage` fired `void this.write(...)` per
 message, so two writes raced and a render could read a configuration a write had not finished
 applying. They go on one chain now, the chain recovers from a rejection instead of staying poisoned,
 and `render` awaits it before deciding anything — without which blur → `change` → write → focusout →
-render is a race the render can win, re-stamping the box from the value being replaced.
+render is a race the render can win, re-stamping the box from the value being replaced. It awaits the
+queue until it is STABLE rather than once, because a write appended while the render was suspended
+would otherwise be read a moment too late; bounded to five rounds, since under continuous typing the
+queue never settles and a render that waits for silence is a render that never happens.
+
+`choosePrompt` and `run` deliberately do NOT join that queue. `choosePrompt` renders at the end of
+itself and `render` awaits the queue, so queueing it would deadlock; and `run` installs binaries and
+starts processes, so a render waiting behind one would freeze the panel for as long as an install
+takes.
+
+**The open tail.** A `config.update` that REJECTS — an unwritable `settings.json` — leaves the typed
+value in the document and nowhere else, and the paint that eventually lands replaces it. The person
+is told by the error notification `save` already raises, and surviving it properly would mean the
+host keeping a shadow copy of what every dirty control holds: a second source of truth for a control
+value, which is the drift this module has already paid for twice. Named here rather than built.
 
 The page's script is now EXECUTED by its tests against a fake document rather than scanned as text: a
 script can contain an `input` listener, a debounce and a focus message while posting the wrong key, a
