@@ -36,9 +36,17 @@ Results as a table in this file. If no local adapter takes one, promote this pla
 
 ### Phase 0 RESULTS — measured 2026-09-09
 
-Harness: [`src_vs_code/scripts/measure-image.mjs`](../src_vs_code/scripts/measure-image.mjs), run on
-Windows 11, node v24.18.0, against the real signed-in CLIs, with the launch spec **imported** from
-`launchSpecFor` so it cannot measure a mode the product does not run.
+| | |
+|---|---|
+| **Subject** | `6356ead` — the commit the adapters and `launchSpecFor` were read from |
+| **Harness** | [`src_vs_code/scripts/measure-image.mjs`](../src_vs_code/scripts/measure-image.mjs), with [`tokenPng.mjs`](../src_vs_code/scripts/tokenPng.mjs) and [`cliHarness.mjs`](../src_vs_code/scripts/cliHarness.mjs) |
+| **Date** | 2026-09-09 |
+| **Machine** | Windows 11, node v24.18.0, win32 x64 |
+| **Pinned** | token `7431`; PNG 415 bytes (556 chars of base64); prompt *"The image contains a number. Reply with ONLY that number and nothing else."* |
+| **Vendor builds** | `codex-cli 0.153.4`, `agy` and `claude` as installed on this machine |
+
+The launch spec is **imported** from `launchSpecFor` rather than retyped, so this cannot measure a
+mode the product does not run.
 
 **The image says something, and that is the whole design of the probe.** A CLI exiting 0 does not
 prove the model received a picture — an unknown field in a JSON turn can be ignored silently and an

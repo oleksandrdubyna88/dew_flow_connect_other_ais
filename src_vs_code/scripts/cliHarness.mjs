@@ -21,7 +21,7 @@
  *       and released in one write is indistinguishable from a trickling one once you count lines.</li>
  * </ul>
  */
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 /**
  * How a run ended. Only `closed` with code 0 is a run whose CONTENT may be believed.
@@ -41,7 +41,11 @@ export function killTree(child) {
   }
   if (process.platform === 'win32') {
     try {
-      spawn('taskkill.exe', ['/pid', String(child.pid), '/t', '/f'], { windowsHide: true, stdio: 'ignore' });
+      // spawnSync, not spawn, and the difference bites on cleanup. Asynchronously, `taskkill` returns
+      // before the tree is dead, the caller resolves, and the caller's `rmSync` of the temp directory
+      // meets a process that still holds it as its working directory — EBUSY, mid-run, after the
+      // turns have already been spent. Waiting costs milliseconds. (gemini, the code round.)
+      spawnSync('taskkill.exe', ['/pid', String(child.pid), '/t', '/f'], { windowsHide: true, stdio: 'ignore' });
 
       return;
     } catch {
