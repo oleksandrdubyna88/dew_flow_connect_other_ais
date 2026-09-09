@@ -46,8 +46,12 @@ export interface ChatPanelHooks {
   /**
    * The person stopped the answer they were waiting for.
    *
-   * <p>`turn` is the turn the page believed was running; `0` means "whichever is". The host checks
-   * it, because this message can land after the turn it names has already finished.</p>
+   * <p>`turn` is the turn the page believed was running — a whole number counted from 1, never 0.
+   * The host stops that turn and no other, because this message can land after the turn it names has
+   * already finished, by which time the next question may be in flight. A page that cannot say which
+   * turn it means gets no stop at all: `chatCommandOf` refuses such a message before it reaches this
+   * hook, so there is no wildcard to fall back on. (Whoever writes the button in `chatPage.ts`: send
+   * the turn the state you rendered was carrying.)</p>
    */
   readonly onStop: (id: object, turn: number) => void;
   /** VS Code closed the tab — the registry must forget it and end its session. */
