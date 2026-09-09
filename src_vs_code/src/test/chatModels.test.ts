@@ -51,22 +51,37 @@ test('a disabled row is not offered at all, and is not reported as refused eithe
   assert.deepStrictEqual(list.refused, []);
 });
 
-test('a row on another runtime is REFUSED BY NAME rather than silently missing', () => {
-  // A person who configured `codex` and finds the picker quietly missing it cannot tell a bug from a
-  // policy. `vendor-routing.md` also forbids routing it through agy, which is what silence invites.
-  const list = chatModelsFrom([vendor({ id: 'codex', runtime: 'codex' })]);
+test('a row on a runtime with no adapter is REFUSED BY NAME rather than silently missing', () => {
+  // A person who configured a reviewer and finds the picker quietly missing it cannot tell a bug
+  // from a policy. `vendor-routing.md` also forbids routing it through somebody else's CLI, which
+  // is what silence invites. Since 2026-09-09 the three vendor CLIs all have adapters, so the case
+  // this rule exists for is a LOCAL engine — an OpenAI endpoint that speaks no chat protocol here.
+  const list = chatModelsFrom([vendor({ id: 'my-local', runtime: 'local' })]);
 
   assert.deepStrictEqual(list.offered, []);
   assert.strictEqual(list.refused.length, 1);
-  assert.match(list.refused[0]!.reason, /codex runs on codex/);
+  assert.match(list.refused[0]!.reason, /my-local runs on local/);
   assert.match(list.refused[0]!.reason, new RegExp(CHAT_RUNTIMES[0]!));
 });
 
 test('offered and refused are reported side by side', () => {
-  const list = chatModelsFrom([vendor(), vendor({ id: 'claude', runtime: 'claude' })]);
+  const list = chatModelsFrom([vendor(), vendor({ id: 'my-local', runtime: 'local' })]);
 
   assert.strictEqual(list.offered.length, 1);
   assert.strictEqual(list.refused.length, 1);
+});
+
+test('all three vendor CLIs are offered, which is what the adapter plan was for', () => {
+  // The master plan recorded "claude's schema differs and codex exec has no multi-turn stdin" as a
+  // limitation. Measured, half of it was wrong, and this is the assertion that keeps it wrong.
+  const list = chatModelsFrom([
+    vendor(),
+    vendor({ id: 'claude', runtime: 'claude' }),
+    vendor({ id: 'codex', runtime: 'codex' }),
+  ]);
+
+  assert.deepStrictEqual(list.offered.map((row) => row.id), ['antigravity', 'claude', 'codex']);
+  assert.deepStrictEqual(list.refused, []);
 });
 
 test('the model asked for wins when it is on offer', () => {
@@ -90,12 +105,12 @@ test('a model the person NAMED and which cannot answer is refused by name, never
   // The quiet substitution is the defect: `coai.chatModel` says `codex`, the chat cannot speak to
   // codex, and the passage went to a different vendor's model — billed, and answered by somebody
   // they did not choose. An empty setting is a different thing entirely: it is not a choice.
-  const list = chatModelsFrom([vendor(), vendor({ id: 'codex', runtime: 'codex' })]);
+  const list = chatModelsFrom([vendor(), vendor({ id: 'my-local', runtime: 'local' })]);
 
-  const choice = chatChoice(list, 'codex');
+  const choice = chatChoice(list, 'my-local');
 
   assert.strictEqual(choice.modelId, '');
-  assert.match(choice.refusal, /codex runs on codex/);
+  assert.match(choice.refusal, /my-local runs on local/);
 });
 
 test('a model the person named and which is simply gone says that, rather than picking a stranger', () => {
@@ -120,13 +135,13 @@ test('the model named and on offer is the one that answers', () => {
 
 test('nothing on offer at all reports every reason it has, not one of them', () => {
   const choice = chatChoice(
-    chatModelsFrom([vendor({ id: 'codex', runtime: 'codex' }), vendor({ id: 'claude', runtime: 'claude' })]),
+    chatModelsFrom([vendor({ id: 'local-one', runtime: 'local' }), vendor({ id: 'a-server', runtime: 'remote' })]),
     '',
   );
 
   assert.strictEqual(choice.modelId, '');
-  assert.match(choice.refusal, /codex/);
-  assert.match(choice.refusal, /claude/);
+  assert.match(choice.refusal, /local-one/);
+  assert.match(choice.refusal, /a-server/);
 });
 
 test('the launch carries the four flags, each of which was chosen against a failure', () => {
@@ -196,9 +211,9 @@ test('a directory that will not delete is SAID, and does not take the closing ta
 });
 
 test('a runtime with no adapter is refused rather than launched through the wrong protocol', () => {
-  const spec = launchSpecFor(vendor({ id: 'claude', runtime: 'claude' }), 't');
+  const spec = launchSpecFor(vendor({ id: 'my-local', runtime: 'local' }), 't');
 
-  assert.match(spec.refusal, /claude runs on claude/);
+  assert.match(spec.refusal, /my-local runs on local/);
   assert.strictEqual(spec.executable, '', 'a refused row still produced something to run');
   assert.deepStrictEqual([...spec.args], []);
 });

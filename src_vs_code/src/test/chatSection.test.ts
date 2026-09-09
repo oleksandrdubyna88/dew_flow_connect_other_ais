@@ -127,10 +127,10 @@ test('a reviewer the chat cannot speak to is named in the section, not silently 
   // The same rule the command follows: a person who configured `codex` and finds it missing from a
   // picker cannot tell a bug from a policy.
   const body = chatSection(panelHtml(state({
-    vendors: [vendor(), vendor({ id: 'codex', runtime: 'codex' })],
+    vendors: [vendor(), vendor({ id: 'my-local', runtime: 'local' })],
   }), 'n0nce'));
 
-  assert.ok(body.includes('codex'), 'the refused reviewer is not mentioned at all');
+  assert.ok(body.includes('my-local'), 'the refused reviewer is not mentioned at all');
   assert.match(body, /can only speak to/, 'it is mentioned without saying why it cannot answer');
 });
 
@@ -148,11 +148,11 @@ test('a model the settings NAME and which cannot answer is shown as chosen, and 
   // one the command will refuse. Disabled, so it cannot be re-picked once it is left. (codex,
   // gemini and local, one finding from three directions.)
   const body = chatSection(panelHtml(state({
-    vendors: [vendor(), vendor({ id: 'codex', runtime: 'codex' })],
-    chat: { ...chat, model: 'codex' },
+    vendors: [vendor(), vendor({ id: 'my-local', runtime: 'local' })],
+    chat: { ...chat, model: 'my-local' },
   }), 'n0nce'));
 
-  assert.match(body, /<option value="codex"[^>]*selected[^>]*disabled|<option value="codex"[^>]*disabled[^>]*selected/,
+  assert.match(body, /<option value="my-local"[^>]*selected[^>]*disabled|<option value="my-local"[^>]*disabled[^>]*selected/,
     'the configured model is not shown as the chosen one');
   assert.ok(!/<option value=""[^>]*selected/.test(body), 'the panel claims no model is chosen while one is');
 });

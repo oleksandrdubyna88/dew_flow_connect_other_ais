@@ -185,6 +185,67 @@ never quietly absent — the same rule the command follows.
 files are stored CRLF, and a required field would have meant sixteen unreviewable whole-file diffs.
 Absent means the defaults, which is what an untouched panel shows anyway.
 
+### Three vendors, one seam (2026-09-09)
+
+The chat answered on one runtime because the master plan recorded a limitation as fact:
+*“claude’s stream-json schema differs and codex exec has no multi-turn stdin”*. Measured, half of
+that was wrong. `claude` holds a conversation exactly as `agy` does and answers faster than either;
+`codex` holds one too, through a stored session it resumes rather than a pipe it keeps.
+
+`cliChatSession.ts` did two jobs — the process LIFECYCLE (budgets, one turn at a time, the four
+ways a child ends, what a death costs a conversation) and `agy`’s wire protocol. The first is
+vendor-neutral and tested; only the second differs. `chatAdapter.ts` is the line between them.
+
+```mermaid
+flowchart TD
+  S["CliChatSession<br/>budgets · queue · context loss"]
+  A{{"ChatAdapter<br/>shape · announces · argv · encode · classify"}}
+  G["agyAdapter<br/>persistent · announces"]
+  C["claudeAdapter<br/>persistent · silent until asked"]
+  X["codexAdapter<br/>per-turn · resumes a thread"]
+
+  S --> A
+  A --> G
+  A --> C
+  A --> X
+
+  classDef seam fill:#1f6feb22,stroke:#1f6feb;
+  class A seam;
+```
+
+**Two shapes, and the difference is not cosmetic.** A `persistent` vendor is a pipe: write a line,
+read events, the context lives in the child, and a child that dies takes the conversation with it.
+A `per-turn` vendor is a process per question: the prompt goes in on stdin, the stream is CLOSED,
+the answer arrives, the process exits — and nothing is lost, because the conversation lives in the
+vendor’s own store and the next turn resumes it by id. **So the context-loss rule is inverted
+between them**, which is the single most likely place for this to go wrong and has a test file of
+its own.
+
+**Three things the live check found that no unit test could.**
+
+- **Who speaks first is a property of the vendor.** `agy` prints `init` on start; `claude` prints
+  nothing at all until a turn arrives, and given an empty stdin simply exits. A session that waits
+  for readiness first spends its whole startup budget and reports a CLI that never started, for one
+  that was working and had not been asked. Hence `ChatAdapter.announces`.
+- **`spawn` searches neither PATHEXT nor the shell.** A bare `codex` on Windows means `codex.cmd`,
+  and spawning the bare name dies with `ENOENT` at the first turn, where it reads as the model
+  refusing. `resolvedExecutable` — exported from `versionProbe`, which had known this for
+  `--version` since it was written — answers it once, before a tab exists, and a CLI that cannot
+  be found is refused in a sentence somebody can act on.
+- **`codex` is resumed by THREAD ID, never by `--last`.** `--last` is the most recent codex session
+  on the machine, so two chat tabs — or one chat and one review round — would answer each other’s
+  questions. `--json` gives `thread.started` with the id, and `item.completed` carries the answer.
+
+Measured through this build’s own session, two turns each, the second asking for a number planted
+in the first: `agy` 8.0 s then 1.4 s, `claude` 3.0 s then 1.6 s, `codex` 7.3 s then 6.7 s. All three
+kept their context. A 76 059-byte prompt reached `codex` through stdin in five seconds, which is why
+the prompt does not travel in argv — Windows caps a command line at 32 767 characters and a carried
+conversation is bounded at 60 000.
+
+`vendor-routing.md` still binds, and the adapter map is how: the runtime chooses the adapter AND the
+executable together, so a Claude model reaches the `claude` CLI and can never be routed through
+`agy`. A runtime with no adapter — a local OpenAI endpoint, a Team server — is still refused by name.
+
 ### A conversation is a process, and it ends four ways (2026-09-08)
 
 ```mermaid

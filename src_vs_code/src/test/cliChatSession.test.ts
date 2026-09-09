@@ -62,7 +62,12 @@ function fakeChild(): FakeChild {
 
   return {
     handle: {
-      writeLine: (line: string) => {
+      writeAndEnd: (text: string) => {
+      written.push(text);
+
+      return alive;
+    },
+    writeLine: (line: string) => {
         if (!alive) {
           return false;
         }
