@@ -123,6 +123,24 @@ question it was asking. Its click goes through `landOnNewest()`, the same entry 
 else uses, and it hands the box back the focus unless a turn is running — focusing a disabled
 control puts the caret where nobody can type.
 
+**The composer sizes itself to its text, under one ceiling, on either kind of host.** `field-sizing:
+content` with `max-height: 30vh` does it in CSS where the engine has it; the page ASKS
+(`CSS.supports('field-sizing', 'content')`) and falls back to an `input` handler that sets the height
+from `scrollHeight`, with the SAME CSS ceiling capping it — the 30 % lives in one rule so the two
+paths cannot disagree about where the top is. Asking rather than assuming is the point: the property
+is Chromium-only and the manifest declares support back to VS Code 1.85, whose engine has never heard
+of it, so a page that took it on faith would work on the machine it was written on and silently never
+grow anywhere else, which is the one failure a person cannot report because nothing happens. The
+fallback is also called after a send empties the box and after a pushed draft, so shrinking back is a
+call rather than a hope.
+
+**A footer whose height changes takes the room from the conversation above it**, and here the flag
+that rule 2 refuses IS the right instrument: a reader at the bottom did not scroll — the region
+shrank underneath them — so re-measuring would call them scrolled away and leave the last answer
+behind the box they are typing into. What they WERE is the only measurement that survives the resize.
+A `ResizeObserver` on `#composer` re-pins them through `landOnNewest()`; a host without one keeps
+today's behaviour rather than breaking.
+
 **A write is compared against what was LAST WRITTEN, not against the element.** Reading `innerHTML`
 back makes the browser serialise the whole subtree on every push, and what comes back is normalised —
 attributes reordered, entities decoded — so an unchanged push can read as different and a changed one

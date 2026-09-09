@@ -17,6 +17,11 @@ put it — including if the answer lands in the moment between your scroll and t
 the composer when an answer lands while you are reading further up, takes you there in one press,
 and disappears again — either when you press it or when you scroll back down yourself.
 
+**The box grows with your question.** It starts at three lines and stretches as you type, up to
+about a third of the tab's height, and only then scrolls inside itself; it shrinks back when you send
+or delete. If it grows while you are reading the last answer, the answer stays in view rather than
+sliding behind the box.
+
 **The captured text no longer has a scrollbar of its own.** There were two on the page. The passage
 was boxed in because a long selection would otherwise push the composer off the screen when the tab
 opened; with the composer pinned, nothing can push it anywhere.
