@@ -84,8 +84,10 @@ on this host for the other product.
 
 ### 1. `deploy/coai-deploy-cmd.sh` — new, in the repository
 
-The wrapper lives in the repo and is installed to `/root/coai-deploy-cmd.sh`, so it is reviewable and
-versioned rather than a file somebody once pasted onto a box. Modelled line for line on
+The wrapper lives in the repo and the forced command names it **in the checkout**
+(`/opt/coai/src/deploy/coai-deploy-cmd.sh`), so it is reviewable, versioned, and refreshed by the same
+pull that refreshes everything else. It is not copied to `/root`: see deviation 1 below — that copy
+was in this plan as written, and it was the plan's own defect. Modelled line for line on
 `rsd-deploy-cmd.sh`, with two differences the artefact-based deploy forces:
 
 - it downloads `coai-server-<version>-linux-x64.tar.gz` from the `server-v<version>` release and
@@ -156,7 +158,8 @@ unrestricted root key behind because a better one now exists is the failure this
 - [ ] Both scripts are committed executable.
 - [ ] The old unrestricted key is gone from the host.
 - [ ] Documentation updated: `deploy/README.md`, `research/module_team_server.md`, this plan promoted
-      with its deviations, `research/README.md`, CHANGELOG.
+      with its deviations, `research/README.md`. **No CHANGELOG entry**: nothing users install
+      changed — the reasoning is recorded under *What shipped differently*.
 - [ ] Both suites green, and a real deploy done through the new path.
 
 ## What shipped differently
@@ -190,6 +193,29 @@ Two things the plan asked for that did **not** ship as written:
   that guards ssh. The workflow's copy is an early warning; the wrapper's is the decision.
 - **No CHANGELOG entry and no version bump.** Nothing users install changed: this is the deploy path,
   and the products it deploys are unmoved.
+
+## The boundary with PLAN_the_server_has_a_release_line.md
+
+That plan built the release LINE — the six Native AOT builds, the GitHub Release, the images, and
+the first version of this workflow. This one changes only who may call the host and how.
+
+| item | built by | the other one's part |
+|---|---|---|
+| `server-v*` builds the six RIDs and publishes a Release | the release line | this plan consumes one asset of it, and refuses a version that has none |
+| `deploy-server.yml` exists, dispatch-only, approval-gated | the release line | this plan rewrites its remote half into one verb; the gate, the preflight and the verification are unchanged in purpose |
+| `systemd-release.sh` — trail, swap, canary, rollback | the release line | **disjoint**: this plan changes none of its behaviour, only its caller |
+| the ssh key's authority on the host | **this plan** | the release line assumed an unrestricted account and said nothing about it |
+| the host's checkout being current | **this plan** | the release line's workflow assumed it, which is the defect this plan was written after |
+
+Order: the release line had to exist first — there is nothing to deploy without a published
+artefact, and this plan's wrapper downloads one.
+
+## What this makes grow, and who empties it
+
+| surface | projected size | who retires it | interrupted |
+|---|---|---|---|
+| `/root/.coai-deploy.XXXXXX` — one per deploy | one archive, ~30 MB | the wrapper's `trap … EXIT INT TERM HUP` | HUP is in the list because sshd sends it when a runner is cancelled, and an untrapped HUP kills a POSIX shell without running its EXIT trap. A `SIGKILL` or a power cut still strands one directory; they are `mktemp` names under `/root`, visible as `.coai-deploy.*`, and the next operator on the box can remove them. |
+| `/opt/coai/releases/<version>-<stamp>` | one release directory per deploy, ~60 MB | `systemd-release.sh`, which retains the last three | unchanged by this plan — the trail and its pruning are the release script's, and this plan does not touch its behaviour |
 
 ## The open tail
 

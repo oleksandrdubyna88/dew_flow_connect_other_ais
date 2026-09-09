@@ -402,14 +402,14 @@ test('the deploy key can press a button and nothing else', () => {
   const wrapper = deployScript('coai-deploy-cmd.sh');
 
   assert.match(wrapper, /restrict,command=/, 'the authorized_keys line is documented in the file it names');
-  assert.match(wrapper, /\^\[0-9A-Za-z\._-\]\{1,40\}\$/, 'the version is validated on the SERVER');
-  assert.match(wrapper, /refused: this key accepts only/, 'and every other shape is refused');
-  // `nopull` is stripped before the version is parsed, or `deploy 0.5.5 nopull` would either be
-  // rejected outright or have its suffix pass through unvalidated. Raised on the plan round.
-  assert.ok(
-    wrapper.indexOf('nopull') < wrapper.indexOf('VERSION="${CMD#deploy }"'),
-    'the flag must be stripped before the version token is taken',
-  );
+  assert.match(wrapper, /refused: this key accepts only/, 'every other shape is refused');
+
+  // Validated with a `case` glob rather than grep, and that is not a style choice: grep decides
+  // LINE by line, so a version carrying a newline would be judged by its first line and the rest
+  // would travel on into a filename. Raised on the code round.
+  assert.match(wrapper, /\*\[!0-9A-Za-z\._-\]\*/, 'the whole version string is judged, not its first line');
+  assert.match(wrapper, /\$\{#VERSION\}" -le 40/, 'and it is bounded');
+  assert.doesNotMatch(wrapper, /grep -Eq/, 'grep is line-based and cannot hold this');
 });
 
 test('the wrapper refuses everything that is not one of its three verbs', () => {
@@ -428,6 +428,9 @@ test('the wrapper refuses everything that is not one of its three verbs', () => 
     'deploy',
     '',
     'bash',
+    // `nopull` is a flag on the deploy forms and on nothing else. Stripping it before the dispatch
+    // would have turned a command this contract does not have into a successful health report.
+    'health nopull',
   ];
 
   for (const command of refused) {
@@ -451,10 +454,50 @@ test('the wrapper repairs a stale checkout instead of failing on it', () => {
   // would abort a plain pull for ever.
   const wrapper = deployScript('coai-deploy-cmd.sh');
 
-  assert.match(wrapper, /merge --ff-only origin\/main/, 'the checkout is fast-forwarded');
-  assert.match(wrapper, /checkout -- \./, 'and local modifications to tracked files are discarded');
+  assert.match(wrapper, /reset --hard --quiet origin\/main/, 'the checkout is put back to origin/main');
   assert.match(wrapper, /--untracked-files=no/, 'while untracked files are left alone');
   assert.match(wrapper, /timeout "\$NET_TIMEOUT"/, 'every network call is bounded');
+
+  // `checkout -- .` restores the WORKTREE and leaves a staged edit in the index, which then refuses
+  // the merge anyway — so the repair has to be `reset --hard`. Raised on the code round. Matched as
+  // a COMMAND, because the comment beside the fix is allowed to name what it replaced.
+  assert.doesNotMatch(wrapper, /^\s*git [^\n]*checkout -- \./m, 'a worktree-only restore leaves the index dirty');
+});
+
+test('a rollback needs nothing from the network, and asks for nothing', () => {
+  // A rollback is what an incident reaches for, and an incident is exactly when this box's route to
+  // GitHub may be the broken thing. The release it returns to is already on the disk. Refreshing
+  // first would have made an outage the reason an emergency rollback could not run.
+  const wrapper = deployScript('coai-deploy-cmd.sh');
+  const rollback = wrapper.indexOf('ACTION" = rollback');
+  const refresh = wrapper.indexOf('refresh() {');
+
+  assert.ok(rollback > 0 && refresh > 0, 'both branches exist');
+  assert.ok(rollback < refresh, 'the rollback must return before the refresh is even defined');
+});
+
+test('health reports, and never refuses to answer', () => {
+  // The workflow asks `health` to prove it can REACH the host before it deploys. If a stopped or
+  // crashed unit made that step fail, the one workflow able to replace the binary would refuse to
+  // run exactly when the box needs it most — and a first deploy to a fresh host could never happen.
+  // What is RUNNING is judged by the caller, against the version it asked for.
+  const wrapper = deployScript('coai-deploy-cmd.sh');
+  const health = wrapper.slice(wrapper.indexOf('"$ACTION" = health'), wrapper.indexOf('# ── rollback'));
+
+  assert.match(health, /unit: no answer/, 'a silent unit is reported rather than fatal');
+  assert.match(health, /exit 0/, 'and the verb still exits 0');
+});
+
+test('the host RID the wrapper fetches is the one the preflight checked', () => {
+  // Two copies, and they must agree: the preflight refuses an incomplete release before an approval
+  // is spent, and the wrapper decides what is actually downloaded. A migration that changed only one
+  // would approve a release for one architecture and fetch another. Raised on the code round.
+  const inWrapper = /^RID=(\S+)$/m.exec(deployScript('coai-deploy-cmd.sh'));
+  const inWorkflow = /HOST_RID:\s*(\S+)/.exec(deployWorkflow());
+
+  assert.ok(inWrapper !== null, 'the wrapper names a RID');
+  assert.ok(inWorkflow !== null, 'and so does the workflow');
+  assert.equal(inWrapper![1], inWorkflow![1], 'and they are the same one');
 });
 
 test('both deploy scripts are committed executable', () => {

@@ -7,6 +7,19 @@
 > Related docs: [deploy/README.md](../deploy/README.md),
 > [module_team_server.md](module_team_server.md).
 
+## The boundary with PLAN_deploy_key_is_a_button.md
+
+This plan built the release LINE. [PLAN_deploy_key_is_a_button.md](PLAN_deploy_key_is_a_button.md),
+2026-09-09, changed who may call the host with it and how — after this line's first real deploy
+failed on a host whose checkout was three commits behind the workflow.
+
+| item | built by | the other one's part |
+|---|---|---|
+| the six RIDs, the Release, the images | **this plan** | the later one consumes one asset and refuses a version that has none |
+| `deploy-server.yml` — dispatch, preflight, approval, verification, rollback | **this plan** | the later one rewrites its remote half into one verb and leaves the rest in purpose |
+| `systemd-release.sh` | **this plan** | **disjoint**: the later one changes none of its behaviour, only its caller |
+| the ssh key's authority, and the host checkout being current | the later plan | this one assumed both, and said so about neither |
+
 ## The symptom
 
 `coai.remsoft.dev` reports `{"ok":true,"version":"0.5.5"}` and there is **no `server-v0.5.5`
