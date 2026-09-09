@@ -2,8 +2,8 @@
 
 > Status: **PHASE 0 IS DONE (measured 2026-09-09) — Phase 1 is not built, and the measurement says
 > only one of three vendors could use it.** `agy` streams real deltas on `step_update`; `claude` and
-> `codex` emit nothing before their final answer. The window scales with answer length — 4 % of a
-> short turn, 38 % of a long one — and the plan's premise that eight silent seconds were recoverable
+> `codex` emit nothing before their final answer. The window scales with answer length — 6 % of a
+> short turn, 44 % of a long one — and the plan's premise that eight silent seconds were recoverable
 > is REFUTED: most of that silence is the model thinking, before any vendor has a token to give.
 > Phase 1 stays unbuilt on that evidence; the table and the harness are below and committed.
 > Kind: **feature**
@@ -54,36 +54,52 @@ the second variable and it turned out to be the one that mattered.
 
 **Asking for 40 lines (a 110-character answer):**
 
-| vendor | arm | ok | turn (ms) | deltas | do they rebuild the answer? | stream window | usage event | usage at |
-|---|---|---|---|---|---|---|---|---|
-| `claude` | direct *(shipped)* | 3/3 | 3875 | 0 | whole answer, once, early | — | `assistant`, `result.success` | 3279 ms |
-| `claude` | `cmd.exe` | 3/3 | 4721 | 0 | whole answer, once, early | — | `assistant`, `result.success` | 4090 ms |
-| `codex` | direct | **impossible** | — | — | — | — | — | node refuses to spawn a `.cmd` without a shell |
-| `codex` | `cmd.exe` *(shipped)* | 3/3 | 7016 | 0 | no | — | `turn.completed` | 6472 ms |
-| `agy` | direct *(shipped)* | 3/3 | 4996 | 5 | **yes** | 203 ms | `step_update`, `result` | 4538 ms |
-| `agy` | `cmd.exe` | 3/3 | 5276 | 5 | **yes** | 254 ms | `step_update`, `result` | 4852 ms |
+| vendor | arm | ok | turn (ms) | deltas | streams? | stream window | delta field | usage event | usage at |
+|---|---|---|---|---|---|---|---|---|---|
+| `claude` | direct *(shipped)* | 3/3 | 3987 | 1 | no — whole answer, once, early | — | `message.content[].text` | `assistant`, `result.success` | 3366 ms |
+| `claude` | `cmd.exe` | 3/3 | 3822 | 1 | no — whole answer, once, early | — | `message.content[].text` | `assistant`, `result.success` | 3186 ms |
+| `codex` | direct | **impossible** | — | — | — | — | — | — | node refuses to spawn a `.cmd` without a shell |
+| `codex` | `cmd.exe` *(shipped)* | 3/3 | 6537 | 0 | no | — | — | `turn.completed` | 6036 ms |
+| `agy` | direct *(shipped)* | 3/3 | 4548 | 6 | **yes** | 253 ms | **`step_update.text_delta`** | `step_update`, `result` | 4113 ms |
+| `agy` | `cmd.exe` | 3/3 | 4207 | 5 | **yes** | 178 ms | **`step_update.text_delta`** | `step_update`, `result` | 3882 ms |
 
-**Asking `agy` for 400 lines**, because a 200 ms window on a 5 s turn is worth nothing and the
+**Asking `agy` for 400 lines**, because a 200 ms window on a 4.5 s turn is worth nothing and the
 question is whether it GROWS:
 
-| vendor | arm | ok | turn (ms) | deltas | stream window |
-|---|---|---|---|---|---|
-| `agy` | direct *(shipped)* | 3/3 | 9614 | 73 | **3656 ms** |
-| `agy` | `cmd.exe` | 3/3 | 9225 | 75 | **3829 ms** |
+| vendor | arm | ok | turn (ms) | deltas | streams? | stream window |
+|---|---|---|---|---|---|---|
+| `agy` | direct *(shipped)* | 3/3 | 8978 | 82 | **yes** | **3932 ms** |
+| `agy` | `cmd.exe` | 3/3 | 11575 | 76 | **yes** | **3730 ms** |
 
 #### What that says, question by question
 
 **1. Does the CLI emit partial answer text at all?**
 
-- **`agy`: YES, and genuinely.** `step_update` with `status: ACTIVE` and `step: agent_response`
-  carries fragments — `"1\n2\n…8\n"`, then `"9\n10\n…16\n1"`, then `"7\n18\n"` — which concatenate in
-  arrival order into exactly the final answer. That reconstruction is the test the harness applies,
-  and it is stricter than "some event carried a string" for a reason: a prefix test finds only the
-  FIRST fragment and undercounts fivefold, while a contains test alone would happily accept the
-  model's reasoning.
-- **`claude`: NO.** Four events. The `assistant` event carries the COMPLETE message, and it arrives
-  12 ms before `result.success`. That is not a stream, it is an early final — showing it would
-  advance the answer by twelve milliseconds.
+- **`agy`: YES, and genuinely.** The field is **`step_update.text_delta`** — the vendor's own name for
+  it — on `step_update` events with `status: ACTIVE` and `step: agent_response`. It carries fragments
+  (`"1\n2\n…8\n"`, then `"9\n10\n…16\n1"`, then `"7\n18\n"`) which tile the final answer exactly, in
+  arrival order.
+
+  **How a delta is identified matters more than the result, so it is written down.** The first version
+  of this harness scraped every nested string out of every event and accepted any that appeared
+  *somewhere* in the answer. All three vendors' reviewers found the same hole independently: for a
+  numeric answer, unrelated metadata like `12` and `345` can pass a containment test and
+  "reconstruct" an answer nobody streamed. A measurement that can say YES when the truth is NO is
+  worse than no measurement. A delta now has to satisfy three conditions at once — it must match at
+  an **advancing offset** (exactly what comes next, from a cursor that never goes backwards), the
+  pieces must **tile the whole answer** with nothing left over, and they must all come from **one JSON
+  path**. That is what produced the field name above, which is the thing Phase 1 actually needs.
+
+  The strict rule then produced a false negative of its own, in the opposite direction, and it is
+  worth recording: excluding single-character fragments stalled the cursor the first time `agy` split
+  a token across a boundary (`"…16\n1"` then `"7\n18\n"`), and every later fragment failed to match, so
+  a streaming vendor was reported as not streaming on the 400-line probe. The minimum length was never
+  what made the test safe — the tiling and the single path are.
+- **`claude`: NO.** Four events. The `assistant` event carries the COMPLETE message in ONE piece on
+  `message.content[].text`, a few milliseconds before `result.success`. The harness counts that as a
+  single "delta" covering the whole answer and refuses to call it streaming, which is the distinction
+  that matters: it is an early final, and showing it would advance the answer by that handful of
+  milliseconds.
 - **`codex`: NO.** Four events; the answer exists only in `item.completed.agent_message`.
 
 **2. What event carries it, and does it interleave with what the adapter already parses?**
@@ -96,8 +112,9 @@ user_input`, then the ACTIVE deltas, then `step_update DONE agent_response`, the
 **3. On Windows through `cmd.exe`, does buffering delay it until the end anyway?**
 
 **No — refuted.** For both vendors that resolve to a real `.exe` the two arms are within noise of each
-other (`claude` 3875 against 4721 ms, `agy` 4996 against 5276 ms with windows of 203 against 254 ms),
-and `agy` streams identically through the shell. The shell is not what makes a turn quiet.
+other (`claude` 3987 against 3822 ms, `agy` 4548 against 4207 ms with windows of 253 against 178 ms —
+the shell arm was FASTER in both, which is how you know you are reading noise), and `agy` streams
+identically through the shell, from the same field. The shell is not what makes a turn quiet.
 
 `codex` cannot be compared: it installs as `codex.cmd`, and node has refused to spawn a `.cmd`
 without a shell since the fix for CVE-2024-27980. That is a result rather than a gap — the product
@@ -105,9 +122,9 @@ has no direct arm available for it either.
 
 #### The finding that decides it: the window SCALES with the answer
 
-At 110 characters `agy`'s deltas occupy the last **203 ms of a 4996 ms turn — 4 %**, which would spare
-a person nothing. At roughly 1.5 kB the same vendor streams for **3656 ms of a 9614 ms turn — 38 %**,
-across 73 deltas. So the silence is the model THINKING, not output being withheld, and the streaming
+At 110 characters `agy`'s deltas occupy the last **253 ms of a 4548 ms turn — 6 %**, which would spare
+a person nothing. At roughly 1.5 kB the same vendor streams for **3932 ms of an 8978 ms turn — 44 %**,
+across 82 deltas. So the silence is the model THINKING, not output being withheld, and the streaming
 half only becomes worth watching once an answer is long — which a real chat answer is, and the
 40-line probe is not.
 
@@ -118,12 +135,12 @@ before any vendor has a token to give. No implementation can recover those.
 ### The decision
 
 **Phase 1 is worth building for `agy` only, and it is NOT urgent.** One of three local vendors
-streams; for it the gain is real on long answers (38 % of the wait) and nil on short ones; the other
+streams; for it the gain is real on long answers (44 % of the wait) and nil on short ones; the other
 two have nothing to stream and must keep an honest `Thinking…`. A Team server, as expected, answers
 "no" — it returns a job over the wire.
 
 Recorded rather than acted on now, because the seam it extends has just changed underneath it (see
-*Phase 1* below) and because one vendor at 38 %-on-long-answers is a smaller prize than the plan
+*Phase 1* below) and because one vendor at 44 %-on-long-answers is a smaller prize than the plan
 assumed when it was written. The evidence is here and the harness is committed, so whoever picks it
 up starts from numbers rather than from a guess.
 
@@ -134,9 +151,9 @@ and [PLAN_who_said_it_and_what_it_cost.md](PLAN_who_said_it_and_what_it_cost.md)
 
 | vendor | usage arrives on | when |
 |---|---|---|
-| `claude` | `assistant` **and** `result.success` | 3279 ms of a 3875 ms turn |
-| `codex` | `turn.completed` | 6472 ms of a 7016 ms turn |
-| `agy` | `step_update` (the `DONE agent_response` one) **and** `result` | 4538 ms of a 4996 ms turn |
+| `claude` | `assistant` **and** `result.success` | 3366 ms of a 3987 ms turn |
+| `codex` | `turn.completed` | 6036 ms of a 6537 ms turn |
+| `agy` | `step_update` (the `DONE agent_response` one) **and** `result` | 4113 ms of a 4548 ms turn |
 
 Every one of them is currently discarded — `codexAdapter.ts`'s own header comment already said so
 about `turn.completed`, and this confirms it for the other two. Note that all three publish usage on
