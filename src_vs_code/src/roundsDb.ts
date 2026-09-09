@@ -106,10 +106,20 @@ export interface DbLog {
    * so both directions of skew are ordinary.</p>
    */
   readonly paged: boolean;
+  /**
+   * Whether the database was ASKED at all.
+   *
+   * <p>The load-bearing difference, and the one the code round caught: a log nobody has read yet and
+   * a log read from an empty database are otherwise the same value. The page is painted BEFORE the
+   * first read on purpose — reading spawns a process, and nobody should wait on one to see their log
+   * — so without this every row on that first paint concluded the database had no record of it, and
+   * the tick that knew better was then held off by the row it had already drawn.</p>
+   */
+  readonly read: boolean;
 }
 
 export const EMPTY_LOG: DbLog = {
-  rounds: [], blindSpots: [], defended: [], totals: EMPTY_TOTALS, paged: false,
+  rounds: [], blindSpots: [], defended: [], totals: EMPTY_TOTALS, paged: false, read: false,
 };
 
 /**
@@ -129,6 +139,7 @@ export function parseLog(text: string, paged = false): DbLog {
       defended: (raw.defended ?? []).map(finding),
       totals: totalsOf(raw.totals),
       paged,
+      read: true,
     };
   } catch {
     return EMPTY_LOG;

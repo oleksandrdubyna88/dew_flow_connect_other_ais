@@ -88,6 +88,7 @@ const LOG = {
   defended: [],
   totals: { rounds: 1, findings: 1, accepted: 1, rejected: 0, gating: 1, tokensIn: 0, tokensOut: 0, costUsd: 0 },
   paged: true,
+  read: true,
 };
 
 const PRICES = (model: string) =>

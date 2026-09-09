@@ -140,9 +140,13 @@ Extension: `node:test` over `sql.js` with a database the server tests produced (
 
 ## Definition of Done
 
-- [ ] `coai.db` exists after the first round, with sessions, rounds, reviewers, findings (with
-      resolutions) and usage.
-- [ ] The page reads the database; search is FTS; findings appear under a row.
-- [ ] Five windows write it without a locked-database error, measured.
-- [ ] Server stays Native AOT; the extension carries no native module.
-- [ ] `module_server.md` and `module_extension.md` describe the projection; this plan promoted.
+- [x] `coai.db` exists after the first round, with sessions, rounds, reviewers, findings (with
+      resolutions) and usage. *(Epic 1, 2026-09-05.)*
+- [x] The page reads the database, and findings appear under a row. *(Epic 2, 2026-09-09 —
+      through `--log`, not `sql.js`; see [PLAN_local_db_reader.md](PLAN_local_db_reader.md).)*
+- [ ] Search is FTS. **Not built** — split out of the line above, because the rest of it shipped:
+      [todo/PLAN_the_log_searches_the_findings.md](../todo/PLAN_the_log_searches_the_findings.md).
+- [ ] Five windows write it without a locked-database error, measured. *(Epic 3, not run.)*
+- [x] Server stays Native AOT; the extension carries no native module. *(The WAL finding is why —
+      the reader became the server rather than a WebAssembly SQLite in the VSIX.)*
+- [x] `module_server.md` and `module_extension.md` describe the projection; this plan promoted.

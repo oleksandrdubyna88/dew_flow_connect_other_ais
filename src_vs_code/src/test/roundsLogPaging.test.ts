@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DbTotals } from '../roundsDb';
+import { DbTotals, EMPTY_TOTALS } from '../roundsDb';
 import { LogRow, PAGE_SIZE, roundsLogHtml } from '../roundsLog';
 
 /**
@@ -270,6 +270,34 @@ test('the findings arrive addressed to one row, and are drawn there', () => {
 
   assert.match(page.at('rows').innerHTML, /the fan rebuilt its buffer/);
   assert.doesNotMatch(page.at('rows').innerHTML, /Reading what this round found/);
+});
+
+test('the totals arrive by a push, because the page is painted before the database is read', () => {
+  // The line under the table was embedded in the HTML and never sent again, and the panel stored the
+  // totals without ever pushing them — so the whole SQL-counted line stayed empty for ever. (Code
+  // round, CodeRabbit.)
+  const page = open(many(3), EMPTY_TOTALS);
+
+  assert.equal(page.at('recorded').textContent, '', 'nothing counted yet, so nothing claimed');
+
+  page.deliver({ type: 'totals', totals: TOTALS });
+
+  assert.match(page.at('recorded').textContent, /250 rounds and 3484 findings/);
+});
+
+test('a loaded row whose count disagrees with what arrived offers a retry, not an endless wait', () => {
+  // The count comes from the list and the sentences from a later read; the database moves between
+  // them. Without this the row drew "Reading…" for ever, because ask() refuses a loaded row.
+  const page = open([row({ foundState: 'loaded', foundCount: 4, found: [] })]);
+  page.click(hit('tr[data-key]', 'k1'));
+
+  assert.match(page.at('rows').innerHTML, /recorded 4 findings, and the read came back with none/);
+  assert.match(page.at('rows').innerHTML, /Try again/);
+
+  page.click(hit('[data-retry]', 'k1'));
+
+  assert.equal(page.posted.filter((m) => (m as { command?: string }).command === 'findings').length, 1,
+    'and the retry is allowed to act on it');
 });
 
 test('a tick that rebuilds every row does not forget the findings one of them already holds', () => {

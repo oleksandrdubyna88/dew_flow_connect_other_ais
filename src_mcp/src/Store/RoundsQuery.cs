@@ -98,6 +98,16 @@ public static class RoundsQuery
     /// </remarks>
     public const int DefaultLimit = 200;
 
+    /// <summary>
+    /// What a caller that cannot page gets when it names no limit.
+    /// </summary>
+    /// <remarks>
+    /// Three hundred, unchanged since the log page shipped. An extension too old to send `--paged`
+    /// is also too old to ask for a second page, so shrinking ITS default to 200 would simply have
+    /// taken a hundred rounds off the only list it can show. (CodeRabbit, on the pull request.)
+    /// </remarks>
+    public const int LegacyLimit = 300;
+
     /// <summary>The most a caller may ask for in one page, however it asks.</summary>
     /// <remarks>
     /// The CLI is a boundary and a boundary that trusts its input is not one — the plan round said
@@ -194,9 +204,21 @@ public static class RoundsQuery
     private static (string StartedUtc, long Id)? Cursor(string before)
     {
         var at = before.IndexOf(CursorSeparator);
+        if (at <= 0 || !long.TryParse(before[(at + 1)..], out var id))
+        {
+            return null;
+        }
 
-        return at > 0 && long.TryParse(before[(at + 1)..], out var id)
-            ? (before[..at], id)
+        // The TIMESTAMP is checked too, not just the number after it. `0000|1` parsed happily and
+        // then compared `0000` against `started_utc`, which matches nothing — so a malformed cursor
+        // answered with an EMPTY page instead of the documented first one, which is the opposite of
+        // treating it as absent. (CodeRabbit, on the pull request.)
+        var started = before[..at];
+
+        return DateTime.TryParseExact(
+            started, "O", System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.RoundtripKind, out _)
+            ? (started, id)
             : null;
     }
 

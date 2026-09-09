@@ -259,6 +259,7 @@ function dbLog(over: Partial<DbRound> = {}): DbLog {
     blindSpots: [],
     defended: [],
     totals: EMPTY_TOTALS,
+    read: true,
     paged: true,
   };
 }
@@ -300,10 +301,25 @@ test('a paged server sends the COUNT and not the findings, and the status still 
 test('a row the database has never heard of says so, rather than asking for what was never written', () => {
   // The distinction the five states rest on. An empty answer cannot say whether a round was clean
   // or was never recorded — and this row can, because the merge knows which half it came from.
-  const [row] = rowsFrom([session([round()])], NOW, () => undefined, []) as [LogRow];
+  // The log is an ANSWER here, from a database holding a different round: `absent` is a claim about
+  // what was read, so it may only be made about a read that happened.
+  const answered = { ...dbLog({ number: 99 }), totals: { ...EMPTY_TOTALS, rounds: 1 } };
+  const [row] = rowsFrom([session([round()])], NOW, () => undefined, [], answered) as [LogRow];
 
   assert.equal(row.origin, 'session');
   assert.equal(row.foundState, 'absent');
+});
+
+test('a page painted before the database is read calls no round absent', () => {
+  // The page is painted FIRST, from the session files alone — reading the database spawns a process
+  // and nobody should wait on one to see their log. So the first paint has EMPTY_LOG, and an unread
+  // log used to be indistinguishable from a read one that found nothing: `0 >= 0`. Every row opened
+  // saying the database had no record of it, and the tick that knew better was then held off by the
+  // row already drawn. (Code round, CodeRabbit — Critical.)
+  const [row] = rowsFrom([session([round()])], NOW, () => undefined, []) as [LogRow];
+
+  assert.equal(row.foundState, 'unasked', 'nothing has been read, so nothing can be claimed');
+  assert.notEqual(row.foundState, 'absent');
 });
 
 test('a server too old to page has already sent everything, so a clean round is not asked about again', () => {

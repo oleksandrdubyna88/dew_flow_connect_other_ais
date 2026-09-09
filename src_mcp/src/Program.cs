@@ -244,8 +244,15 @@ internal static class Program
         var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
         try
         {
+            // A caller that cannot page also cannot ask for a second page, so its default stays
+            // the three hundred it has always been. (CodeRabbit, on the pull request.)
+            var paged = Paged(args);
             Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
-                Store.RoundsQuery.Read(settings.DataDir, Limit(args), Before(args), withFindings: !Paged(args)),
+                Store.RoundsQuery.Read(
+                    settings.DataDir,
+                    Limit(args, paged ? Store.RoundsQuery.DefaultLimit : Store.RoundsQuery.LegacyLimit),
+                    Before(args),
+                    withFindings: !paged),
                 Server.ServerJsonContext.Default.LoggedLog));
         }
         catch (Exception e) when (Unreadable(e))
@@ -253,6 +260,11 @@ internal static class Program
             Note(WhyUnreadable(e));
             Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
                 new Store.LoggedLog([], [], [], new Store.LoggedTotals()), Server.ServerJsonContext.Default.LoggedLog));
+
+            // A PAGED caller is told, because it can act on it — 74 is the database, not the log.
+            // The legacy shape keeps exit 0 and an empty log, which is what it has always answered
+            // and what an extension too old to read a code expects. (CodeRabbit, on the PR.)
+            return Paged(args) ? 74 : 0; // EX_IOERR
         }
 
         return 0;
@@ -355,13 +367,13 @@ internal static class Program
     /// an error would answer it with nothing. The plan round asked for this: the CLI is a boundary,
     /// and a boundary that trusts its input is not one.
     /// </remarks>
-    internal static int Limit(string[] args)
+    internal static int Limit(string[] args, int fallback = Store.RoundsQuery.DefaultLimit)
     {
         var at = Array.IndexOf(args, "--limit");
 
         return at >= 0 && at + 1 < args.Length && int.TryParse(args[at + 1], out var limit)
             ? Math.Clamp(limit, 1, Store.RoundsQuery.MaxLimit)
-            : Store.RoundsQuery.DefaultLimit;
+            : fallback;
     }
 
     /// <summary>

@@ -73,10 +73,24 @@ public sealed class LogCliScenarioTests : IDisposable
 
         info.Environment["COAI_DATA_DIR"] = _data;
         using var process = Process.Start(info)!;
-        var text = process.StandardOutput.ReadToEnd();
-        process.WaitForExit(60_000).Should().BeTrue("a one-shot mode answers and exits");
 
-        return (process.ExitCode, text);
+        // BOTH pipes are drained, and concurrently. Reading stdout to the end while stderr fills its
+        // buffer is the classic deadlock: the child blocks writing, this blocks reading, and the
+        // timeout below never gets a chance because nothing is timing the READ. And a process that
+        // outlives its deadline is KILLED rather than left behind holding the temp directory this
+        // test is about to delete. (CodeRabbit, on the pull request.)
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(60_000))
+        {
+            process.Kill(entireProcessTree: true);
+            process.WaitForExit(5_000);
+            throw new TimeoutException("a one-shot mode did not answer and exit within a minute");
+        }
+
+        Task.WaitAll([stdout, stderr], 10_000).Should().BeTrue("the pipes close when the child does");
+
+        return (process.ExitCode, stdout.Result);
     }
 
     private void Record()
@@ -113,6 +127,43 @@ public sealed class LogCliScenarioTests : IDisposable
         log.Totals.Rounds.Should().Be(1);
         log.Totals.Findings.Should().Be(1);
     }
+
+    [Fact]
+    public void TheUnpagedLogsDefault_IsStillThreeHundred_NotThePageSize()
+    {
+        // An extension too old to send `--paged` is also too old to ask for a second page, so
+        // shrinking ITS default to 200 would simply take a hundred rounds off the only list it can
+        // show. Two hundred and one rounds, no `--limit`: it must still see more than a page.
+        // (CodeRabbit, on the pull request.)
+        var start = new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
+        var session = new SessionState("s1", "D:/repo", "feat/x", new PanelConfig()) { Stage = Stage.CodeReview };
+        using (var db = RoundsDb.Open(_data, _log)!)
+        {
+            for (var n = 1; n <= 201; n++)
+            {
+                var started = start.AddSeconds(n);
+                db.RecordRound(
+                    session,
+                    new RoundRecord("CodeReview", n, "proceed", 0, "all 3 reviewers answered", started)
+                    {
+                        StartedUtc = started,
+                        Subject = "SCOPE",
+                    },
+                    []);
+            }
+        }
+
+        var (paged, pagedText) = Run("--log", "--paged");
+        var (legacy, legacyText) = Run("--log");
+
+        paged.Should().Be(0);
+        legacy.Should().Be(0);
+        Rounds(pagedText).Should().Be(200, "a page is two hundred");
+        Rounds(legacyText).Should().Be(201, "and the old shape's default is three hundred");
+    }
+
+    private static int Rounds(string json) =>
+        JsonSerializer.Deserialize<LoggedLog>(json, ServerJsonContext.Default.LoggedLog)!.Rounds.Count;
 
     [Fact]
     public void TheUnpagedLog_StillAnswersWhatItAnsweredYesterday()

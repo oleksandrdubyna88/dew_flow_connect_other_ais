@@ -20,7 +20,7 @@
  */
 
 /** One region of the page, and the last thing it is known to have received. */
-export type Region = 'rows' | 'usage' | 'spots';
+export type Region = 'rows' | 'usage' | 'spots' | 'totals';
 
 /**
  * A push that has been decided on but not yet confirmed.
