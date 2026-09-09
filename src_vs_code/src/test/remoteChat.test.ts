@@ -11,6 +11,7 @@ import {
   waitSecondsFor,
 } from '../remoteAsk';
 import { RemoteChatSession, RemoteTransport } from '../remoteChatSession';
+import { REQUEST_TIMEOUT_MS } from '../teamServerApi';
 import { Timers } from '../cliChatSession';
 import { TurnBudgets } from '../chatSession';
 
@@ -112,9 +113,7 @@ test('a failed review says what the server said, and an unknown status is still 
   assert.strictEqual(failed.kind, 'failure');
   assert.match((failed as { failure: string }).failure, /the vendor refused the prompt/);
 
-  // A server that learns a new state must not turn every conversation into an error the day it
-  // ships. The deadline is what ends a turn that never resolves.
-  assert.deepStrictEqual(readStep({ status: 'thinking-really-hard', position: 4 }), { kind: 'waiting', position: 4 });
+  // A body with no status at all is a poll that answered nothing yet, which IS waiting.
   assert.deepStrictEqual(readStep({}), { kind: 'waiting', position: 0 });
 });
 
@@ -122,7 +121,8 @@ test('a poll never asks for longer than the turn has left', () => {
   // Asking for the full window when four seconds remain means the answer arrives after this side
   // has given up, which reads as a server that never answered.
   assert.strictEqual(waitSecondsFor(4_000), 4);
-  assert.strictEqual(waitSecondsFor(600_000), 25);
+  // Eight, not twenty-five: `ask` aborts the request at ten seconds — see the test below.
+  assert.strictEqual(waitSecondsFor(600_000), 8);
   assert.strictEqual(waitSecondsFor(10), 1, 'a poll asked for zero seconds is a busy loop');
 });
 
@@ -224,4 +224,29 @@ test('two questions at once are two turns, one after the other', async () => {
   await Promise.all([first, second]);
 
   assert.strictEqual(server.submitted.length, 2, 'the second turn was submitted before the first finished');
+});
+
+test('a poll never asks the server to hold longer than this side will wait', () => {
+  // Two constants that had to be read together: `ask` aborts every request at REQUEST_TIMEOUT_MS,
+  // and a long poll asking for longer than that is a request this side kills before the server
+  // answers — every poll failing with "it did not answer within 10s", for a server behaving
+  // perfectly. (codex, the plan round, from the other end.)
+  assert.ok(
+    waitSecondsFor(600_000) * 1000 < REQUEST_TIMEOUT_MS,
+    `a poll asks for ${waitSecondsFor(600_000)}s and the request is aborted at ${REQUEST_TIMEOUT_MS / 1000}s`,
+  );
+});
+
+test('a status this client does not know is named, not waited out', () => {
+  // The server has exactly four: Queued, Running, Done, Failed. A fifth value means a server much
+  // newer than this build, or something in front of it answering for it — and three minutes of
+  // "Thinking…" is the worst way to say either. (gemini and local, one finding from two sides.)
+  const odd = readStep({ status: 'abandoned' });
+
+  assert.strictEqual(odd.kind, 'failure');
+  assert.match((odd as { failure: string }).failure, /abandoned/);
+
+  // The two that ARE running stay running.
+  assert.strictEqual(readStep({ status: 'queued', position: 3 }).kind, 'waiting');
+  assert.strictEqual(readStep({ status: 'running' }).kind, 'waiting');
 });

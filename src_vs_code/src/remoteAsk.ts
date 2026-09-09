@@ -100,14 +100,28 @@ export function readStep(body: unknown): RemoteStep {
       : { kind: 'failure', failure: 'the server finished the turn without an answer' };
   }
   if (status === 'failed' || status === 'error' || status === 'cancelled' || status === 'canceled') {
-    const why = typeof row['failure'] === 'string' && row['failure'].length > 0
-      ? row['failure']
-      : typeof row['reason'] === 'string' && row['reason'].length > 0 ? row['reason'] : status;
-
-    return { kind: 'failure', failure: `the server reported: ${why}` };
+    return { kind: 'failure', failure: `the server reported: ${saidWhy(row, status)}` };
+  }
+  if (status.length === 0 || RUNNING.includes(status)) {
+    return { kind: 'waiting', position };
   }
 
-  return { kind: 'waiting', position };
+  // The server has exactly four states — Queued, Running, Done, Failed — so a fifth value is a
+  // server much newer than this build, or something in front of it answering for it. Three minutes
+  // of "Thinking…" is the worst way to say either, and naming it is the shortest way to be fixed.
+  // (gemini and local, one finding from two sides; the state list is measured, not assumed.)
+  return { kind: 'failure', failure: `the server answered with a status this build does not know: ${status}` };
+}
+
+/** The states that mean "not finished yet". Measured from the server's own `JobStatus`. */
+const RUNNING: readonly string[] = ['queued', 'running', 'pending', 'claimed', 'waiting'];
+
+/** What the server said about a failure, in its own words when it gave any. */
+function saidWhy(row: Record<string, unknown>, status: string): string {
+  const failure = typeof row['failure'] === 'string' ? row['failure'] : '';
+  const reason = typeof row['reason'] === 'string' ? row['reason'] : '';
+
+  return failure.length > 0 ? failure : reason.length > 0 ? reason : status;
 }
 
 function count(value: unknown): number {
@@ -120,8 +134,15 @@ function count(value: unknown): number {
  * <p>Never longer than what is LEFT of the turn's deadline: asking for the full window when four
  * seconds remain means the answer arrives after this side has already given up, which reads as a
  * server that never answered. The C# shim learned this the same way.</p>
+ *
+ * <p><b>And never longer than this side will WAIT.</b> `ask` aborts every request at
+ * `REQUEST_TIMEOUT_MS` — ten seconds — so a poll that asks the server to hold for twenty-five is a
+ * request this side kills before the server answers: every poll failing with "it did not answer
+ * within 10s", for a server behaving perfectly. Eight leaves room for the round trip. The C# shim
+ * can ask for twenty-five because its own client has no such cap; this one cannot, and the two
+ * constants had to be read together to see it. (codex, the plan round, from the other end.)</p>
  */
-export function waitSecondsFor(remainingMs: number, longest = 25): number {
+export function waitSecondsFor(remainingMs: number, longest = 8): number {
   const seconds = Math.floor(remainingMs / 1000);
 
   return Math.max(1, Math.min(longest, seconds));

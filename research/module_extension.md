@@ -232,6 +232,40 @@ force-killed window was ENDED, a stranger of the same image recorded an hour off
 another window’s live child was LEFT ALONE and its file was not even read, the dead window’s file was
 removed and the live one was untouched.
 
+### A Team server answers a chat, bounded at three turns (2026-09-09)
+
+`RemoteChatSession` is the same `ChatSession` the local half implements, over a QUEUE instead of a
+pipe: submit a review, poll it while it waits behind everybody else’s, take the answer, cancel what
+is still queued when the tab closes. The wire is the one `coai-mcp --ask-remote` has spoken since
+the Team server existed — a second dialect of one protocol is how two halves become green about
+opposite things.
+
+**Two measurements changed the design before any of it was trusted.**
+
+- **A chat turn carries no review ROLE.** The first version sent `Chat`, which the server refuses
+  outright — and it is right to: a role there carries a shipped prompt, a threshold and a round
+  budget, and a test walks every value of that enum asserting each asks for an honest empty findings
+  list. What the server does accept is a job with no role, which is also the separation the owner
+  asked for: a usage row with no role is a conversation, because every review has one. That it is a
+  validation gap rather than a contract is written up as its own plan.
+- **A poll may not ask for longer than this side will wait.** `ask` aborts every request at ten
+  seconds; the long poll was asking the server to hold for twenty-five. Every poll would have failed
+  with *"it did not answer within 10s"*, for a server behaving perfectly. Two constants in two files,
+  and the defect only exists when they are read together.
+
+**Three turns is the cap**, and the reason is arithmetic rather than policy: a remote model keeps no
+conversation, so every turn re-sends the whole transcript and the bill for turn N is the bill for
+everything before it. The page’s `capped` region — built in epic 2 and never set until now — says so
+and offers the local model that HAS a memory. What travels is `carriedTurn`, bounded tighter for a
+server (20 000 characters) than for a pipe (60 000): a pipe took 76 059 bytes in five seconds, and a
+JSON body through whatever sits in front of a server is where a 413 arrives at turn three.
+
+**A status this build does not know is NAMED, not waited out.** The server has exactly four — Queued,
+Running, Done, Failed — so a fifth value means a server much newer than this client, or something in
+front of it answering for it, and three minutes of "Thinking…" is the worst way to say either.
+
+Measured live: a real turn through `coai.remsoft.dev`, answered in 5.2 seconds.
+
 ### Three vendors, one seam (2026-09-09)
 
 The chat answered on one runtime because the master plan recorded a limitation as fact:
