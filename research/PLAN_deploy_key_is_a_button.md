@@ -219,9 +219,19 @@ artefact, and this plan's wrapper downloads one.
 
 ## The open tail
 
-- The old unrestricted `coai-deploy-ci` key is removed from the host only after a real deploy has
-  passed through the restricted one — installing the new key, testing it, re-issuing the secret and
-  revoking the old is a sequence, and doing it in one step is how a deploy path locks itself out.
+- ~~The old unrestricted key is removed only after a real deploy has passed through the restricted
+  one.~~ **Done, 2026-09-09.** It was not replaced: the same key already in `COAI_DEPLOY_KEY` was
+  given the `restrict,command=` prefix in place, which reaches the goal — that key can no longer open
+  a root shell — without any private-key material moving anywhere. `authorized_keys` was backed up to
+  `authorized_keys.before-coai-lockdown` first, and the proof is a real deploy of `0.5.5` through the
+  new path afterwards: run 34329776612, every step green, the rollback step skipped because nothing
+  needed it.
+
+  What that run showed, in its own words: the wrapper found `.claude/rules/shared` modified and said
+  so before discarding it, refreshed the checkout to `56831d3`, fetched the archive, reported
+  `sha256 verified`, and handed it to the release script — which canaried one real review per vendor.
+  `bin` moved to `0.5.5-20260909T085527Z`, the trail kept the previous three, loopback and the public
+  URL both answered `{"ok":true,"version":"0.5.5"}`, and no staging directory was left behind.
 - The wrapper is not covered by a shell test suite of its own; its refusals are executed by
   `install.test.ts` through `sh`, which is the boundary that matters, but the accept paths are
   asserted only as text because running them would deploy something.
