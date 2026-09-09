@@ -1,5 +1,12 @@
 # Changelog
 
+## Extension 0.31.21 — 2026-09-09
+
+**A chat tab looks like a chat tab.** It wore the same generic icon as everything else in the editor,
+which is no help at all when three conversations are open side by side. It carries this product's own
+green glyph now, in a light and a dark version, because a tab icon cannot read your theme.
+
+
 ## Extension 0.31.19 — 2026-09-09
 
 **Ctrl+F works.** The chat tab, the rounds log and the help page each open with the editor's own find

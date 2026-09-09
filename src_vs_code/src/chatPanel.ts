@@ -12,6 +12,7 @@ import {
   chatPickerHtml,
   chatStatusHtml,
 } from './chatPage';
+import { CHAT_ICON } from './chatIcon';
 import { escapeHtml } from './webviewHtml';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
@@ -89,11 +90,13 @@ export interface ChatPushState {
  * map, and handing back a `WebviewPanel` would invite a second place that knows how to dispose one.</p>
  *
  * @param known whether a model id the page asks for is one this conversation was actually offered
+ * @param extensionUri where this extension was installed — the only way to name a file it ships
  */
 export function createChatPanel(
   state: ChatPageState,
   session: DisposableSession,
   hooks: ChatPanelHooks,
+  extensionUri: vscode.Uri,
 ): ChatEntry {
   // The conversation's own identity, created once and never replaced. See the module comment.
   const id = { conversation: state.title };
@@ -116,6 +119,14 @@ export function createChatPanel(
       localResourceRoots: [],
     },
   );
+  // A pair, because a tab icon is workbench chrome and no theme reaches it — `var(--vscode-…)` is
+  // unavailable there, and the colour has to be baked into the file. The segments come from
+  // `chatIcon.ts` rather than being spelled out here: a path written twice is a path that goes stale
+  // on the first rename, and nothing type-checks a `Uri`.
+  panel.iconPath = {
+    light: vscode.Uri.joinPath(extensionUri, ...CHAT_ICON.light),
+    dark: vscode.Uri.joinPath(extensionUri, ...CHAT_ICON.dark),
+  };
   panel.webview.html = chatPageHtml(state, crypto.randomBytes(16).toString('hex'));
 
   const scale = pushUiScaleTo(panel.webview);

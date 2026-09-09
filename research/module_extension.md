@@ -787,6 +787,49 @@ because it could override the value out of sight. A second test in the file driv
 guard that cannot be described in a fixture is a guard nobody can trust. The discovery walks `.ts`,
 `.tsx`, `.mts` and `.cts`, so a panel arriving as a `.tsx` is not a panel nobody scans.
 
+## The chat tab wears its own glyph (2026-09-09)
+
+Every chat tab wore the generic `≡`, because `createWebviewPanel` never set `iconPath` — there was
+not one in the whole extension. A person with three conversations open had three tabs that looked
+like everything else in the editor.
+
+`media/chat.svg` and `media/chat-light.svg` are the activity-bar glyph (`panel.svg`: three nodes
+around a hub) with three things changed for a tab. The colour is BAKED IN, twice, because a tab icon
+is workbench chrome and no theme reaches it: `var(--vscode-…)` is unavailable and `iconPath` takes a
+`Uri` or a `{ light, dark }` pair — `#5CC46F`, palette slot 5, on a dark ground, and `#2E8B3E`, the
+same hue darkened, on a light one, because a bright green on white reads pale. Measured against the
+grounds they sit on: 4.30:1 on white, 3.64:1 on a Light+ tab, 7.61:1 on Dark+, 8.10:1 on Dark
+Modern — every one past the 3:1 WCAG asks of a graphical object. And the viewBox is cut to the
+content (`2.7 0.85 18.6 18.6`, centred on the hub's visual centre at y 10.15 rather than the box's
+12) with the strokes taken from 0.95/1.15 to 1.7/1.8, because "big" is not a size the workbench lets
+you ask for: it draws a tab icon at its own fixed size, and the Welcome tab's looks big only because
+its glyph fills the box edge to edge.
+
+**The line was the small half.** `createChatPanel` took no context and no URI, and neither did
+`newConversation` or `chatWithOtherAi`; `context` exists only in `activate`. The URI is threaded
+through all three — the URI, not the `ExtensionContext`, because a function that needs a media folder
+should say that and this one needs neither storage nor subscriptions. `PanelProvider` holding a whole
+context is the precedent for the other choice and it is the right one there: it uses `globalState`
+and `globalStorageUri`.
+
+**Where the path lives, and why it is not in `chatPanel.ts`.** `chatIcon.ts` holds the two file names
+as path segments and imports nothing. The only failure mode an icon has is a path that names a file
+nobody shipped — nothing type-checks a `Uri`, and a wrong one produces the generic icon and no error
+anywhere — so the segments the panel joins are the segments a test opens on disk. A regex over the
+source could only have proved that some string was written down. The tests also assert the two
+colours, the viewBox and the stroke weights, and that `.vscodeignore` excludes nothing under
+`media/`; `vsce ls` was run and lists both files.
+
+**Not verified here.** The side-by-side against the Welcome tab needs a running workbench and a human
+eye. The geometry matches the numbers the plan measured, but "indistinguishable in size" is recorded
+as unverified rather than claimed.
+
+**The open tail, named by the plan round.** A panel restored by a `WebviewPanelSerializer` would not
+pass through `chatWithOtherAi`, so it would come back without an icon. There is no serializer in this
+extension today — `registerWebviewPanelSerializer` appears nowhere — but the plan that adds one
+(`a_conversation_survives_a_reload`) must route its restored panel through `createChatPanel`, or its
+tabs will wear the generic glyph again.
+
 ## The update check can trust `…/releases` again (2026-09-08)
 
 `installer.ts` asks GitHub for the newest release and offers its asset. That was safe only while a

@@ -541,6 +541,7 @@ function newConversation(
   state: { readonly title: string; readonly passage: string; readonly draft: string },
   resolved: string,
   remote: ChatSession | undefined,
+  extensionUri: vscode.Uri,
 ): ChatEntry {
   const first = started(ready.vendor, resolved, remote);
   const session = first.session;
@@ -611,6 +612,7 @@ function newConversation(
         void vscode.window.showWarningMessage(`The chat page reported: ${message}`);
       },
     },
+    extensionUri,
   );
   // Recorded against the entry's OWN id, which `createChatPanel` made — not against the tab key,
   // which can move under a live conversation. That distinction cost a whole code round.
@@ -639,7 +641,11 @@ function newConversation(
  * @param panels the registry of open conversations
  * @param args what VS Code handed it — a menu item passes the webview, a keybinding passes nothing
  */
-export async function chatWithOtherAi(panels: ChatPanels, args: readonly unknown[]): Promise<void> {
+export async function chatWithOtherAi(
+  panels: ChatPanels,
+  extensionUri: vscode.Uri,
+  args: readonly unknown[],
+): Promise<void> {
   const config = vscode.workspace.getConfiguration('coai');
   const settings = chatSettingsFrom((key) => config.get(key));
   const ready = readyToChat(config, settings.model);
@@ -699,7 +705,7 @@ export async function chatWithOtherAi(panels: ChatPanels, args: readonly unknown
     title: match.label,
     passage: passage.text,
     draft: plan.send ? '' : turn,
-  }, cli.resolved, remote.session));
+  }, cli.resolved, remote.session, extensionUri));
 
   opened.entry.panel.reveal();
   if (plan.send) {
