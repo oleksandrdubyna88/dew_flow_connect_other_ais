@@ -355,7 +355,12 @@ function runChatPage(over: Partial<ChatPageState> = {}): RunningPage {
       }
       if (seen[id] === undefined) {
         seen[id] = fake();
+        // Boolean attributes are read ACROSS from the markup. A fake that starts open where the page
+        // renders it locked, or visible where the page renders it hidden, is a fake the tests cannot
+        // see the initial state on — and both of those were caught by tests that then passed for the
+        // wrong reason until this was here.
         seen[id].disabled = / disabled(?=[ >])/.test(tag);
+        seen[id].hidden = / hidden(?=[ >])/.test(tag);
       }
 
       return seen[id];
@@ -797,4 +802,91 @@ test('a state that omits the capped notice clears it, as it always did', () => {
 
   assert.strictEqual(page.seen['capped'].innerHTML, '', 'an omitted capped notice stayed on screen');
   assert.strictEqual(page.seen['failure'].innerHTML, '', 'an omitted failure stayed on screen');
+});
+
+
+/* ------------------------------------------------------------------------------------------------
+ * Story 3: rule 3 of the decided behaviour — a reader who was NOT followed is told that something
+ * arrived, and given one way back to it.
+ * ---------------------------------------------------------------------------------------------- */
+
+test('the jump control is an overlay, so showing it moves no layout', () => {
+  // If it took room in the footer, showing it would shrink the scrolling region — which changes
+  // clientHeight, which is one of the three numbers the follow decision is made from. A control that
+  // appears BECAUSE a reader was not followed must not alter what "at the bottom" means.
+  const html = chatPageHtml(state(), 'n0nce');
+  const css = html.split('<style>')[1].split('</style>')[0];
+  const footer = html.slice(html.indexOf('<footer'), html.indexOf('</footer>'));
+
+  assert.ok(footer.includes('id="jump"'), 'the jump control is not in the footer');
+  assert.match(html, /<button type="button" id="jump"[^>]*hidden/, 'the jump control is not a hidden plain button');
+  assert.match(ruleFor(css, '.jump'), /position: absolute/, 'the jump control takes room in the layout');
+  assert.match(ruleFor(css, '#composer'), /position: relative/, 'the overlay has nothing to be positioned against');
+});
+
+test('an answer that lands out of view offers the way back to it; one that lands in view does not', () => {
+  const away = runChatPage();
+  away.scrolledUp();
+  away.deliver({ type: 'state', messagesHtml: '<p>an answer</p>' });
+  away.frames();
+  assert.strictEqual(away.seen['jump'].hidden, false, 'a reader who was not followed was never told an answer arrived');
+
+  const there = runChatPage();
+  there.scrolledToBottom();
+  there.deliver({ type: 'state', messagesHtml: '<p>an answer</p>' });
+  there.frames();
+  assert.strictEqual(there.seen['jump'].hidden, true, 'a reader who was followed was offered a jump to where they already are');
+});
+
+test('a push that inserts nothing offers no jump', () => {
+  const page = runChatPage();
+  page.scrolledUp();
+
+  page.deliver({ type: 'state', running: true, capped: false });
+  page.frames();
+
+  assert.strictEqual(page.seen['jump'].hidden, true, 'a state with no insertion offered a jump to nothing new');
+});
+
+test('pressing jump goes to the newest, retires itself, and hands the box back the focus', () => {
+  const page = runChatPage();
+  const scroll = page.scrolledUp();
+  page.deliver({ type: 'state', messagesHtml: '<p>an answer</p>' });
+  page.frames();
+  const focusedBefore = page.seen['say'].focused;
+
+  page.fire('jump', 'click');
+
+  assert.strictEqual(scroll.scrollTop, scroll.scrollHeight, 'the jump did not go to the newest message');
+  assert.strictEqual(page.seen['jump'].hidden, true, 'the jump control stayed up after doing its one job');
+  assert.ok(page.seen['say'].focused > focusedBefore, 'the jump left the focus on itself');
+});
+
+test('a reader who scrolls back down on their own retires the jump control', () => {
+  // Its lifecycle is not only "click me": a person who returns under their own steam has answered
+  // the question it was asking, and a control that stays up after that is one nobody trusts.
+  const page = runChatPage();
+  const scroll = page.scrolledUp();
+  page.deliver({ type: 'state', messagesHtml: '<p>an answer</p>' });
+  page.frames();
+  assert.strictEqual(page.seen['jump'].hidden, false, 'the jump control was never offered');
+
+  scroll.scrollTop = scroll.scrollHeight - scroll.clientHeight;
+  page.fire('scroll', 'scroll');
+
+  assert.strictEqual(page.seen['jump'].hidden, true, 'the jump control outlived the reader arriving');
+});
+
+test('a locked composer does not get the focus from a jump', () => {
+  // While a turn runs the box is disabled; focusing it would put the caret where nobody can type.
+  const page = runChatPage({ running: true });
+  const scroll = page.scrolledUp();
+  page.deliver({ type: 'state', messagesHtml: '<p>an answer</p>', running: true, capped: false });
+  page.frames();
+  const focusedBefore = page.seen['say'].focused;
+
+  page.fire('jump', 'click');
+
+  assert.strictEqual(scroll.scrollTop, scroll.scrollHeight, 'the jump did not scroll while a turn ran');
+  assert.strictEqual(page.seen['say'].focused, focusedBefore, 'the jump focused a box nobody can type in');
 });

@@ -13,6 +13,10 @@ last thing said rather than at the top, and an answer that arrives scrolls itsel
 you were already at the bottom. Scroll up to re-read something and the conversation stays where you
 put it — including if the answer lands in the moment between your scroll and the screen redrawing.
 
+**And when it stays put, it tells you something arrived.** A *Jump to newest* button appears over
+the composer when an answer lands while you are reading further up, takes you there in one press,
+and disappears again — either when you press it or when you scroll back down yourself.
+
 **The captured text no longer has a scrollbar of its own.** There were two on the page. The passage
 was boxed in because a long selection would otherwise push the composer off the screen when the tab
 opened; with the composer pinned, nothing can push it anywhere.

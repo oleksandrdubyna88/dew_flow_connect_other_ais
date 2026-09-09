@@ -139,7 +139,15 @@ function chatStyle(uiScale: number): string {
      body would instead, and the composer would leave the screen — the symptom this layout exists
      to end. (The gate raised it, and it is invisible to every test but a reading of this rule.) */
   #scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px 20px 0; }
-  #composer { flex: 0 0 auto; padding: 8px 20px 12px; }
+  /* Positioned, because the jump control hangs above it. */
+  #composer { flex: 0 0 auto; padding: 8px 20px 12px; position: relative; }
+  /* OUT OF FLOW, and that is the point rather than the styling. In the flow it would take room in
+     the footer, which shrinks the scrolling region, which changes clientHeight - one of the three
+     numbers the follow decision is made from. A control that appears BECAUSE a reader was not
+     followed must not alter what "at the bottom" means. No display property either, so the hidden
+     attribute keeps working. */
+  .jump { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); font: inherit; color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: none; border-radius: 12px; padding: 4px 12px; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
+  .jump:hover { background: var(--vscode-button-hoverBackground); }
   .compose { display: flex; gap: 8px; align-items: flex-end; }
   header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
   h1 { font-size: 1.2em; margin: 0; }
@@ -188,19 +196,38 @@ export function chatStatusHtml(running: boolean, position: number): string {
   return `<p class="thinking">Thinking…${where}</p>`;
 }
 
+/**
+ * What each pushed region holds, for the page as it is first rendered.
+ *
+ * <p>One function because two callers need the SAME four strings: the markup writes them, and the
+ * script remembers them as "what is already on screen" so that the first pushed state can tell a
+ * change from a repeat. Two copies of these expressions would drift on the day one of them gains a
+ * condition, and the symptom would be a page that scrolls on a push that changed nothing.</p>
+ */
+function regionsOf(state: ChatPageState): Record<'messages' | 'thinking' | 'capped' | 'failure', string> {
+  return {
+    messages: chatMessagesHtml(state.messages),
+    thinking: chatStatusHtml(state.running, 0),
+    capped: chatCappedHtml(state.capped),
+    failure: state.failure.length === 0 ? '' : `<div class="failure">${escapeHtml(state.failure)}</div>`,
+  };
+}
+
 /** The document, without its head or its script. */
 function chatBody(state: ChatPageState): string {
   const locked = state.running || state.capped;
+  const regions = regionsOf(state);
 
   return `<main id="scroll">
 <header><h1>${escapeHtml(state.title)}</h1>${zoomControlHtml(state.uiScale)}</header>
 <div class="passage" id="passage">${escapeHtml(state.passage)}</div>
-<div id="failure">${state.failure.length === 0 ? '' : `<div class="failure">${escapeHtml(state.failure)}</div>`}</div>
-<div id="messages">${chatMessagesHtml(state.messages)}</div>
-<div id="thinking">${chatStatusHtml(state.running, 0)}</div>
-<div id="capped">${chatCappedHtml(state.capped)}</div>
+<div id="failure">${regions.failure}</div>
+<div id="messages">${regions.messages}</div>
+<div id="thinking">${regions.thinking}</div>
+<div id="capped">${regions.capped}</div>
 </main>
 <footer id="composer">
+<button type="button" id="jump" class="jump" hidden>Jump to newest ↓</button>
 <div id="pickerBox">${chatPickerHtml(state.models, state.modelId)}</div>
 <div class="compose">
 <textarea id="say" rows="3" placeholder="Ask about the text above…"${locked ? ' disabled' : ''}>${escapeHtml(state.draft)}</textarea>
@@ -266,8 +293,10 @@ function chatScript(state: ChatPageState): string {
   var SLACK = ${FOLLOW_SLACK_PX};
   var pendingFollow = 0;
   // What was last PUT into each region, so a repeat can be told from a change without asking the
-  // browser to serialise the DOM back to us on every push.
-  var lastWritten = { messages: null, thinking: null, capped: null, failure: null };
+  // browser to serialise the DOM back to us on every push. Seeded with what the MARKUP holds, or the
+  // first push would compare against nothing, read as a change, and scroll a reader for content that
+  // was already on their screen.
+  var lastWritten = ${jsonForScript(regionsOf(state))};
   // The ONE scroll event the page owes itself, armed by its own write and consumed by the event it
   // causes. Two shapes were tried and both were wrong: a flag cleared on a later frame stays raised
   // until that frame comes, so every scroll in between reads as the page's own; and a position kept
@@ -301,6 +330,10 @@ function chatScript(state: ChatPageState): string {
   // scheduled is a hijack by the time it runs. Re-measuring in the callback cannot tell: the content
   // is already in, so a reader who WAS at the bottom now measures short of it. Only the reader knows
   // they moved, so the cancel is their scroll event. (Two vendors raised this on the plan round.)
+  function offerJump(show) {
+    const control = document.getElementById('jump');
+    if (control) { control.hidden = !show; }
+  }
   function scheduleFollow() {
     const token = ++pendingFollow;
     afterLayout(function () { if (token === pendingFollow) { landOnNewest(); } });
@@ -390,6 +423,22 @@ function chatScript(state: ChatPageState): string {
       } else {
         pendingFollow++;
       }
+      // A reader who came back under their own steam has answered the question the control was
+      // asking. One that stays up after that is one nobody trusts.
+      if (shouldFollow(scrollRegion.scrollTop, scrollRegion.clientHeight, scrollRegion.scrollHeight, SLACK)) {
+        offerJump(false);
+      }
+    });
+  }
+  const jump = document.getElementById('jump');
+  if (jump) {
+    jump.addEventListener('click', function () {
+      landOnNewest();
+      offerJump(false);
+      // The box, unless a turn is running - focusing a disabled control puts the caret where
+      // nobody can type, which is the same rule send() follows.
+      const box = document.getElementById('say');
+      if (box && !box.disabled && typeof box.focus === 'function') { box.focus(); }
     });
   }
   window.addEventListener('message', function (event) {
@@ -470,9 +519,13 @@ function chatScript(state: ChatPageState): string {
       // nine seconds after the last one — which is the whole conversation, one click at a time.
       if (wasLocked && !box.disabled && typeof box.focus === 'function') { box.focus(); }
     }
-    // Rule 2, applied once for whatever this push contained - an answer, a failure, a thinking line
-    // or a capped notice. There is one rule, not one per outcome.
-    if (wrote && follow) { scheduleFollow(); }
+    // Rules 2 and 3, applied once for whatever this push contained - an answer, a failure, a
+    // thinking line or a capped notice. There is one rule, not one per outcome, and the two halves
+    // are exclusive by construction: something arrived, and either the reader was taken to it or
+    // they are told it is there.
+    if (wrote) {
+      if (follow) { scheduleFollow(); } else { offerJump(true); }
+    }
   });
 }());`;
 }

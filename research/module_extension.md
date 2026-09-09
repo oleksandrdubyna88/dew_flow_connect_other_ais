@@ -112,12 +112,25 @@ unconditionally made a fresh token, so a cancelled open came back to life whenev
 to settle, and a person who opened a tab and started reading upward was dragged down by a font. It
 captures the generation at open and skips if a reader's scroll has moved it.
 
+**Rule 3 is an OVERLAY, and that is structural rather than styling.** The *jump to newest* control
+hangs above the composer out of flow (`.jump { position: absolute }` against a positioned
+`#composer`). In the flow it would take room in the footer, which shrinks the scrolling region,
+which changes `clientHeight` — one of the three numbers the follow decision is made from. A control
+that appears BECAUSE a reader was not followed must not alter what "at the bottom" means. It is
+shown only when an insertion happened and the reader was not taken to it, and it is retired two
+ways: by its own click, and by the reader arriving under their own steam, which has answered the
+question it was asking. Its click goes through `landOnNewest()`, the same entry point everything
+else uses, and it hands the box back the focus unless a turn is running — focusing a disabled
+control puts the caret where nobody can type.
+
 **A write is compared against what was LAST WRITTEN, not against the element.** Reading `innerHTML`
 back makes the browser serialise the whole subtree on every push, and what comes back is normalised —
 attributes reordered, entities decoded — so an unchanged push can read as different and a changed one
 as the same. `cappedHtml` and `failureHtml` clear when they are not mentioned, which the protocol has
 always meant: a cap notice or a failure left on screen after it stopped being true is one a person
-acts on.
+acts on. The record is SEEDED from what the markup holds — `regionsOf`, the one function both the
+markup and the script take their four strings from — or the first push would compare against nothing,
+read as a change, and scroll a reader for content already on their screen.
 
 ### One webview per SESSION, which no other page in here does (2026-09-08)
 
