@@ -701,10 +701,19 @@ it is written. A test like that cannot carry an exception for one file without b
 hand-written list it replaces. The sidebar is not affected: it is a `WebviewView`, and the API has no
 such option for one.
 
-`panelsAreSearchable.test.ts` reads each call's own arguments — cut out by balanced parentheses, with
-comments stripped — rather than the whole file, so a file that grows a second panel is checked twice
-and a comment naming the option cannot stand in for it. It refuses a spread in those options as well,
-because a spread could override the value where a source scan cannot see it.
+**What the code round did to the test.** The first version matched `enableFindWidget: true` anywhere
+in a call's text, and three reviewers refused it independently for the same reason: a string literal,
+a comment, or an object one level down can all carry those words while the call VS Code receives has
+no such option — the guard stays green over a dead Ctrl+F. So `panelsAreSearchable.test.ts` now blanks
+every comment, string and regular expression first (delimiters kept, so offsets and bracket counts
+survive), which is also what makes the balanced-parenthesis cut of the arguments safe: a `)` inside a
+title can no longer close the count. The option is then required as a TOP-LEVEL property of the
+options object, exactly once, with a literal `true`, and a spread among those properties is refused
+because it could override the value out of sight. A second test in the file drives all seven evasions
+— absent, false, in a string, in a comment, nested, spread, a variable — plus the two formattings
+(`)` inside a string, the bracket on the next line) through the same code and watches it complain; a
+guard that cannot be described in a fixture is a guard nobody can trust. The discovery walks `.ts`,
+`.tsx`, `.mts` and `.cts`, so a panel arriving as a `.tsx` is not a panel nobody scans.
 
 ## The update check can trust `…/releases` again (2026-09-08)
 
