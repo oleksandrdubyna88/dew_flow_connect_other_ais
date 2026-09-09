@@ -7,7 +7,7 @@
 > remotely as a job on the company subscription, bounded at three turns.
 > One item is owed and it is not ours to build: chat turns are DISTINGUISHABLE in the spending view
 > (they carry no review role) but the view does not yet group on it, which needs a server change —
-> [../todo/PLAN_the_server_knows_a_chat_from_a_review.md](../todo/PLAN_the_server_knows_a_chat_from_a_review.md).
+> [PLAN_the_server_knows_a_chat_from_a_review.md](PLAN_the_server_knows_a_chat_from_a_review.md).
 >
 > **Deviations.** Three, all of them measurements overruling the plan. (1) The plan wrote off two of
 > the three vendor CLIs — *"claude's schema differs and codex exec has no multi-turn stdin"* — and
@@ -447,7 +447,7 @@ costs a few hundred bytes, and a file deleted too early costs a process nobody c
 - [ ] **NOT DONE, and moved out**: chat turns appear in the spending view, separated from review
       turns. They are already distinguishable — a usage row with no review role is a conversation —
       but grouping on it is a server change:
-      [../todo/PLAN_the_server_knows_a_chat_from_a_review.md](../todo/PLAN_the_server_knows_a_chat_from_a_review.md).
+      [PLAN_the_server_knows_a_chat_from_a_review.md](PLAN_the_server_knows_a_chat_from_a_review.md).
 - [x] The model picker lists local rows and, when a Team server answers, its catalog rows too — and
       a row that cannot answer is listed WITH ITS REASON rather than quietly missing.
 - [x] The section holds a multi-line prompt box, defaulting to the single word `Explain`, and what it

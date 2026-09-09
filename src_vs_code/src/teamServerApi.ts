@@ -125,9 +125,27 @@ export interface VendorUsage {
   readonly costUsd?: number;
 }
 
+/**
+ * What one KIND of work cost — the gate, or asking.
+ *
+ * <p>Absent from a server older than the field, which is why `Usage.kinds` is optional: a panel that
+ * demanded it would show nothing at all against every server that has not been redeployed.</p>
+ */
+export interface KindUsage {
+  readonly kind: string;
+  readonly runs: number;
+  readonly failed: number;
+  readonly tokensIn: number;
+  readonly tokensOut: number;
+  readonly seconds: number;
+  readonly costUsd?: number;
+}
+
 export interface Usage {
   readonly window: string;
   readonly vendors: readonly VendorUsage[];
+  /** Optional: a server that predates the field sends none, and the panel then says nothing. */
+  readonly kinds?: readonly KindUsage[];
 }
 
 /** The bearer this machine holds for one server, or empty when it has never signed in. */

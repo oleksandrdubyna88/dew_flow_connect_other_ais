@@ -25,7 +25,19 @@ public sealed record UsageEntry(
     /// Trailing and defaulted, so every existing construction still compiles and every line
     /// already on disk stays valid — an old line simply has no email, which is the truth about it.
     /// </remarks>
-    string Email = "");
+    string Email = "",
+
+    /// <summary>What this run WAS: a review, or a conversation.</summary>
+    /// <remarks>
+    /// The owner's ruling, 2026-09-08: chat turns go into the spending record like review turns and
+    /// are DISTINGUISHED from them, because "what did the gate cost me" and "what did asking cost me"
+    /// are two questions and one total answers neither.
+    /// <para>Trailing and defaulted, like the email above it and for the same reason: every line
+    /// already on disk stays valid. An old line has no kind, and everything written before this
+    /// existed was a review — there was nothing else to be — so an absent kind is READ as one rather
+    /// than shown as unknown. That is the truth about those lines, not a convenience.</para>
+    /// </remarks>
+    string Kind = "");
 
 /// <summary>
 /// The append-only record of what every reviewer has consumed.
@@ -98,7 +110,8 @@ public sealed class UsageLedger(string dataDir)
         TimeSpan elapsed,
         long tokensIn,
         long tokensOut,
-        double? costUsd = null) =>
+        double? costUsd = null,
+        string kind = "") =>
         Append(new UsageEntry(
             DateTime.UtcNow.ToString("O"),
             provider,
@@ -110,7 +123,8 @@ public sealed class UsageLedger(string dataDir)
             tokensOut,
             costUsd,
             outcome,
-            email));
+            email,
+            kind));
 
     /// <summary>Never throws: a spending record that can fail a review is worse than one with a gap.</summary>
     private void Append(UsageEntry entry)

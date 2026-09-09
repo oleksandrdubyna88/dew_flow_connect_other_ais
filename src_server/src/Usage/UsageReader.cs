@@ -23,7 +23,9 @@ public sealed record UsageLine(
     double Seconds,
     long TokensIn,
     long TokensOut,
-    double? CostUsd)
+    double? CostUsd,
+    /// <summary>A review or a conversation. A line written before the field existed was a review.</summary>
+    JobKind Kind = JobKinds.WhenNotSaid)
 {
     /// <summary>True when this run produced no answer. It cost the same.</summary>
     public bool Failed => !Outcome.Equals("ok", StringComparison.OrdinalIgnoreCase);
@@ -131,7 +133,12 @@ public sealed class UsageReader(string dataDir)
                     entry.Seconds,
                     entry.TokensIn,
                     entry.TokensOut,
-                    entry.CostUsd);
+                    entry.CostUsd,
+                    // A kind this build does not know is READ AS A REVIEW rather than refused. The
+                    // line is history: it already happened and it already cost money, and dropping
+                    // it from a spending report because a newer server wrote a word this one has not
+                    // heard would hide spending — which is the one thing this file must never do.
+                    JobKinds.TryRead(entry.Kind, out var kind) ? kind : JobKinds.WhenNotSaid);
         }
         catch (JsonException)
         {

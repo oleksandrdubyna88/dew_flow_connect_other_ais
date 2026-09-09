@@ -54,8 +54,10 @@ public sealed class JobPump(
     {
         foreach (var job in jobs.Sweep(DateTimeOffset.UtcNow))
         {
-            log.LogInformation(
-                "job {Id} for {Email} {Reason}", job.Id, job.Email, JobTransitions.ExpiryReason(job));
+            // The store's own sentence, not a second one worked out here. It has already decided
+            // WHICH clock ran out — an abandoned job and a timed-out one read very differently, and
+            // recomputing after the record went terminal would have got the answer wrong.
+            log.LogInformation("job {Id} for {Email} {Reason}", job.Id, job.Email, job.Reason);
         }
     }
 

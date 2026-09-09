@@ -1,7 +1,20 @@
 # PLAN — the Team server should know a chat from a review, and outlive the client that asked
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_server` and the shared job contract;
-> the extension half already ships and works around what is missing here.
+> Status: **IMPLEMENTED, 2026-09-09.** All three shipped in Team server 0.5.6 and extension 0.31.17:
+> `kind` as a contract with `review` as the default, abandonment on two clocks, and an idempotency
+> key bound to a fingerprint of the request. The panel's spending block separates conversations from
+> rounds, which closes the owner's *"счиатть, отделять"* — the one item the chat plan had to leave open.
+>
+> **Deviations, all from the plan round of this product's own gate.** (1) The abandonment window is
+> TWO numbers, not one: three minutes for a queued job, ten for a running one. Treating them alike was
+> called blocking and rightly — a queued job has cost nothing, a running one has already been billed
+> for whatever it has done, so killing it for a network blip destroys work somebody paid for.
+> (2) The idempotency key carries a FINGERPRINT of the request; a key repeated with a different
+> question is a 409 rather than the first job's answer, which would otherwise have answered a question
+> nobody asked while looking exactly like success. (3) A poll JUDGES before it stamps, so a client
+> that vanished for five minutes cannot resurrect a job the sweep was entitled to drop.
+>
+> Scope: `src_server` and the shared job contract; the extension half shipped first, deliberately.
 >
 > Related docs: [PLAN_chat_with_other_ais.md](../research/PLAN_chat_with_other_ais.md) (phase 5 is what raised
 > all of this), [../research/module_extension.md](../research/module_extension.md).
@@ -82,10 +95,17 @@ still answers — because a server older than the client is the ordinary state o
 
 ## Definition of Done
 
-- [ ] `kind` is part of the job contract, defaulted so no existing client changes behaviour.
-- [x] The extension sends it, and still works against a server that ignores it. *(0.31.14, measured
-      against the live server before the server knew the field.)*
-- [ ] `UsageReader` carries it and the panel's spending section separates conversations from rounds.
-- [ ] A job nobody polls expires and frees its vendor slot.
-- [ ] A repeated submit with one idempotency key produces one job.
-- [ ] Measured against the live server, as phase 5 was.
+- [x] `kind` is part of the job contract, and NULLABLE rather than defaulted — which is the whole
+      design: it is the only way to tell an old client that said nothing from a new one that said
+      `review`, and the first must keep working. Six rows of a table, six tests.
+- [x] The extension sends it, and still works against a server that ignores it. *(0.31.15, measured
+      against the live server before the server knew the field: accepted in 56 ms, exactly as a body
+      without it.)*
+- [x] `UsageReader` carries it and the panel's spending section separates conversations from rounds —
+      one line under the vendor rows, folded through the SAME arithmetic those rows use, and silent
+      when there is only one kind, because an absence is not a zero.
+- [x] A job nobody polls expires and frees its vendor slot — its PROCESS stopped, not merely its
+      record marked, and on two clocks: three minutes queued, ten minutes running.
+- [x] A repeated submit with one idempotency key produces one job; the same key for a different
+      question is a 409 rather than somebody else's answer.
+- [x] Measured against the live server, as phase 5 was — see *What the live server said* below.

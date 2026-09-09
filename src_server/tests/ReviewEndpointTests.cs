@@ -164,6 +164,106 @@ public sealed class ReviewEndpointTests
         // sits for twenty-five seconds staring at an answer the server already has. (Plan round.)
         (DateTimeOffset.UtcNow - started).Should().BeLessThan(TimeSpan.FromSeconds(5));
     }
+
+    [Fact]
+    public async Task AChatIsAcceptedOverTheWireWithNoRole()
+    {
+        using var server = WithVendors();
+
+        var response = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .PostAsJsonAsync("/api/reviews", Request() with { Role = null, Kind = "chat" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Accepted);
+    }
+
+    [Fact]
+    public async Task AChatCarryingAReviewRoleIsRefusedOverTheWire()
+    {
+        using var server = WithVendors();
+
+        var response = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .PostAsJsonAsync("/api/reviews", Request() with { Kind = "chat" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadFromJsonAsync<ErrorDto>())!.Error
+            .Should().Contain("carries no review role");
+    }
+
+    [Fact]
+    public async Task AClientThatSendsNoKindIsStillAcceptedWithNoRole()
+    {
+        // The row every installed copy depends on. `coai-mcp --ask-remote` and the extension's chat
+        // both predate this field; refusing them would take every round and every conversation down
+        // at once, on the day this server was deployed.
+        using var server = WithVendors();
+
+        var response = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .PostAsJsonAsync("/api/reviews", Request() with { Role = null });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Accepted);
+    }
+
+    [Fact]
+    public async Task AKindTheServerDoesNotKnowIsRefusedByName()
+    {
+        using var server = WithVendors();
+
+        var response = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .PostAsJsonAsync("/api/reviews", Request() with { Kind = "conversation" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadFromJsonAsync<ErrorDto>())!.Error
+            .Should().Contain("not a kind of job").And.Contain("chat");
+    }
+
+    [Fact]
+    public async Task RepeatingASubmitWithOneKeyAnswersWithTheSameReview()
+    {
+        // The failure this is for: the POST arrives, the job is accepted, and the response never
+        // comes back. The person presses send again, and without this the server is holding two
+        // jobs for one question on an account where a slot is the scarcest thing there is.
+        using var server = WithVendors();
+        var client = server.ClientFor($"dev@{TeamServer.Domain}");
+        var body = Request() with { IdempotencyKey = "turn-1" };
+
+        var first = await (await client.PostAsJsonAsync("/api/reviews", body))
+            .Content.ReadFromJsonAsync<ReviewAcceptedDto>();
+        var second = await client.PostAsJsonAsync("/api/reviews", body);
+
+        second.StatusCode.Should().Be(HttpStatusCode.Accepted, "a retry is not an error");
+        (await second.Content.ReadFromJsonAsync<ReviewAcceptedDto>())!.Id.Should().Be(first!.Id);
+    }
+
+    [Fact]
+    public async Task OneKeyUsedForTwoDifferentQuestionsIsAConflict()
+    {
+        using var server = WithVendors();
+        var client = server.ClientFor($"dev@{TeamServer.Domain}");
+
+        await client.PostAsJsonAsync("/api/reviews", Request() with { IdempotencyKey = "turn-1" });
+        var second = await client.PostAsJsonAsync(
+            "/api/reviews",
+            Request() with { IdempotencyKey = "turn-1", Prompt = "a different question entirely" });
+
+        // 409, not 400: the request is well formed and so is the key. What is wrong is that the two
+        // disagree with something this server already accepted, and the fix is a NEW key.
+        second.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await second.Content.ReadFromJsonAsync<ErrorDto>())!.Error
+            .Should().Contain("turn-1").And.Contain("use a new key");
+    }
+
+    [Fact]
+    public async Task AMalformedIdempotencyKeyIsRefusedBeforeAnythingIsQueued()
+    {
+        using var server = WithVendors();
+
+        var response = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .PostAsJsonAsync("/api/reviews", Request() with { IdempotencyKey = "../../etc/passwd" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadFromJsonAsync<ErrorDto>())!.Error
+            .Should().Contain("idempotency key");
+    }
 }
 
 /// <summary>The runner's rules, driven against a vendor that answers however the test says.</summary>
@@ -401,6 +501,40 @@ public sealed class JobRunnerTests : IDisposable
         var lines = File.ReadAllLines(Path.Combine(_dir, "usage.jsonl"));
         lines.Should().ContainSingle();
         lines[0].Should().Contain("someone@example.com").And.Contain("codex");
+    }
+
+    [Fact]
+    public async Task AConversationIsRecordedAsOneRatherThanAsAReview()
+    {
+        // The owner's "счиатть, отделять": a chat turn goes into the spending record like a review
+        // turn and is DISTINGUISHED from it, because "what did the gate cost me" and "what did asking
+        // cost me" are two questions and one total answers neither.
+        var (jobs, runner, _) = Build(new ReviewAttempt.Answered("the answer", 7, 11));
+        jobs.Submit(Job() with { Kind = JobKind.Chat, Role = "" });
+
+        await runner.PumpAsync("codex", CancellationToken.None);
+
+        var read = new UsageReader(_dir).Read(
+            new UsageRange(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)));
+
+        read.Lines.Should().ContainSingle();
+        read.Lines[0].Kind.Should().Be(JobKind.Chat);
+        UsageTotals.ByKind(read.Lines).Should().ContainSingle()
+            .Which.Kind.Should().Be("chat");
+    }
+
+    [Fact]
+    public async Task AReviewIsStillRecordedAsAReview()
+    {
+        var (jobs, runner, _) = Build(new ReviewAttempt.Answered("the answer", 7, 11));
+        jobs.Submit(Job());
+
+        await runner.PumpAsync("codex", CancellationToken.None);
+
+        var read = new UsageReader(_dir).Read(
+            new UsageRange(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(1)));
+
+        read.Lines[0].Kind.Should().Be(JobKind.Review);
     }
 
     private sealed class Exploding : IReviewLauncher

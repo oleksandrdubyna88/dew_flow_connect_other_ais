@@ -1,5 +1,37 @@
 # Changelog
 
+## Team server 0.5.6 — 2026-09-09
+
+**Your spending page can now tell the gate apart from asking.** Reviews and conversations go to the
+same vendors and cost the same money, so one total answered neither question. The *Team servers*
+block shows both under its vendor rows — *reviews: 12 · 41k tokens · conversations: 3 · 2k tokens* —
+and says nothing at all in a window that has only one of them, because "no conversations" is an
+absence and a zero is a measurement.
+
+**A conversation now says what it is, instead of being recognised by what it lacks.** Chat turns
+have been telling this server apart from reviews by carrying no reviewer role, which worked and was
+an accident: the day anybody tightened that check, every conversation on every machine would have
+stopped with a message about roles. A turn carries `kind` now, the server reads it, and a client
+too old to send one is still read as a review — which every one of them is.
+
+**A review nobody is waiting for stops holding an account.** If the window that asked is killed —
+the editor quits, the laptop closes — nothing can tell this server so, and the job went on sitting
+in the queue, or ran to the end of its budget and answered into nothing. It is dropped now when
+nobody has asked about it: three minutes for one still queued, which has cost nothing, and ten for
+one already running, which has already been paid for and is not thrown away over a network blip. The
+message says which, because "nobody was listening" and "the vendor was too slow" send you looking in
+opposite directions.
+
+**Pressing send twice after a lost connection no longer costs two slots.** When a request arrives and
+its answer does not come back, the extension repeats it with the same name for that turn, and the
+server hands back the review it already made rather than starting a second one on a shared account.
+
+## Extension 0.31.17 — 2026-09-09
+
+The client half of the above: every chat turn carries its own name so a retry is a retry, and the
+*Team servers* spending block renders the conversations-against-reviews line when a server is new
+enough to send it. A server that is not sends nothing, and the block looks exactly as it did.
+
 ## Extension 0.31.16 — 2026-09-09
 
 **The Review rounds page has its findings back.** It had none — no list of what was found, no

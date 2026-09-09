@@ -44,6 +44,23 @@ public enum FailureKind
 /// When a RUNNING job is killed. Null until it starts, because it is measured from the start: the
 /// caller asked for N seconds of vendor time, not N seconds of wall clock that a queue may eat.
 /// </param>
+/// <param name="Kind">
+/// What this job IS — see <see cref="JobKind"/>. It is what lets a spending report answer "what did
+/// the gate cost me" and "what did asking cost me" separately, which one total answers neither of.
+/// </param>
+/// <param name="LastPolledUtc">
+/// When somebody last asked about it. Null means never, and it is then read as
+/// <paramref name="SubmittedUtc"/>: a client that posts and never polls is abandoned from the moment
+/// it was accepted, not from the moment it would first have been due.
+/// </param>
+/// <param name="IdempotencyKey">
+/// The caller's own name for this ATTEMPT, so a submit whose answer was lost can be repeated without
+/// making a second job. Empty when they did not choose one.
+/// </param>
+/// <param name="Fingerprint">
+/// What the key was first used for. A key repeated with a DIFFERENT question is a mistake, not a
+/// retry, and returning the first question's job for it would answer something nobody asked.
+/// </param>
 public sealed record JobRecord(
     string Id,
     string Email,
@@ -55,6 +72,10 @@ public sealed record JobRecord(
     DateTimeOffset SubmittedUtc,
     DateTimeOffset QueueDeadlineUtc,
     TimeSpan RunBudget,
+    JobKind Kind = JobKinds.WhenNotSaid,
+    DateTimeOffset? LastPolledUtc = null,
+    string IdempotencyKey = "",
+    string Fingerprint = "",
     DateTimeOffset? StartedUtc = null,
     DateTimeOffset? RunDeadlineUtc = null,
     DateTimeOffset? FinishedUtc = null,
@@ -82,6 +103,9 @@ public sealed record JobRecord(
     /// <summary>How long the vendor actually ran, or zero while it is still queued.</summary>
     public TimeSpan Elapsed =>
         StartedUtc is { } started ? (FinishedUtc ?? DateTimeOffset.UtcNow) - started : TimeSpan.Zero;
+
+    /// <summary>When somebody last showed an interest, which before the first poll is the submit.</summary>
+    public DateTimeOffset HeardFromUtc => LastPolledUtc ?? SubmittedUtc;
 }
 
 /// <summary>Every move a job can make, as pure functions.</summary>
@@ -108,6 +132,42 @@ public static class JobTransitions
     /// ten minutes later and spends the team's subscription on an answer nobody collects.
     /// </remarks>
     public static readonly TimeSpan DefaultQueueWait = TimeSpan.FromMinutes(10);
+
+    /// <summary>How long a QUEUED job nobody has asked about goes on holding its place.</summary>
+    /// <remarks>
+    /// <para>The client that submitted it can die without saying so — an extension host killed, a
+    /// laptop closed — and no promise survives that, which is why the cancel on tab close is
+    /// best-effort by construction. Then the job wins an account minutes later and spends the team's
+    /// subscription on an answer nobody will ever collect.</para>
+    /// <para>Three minutes, and the number is derived rather than chosen: every client here polls in
+    /// a loop bounded by <see cref="ReviewEndpoints.MaxWait"/> (25 s) on this side and 8 s on the
+    /// extension's, so three minutes is seven missed polls for the chattiest and four for the
+    /// quietest. Nothing has been spent on a queued job, so expiring one costs a resubmit and saves a
+    /// whole run.</para>
+    /// </remarks>
+    public static readonly TimeSpan QueuedAbandonedAfter = TimeSpan.FromMinutes(3);
+
+    /// <summary>The same for a RUNNING job, and deliberately far longer.</summary>
+    /// <remarks>
+    /// <para><b>The two are not the same question, and treating them as one was the plan round's
+    /// blocking finding.</b> A queued job has cost nothing, so killing it early is free. A running one
+    /// has ALREADY been billed for whatever it has done, so killing it for a network blip destroys
+    /// work somebody paid for — and the saving is only the remainder.</para>
+    /// <para>Ten minutes, which is still far below the thirty a review may ask for, and well past any
+    /// transient disruption a client recovers from. A chat's own run budget is three minutes, so this
+    /// never fires on one; where it earns its place is a long review whose caller went away.
+    /// (gemini, plan round.)</para>
+    /// </remarks>
+    public static readonly TimeSpan RunningAbandonedAfter = TimeSpan.FromMinutes(10);
+
+    /// <summary>How long since anybody asked about this job, before it is treated as abandoned.</summary>
+    public static TimeSpan AbandonedAfter(JobStatus status) => status == JobStatus.Running
+        ? RunningAbandonedAfter
+        : QueuedAbandonedAfter;
+
+    /// <summary>Has everybody who cared about this job stopped asking?</summary>
+    public static bool IsAbandoned(JobRecord job, DateTimeOffset nowUtc) =>
+        !job.IsTerminal && nowUtc - job.HeardFromUtc >= AbandonedAfter(job.Status);
 
     /// <summary>The job starts on a slot: the run clock begins HERE, not at submit.</summary>
     public static JobRecord Start(JobRecord job, string slot, DateTimeOffset nowUtc) =>
@@ -160,14 +220,33 @@ public static class JobTransitions
     /// </remarks>
     public static bool IsExpired(JobRecord job, DateTimeOffset nowUtc) => job.Status switch
     {
-        JobStatus.Queued => nowUtc >= job.QueueDeadlineUtc,
-        JobStatus.Running => job.RunDeadlineUtc is { } deadline && nowUtc >= deadline,
+        JobStatus.Queued => nowUtc >= job.QueueDeadlineUtc || IsAbandoned(job, nowUtc),
+        JobStatus.Running =>
+            (job.RunDeadlineUtc is { } deadline && nowUtc >= deadline) || IsAbandoned(job, nowUtc),
         _ => false,
     };
 
-    /// <summary>The sentence for a job that ran out of time, saying WHICH clock ran out.</summary>
-    public static string ExpiryReason(JobRecord job) => job.Status == JobStatus.Queued
-        ? $"expired in the queue after {(job.QueueDeadlineUtc - job.SubmittedUtc).TotalMinutes:0} minutes "
-            + "without a free account — nothing was sent to the vendor"
-        : $"the vendor was still running {job.RunBudget.TotalSeconds:0}s after it started and was stopped";
+    /// <summary>
+    /// The sentence for a job that ran out of time, saying WHICH clock ran out.
+    /// </summary>
+    /// <remarks>
+    /// Three now, and the third is not a variation on the other two: a job killed because nobody was
+    /// listening is a different event from one the vendor was too slow for, and a person chasing
+    /// either is led in the opposite direction by the other's words. Abandonment is checked FIRST,
+    /// because a job that is both abandoned and out of clock was abandoned earlier — the deadline
+    /// merely arrived while nobody was watching.
+    /// </remarks>
+    public static string ExpiryReason(JobRecord job, DateTimeOffset nowUtc)
+    {
+        if (IsAbandoned(job, nowUtc))
+        {
+            return $"nobody asked about this review for {AbandonedAfter(job.Status).TotalMinutes:0} minutes, "
+                + "so it was dropped and its account freed — submit it again if you still want it";
+        }
+
+        return job.Status == JobStatus.Queued
+            ? $"expired in the queue after {(job.QueueDeadlineUtc - job.SubmittedUtc).TotalMinutes:0} minutes "
+                + "without a free account — nothing was sent to the vendor"
+            : $"the vendor was still running {job.RunBudget.TotalSeconds:0}s after it started and was stopped";
+    }
 }

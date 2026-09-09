@@ -1,5 +1,5 @@
 import { ChatSession, TurnBudgets, TurnResult } from './chatSession';
-import { RemoteStep, acceptedId, backoffMs, readStep, requestBody, waitSecondsFor } from './remoteAsk';
+import { RemoteStep, acceptedId, backoffMs, readStep, requestBody, turnKey, waitSecondsFor } from './remoteAsk';
 import { Timers } from './cliChatSession';
 
 /**
@@ -54,6 +54,8 @@ export class RemoteChatSession implements ChatSession {
     private readonly budgets: TurnBudgets,
     private readonly timers: Timers,
     private readonly now: () => number = Date.now,
+    /** Injected so a test can watch the same turn keep one key and two turns take two. */
+    private readonly key: () => string = turnKey,
   ) {}
 
   send(text: string, onWaiting?: (position: number) => void): Promise<TurnResult> {
@@ -85,8 +87,12 @@ export class RemoteChatSession implements ChatSession {
     }
     const deadline = this.now() + this.budgets.turnMs;
     const seconds = Math.max(1, Math.floor(this.budgets.turnMs / 1000));
+    // One name for this TURN, minted here and used once. It is what makes a submit whose answer was
+    // lost repeatable: the server hands back the job the first attempt made rather than starting a
+    // second one on an account where a slot is the scarcest thing there is. A server that has not
+    // learned the field ignores it, which is measured, not assumed.
     const sent = await this.transport.submit(
-      requestBody(this.vendor.vendor, this.vendor.model, text, seconds),
+      requestBody(this.vendor.vendor, this.vendor.model, text, seconds, this.key()),
     );
     if (sent.failure.length > 0) {
       return { ok: false, failure: sent.failure };

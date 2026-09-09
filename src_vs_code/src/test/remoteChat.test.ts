@@ -9,6 +9,7 @@ import {
   readStep,
   remoteIsFull,
   requestBody,
+  turnKey,
   waitSecondsFor,
 } from '../remoteAsk';
 import { RemoteChatSession, RemoteTransport } from '../remoteChatSession';
@@ -413,4 +414,45 @@ test('a row belonging to a server this side cannot reach gets no session at all'
 
   assert.strictEqual(remoteChatFor(row, server, ''), undefined, 'a signed-out row built a session');
   assert.strictEqual(remoteChatFor(row, { ...server, url: '' }, 'a-token'), undefined);
+});
+
+test('a turn carries one idempotency key, and two turns carry two', async () => {
+  // The failure this answers: the POST reaches the server, the job is accepted, and the response is
+  // lost on the way back. Pressing send again without a key makes a SECOND job — two slots on a
+  // shared account for one question. The key is per TURN, not per attempt; per attempt would be no
+  // key at all, and per question would collapse two deliberate asks into one.
+  const server = fakeServer([{ body: answered('one') }]);
+  const keys = ['turn-a', 'turn-b'];
+  let next = 0;
+  const session = new RemoteChatSession(
+    server.transport, vendor, BUDGETS, AT_ONCE, Date.now, () => keys[next++] as string,
+  );
+
+  await session.send('first');
+  await session.send('second');
+
+  assert.strictEqual(server.submitted[0]?.['idempotencyKey'], 'turn-a');
+  assert.strictEqual(server.submitted[1]?.['idempotencyKey'], 'turn-b');
+});
+
+test('a key is a shape the server will accept, and never the same twice', () => {
+  // The server checks it before it becomes part of a lookup: letters, digits and a few punctuation
+  // marks, at most 128 of them. A UUID is what it was written to accept.
+  const seen = new Set<string>();
+  for (let i = 0; i < 50; i += 1) {
+    const key = turnKey();
+    assert.match(key, /^[A-Za-z0-9._:-]{1,128}$/, key);
+    assert.ok(!seen.has(key), 'a key repeated across turns would merge two questions into one');
+    seen.add(key);
+  }
+});
+
+test('a client that sends no key sends no field, rather than an empty one', () => {
+  // An empty string is a value; the absence is what says "I did not choose one". A server reading a
+  // blank key as a key would match every keyless submit against every other.
+  const without = requestBody('claude', 'm', 'p', 60);
+  assert.ok(!('idempotencyKey' in without));
+
+  const with_ = requestBody('claude', 'm', 'p', 60, 'turn-1');
+  assert.strictEqual(with_['idempotencyKey'], 'turn-1');
 });

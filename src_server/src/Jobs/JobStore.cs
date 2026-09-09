@@ -5,6 +5,16 @@ public enum SubmitRefusal
 {
     None,
     TooManyQueued,
+
+    /// <summary>
+    /// The idempotency key has been used, for a DIFFERENT question.
+    /// </summary>
+    /// <remarks>
+    /// Not a retry: a retry is the same key and the same request, and that is answered with the first
+    /// job. This is a client bug, and returning the earlier job for it would hand somebody the answer
+    /// to a question they did not ask while looking exactly like success.
+    /// </remarks>
+    KeyUsedForSomethingElse,
 }
 
 /// <summary>
@@ -63,11 +73,30 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
     /// </remarks>
     public int PerCallerRunning { get; } = perCallerRunning;
 
-    /// <summary>Accept a job, or say why not.</summary>
+    /// <summary>
+    /// Accept a job, or say why not — or hand back the one this key already made.
+    /// </summary>
+    /// <remarks>
+    /// <para>The idempotency lookup is INSIDE this lock, with the insert. Two simultaneous posts of
+    /// one key would otherwise both find nothing and both create a job, which is the exact duplicate
+    /// the key exists to prevent — and the window is widest under precisely the conditions that
+    /// produce a retry. (codex, plan round.)</para>
+    /// <para>The mapping lives on the job RECORD rather than in a dictionary beside it, so there is
+    /// no second lifetime to keep in step: <see cref="Sweep"/> forgets a finished job an hour later
+    /// and the key goes with it. A separate index would have needed its own pruning, and an index
+    /// that outlives what it points at is how a repeat comes to return a 404. (gemini, plan round.)</para>
+    /// </remarks>
     public (JobRecord? Job, SubmitRefusal Refusal, int Position) Submit(JobRecord job)
     {
         lock (_gate)
         {
+            if (job.IdempotencyKey.Length > 0 && Keyed(job.Email, job.IdempotencyKey) is { } already)
+            {
+                return already.Fingerprint == job.Fingerprint
+                    ? (already, SubmitRefusal.None, Position(already))
+                    : (null, SubmitRefusal.KeyUsedForSomethingElse, 0);
+            }
+
             var queued = _jobs.Values.Count(j => j.Email == job.Email && j.Status == JobStatus.Queued);
             if (queued >= PerCallerQueued)
             {
@@ -78,6 +107,54 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
             Wake(job.Id);
 
             return (job, SubmitRefusal.None, Position(job));
+        }
+    }
+
+    /// <summary>This caller's job under this key, whatever state it is in. Call under the lock.</summary>
+    /// <remarks>
+    /// A scan, not an index. At this deployment's ceiling — twenty queued per person and an hour of
+    /// finished work — it is a walk of a few hundred records under a lock that already does exactly
+    /// that to count somebody's queue, and it cannot fall out of step with the jobs it describes.
+    /// </remarks>
+    private JobRecord? Keyed(string email, string key) =>
+        _jobs.Values.FirstOrDefault(j =>
+            j.IdempotencyKey.Length > 0
+            && string.Equals(j.IdempotencyKey, key, StringComparison.Ordinal)
+            && string.Equals(j.Email, email, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Somebody asked about this job: it is not abandoned.
+    /// </summary>
+    /// <remarks>
+    /// <b>The order here is the whole point.</b> A job that is ALREADY past its abandonment window is
+    /// expired on the spot rather than revived by the poll that found it — otherwise a client that
+    /// went away for five minutes and came back would resurrect a job the server had every right to
+    /// have dropped, and whether it survived would depend on when the sweep timer last happened to
+    /// fire. Deciding it here makes the boundary the same for every caller. (codex and local, plan
+    /// round, from two directions.)
+    /// </remarks>
+    /// <returns>The job as it stands after the poll, or null when this caller has none.</returns>
+    public JobRecord? Polled(string id, string email, DateTimeOffset nowUtc)
+    {
+        lock (_gate)
+        {
+            if (!_jobs.TryGetValue(id, out var job) || job.Email != email)
+            {
+                return null;
+            }
+            if (job.IsTerminal)
+            {
+                return job;
+            }
+            if (JobTransitions.IsAbandoned(job, nowUtc))
+            {
+                return Expire(job, nowUtc);
+            }
+
+            var heard = job with { LastPolledUtc = nowUtc };
+            _jobs[id] = heard;
+
+            return heard;
         }
     }
 
@@ -195,7 +272,7 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
     /// <summary>
     /// Expire what has run out of time, and forget what finished long enough ago.
     /// </summary>
-    /// <returns>The jobs that were expired.</returns>
+    /// <returns>The expired jobs AS ENDED — each already carrying the reason it ended for.</returns>
     /// <remarks>
     /// On a timer rather than on an event: an event-driven deadline is only checked when there is an
     /// event, so a running job whose deadline passes on an otherwise idle server would keep going and
@@ -206,14 +283,14 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
     {
         lock (_gate)
         {
-            var expired = _jobs.Values.Where(j => JobTransitions.IsExpired(j, nowUtc)).ToList();
-            foreach (var job in expired)
-            {
-                _jobs[job.Id] = JobTransitions.Fail(
-                    job, FailureKind.Cancelled, JobTransitions.ExpiryReason(job), nowUtc);
-                Stop(job.Id);
-                Wake(job.Id);
-            }
+            // The ENDED records are returned, not the ones as they were: each carries the sentence
+            // that says why it ended, so the caller logs the reason this store decided rather than
+            // computing a second one that can disagree with it.
+            var expired = _jobs.Values
+                .Where(j => JobTransitions.IsExpired(j, nowUtc))
+                .ToList()
+                .Select(job => Expire(job, nowUtc))
+                .ToList();
 
             foreach (var old in _jobs.Values
                 .Where(j => j.IsTerminal && j.FinishedUtc is { } at && nowUtc - at > _keep)
@@ -321,6 +398,27 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
                 && j.Vendor == job.Vendor
                 && (j.SubmittedUtc < job.SubmittedUtc
                     || (j.SubmittedUtc == job.SubmittedUtc && string.CompareOrdinal(j.Id, job.Id) < 0)));
+
+    /// <summary>
+    /// End a job that has run out of whichever clock applies. Called with the lock held.
+    /// </summary>
+    /// <remarks>
+    /// <b>Marking the record is not the half that matters.</b> A RUNNING job has a vendor CLI behind
+    /// it that goes on running, goes on spending against the shared account and goes on holding the
+    /// slot; <see cref="Stop"/> fires the token the runner is awaiting on, which is what actually
+    /// frees it. Both the sweep and a poll that finds an abandoned job come through here, so there is
+    /// one path from "expired" to "stopped" rather than two that can disagree. (codex, plan round.)
+    /// </remarks>
+    private JobRecord Expire(JobRecord job, DateTimeOffset nowUtc)
+    {
+        var ended = JobTransitions.Fail(
+            job, FailureKind.Cancelled, JobTransitions.ExpiryReason(job, nowUtc), nowUtc);
+        _jobs[job.Id] = ended;
+        Stop(job.Id);
+        Wake(job.Id);
+
+        return ended;
+    }
 
     /// <summary>Called with the lock held: fire the token, and LEAVE the source alone.</summary>
     /// <remarks>

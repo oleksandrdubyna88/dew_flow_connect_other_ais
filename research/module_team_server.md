@@ -52,10 +52,10 @@ sequenceDiagram
 | `DELETE /api/session` | any | `204`; `400` for an IdP token, `500` when the file would not go |
 | `GET /api/whoami` | any | `{email, name, isAdmin}` |
 | `GET /api/catalog` | any | the allowlist, each CLI's presence, and the account counts |
-| `POST /api/reviews` | any | `202 {id, position}` · `400` naming the allowed vendors/models · `429 + Retry-After` over the queued cap |
-| `GET /api/reviews/{id}?wait=<=25` | owner | the status, and the vendor's RAW answer · `403` somebody else's · `404` unknown or lost |
+| `POST /api/reviews` | any | `202 {id, position}` · `400` naming the allowed vendors/models/**kinds** · `409` an idempotency key reused for a different request · `429 + Retry-After` over the queued cap |
+| `GET /api/reviews/{id}?wait=<=25` | owner | the status, and the vendor's RAW answer · `403` somebody else's · `404` unknown or lost. **A read that writes**: the poll is the only evidence anybody is still listening, so it stamps `LastPolledUtc` |
 | `DELETE /api/reviews/{id}` | owner | `204` |
-| `GET /api/usage?window=&scope=` | any / **admins for `company`** | per-vendor totals for the caller, or for everyone plus per person · `400` unknown window · `403` company as a non-admin |
+| `GET /api/usage?window=&scope=` | any / **admins for `company`** | per-vendor totals for the caller, or for everyone plus per person, **and per kind** · `400` unknown window · `403` company as a non-admin |
 
 **Every route that has a caller reads its credential from `Authorization: Bearer …` and from
 nowhere else** — `Auth.Bearer` looks at that header, and no handler here reads a token out of a
@@ -677,6 +677,66 @@ Behind the **host** nginx on the CredsForDevs VM — not the vault's container, 
 and terminates no TLS. `coai.remsoft.dev` has its own site file and its own certificate; the app
 binds `127.0.0.1:8090` and nothing else can reach it. See the plan's *Deployment* section for the
 topology and for why the box's 3.8 GB of RAM is a design input rather than a footnote.
+
+### The server knows a chat from a review, and outlives the client that asked (2026-09-09)
+
+Three fields and one expiry rule. No new endpoint and no second queue: a chat turn is a job, and
+everything about how it is claimed, run, priced and recorded is unchanged.
+
+**`kind` — and the nullable is the design, not an oversight.** The extension's chat shipped in
+0.31.15 riding a validation GAP: `Refusal` skips the role enum check when the role is blank, so a
+job with no role was accepted, and an ABSENCE was being read as a statement. The day somebody
+tightened that check, every conversation on every machine would have stopped with a message about
+roles. `JobKinds` is now that statement as a table:
+
+| `kind` | role | verdict |
+|---|---|---|
+| absent | anything | a review — an OLD client, judged exactly as it was before the field existed |
+| `review` | present | accepted |
+| `review` | absent | refused, naming the roles: a client that made a claim is held to it |
+| `chat` | absent | accepted |
+| `chat` | present | refused — dropping a role silently is how a field comes to mean something else |
+| anything else | — | refused, naming both kinds |
+
+The first row is why the field is `string?` rather than defaulted to `review`. A default collapses
+*said nothing* into *said review* and refuses every installed copy of `coai-mcp --ask-remote` and of
+the extension. The client half went first for exactly this reason — `CHAT_KIND` has shipped since
+0.31.15, measured against the live server before the server knew the word: a body carrying `kind`
+was accepted in 56 ms, exactly as one without.
+
+The kind travels to `UsageEntry` (trailing and defaulted, so every line already on disk stays valid)
+and comes back as `UsageDto.kinds` — one `KindTotal` per kind, folded through the SAME arithmetic
+the vendor rows use, so an unknown price is never zero here either. That is the owner's *"счиатть,
+отделять"*: "what did the gate cost me" and "what did asking cost me" are two questions, and one
+total answers neither. **A line with no kind folds as a review**, because everything written before
+the field existed was one — and a kind from a server NEWER than this one is also counted as a
+review rather than dropped, since that line already happened and already cost money.
+
+**Abandonment, on two clocks rather than one.** A client can die without saying so, and no promise
+survives that — the extension's cancel-on-close is best-effort by construction. So a job nobody has
+polled is dropped, and `LastPolledUtc` (defaulting to the submit) is the only evidence there is.
+
+The two states are NOT the same question, which was the plan round's blocking finding. A queued job
+has cost nothing, so three minutes is free — seven missed polls for the chattiest client. A running
+one has ALREADY been billed for whatever it has done, so killing it for a network blip destroys work
+somebody paid for and saves only the remainder: ten minutes, still far under the thirty a review may
+ask for. `Expire` is one path from "expired" to "stopped", used by both the sweep and a poll, because
+marking the record is not the half that matters — the vendor CLI goes on spending until its token is
+fired.
+
+**A poll that arrives too late does not revive the job.** `Polled` judges before it stamps. Stamping
+first would let a client that vanished for five minutes resurrect a job the server was entitled to
+drop, and whether it survived would depend on when the sweep timer last happened to fire.
+
+**`idempotencyKey`.** A POST that reaches the server and whose response is lost leaves the client
+believing there is no job; pressing send again makes a second one, on an account where a slot is the
+scarcest thing there is. The lookup and the insert are inside `Submit`'s existing lock — two
+simultaneous retries would otherwise both find nothing and both create a job, which is precisely the
+duplicate the key exists to prevent. It is scoped to the CALLER, and it carries a **fingerprint** of
+the request: a key repeated with a different question is a client bug, refused with 409, because
+returning the first job for it would answer something nobody asked while looking exactly like
+success. The mapping lives on the job RECORD rather than in an index beside it, so there is no
+second lifetime to keep in step — the sweep forgets a finished job and the key goes with it.
 
 ## How it is released, and how it is deployed (2026-09-08)
 

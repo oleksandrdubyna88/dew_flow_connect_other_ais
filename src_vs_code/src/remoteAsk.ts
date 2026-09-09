@@ -41,9 +41,9 @@ export const CHAT_ROLE = '';
 /**
  * What this job IS, said out loud rather than left for an absence to imply.
  *
- * <p>The server does not read this field yet — `todo/PLAN_the_server_knows_a_chat_from_a_review.md`
- * is where it becomes part of the contract, defaulted to `review` so no existing client changes
- * behaviour. Sending it BEFORE that lands is the whole point: the day the server requires a role for
+ * <p>The server reads this field since Team server 0.5.6 — `research/PLAN_the_server_knows_a_chat_from_a_review.md`
+ * records the contract, in which `review` is the default so no existing client changes behaviour.
+ * The client shipped FIRST, in 0.31.15, and that was the whole point: the day the server requires a role for
  * a job it reads as a review, a client sending a blank role and no `kind` stops working with a
  * message about roles. This one will already be saying what it is. That is what makes a client
  * older than a server keep working, which is the ordinary state of a fleet.</p>
@@ -95,14 +95,52 @@ export type RemoteStep =
  */
 const REVIEW_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 
-/** The body a submit carries. Shaped by `RemoteRequest` on the server's side. */
+/**
+ * The body a submit carries. Shaped by `RemoteRequest` on the server's side.
+ *
+ * @param idempotencyKey this TURN's own name, so a retry after a lost answer finds the job the first
+ *   attempt made instead of starting a second one on a shared account. Empty accepts a duplicate,
+ *   which is what every client did before the server understood the field.
+ */
 export function requestBody(
   vendor: string,
   model: string,
   prompt: string,
   timeoutSeconds: number,
+  idempotencyKey = '',
 ): Record<string, unknown> {
-  return { vendor, model, prompt, role: CHAT_ROLE, kind: CHAT_KIND, timeoutSeconds };
+  return {
+    vendor,
+    model,
+    prompt,
+    role: CHAT_ROLE,
+    kind: CHAT_KIND,
+    timeoutSeconds,
+    ...(idempotencyKey.length > 0 ? { idempotencyKey } : {}),
+  };
+}
+
+/**
+ * A name for one TURN, not for one attempt.
+ *
+ * <p>That distinction is the whole feature. The failure it answers is a POST that reached the server
+ * and whose response did not come back: the job exists, the client believes it does not, and pressing
+ * send again makes a second one — two slots on a shared account for one question. A key that changed
+ * per attempt would be no key at all; one that changed per turn is what makes the retry a retry.</p>
+ *
+ * <p>Random rather than derived from the question. Two identical questions asked deliberately are two
+ * turns and must cost two jobs — a hash of the prompt would silently collapse them into one and hand
+ * back the first answer, which is the same defect the server refuses a mismatched key for, arriving
+ * from the other side.</p>
+ *
+ * <p><b>The GLOBAL crypto, not `node:crypto`.</b> This module is pure and it has no imports, which is
+ * not an accident: the panel's own page reaches it through `chatModels`, and `bundledPage.test.ts`
+ * bundles and EXECUTES that page — a `node:` import here becomes `require is not defined` in a
+ * webview. `globalThis.crypto` is the Web Crypto API, present in both, and a UUID is exactly the
+ * shape the server's key guard accepts.</p>
+ */
+export function turnKey(): string {
+  return globalThis.crypto.randomUUID();
 }
 
 /** The id a submit was accepted under, or empty when the answer was not one — or not an id. */

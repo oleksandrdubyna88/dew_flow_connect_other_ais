@@ -76,14 +76,19 @@ public static class UsageEndpoints
                 CompanyScope,
                 UsageTotals.ByVendor(scan.Lines),
                 UsageTotals.ByPerson(scan.Lines),
-                scan.Unreadable)
+                scan.Unreadable,
+                UsageTotals.ByKind(scan.Lines))
             : new UsageDto(
                 range.FromUtc,
                 range.ToUtc,
                 "me",
                 UsageTotals.ByVendorFor(scan.Lines, caller.Email),
                 [],
-                null);
+                null,
+                // Scoped the same way the vendor rows above it are: a person's own conversations,
+                // never the company's. The two lists must answer about the same lines or the small
+                // block would contradict the table beside it.
+                UsageTotals.ByKindFor(scan.Lines, caller.Email));
 
     /// <summary>The scope asked for, or null when the value is neither of them.</summary>
     /// <remarks>
