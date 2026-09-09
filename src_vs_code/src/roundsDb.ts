@@ -135,14 +135,21 @@ export function parseLog(text: string, paged = false): DbLog {
   }
 }
 
-/** One round's findings, as `--findings` answers them. */
-export function parseFindings(text: string): readonly DbFinding[] {
+/**
+ * One round's findings, as `--findings` answers them — or NOTHING when the answer was not that.
+ *
+ * <p>The distinction is the point. `parseLog` turns a malformed answer into an empty log, which is
+ * legible and says nothing untrue. An empty findings list is a CLAIM: it says the round was clean.
+ * So text that is not JSON, or JSON without a findings array, comes back as `undefined` and the
+ * caller reports a failed read. (Code round, codex.)</p>
+ */
+export function parseFindings(text: string): readonly DbFinding[] | undefined {
   try {
     const raw = JSON.parse(text) as { findings?: Partial<DbFinding>[] };
 
-    return (raw.findings ?? []).map(finding);
+    return Array.isArray(raw?.findings) ? raw.findings.map(finding) : undefined;
   } catch {
-    return [];
+    return undefined;
   }
 }
 

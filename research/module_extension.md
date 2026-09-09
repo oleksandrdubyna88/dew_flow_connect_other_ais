@@ -1479,7 +1479,20 @@ page: "next page" of a client-side filter over a server-side window is a promise
 
 *Either half can be older than the other.* `readLog` asks with `--paged`; a server that does not know
 the flag exits 64 and it asks again without it, which is the answer that server gave yesterday. A new
-server asked WITHOUT the flag answers the old shape. All four pairings are tested.
+server asked WITHOUT the flag answers the old shape — and a row from THAT shape is `loaded` even when
+its findings list is empty, because the old server already sent everything it had; asking it again
+would send `--findings` to a binary that does not know the flag and turn an honestly clean round into
+a failed read. All four pairings are tested.
+
+*A read that cannot be believed is a failed read.* `parseFindings` answers nothing rather than an
+empty list when the text is not JSON or carries no findings array, because an empty list is a CLAIM —
+it says the round was clean — and a truncated pipe must not be allowed to make it.
+
+*The round's identity travels with the request.* The page sends the session, the stage and the number
+alongside the row key, so the extension host looks nothing up. It used to consult a module-level copy
+of the last rows it had built, which answers wrongly for any row a later refresh dropped; three
+reviewers of the code round objected to it independently. The host wraps the read in `try/catch` and
+always answers, so a rejection cannot leave a row reading "Reading…" for ever.
 
 **A fan-out that copied its buffer per event cost the log page everything it knows (2026-09-09).**
 `replayingFan` in `processLauncher.ts` held what nobody had subscribed to yet with

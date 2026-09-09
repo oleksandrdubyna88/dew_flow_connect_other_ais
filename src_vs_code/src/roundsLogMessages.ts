@@ -21,6 +21,17 @@ export interface LogPageMessage {
   readonly type?: unknown;
   readonly command?: unknown;
   readonly id?: unknown;
+  /**
+   * The three fields the rounds database keys a round by, carried BY the request.
+   *
+   * <p>They used to be looked up in a module-level copy of the last rows the extension built, which
+   * is shared mutable state that answers wrongly for any row a later refresh dropped. Three
+   * reviewers of the code round objected to it independently; the row already holds these, so it
+   * sends them.</p>
+   */
+  readonly session?: unknown;
+  readonly stage?: unknown;
+  readonly number?: unknown;
 }
 
 export type LogCommand =
@@ -28,7 +39,13 @@ export type LogCommand =
   | { readonly kind: 'answer'; readonly id: string }
   | { readonly kind: 'usageWindow'; readonly window: string }
   | { readonly kind: 'forget'; readonly provider: string }
-  | { readonly kind: 'findings'; readonly key: string }
+  | {
+    readonly kind: 'findings';
+    readonly key: string;
+    readonly sessionId: string;
+    readonly stage: string;
+    readonly number: number;
+  }
   | { readonly kind: 'ignore' };
 
 const IGNORE: LogCommand = { kind: 'ignore' };
@@ -36,6 +53,25 @@ const IGNORE: LogCommand = { kind: 'ignore' };
 /** A string, or nothing at all — the page's values arrive over a bridge and are not typed there. */
 function text(value: unknown): string {
   return typeof value === 'string' ? value : '';
+}
+
+/**
+ * A findings request, believed only as far as it is complete.
+ *
+ * <p>A round with no session or no stage cannot be looked up, and asking the server for one would
+ * spend a process to be told so. A message missing either is IGNORED, which is what this module does
+ * with everything it cannot read.</p>
+ */
+function findingsOf(message: LogPageMessage, key: string): LogCommand {
+  const sessionId = text(message.session);
+  const stage = text(message.stage);
+  const number = typeof message.number === 'number' && Number.isInteger(message.number)
+    ? message.number
+    : -1;
+
+  return sessionId.length > 0 && stage.length > 0 && number >= 0
+    ? { kind: 'findings', key, sessionId, stage, number }
+    : IGNORE;
 }
 
 /**
@@ -68,7 +104,7 @@ export function logCommandOf(message: LogPageMessage | undefined | null): LogCom
     case 'forgetUsage':
       return { kind: 'forget', provider: id };
     case 'findings':
-      return { kind: 'findings', key: id };
+      return findingsOf(message, id);
     default:
       return IGNORE;
   }

@@ -329,9 +329,19 @@ same second.
 
 *The list carries no findings.* It carries `FoundCount` — one subquery per row — because the page
 needs the number to say whether a gate is still open, and the sentences only when somebody opens a
-row. `--findings --session <id> --stage <stage> --number <n>` answers those, and exits **69** when
-the database has never heard of the round: an empty list cannot say whether a round was clean or was
-never recorded, so the exit code says it rather than leaving the renderer to guess.
+row. `--findings --session <id> --stage <stage> --number <n>` answers those.
+
+*Three exit codes, because there are three answers.* **0** and a list is what the round found — an
+empty list is then a clean round. **69** (EX_UNAVAILABLE) is a round the database has never heard
+of, whose findings were recorded nowhere. **74** (EX_IOERR) is the database itself being unreadable,
+which says nothing about the round at all and the page draws as a failed read with a retry. The code
+round caught the last two sharing one number, which would have told somebody a round was never
+recorded because a file was momentarily locked. `LogCliScenarioTests` runs the real binary for each.
+
+*The old shape keeps its ONE grouped findings read.* `--log` without `--paged` still fetches a whole
+page's findings in a single `WHERE round_id IN (…)` query rather than one per row — the paged path
+asks for none of them, and a thousand round-trips where one read would do is what the code round
+caught in the first draft.
 
 *`LoggedTotals` is two statements, one scan each* — `COUNT(*)` and conditional `SUM`s over `rounds`
 and over `findings`. The first draft had eight scalar subqueries, which is five passes over one table

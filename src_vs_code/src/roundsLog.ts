@@ -178,6 +178,10 @@ export function rowsFrom(
   // might simply be older than the window — and guessing "never recorded" would be a claim about a
   // round nobody checked, so it is asked for instead and the server answers authoritatively.
   const whole = log.rounds.length >= log.totals.rounds;
+  // A server too old to page sent every finding it had, so an empty list from IT is the whole truth
+  // about that round — asking again would send `--findings` to a binary that does not know the flag,
+  // exit 64, and turn an honestly clean round into a failed read. (Code round, codex.)
+  const inline = !log.paged;
   // The CONFIGURED vendors, the same list the panel's cards are coloured from — not the providers
   // these rounds happen to name. A log holding a vendor somebody has since removed still colours it,
   // from its own name, and only such a stray may share a hue with a live reviewer.
@@ -186,7 +190,9 @@ export function rowsFrom(
   return sessions
     .flatMap((session) =>
       session.rounds.map((round) =>
-        rowFrom(session, round, nowMs, priceOf, usage, { byRound, counts, decidedBy: decided, colour, whole })))
+        rowFrom(
+          session, round, nowMs, priceOf, usage,
+          { byRound, counts, decidedBy: decided, colour, whole, inline })))
     .sort((a, b) => (b.startedUtc || b.completedUtc).localeCompare(a.startedUtc || a.completedUtc));
 }
 
@@ -205,6 +211,8 @@ interface RowContext {
   readonly colour: VendorPalette;
   /** Whether the list covers every round the database holds. See `rowsFrom`. */
   readonly whole: boolean;
+  /** Whether the list already carried the findings — the shape a server before 0.18.15 answers. */
+  readonly inline: boolean;
 }
 
 function rowFrom(
@@ -214,10 +222,11 @@ function rowFrom(
   priceOf: PriceOfModel,
   usage: readonly UsageEntry[],
   context: RowContext = {
-    byRound: new Map(), counts: new Map(), decidedBy: new Map(), colour: vendorPalette([]), whole: true,
+    byRound: new Map(), counts: new Map(), decidedBy: new Map(), colour: vendorPalette([]),
+    whole: true, inline: false,
   },
 ): LogRow {
-  const { byRound, counts, decidedBy, colour, whole } = context;
+  const { byRound, counts, decidedBy, colour, whole, inline } = context;
   const cost = costOf(round, priceOf, usage, nowMs);
   const key = roundKeyOf(
     session.state.sessionId, session.state.repoPath, session.state.branch, round.stage, round.number);
@@ -257,7 +266,7 @@ function rowFrom(
     reviewerColours: rows.map((r) => colour(r.provider)),
     found,
     foundCount,
-    foundState: foundState(known, whole, found),
+    foundState: foundState(known, whole, inline, found),
     origin: known ? 'db' : 'session',
     dbKey: { sessionId: session.state.sessionId, stage: round.stage, number: round.number },
   };
@@ -271,14 +280,24 @@ function rowFrom(
  * unless an older server already sent the findings, in which case they are here and it is
  * `loaded`.</p>
  */
-function foundState(known: boolean, whole: boolean, found: readonly DbFinding[]): LogRow['foundState'] {
+function foundState(
+  known: boolean,
+  whole: boolean,
+  inline: boolean,
+  found: readonly DbFinding[],
+): LogRow['foundState'] {
   if (!known) {
     // Only when the list covered everything is "the list did not name it" the same as "the database
     // does not hold it". Otherwise the row asks, and the server answers with the truth.
     return whole ? 'absent' : 'unasked';
   }
+  if (inline || found.length > 0) {
+    // Either the sentences are here, or they were never coming: a server that answers the old shape
+    // sends all of them with the list, so an empty list from it means the round found nothing.
+    return 'loaded';
+  }
 
-  return found.length > 0 ? 'loaded' : 'unasked';
+  return 'unasked';
 }
 
 /**
@@ -952,7 +971,7 @@ export function roundsLogHtml(
   var PAGE_SIZE = ${PAGE_SIZE};
   // What SQL counted over the WHOLE table, which is a different number from the length of what was
   // sent. The operator asked for this in as many words: «суммы - скл счиатть (сколько всего и тд.)».
-  var TOTALS = ${JSON.stringify(totals)};
+  var TOTALS = ${jsonForScript(totals)};
   // Every filter, the search text and the sort all return to the first page. "Next page" of a
   // client-side filter over a server-side window is a promise nothing can keep: the cursor moves in
   // the unfiltered stream and rows skip or repeat across the boundary. (Plan round, gemini.)
@@ -1161,7 +1180,13 @@ export function roundsLogHtml(
       var state_ = ROWS[i].foundState;
       if (state_ !== 'unasked' && !(again && state_ === 'failed')) { return; }
       ROWS[i] = Object.assign({}, ROWS[i], { foundState: 'asking' });
-      vscode.postMessage({ type: 'command', command: 'findings', id: key });
+      // The dbKey travels WITH the request. The extension host used to look the row up in a
+      // module-level copy of the last rows it built, which is a shared mutable global three
+      // reviewers objected to and which answers wrongly for any row a later refresh dropped.
+      vscode.postMessage({
+        type: 'command', command: 'findings', id: key,
+        session: ROWS[i].dbKey.sessionId, stage: ROWS[i].dbKey.stage, number: ROWS[i].dbKey.number,
+      });
       render();
       return;
     }

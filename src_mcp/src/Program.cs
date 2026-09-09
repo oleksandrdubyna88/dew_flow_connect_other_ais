@@ -265,7 +265,11 @@ internal static class Program
     /// <para>Exit code carries the distinction the page cannot otherwise make: <b>0</b> and a list
     /// means the database holds this round and this is what it found — an empty list is then a clean
     /// round. <b>69</b> (EX_UNAVAILABLE) means it has never heard of the round, so its findings were
-    /// recorded nowhere and "nothing found" would be a lie about it.</para>
+    /// recorded nowhere and "nothing found" would be a lie about it. <b>74</b> (EX_IOERR) is a
+    /// database that could not be READ, which is a third thing again: the page draws it as a failed
+    /// read with a retry, because the round may be perfectly fine. The code round caught these last
+    /// two being the same number, which would have told somebody a round was never recorded because
+    /// a file was momentarily locked.</para>
     /// <para>Without that, an opened row has one blank for four different truths, which is the defect
     /// this mode was added to end.</para>
     /// </remarks>
@@ -293,7 +297,7 @@ internal static class Program
         catch (Exception e) when (Unreadable(e))
         {
             Note(WhyUnreadable(e));
-            return 69;
+            return 74; // EX_IOERR — the database, not the round
         }
 
         return 0;

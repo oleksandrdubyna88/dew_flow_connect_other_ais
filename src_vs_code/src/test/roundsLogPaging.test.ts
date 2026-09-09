@@ -15,6 +15,13 @@ import { LogRow, PAGE_SIZE, roundsLogHtml } from '../roundsLog';
  * although the page opens them one at a time.</p>
  */
 
+/**
+ * A row, complete.
+ *
+ * <p>No `as LogRow`. The whole value of a fixture standing in for a real type is that the compiler
+ * checks it, and a cast turns the day a field is added into a silent pass. The code round named
+ * this, and the repository's own doctrine forbids it.</p>
+ */
 function row(over: Partial<LogRow> = {}): LogRow {
   return {
     key: 'k1', startedUtc: '2026-09-05T07:41:00.000Z', completedUtc: '2026-09-05T07:43:10.000Z',
@@ -26,7 +33,7 @@ function row(over: Partial<LogRow> = {}): LogRow {
     reviewerColours: ['#fff'], found: [], foundCount: 0, foundState: 'unasked', origin: 'db',
     dbKey: { sessionId: 's1', stage: 'CodeReview', number: 1 },
     ...over,
-  } as LogRow;
+  };
 }
 
 function many(howMany: number): LogRow[] {
@@ -201,9 +208,21 @@ function detailOf(one: LogRow): { html: string; posted: unknown[] } {
 test('opening a row asks for that round\u0027s findings, once, and says it is asking', () => {
   const { html, posted } = detailOf(row({ foundState: 'unasked', foundCount: 3 }));
 
-  assert.deepEqual(posted.filter((m) => (m as { command?: string }).command === 'findings'),
-    [{ type: 'command', command: 'findings', id: 'k1' }]);
+  assert.equal(posted.filter((m) => (m as { command?: string }).command === 'findings').length, 1);
   assert.match(html, /Reading what this round found/);
+});
+
+test('the request carries the round\u0027s identity, so the host looks nothing up', () => {
+  // It used to be looked up in a module-level copy of the last rows the extension built — shared
+  // mutable state that answers wrongly for any row a later refresh dropped. Three reviewers of the
+  // code round objected independently.
+  const { posted } = detailOf(row({
+    foundState: 'unasked', foundCount: 3, dbKey: { sessionId: 'sX', stage: 'PlanReview', number: 7 },
+  }));
+
+  assert.deepEqual(posted.filter((m) => (m as { command?: string }).command === 'findings'), [{
+    type: 'command', command: 'findings', id: 'k1', session: 'sX', stage: 'PlanReview', number: 7,
+  }]);
 });
 
 test('a round that found nothing SAYS it found nothing', () => {
@@ -231,8 +250,8 @@ test('a read that failed offers a retry, and the retry asks again', () => {
 
   page.click(hit('[data-retry]', 'k1'));
 
-  assert.deepEqual(page.posted.filter((m) => (m as { command?: string }).command === 'findings'),
-    [{ type: 'command', command: 'findings', id: 'k1' }], 'a failure is not cached');
+  assert.equal(page.posted.filter((m) => (m as { command?: string }).command === 'findings').length, 1,
+    'a failure is not cached');
 });
 
 test('the findings arrive addressed to one row, and are drawn there', () => {

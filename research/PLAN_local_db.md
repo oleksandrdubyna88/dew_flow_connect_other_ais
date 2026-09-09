@@ -2,9 +2,10 @@
 
 > Status: **Epic 1 IMPLEMENTED, 2026-09-05** — the server writes `coai.db` (sessions, rounds,
 > reviewers, every finding with its resolution and reason, FTS5 search) and 24 tests cover it over
-> real SQLite. **Epic 2 (the extension reads it) is NOT built** and is extracted into
-> [todo/PLAN_local_db_reader.md](PLAN_local_db_reader.md); **Epic 3 (the five-window
-> measurement) is not run.** Scope as built: `src_mcp/src/Store/{RoundsDb,Schema,RoundContext,AgentLog}.cs`,
+> real SQLite. **Epic 2 (the extension reads it) SHIPPED on 2026-09-09**, through a different door
+> than this plan drew — the reader is the SERVER, answering `--log`, because a `sql.js` snapshot
+> cannot see `coai.db-wal`; see [PLAN_local_db_reader.md](PLAN_local_db_reader.md) for its
+> deviations. **Epic 3 (the five-window measurement) is not run.** Scope as built: `src_mcp/src/Store/{RoundsDb,Schema,RoundContext,AgentLog}.cs`,
 > `PanelService` (two call sites, both best-effort), `SessionStore.OpenedUtc`, `research/module_server.md`.
 >
 > **Deviations, and one whole epic that was not in the plan.**
@@ -35,7 +36,7 @@
 >    its session file as before. Written down rather than half-built.
 >
 > Related docs: [PLAN_rounds_log_view.md](PLAN_rounds_log_view.md) — the page this feeds;
-> [todo/PLAN_findings_in_the_log.md](PLAN_findings_in_the_log.md) — closed by this plan's
+> [PLAN_findings_in_the_log.md](PLAN_findings_in_the_log.md) — closed by this plan's
 > findings table once the reader lands; [module_server.md](module_server.md),
 > [module_extension.md](module_extension.md).
 
@@ -109,12 +110,19 @@ round record keeps counts.
 
 ### Epic 2 — the extension reads it
 
+> **Shipped 2026-09-09, and step 2 is not what happened.** `sql.js` never entered the VSIX: this
+> epic's own review round showed that a byte snapshot can neither lock nor see `coai.db-wal`, so the
+> page would silently miss the round just run. The server reads its own database and answers `--log`.
+> Step 3's FTS search is the one piece still unbuilt, extracted to
+> [todo/PLAN_the_log_searches_the_findings.md](../todo/PLAN_the_log_searches_the_findings.md). The
+> record of all of it is [PLAN_local_db_reader.md](PLAN_local_db_reader.md).
+
 1. RED: `roundsFromDb(bytes)` returns the same `LogRow[]` as `rowsFrom(sessions)` for the same data
    (the projection is checked against the files it projects); a search query returns findings ranked.
 2. `sql.js` in the VSIX; `RoundsDbReader` opening the file's bytes read-only; the page's provider
    pushes query results; the JSON path stays as the fallback when there is no database yet.
 3. The page: findings under an expanded row (closing
-   [todo/PLAN_findings_in_the_log.md](PLAN_findings_in_the_log.md)); the search box queries FTS through the
+   [PLAN_findings_in_the_log.md](PLAN_findings_in_the_log.md)); the search box queries FTS through the
    provider with a small debounce, results replacing the table.
 
 ### Epic 3 — measured

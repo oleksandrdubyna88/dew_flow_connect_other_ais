@@ -203,6 +203,10 @@ public static class RoundsQuery
     private static List<LoggedRound> Rounds(
         SqliteConnection db, int limit, (string StartedUtc, long Id)? before, bool withFindings)
     {
+        // ONE query for the whole page's findings, not one per row. The paged shape asks for none of
+        // them; the old shape asks for all of them, and a thousand round-trips where one grouped
+        // read would do is what the code round caught here. (codex, Major.)
+        var inline = withFindings ? FindingsByRound(db, limit, before) : [];
         using var read = db.CreateCommand();
         // Keyed, never OFFSET. Rounds are inserted at the TOP of this ordering, so a round finishing
         // while somebody is on page two shifts every later page by one and a row is seen twice or
@@ -234,7 +238,7 @@ public static class RoundsQuery
                 rows.GetInt32(6),
                 rows.GetInt32(7),
                 rows.GetString(8),
-                withFindings ? FindingsFor(db, id) : [],
+                inline.TryGetValue(id, out var mine) ? mine : [],
                 rows.GetString(5) + CursorSeparator + id,
                 rows.GetInt32(9)));
         }
@@ -279,6 +283,49 @@ public static class RoundsQuery
             rounds.GetInt64(1),
             rounds.GetInt64(2),
             rounds.GetDouble(3));
+    }
+
+    /// <summary>
+    /// Every finding of one PAGE of rounds, grouped — the old shape's read, and only its read.
+    /// </summary>
+    /// <remarks>
+    /// The paged shape never calls this: it is the 3.78 MB. It exists so that a new binary asked
+    /// without <c>--paged</c> answers exactly what it answered yesterday, at yesterday's cost.
+    /// </remarks>
+    private static Dictionary<long, List<LoggedFinding>> FindingsByRound(
+        SqliteConnection db, int limit, (string StartedUtc, long Id)? before)
+    {
+        using var read = db.CreateCommand();
+        read.CommandText = """
+            SELECT f.round_id, f.ordinal, f.severity, f.category, f.file, f.line, f.title, f.why, f.fix,
+                   f.role, f.is_gating, f.providers, f.resolution, f.reason, f.re_raised
+            FROM findings f
+            WHERE f.round_id IN (
+                SELECT id FROM rounds
+                WHERE $unbounded = 1
+                   OR started_utc < $started
+                   OR (started_utc = $started AND id < $id)
+                ORDER BY started_utc DESC, id DESC LIMIT $limit)
+            ORDER BY f.round_id, f.ordinal
+            """;
+        read.Parameters.AddWithValue("$unbounded", before is null ? 1 : 0);
+        read.Parameters.AddWithValue("$started", before?.StartedUtc ?? string.Empty);
+        read.Parameters.AddWithValue("$id", before?.Id ?? 0L);
+        read.Parameters.AddWithValue("$limit", limit);
+        using var rows = read.ExecuteReader();
+        var byRound = new Dictionary<long, List<LoggedFinding>>();
+        while (rows.Read())
+        {
+            var round = rows.GetInt64(0);
+            if (!byRound.TryGetValue(round, out var mine))
+            {
+                byRound[round] = mine = [];
+            }
+
+            mine.Add(FindingFrom(rows, 1));
+        }
+
+        return byRound;
     }
 
     /// <summary>One round's findings, in the order the reviewers produced them.</summary>
