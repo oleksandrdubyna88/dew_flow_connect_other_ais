@@ -61,6 +61,16 @@ interface Thread extends ChatMemory {
   /** Whether a turn is in flight. Only so a switch can say out loud that it is waiting for one. */
   running: boolean;
   /**
+   * Which turn of this conversation is running, counted from 1. Never reset.
+   *
+   * <p>It exists so a STOP can name what it means to stop. The page renders its control against the
+   * turn it is watching and posts that number back; a stop naming anything else is refused here. A
+   * bridge message can land a tick after the answer did, and by then the next question can already
+   * be in flight — without the number the second press of a button would end the turn that the first
+   * press was too late to reach. (codex and gemini, the plan round.)</p>
+   */
+  turn: number;
+  /**
    * The conversation to hand the NEXT turn, because the process it goes to never heard it.
    *
    * <p>Empty in the ordinary case. Filled when the person switches model: a vendor CLI keeps its
@@ -206,6 +216,7 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   }
   thread.messages = [...thread.messages, { role: 'you', text }];
   thread.running = true;
+  thread.turn += 1;
   show(entry, true, '');
 
   // A forgetful model is handed the conversation EVERY time, not only after a switch: the server
@@ -236,6 +247,22 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   });
   thread.running = false;
   if (!result.ok) {
+    // A STOPPED turn is written down before anything is carried, and the order is the whole finding.
+    // The question was appended before the turn was sent, so a turn that ends without an answer
+    // leaves the transcript ending on a dangling question. Handing THAT to a fresh process gives the
+    // next model a question nobody answered with no sign it was abandoned — and the turn after it
+    // appends a second `you` directly on top of the first. One line saying what happened makes the
+    // transcript true, and it is only then worth carrying. (gemini, the plan round, Blocking.)
+    if (result.stopped === true) {
+      thread.messages = [...thread.messages, { role: 'model', text: '(you stopped this answer)' }];
+    }
+    // And only a vendor that LOST the conversation needs it re-sent. `contextLost` on the failure arm
+    // is the session saying which of the two it is: a killed process that held the thread says yes, a
+    // per-turn vendor resuming by id and a server that never remembered anything say nothing. Set
+    // after the line above, so what is carried is the transcript a reader would recognise.
+    if (result.contextLost === true) {
+      thread.carry = [...thread.messages];
+    }
     // The carry is NOT cleared here. A turn that failed carried nothing anywhere, and clearing it
     // would mean the retry — the same question, one keypress later — reaches the new model with no
     // conversation behind it, which is the exact thing the switch existed to prevent. (gemini, the
@@ -544,6 +571,23 @@ function newConversation(
           switchModel(found, modelId);
         }
       },
+      onStop: (id, turn) => {
+        const found = panels.entryOf(id);
+        const thread = threads.get(id);
+        if (found === undefined || thread === undefined || !thread.running) {
+          // Nothing is running, or the tab is already gone. A stop is a message about a turn, and
+          // there is no turn — killing the process for it would cost the conversation for a keypress
+          // that arrived too late to mean anything.
+          return;
+        }
+        if (turn !== 0 && turn !== thread.turn) {
+          // The page named a turn that is no longer the running one, which is what a late or a
+          // repeated press looks like from here. Refused rather than applied to whatever happens to
+          // be in flight now — that turn is a different question the person has not asked to stop.
+          return;
+        }
+        thread.session.stop();
+      },
       onClosed: (id) => {
         // The registry disposes the session the ENTRY was created with, which after a model switch
         // is no longer the one that is running. So the thread's own current session is ended here
@@ -574,6 +618,9 @@ function newConversation(
     models: ready.models,
     modelId: ready.modelId,
     running: false,
+    // Counted from 1 by the first turn, so 0 is "this conversation has not asked anything yet" and
+    // can never be mistaken for a turn a stop could name.
+    turn: 0,
     ...memoryOf(ready.vendor),
     carry: [],
     messages: [],

@@ -26,11 +26,21 @@ export interface PageMessage {
   readonly id?: unknown;
   readonly delta?: unknown;
   readonly message?: unknown;
+  readonly turn?: unknown;
 }
 
 export type ChatCommand =
   | { readonly kind: 'send'; readonly text: string }
   | { readonly kind: 'pick'; readonly id: string }
+  /**
+   * End the turn numbered `turn`; `0` means whichever is running.
+   *
+   * <p>The number is what stops a LATE stop from ending the turn after the one it was pressed for.
+   * The page disables its own control, but a keybinding does not go through it and a bridge message
+   * can land a tick after the answer did — by which time the next question may already be in flight.
+   * Zero is what a page too old to name a turn sends, and it still means the useful thing.</p>
+   */
+  | { readonly kind: 'stop'; readonly turn: number }
   | { readonly kind: 'zoom'; readonly delta: number }
   | { readonly kind: 'restart' }
   | { readonly kind: 'useLocal' }
@@ -58,6 +68,22 @@ function zoomOf(message: PageMessage): ChatCommand {
   }
 
   return { kind: 'zoom', delta: Math.max(-1, Math.min(1, Math.trunc(message.delta))) };
+}
+
+/**
+ * Which turn a stop names, or `0` for "whichever is running".
+ *
+ * <p>Clamped the way the zoom delta is, and for the same reason: the value comes from a surface the
+ * host does not control, and this one is compared against a live counter. Anything that is not a
+ * whole positive number is not a turn — a page too old to send one, and a page sending nonsense,
+ * both mean the same thing here and are treated the same way.</p>
+ */
+function turnOf(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+    return 0;
+  }
+
+  return value;
 }
 
 /**
@@ -93,6 +119,8 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
 
       return id.length === 0 ? IGNORE : { kind: 'pick', id };
     }
+    case 'stop':
+      return { kind: 'stop', turn: turnOf(message.turn) };
     case 'restart':
       return { kind: 'restart' };
     case 'useLocal':

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CliChatSession, Timers } from '../cliChatSession';
 import { ProcessHandle } from '../processLauncher';
-import { TurnBudgets } from '../chatSession';
+import { TurnBudgets, TurnResult } from '../chatSession';
 
 /**
  * The four ways a long-lived vendor process ends, and the one way it answers.
@@ -174,7 +174,7 @@ async function asking(
   session: CliChatSession,
   child: FakeChild,
   text: string,
-): Promise<{ answering: Promise<unknown> }> {
+): Promise<{ answering: Promise<TurnResult> }> {
   const answering = session.send(text);
   child.say(INIT);
   await flush();
@@ -656,4 +656,121 @@ test('a death after a question, before any answer, still counts as a lost conver
   current.say(ok('answer two'));
 
   assert.deepStrictEqual(await second, { ok: true, answer: 'answer two', contextLost: true });
+});
+
+/**
+ * Stopping a turn, and what the conversation looks like afterwards.
+ *
+ * <p>A turn is 9.4 s measured and a long one is much more, so a question sent by accident is waited
+ * out and billed. The kill was always built — `dispose` has used it since the first version. What was
+ * missing is a stop that ends the TURN without ending the CONVERSATION, and for a vendor that holds
+ * the conversation inside its own process those are the same kill with two different sequels.</p>
+ */
+
+test('a turn stopped while it runs ends as stopped rather than waiting out its budget', async () => {
+  const child = fakeChild();
+  const session = new CliChatSession(() => child.handle, BUDGETS, fakeTimers());
+
+  const { answering } = await asking(session, child, 'why is it pinned?');
+  session.stop();
+
+  const result = await answering;
+  assert.strictEqual(result.ok, false, 'a stopped turn is not an answer');
+  assert.match(
+    result.ok === false ? result.failure : '',
+    /stopped/i,
+    'the sentence must say the person stopped it, not that something went wrong',
+  );
+  assert.strictEqual(child.killed(), 1, 'the process must actually be killed, not merely abandoned');
+});
+
+test('a turn stopped on a vendor that keeps the conversation says the next question re-sends it', async () => {
+  // The trap this plan is really about. `claude` and `agy` hold the conversation IN the process, so
+  // the kill that stops the turn takes the memory with it. The caller must be TOLD, because it is
+  // the caller that carries the transcript into the next turn.
+  const child = fakeChild();
+  const session = new CliChatSession(() => child.handle, BUDGETS, fakeTimers());
+
+  const { answering } = await asking(session, child, 'why is it pinned?');
+  session.stop();
+
+  const result = await answering;
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(
+    result.ok === false ? result.contextLost : undefined,
+    true,
+    'a persistent vendor loses the conversation with the process; the caller carries it or it is gone',
+  );
+  assert.strictEqual(
+    result.ok === false ? result.stopped : undefined,
+    true,
+    'the caller has to tell a stop from a crash: one is the person, the other is a defect',
+  );
+});
+
+test('the turn after a stop is answered by a new process', async () => {
+  const first = fakeChild();
+  const second = fakeChild();
+  let handed = 0;
+  const session = new CliChatSession(
+    () => {
+      handed += 1;
+
+      return handed === 1 ? first.handle : second.handle;
+    },
+    BUDGETS,
+    fakeTimers(),
+  );
+
+  const { answering } = await asking(session, first, 'one');
+  session.stop();
+  await answering;
+
+  const next = session.send('two');
+  await flush();
+  second.say(INIT);
+  await flush();
+  second.say(ok('answer two'));
+
+  assert.deepStrictEqual(
+    await next,
+    { ok: true, answer: 'answer two', contextLost: true },
+    'the next turn must work, and must still say the process answering it never heard the first',
+  );
+  assert.strictEqual(handed, 2, 'a stop must not leave the session unable to start again');
+});
+
+test('a stop with nothing running kills nothing', async () => {
+  // A stop can arrive late — a queued bridge message, a second press, a keybinding while the turn
+  // has just landed. Killing a healthy idle process for it would cost the conversation for nothing.
+  const child = fakeChild();
+  const session = new CliChatSession(() => child.handle, BUDGETS, fakeTimers());
+
+  session.stop();
+  assert.strictEqual(child.killed(), 0, 'nothing was running, so nothing should have been killed');
+
+  const { answering } = await asking(session, child, 'one');
+  child.say(ok('answer one'));
+  await answering;
+
+  session.stop();
+  assert.strictEqual(child.killed(), 0, 'the turn had already finished; a late stop must be a no-op');
+});
+
+test('a stop that arrives after the next turn has started does not stop that one', async () => {
+  // The guarantee the plan states as "a double press cannot stop the NEXT turn". The page disables
+  // its button, but a keybinding does not go through the button and a bridge message can be late.
+  const child = fakeChild();
+  const session = new CliChatSession(() => child.handle, BUDGETS, fakeTimers());
+
+  const { answering: one } = await asking(session, child, 'one');
+  child.say(ok('answer one'));
+  await one;
+
+  const { answering: two } = await asking(session, child, 'two');
+  session.stop();
+  const result = await two;
+
+  assert.strictEqual(result.ok, false, 'this stop names the turn that IS running, and stops it');
+  assert.strictEqual(child.killed(), 1, 'exactly one kill, for the turn that was actually running');
 });

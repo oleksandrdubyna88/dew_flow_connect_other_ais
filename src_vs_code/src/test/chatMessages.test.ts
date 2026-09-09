@@ -73,3 +73,34 @@ test('a message whose fields are the wrong types cannot become a command', () =>
   assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'pick', id: { id: 'x' } }), { kind: 'ignore' });
   assert.deepStrictEqual(chatCommandOf({ type: 42, command: 'send', text: 'hi' }), { kind: 'ignore' });
 });
+
+test('a stop carries the turn it means to stop', () => {
+  // The number is what keeps a late stop from ending the turn AFTER the one it was pressed for: the
+  // page renders the control against a turn, and the host refuses a number that is no longer running.
+  assert.deepStrictEqual(
+    chatCommandOf({ type: 'command', command: 'stop', turn: 3 }),
+    { kind: 'stop', turn: 3 },
+  );
+});
+
+test('a stop from a page too old to name a turn still stops the running one', () => {
+  // A webview retained across a reload can be older than the extension talking to it — the reason
+  // this module ignores what it does not know rather than refusing it. An older page posts no turn,
+  // and zero means "whichever is running", which is what that page was built to mean.
+  assert.deepStrictEqual(
+    chatCommandOf({ type: 'command', command: 'stop' }),
+    { kind: 'stop', turn: 0 },
+  );
+});
+
+test('a stop naming a turn that is not a whole positive number names no turn at all', () => {
+  // Same rule the zoom delta follows: a value from a surface the host does not control is clamped to
+  // something meaningful rather than trusted into an index.
+  for (const turn of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 'two', null]) {
+    assert.deepStrictEqual(
+      chatCommandOf({ type: 'command', command: 'stop', turn }),
+      { kind: 'stop', turn: 0 },
+      `a turn of ${String(turn)} should have been read as no turn`,
+    );
+  }
+});

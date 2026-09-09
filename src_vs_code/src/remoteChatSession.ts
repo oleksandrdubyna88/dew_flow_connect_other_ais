@@ -26,6 +26,15 @@ import { Timers } from './cliChatSession';
  */
 const POLL_GAP_MS = 500;
 
+/**
+ * What a stopped remote turn is.
+ *
+ * <p>No `contextLost`. A Team server holds no conversation to lose — the transcript is re-sent on
+ * every turn anyway, which is what `forgetful` means — so stopping one costs the answer and nothing
+ * else. Saying the conversation restarted here would be a sentence about a loss that did not happen.</p>
+ */
+const STOPPED: TurnResult = { ok: false, failure: 'you stopped this answer', stopped: true };
+
 /** One request to the server, already carrying its token and its base URL. */
 export interface RemoteTransport {
   /** POST a review. Answers the parsed body, or a sentence saying why not. */
@@ -63,6 +72,22 @@ export class RemoteChatSession implements ChatSession {
    */
   private retry: { readonly text: string; readonly key: string } | undefined;
 
+  /** Whether a turn is between its submit and its result. What makes an idle `stop` a no-op. */
+  private running = false;
+
+  /**
+   * The person stopped THIS turn. Cleared when the next one starts.
+   *
+   * <p>Deliberately not `disposed`: that flag is terminal and every guard reading it means "this
+   * session is over". A stop ends a turn and leaves the session able to take another, so it needs a
+   * flag of its own — reusing `disposed` would have made the second question after a stop return
+   * "the conversation was closed" for a conversation that is open.</p>
+   */
+  private stopped = false;
+
+  /** Settles the turn without waiting for the poll in flight. Undefined when no turn is waiting. */
+  private wakeOnStop: (() => void) | undefined;
+
   constructor(
     private readonly transport: RemoteTransport,
     private readonly vendor: RemoteVendor,
@@ -85,6 +110,39 @@ export class RemoteChatSession implements ChatSession {
     return mine;
   }
 
+  /**
+   * End the turn the server is running, and keep the conversation.
+   *
+   * <p>Two obligations that pull in opposite directions, which is why this is not simply `dispose`
+   * without the flag. The person must see the turn end AT ONCE — a poll can be holding the
+   * connection for eight seconds and waiting that out is the very complaint this feature answers —
+   * and the server must be TOLD, because a queued job holds a slot on a shared vendor account and
+   * the drop-on-no-poll sweep would not take it back for three minutes.</p>
+   *
+   * <p>So the cancel goes out here, and `wakeOnStop` settles the turn without waiting for the poll.
+   * Whatever that poll eventually answers is dropped: `turn` races the two and a race settles once,
+   * so an answer landing after a stop cannot turn a stopped turn into an answered one. (gemini and
+   * codex, the plan round, independently.)</p>
+   */
+  stop(): void {
+    if (this.disposed || !this.running) {
+      // Nothing is in flight — an idle session, or a stop that lost a race with the answer it meant
+      // to prevent. Cancelling a job id this session no longer owns would be cancelling somebody's
+      // finished work for nothing.
+      return;
+    }
+    this.stopped = true;
+    const id = this.inFlight;
+    this.inFlight = '';
+    if (id.length > 0) {
+      void this.transport.cancel(id);
+    }
+    // Undefined in the window between `submit` going out and its id coming back. That window is not
+    // lost: `turn` checks `stopped` where the id first exists, exactly as it already checks
+    // `disposed` there, and cancels then.
+    this.wakeOnStop?.();
+  }
+
   dispose(): void {
     this.disposed = true;
     const id = this.inFlight;
@@ -100,6 +158,21 @@ export class RemoteChatSession implements ChatSession {
     if (this.disposed) {
       return { ok: false, failure: 'the conversation was closed' };
     }
+    // A NEW turn, so last turn's stop is spent. Reset here rather than in `stop` itself, because
+    // between the two is exactly where a person decides whether to ask again.
+    this.stopped = false;
+    this.running = true;
+    try {
+      return await this.submitAndWait(text, onWaiting);
+    } finally {
+      this.running = false;
+      this.wakeOnStop = undefined;
+      this.inFlight = '';
+    }
+  }
+
+  /** The turn proper, with `running` already true so a stop arriving mid-flight is not a no-op. */
+  private async submitAndWait(text: string, onWaiting?: (position: number) => void): Promise<TurnResult> {
     const deadline = this.now() + this.budgets.turnMs;
     const seconds = Math.max(1, Math.floor(this.budgets.turnMs / 1000));
     // One name for this TURN — the SAME one when this is the person retrying a turn that failed,
@@ -134,13 +207,29 @@ export class RemoteChatSession implements ChatSession {
 
       return { ok: false, failure: 'the conversation was closed' };
     }
+    // The same window, for the same reason, for a stop instead of a close: `stop` ran while the POST
+    // was in flight, found no id to cancel and settled nothing. Checked HERE because this is the
+    // first moment the job has a name. (The dispose case above is the precedent; a stop needed it
+    // too and would otherwise have left the job running for the sweep to find.)
+    if (this.stopped) {
+      void this.transport.cancel(id);
+
+      return STOPPED;
+    }
     this.inFlight = id;
 
-    try {
-      return await this.waitFor(id, deadline, onWaiting);
-    } finally {
-      this.inFlight = '';
-    }
+    const waiting = this.waitFor(id, deadline, onWaiting);
+    // Attached BEFORE the race. If the stop wins, this promise still settles later with nobody
+    // reading it, and a rejection nobody handles is an unhandled rejection that takes the window
+    // down rather than the turn.
+    waiting.catch(() => undefined);
+
+    return Promise.race([
+      waiting,
+      new Promise<TurnResult>((resolve) => {
+        this.wakeOnStop = () => resolve(STOPPED);
+      }),
+    ]);
   }
 
   /** Poll until it answers, fails, or the deadline passes. */
@@ -150,7 +239,9 @@ export class RemoteChatSession implements ChatSession {
     onWaiting?: (position: number) => void,
   ): Promise<TurnResult> {
     let refusals = 0;
-    while (!this.disposed) {
+    // `stopped` as well as `disposed`: the race has already settled the turn, and this loop carrying
+    // on would keep polling a job the server has been told to cancel.
+    while (!this.disposed && !this.stopped) {
       const remaining = deadline - this.now();
       if (remaining <= 0) {
         void this.transport.cancel(id);

@@ -372,15 +372,63 @@ stateDiagram-v2
   Asking --> Ready: result SUCCESS
   Asking --> Ready: result ERROR (the model refused; the process lives)
   Asking --> Failed: turn budget · exit · error
+  Asking --> Stopped: stop (the person)
+  Stopped --> Starting: the next send, carrying the transcript
   Failed --> Starting: the next send, with contextLost
   Ready --> [*]: dispose
   Starting --> [*]: dispose (the waiter is told at once)
 ```
 
-Four ends, one of them a person closing a tab. `Failed` always kills the tree: a process that has
-stopped answering must not be handed the next turn. The edge back into `Starting` is the one that
-carries `contextLost` — the replacement never heard the passage, and the first answer afterwards
-says so rather than reading as a model that has lost the thread.
+Five ends, one of them a person closing a tab and one a person ending a single answer. `Failed`
+always kills the tree: a process that has stopped answering must not be handed the next turn. The
+edge back into `Starting` is the one that carries `contextLost` — the replacement never heard the
+passage, and the first answer afterwards says so rather than reading as a model that has lost the
+thread.
+
+### `stop()` — ending a turn without ending the conversation (2026-09-09)
+
+`ChatSession` has a third method beside `send` and `dispose`. A measured turn is 9.4 s and a long one
+much more, and until now a question sent by accident could only be waited out — and billed.
+
+`stop()` ends the turn that is running NOW and leaves the session able to take another. **A stop that
+names nothing does nothing**: with no turn in flight it neither kills an idle process nor marks a
+conversation lost. That is not defensive coding, it is the whole guarantee — a stop can arrive late (a
+queued bridge message, a second press, a keybinding pressed as the answer lands), and the identity of
+the turn being ended lives in a closure created by that turn and cleared the moment it settles by any
+route. A stop one tick late finds `undefined`; a stop after the next turn began finds that turn's own
+closure, which is why the host also checks the turn NUMBER before calling this at all.
+
+What a stop costs differs by session shape, and the session knows which it is:
+
+| shape | vendor | what the kill costs | what the next turn does |
+|---|---|---|---|
+| persistent | `claude`, `agy` | the conversation — it lived in that process | re-sends the transcript (`contextLost: true`) |
+| per-turn | `codex` | the answer only — the thread is in the vendor's store | resumes by the same thread id |
+| remote | a Team server | nothing — a server remembers nothing anyway | submits as usual |
+
+The failure arm of `TurnResult` grew two optional flags to carry that: `stopped`, so a caller can tell
+an instruction that was obeyed from a defect, and `contextLost`, so it knows whether to re-send.
+`contextLost` is set for a stop and **not** for a crash — a stop is the person's decision, whereas
+silently re-sending a transcript because a third-party CLI fell over bills somebody for an accident.
+That case is [its own plan](../todo/PLAN_a_dead_process_could_carry_the_conversation_too.md), gated on
+measuring how often it happens.
+
+The remote half settles the turn through a `Promise.race` rather than by waiting for the poll in
+flight: a long poll holds the connection for up to eight seconds, and waiting that out is the very
+complaint the feature answers. The job is cancelled on the server in the same breath — `DELETE
+api/reviews/{id}`, which already existed — because a queued job holds a slot on a shared vendor
+account and the drop-on-no-poll sweep would not take it back for three minutes. Whatever the abandoned
+poll eventually answers is dropped; a race settles once, so an answer landing after a stop cannot turn
+a stopped turn into an answered one.
+
+`chatCommand.ts` records the stop in the transcript before carrying it. The question is appended
+*before* the turn is sent, so a turn ending without an answer leaves the transcript on a dangling
+question; carrying that would hand the next model a question nobody answered with no sign it was
+abandoned, and the turn after would append a second `you` on top of the first.
+
+> The Stop CONTROL is not here yet. This is the seam half; the button in `chatStatusHtml` belongs to
+> the chat-page lane, which owns that file. The seam is complete and tested without it, and the host
+> route already accepts the message the button will post.
 
 
 `cliChatSession.ts` holds one long-lived vendor process per conversation. The protocol was measured

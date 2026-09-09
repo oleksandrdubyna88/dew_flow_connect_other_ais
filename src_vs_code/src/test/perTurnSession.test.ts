@@ -396,3 +396,45 @@ test('a thread that cannot be resumed is dropped, rather than failing every turn
   assert.ok(result.ok);
   assert.strictEqual(result.contextLost, true, 'the new conversation did not say it was new');
 });
+
+test('stopping a per-turn turn keeps the thread, so the next question resumes the same conversation', async () => {
+  // The inversion, at the one moment it is most likely to be got wrong. For `claude` and `agy` a
+  // stop kills the conversation and the caller must carry the transcript; here the conversation is
+  // in the vendor's own store, the thread id survives the killed process, and carrying anything
+  // would re-send a conversation the model already has. A reviewer asked for this to be PROVEN
+  // rather than asserted in a comment. (codex, the plan round.)
+  const launcher = perTurnLauncher();
+  const session = new CliChatSession(launcher.start, BUDGETS, NEVER, codexAdapter);
+
+  const first = session.send('what does this mean?');
+  await flush();
+  launcher.turns[0]!.say(started('01a0851c-488c-7be0-9e51-e35c5fb2ce5c'));
+  launcher.turns[0]!.say(answered('it means this'));
+  launcher.turns[0]!.exit();
+  await first;
+
+  const stopped = session.send('and in the north?');
+  await flush();
+  launcher.turns[1]!.say(started('01a0851c-488c-7be0-9e51-e35c5fb2ce5c'));
+  session.stop();
+
+  const result = await stopped;
+  assert.strictEqual(result.ok, false, 'a stopped turn is not an answer');
+  assert.strictEqual(result.ok === false ? result.stopped : undefined, true);
+  assert.strictEqual(
+    result.ok === false ? result.contextLost : undefined,
+    undefined,
+    'a per-turn vendor keeps the conversation in its own store; a stop loses nothing to report',
+  );
+
+  const third = session.send('try again');
+  await flush();
+  assert.strictEqual(
+    launcher.turns[2]!.resume,
+    '01a0851c-488c-7be0-9e51-e35c5fb2ce5c',
+    'the turn after a stop must resume the SAME thread, not open a new conversation',
+  );
+  launcher.turns[2]!.say(answered('there it is different'));
+  launcher.turns[2]!.exit();
+  assert.deepStrictEqual(await third, { ok: true, answer: 'there it is different' });
+});
