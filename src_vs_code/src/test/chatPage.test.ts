@@ -310,6 +310,8 @@ interface RunningPage {
   scrolledToBottom(): Fake;
   /** Put the reader a screen above the bottom, same page. */
   scrolledUp(): Fake;
+  /** Resolve `document.fonts.ready`. Await it: what it queued runs on the microtask queue. */
+  fontsSettle(): Promise<void>;
 }
 
 /**
@@ -341,6 +343,10 @@ function runChatPage(over: Partial<ChatPageState> = {}): RunningPage {
   const rendered = new Map(
     [...html.matchAll(/<[a-z]+[^>]*\bid="([^"]+)"[^>]*>/g)].map((match) => [match[1], match[0]]),
   );
+  // The page corrects its opening scroll once the fonts have settled. A test that cannot say WHEN
+  // that happens cannot show what a reader who moved in the meantime experiences.
+  let settleFonts = () => { /* replaced by the promise below */ };
+  const fontsReady = new Promise<void>((resolve) => { settleFonts = () => { resolve(); }; });
   const document_ = {
     getElementById: (id: string) => {
       const tag = rendered.get(id);
@@ -357,10 +363,12 @@ function runChatPage(over: Partial<ChatPageState> = {}): RunningPage {
     querySelectorAll: () => [],
     addEventListener() { /* the page listens on window */ },
     body: { style: emptyStyle() },
+    fonts: { ready: fontsReady },
   };
   const window_ = {
     addEventListener(type: string, fn: (event: unknown) => void) { (onWindow[type] ??= []).push(fn); },
   };
+
 
   new Function('document', 'window', 'acquireVsCodeApi', 'requestAnimationFrame', body)(
     document_,
@@ -404,6 +412,13 @@ function runChatPage(over: Partial<ChatPageState> = {}): RunningPage {
       scroll.scrollTop = 200;
 
       return scroll;
+    },
+    fontsSettle() {
+      settleFonts();
+      // Awaited by the caller: the page registered its own `.then` first, so by the time this
+      // resolves for us it has already run. A synchronous "drain" does not drain anything, and a
+      // test written that way passes because the callback never ran at all.
+      return fontsReady;
     },
     fire(id, type, event = {}) {
       assert.ok(seen[id], `the page never asked for #${id}, so nothing is listening on it`);
@@ -724,4 +739,62 @@ test('a push that changes nothing scrolls nobody, however many times it arrives'
   page.frames();
 
   assert.strictEqual(scroll.scrollTop, after - 300, 'an identical push moved the reader');
+});
+
+
+test('a reader who leaves and comes back to where the page left them still cancels the follow', () => {
+  // The position marker was permanent, and that is a magic pixel: a reader who scrolls away and
+  // returns to it — which is exactly what "scroll back down to the bottom" is — read as the page's
+  // own scroll for the rest of the tab's life, so their next movement never cancelled anything.
+  // It is one-shot now: our own scroll event consumes it, and everything after is the reader.
+  const page = runChatPage();
+  const scroll = page.scrolledToBottom();
+
+  page.deliver({ type: 'state', messagesHtml: '<p>first</p>' });
+  page.frames();
+  const wherePageLeftThem = scroll.scrollTop;
+  page.fire('scroll', 'scroll');
+
+  page.deliver({ type: 'state', messagesHtml: '<p>second</p>' });
+  scroll.scrollTop = wherePageLeftThem;
+  page.fire('scroll', 'scroll');
+  page.frames();
+
+  assert.strictEqual(scroll.scrollTop, wherePageLeftThem,
+    'a reader standing where the page had left them was moved by a follow they had cancelled');
+});
+
+test('the fonts settling does not undo a reader who has already scrolled away', async () => {
+  // Three findings from one vendor said the same thing: the opening follow is cancellable, and the
+  // fonts-settled correction was not — it made a FRESH token, so a cancelled open came back to life
+  // whenever the fonts happened to settle. A reader who opened a tab and started reading upward was
+  // dragged to the bottom by a font.
+  const page = runChatPage({ messages: [{ role: 'model', text: 'something long' }] });
+  const scroll = page.seen['scroll'];
+  assert.ok(scroll, 'the page has no scrolling region');
+  scroll.clientHeight = 500;
+  scroll.scrollHeight = 3000;
+
+  scroll.scrollTop = 200;
+  page.fire('scroll', 'scroll');
+  await page.fontsSettle();
+  page.frames();
+
+  assert.strictEqual(scroll.scrollTop, 200, 'the fonts settling yanked a reader who had scrolled up');
+});
+
+test('a state that omits the capped notice clears it, as it always did', () => {
+  // A regression this branch introduced and the gate caught: requiring a string before writing meant
+  // an omitted field left the old notice on screen. The protocol has always treated "not mentioned"
+  // as "gone" for these two regions, and a stale cap notice is one a person acts on.
+  const page = runChatPage();
+
+  page.deliver({ type: 'state', cappedHtml: '<div class="capped">no more turns</div>', failureHtml: '<p>it broke</p>' });
+  assert.match(page.seen['capped'].innerHTML, /no more turns/, 'the capped notice was never shown');
+  assert.match(page.seen['failure'].innerHTML, /it broke/, 'the failure was never shown');
+
+  page.deliver({ type: 'state', running: false, capped: false });
+
+  assert.strictEqual(page.seen['capped'].innerHTML, '', 'an omitted capped notice stayed on screen');
+  assert.strictEqual(page.seen['failure'].innerHTML, '', 'an omitted failure stayed on screen');
 });

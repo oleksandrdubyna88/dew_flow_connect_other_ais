@@ -96,10 +96,28 @@ agree by accident.
 **A deferred follow is cancelled by the reader, not by re-measuring.** The reader can move between
 the frame being asked for and the frame arriving, and re-measuring in the callback cannot tell: the
 content is already in, so a reader who *was* at the bottom now measures short of it. Only the reader
-knows they moved, so their scroll event invalidates the pending token. The page's own scroll is told
-apart by POSITION — `scrolledItselfTo`, recorded as what the browser clamped to — rather than by a
-flag cleared on a later frame, which stays raised for as long as that frame has not come and makes
-every scroll in between read as the page's own.
+knows they moved, so their scroll event invalidates the pending token.
+
+**Telling the page's own scroll from the reader's took three shapes, and the first two were wrong.**
+A flag cleared on a later frame stays raised for as long as that frame has not come, so every scroll
+in between reads as the page's own. A position kept indefinitely turns the bottom into a magic pixel:
+a reader who scrolls away and comes back to it — which is what *scroll back down* is — was still
+being read as the page for the rest of the tab's life. What is there now is a ONE-SHOT arming:
+`landOnNewest` records the position it actually reached (what the browser clamped to, and `null` when
+nothing moved, since then no event is coming to consume it), and the first scroll event matching it
+consumes the arming. Everything after that is the reader.
+
+**The fonts-settled correction belongs to the opening follow and dies with it.** Scheduling it
+unconditionally made a fresh token, so a cancelled open came back to life whenever the fonts happened
+to settle, and a person who opened a tab and started reading upward was dragged down by a font. It
+captures the generation at open and skips if a reader's scroll has moved it.
+
+**A write is compared against what was LAST WRITTEN, not against the element.** Reading `innerHTML`
+back makes the browser serialise the whole subtree on every push, and what comes back is normalised —
+attributes reordered, entities decoded — so an unchanged push can read as different and a changed one
+as the same. `cappedHtml` and `failureHtml` clear when they are not mentioned, which the protocol has
+always meant: a cap notice or a failure left on screen after it stopped being true is one a person
+acts on.
 
 ### One webview per SESSION, which no other page in here does (2026-09-08)
 

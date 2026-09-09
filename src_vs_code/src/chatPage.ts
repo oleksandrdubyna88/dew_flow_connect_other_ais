@@ -265,16 +265,22 @@ function chatScript(state: ChatPageState): string {
   var shouldFollow = ${shouldFollow.toString()};
   var SLACK = ${FOLLOW_SLACK_PX};
   var pendingFollow = 0;
-  // Where the PAGE last put the reader. A flag cleared on a later frame looked simpler and was
-  // wrong: it stays raised for as long as that frame has not arrived, and every scroll in between
-  // reads as the page's own. A position cannot get stuck. If a reader happens to land exactly where
-  // we did, they are at the bottom, which is the case where not cancelling is right anyway.
-  var scrolledItselfTo = -1;
+  // What was last PUT into each region, so a repeat can be told from a change without asking the
+  // browser to serialise the DOM back to us on every push.
+  var lastWritten = { messages: null, thinking: null, capped: null, failure: null };
+  // The ONE scroll event the page owes itself, armed by its own write and consumed by the event it
+  // causes. Two shapes were tried and both were wrong: a flag cleared on a later frame stays raised
+  // until that frame comes, so every scroll in between reads as the page's own; and a position kept
+  // indefinitely turns the bottom into a magic pixel - a reader who scrolls away and comes back to
+  // it, which is what "scroll back down" IS, was still being read as the page for the rest of the
+  // tab's life. Armed only when the write actually moved anything, or nothing would consume it.
+  var selfScrollTo = null;
   // A scroll set in the same tick as the write scrolls to a height the browser has not laid out yet
   // and lands short. The next frame has the real height, and setTimeout is the fallback for a host
   // that has no requestAnimationFrame - the bundled page runs in exactly such a stub.
   function afterLayout(fn) {
-    if (typeof requestAnimationFrame === 'function') { requestAnimationFrame(fn); } else { setTimeout(fn, 0); }
+    if (typeof requestAnimationFrame === 'function') { requestAnimationFrame(fn); }
+    else if (typeof setTimeout === 'function') { setTimeout(fn, 0); }
   }
   // THE TWO ENTRY POINTS for moving this page, and the contract stories 3 and 4 are held to: the
   // jump control and the composer's resize go through scheduleFollow or landOnNewest, never through
@@ -284,9 +290,11 @@ function chatScript(state: ChatPageState): string {
     if (!scroll) { return; }
     // Our own write fires a scroll event. Without this flag the page would cancel its own next
     // follow, and the rule would work exactly once per tab.
+    const was = scroll.scrollTop;
     scroll.scrollTop = scroll.scrollHeight;
-    // What it CLAMPED to, not what we asked for: a browser answers scrollHeight - clientHeight.
-    scrolledItselfTo = scroll.scrollTop;
+    // What it CLAMPED to, not what we asked for: a browser answers scrollHeight - clientHeight. And
+    // null when nothing moved, because then no scroll event is coming to consume the arming.
+    selfScrollTo = scroll.scrollTop === was ? null : scroll.scrollTop;
   }
   // Deferred to the next frame, and CANCELLABLE. The reader can move between the frame being asked
   // for and the frame arriving - a drag, a wheel, Page Up - and a scroll that was right when it was
@@ -365,14 +373,23 @@ function chatScript(state: ChatPageState): string {
   landOnNewest();
   scheduleFollow();
   if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
-    // Through the schedule, not straight to the scroll: fonts settle after the first paint, and a
-    // person who opened the tab and started reading upward in that gap must not be dragged back.
-    document.fonts.ready.then(scheduleFollow);
+    // The correction belongs to the OPENING follow and dies with it. Scheduling unconditionally
+    // here made a fresh token, so a cancelled open came back to life whenever the fonts happened to
+    // settle - a reader who opened the tab and started reading upward was dragged down by a font.
+    // Three findings from one vendor said this, and they were right.
+    const openedAt = pendingFollow;
+    document.fonts.ready.then(function () {
+      if (pendingFollow === openedAt) { scheduleFollow(); }
+    });
   }
   const scrollRegion = document.getElementById('scroll');
   if (scrollRegion) {
     scrollRegion.addEventListener('scroll', function () {
-      if (scrollRegion.scrollTop !== scrolledItselfTo) { pendingFollow++; }
+      if (selfScrollTo !== null && scrollRegion.scrollTop === selfScrollTo) {
+        selfScrollTo = null;
+      } else {
+        pendingFollow++;
+      }
     });
   }
   window.addEventListener('message', function (event) {
@@ -386,23 +403,33 @@ function chatScript(state: ChatPageState): string {
     const scroll = document.getElementById('scroll');
     const follow = !scroll || shouldFollow(scroll.scrollTop, scroll.clientHeight, scroll.scrollHeight, SLACK);
     let wrote = false;
+    const messages = document.getElementById('messages');
+    const thinking = document.getElementById('thinking');
+    const capped = document.getElementById('capped');
+    const failure = document.getElementById('failure');
     // A CHANGE, not an assignment. A retry, or a poll that pushes the state again, assigns the same
     // html - and counting that as an insertion scrolls a reader for content already in front of
-    // them. Compared against the element rather than a remembered copy: what the page is showing is
-    // the honest question, and our own generated markup round-trips through innerHTML unchanged.
-    const messages = document.getElementById('messages');
-    if (messages && typeof data.messagesHtml === 'string' && messages.innerHTML !== data.messagesHtml) {
+    // them. Compared against what we LAST WROTE rather than against the element: reading innerHTML
+    // back makes the browser serialise the whole subtree on every push, and what comes back is
+    // normalised - attributes reordered, entities decoded - so an unchanged push can read as
+    // different and a changed one as the same.
+    if (messages && typeof data.messagesHtml === 'string' && lastWritten.messages !== data.messagesHtml) {
       messages.innerHTML = data.messagesHtml;
+      lastWritten.messages = data.messagesHtml;
       wrote = true;
     }
-    const thinking = document.getElementById('thinking');
-    if (thinking && typeof data.thinkingHtml === 'string' && thinking.innerHTML !== data.thinkingHtml) {
+    if (thinking && typeof data.thinkingHtml === 'string' && lastWritten.thinking !== data.thinkingHtml) {
       thinking.innerHTML = data.thinkingHtml;
+      lastWritten.thinking = data.thinkingHtml;
       wrote = true;
     }
-    const capped = document.getElementById('capped');
-    if (capped && typeof data.cappedHtml === 'string' && capped.innerHTML !== data.cappedHtml) {
-      capped.innerHTML = data.cappedHtml;
+    // These two clear when they are NOT mentioned - the protocol has always meant that, and a
+    // capped notice or a failure left on screen after it stopped being true is one a person acts on.
+    // Requiring a string here was this branch's own regression; the gate caught it.
+    const nextCapped = typeof data.cappedHtml === 'string' ? data.cappedHtml : '';
+    if (capped && lastWritten.capped !== nextCapped) {
+      capped.innerHTML = nextCapped;
+      lastWritten.capped = nextCapped;
       wireCapped();
       wrote = true;
     }
@@ -411,9 +438,10 @@ function chatScript(state: ChatPageState): string {
     // longer offers.
     const pickerBox = document.getElementById('pickerBox');
     if (pickerBox && typeof data.pickerHtml === 'string') { pickerBox.innerHTML = data.pickerHtml; wirePicker(); }
-    const failure = document.getElementById('failure');
-    if (failure && typeof data.failureHtml === 'string' && failure.innerHTML !== data.failureHtml) {
-      failure.innerHTML = data.failureHtml;
+    const nextFailure = typeof data.failureHtml === 'string' ? data.failureHtml : '';
+    if (failure && lastWritten.failure !== nextFailure) {
+      failure.innerHTML = nextFailure;
+      lastWritten.failure = nextFailure;
       wrote = true;
     }
     const passage = document.getElementById('passage');

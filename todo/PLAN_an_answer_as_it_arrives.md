@@ -105,7 +105,7 @@ only when the whole ritual has run — not when the code works.
       plain text with no image, embed or async highlighter, so one deferred scroll per push lands on
       the final height. A streamed answer breaks that — the height keeps growing after the follow has
       run, leaving a reader who WAS at the bottom short of it. Each partial must go through the same
-      `scheduleFollow()` the pushes use (`chatPage.ts`), never a scrollTop of its own, and a test
+      `scheduleFollow()` the pushes use (`src_vs_code/src/chatPage.ts:304`), never a scrollTop of its own, and a test
       must prove a reader at the bottom is still at the bottom when the last token lands.
 - [ ] `npm test` green; the acceptance ritual complete; promoted on merge.
 
