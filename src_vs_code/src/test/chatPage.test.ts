@@ -1037,3 +1037,91 @@ test('a composer that grows re-pins the reader even where nothing observes it', 
   assert.strictEqual(scroll.scrollTop, scroll.scrollHeight,
     'the growing box pushed the last answer out of view on a host with no ResizeObserver');
 });
+
+
+/* ------------------------------------------------------------------------------------------------
+ * An answer reads like a document: entries 4, 5, 6, 7, 8 and 18 of the operator's list, which are
+ * one rendering pass.
+ * ---------------------------------------------------------------------------------------------- */
+
+test('a model answer is rendered as a document; what the person typed is not', () => {
+  const html = chatMessagesHtml([
+    { role: 'you', text: '### not a heading, I typed this' },
+    { role: 'model', text: '### a heading\n\n- and a list' },
+  ]);
+
+  const mine = html.slice(html.indexOf('msg you'), html.indexOf('msg model'));
+  const theirs = html.slice(html.indexOf('msg model'));
+
+  assert.match(theirs, /<h3>a heading<\/h3>/, 'the answer was not rendered');
+  assert.match(theirs, /<ul><li>and a list<\/li><\/ul>/, 'the list was not rendered');
+  assert.match(mine, /### not a heading/, 'what the person typed was rendered as markdown');
+  assert.doesNotMatch(mine, /<h3>/, 'the person typed a hash and got a heading');
+});
+
+test('the person is on the right and the model on the left, each in its own colour', () => {
+  const css = chatPageHtml(state(), 'n0nce').split('<style>')[1].split('</style>')[0];
+
+  assert.match(ruleFor(css, '.msg.you'), /margin-left: auto/, 'the person is not on their own side');
+  assert.match(ruleFor(css, '.msg.you'), /border-right/, 'the person has no colour of their own');
+  assert.match(ruleFor(css, '.msg.model'), /border-left/, 'the model has no colour of its own');
+  assert.match(ruleFor(css, '.msg'), /max-width/, 'a line spans the whole tab, so the sides say nothing');
+  // The edge is the colour, not a filled box — the decision already shipped for the reviewer cards.
+  assert.doesNotMatch(ruleFor(css, '.msg.you'), /background/, 'the sides became filled boxes');
+});
+
+test('an answer ends with a rule, and the person\'s own message does not', () => {
+  const html = chatMessagesHtml([{ role: 'you', text: 'ask' }, { role: 'model', text: 'answer' }]);
+
+  assert.strictEqual((html.match(/<hr class="end">/g) ?? []).length, 1,
+    'the end rule is not exactly once, after the answer');
+  assert.ok(html.indexOf('<hr class="end">') > html.indexOf('answer'), 'the rule is not after the answer');
+});
+
+test('every answer carries a way to copy the markdown it arrived as', () => {
+  const html = chatMessagesHtml([{ role: 'you', text: 'ask' }, { role: 'model', text: '**answer**' }]);
+
+  assert.match(html, /<button type="button" class="copy" data-copy="1"/, 'an answer cannot be copied');
+  assert.strictEqual((html.match(/class="copy"/g) ?? []).length, 1, 'the person\'s own message got a copy control');
+});
+
+test('the prose is the editor\'s foreground and has room to breathe', () => {
+  const css = chatPageHtml(state(), 'n0nce').split('<style>')[1].split('</style>')[0];
+
+  // Scoped to the prose rather than reset on body: the chrome around it — inputs, the hint, the
+  // picker — belongs to `--vscode-foreground`, and a seam between the two is what a blanket
+  // override produces. (gemini, the plan round.)
+  assert.match(ruleFor(css, '.msg .what'), /var\(--vscode-editor-foreground\)/, 'the prose is the chrome colour');
+  assert.match(ruleFor(css, '.msg .what'), /line-height/, 'the lines have no room between them');
+  assert.doesNotMatch(ruleFor(css, '.msg.you .what'), /opacity/, 'the person\'s own words are dimmed');
+});
+
+test('a link posts to the host and never navigates the page itself', () => {
+  const page = runChatPage();
+  page.deliver({
+    type: 'state',
+    messagesHtml: '<div class="msg model"><div class="what">'
+      + '<a class="link" data-open="https://example.com">docs</a>'
+      + '<a class="link" data-file="src/a.ts" data-line="12">a.ts</a></div></div>',
+  });
+
+  page.fire('messages', 'click', { target: { closest: () => ({ dataset: { open: 'https://example.com' } }) } });
+  page.fire('messages', 'click', { target: { closest: () => ({ dataset: { file: 'src/a.ts', line: '12' } }) } });
+
+  const opened = page.posted.filter((message) => message['command'] === 'openLink');
+  assert.strictEqual(opened.length, 2, 'the page did not ask the host to open either link');
+  assert.deepStrictEqual(opened[0], { type: 'command', command: 'openLink', url: 'https://example.com' });
+  assert.deepStrictEqual(opened[1], { type: 'command', command: 'openLink', file: 'src/a.ts', line: 12 });
+});
+
+test('a copy control asks the host for the message it names', () => {
+  const page = runChatPage();
+  page.deliver({ type: 'state', messagesHtml: '<button type="button" class="copy" data-copy="3"></button>' });
+
+  page.fire('messages', 'click', { target: { closest: () => ({ dataset: { copy: '3' } }) } });
+
+  assert.deepStrictEqual(
+    page.posted.filter((message) => message['command'] === 'copyAnswer'),
+    [{ type: 'command', command: 'copyAnswer', index: 3 }],
+  );
+});

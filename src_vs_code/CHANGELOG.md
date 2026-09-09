@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+**Answers read like answers.** Headings were hashes, lists were dashes, code was backticks and a
+link was its own address in brackets — everything a model wrote as Markdown arrived as Markdown. It
+is rendered now: headings, numbered and bulleted lists that nest, code in a code face and in its own
+scrolling box, tables, quotes.
+
+**Links are blue and they work.** A web address opens in your browser; a file a model names opens in
+the editor at the line it named, if that file is really in this workspace — and if it is not, the tab
+says so instead of doing nothing. Anything else keeps the words and loses the link. An address a
+model merely mentioned in a sentence is not turned into a link at all.
+
+**You are on the right, the answer is on the left**, each behind an edge in its own colour, and a
+line closes every answer — so finding where one ends no longer means reading to the end of it.
+
+**Every answer can be copied as the Markdown it arrived as**, which is what you want when it goes
+into a plan or an issue. Selecting the page still gives you what the page shows.
+
+**The text is brighter and has room to breathe.** It was the colour of a button label, packed at the
+editor's interface size.
+
+## Unreleased
+
 **The box you type in stays where you put it.** It used to scroll away with the conversation, so
 asking a second question meant scrolling back down to find it. The composer, the model picker and
 the hint are pinned to the bottom of the tab now, the conversation scrolls above them, and there is

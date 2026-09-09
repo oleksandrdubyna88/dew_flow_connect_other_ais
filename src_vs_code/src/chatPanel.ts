@@ -63,6 +63,15 @@ export interface ChatPanelHooks {
   readonly onUseLocal: (id: object) => void;
   /** The page trapped an error, or the host failed to handle one of its messages. */
   readonly onPageError: (id: object, message: string) => void;
+  /**
+   * Copy the answer at `index` as the MARKDOWN it arrived as.
+   *
+   * <p>By index into the thread's own messages, which is the array the page was rendered from —
+   * turns are appended and never reordered, so the number identifies the same answer for as long as
+   * the tab lives. What is copied is the source, because that is the one thing a selection cannot
+   * give: selecting the page gives what the page shows.</p>
+   */
+  readonly onCopyAnswer: (id: object, index: number) => void;
 }
 
 /** Everything the page shows that can change after it is open. */
@@ -183,6 +192,44 @@ export function createChatPanel(
  * left here is the dispatch. That split exists because a wrong message type would otherwise have
  * shipped with every test green — a person's send quietly ignored. (codex, the plan round.)</p>
  */
+/**
+ * Open a file an ANSWER named, if it is really inside this workspace.
+ *
+ * <p>The renderer checked the shape and `chatCommandOf` checked it again, and neither is enough: a
+ * string can look confined and still leave through a symlink or a folder that is not where anyone
+ * thought. So the path is resolved against each workspace root and the RESULT is what is checked —
+ * and a reference that resolves nowhere is reported to the tab rather than opened somewhere else.</p>
+ */
+async function openWorkspaceFile(
+  id: object,
+  requested: string,
+  line: number,
+  hooks: ChatPanelHooks,
+): Promise<void> {
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    const target = vscode.Uri.joinPath(folder.uri, requested);
+    if (!target.path.startsWith(folder.uri.path)) {
+      continue;
+    }
+    try {
+      await vscode.workspace.fs.stat(target);
+    } catch {
+      continue;
+    }
+    const editor = await vscode.window.showTextDocument(target);
+    if (line > 0) {
+      const at = new vscode.Position(Math.max(0, line - 1), 0);
+      editor.revealRange(new vscode.Range(at, at), vscode.TextEditorRevealType.InCenter);
+      editor.selection = new vscode.Selection(at, at);
+    }
+
+    return;
+  }
+
+  // Said rather than swallowed: a link that quietly does nothing is a link a person presses twice.
+  hooks.onPageError(id, `there is no ${requested} in this workspace`);
+}
+
 async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): Promise<void> {
   const command = chatCommandOf(message);
   switch (command.kind) {
@@ -207,6 +254,21 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
       return;
     case 'stop':
       hooks.onStop(id, command.turn);
+
+      return;
+    case 'openLink':
+      // Handed to the editor, not navigated in the page: the webview has `localResourceRoots: []`
+      // and a CSP that loads nothing, so this is the only way out — and it is the way a person can
+      // see where they are going before they arrive.
+      await vscode.env.openExternal(vscode.Uri.parse(command.url));
+
+      return;
+    case 'openFile':
+      await openWorkspaceFile(id, command.path, command.line, hooks);
+
+      return;
+    case 'copyAnswer':
+      hooks.onCopyAnswer(id, command.index);
 
       return;
     case 'restart':

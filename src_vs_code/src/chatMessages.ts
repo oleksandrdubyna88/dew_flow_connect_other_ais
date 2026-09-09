@@ -27,6 +27,10 @@ export interface PageMessage {
   readonly delta?: unknown;
   readonly message?: unknown;
   readonly turn?: unknown;
+  readonly url?: unknown;
+  readonly file?: unknown;
+  readonly line?: unknown;
+  readonly index?: unknown;
 }
 
 export type ChatCommand =
@@ -52,6 +56,24 @@ export type ChatCommand =
   | { readonly kind: 'restart' }
   | { readonly kind: 'useLocal' }
   | { readonly kind: 'pageError'; readonly message: string }
+  /**
+   * A link in an ANSWER, which is text another vendor's model wrote.
+   *
+   * <p>The page emits no `href` at all — it names what it wants and the host decides — so this is
+   * the boundary, and it validates rather than trusts. Only `http` and `https` become an `openLink`;
+   * every other scheme, `javascript:` and `data:` and `file:` alike, is not a link this product
+   * opens on anybody's behalf.</p>
+   */
+  | { readonly kind: 'openLink'; readonly url: string }
+  /**
+   * A file reference in an answer, to be opened in the editor at a line.
+   *
+   * <p>Relative and confined, checked HERE and again against the real workspace root before anything
+   * is opened: a model writing `.git/config` or `../../.ssh/id_rsa` is not a hypothetical, and
+   * neither end of this is allowed to be the only one that says no.</p>
+   */
+  | { readonly kind: 'openFile'; readonly path: string; readonly line: number }
+  | { readonly kind: 'copyAnswer'; readonly index: number }
   | { readonly kind: 'ignore' };
 
 const IGNORE: ChatCommand = { kind: 'ignore' };
@@ -96,6 +118,37 @@ function turnOf(value: unknown): number {
 }
 
 /**
+ * A path this product will open on the strength of a model having written it.
+ *
+ * <p>Relative, no traversal, no drive letter, no scheme, no leading slash, and no backslash — a
+ * Windows separator is not how this repository names a file and accepting one is a second grammar to
+ * get wrong. The renderer applies the same shape before it emits the anchor; this is the boundary
+ * that matters, because the page is a surface and anything can post to it.</p>
+ *
+ * <p>It is deliberately NOT enough on its own: the caller resolves it against the real workspace
+ * root and checks the result is still inside. A string can be confined-looking and still escape
+ * through a symlink, which only the filesystem knows about.</p>
+ */
+export function isConfinedRelativePath(value: string): boolean {
+  if (value.length === 0 || value.length > 400) {
+    return false;
+  }
+  if (value.startsWith('/') || value.startsWith('\\') || value.includes('\\') || value.includes('..')) {
+    return false;
+  }
+  if (/^[A-Za-z]:/.test(value) || /^[a-z][a-z0-9+.-]*:/i.test(value)) {
+    return false;
+  }
+
+  return /^[\w./-]+$/.test(value);
+}
+
+/** The line a file reference names, or 0 for "the top" — never negative, never a fraction. */
+function lineOf(value: unknown): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : 0;
+}
+
+/**
  * One message, read.
  *
  * <p>An empty `send` is `ignore` rather than a send of nothing: the page already refuses to post one,
@@ -132,6 +185,24 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
       const turn = turnOf(message.turn);
 
       return turn === 0 ? IGNORE : { kind: 'stop', turn };
+    }
+    case 'openLink': {
+      const url = text(message.url);
+      if (url.length > 0) {
+        return /^https?:\/\/[^\s]+$/i.test(url) ? { kind: 'openLink', url } : IGNORE;
+      }
+      const path = text(message.file);
+
+      return isConfinedRelativePath(path)
+        ? { kind: 'openFile', path, line: lineOf(message.line) }
+        : IGNORE;
+    }
+    case 'copyAnswer': {
+      const index = message.index;
+
+      return typeof index === 'number' && Number.isSafeInteger(index) && index >= 0
+        ? { kind: 'copyAnswer', index }
+        : IGNORE;
     }
     case 'restart':
       return { kind: 'restart' };

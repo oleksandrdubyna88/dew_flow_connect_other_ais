@@ -1,7 +1,12 @@
 # module: extension — ConnectOtherAIs in VS Code
 
-> `src_vs_code` — the human surface. Four commands, zero runtime dependencies, no background work
+> `src_vs_code` — the human surface. Four commands, **one** runtime dependency, no background work
 > and **no port**: the review itself lives in `coai-mcp`, which an MCP client owns and starts.
+>
+> That line said *zero* runtime dependencies until 2026-09-09, and the one that ended it is `marked`
+> — see *An answer reads like a document* below. It was taken on the plan round's advice, against
+> this file's own preference, and the reason is written there rather than left as a version bump
+> somebody finds later.
 
 ### What the code round did to the chat tab (2026-09-08)
 
@@ -24,6 +29,51 @@ local model` the page would otherwise still show the remote one as selected whil
 somewhere else), a pushed state that has not changed is not sent at all, a `pick` naming a model the
 conversation was never offered is refused at the host boundary rather than trusted, and the
 composer takes focus back when a turn ends — without which every follow-up costs a mouse click.
+### An answer reads like a document (2026-09-09)
+
+A model's answer used to reach the page as `escapeHtml(text)` under `white-space: pre-wrap` — the
+raw characters, wrapped. `renderAnswer` renders it, and **the split inside that module is the whole
+design: `marked` tokenizes, and the emitting is ours.**
+
+**Why a dependency, in a file that advertised having none.** The alternative was widening
+`bodyHtml` (`helpPage.ts`), whose rule — *escape first, mark up second* — the chat page needs
+verbatim. Both reviewers on the plan round refused it, and the argument holds: as a REGEX pipeline
+that rule breaks on a fence containing entities (escaping the string first turns `<` into `&lt;`
+inside the code the reader is shown) and it cannot count nesting at all. What is needed is a lexer
+that hands back an AST, with escaping applied to the text LEAVES. So the tokenizer is bought and the
+safety is written.
+
+**Nothing marked would emit is used.** The renderer walks the token tree and emits a fixed list of
+tags and nothing else; a token it does not recognise becomes its own raw text, escaped. Raw HTML —
+`<script>`, an `onerror`, an `<iframe>` — is neither passed through nor dropped: it is escaped and
+SHOWN, because a model that wrote a tag meant to show one. An image renders as its words, since the
+page's CSP has no `img-src` and an `<img>` could only ever be a broken one.
+
+**No `href` is ever emitted.** A link becomes an anchor carrying `data-open` or `data-file`, and one
+delegated listener asks the HOST to act on it — so there is nothing for a `javascript:` URL to be.
+The host validates again: `chatCommandOf` refuses every scheme but `http`/`https`, refuses a path
+that is absolute, traversing, drive-lettered or backslashed, and `openWorkspaceFile` resolves what is
+left against each workspace root and checks the RESULT is still inside before opening it. A
+reference that resolves nowhere is reported to the tab rather than opened somewhere else. The page
+is a surface; the host is the boundary.
+
+**A bare address in prose is not a link.** GFM autolinks one, and this family has already shipped a
+defect of exactly that shape — a URL inside a person's name that GitHub made clickable. A link is a
+link only when the model typed the bracket.
+
+**What the reader sees.** `You` on the right behind a link-coloured edge, the model on the left
+behind a green one — an edge rather than a filled box, the decision already shipped for the reviewer
+cards. A rule closes each answer. A copy control on each answer hands back the markdown SOURCE,
+which is the one thing selecting the page cannot give. The prose takes
+`var(--vscode-editor-foreground)` and a line height — scoped to the prose, because the chrome around
+it belongs to `--vscode-foreground` and overriding that on `body` produces a seam rather than a
+brighter page.
+
+**The hostile-input file is this feature's safety**, and it is meant to grow: `renderAnswer.test.ts`
+asserts on the TAG NAMES that came out, against the allow-list, rather than on words like `onerror`
+— which would flag escaped text that merely mentions one, and would miss a hostile tag nobody
+thought of.
+
 ### The chat page's layout: one scrolling region, a pinned footer (2026-09-09)
 
 `chatPage.ts` renders two children of `body` and nothing else at the top level: `<main id="scroll">`

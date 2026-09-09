@@ -101,3 +101,53 @@ test('a stop naming something that is not a turn is refused, not applied to what
     );
   }
 });
+
+test('a link from an answer is opened only when it is http or https', () => {
+  assert.deepStrictEqual(
+    chatCommandOf({ type: 'command', command: 'openLink', url: 'https://example.com/a?b=1' }),
+    { kind: 'openLink', url: 'https://example.com/a?b=1' },
+  );
+  // The page emits no href at all, so this is the boundary — and the boundary is where a scheme is
+  // refused rather than where it is hoped nobody wrote one.
+  for (const url of ['javascript:alert(1)', 'data:text/html,<script>x</script>', 'vbscript:x',
+    'file:///etc/passwd', 'ftp://example.com', 'HTTPS:/broken', 'https://', '']) {
+    assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'openLink', url }),
+      { kind: 'ignore' }, `${url} was accepted as a link to open`);
+  }
+});
+
+test('a file reference from an answer is confined before anything opens it', () => {
+  assert.deepStrictEqual(
+    chatCommandOf({ type: 'command', command: 'openLink', file: 'src/a.ts', line: 12 }),
+    { kind: 'openFile', path: 'src/a.ts', line: 12 },
+  );
+  assert.deepStrictEqual(
+    chatCommandOf({ type: 'command', command: 'openLink', file: 'a.ts' }),
+    { kind: 'openFile', path: 'a.ts', line: 0 },
+  );
+
+  // A model writing `.git/config` or `../../.ssh/id_rsa` is not a hypothetical. The renderer refuses
+  // these too; a page is a surface, not a boundary, and anything can post to it.
+  for (const file of ['../a.ts', 'a/../b.ts', '/etc/passwd', 'C:/x/a.ts', 'C:\\x\\a.ts',
+    'src\\a.ts', 'file:///a.ts', 'https://e.com/a.ts', '']) {
+    assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'openLink', file }),
+      { kind: 'ignore' }, `${file} was accepted as a workspace file`);
+  }
+
+  // A line that is not a line is the top of the file, never a negative or a fraction.
+  for (const line of [-3, 1.5, Number.NaN, '12', undefined]) {
+    const command = chatCommandOf({ type: 'command', command: 'openLink', file: 'a.ts', line });
+    assert.deepStrictEqual(command, { kind: 'openFile', path: 'a.ts', line: 0 }, `line ${String(line)}`);
+  }
+});
+
+test('a copy names an answer by an index that is really an index', () => {
+  assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'copyAnswer', index: 3 }),
+    { kind: 'copyAnswer', index: 3 });
+  assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'copyAnswer', index: 0 }),
+    { kind: 'copyAnswer', index: 0 });
+  for (const index of [-1, 1.5, '2', undefined, Number.NaN]) {
+    assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'copyAnswer', index }),
+      { kind: 'ignore' }, `index ${String(index)} was accepted`);
+  }
+});
