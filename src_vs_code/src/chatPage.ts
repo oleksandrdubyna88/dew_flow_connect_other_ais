@@ -137,9 +137,12 @@ export function chatMessagesHtml(messages: readonly ChatMessage[]): string {
       // The copy control carries the INDEX, and the host reads the message out of the same array
       // this was rendered from - so what is copied is the markdown that arrived, which is the one
       // thing a selection cannot give: selecting the page gives what the page shows.
+      // Its OWN class. It used to be a `who` span inside the `who` row, so every rule written for
+      // the row — flex, gap, margin, opacity — landed on the label too, and the next person to change
+      // the row's layout would have moved the text with it. (gemini, the code round.)
       const said = !mine && message.model !== undefined && message.model.label.length > 0
-        ? `<span class="who ${modelClass(message.model.id)}">${escapeHtml(message.model.label)}</span>`
-        : `<span class="who">${mine ? 'You' : 'The other AI'}</span>`;
+        ? `<span class="author ${modelClass(message.model.id)}">${escapeHtml(message.model.label)}</span>`
+        : `<span class="author">${mine ? 'You' : 'The other AI'}</span>`;
       const copy = mine
         ? ''
         : `<button type="button" class="copy" data-copy="${index}" title="Copy this answer as Markdown">Copy</button>`;
@@ -194,15 +197,30 @@ export function chatCappedHtml(capped: boolean): string {
  * and is no longer offered gets no rule and falls back to the ordinary caption colour — which is
  * honest: the page cannot say what colour a vendor it has never been told about would have.</p>
  */
-function modelColours(models: readonly ChatModelChoice[]): string {
-  const colour = vendorPalette(models.map((model) => model.id));
+function modelColours(
+  models: readonly ChatModelChoice[],
+  messages: readonly ChatMessage[] = [],
+): string {
+  // Every model this page will SHOW, not only the ones it can still offer. Switching models carries
+  // the whole thread across — which is the feature this caption exists for — so a conversation
+  // routinely displays a model the picker has moved on from, and building the rules from the picker
+  // alone left those answers with a class and no rule. The ids are in the messages already.
+  const shown = [...new Set([
+    ...models.map((model) => model.id),
+    ...messages.flatMap((message) => (message.model === undefined ? [] : [message.model.id])),
+  ])].filter((id) => id.length > 0);
+  const colour = vendorPalette(shown);
 
-  return models
-    .map((model) => `  .msg .who.${modelClass(model.id)} { color: ${colour(model.id)}; opacity: 1; }`)
+  return shown
+    .map((id) => `  .msg .author.${modelClass(id)} { color: ${colour(id)}; opacity: 1; }`)
     .join('\n');
 }
 
-function chatStyle(uiScale: number, models: readonly ChatModelChoice[] = []): string {
+function chatStyle(
+  uiScale: number,
+  models: readonly ChatModelChoice[] = [],
+  messages: readonly ChatMessage[] = [],
+): string {
   // The zoom goes INSIDE the body rule, and that is not a tidiness preference. It used to sit above
   // it, where CSS has no such thing as a declaration: a parser consuming a qualified rule appends
   // every token to the prelude until it meets `{`, and `;` does not end one — so the selector became
@@ -285,7 +303,7 @@ function chatStyle(uiScale: number, models: readonly ChatModelChoice[] = []): st
   #send:hover:not([disabled]) { background: var(--vscode-button-hoverBackground); }
   #send[disabled] { opacity: .6; cursor: default; }
   .hint { font-size: .85em; opacity: .6; margin-top: 4px; }
-${modelColours(models)}
+${modelColours(models, messages)}
 ${ZOOM_CSS}`;
 }
 
@@ -825,7 +843,7 @@ export function chatPageHtml(state: ChatPageState, nonce: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(state.title)}</title>
 <style>
-${chatStyle(state.uiScale, state.models)}
+${chatStyle(state.uiScale, state.models, state.messages)}
 </style>
 </head>
 <body>

@@ -47,6 +47,15 @@ carries a class per model and `chatStyle` emits one rule per model the page know
 answered once and is no longer offered gets no rule and falls back to the ordinary caption colour,
 which is honest — the page cannot say what colour a vendor it has never been told about would have.
 
+**The rules are built from every model the page will SHOW, not only the ones it can still offer.**
+Switching models carries the whole thread across — which is the feature this caption exists for — so
+a conversation routinely displays a model the picker has moved on from, and building the rules from
+the picker alone left those answers with a class and no rule. The ids are in the messages already.
+
+**The caption is its own element.** It began as a `who` span inside the `who` row, which meant every
+rule written for the row — its flex, its gap, its margin, its opacity — landed on the label too, and
+the next person to change the row's layout would have moved the text with it without knowing why.
+
 The label comes from the picker, so the caption reads as the name a person chose from; a model the
 catalog has withdrawn is still named by its id, because what answered is a fact about the past.
 

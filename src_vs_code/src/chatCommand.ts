@@ -309,6 +309,9 @@ async function reopened(thread: Thread): Promise<string> {
  * <p>The question is appended BEFORE the turn is sent, so the page shows it while the model is
  * thinking — nine measured seconds of silence otherwise look like a tab that ignored a keypress.</p>
  */
+/** What a stopped turn leaves in the transcript, so it never ends on a dangling question. */
+const STOPPED_ANSWER = '(you stopped this answer)';
+
 async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   const thread = threads.get(entry.id);
   if (thread === undefined) {
@@ -831,9 +834,6 @@ async function openWorkspaceFile(
   refuse(`There is no ${requested} in this workspace.`);
 }
 
-/** What a stopped turn leaves in the transcript, so it never ends on a dangling question. */
-const STOPPED_ANSWER = '(you stopped this answer)';
-
 /**
  * Which model a turn was answered by, as the page will caption it.
  *
@@ -843,8 +843,11 @@ const STOPPED_ANSWER = '(you stopped this answer)';
  */
 function answeredBy(thread: Thread): AnsweredBy {
   const chosen = thread.models.find((model) => model.id === thread.modelId);
+  // An empty label is not a label. `??` keeps one, and the caption would then fall through to
+  // "The other AI" for a model whose id was known all along. (gemini, the code round.)
+  const named = chosen?.label.trim() ?? '';
 
-  return { id: thread.modelId, label: chosen?.label ?? thread.modelId };
+  return { id: thread.modelId, label: named.length > 0 ? named : thread.modelId };
 }
 
 /**
