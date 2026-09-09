@@ -168,4 +168,16 @@ public sealed class VendorsTests : IDisposable
         Vendors.AsSetting([new VendorConfig("codex", "codex", "gpt-5.6-luna")])
             .Should().NotContain("remoteVendor");
     }
+
+    [Fact]
+    public void ALocalVendorHoldingAStaleRemoteName_StillSaysNothingAboutIt()
+    {
+        // Vendors.Read preserves whatever a settings file carries, so a row that used to be remote
+        // can arrive local and still holding the name. Testing only the empty default left that
+        // branch unexercised, and it would have written the field back out — the same silent
+        // mismatch this change exists to end, pointing the other way. (CodeRabbit, on the PR.)
+        var stale = new VendorConfig("codex", "codex", "gpt-5.6-luna") { RemoteVendor = "stale" };
+
+        Vendors.AsSetting([stale]).Should().NotContain("remoteVendor");
+    }
 }

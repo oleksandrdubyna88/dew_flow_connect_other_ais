@@ -29,6 +29,11 @@ rounds where nothing reviewed anything still produced a full report with tables.
 
 ## Ten parallel rounds, from ONE account
 
+The command was 4 cases × `--repeat 3` = **twelve runs at `--parallel 10`**, so ten went out
+together and two followed as lanes freed. Everything below is the **ten that ran in parallel** —
+the measurement is about what one account does under simultaneous load, and the trailing two did
+not face it. They are not in any table here.
+
 | round | seconds |
 |---|---|
 | 1 | 79 |
@@ -37,8 +42,11 @@ rounds where nothing reviewed anything still produced a full report with tables.
 | 4 | 267 |
 | 5–10 | 295, 295, 299, 305, 305, 306 |
 
-Six of ten pinned at 295–306 s against a five-minute reviewer timeout: those reviewers ran out of
-time rather than answering.
+Six of ten pinned at 295–306 s, against a five-minute reviewer timeout — the bound they are sitting
+on. **What put them there is not one cause**, and the table below is the honest account of it: of the
+twelve reviewers that did not answer, seven were refused by the server with a **429**, three were
+still queued when the shim's own deadline passed, and only two were the reviewer's own timeout. A
+round takes the time of its slowest reviewer whichever of the three happened to it.
 
 | how many of the three answered | rounds |
 |---|---|
