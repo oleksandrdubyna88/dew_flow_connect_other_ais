@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ChatModelChoice, ChatPageState, chatCappedHtml, chatMessagesHtml, chatPageHtml, chatPickerHtml, chatStatusHtml } from '../chatPage';
+import { ChatModelChoice, ChatPageState, FOLLOW_SLACK_PX, chatCappedHtml, chatMessagesHtml, chatPageHtml, chatPickerHtml, chatStatusHtml, shouldFollow } from '../chatPage';
 
 /**
  * The page, as a string.
@@ -257,6 +257,8 @@ test('the text size the person chose is inside the body rule, so it applies befo
  */
 interface Fake {
   innerHTML: string;
+  /** Called when the page writes innerHTML — an insertion, which is what makes the region taller. */
+  onWrite?: (value: string) => void;
   textContent: string;
   hidden: boolean;
   value: string;
@@ -280,8 +282,15 @@ function emptyStyle(): Record<string, string> {
 }
 
 function fake(): Fake {
+  let written = '';
+
   return {
-    innerHTML: '', textContent: '', hidden: false, value: '', disabled: false, focused: 0,
+    get innerHTML() { return written; },
+    set innerHTML(value: string) {
+      written = value;
+      this.onWrite?.(value);
+    },
+    textContent: '', hidden: false, value: '', disabled: false, focused: 0,
     scrollTop: 0, clientHeight: 0, scrollHeight: 0, style: emptyStyle(), listeners: {},
     addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); },
     focus() { this.focused += 1; },
@@ -297,6 +306,23 @@ interface RunningPage {
   fire(id: string, type: string, event?: Record<string, unknown>): void;
   deliver(message: Record<string, unknown>): void;
   frames(): void;
+  /** Put the reader at the bottom of a page tall enough to have one, and make writes grow it. */
+  scrolledToBottom(): Fake;
+  /** Put the reader a screen above the bottom, same page. */
+  scrolledUp(): Fake;
+}
+
+/**
+ * An element whose content growing makes the SCROLLING REGION taller, which is what an arriving
+ * answer does. Without this the before/after ordering the gate flagged as blocking is invisible: a
+ * test whose scrollHeight never moves passes whichever side of the write the snapshot is taken.
+ */
+function growsTheRegion(region: Fake, by: number): (value: string) => void {
+  return (value: string) => {
+    if (value.length > 0) {
+      region.scrollHeight += by;
+    }
+  };
 }
 
 function runChatPage(over: Partial<ChatPageState> = {}): RunningPage {
@@ -343,9 +369,42 @@ function runChatPage(over: Partial<ChatPageState> = {}): RunningPage {
     (fn: () => void) => { pending.push(fn); },
   );
 
+  const region = () => {
+    // The page's own opening scroll has already happened by the time a reader scrolls anywhere, so
+    // run it out first. Leaving it queued would mean a test that positions a reader and then lets a
+    // frame run is watching the page OPEN, not the page follow.
+    for (const fn of pending.splice(0)) {
+      fn();
+    }
+    const scroll = document_.getElementById('scroll');
+    assert.ok(scroll, 'the page has no scrolling region');
+    scroll.clientHeight = 500;
+    scroll.scrollHeight = 2000;
+    for (const id of ['messages', 'thinking', 'capped', 'failure']) {
+      const written = document_.getElementById(id);
+      if (written) {
+        written.onWrite = growsTheRegion(scroll, 400);
+      }
+    }
+
+    return scroll;
+  };
+
   return {
     seen,
     posted,
+    scrolledToBottom() {
+      const scroll = region();
+      scroll.scrollTop = 1500;
+
+      return scroll;
+    },
+    scrolledUp() {
+      const scroll = region();
+      scroll.scrollTop = 200;
+
+      return scroll;
+    },
     fire(id, type, event = {}) {
       assert.ok(seen[id], `the page never asked for #${id}, so nothing is listening on it`);
       for (const fn of seen[id]?.listeners[type] ?? []) {
@@ -490,4 +549,107 @@ test('a locked composer posts nothing, however it is asked', () => {
 
   assert.strictEqual(page.posted.filter((message) => message['command'] === 'send').length, 0,
     'a locked composer sent a turn');
+});
+
+
+/* ------------------------------------------------------------------------------------------------
+ * Story 2: the decided scroll rule. Entry 23 of the operator's bug list, settled on 2026-09-09 and
+ * implemented ONCE here, because three separate fixes each deciding it their own way is how a page
+ * ends up behaving differently depending on which of them you provoked.
+ * ---------------------------------------------------------------------------------------------- */
+
+test('shouldFollow: at the bottom follows, within the slack follows, a screen up does not', () => {
+  // The boundary is a number, not "a line or two" — the gate asked for exactly that. 48px is about
+  // two lines at the base size and three at the largest zoom step, and it is a constant rather than
+  // something derived from the font, because a reader one pixel short of the bottom considers
+  // themselves at the bottom whatever size they read at.
+  assert.strictEqual(FOLLOW_SLACK_PX, 48);
+
+  const at = (top: number) => shouldFollow(top, 500, 1000, FOLLOW_SLACK_PX);
+  assert.strictEqual(at(500), true, 'the reader was exactly at the bottom');
+  assert.strictEqual(at(452), true, 'the reader was inside the slack');
+  assert.strictEqual(at(451), false, 'one pixel past the slack still followed');
+  assert.strictEqual(at(0), false, 'a reader a screen up was yanked to the bottom');
+
+  // Overscroll, and a page with nothing to scroll, are both "at the bottom".
+  assert.strictEqual(shouldFollow(600, 500, 1000, 48), true, 'overscroll did not count as the bottom');
+  assert.strictEqual(shouldFollow(0, 500, 300, 48), true, 'a page shorter than its viewport did not follow');
+
+  // A page that cannot measure itself is a page whose reader has not scrolled: follow.
+  assert.strictEqual(shouldFollow(Number.NaN, 500, 1000, 48), true, 'an unmeasurable page refused to follow');
+});
+
+test('the page runs the shouldFollow the tests ran, and the slack they share', () => {
+  // The rounds log learned this twice: a function referenced only from a template string is a
+  // function the minifier renames out from under the page. Embedding the source is what makes the
+  // tested function and the shipped function the same one.
+  const script = chatPageHtml(state(), 'n0nce').split('<script nonce="n0nce">')[1];
+
+  assert.ok(script.includes(shouldFollow.toString()), 'the page does not run the tested shouldFollow');
+  assert.ok(script.includes(String(FOLLOW_SLACK_PX)), 'the page does not use the tested slack');
+});
+
+test('the at-bottom decision is taken before anything is inserted, on every path', () => {
+  // The blocking finding: scrollHeight read AFTER a write is the height including the write, so a
+  // reader who was at the bottom reads as "not at the bottom" and is never followed — rule 2 turns
+  // silently into "never follow". Each region is pushed on its own, because each is an insertion.
+  for (const push of ['messagesHtml', 'thinkingHtml', 'cappedHtml', 'failureHtml']) {
+    const page = runChatPage();
+    const scroll = page.scrolledToBottom();
+
+    page.deliver({ type: 'state', [push]: '<p>an answer</p>' });
+    page.frames();
+
+    assert.strictEqual(scroll.scrollTop, scroll.scrollHeight,
+      `a reader at the bottom was not followed when ${push} arrived`);
+  }
+});
+
+test('a reader who scrolled up is left where they were, on every path', () => {
+  for (const push of ['messagesHtml', 'thinkingHtml', 'cappedHtml', 'failureHtml']) {
+    const page = runChatPage();
+    const scroll = page.scrolledUp();
+
+    page.deliver({ type: 'state', [push]: '<p>an answer</p>' });
+    page.frames();
+
+    assert.strictEqual(scroll.scrollTop, 200, `a reader was yanked to the bottom when ${push} arrived`);
+  }
+});
+
+test('the follow happens after layout, not in the tick that inserted the content', () => {
+  // Setting scrollTop in the same tick as the write scrolls to a height the browser has not laid
+  // out yet, which lands short. The scroll is handed to the next frame.
+  const page = runChatPage();
+  const scroll = page.scrolledToBottom();
+
+  page.deliver({ type: 'state', messagesHtml: '<p>an answer</p>' });
+  assert.strictEqual(scroll.scrollTop, 1500, 'the page scrolled inside the tick that inserted');
+
+  page.frames();
+  assert.strictEqual(scroll.scrollTop, scroll.scrollHeight, 'the page never scrolled after layout');
+});
+
+test('a state that inserts nothing does not scroll a reader anywhere', () => {
+  const page = runChatPage();
+  const scroll = page.scrolledUp();
+
+  page.deliver({ type: 'state', running: true, capped: false });
+  page.frames();
+
+  assert.strictEqual(scroll.scrollTop, 200, 'a state with no insertion moved the page');
+});
+
+test('on open the page lands on the last message, and again once the fonts have settled', () => {
+  // Rule 1, and the second blocking finding: scrolling at script time lands mid-page, because the
+  // heights are not final until the fonts are. Immediately, then after layout, then after the fonts
+  // — idempotent, so three calls cost nothing and the first paint is already close.
+  const page = runChatPage({ messages: [{ role: 'model', text: 'the last thing said' }] });
+  const scroll = page.seen['scroll'];
+  assert.ok(scroll, 'the page has no scrolling region');
+
+  // The page scrolled once at script time, before any of this test ran.
+  scroll.scrollHeight = 3000;
+  page.frames();
+  assert.strictEqual(scroll.scrollTop, 3000, 'the page did not land on the last message after layout');
 });
