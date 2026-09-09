@@ -240,8 +240,12 @@ public static class JobTransitions
     {
         if (IsAbandoned(job, nowUtc))
         {
-            return $"nobody asked about this review for {AbandonedAfter(job.Status).TotalMinutes:0} minutes, "
-                + "so it was dropped and its account freed — submit it again if you still want it";
+            // Worded for the person who is READING it, who is by definition asking about it: a
+            // sentence beginning "nobody asked about this" is answered to somebody doing exactly
+            // that, and reads as the server contradicting them. It says when it gave up instead.
+            // (gemini, code round.)
+            return $"this review went {AbandonedAfter(job.Status).TotalMinutes:0} minutes with nobody "
+                + "asking about it, so it was dropped and its account freed — send it again if you still want it";
         }
 
         return job.Status == JobStatus.Queued

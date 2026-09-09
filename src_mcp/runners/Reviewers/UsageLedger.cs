@@ -4,6 +4,33 @@ using CoaiMcp.Runners.Reviewers;
 
 namespace CoaiMcp.Runners.Reviewers;
 
+/// <summary>
+/// What a recorded run WAS, as the ledger spells it.
+/// </summary>
+/// <remarks>
+/// <para>The names live HERE, in the library both halves compile against, rather than only in the
+/// server's own <c>JobKind</c> — which the ledger cannot see, because the dependency runs
+/// server → mcp and not back. Two vocabularies for one field is how a writer and a reader come to
+/// disagree about what a spending row means, and the reader's fallback ("anything I do not know is a
+/// review") would hide the disagreement rather than report it. A test in <c>src_server</c> asserts
+/// the server's enum spells exactly these. (codex, code round.)</para>
+/// <para><b>An unknown value is still WRITTEN.</b> A ledger line is history: refusing one because a
+/// newer producer used a word this build has not heard would lose a run that already happened and
+/// already cost money, which is the one thing a spending record must never do.</para>
+/// </remarks>
+public static class UsageKinds
+{
+    public const string Review = "review";
+    public const string Chat = "chat";
+
+    /// <summary>Every kind this build knows how to name. Order is the order a report reads best in.</summary>
+    public static IReadOnlyList<string> Known { get; } = [Review, Chat];
+
+    /// <summary>Whether a non-empty kind is one this build knows. Empty is "not said", which is fine.</summary>
+    public static bool IsKnown(string kind) =>
+        kind.Length == 0 || Known.Contains(kind, StringComparer.Ordinal);
+}
+
 /// <summary>One reviewer run, as it will be counted forever.</summary>
 /// <param name="Outcome">`ok` or the failure's own name — a round that cost money without
 /// answering is exactly what a spending record must not hide.</param>

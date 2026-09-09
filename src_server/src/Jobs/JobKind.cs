@@ -63,7 +63,22 @@ public static class JobKinds
             return true;
         }
 
-        return Enum.TryParse(said.Trim(), ignoreCase: true, out kind) && Enum.IsDefined(kind);
+        // The NAMES, matched explicitly. `Enum.TryParse` also accepts the underlying numbers, so
+        // `kind: "1"` would have arrived as a chat and `kind: "0"` as a review — values no contract
+        // mentions, from a caller who cannot have meant them, deciding what a spending row says.
+        // (codex, code round.)
+        var named = said.Trim();
+        foreach (var known in Enum.GetValues<JobKind>())
+        {
+            if (Wire(known).Equals(named, StringComparison.OrdinalIgnoreCase))
+            {
+                kind = known;
+
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Whether the caller said anything at all about what this job is.</summary>

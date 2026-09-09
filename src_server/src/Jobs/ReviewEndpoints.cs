@@ -64,7 +64,9 @@ public static class ReviewEndpoints
                 Fingerprint: key.Length == 0
                     ? string.Empty
                     : Idempotency.Fingerprint(
-                        request.Vendor, request.Model, role, request.Prompt, kind, request.TimeoutSeconds)));
+                        caller.Email, request.Vendor, request.Model, role, request.Prompt, kind,
+                        request.TimeoutSeconds)),
+                now);
 
             if (refused == SubmitRefusal.KeyUsedForSomethingElse)
             {

@@ -31,6 +31,38 @@ sequenceDiagram
   P->>P: token → <dataDir>/servers/<hash>.token
 ```
 
+And one job, from the submit to whichever way it ends — the two paths added on 2026-09-09 marked:
+
+```mermaid
+sequenceDiagram
+  participant C as A client
+  participant S as coai-server
+  participant J as JobStore
+  participant V as A vendor CLI
+  C->>S: POST /api/reviews { kind?, idempotencyKey? }
+  Note over S: kind × role checked, key checked for shape
+  S->>J: Submit(job, now)
+  alt this key already made a live job
+    J-->>S: that job
+    Note over S,J: a retry, answered with the first job
+  else that job has run out of its clock
+    J->>J: Expire it, then queue the new one
+  end
+  S-->>C: 202 { id, position }
+  loop until it answers, fails, or nobody asks
+    C->>S: GET /api/reviews/{id}?wait=n
+    S->>J: Polled(id, email, now)
+    alt any clock has run out
+      J->>V: cancel the token
+      J-->>S: Failed, saying WHICH clock
+    else still alive
+      J->>J: stamp LastPolledUtc
+    end
+    S-->>C: the status
+  end
+  Note over J,V: the sweep takes the same Expire path on a timer,<br/>so a job nobody polls at all still frees its account
+```
+
 **The order is the design**, and each step is a defect somebody already paid for:
 
 | Step | Why it is there, and why it is HERE |

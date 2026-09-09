@@ -456,3 +456,97 @@ test('a client that sends no key sends no field, rather than an empty one', () =
   const with_ = requestBody('claude', 'm', 'p', 60, 'turn-1');
   assert.strictEqual(with_['idempotencyKey'], 'turn-1');
 });
+
+test('the person retrying a failed turn carries the SAME key, which is the whole point', async () => {
+  // A key minted per `send` is a key minted per ATTEMPT, and the attempt this exists for is the
+  // second one. The POST arrives, the job is accepted, its answer is lost; the person presses send
+  // again on the same question — and with a fresh key the server has no way to know it is the same
+  // question and makes a second paid job. (codex, the code round, twice.)
+  const submitted: Record<string, unknown>[] = [];
+  let refuse = true;
+  const transport: RemoteTransport = {
+    submit: async (body) => {
+      submitted.push(body);
+      const failing = refuse;
+      refuse = false;
+
+      return failing
+        ? { body: undefined, failure: 'the connection went away', status: 0 }
+        : { body: { id: 'review-1' }, failure: '', status: 202 };
+    },
+    poll: async () => ({ body: answered('at last'), failure: '', status: 200 }),
+    cancel: async () => undefined,
+  };
+  let minted = 0;
+  const session = new RemoteChatSession(
+    transport, vendor, BUDGETS, AT_ONCE, Date.now, () => `turn-${(minted += 1)}`,
+  );
+
+  const failed = await session.send('explain this');
+  assert.ok(!failed.ok, 'the first attempt was supposed to fail');
+  const answeredTurn = await session.send('explain this');
+  assert.ok(answeredTurn.ok);
+
+  assert.strictEqual(submitted.length, 2);
+  assert.strictEqual(
+    submitted[1]?.['idempotencyKey'],
+    submitted[0]?.['idempotencyKey'],
+    'the retry minted a new key, so the server would have made a second paid job',
+  );
+  assert.strictEqual(minted, 1, 'only the first attempt needed a key');
+});
+
+test('a DIFFERENT question after a failure is a new turn, with a new key', async () => {
+  // The kept key belongs to that question. A new one is a new turn, and the server would refuse the
+  // old key for it anyway — it binds a key to a fingerprint of what was asked.
+  const submitted: Record<string, unknown>[] = [];
+  let refuse = true;
+  const transport: RemoteTransport = {
+    submit: async (body) => {
+      submitted.push(body);
+      const failing = refuse;
+      refuse = false;
+
+      return failing
+        ? { body: undefined, failure: 'gone', status: 0 }
+        : { body: { id: 'review-1' }, failure: '', status: 202 };
+    },
+    poll: async () => ({ body: answered('ok'), failure: '', status: 200 }),
+    cancel: async () => undefined,
+  };
+  let minted = 0;
+  const session = new RemoteChatSession(
+    transport, vendor, BUDGETS, AT_ONCE, Date.now, () => `turn-${(minted += 1)}`,
+  );
+
+  await session.send('the first question');
+  await session.send('a different question');
+
+  assert.notStrictEqual(submitted[1]?.['idempotencyKey'], submitted[0]?.['idempotencyKey']);
+  assert.strictEqual(minted, 2);
+});
+
+test('a turn that was ACCEPTED leaves no key to reuse', async () => {
+  // From there the id identifies the turn, and the next question is a new one. Keeping the key would
+  // make an identical follow-up return the earlier answer instead of asking again.
+  const submitted: Record<string, unknown>[] = [];
+  const server = fakeServer([{ body: answered('one') }]);
+  const transport: RemoteTransport = {
+    ...server.transport,
+    submit: async (body) => {
+      submitted.push(body);
+
+      return server.transport.submit(body);
+    },
+  };
+  let minted = 0;
+  const session = new RemoteChatSession(
+    transport, vendor, BUDGETS, AT_ONCE, Date.now, () => `turn-${(minted += 1)}`,
+  );
+
+  await session.send('same words');
+  await session.send('same words');
+
+  assert.notStrictEqual(submitted[1]?.['idempotencyKey'], submitted[0]?.['idempotencyKey']);
+  assert.strictEqual(minted, 2);
+});

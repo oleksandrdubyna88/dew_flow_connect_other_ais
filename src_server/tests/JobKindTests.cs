@@ -1,3 +1,4 @@
+using CoaiMcp.Runners.Reviewers;
 using CoaiServer;
 using FluentAssertions;
 using Xunit;
@@ -80,5 +81,37 @@ public sealed class JobKindTests
     {
         JobKinds.Wire(JobKind.Review).Should().Be("review");
         JobKinds.Wire(JobKind.Chat).Should().Be("chat");
+    }
+
+    [Fact]
+    public void ANumberIsNotAKindHoweverWellItParses()
+    {
+        // Enum.TryParse also accepts the underlying numbers, so a kind of "1" arrived as a chat and
+        // "0" as a review — values no contract mentions, from a caller who cannot have meant them,
+        // deciding what a spending row says. (codex, the code round.)
+        foreach (var number in new[] { "0", "1", "-1", "99" })
+        {
+            JobKinds.TryRead(number, out _).Should().BeFalse(number);
+            JobKinds.Refusal(number, null).Should().Contain("not a kind of job", number);
+        }
+    }
+
+    [Fact]
+    public void TheServerAndTheLedgerSpellTheKindsTheSameWay()
+    {
+        // Two vocabularies for one field is how a writer and a reader come to disagree about what a
+        // spending row means — and the reader mapping anything it does not know to "review" would
+        // HIDE that disagreement rather than report it. The ledger lives in src_mcp, which cannot
+        // see this enum, so the two are held together here. (codex, the code round.)
+        Enum.GetValues<JobKind>().Select(JobKinds.Wire)
+            .Should().BeEquivalentTo(UsageKinds.Known);
+
+        foreach (var kind in Enum.GetValues<JobKind>())
+        {
+            UsageKinds.IsKnown(JobKinds.Wire(kind)).Should().BeTrue(JobKinds.Wire(kind));
+        }
+
+        UsageKinds.IsKnown("").Should().BeTrue("an empty kind is a line that did not say, which is fine");
+        UsageKinds.IsKnown("rehearsal").Should().BeFalse();
     }
 }
