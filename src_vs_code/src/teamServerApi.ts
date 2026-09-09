@@ -55,11 +55,19 @@ function contractOf(response: Response): number | undefined {
     return 0;
   }
 
-  // `v2`, `beta`, or anything a proxy invented: something is answering that is not this server, and
-  // reporting it as ancient would be a guess dressed as a fact.
-  const parsed = Number(said);
+  // Canonical decimal digits or nothing. `Number()` alone would have accepted the whole zoo a proxy
+  // can put on a wire — `Number('')` and `Number(' ')` are BOTH 0, which is the one wrong answer
+  // available here: an empty header would have been read as "this server is ancient" and warned
+  // about a healthy one. `0x10` is 16 and `1e2` is 100 for good measure. Anything that is not plain
+  // digits is something other than this server answering, and a guess dressed as a fact is worse
+  // than saying nothing. Raised by four reviewers on the code round.
+  if (!/^\d+$/.test(said.trim())) {
+    return undefined;
+  }
 
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
+  const parsed = Number.parseInt(said.trim(), 10);
+
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
 }
 
 /**
@@ -153,6 +161,9 @@ export async function ask<T>(
 
   const controller = new AbortController();
   const deadline = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  // What the server said about itself, if it got as far as saying anything. Held outside the `try`
+  // so a failure AFTER the response arrived still carries it.
+  let spoken: number | undefined;
   const headers: Record<string, string> = { [CONTRACT_HEADER]: String(CONTRACT_VERSION) };
   if (attempt.token !== undefined && attempt.token.length > 0) {
     headers['Authorization'] = `Bearer ${attempt.token}`;
@@ -177,21 +188,25 @@ export async function ask<T>(
       request.body = JSON.stringify(attempt.body);
     }
     const response = await send(teamServerEndpoint(url, route), request);
+    // Read BEFORE the body. `response.text()` can throw on a truncated or mis-encoded payload, and
+    // the catch arm below would then answer `undefined` for a server that had already said what it
+    // speaks — losing the number on exactly the call that most wants it.
+    spoken = contractOf(response);
     const text = await response.text();
     if (!response.ok) {
-      return { ok: false, status: response.status, contract: contractOf(response), message: said(text, response.status) };
+      return { ok: false, status: response.status, contract: spoken, message: said(text, response.status) };
     }
 
     return {
       ok: true,
       status: response.status,
-      contract: contractOf(response),
+      contract: spoken,
       value: (text.length > 0 ? JSON.parse(text) : {}) as T,
     };
   } catch (e) {
     // Includes the deadline: an aborted request is a server that did not answer, which is exactly
     // what a person needs told, and is not different in kind from one that refused the connection.
-    return { ok: false, status: 0, contract: undefined, message: reason(e) };
+    return { ok: false, status: 0, contract: spoken, message: reason(e) };
   } finally {
     clearTimeout(deadline);
   }

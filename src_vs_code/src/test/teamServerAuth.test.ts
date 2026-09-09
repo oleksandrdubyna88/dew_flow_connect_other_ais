@@ -448,7 +448,7 @@ test('a bearer token cannot travel over plain http, whatever the call', async ()
     const counting = (async () => {
       sent += 1;
 
-      return { ok: true, status: 200, text: async () => '{}' } as Response;
+      return { ok: true, status: 200, headers: new Headers(), text: async () => '{}' } as Response;
     }) as typeof fetch;
     const insecure = { ...SERVER, url: 'http://coai.example.com' };
 

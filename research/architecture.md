@@ -78,6 +78,24 @@ throughout, which is the property this section is about: a seam neither containe
 neither container's tests reach. Recorded, with the fix, in
 [PLAN_team_server_reviewer_never_called.md](PLAN_team_server_reviewer_never_called.md).
 
+### A version that rides in both directions (2026-09-09)
+
+The extension↔Team-server seam has a version of its own — `X-Coai-Contract`, an integer on every
+request AND every response — and it is the seam's only self-describing part. The server has judged
+the client's number since it shipped, refusing a client below `Coai:MinimumClientContract` with 426
+rather than serving one whose expectations it can no longer meet.
+
+Until 2026-09-09 the other direction was written but not read. `ContractVersion`'s own remarks name
+the client's check as "the right place to decide" what to do about a server that is behind, and the
+extension sent its number and discarded the answer. It reads it now
+([PLAN_the_client_reads_the_contract_back.md](PLAN_the_client_reads_the_contract_back.md)), which
+makes this the first crossing where BOTH halves can describe themselves to the other.
+
+The asymmetry in what they do about it is deliberate and worth stating at this level: the server
+REFUSES, because serving a client it cannot satisfy corrupts state; the panel REPORTS, because a
+client that refused a server it merely suspects would turn a warning into an outage. Same fact, two
+different powers, decided by which side can do damage by continuing.
+
 ### A setting whose ABSENCE must mean something (2026-09-08)
 
 `COAI_ENABLED_<ROLE>` crosses the same seam and is shaped by the same lesson, pushed one step
