@@ -1660,10 +1660,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // recorded on this server", which is a measurement, not an absence of one.
       problem: problem.length > 0 ? problem : (spent.ok ? '' : spent.message),
       stale: answer.ok ? false : known?.catalog !== undefined,
-      // Only when an HTTP response actually arrived. `undefined` means the call never reached a
-      // server — a timeout, a refused connection, a URL that is not https — and recording that as
-      // "this server named nothing" would report every network blip as a server too old to talk to.
-      contract: answer.contract ?? known?.contract,
+      // From WHICHEVER call reached the server: the header rides every response, so a catalog call
+      // that failed to connect while the usage call got through still leaves the row knowing what it
+      // is talking to. Only when an HTTP response actually arrived — `undefined` means the call never
+      // reached a server (a timeout, a refused connection, a URL that is not https), and recording
+      // that as "this server named nothing" would report every network blip as a server too old.
+      contract: answer.contract ?? spent.contract ?? known?.contract,
     };
   }
 

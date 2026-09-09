@@ -468,7 +468,7 @@ test('nothing to do is answered without touching the network', async () => {
     const counting = (async () => {
       called += 1;
 
-      return { ok: true, status: 200, text: async () => '{}' } as Response;
+      return { ok: true, status: 200, headers: new Headers(), text: async () => '{}' } as Response;
     }) as typeof fetch;
 
     const action = await plannedAction(

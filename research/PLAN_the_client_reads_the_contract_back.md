@@ -112,6 +112,12 @@ lifetime to reason about).
   carries the same header from the same server — but if a Team server ever fronts more than one
   version behind a load balancer, the row would report whichever answered most recently rather than
   the range.
+- The response fixtures in `teamServerAuth.test.ts` and `teamServerSide.test.ts` still build a
+  `Response` by hand and cast it. They now carry `headers`, which is what their absence broke, but
+  `typescript/doctrine.md` asks for a typed factory or a note on the interface, and `Response` is a
+  DOM lib type nobody here can annotate. A single documented factory per file is the fix; attempting
+  it inside this branch cut through the files own constants and broke six tests, so it is its own
+  change.
 - Nothing yet READS `SERVER_CONTRACT_REQUIRED` except the note. The day a panel feature genuinely
   needs a newer server, raising the constant is the whole change — which is the property this was
   built for, and the reason it ships while it is still quiet.

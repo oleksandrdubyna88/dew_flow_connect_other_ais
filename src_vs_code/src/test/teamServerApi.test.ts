@@ -283,3 +283,43 @@ test('a header that is not a number is unknown, never legacy', async () => {
 
   assert.strictEqual(answer.contract, undefined);
 });
+
+test('a header that is not plain digits is unknown, whatever Number() would make of it', async () => {
+  // `Number('')` and `Number(' ')` are both 0, which is the one wrong answer available here: an
+  // empty header would be read as "this server is ancient" and warn about a healthy one. `0x10` is
+  // 16 and `1e2` is 100 for good measure. Raised by four reviewers on the code round.
+  for (const said of ['', ' ', '0x10', '1e2', '1.0', 'v2', '-1', ' 1 x']) {
+    const fetchImpl = stub(() => ({ status: 200, body: '{}', headers: { [CONTRACT_HEADER]: said } }));
+
+    const answer = await ask('https://s', 'api/catalog', { fetchImpl });
+
+    assert.strictEqual(answer.contract, undefined, `'${said}' must be unreadable, not a version`);
+  }
+
+  const spaced = await ask('https://s', 'api/catalog', {
+    fetchImpl: stub(() => ({ status: 200, body: '{}', headers: { [CONTRACT_HEADER]: ' 2 ' } })),
+  });
+  assert.strictEqual(spaced.contract, 2, 'surrounding space is not a lie');
+
+  const zero = await ask('https://s', 'api/catalog', {
+    fetchImpl: stub(() => ({ status: 200, body: '{}', headers: { [CONTRACT_HEADER]: '0' } })),
+  });
+  assert.strictEqual(zero.contract, 0, 'and a real zero still reads as zero');
+});
+
+test('a body that cannot be read keeps the number the server already gave', async () => {
+  // `response.text()` throws on a truncated payload, and the catch arm would otherwise answer
+  // `undefined` for a server that had already said what it speaks — losing it on the call that
+  // most wants it.
+  const fetchImpl = (async () => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({ [CONTRACT_HEADER]: '4' }),
+    text: async () => { throw new Error('unexpected end of body'); },
+  }) as unknown as Response) as typeof fetch;
+
+  const answer = await ask('https://s', 'api/catalog', { fetchImpl });
+
+  assert.strictEqual(answer.ok, false);
+  assert.strictEqual(answer.contract, 4);
+});
