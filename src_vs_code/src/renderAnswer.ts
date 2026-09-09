@@ -65,7 +65,14 @@ export const SUPPORTED = [
   'file-reference',
 ] as const;
 
-/** A file reference the page may turn into a click. See {@link fileHref}. */
+/**
+ * A file reference the PAGE may turn into a click — `path#L12` or `path:12`.
+ *
+ * <p>It requires an extension, so a bare word is not a file, and it refuses anything that is not
+ * made of path characters. A traversal like `../../etc/passwd` fails it for want of an extension,
+ * which is the answer this renderer wants anyway: the host refuses `..` when it resolves a path, and
+ * a renderer that OFFERED the click would be inviting a refusal.</p>
+ */
 const FILE_REFERENCE = /^(?!https?:)([\w./\\-]+\.\w{1,12})(?:#L(\d{1,7})|:(\d{1,7}))$/;
 
 /**
@@ -128,10 +135,14 @@ function blocksOf(markdown: string): Block[] {
       const [, marker = '```', language = ''] = fence;
       const body: string[] = [];
       at += 1;
+      // Compiled ONCE, outside the loop. It was being rebuilt for every line of the block, which is
+      // a fresh regex compilation per line of a model's five-thousand-line log paste, on the
+      // extension host's thread. (gemini, the code round.)
+      const closing = new RegExp(`^\\s*${marker[0] === '`' ? '`' : '~'}{3,}\\s*$`);
       // An UNCLOSED fence runs to the end of the answer rather than being abandoned. A model that
       // stops mid-block is the ordinary case while an answer is still arriving, and dropping the
       // text would hide what it had already said.
-      while (at < lines.length && !new RegExp(`^\\s*${marker[0] === '`' ? '`' : '~'}{3,}\\s*$`).test(lines[at] ?? '')) {
+      while (at < lines.length && !closing.test(lines[at] ?? '')) {
         body.push(lines[at] ?? '');
         at += 1;
       }
@@ -196,7 +207,10 @@ function listAt(lines: readonly string[], from: number): { block: Block; next: n
   const first = bulletOf(lines[from] ?? '');
   const ordered = first?.ordered === true;
   const baseIndent = first?.indent ?? 0;
-  const items: Item[] = [];
+  // Built with a mutable child array per item rather than by cloning the parent's children and
+  // popping-and-repushing it on every nested line, which copied the array once per child and cost
+  // O(N²) on a long checklist. (gemini, the code round.)
+  const items: { text: string; ordered: boolean; children: Item[] }[] = [];
   let at = from;
 
   while (at < lines.length) {
@@ -205,17 +219,24 @@ function listAt(lines: readonly string[], from: number): { block: Block; next: n
       break;
     }
     if (bullet.indent > baseIndent) {
-      const children = items.length > 0 ? [...(items[items.length - 1]?.children ?? [])] : [];
-      children.push({ text: bullet.text, children: [], ordered: bullet.ordered });
-      const last = items.pop();
-      items.push({ text: last?.text ?? '', children, ordered: last?.ordered ?? ordered });
+      const parent = items[items.length - 1];
+      if (parent === undefined) {
+        break;
+      }
+      parent.children.push({ text: bullet.text, children: [], ordered: bullet.ordered });
       at += 1;
       continue;
     }
     if (bullet.indent < baseIndent) {
       break;
     }
-    items.push({ text: bullet.text, children: [], ordered: bullet.ordered });
+    // A DIFFERENT delimiter at the same indent starts a different list. `1. one` followed by
+    // `- two` with no blank line is two lists, and swallowing the second put an unordered item
+    // inside an <ol>. (gemini, the code round.)
+    if (bullet.ordered !== ordered) {
+      break;
+    }
+    items.push({ text: bullet.text, ordered: bullet.ordered, children: [] });
     at += 1;
   }
 
@@ -307,9 +328,25 @@ function inline(text: string): string {
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*\w])\*([^*\s][^*]*)\*(?=$|[^*\w])/g, '$1<em>$2</em>');
 
-  // 5. Put the held constructs back, now that no rule can run over them.
-  return emphasised.replace(new RegExp(`${MARK}(\\d+)${MARK}`, 'g'), (_whole, index: string) =>
-    held[Number(index)] ?? '');
+  // 5. Put the held constructs back, REPEATEDLY, until none is left.
+  //
+  //    A single pass is not enough, and the code round found the case: a code span inside a link
+  //    LABEL is held first, then the link is held with that placeholder inside it, so one pass over
+  //    the outer string restores the link and leaves the span's placeholder sitting inside it —
+  //    four raw control characters on the page, and the code span lost. The loop is bounded by the
+  //    number of held constructs, because each pass consumes at least one and no pass can add one.
+  //    (gemini, the code round.)
+  const marker = new RegExp(`${MARK}(\\d+)${MARK}`, 'g');
+  let out = emphasised;
+  for (let pass = 0; pass <= held.length; pass += 1) {
+    const next = out.replace(marker, (_whole, index: string) => held[Number(index)] ?? '');
+    if (next === out) {
+      break;
+    }
+    out = next;
+  }
+
+  return out;
 }
 
 /**
@@ -344,9 +381,4 @@ function links(text: string, hold: (rendered: string) => string): string {
 
     return whole;
   });
-}
-
-/** What the page should put on a resolved file link. Exported so the page cannot invent its own. */
-export function fileHref(path: string, line: string): string {
-  return `${path}#L${line}`;
 }

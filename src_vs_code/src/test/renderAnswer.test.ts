@@ -241,3 +241,44 @@ test('the colon form of a file reference works too', () => {
   assert.match(html, /data-file="src\/chatPage\.ts"/);
   assert.match(html, /data-line="42"/);
 });
+
+test('a code span inside a link label survives, and no sentinel reaches the page', () => {
+  // The code round found this and it was real: code spans are held aside FIRST, so a span inside a
+  // link label was held, then the link was held with the placeholder inside it, and the single-pass
+  // restore never looked inside a held construct. Four raw control characters reached the page and
+  // the code span was lost. (gemini, the code round.)
+  const html = renderAnswer('see [`renderAnswer`](https://example.com) here');
+
+  assert.match(html, /<code>renderAnswer<\/code>/, 'the code span inside the label must survive');
+  assert.doesNotMatch(html, /[\u0000-\u0008]/, 'no placeholder sentinel may reach the page');
+  assertOnlyAllowedMarkup(html, 'code span in a link label');
+});
+
+test('no answer, however nested, leaks a placeholder sentinel', () => {
+  for (const markdown of [
+    'see [`a`](https://e.com) and [`b`](https://e.com)',
+    '- [`a`](https://e.com)',
+    '# [`a`](https://e.com)',
+    '**[`a`](https://e.com)**',
+    '[`a` and `b`](https://e.com)',
+  ]) {
+    assert.doesNotMatch(renderAnswer(markdown), /[\u0000-\u0008]/, `sentinel leaked from: ${markdown}`);
+  }
+});
+
+test('a file reference that climbs out of the workspace is not offered as a link', () => {
+  // The host refuses `..` when it resolves one, but a renderer that OFFERS the click is inviting it.
+  // Refused here too, so the two halves agree. (gemini, the code round.)
+  const html = renderAnswer('[passwd](../../../../etc/passwd#L1)');
+
+  assert.doesNotMatch(html, /data-file/, 'a traversal path must not become a file link');
+  assert.match(html, /etc\/passwd/, 'and the text still says what the model wrote');
+});
+
+test('an ordered list is not swallowed by an unordered one that follows it', () => {
+  // Same indentation, different delimiter, no blank line between: two lists, not one. (gemini.)
+  const html = renderAnswer('1. one\n- two');
+
+  assert.match(html, /<ol><li>one<\/li><\/ol>/);
+  assert.match(html, /<ul><li>two<\/li><\/ul>/);
+});
