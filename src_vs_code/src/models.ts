@@ -1,4 +1,7 @@
 import { engineNote, LocalEngine } from './localEngines';
+import { canonicalTeamServerUrl } from './teamServers';
+import { TeamServerState } from './teamServerView';
+import { Vendor } from './vendors';
 /**
  * Which models a vendor can be pointed at, and where that list comes from.
  *
@@ -283,3 +286,79 @@ export function modelsProvenance(
 // the wrong question: `process.platform` is 'linux' both in a WSL distro and on a native Linux box,
 // and only one of them has a `.wslconfig` to edit. The engine now carries whether the probe ran
 // under WSL, which is the fact the message actually needed.
+
+
+/**
+ * MOVED HERE from `panelView.ts` (2026-09-09), unchanged.
+ *
+ * <p>It was always pure — it reads a row and a list of server states and returns three fields — but
+ * it lived in the file that renders the panel, so anything else that needed the same answer had to
+ * import the view to get it. The chat picker needs exactly this answer, and a pure module importing
+ * a webview renderer to ask what a Team server allows is the coupling that makes a lane boundary
+ * meaningless. It sits beside `modelsFor`, which consumes what it returns, and beside
+ * `RemoteProvenance`, which was already declared here. (gemini, the plan round.)</p>
+ */
+/**
+ * What a Team server allows, and whether the server has actually said so.
+ *
+ * <p>The two cannot be collapsed into a list length. When the catalog has not arrived this returns
+ * the row's OWN model — never an empty list, because an empty one means "your server withdrew this
+ * model" and `modelsFor` would mark it so, on every reload, for as long as a server stayed
+ * unreachable. So a one-item list is ambiguous by construction, and the caption has to be told which
+ * of the two it is looking at rather than counting.</p>
+ *
+ * <p>The shape is `RemoteProvenance`, declared beside the caption that reads it. It was declared
+ * twice for one release — the same three fields, once here and once there — which is the beginning
+ * of the drift this plan spent two stories closing on the other seam.</p>
+ */
+export function allowedModelsFor(vendor: Vendor, servers: readonly TeamServerState[]): RemoteProvenance {
+  if (vendor.runtime !== 'remote') {
+    return { models: [], named: vendor.id, catalog: 'no-server' };
+  }
+
+  // By ID first, because an address is CORRECTABLE and an id is not: fixing a typo in a hostname
+  // would otherwise orphan every row that matched the old string. The address is the fallback, for
+  // rows written before the id was recorded — and it is compared CANONICALLY, never as typed, since
+  // the row stores one spelling and the server entry holds whatever the person entered.
+  const url = canonicalTeamServerUrl(vendor.baseUrl);
+  const server = servers.find((s) => (vendor.teamServerId !== undefined && vendor.teamServerId.length > 0)
+    ? s.server.id === vendor.teamServerId
+    : canonicalTeamServerUrl(s.server.url) === url);
+  // Guarded by `typeof`, not by `!== undefined`: a JSON null passes the second and then has
+  // `.length` read off it, and this is a field a person can hand-write. Length-checked rather than
+  // `??`, because nullish coalescing keeps an EMPTY string — a row carrying `remoteVendor: ''` would
+  // be looked up in the catalog under a blank name. The C# side of this seam asks the same question
+  // the same way (`VendorIdentity.Recorded`), and two halves of one contract disagreeing about what
+  // counts as absent is how this whole plan started. Both raised on this story's rounds.
+  const named = typeof vendor.remoteVendor === 'string' && vendor.remoteVendor.length > 0
+    ? vendor.remoteVendor
+    : vendor.id;
+
+  // Three states, not two. "No server entry matches this row" is not "its catalog has not arrived
+  // yet" — it is what a person is left with after removing a Team server and keeping its reviewers,
+  // and sending them to a section that no longer lists their server is worse than saying nothing.
+  if (server === undefined) {
+    return { models: [vendor.model], named, catalog: 'no-server' };
+  }
+
+  if (server.catalog === undefined) {
+    // NOT an empty allowlist. An empty one means "this server no longer offers your model", and
+    // `modelsFor` would then mark every remote row's saved model as withdrawn — on every reload,
+    // before the first fetch has landed, and for as long as a server stays unreachable. A person
+    // would read that as their configuration having been dropped. Caught on the code round.
+    return { models: [vendor.model], named, catalog: 'waiting' };
+  }
+
+  return {
+    // Case-insensitively, because `RemoteProbe.Read` on the other side of this seam compares with
+    // `OrdinalIgnoreCase`. A server whose catalog says `DeepSeek` answers a row that recorded
+    // `deepseek` perfectly well, and this comparison showed that same row an empty dropdown and a
+    // caption saying the server allows it nothing. Neither side may lower-case the name it SENDS —
+    // that is the server's own spelling — but both must agree about which names are the same one.
+    // Found by the automated reviewer on this change's pull request.
+    models: (server.catalog.vendors ?? [])
+      .find((v) => v.id.toLowerCase() === named.toLowerCase())?.models ?? [],
+    named,
+    catalog: 'here',
+  };
+}

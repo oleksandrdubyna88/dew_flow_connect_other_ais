@@ -1,6 +1,18 @@
 # PLAN — pick the provider, then the model
 
-> Status: **plan only, nothing implemented yet.** Kind: **feature**. Scope: the chat model picker —
+> Status: **the PURE half is implemented (2026-09-09, branch `feat/provider-then-model-pure`); the
+> two SELECTS and the `coai.chatProvider` setting are not built.** `chatProvidersFrom`,
+> `resolveChatPick` and `legacyPick` exist and are tested, and `allowedModelsFor` moved out of
+> `panelView.ts` into `models.ts` so a pure module no longer has to import a webview renderer to ask
+> what a Team server allows.
+>
+> **The plan's own recommendation was OVERTURNED by its gate, and this is the record of it.** It said
+> a provider is a runtime, resolved to "the first enabled row of that runtime". Three vendors'
+> reviewers rejected that independently — two rows on one runtime are two backends, and picking the
+> first is a coin toss that bills the wrong one — and a fourth extended it to Team servers, where one
+> server hosts several vendor rows. **A provider is a ROW.** Resolution is a lookup, not a search.
+>
+> Kind: **feature**. Scope: the chat model picker —
 > `src_vs_code/src/chatModels.ts`, `chatPage.ts` (`chatPickerHtml`), the panel's *Which model
 > answers* control (`panelView.ts`), `chatSettings.ts`, and the resolution of a choice to a vendor
 > row in `chatCommand.ts`. Origin: [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entry 21.
