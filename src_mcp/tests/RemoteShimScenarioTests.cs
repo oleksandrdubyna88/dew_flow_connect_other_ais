@@ -417,16 +417,47 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
     /// leaked <c>coai-mcp</c> holding a claim file is how one failing test makes the next three
     /// fail for a reason that has nothing to do with them. (codex and local, the plan round.)</para>
     /// </remarks>
-    private sealed record RunningShim(Process Process, StringBuilder Heard) : IDisposable
+    /// <remarks>
+    /// A CLASS, not a record: it owns a process and a growing buffer, which is a stateful service
+    /// rather than a data container, and the repository's own rule keeps those apart. (gemini.)
+    /// </remarks>
+    private sealed class RunningShim(Process process) : IDisposable
     {
+        /// <summary>
+        /// What the child has said, kept to a bound.
+        /// </summary>
+        /// <remarks>
+        /// A shim can talk for the whole 120 seconds, and an unbounded buffer would be copied again
+        /// into the failure message — a hundred megabytes of progress notes is not a diagnostic.
+        /// The LAST lines are kept, because what a process said just before it stopped is the part
+        /// that explains why. (codex.)
+        /// </remarks>
+        private const int SaidCap = 8_000;
+
+        private readonly StringBuilder _heard = new();
+
+        public Process Process { get; } = process;
+
+        internal void Heard(string line)
+        {
+            lock (_heard)
+            {
+                _heard.AppendLine(line);
+                if (_heard.Length > SaidCap)
+                {
+                    _heard.Remove(0, _heard.Length - SaidCap);
+                }
+            }
+        }
+
         /// <summary>Everything the child has said so far, safe to read while it is still saying it.</summary>
         public string Said
         {
             get
             {
-                lock (Heard)
+                lock (_heard)
                 {
-                    return Heard.ToString().Trim();
+                    return _heard.ToString().Trim();
                 }
             }
         }
@@ -440,9 +471,11 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
                     Process.Kill(entireProcessTree: true);
                 }
             }
-            catch (InvalidOperationException)
+            catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
             {
-                // Already gone, and its handle with it. Nothing to kill and nothing to report.
+                // Already gone, or gone between the question and the answer, or a tree member the OS
+                // would not let us touch. Nothing left to kill and nothing a test can do about it.
+                // (gemini: Kill throws Win32Exception on Windows, not only InvalidOperationException.)
             }
 
             Process.Dispose();
@@ -455,21 +488,18 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         info.RedirectStandardError = true;
         info.UseShellExecute = false;
 
-        var heard = new StringBuilder();
         var process = Process.Start(info)!;
+        var shim = new RunningShim(process);
         process.ErrorDataReceived += (_, e) =>
         {
             if (e.Data is not null)
             {
-                lock (heard)
-                {
-                    heard.AppendLine(e.Data);
-                }
+                shim.Heard(e.Data);
             }
         };
         process.BeginErrorReadLine();
 
-        return new RunningShim(process, heard);
+        return shim;
     }
 
     /// <summary>
@@ -487,12 +517,30 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
     /// with the moment it was taken, since a process can change state between the check and the
     /// sentence. (codex again, and the same point from local twice.)</para>
     /// </remarks>
-    private static async Task WaitForAsync(
-        Func<bool> condition, string what, RunningShim shim, TimeSpan? limit = null)
+    private static Task WaitForAsync(Func<bool> condition, string what, RunningShim shim) =>
+        WaitUntilAsync(condition, what, shim, PrerequisiteWait);
+
+    /// <summary>
+    /// The same wait on a deliberately small budget — for the tests OF the wait, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// A separate method rather than an optional parameter, because an optional parameter is exactly
+    /// how the thirty seconds got there: a scenario could pass its own number again and the compiler
+    /// would say nothing. Raised three times by codex on the code round, and by gemini from the other
+    /// side — a diagnostic test inheriting the two-minute budget blocks the suite for two minutes the
+    /// day it regresses.
+    /// </remarks>
+    private static Task WaitBrieflyForAsync(
+        Func<bool> condition, string what, RunningShim shim, TimeSpan limit) =>
+        WaitUntilAsync(condition, what, shim, limit);
+
+    private static async Task WaitUntilAsync(
+        Func<bool> condition, string what, RunningShim shim, TimeSpan deadline)
     {
-        var deadline = limit ?? PrerequisiteWait;
         var clock = Stopwatch.StartNew();
-        while (clock.Elapsed < deadline)
+        // A DO, so the condition is read at least once. A budget small enough to be already spent
+        // would otherwise report a failure for something nobody ever looked at. (gemini.)
+        do
         {
             if (condition())
             {
@@ -501,13 +549,37 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
 
             if (Gone(shim.Process) is { } code && !condition())
             {
-                throw Failure(what, clock.Elapsed, $"had exited with {code}", shim);
+                throw Failure(what, clock.Elapsed, deadline, $"had exited with {code}", Drained(shim));
             }
 
             await Task.Delay(50);
         }
+        while (clock.Elapsed < deadline);
 
-        throw Failure(what, clock.Elapsed, StateOf(shim.Process), shim);
+        throw Failure(what, clock.Elapsed, deadline, StateOf(shim.Process), shim.Said);
+    }
+
+    /// <summary>
+    /// Everything the child said, including whatever was still in flight when it exited.
+    /// </summary>
+    /// <remarks>
+    /// <c>ErrorDataReceived</c> is asynchronous, so a child that writes its reason and exits can have
+    /// that reason still queued at the moment the exit is noticed — and the reason is the whole point
+    /// of reporting the exit. <c>WaitForExit</c> with no timeout is documented to wait for the
+    /// asynchronous handlers to finish, which <c>WaitForExitAsync</c> does not promise. (codex.)
+    /// </remarks>
+    private static string Drained(RunningShim shim)
+    {
+        try
+        {
+            shim.Process.WaitForExit();
+        }
+        catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            // The handle is gone; whatever was already buffered is what there is to report.
+        }
+
+        return shim.Said;
     }
 
     /// <summary>The exit code if the child is gone, or nothing while it lives.</summary>
@@ -531,15 +603,18 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
     private static string StateOf(Process process) =>
         Gone(process) is { } code ? $"had exited with {code}" : "was still running";
 
-    private static TimeoutException Failure(string what, TimeSpan waited, string state, RunningShim shim)
-    {
-        var said = shim.Said;
-
-        return new TimeoutException(
-            $"waiting for {what}: it was still not true after {waited.TotalSeconds:0.0}s. "
-            + $"The child {state} when that was checked. "
+    /// <summary>
+    /// What ran out, how long it had, what the child was doing, and what the child said.
+    /// </summary>
+    /// <remarks>
+    /// The BUDGET is named as well as the elapsed time, so a reader can tell the prerequisite's two
+    /// minutes from a diagnostic test's fraction of a second without opening the file. (gemini.)
+    /// </remarks>
+    private static TimeoutException Failure(
+        string what, TimeSpan waited, TimeSpan budget, string state, string said) =>
+        new($"waiting for {what}: it was still not true after {waited.TotalSeconds:0.0}s "
+            + $"of a {budget.TotalSeconds:0.0}s budget. The child {state} when that was checked. "
             + (said.Length == 0 ? "It had said nothing on stderr." : $"It had said:{Environment.NewLine}{said}"));
-    }
 
     // ------------------------------------------------------------------------------------------
     // What a prerequisite wait has to say when it runs out (2026-09-09).
@@ -564,7 +639,7 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         await shim.Process.WaitForExitAsync();
 
         var failure = await Record.ExceptionAsync(
-            () => WaitForAsync(() => false, "the claim file to appear", shim, TimeSpan.FromMilliseconds(200)));
+            () => WaitBrieflyForAsync(() => false, "the claim file to appear", shim, TimeSpan.FromMilliseconds(200)));
 
         failure.Should().BeOfType<TimeoutException>().Which.Message
             .Should().Contain("the claim file to appear", "the wait must say what it was waiting FOR")
@@ -585,7 +660,7 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         using var shim = StartLivingShim();
 
         var failure = await Record.ExceptionAsync(
-            () => WaitForAsync(() => false, "something that never happens", shim, TimeSpan.FromMilliseconds(200)));
+            () => WaitBrieflyForAsync(() => false, "something that never happens", shim, TimeSpan.FromMilliseconds(200)));
 
         failure.Should().BeOfType<TimeoutException>().Which.Message
             .Should().Contain("still running", "a live child and a dead one send a reader to different places")
@@ -606,7 +681,8 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         using var shim = StartLivingShim();
         var clock = Stopwatch.StartNew();
 
-        await WaitForAsync(() => clock.Elapsed > TimeSpan.FromMilliseconds(300), "a late condition", shim);
+        await WaitBrieflyForAsync(
+            () => clock.Elapsed > TimeSpan.FromMilliseconds(300), "a late condition", shim, TimeSpan.FromSeconds(5));
 
         clock.Elapsed.Should().BeGreaterThan(TimeSpan.FromMilliseconds(300));
     }
