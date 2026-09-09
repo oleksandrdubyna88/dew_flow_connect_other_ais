@@ -374,6 +374,13 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   var shouldFollow = ${shouldFollow.toString()};
   var SLACK = ${FOLLOW_SLACK_PX};
   var pendingFollow = 0;
+  // The ONE turn a stop has been asked for and not yet answered. The thinking line is replaced
+  // wholesale on every push - a Team server pushes its queue position while a turn waits - and the
+  // replacement carried a fresh, pressable control for a turn the person had already stopped. They
+  // would press it again and watch it come back. It is one number, not a set, because there is one
+  // turn in flight; the next turn's control is live, and inheriting a stop nobody asked for would be
+  // the opposite defect. (gemini, the plan round.)
+  var stopAsked = 0;
   // Whether the reader was at the bottom BEFORE the last thing that moved the layout under them.
   // Recomputed on every scroll, which is the only event that means the READER moved; a resize or a
   // growing composer must ask what this remembers, because after one the numbers no longer describe
@@ -611,6 +618,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       // Disabled the instant it is pressed. A second press a moment later would name the same turn,
       // and by the time it landed the host could have moved on to the next one.
       control.disabled = true;
+      stopAsked = turn;
       vscode.postMessage({ type: 'command', command: 'stop', turn: turn });
     });
   }
@@ -671,9 +679,18 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       wrote = true;
     }
     if (thinking && typeof data.thinkingHtml === 'string' && lastWritten.thinking !== data.thinkingHtml) {
+      // Whether the keyboard was on the control this is about to destroy. Replacing the line while a
+      // remote turn's queue position moves would otherwise take the focus away repeatedly, silently,
+      // from somebody waiting - which is exactly when they are most likely to want it.
+      const hadFocus = document.activeElement === document.getElementById('stop');
       thinking.innerHTML = data.thinkingHtml;
       lastWritten.thinking = data.thinkingHtml;
       wrote = true;
+      const redrawn = document.getElementById('stop');
+      if (redrawn) {
+        if (Number(redrawn.dataset && redrawn.dataset.turn) === stopAsked) { redrawn.disabled = true; }
+        if (hadFocus && typeof redrawn.focus === 'function') { redrawn.focus(); }
+      }
     }
     // These two clear when they are NOT mentioned - the protocol has always meant that, and a
     // capped notice or a failure left on screen after it stopped being true is one a person acts on.

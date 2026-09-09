@@ -261,6 +261,8 @@ test('the text size the person chose is inside the body rule, so it applies befo
  */
 interface Fake {
   innerHTML: string;
+  /** A region learning the elements a push just wrote into it. */
+  reparse?: ((markup: string) => void) | undefined;
   /** Called when the page writes innerHTML — an insertion, which is what makes the region taller. */
   onWrite?: (value: string) => void;
   textContent: string;
@@ -268,6 +270,8 @@ interface Fake {
   value: string;
   disabled: boolean;
   focused: number;
+  /** The element's `data-*` attributes, as the page wrote them. */
+  dataset: Record<string, string>;
   scrollTop: number;
   clientHeight: number;
   scrollHeight: number;
@@ -292,11 +296,15 @@ function fake(): Fake {
     get innerHTML() { return written; },
     set innerHTML(value: string) {
       written = value;
+      // What a push writes into a region IS new elements — the page looks them up by id and reads
+      // their attributes, so the registry has to learn them or every such read comes back stale.
+      this.reparse?.(value);
       this.onWrite?.(value);
     },
-    textContent: '', hidden: false, value: '', disabled: false, focused: 0,
+    textContent: '', hidden: false, value: '', disabled: false, focused: 0, dataset: {},
     scrollTop: 0, clientHeight: 0, scrollHeight: 0, style: emptyStyle(), listeners: {},
     addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); },
+    reparse: undefined,
     focus() { this.focused += 1; },
     getAttribute: () => null,
     setAttribute() { /* the page sets none */ },
@@ -318,6 +326,8 @@ interface RunningPage {
   fontsSettle(): Promise<void>;
   /** The composer's height changed — what a growing or shrinking box does to the footer. */
   composerResized(): void;
+  /** Put the keyboard on an element, as a person tabbing to it would. */
+  focusOn(id: string): void;
 }
 
 /**
@@ -352,14 +362,33 @@ function runChatPage(over: RunOptions = {}): RunningPage {
   // fake, and the shipped webview is inert. (The gate raised this looking ahead to story 3's jump
   // control.) The `disabled` attribute is read across for the same reason: a page rendered locked
   // whose fakes start unlocked is a page the tests cannot see the lock on.
-  const rendered = new Map(
-    [...html.matchAll(/<[a-z]+[^>]*\bid="([^"]+)"[^>]*>/g)].map((match) => [match[1], match[0]]),
+  const taggedIn = (markup: string): Map<string, string> => new Map(
+    [...markup.matchAll(/<[a-z]+[^>]*\bid="([^"]+)"[^>]*>/g)].map((match) => [match[1] ?? '', match[0] ?? '']),
   );
+  const seed = (element: Fake, tag: string): void => {
+    element.disabled = / disabled(?=[ >])/.test(tag);
+    element.hidden = / hidden(?=[ >])/.test(tag);
+    element.dataset = {};
+    for (const attribute of tag.matchAll(/ data-([a-z-]+)="([^"]*)"/g)) {
+      element.dataset[attribute[1] ?? ''] = attribute[2] ?? '';
+    }
+  };
+  const rendered = taggedIn(html);
+  const reparse = (markup: string): void => {
+    for (const [id, tag] of taggedIn(markup)) {
+      rendered.set(id, tag);
+      if (seen[id] !== undefined) {
+        seed(seen[id], tag);
+      }
+    }
+  };
   // The page corrects its opening scroll once the fonts have settled. A test that cannot say WHEN
   // that happens cannot show what a reader who moved in the meantime experiences.
   let settleFonts = () => { /* replaced by the promise below */ };
   const fontsReady = new Promise<void>((resolve) => { settleFonts = () => { resolve(); }; });
+  let focused: Fake | undefined;
   const document_ = {
+    get activeElement() { return focused; },
     getElementById: (id: string) => {
       const tag = rendered.get(id);
       if (tag === undefined) {
@@ -371,8 +400,8 @@ function runChatPage(over: RunOptions = {}): RunningPage {
         // renders it locked, or visible where the page renders it hidden, is a fake the tests cannot
         // see the initial state on — and both of those were caught by tests that then passed for the
         // wrong reason until this was here.
-        seen[id].disabled = / disabled(?=[ >])/.test(tag);
-        seen[id].hidden = / hidden(?=[ >])/.test(tag);
+        seen[id].reparse = reparse;
+        seed(seen[id], tag);
       }
 
       return seen[id];
@@ -444,6 +473,11 @@ function runChatPage(over: RunOptions = {}): RunningPage {
       this.fire('scroll', 'scroll');
 
       return scroll;
+    },
+    focusOn(id) {
+      const element = document_.getElementById(id);
+      assert.ok(element, `the page renders no #${id} to focus`);
+      focused = element;
     },
     composerResized() {
       assert.ok(observed, 'the page is not watching the composer for a height change');
@@ -1224,4 +1258,64 @@ test('a stop control that names no turn posts nothing', () => {
 
   assert.deepStrictEqual(page.posted.filter((message) => message['command'] === 'stop'), [],
     'a control with no usable turn posted a stop the host would only drop');
+});
+
+
+test('a push while a stop is in flight does not hand the control back', () => {
+  // The gate's finding, and it is real: the thinking line is replaced wholesale on every push — a
+  // Team server pushes its queue position while a turn waits — and the replacement carried a fresh,
+  // pressable control for a turn the person had already asked to stop. They would press it again,
+  // and see it come back a second time.
+  const page = runChatPage({ running: true, turn: 7 });
+  page.fire('thinking', 'click', { target: { closest: () => ({ dataset: { turn: '7' }, disabled: false }) } });
+
+  page.deliver({
+    type: 'state',
+    thinkingHtml: '<p class="thinking">Thinking…<button type="button" id="stop" data-turn="7">Stop</button></p>',
+    running: true,
+    capped: false,
+  });
+
+  assert.strictEqual(page.seen['stop'].disabled, true,
+    'a push handed back a control for a turn the person had already stopped');
+  page.fire('thinking', 'click', { target: { closest: () => page.seen['stop'] } });
+  assert.strictEqual(page.posted.filter((message) => message['command'] === 'stop').length, 1,
+    'the re-rendered control sent a second stop for the same turn');
+});
+
+test('the next turn gets its own control, live', () => {
+  // The memory is about ONE turn. A conversation that carries on must not inherit a stop nobody
+  // asked for.
+  const page = runChatPage({ running: true, turn: 7 });
+  page.fire('thinking', 'click', { target: { closest: () => ({ dataset: { turn: '7' }, disabled: false }) } });
+
+  page.deliver({
+    type: 'state',
+    thinkingHtml: '<p class="thinking">Thinking…<button type="button" id="stop" data-turn="8">Stop</button></p>',
+    running: true,
+    capped: false,
+  });
+
+  assert.strictEqual(page.seen['stop'].disabled, false, 'the next turn inherited the last one\'s stop');
+});
+
+test('a stop control keeps the focus a push would have taken from it', () => {
+  // Replacing the line destroys the element the keyboard was on. For a remote turn the line is
+  // replaced every time the queue position moves, so somebody who tabbed to Stop would lose it
+  // repeatedly, silently, while waiting — which is exactly when they are most likely to want it.
+  const page = runChatPage({ running: true, turn: 7 });
+  // Focus first: nothing has asked the page for #stop yet, and the registry answers only for
+  // elements somebody looked up — which is the same property that catches a control the page never
+  // rendered.
+  page.focusOn('stop');
+  const before = page.seen['stop'].focused;
+
+  page.deliver({
+    type: 'state',
+    thinkingHtml: '<p class="thinking">Thinking…<button type="button" id="stop" data-turn="7">Stop</button></p>',
+    running: true,
+    capped: false,
+  });
+
+  assert.ok(page.seen['stop'].focused > before, 'the keyboard lost the control when the line was redrawn');
 });

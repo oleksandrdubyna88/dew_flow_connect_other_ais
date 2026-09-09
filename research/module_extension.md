@@ -41,6 +41,15 @@ was drawn for: nothing in the script remembers one across a push, which is the p
 no button** — a control that posted a message the seam refuses would look to a person exactly like a
 stop that did not work.
 
+**A push must not hand the control back.** The thinking line is replaced wholesale whenever it
+changes — a Team server pushes its queue position while a turn waits — and the replacement carried a
+fresh, pressable control for a turn the person had already stopped: they would press it again and
+watch it come back. The page remembers the ONE turn a stop was asked for, and a redrawn control
+naming that turn comes back disabled. One number rather than a set, because there is one turn in
+flight, and the next turn's control is live — inheriting a stop nobody asked for is the opposite
+defect. The keyboard's place is carried across the same replacement, since somebody who tabbed to
+Stop while waiting is precisely somebody who wants it.
+
 The listener is delegated on `#thinking` for the same reason the answers' links are delegated on
 `#messages`: the region is replaced wholesale on every push, and a listener bound to the old button
 dies with it. Pressing it disables it at once — a second press names the same turn, and by the time
