@@ -215,16 +215,26 @@ interface RowContext {
   readonly inline: boolean;
 }
 
+/**
+ * A row built from the session files alone — no database, no palette of its own.
+ *
+ * <p>A named constant rather than a literal in the parameter list: a default object literal is a
+ * fresh allocation on every call that omits the argument, and this one holds three maps and a
+ * palette. It is never mutated — `rowFrom` only reads from it — so one is enough for all of them.
+ * (SonarCloud, on the pull request.)</p>
+ */
+const NO_DATABASE: RowContext = {
+  byRound: new Map(), counts: new Map(), decidedBy: new Map(), colour: vendorPalette([]),
+  whole: true, inline: false,
+};
+
 function rowFrom(
   session: SessionFile,
   round: RoundRecord,
   nowMs: number,
   priceOf: PriceOfModel,
   usage: readonly UsageEntry[],
-  context: RowContext = {
-    byRound: new Map(), counts: new Map(), decidedBy: new Map(), colour: vendorPalette([]),
-    whole: true, inline: false,
-  },
+  context: RowContext = NO_DATABASE,
 ): LogRow {
   const { byRound, counts, decidedBy, colour, whole, inline } = context;
   const cost = costOf(round, priceOf, usage, nowMs);
