@@ -267,7 +267,7 @@ only when the whole ritual has run — not when the code works.
 ## Parallelism
 
 **Owns `chatPage.ts` — the whole file.** Nothing else that touches `chatPage.ts` may run beside it:
-[PLAN_an_answer_reads_like_a_document.md](../todo/PLAN_an_answer_reads_like_a_document.md),
+[PLAN_an_answer_reads_like_a_document.md](PLAN_an_answer_reads_like_a_document.md),
 [PLAN_a_turn_nobody_can_stop.md](../todo/PLAN_a_turn_nobody_can_stop.md),
 [PLAN_provider_then_model.md](../todo/PLAN_provider_then_model.md) and
 [PLAN_presets_above_the_composer.md](../todo/PLAN_presets_above_the_composer.md) all queue behind it. It is
