@@ -54,9 +54,33 @@ function captionOf(vendor: Vendor): string {
  * `codex` and finds the chat picker silently missing it has no way to tell a bug from a policy; a
  * line saying which runtimes can answer costs nothing and answers that.</p>
  */
+/**
+ * Is this row answered by a Team server rather than by a process on this machine?
+ *
+ * <p>One predicate, because three places ask it and a literal `'remote'` in each is three chances to
+ * mean something slightly different. (gemini, the code round, on two of them.)</p>
+ */
+export function isRemote(vendor: Vendor): boolean {
+  return vendor.runtime === 'remote';
+}
+
 /** Whether this row can answer a chat at all — a CLI with an adapter, or a Team server. */
 export function canChat(vendor: Vendor): boolean {
-  return CHAT_RUNTIMES.includes(vendor.runtime) || vendor.runtime === 'remote';
+  return CHAT_RUNTIMES.includes(vendor.runtime) || isRemote(vendor);
+}
+
+/**
+ * What a conversation remembers, and how much of it is left.
+ *
+ * <p>Its own type so that {@link memoryOf} is checked against it at the source and the thread that
+ * holds it EXTENDS it. That is what makes a field added here reach both places a session starts:
+ * one would not compile without it, and the other takes the whole object.</p>
+ */
+export interface ChatMemory {
+  /** This model keeps no conversation of its own, so every turn re-sends one. */
+  forgetful: boolean;
+  /** How many turns THIS model has answered. The cap is on turns, not on messages. */
+  asked: number;
 }
 
 /**
@@ -80,8 +104,8 @@ export function canChat(vendor: Vendor): boolean {
  * who chose a server model after four local turns with "this conversation is full" before they had
  * asked it anything.</p>
  */
-export function memoryOf(vendor: Vendor): { readonly forgetful: boolean; readonly asked: number } {
-  return { forgetful: vendor.runtime === 'remote', asked: 0 };
+export function memoryOf(vendor: Vendor): ChatMemory {
+  return { forgetful: isRemote(vendor), asked: 0 };
 }
 
 export function chatModelsFrom(vendors: readonly Vendor[]): ChatModelList {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ChatModelChoice, ChatPageState, chatCappedHtml, chatMessagesHtml, chatPageHtml, chatPickerHtml, chatThinkingHtml } from '../chatPage';
+import { ChatModelChoice, ChatPageState, chatCappedHtml, chatMessagesHtml, chatPageHtml, chatPickerHtml, chatStatusHtml } from '../chatPage';
 
 /**
  * The page, as a string.
@@ -161,15 +161,15 @@ test('a turn waiting behind other people says so, and one being answered does no
   // A shared Team server queues twenty deep per person by design, so "still waiting" is minutes —
   // and an unchanging spinner is the one shape a busy server and a broken tab look identical in.
   // The position was already parsed out of every poll and thrown away. (gemini, the code round.)
-  assert.match(chatThinkingHtml(true, 4), /Thinking/);
-  assert.match(chatThinkingHtml(true, 4), /4 ahead/);
+  assert.match(chatStatusHtml(true, 4), /Thinking/);
+  assert.match(chatStatusHtml(true, 4), /4 ahead/);
 
   // Zero is "no number to show", not position zero: the server says 0 both when it did not count
   // and when the turn has left the queue and is being answered. Neither is a place in a line.
-  assert.strictEqual(chatThinkingHtml(true, 0), '<p class="thinking">Thinking…</p>');
-  assert.strictEqual(chatThinkingHtml(true, -1), '<p class="thinking">Thinking…</p>');
-  assert.strictEqual(chatThinkingHtml(true, 1.5), '<p class="thinking">Thinking…</p>');
+  assert.strictEqual(chatStatusHtml(true, 0), '<p class="thinking">Thinking…</p>');
+  assert.strictEqual(chatStatusHtml(true, -1), '<p class="thinking">Thinking…</p>');
+  assert.strictEqual(chatStatusHtml(true, 1.5), '<p class="thinking">Thinking…</p>');
 
   // Nothing at all when no turn is in flight — the region is emptied, not left saying "Thinking…".
-  assert.strictEqual(chatThinkingHtml(false, 4), '');
+  assert.strictEqual(chatStatusHtml(false, 4), '');
 });

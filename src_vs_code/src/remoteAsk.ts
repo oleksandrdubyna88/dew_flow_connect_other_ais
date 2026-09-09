@@ -39,6 +39,23 @@
 export const CHAT_ROLE = '';
 
 /**
+ * What this job IS, said out loud rather than left for an absence to imply.
+ *
+ * <p>The server does not read this field yet — `todo/PLAN_the_server_knows_a_chat_from_a_review.md`
+ * is where it becomes part of the contract, defaulted to `review` so no existing client changes
+ * behaviour. Sending it BEFORE that lands is the whole point: the day the server requires a role for
+ * a job it reads as a review, a client sending a blank role and no `kind` stops working with a
+ * message about roles. This one will already be saying what it is. That is what makes a client
+ * older than a server keep working, which is the ordinary state of a fleet.</p>
+ *
+ * <p>Safe to send today, and measured rather than assumed: a body carrying `kind` was accepted by
+ * `coai.remsoft.dev` in 56 ms on 2026-09-09, exactly as one without it — an unknown property is
+ * ignored, which is System.Text.Json's default and one attribute away from not being. (codex, the
+ * code round.)</p>
+ */
+export const CHAT_KIND = 'chat';
+
+/**
  * How many turns a REMOTE conversation may hold.
  *
  * <p>The owner's ruling, asked and answered on 2026-09-08: *"Стоит ли вообще запрещать длинные
@@ -85,7 +102,7 @@ export function requestBody(
   prompt: string,
   timeoutSeconds: number,
 ): Record<string, unknown> {
-  return { vendor, model, prompt, role: CHAT_ROLE, timeoutSeconds };
+  return { vendor, model, prompt, role: CHAT_ROLE, kind: CHAT_KIND, timeoutSeconds };
 }
 
 /** The id a submit was accepted under, or empty when the answer was not one — or not an id. */

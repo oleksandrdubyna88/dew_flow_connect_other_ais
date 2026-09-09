@@ -156,7 +156,7 @@ ${ZOOM_CSS}`;
  * <p>`position` is 0 when the server did not say, or when the turn has left the queue and is being
  * answered. Both are "no number to show", and neither is position zero.</p>
  */
-export function chatThinkingHtml(running: boolean, position: number): string {
+export function chatStatusHtml(running: boolean, position: number): string {
   if (!running) {
     return '';
   }
@@ -175,7 +175,7 @@ function chatBody(state: ChatPageState): string {
 <div class="passage" id="passage">${escapeHtml(state.passage)}</div>
 <div id="failure">${state.failure.length === 0 ? '' : `<div class="failure">${escapeHtml(state.failure)}</div>`}</div>
 <div id="messages">${chatMessagesHtml(state.messages)}</div>
-<div id="thinking">${chatThinkingHtml(state.running, 0)}</div>
+<div id="thinking">${chatStatusHtml(state.running, 0)}</div>
 <div id="capped">${chatCappedHtml(state.capped)}</div>
 <div id="pickerBox">${chatPickerHtml(state.models, state.modelId)}</div>
 <textarea id="say" rows="3" placeholder="Ask about the text above…"${locked ? ' disabled' : ''}>${escapeHtml(state.draft)}</textarea>

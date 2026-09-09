@@ -10,7 +10,7 @@ import {
   chatMessagesHtml,
   chatPageHtml,
   chatPickerHtml,
-  chatThinkingHtml,
+  chatStatusHtml,
 } from './chatPage';
 import { escapeHtml } from './webviewHtml';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
@@ -208,7 +208,7 @@ export function pushChatState(entry: ChatEntry, state: ChatPushState): boolean {
     messagesHtml: chatMessagesHtml(state.messages),
     running: state.running,
     capped: state.capped,
-    thinkingHtml: chatThinkingHtml(state.running, state.queued),
+    thinkingHtml: chatStatusHtml(state.running, state.queued),
     cappedHtml: chatCappedHtml(state.capped),
     failureHtml: state.failure.length === 0 ? '' : `<div class="failure">${escapeHtml(state.failure)}</div>`,
     pickerHtml: chatPickerHtml(state.models, state.modelId),
