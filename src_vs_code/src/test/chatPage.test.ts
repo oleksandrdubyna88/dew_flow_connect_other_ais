@@ -329,8 +329,14 @@ function growsTheRegion(region: Fake, by: number): (value: string) => void {
   };
 }
 
-function runChatPage(over: Partial<ChatPageState> = {}): RunningPage {
-  const html = chatPageHtml(state(over), 'n0nce');
+interface RunOptions extends Partial<ChatPageState> {
+  /** Model an older engine: the same hosts that lack `field-sizing` are the case this guards. */
+  readonly withoutResizeObserver?: boolean;
+}
+
+function runChatPage(over: RunOptions = {}): RunningPage {
+  const { withoutResizeObserver, ...state_ } = over;
+  const html = chatPageHtml(state(state_), 'n0nce');
   const body = html.split('<script nonce="n0nce">')[1].split('</script>')[0];
   const seen: Record<string, Fake> = {};
   const posted: Array<Record<string, unknown>> = [];
@@ -389,7 +395,7 @@ function runChatPage(over: Partial<ChatPageState> = {}): RunningPage {
     window_,
     () => ({ postMessage: (message: Record<string, unknown>) => posted.push(message) }),
     (fn: () => void) => { pending.push(fn); },
-    FakeResizeObserver,
+    withoutResizeObserver === true ? undefined : FakeResizeObserver,
   );
 
   const region = () => {
@@ -991,4 +997,40 @@ test('a composer that grows leaves a reader who scrolled up where they were', ()
   page.frames();
 
   assert.strictEqual(scroll.scrollTop, 200, 'a growing composer moved a reader who was reading something else');
+});
+
+test('a follow the reader cancels leaves the jump control behind it', () => {
+  // The narrow race the gate found: an answer arrives while the reader is at the bottom, so a follow
+  // is scheduled rather than done — and the reader scrolls up inside that frame. The follow is
+  // correctly cancelled, and without this the reader is left scrolled up, with an answer they were
+  // never taken to and nothing on screen saying it came.
+  const page = runChatPage();
+  const scroll = page.scrolledToBottom();
+
+  page.deliver({ type: 'state', messagesHtml: '<p>an answer</p>' });
+  scroll.scrollTop = 100;
+  page.fire('scroll', 'scroll');
+  page.frames();
+
+  assert.strictEqual(scroll.scrollTop, 100, 'the cancelled follow ran anyway');
+  assert.strictEqual(page.seen['jump'].hidden, false, 'an answer arrived, nobody was taken to it, and nobody was told');
+});
+
+test('a composer that grows re-pins the reader even where nothing observes it', () => {
+  // Requirement 8 was promised unconditionally and delivered only through ResizeObserver. Where the
+  // host has none — the same older engines that lack field-sizing — the box grows, the footer eats
+  // the room, and the last answer slides behind it with nothing to notice. The fallback that sizes
+  // the box knows it changed the height, so it is the one place that can say so.
+  const page = runChatPage({ withoutResizeObserver: true });
+  const scroll = page.scrolledToBottom();
+  scroll.scrollTop = scroll.scrollHeight - scroll.clientHeight;
+
+  page.seen['say'].value = 'one\ntwo\nthree';
+  page.seen['say'].scrollHeight = 180;
+  scroll.clientHeight -= 100;
+  page.fire('say', 'input');
+  page.frames();
+
+  assert.strictEqual(scroll.scrollTop, scroll.scrollHeight,
+    'the growing box pushed the last answer out of view on a host with no ResizeObserver');
 });

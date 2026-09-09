@@ -297,6 +297,14 @@ function chatScript(state: ChatPageState): string {
   var shouldFollow = ${shouldFollow.toString()};
   var SLACK = ${FOLLOW_SLACK_PX};
   var pendingFollow = 0;
+  // Whether the reader was at the bottom BEFORE the last thing that moved the layout under them.
+  // Recomputed on every scroll, which is the only event that means the READER moved; a resize or a
+  // growing composer must ask what this remembers, because after one the numbers no longer describe
+  // where the person put themselves.
+  var wasAtBottom = true;
+  // A follow is out and has not run yet. If the reader cancels it, they are left scrolled up with an
+  // answer nobody took them to - so the cancel hands them the jump control instead.
+  var followOutstanding = false;
   // What was last PUT into each region, so a repeat can be told from a change without asking the
   // browser to serialise the DOM back to us on every push. Seeded with what the MARKUP holds, or the
   // first push would compare against nothing, read as a change, and scroll a reader for content that
@@ -348,6 +356,24 @@ function chatScript(state: ChatPageState): string {
     if (!box || !box.style) { return; }
     box.style.height = 'auto';
     box.style.height = box.scrollHeight + 'px';
+    // The footer just changed height and nothing else is watching on this host - the engines without
+    // field-sizing are the ones this fallback exists for, and requirement 8 was promised to them
+    // too. Whoever changed the height says so; the pin itself is one function.
+    repinIfTheyWereAtTheBottom();
+  }
+  // A height change nobody asked for must not move the conversation out from under a reader. The
+  // remembered flag is right here where re-measuring is not: they did NOT scroll, the region shrank
+  // underneath them, so measuring now would call them scrolled away and leave the last answer behind
+  // the box they are typing into.
+  function repinIfTheyWereAtTheBottom() {
+    if (wasAtBottom) { landOnNewest(); }
+    afterLayout(rememberWhereTheyAre);
+  }
+  function rememberWhereTheyAre() {
+    const scroll = document.getElementById('scroll');
+    if (scroll) {
+      wasAtBottom = shouldFollow(scroll.scrollTop, scroll.clientHeight, scroll.scrollHeight, SLACK);
+    }
   }
   function offerJump(show) {
     const control = document.getElementById('jump');
@@ -355,7 +381,13 @@ function chatScript(state: ChatPageState): string {
   }
   function scheduleFollow() {
     const token = ++pendingFollow;
-    afterLayout(function () { if (token === pendingFollow) { landOnNewest(); } });
+    followOutstanding = true;
+    afterLayout(function () {
+      if (token === pendingFollow) {
+        landOnNewest();
+        followOutstanding = false;
+      }
+    });
   }
   function send() {
     const box = document.getElementById('say');
@@ -443,7 +475,14 @@ function chatScript(state: ChatPageState): string {
         selfScrollTo = null;
       } else {
         pendingFollow++;
+        // They cancelled a follow that had not run. An answer arrived, they were not taken to it,
+        // and without this nothing on the page would say so. (codex, the plan round.)
+        if (followOutstanding) {
+          followOutstanding = false;
+          offerJump(true);
+        }
       }
+      rememberWhereTheyAre();
       // A reader who came back under their own steam has answered the question the control was
       // asking. One that stays up after that is one nobody trusts.
       if (shouldFollow(scrollRegion.scrollTop, scrollRegion.clientHeight, scrollRegion.scrollHeight, SLACK)) {
@@ -457,21 +496,12 @@ function chatScript(state: ChatPageState): string {
   // the other side. What they WERE is the only measurement that survives the resize, so it is taken
   // before the layout changes and acted on after. A host without ResizeObserver keeps today's
   // behaviour rather than breaking.
-  if (typeof ResizeObserver === 'function' && scrollRegion) {
-    let wasAtBottom = true;
+  // Where the host has one, it catches every way the composer's height can change, including the
+  // CSS path where no script of ours runs at all. Where it has none, fitComposer says so instead -
+  // and those are the same hosts, since an engine without field-sizing is an old engine.
+  if (typeof ResizeObserver === 'function') {
     const composer = document.getElementById('composer');
-    const watcher = new ResizeObserver(function () {
-      if (wasAtBottom) { landOnNewest(); }
-      afterLayout(function () {
-        wasAtBottom = shouldFollow(
-          scrollRegion.scrollTop, scrollRegion.clientHeight, scrollRegion.scrollHeight, SLACK);
-      });
-    });
-    if (composer) { watcher.observe(composer); }
-    scrollRegion.addEventListener('scroll', function () {
-      wasAtBottom = shouldFollow(
-        scrollRegion.scrollTop, scrollRegion.clientHeight, scrollRegion.scrollHeight, SLACK);
-    });
+    if (composer) { new ResizeObserver(repinIfTheyWereAtTheBottom).observe(composer); }
   }
   const jump = document.getElementById('jump');
   if (jump) {
