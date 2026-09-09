@@ -578,7 +578,8 @@
     "package": "npm run test && npm run bundle && vsce package --no-dependencies",
     "icon": "node scripts/generate-icon.mjs",
     "test:live": "npm run compile && node scripts/live-chat.mjs",
-    "measure:stream": "npm run compile && node scripts/measure-stream.mjs"
+    "measure:stream": "npm run compile && node scripts/measure-stream.mjs",
+    "measure:image": "npm run compile && node scripts/measure-image.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",
