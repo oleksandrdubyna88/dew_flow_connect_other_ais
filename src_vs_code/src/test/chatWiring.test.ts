@@ -143,7 +143,7 @@ test('a stop reaches the thread it names, and only while that thread is running'
   );
   assert.match(
     text,
-    /thread\.running/,
+    /thread\??\.running/,
     'a stop is applied without checking that the thread has a turn to stop',
   );
   assert.match(
