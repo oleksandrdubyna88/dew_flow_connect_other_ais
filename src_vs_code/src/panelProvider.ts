@@ -240,7 +240,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * one being entered.</p>
    */
   private editingSince = 0;
-  private editingSetting = '';
+  private editingId = '';
+  private editingCaret: readonly [number, number] = [0, 0];
   /**
    * Every write, in the order the page asked for it.
    *
@@ -259,13 +260,18 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.held.hold(view);
+    // A new document, so nothing in it is focused yet — whatever the last one left behind.
+    this.forgetEditing();
     // Only ever clears the handle when THIS view is still the one held: VS Code re-creates a hidden
     // view when it is shown again, so a late callback from a replaced view would otherwise blank
     // the live one and stop the sidebar updating until something else resolved it.
-    view.onDidDispose(() => this.held.release(view));
+    view.onDidDispose(() => {
+      this.held.release(view);
+      this.forgetEditing();
+    });
     view.webview.options = { enableScripts: true };
     view.webview.onDidReceiveMessage(
-      (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string; open?: boolean; role?: string; round?: number; setting?: string; editing?: boolean }) => {
+      (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string; open?: boolean; role?: string; round?: number; editing?: boolean; start?: number; end?: number }) => {
         if (m.type === 'section' && m.id !== undefined) {
           this.openSections = m.open === true
             ? [...new Set([...this.openSections, m.id])]
@@ -275,7 +281,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         } else if (m.type === 'setting') {
           this.enqueue(() => this.write({ key: m.key, value: m.value, vendor: m.vendor, role: m.role }));
         } else if (m.type === 'focus') {
-          this.editing(m.editing === true, m.setting ?? '');
+          this.editing(m.editing === true, m.id ?? '', Number(m.start), Number(m.end));
         } else if (m.type === 'command') {
           void this.run(m.command, m.id);
         }
@@ -481,7 +487,18 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // and then `focusout`, and the render the release asks for would otherwise overtake the write
     // it followed and re-stamp the box with the value being replaced — the symptom, reintroduced by
     // the fix. `queued` never stays rejected; see `enqueue`.
-    await this.queued;
+    //
+    // Awaited until it is STABLE, because a write appended while this render was suspended would
+    // otherwise be read a moment too late. Bounded: under continuous typing the queue never settles,
+    // and a render that waits for silence is a render that never happens.
+    for (let round = 0; round < 5; round += 1) {
+      const seen = this.queued;
+      // eslint-disable-next-line no-await-in-loop -- the point is to wait for each one in turn.
+      await seen;
+      if (seen === this.queued) {
+        break;
+      }
+    }
     const config = vscode.workspace.getConfiguration('coai');
     const settings = settingsFrom((section) => config.get(section));
     const vendors = vendorsFrom(this.read(config)('vendors'));
@@ -522,7 +539,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // Only while something IS focused — and by the time a paint gets past the hold below, that
       // means the hold ran out under it. An ordinary paint carries nothing and steals nobody's
       // focus.
-      focus: this.editingSince > 0 ? this.editingSetting : '',
+      focus: this.editingSince > 0
+        ? { id: this.editingId, start: this.editingCaret[0], end: this.editingCaret[1] }
+        : undefined,
     };
 
     // Two update paths, and which one runs is the whole fix for the pickers.
@@ -989,16 +1008,35 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * exactly this, and `render` awaits the write queue first, so the paint it produces carries what
    * was typed rather than what it replaced.</p>
    */
-  private editing(editing: boolean, setting: string): void {
+  private editing(editing: boolean, id: string, start: number, end: number): void {
     if (editing) {
-      this.editingSince = Date.now();
-      this.editingSetting = setting;
+      // Only the FIRST focus of a session starts the clock. Tabbing from one control to the next
+      // must not renew it: a cap a focus change renews is a cap with no bound, which is the same
+      // defect as a cap a keystroke renews. The id and the caret are refreshed every time, because
+      // the paint that eventually lands must find the control the person is in NOW.
+      if (this.editingSince === 0) {
+        this.editingSince = Date.now();
+      }
+      this.editingId = id;
+      this.editingCaret = [start, end];
 
       return;
     }
-    this.editingSince = 0;
-    this.editingSetting = '';
+    this.forgetEditing();
     void this.render();
+  }
+
+  /**
+   * Nothing is being edited.
+   *
+   * <p>Also on DISPOSAL, and that is not tidiness: closing the sidebar mid-sentence fires no
+   * `focusout`, so a view resolved again within the cap would refuse to paint and would refocus a
+   * control from a page that no longer exists.</p>
+   */
+  private forgetEditing(): void {
+    this.editingSince = 0;
+    this.editingId = '';
+    this.editingCaret = [0, 0];
   }
 
   private async write(message: SettingMessage): Promise<void> {

@@ -71,6 +71,8 @@ class FakeElement {
   readonly listeners = new Map<string, ((event: FakeEvent) => void)[]>();
   focused = false;
   caret: readonly [number, number] = [0, 0];
+  selectionStart = 0;
+  selectionEnd = 0;
 
   constructor(
     readonly tagName: string,
@@ -95,6 +97,8 @@ class FakeElement {
 
   setSelectionRange(start: number, end: number): void {
     this.caret = [start, end];
+    this.selectionStart = start;
+    this.selectionEnd = end;
   }
 }
 
@@ -194,6 +198,8 @@ function run(elements: readonly FakeElement[], over: Partial<PanelState> = {}): 
 
 const promptBox = (): FakeElement => new FakeElement('TEXTAREA', { setting: 'chatPrompt' });
 const languagePicker = (): FakeElement => new FakeElement('SELECT', { setting: 'chatLanguage' }, 'en');
+/** Two controls that share a setting name and are told apart only by their role. */
+const roundsFor = (role: string): FakeElement => new FakeElement('INPUT', { setting: 'rounds', role }, '2', 'number');
 const settings = (page: Page): Record<string, unknown>[] =>
   page.posted.filter((message) => message.type === 'setting');
 const focusMessages = (page: Page): Record<string, unknown>[] =>
@@ -239,11 +245,13 @@ test('the page says when a control has focus, so nothing rebuilds it underneath'
 
   page.fire(0, 'focusin');
 
-  assert.deepEqual(focusMessages(page), [{ type: 'focus', setting: 'chatPrompt', editing: true }]);
+  assert.deepEqual(focusMessages(page),
+    [{ type: 'focus', id: 'chatPrompt||', editing: true, start: 0, end: 0 }]);
 
   page.fire(0, 'focusout', { relatedTarget: null });
 
-  assert.deepEqual(focusMessages(page)[1], { type: 'focus', setting: 'chatPrompt', editing: false });
+  assert.deepEqual(focusMessages(page)[1],
+    { type: 'focus', id: 'chatPrompt||', editing: false, start: 0, end: 0 });
 });
 
 test('moving between two controls is not a moment to rebuild the page', () => {
@@ -260,7 +268,7 @@ test('moving between two controls is not a moment to rebuild the page', () => {
     'the page was released for a repaint while focus was still inside it',
   );
   // Paired with the transition actually being seen, so this cannot pass by reporting nothing at all.
-  assert.deepEqual(focusMessages(page).map((message) => message.setting), ['chatPrompt', 'chatLanguage']);
+  assert.deepEqual(focusMessages(page).map((message) => message.id), ['chatPrompt||', 'chatLanguage||']);
 });
 
 test('leaving the box writes what was typed, before it says the box is free', () => {
@@ -291,10 +299,30 @@ test('a panel that is being hidden writes what was typed into it', () => {
 test('a paint that could not be withheld any longer puts the caret back', () => {
   const box = promptBox();
   box.value = 'поясни';
-  const page = run([box, languagePicker()], { focus: 'chatPrompt' });
+  const page = run([box, languagePicker()], { focus: { id: 'chatPrompt||', start: 2, end: 2 } });
 
   assert.equal(page.elements[0].focused, true, 'the control the paint landed under was not refocused');
-  assert.deepEqual(page.elements[0].caret, [6, 6], 'the caret did not return to the end of what was typed');
+  assert.deepEqual(page.elements[0].caret, [2, 2], 'the caret did not come back where it was');
+});
+
+test('the caret is put back inside a value the rebuilt page is shorter than', () => {
+  const box = promptBox();
+  box.value = 'по';
+  const page = run([box], { focus: { id: 'chatPrompt||', start: 40, end: 90 } });
+
+  assert.deepEqual(page.elements[0].caret, [2, 2], 'a range past the end of the box was asked for');
+});
+
+test('two controls sharing a setting name are told apart', () => {
+  // `rounds` is carried by one control per role. A focus anchor that were the setting NAME alone
+  // would refocus whichever of them the document holds first — which is never the one being edited
+  // unless it happens to be Architecture.
+  const architecture = roundsFor('Architecture');
+  const security = roundsFor('SecurityReliability');
+  run([architecture, security], { focus: { id: 'rounds||SecurityReliability', start: 1, end: 1 } });
+
+  assert.equal(security.focused, true, 'the control that was being edited was not the one refocused');
+  assert.equal(architecture.focused, false, 'a namesake control took the focus');
 });
 
 test('an ordinary paint takes nobody’s focus', () => {
@@ -304,10 +332,17 @@ test('an ordinary paint takes nobody’s focus', () => {
 });
 
 test('a focus name that is not a setting name never reaches the page', () => {
-  const hostile = panelHtml(state({ focus: '</script><script>alert(1)' }), 'test-nonce');
+  const hostile = panelHtml(
+    state({ focus: { id: '</script><script>alert(1)', start: 0, end: 0 } }), 'test-nonce');
 
   assert.ok(!hostile.includes('alert(1)'), 'a value echoed from the webview was written into its own script');
-  assert.match(hostile, /const focusOn = '';/, 'the name was escaped rather than refused');
+  assert.match(hostile, /const focusOn = null;/, 'the id was escaped rather than refused');
+
+  // And a caret that is not two ordered whole numbers is coerced rather than carried.
+  const silly = panelHtml(
+    state({ focus: { id: 'chatPrompt||', start: -5, end: Number.NaN } }), 'test-nonce');
+
+  assert.match(silly, /const focusOn = \{"id":"chatPrompt\|\|","start":0,"end":0\};/);
 });
 
 test('a chat setting cannot repaint the panel — the measurement this design rests on', () => {
@@ -335,7 +370,7 @@ test('the host never renders from a configuration it has not finished writing', 
   // class, which is exactly what a unit test could not see even if it could reach them.
   const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8');
 
-  const awaits = source.indexOf('await this.queued;');
+  const awaits = source.indexOf('const seen = this.queued;');
   const paints = source.indexOf('const key = staticKey(state);');
   assert.ok(awaits > 0 && paints > awaits, 'render must await the write queue before it decides what to paint');
 
@@ -345,4 +380,29 @@ test('the host never renders from a configuration it has not finished writing', 
     'a rejected write would poison the queue and freeze every later one');
   assert.match(source, /this\.enqueue\(\(\) => this\.write\(/,
     'settings are written straight off the message again, so two of them can race');
+});
+
+test('leaving a box the pause already saved does not write it a second time', () => {
+  const box = promptBox();
+  const page = run([box, languagePicker()]);
+
+  box.value = 'поясни';
+  page.fire(0, 'input');
+  page.tick();
+  page.fire(0, 'change');
+  page.fire(0, 'focusout', { relatedTarget: null });
+
+  assert.deepEqual(settings(page).map((message) => message.value), ['поясни'],
+    'the same value was written twice — `change` compares with the value at focus, not the one sent');
+});
+
+test('the hold is not renewed by moving between controls, and disposal forgets it', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8');
+
+  assert.match(source, /if \(this\.editingSince === 0\) \{\s*\n\s*this\.editingSince = Date\.now\(\);/,
+    'every focus restarts the clock again, so tabbing between controls withholds a paint forever');
+  assert.match(source, /onDidDispose\(\(\) => \{[\s\S]{0,120}this\.forgetEditing\(\);/,
+    'a sidebar closed mid-sentence leaves the host believing a control is still being edited');
+  assert.match(source, /const seen = this\.queued;[\s\S]{0,200}if \(seen !== this\.queued\)|if \(seen === this\.queued\)/,
+    'render awaits one snapshot of the queue, so a write appended while it waited is read too late');
 });

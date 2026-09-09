@@ -169,7 +169,21 @@ export interface PanelState {
    * ordinary paint. Only ever a setting NAME; {@link panelHtml} refuses anything else before it can
    * reach the page's script.</p>
    */
-  readonly focus?: string | undefined;
+  readonly focus?: PanelFocus | undefined;
+}
+
+/**
+ * The control that had focus when a paint could no longer be withheld, and where its caret was.
+ *
+ * <p>`id` is `setting|vendor|role`, not the setting name alone: a role-keyed control and a
+ * vendor-keyed one both carry `data-setting="rounds"`, so a name would refocus whichever of them
+ * the document happened to hold first. The page builds this id from its own attributes and compares
+ * it as DATA — it is never put into a selector, so nothing here can become one.</p>
+ */
+export interface PanelFocus {
+  readonly id: string;
+  readonly start: number;
+  readonly end: number;
 }
 
 /**
@@ -215,16 +229,28 @@ export function withholdsRepaint(editingSince: number, now: number): boolean {
  */
 export const OPEN_BY_DEFAULT: readonly string[] = [];
 
+/** `setting|vendor|role`, each of them a name. Nothing that could end a script or open a tag. */
+const FOCUS_ID = /^[A-Za-z0-9_.-]+\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*$/;
+
 /**
- * A setting name, or nothing at all — never anything that could end a script element.
+ * {@link PanelState.focus} as a literal the page's own script can hold, or `null`.
  *
- * <p>{@link PanelState.focus} is echoed back from a message the WEBVIEW sent, and it is written into
- * the page's own script as a string literal. A name is `[A-Za-z0-9_]`, every declared setting key
- * is, and anything else is dropped rather than escaped: there is no legitimate value here that
- * needs a quote or a bracket, so refusing them costs nothing and closes the injection outright.</p>
+ * <p>Three layers, because this value is echoed back from a message the WEBVIEW sent and is written
+ * into a `<script>`: the id must match {@link FOCUS_ID} or the whole thing is dropped rather than
+ * escaped — no legitimate control id needs a quote — the caret is coerced to two ordered
+ * non-negative integers, and `<` is escaped in the serialised result so that widening the pattern
+ * one day cannot reopen the hole. The code round asked for a serialiser instead of a whitelist; it
+ * has both, because a whitelist alone is a guarantee that depends on nobody editing it.</p>
  */
-function focusName(focus: string | undefined): string {
-  return focus !== undefined && /^[A-Za-z0-9_]+$/.test(focus) ? focus : '';
+function focusLiteral(focus: PanelFocus | undefined): string {
+  if (focus === undefined || !FOCUS_ID.test(focus.id)) {
+    return 'null';
+  }
+  const whole = (value: number): number => (Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0);
+  const start = whole(focus.start);
+
+  return JSON.stringify({ id: focus.id, start, end: Math.max(start, whole(focus.end)) })
+    .replace(/</g, '\\u003c');
 }
 
 export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date.now()): string {
@@ -256,6 +282,10 @@ ${body}
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
 
+  // What names ONE control. A role-keyed control and a vendor-keyed one can share a setting name,
+  // so a name alone would refocus whichever of them the document holds first.
+  const idOf = (el) => el.dataset.setting + '|' + (el.dataset.vendor || '') + '|' + (el.dataset.role || '');
+  const posted = new Map();
   const save = (el) => {
     const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
     if (value === '__other__') {
@@ -263,9 +293,22 @@ ${body}
       vscode.postMessage({ type: 'command', command: 'customModel', id: el.dataset.vendor });
       return;
     }
+    // \`change\` compares with the value the control had when it gained FOCUS, not with the value
+    // last sent — so typing, pausing past the write, then blurring wrote the same string twice.
+    if (posted.get(el) === value) {
+      return;
+    }
+    posted.set(el, value);
     vscode.postMessage({ type: 'setting', key: el.dataset.setting, value,
                          vendor: el.dataset.vendor, role: el.dataset.role });
   };
+  const reportFocus = (el, editing) => vscode.postMessage({
+    type: 'focus',
+    id: idOf(el),
+    editing,
+    start: typeof el.selectionStart === 'number' ? el.selectionStart : 0,
+    end: typeof el.selectionEnd === 'number' ? el.selectionEnd : 0,
+  });
 
   // A textarea fires \`change\` at BLUR, so everything typed before that lived only in the DOM — and
   // a repaint, which can land from five causes that are nobody's doing, threw the DOM away with it.
@@ -297,11 +340,12 @@ ${body}
         if (timer !== 0) {
           clearTimeout(timer);
         }
-        timer = setTimeout(() => { timer = 0; flush(); }, ${SAVE_AFTER_MS});
+        // The caret rides along with the write, so a paint that lands later puts it back where it
+        // is rather than at the end — and it costs no message of its own.
+        timer = setTimeout(() => { timer = 0; flush(); reportFocus(el, true); }, ${SAVE_AFTER_MS});
       });
     }
-    el.addEventListener('focusin', () =>
-      vscode.postMessage({ type: 'focus', setting: el.dataset.setting, editing: true }));
+    el.addEventListener('focusin', () => reportFocus(el, true));
     el.addEventListener('focusout', (event) => {
       // The value first, ALWAYS, and the release second: the provider repaints when it hears the
       // release, and a repaint that overtook the write would re-stamp the box from the value being
@@ -314,7 +358,7 @@ ${body}
       if (next && next.dataset && next.dataset.setting !== undefined) {
         return;
       }
-      vscode.postMessage({ type: 'focus', setting: el.dataset.setting, editing: false });
+      reportFocus(el, false);
     });
   }
   // Neither is a blur, and both can be the last thing that happens to this page.
@@ -329,14 +373,20 @@ ${body}
   // names it, and the caret comes back to the end of what is in it — the end rather than where it
   // was, because a caret position per keystroke is a message per keystroke, and this happens only
   // after half a minute of focus that never moved.
-  const focusOn = '${focusName(state.focus)}';
-  if (focusOn !== '') {
-    const back = document.querySelector('[data-setting="' + focusOn + '"]');
-    if (back !== null) {
+  const focusOn = ${focusLiteral(state.focus)};
+  if (focusOn !== null) {
+    for (const back of document.querySelectorAll('[data-setting]')) {
+      if (idOf(back) !== focusOn.id) {
+        continue;
+      }
       back.focus();
       if (typeof back.setSelectionRange === 'function') {
-        back.setSelectionRange(back.value.length, back.value.length);
+        // Clamped: the value the page was rebuilt with can be shorter than the one the caret was
+        // measured in, and a range past the end is a range nobody asked for.
+        const end = Math.min(focusOn.end, back.value.length);
+        back.setSelectionRange(Math.min(focusOn.start, end), end);
       }
+      break;
     }
   }
   for (const el of document.querySelectorAll('[data-prompt]')) {
