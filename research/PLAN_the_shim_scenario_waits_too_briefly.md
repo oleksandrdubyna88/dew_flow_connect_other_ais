@@ -107,6 +107,59 @@ file is how one failing test makes the next three fail for unrelated reasons.
 rather than `the child is running`, because a process can change state between the check and the
 sentence. (codex.)
 
+## What the CODE round changed
+
+**The promotion left its own row behind, and two vendors caught it.** Rebasing onto a moving main
+conflicts in `todo/README.md`, and resolving that by keeping BOTH sides restores the row main still
+had — so the plan landed in `research/` with its open-work row intact. It had already happened once
+undetected: `PLAN_a_progress_note_is_never_a_reason_the_local_half.md` merged to main the same way,
+and running the checker here found both.
+
+```
+$ git submodule update --init --depth 1 .claude/rules/shared
+$ node .claude/rules/shared/tools/plan-lifecycle.mjs
+plan-lifecycle: 2 finding(s) — see common/planning-docs.md
+  index     todo/README.md still lists PLAN_a_progress_note_is_never_a_reason_the_local_half.md, …
+  link      todo/README.md -> PLAN_a_progress_note_is_never_a_reason_the_local_half.md
+```
+
+Both rows are gone and it reports `plan-lifecycle: clean.` The CI step exists but the tool lives in
+the conventions submodule, which a worktree does not check out — so it says nothing locally unless
+asked.
+
+**The optional `limit` was the defect in miniature.** Three findings from codex, and a fourth from
+gemini from the opposite side: an optional parameter is exactly how the thirty seconds got there, and
+a scenario could pass its own number again with the compiler saying nothing — while a diagnostic test
+that omitted it would inherit the two-minute budget and block the suite the day it regressed. There
+are two methods now: `WaitForAsync`, which always uses `PrerequisiteWait`, and
+`WaitBrieflyForAsync`, whose name says it is for the tests OF the wait.
+
+Four more, each real:
+
+- **The condition is read at least once**, as a `do`, so a budget already spent does not report a
+  failure for something nobody looked at. (gemini.)
+- **The exit path waits for the stream handlers to finish** before building the message.
+  `ErrorDataReceived` is asynchronous, so a child that writes its reason and exits can have that
+  reason still queued at the moment the exit is noticed — and the reason is the whole point of
+  reporting the exit. `WaitForExit()` with no timeout is documented to wait for them;
+  `WaitForExitAsync` does not promise it. (codex.)
+- **The stderr buffer is capped at 8 KB of the most recent lines**, kept from the END, because what a
+  process said just before it stopped is the part that explains why. (codex.)
+- **`RunningShim` is a class, not a record** — it owns a process and a growing buffer, which is a
+  stateful service — and its `Dispose` catches `Win32Exception` as well as `InvalidOperationException`,
+  because that is what `Kill` throws on Windows. (gemini.) The failure message names the BUDGET as
+  well as the elapsed time, so a reader can tell two minutes from a fraction of a second without
+  opening the file.
+
+Nineteen findings were rejected with reasons. Seven of them were `local` restating that a rule was
+satisfied (*"This is compliant."*, *"It does."*), and four more asked for code that is already there —
+`Kill(entireProcessTree: true)`, `BeginErrorReadLine` immediately after `Start`, `HasExited` checked
+before `ExitCode`, `Dispose` doing the killing. Two are worth naming because they sounded right: that
+stdout is an undrained pipe (it is not redirected at all, so the child inherits the handle and writes
+straight through), and that a child exiting instantly loses its stderr to the race —
+`AFailedWait_NamesWhatItWaitedForAndWhatTheChildSaid` starts a shim that writes one line and exits in
+milliseconds, and asserts the message quotes it.
+
 ## Evidence
 
 | reverted | test | failure |
@@ -118,4 +171,4 @@ The success path is held by `AWaitReturnsWhenTheConditionComesTrueLate`, which t
 for: a test that only ever proves the failure path would pass just as well against a wait that gave
 up immediately.
 
-Whole suite: **1101 tests, 1100 pass, 0 fail, 1 skipped.**
+Whole suite: **1113 tests, 1112 pass, 0 fail, 1 skipped.** `plan-lifecycle: clean.`
