@@ -288,9 +288,32 @@ budget, so it fits today and an endpoint longer than about 85 characters would n
 
 One more fallback moved. `Because` ended at "the last line" when every line was scaffolding, and for
 a reviewer killed while it was still queuing that is a progress note again — the same defect wearing
-the other shoe. A tail that is nothing but progress notes now says *it was still waiting for its
-engine when it stopped*; a tail that is nothing but stack frames keeps the old behaviour, because its
-last line is at least something a person can search for.
+the other shoe. A tail carrying *any* progress note now says *it was still waiting for its engine
+when it stopped*; a tail that is nothing but stack frames keeps the old behaviour, because its last
+line is at least something a person can search for. (It was "every line is a progress note" first,
+which sent a reviewer that waited and then crashed straight back to quoting a stack frame.)
+
+**The tag is a fact about the stream, so it stopped being a private constant.** `ShimNotes` holds the
+name this program calls itself, the `[coai-mcp] ` prefix `Note` puts in front of every line it
+writes, and the two questions that prefix answers: *did we write this line*, and *what is the
+sentence without the tag*. It was `private const string AppName` inside the shim's own `Program`,
+which the code that READS the stream cannot reach — and both halves of the code round's real findings
+needed it:
+
+- **A progress recogniser must be ANCHORED, not searched.** `LocalAsk.IsProgress` matched the stem
+  anywhere in the line, so a wrapper reporting `error: waiting for the local engine at …: connection
+  refused` would have been classified as progress and hidden — the picker suppressing the only line
+  that said anything. Three findings, two vendors. It is anchored to the tag now.
+- **A reason is capped at 160 characters, and that cap is for a VENDOR's line.** Ours are written to
+  be read and are already bounded by the 400-character tail. Cutting them cost the whole point of
+  one: measured on the code round, a queued-out local reviewer reported
+  `…so its question was never asked. One caller uses t.` — 160 characters of a 340-character verdict,
+  ending mid-word, with every cure it names past the cut. The plan's own Definition of Done said
+  *reports `QueuedOutMessage`, whole*, and until this it did not.
+
+`StdErrTail` stays at 400. Measured, `QueuedOutMessage` is 340–359 characters, so it fits and an
+endpoint longer than about 85 characters would not — a capacity question, recorded rather than
+solved, because raising the budget puts more vendor noise into every other failure.
 
 Design record:
 [PLAN_a_progress_note_is_never_a_reason_the_local_half.md](PLAN_a_progress_note_is_never_a_reason_the_local_half.md).

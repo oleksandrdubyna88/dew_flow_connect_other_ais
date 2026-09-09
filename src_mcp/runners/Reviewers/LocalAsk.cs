@@ -126,14 +126,19 @@ public static class LocalAsk
     /// Whether a line this shim wrote is PROGRESS rather than a verdict.
     /// </summary>
     /// <remarks>
-    /// Matched on the STEM, because the endpoint, the queue position, the elapsed time, the model
-    /// and the pid are all interpolated into it. The same shape as
+    /// <para>Matched on the STEM, because the endpoint, the queue position, the elapsed time, the
+    /// model and the pid are all interpolated into it. The same shape as
     /// <see cref="RemoteAsk.IsProgress"/>, and for the same reason recorded there: asking "is this
     /// progress" is answerable because these sentences are OURS, while asking "does this announce a
-    /// failure" is not — that was tried, and three reviewers broke it with tallies.
+    /// failure" is not — that was tried, and three reviewers broke it with tallies.</para>
+    /// <para><b>ANCHORED, not searched.</b> A bare <c>Contains</c> anywhere in the line would call
+    /// <c>error: waiting for the local engine at …: connection refused</c> progress and hide it —
+    /// three findings from two vendors on the code round, and they are right: this note is the WHOLE
+    /// message the shim wrote, so it starts the line after the tag. A line that merely mentions the
+    /// phrase did not come from here.</para>
     /// </remarks>
     public static bool IsProgress(string line) =>
-        line.Contains(WaitingOpening, StringComparison.OrdinalIgnoreCase);
+        ShimNotes.Message(line.TrimStart()).StartsWith(WaitingOpening, StringComparison.OrdinalIgnoreCase);
 
     /// <inheritdoc cref="TooSlowMessage"/>
     public const string TooSlowOpening = "the local engine at ";
