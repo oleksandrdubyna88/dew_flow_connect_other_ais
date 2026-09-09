@@ -84,10 +84,10 @@ test('the chat tab asks the workbench for that pair', () => {
 });
 
 test('a panel restored after a reload must be built the same way', () => {
-  // The code round's open tail, held rather than written down. There is no `WebviewPanelSerializer`
-  // in this extension today, so no tab loses its icon — but the plan that adds one restores a panel
-  // WITHOUT passing through `chatWithOtherAi`, and would hand back tabs wearing the generic glyph
-  // again. The day a serializer appears, the file that registers it has to reach `createChatPanel`.
+  // Written as an open tail when there was no serializer at all, and it earned its keep the week
+  // after: the reload plan's first version restored a panel WITHOUT passing through
+  // `createChatPanel`, and this went red. A restored tab that skipped the builder would come back
+  // with no icon, no message wiring and no disposal.
   const root = path.join(EXTENSION_ROOT, 'src');
   const walk = (dir: string): string[] => fs.readdirSync(dir, { withFileTypes: true })
     .flatMap((entry) => {
@@ -108,7 +108,12 @@ test('a panel restored after a reload must be built the same way', () => {
     .filter((file) => /createChatPanel\(/.test(fs.readFileSync(file, 'utf8')))
     .map((file) => path.basename(file, '.ts'));
 
-  assert.ok(builders.length > 0, 'nothing builds a chat panel any more, so this scan guards nothing');
+  // The known instances, so a scan that has stopped matching anything cannot pass by matching
+  // nothing — the same pairing every structural test in this suite carries.
+  assert.ok(builders.includes('chatPanel'),
+    `the module that defines the builder is not among them; found ${builders.join(', ')}`);
+  assert.ok(builders.includes('chatCommand'),
+    `the module that opens and restores conversations is not among them; found ${builders.join(', ')}`);
 
   for (const file of files) {
     const source = fs.readFileSync(file, 'utf8');

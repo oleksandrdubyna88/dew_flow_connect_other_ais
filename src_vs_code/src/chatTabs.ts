@@ -180,6 +180,12 @@ export class ChatTabMemory {
     const step = async (): Promise<void> => {
       await this.store.update(TAB_STORE_KEY, stored(change(this.held())));
     };
-    this.queued = this.queued.then(step, step).catch(() => undefined);
+    this.queued = this.queued.then(step, step).catch((reason: unknown) => {
+      // Swallowed so the queue survives — a chain left rejected would stop every later write, which
+      // is the same silence as the bug this module exists to end. Said out loud in the host's own
+      // log rather than in a notification: nobody can act on a memento that would not take a write,
+      // and one per turn would be a wall of them.
+      console.error('ConnectOtherAIs: a chat tab could not be saved for a reload', reason);
+    });
   }
 }

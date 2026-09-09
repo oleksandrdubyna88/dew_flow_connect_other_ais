@@ -958,6 +958,14 @@ would have made the whole feature a no-op. A closed tab is simply never restored
 only deserializes panels that were open. The store is bounded instead: a record per conversation,
 newest first, cut at a week and at twenty, swept once on activation.
 
+**A push that changed nothing writes nothing.** `show` runs on every state push — a turn starting, a
+queue position moving, a failure clearing — and the first version rewrote up to twenty whole
+transcripts into one key each time, which is a great deal of JSON on the extension host for a page
+that said the same words. The comparison is by REFERENCE, exact because `thread.messages` is replaced
+rather than mutated. And a question a restored conversation refuses comes BACK to the composer: the
+page clears its box when it sends, so a refusal that said only what was wrong would also have thrown
+away what the person typed, leaving them to write it again to try the fix they were just told to make.
+
 `chatTabs.ts` holds all of that with no `vscode` import — what is written, what a damaged record does
 (dropped, never repaired: a transcript with a hole reads as a model that said nothing), what a
 different `version` does (discarded, never guessed at), and the write queue. The queue matters
