@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CARRY_BUDGET, DEFAULT_CHAT_PROMPT, carriedTurn, openingTurn } from '../chatPrompt';
+import { CARRY_BUDGET, DEFAULT_CHAT_PROMPT, REMOTE_CARRY_BUDGET, carriedTurn, openingTurn } from '../chatPrompt';
 
 /**
  * What a captured passage actually travels in.
@@ -235,9 +235,23 @@ test('one turn bigger than the whole budget is cut, and says it was', () => {
 test('the fence id can be given, so the same conversation twice is the same turn twice', () => {
   // Determinism is what lets a contract test compare two implementations of this handover - the
   // remote transport will build one too. The default stays random, so no caller can forget.
-  const first = carriedTurn(SAID, 'same question', 'en', 'fixedid');
-  const second = carriedTurn(SAID, 'same question', 'en', 'fixedid');
+  const first = carriedTurn(SAID, 'same question', 'en', undefined, 'fixedid');
+  const second = carriedTurn(SAID, 'same question', 'en', undefined, 'fixedid');
 
   assert.strictEqual(first, second, 'the same inputs produced two different turns');
   assert.ok(first.includes('--- what was said (fixedid) ---'), 'the given fence id was ignored');
+});
+
+test('a conversation going to a SERVER carries less than one going to a pipe', () => {
+  // A local CLI takes the whole thing on stdin — 76 059 bytes answered in five seconds. A Team
+  // server takes it as a JSON body through whatever sits in front of it, and a body limit is a 413
+  // that arrives at turn three, exactly when the person expects the answer they were building to.
+  const long = { role: 'model' as const, text: 'о'.repeat(40_000) };
+
+  const toAPipe = carriedTurn([long], 'and now?', 'en', undefined, 'fixed');
+  const toAServer = carriedTurn([long], 'and now?', 'en', REMOTE_CARRY_BUDGET, 'fixed');
+
+  assert.ok(toAServer.length < toAPipe.length, 'the server was sent as much as the pipe');
+  assert.ok(toAServer.length < REMOTE_CARRY_BUDGET + 5_000, `the server turn is ${toAServer.length} characters`);
+  assert.match(toAServer, /cut here/, 'the cut is silent');
 });

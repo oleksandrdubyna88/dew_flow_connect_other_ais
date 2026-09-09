@@ -96,6 +96,17 @@ export interface Said {
  */
 export const CARRY_BUDGET = 60_000;
 
+/**
+ * What a REMOTE conversation may carry, which is less.
+ *
+ * <p>A local CLI takes the whole thing on stdin — 76 059 bytes were answered in five seconds. A Team
+ * server takes it as a JSON body through whatever sits in front of it, and a body limit is a 413
+ * that arrives at turn three, exactly when the person expects the answer they have been building
+ * towards. Twenty thousand characters is a long conversation about a paragraph and well inside any
+ * default body limit. (gemini and local, the plan round.)</p>
+ */
+export const REMOTE_CARRY_BUDGET = 20_000;
+
 /** What the fences are made of. The id is per-turn — see `carriedTurn`. */
 const SAID_OPEN = (id: string): string => `--- what was said (${id}) ---`;
 const SAID_CLOSE = (id: string): string => `--- end of what was said (${id}) ---`;
@@ -162,6 +173,8 @@ export function carriedTurn(
   said: readonly Said[],
   question: string,
   language: LanguageCode,
+  /** How much of the conversation may travel. Less for a server than for a pipe — see above. */
+  budget = CARRY_BUDGET,
   // Per turn, and unguessable, because the material is a conversation that can contain ANY text —
   // including this file's own delimiters. A transcript that closes its own fence early turns
   // everything after it back into instructions to the model. (gemini, the plan round.) Given rather
@@ -171,7 +184,7 @@ export function carriedTurn(
   fenceId: string = randomUUID().slice(0, 8),
 ): string {
   const named = ENGLISH_NAME[language] ?? ENGLISH_NAME.en;
-  const { kept, trimmed } = within(said, CARRY_BUDGET);
+  const { kept, trimmed } = within(said, budget);
   // Attributed, or the answers read as more questions and the model argues with itself. The label
   // stands on its own line and the text is INDENTED under it, so a line inside somebody's answer
   // that reads `You: …` is visibly nested rather than a boundary the model could take for real.

@@ -20,7 +20,7 @@ import { ChatHome, adapterFor, chatHome, chatRuntimeRefusal, defaultExecutableFo
 import { chatProcessFor } from './chatProcess';
 import { launch } from './processLauncher';
 import { resolvedExecutable } from './versionProbe';
-import { carriedTurn, openingTurn } from './chatPrompt';
+import { REMOTE_CARRY_BUDGET, carriedTurn, openingTurn } from './chatPrompt';
 import { LanguageCode } from './settingsShape';
 import { sourceSession, TabSnapshot } from './sessionKey';
 import { triggerPlan } from './chatTrigger';
@@ -218,7 +218,9 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   // because the process it is going to never heard any of it. Putting the carried version in the
   // transcript would print the entire history back at them under their own one-line question.
   const carrying = thread.carry;
-  const sent = carrying.length > 0 ? carriedTurn(carrying, text, chatLanguage()) : text;
+  const sent = carrying.length > 0
+    ? carriedTurn(carrying, text, chatLanguage(), thread.forgetful ? REMOTE_CARRY_BUDGET : undefined)
+    : text;
 
   const result = await thread.session.send(sent);
   thread.running = false;
