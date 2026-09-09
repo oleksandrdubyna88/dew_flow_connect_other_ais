@@ -161,6 +161,49 @@ export interface PanelState {
    * one set of keys is the drift this repository has already paid for twice.</p>
    */
   readonly chat?: ChatSettings | undefined;
+  /**
+   * The `data-setting` name of the control that had focus when this paint could no longer be
+   * withheld — so the page can put the caret back where the person left it.
+   *
+   * <p>Optional, like {@link PanelState.chat}: absent means nothing was focused, which is the
+   * ordinary paint. Only ever a setting NAME; {@link panelHtml} refuses anything else before it can
+   * reach the page's script.</p>
+   */
+  readonly focus?: string | undefined;
+}
+
+/**
+ * How long a textarea waits after the last keystroke before its value is written.
+ *
+ * <p>One write per pause rather than one per key. Short enough that leaving the window cannot
+ * plausibly cost a sentence, long enough that a fast typist does not produce a write per character.
+ * The value is flushed at once on blur, on the panel being hidden and on the page unloading, so this
+ * is the delay for somebody who stops typing and does nothing else at all.</p>
+ */
+export const SAVE_AFTER_MS = 400;
+
+/**
+ * How long a full repaint may be withheld from a focused control before it lands anyway.
+ *
+ * <p>Absolute, from the moment focus was gained — not renewed by typing. A hold a keystroke renews
+ * is a hold with no bound, and `focusout` is not guaranteed: switch to another application
+ * mid-sentence and the panel would never learn the box was abandoned. Nothing is lost when the cap
+ * expires — the value was written {@link SAVE_AFTER_MS} after the last keystroke, and the paint
+ * carries {@link PanelState.focus}, so the caret comes back.</p>
+ */
+export const REPAINT_HOLD_MS = 30_000;
+
+/**
+ * Whether a repaint must wait, because a control is being edited and the hold has not run out.
+ *
+ * <p>Pure, and beside {@link staticKey} on purpose: which of the two update paths runs is the one
+ * decision this panel makes that no test can reach through `vscode`, so both halves of it live
+ * where a test can call them.</p>
+ *
+ * @param editingSince when a control gained focus, or 0 when none has it
+ */
+export function withholdsRepaint(editingSince: number, now: number): boolean {
+  return editingSince > 0 && now - editingSince < REPAINT_HOLD_MS;
 }
 
 /**
@@ -171,6 +214,18 @@ export interface PanelState {
  * once and afterwards only visit when something is waiting on you.</p>
  */
 export const OPEN_BY_DEFAULT: readonly string[] = [];
+
+/**
+ * A setting name, or nothing at all — never anything that could end a script element.
+ *
+ * <p>{@link PanelState.focus} is echoed back from a message the WEBVIEW sent, and it is written into
+ * the page's own script as a string literal. A name is `[A-Za-z0-9_]`, every declared setting key
+ * is, and anything else is dropped rather than escaped: there is no legitimate value here that
+ * needs a quote or a bracket, so refusing them costs nothing and closes the injection outright.</p>
+ */
+function focusName(focus: string | undefined): string {
+  return focus !== undefined && /^[A-Za-z0-9_]+$/.test(focus) ? focus : '';
+}
 
 export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date.now()): string {
   const open = state.openSections.length === 0 ? OPEN_BY_DEFAULT : state.openSections;
@@ -200,17 +255,89 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
 ${body}
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
+
+  const save = (el) => {
+    const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
+    if (value === '__other__') {
+      // Not a model — a request to type one; the input box comes from the provider side.
+      vscode.postMessage({ type: 'command', command: 'customModel', id: el.dataset.vendor });
+      return;
+    }
+    vscode.postMessage({ type: 'setting', key: el.dataset.setting, value,
+                         vendor: el.dataset.vendor, role: el.dataset.role });
+  };
+
+  // A textarea fires \`change\` at BLUR, so everything typed before that lived only in the DOM — and
+  // a repaint, which can land from five causes that are nobody's doing, threw the DOM away with it.
+  // A textarea is written as it is TYPED now: one message per pause rather than one per key, and
+  // flushed the moment the box is left, the panel is hidden, or the page goes away. A select and a
+  // checkbox keep \`change\` alone — a dropdown must not save half-chosen.
+  let waiting = null;
+  let timer = 0;
+  const forget = () => {
+    if (timer !== 0) {
+      clearTimeout(timer);
+      timer = 0;
+    }
+    waiting = null;
+  };
+  const flush = () => {
+    const el = waiting;
+    forget();
+    if (el !== null) {
+      save(el);
+    }
+  };
+
   for (const el of document.querySelectorAll('[data-setting]')) {
-    el.addEventListener('change', () => {
-      const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
-      if (value === '__other__') {
-        // Not a model — a request to type one; the input box comes from the provider side.
-        vscode.postMessage({ type: 'command', command: 'customModel', id: el.dataset.vendor });
+    el.addEventListener('change', () => { forget(); save(el); });
+    if (el.tagName === 'TEXTAREA') {
+      el.addEventListener('input', () => {
+        waiting = el;
+        if (timer !== 0) {
+          clearTimeout(timer);
+        }
+        timer = setTimeout(() => { timer = 0; flush(); }, ${SAVE_AFTER_MS});
+      });
+    }
+    el.addEventListener('focusin', () =>
+      vscode.postMessage({ type: 'focus', setting: el.dataset.setting, editing: true }));
+    el.addEventListener('focusout', (event) => {
+      // The value first, ALWAYS, and the release second: the provider repaints when it hears the
+      // release, and a repaint that overtook the write would re-stamp the box from the value being
+      // replaced — the very symptom this fixes.
+      flush();
+      // Tabbing from one control to the next is not a moment to rebuild the page. The focusout of
+      // the control being left arrives before the focusin of the one being entered, so a release
+      // here would repaint over a caret that is on its way.
+      const next = event.relatedTarget;
+      if (next && next.dataset && next.dataset.setting !== undefined) {
         return;
       }
-      vscode.postMessage({ type: 'setting', key: el.dataset.setting, value,
-                           vendor: el.dataset.vendor, role: el.dataset.role });
+      vscode.postMessage({ type: 'focus', setting: el.dataset.setting, editing: false });
     });
+  }
+  // Neither is a blur, and both can be the last thing that happens to this page.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      flush();
+    }
+  });
+  window.addEventListener('pagehide', () => flush());
+
+  // A repaint that could not be withheld any longer lands under a focused control. The provider
+  // names it, and the caret comes back to the end of what is in it — the end rather than where it
+  // was, because a caret position per keystroke is a message per keystroke, and this happens only
+  // after half a minute of focus that never moved.
+  const focusOn = '${focusName(state.focus)}';
+  if (focusOn !== '') {
+    const back = document.querySelector('[data-setting="' + focusOn + '"]');
+    if (back !== null) {
+      back.focus();
+      if (typeof back.setSelectionRange === 'function') {
+        back.setSelectionRange(back.value.length, back.value.length);
+      }
+    }
   }
   for (const el of document.querySelectorAll('[data-prompt]')) {
     el.addEventListener('change', () =>

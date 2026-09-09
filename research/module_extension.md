@@ -762,6 +762,58 @@ were. `usageWindow` and `latestServerVersion` are now in the key; the spending R
 region, so they advance mid-round without closing a dropdown. The window tabs deliberately sit
 OUTSIDE that region: a button inside a patched region loses its click listener on the next tick.
 
+### A third answer beside repaint and patch: WITHHOLD (2026-09-09)
+
+The prompt box in *Chat other AIs* forgot what was typed into it. Two halves, and a measurement that
+refuted the obvious fix before it was written.
+
+**The measurement.** `chatPrompt` was suspected of repainting the panel on every save, which is why
+the draft plan called "save as you type" a trap. It does not: the paint decision is `staticKey`, and
+its eleven fields are `settings`, `vendors`, `codexModels`, `localEngines`, `server`, `side`,
+`latestServerVersion`, `usageWindow`, `openSections`, `teamServers` and `usageScope`. `state.chat` is
+not one of them, and `state.settings` is `CoaiSettings`, which the chat keys are deliberately not
+part of. A chat setting cannot rebuild the page. That is now an assertion in
+`thePromptBoxRemembers.test.ts`, so adding `chat` to the key fails with that sentence instead of
+making the box flicker.
+
+**What actually killed the draft** is the same reading from the other side. `render()` runs
+unconditionally every five seconds from the escalation watcher, recomputing all eleven, and four of
+them move with nobody touching the panel — the local-engine probe, the server's own `--version`, the
+published-release fetch and the Team-server catalog — while `settings` moves whenever any other
+control is written, from this window or another one sharing `settings.json`. Any of those rebuilt the
+document, and the typed text existed only in that document, because the `[data-setting]` listener
+posted on `change`, which a textarea fires at BLUR.
+
+**Half one: a textarea is written as it is typed.** One message per 400 ms pause rather than one per
+key, flushed at once on blur, on the panel being hidden, and on the page unloading. Selects and
+checkboxes keep `change` alone — a dropdown must not save half-chosen.
+
+**Half two: the page is not rebuilt under a focused control.** The page reports focus in and out of
+any `[data-setting]` control and `render` withholds the html assignment while one is held, patching
+the live regions as usual. The key is not recorded while a paint is withheld, so the next render
+after focus leaves paints what this one could not. A transition between two controls reports neither
+edge — the focusout of the one being left arrives before the focusin of the one being entered, and a
+repaint in between would land on a caret that is on its way.
+
+**The hold is capped at 30 seconds, absolute from the moment focus was gained.** Not renewed by
+typing: a hold a keystroke renews has no bound, and `focusout` is not guaranteed — switch to another
+application mid-sentence and the panel would never learn the box was abandoned. Nothing is lost when
+the cap expires, because the value was written 400 ms after the last keystroke and the paint carries
+`PanelState.focus`, which the page uses to put the caret back at the end of the box. That name is
+echoed from a message the WEBVIEW sent and is written into the page's own script, so it is refused
+unless it matches `[A-Za-z0-9_]+` — dropped rather than escaped, because no legitimate setting name
+needs a quote.
+
+**Writes queue, and a render waits for them.** `onDidReceiveMessage` fired `void this.write(...)` per
+message, so two writes raced and a render could read a configuration a write had not finished
+applying. They go on one chain now, the chain recovers from a rejection instead of staying poisoned,
+and `render` awaits it before deciding anything — without which blur → `change` → write → focusout →
+render is a race the render can win, re-stamping the box from the value being replaced.
+
+The page's script is now EXECUTED by its tests against a fake document rather than scanned as text: a
+script can contain an `input` listener, a debounce and a focus message while posting the wrong key, a
+stale value or the wrong order, and a scan would call that green.
+
 ### The rounds view refreshes for a RESTORED tab too
 
 `refreshRoundsFile` rewrites `rounds.md` only while somebody has it open, and "open" was an exact
