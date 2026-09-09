@@ -1,3 +1,5 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ChatModelChoice, ChatPageState, FOLLOW_SLACK_PX, chatCappedHtml, chatMessagesHtml, chatPageHtml, chatPickerHtml, chatStatusHtml, shouldFollow } from '../chatPage';
@@ -1124,4 +1126,26 @@ test('a copy control asks the host for the message it names', () => {
     page.posted.filter((message) => message['command'] === 'copyAnswer'),
     [{ type: 'command', command: 'copyAnswer', index: 3 }],
   );
+});
+
+
+test('the copy control can be found without a mouse', () => {
+  // Hidden until hover is hidden entirely for a keyboard, a touch screen and a screen reader — and
+  // `opacity: 0` leaves it in the tab order as an invisible target. It is dimmed, not erased, and
+  // the whole message revealing it means arriving anywhere in the answer is enough.
+  const css = chatPageHtml(state(), 'n0nce').split('<style>')[1].split('</style>')[0];
+  const resting = ruleFor(css, '.msg .copy');
+
+  assert.doesNotMatch(resting, /opacity: 0[;\s}]/, 'the copy control is invisible until a pointer finds it');
+  assert.match(css, /\.msg:focus-within \.copy/, 'reaching the answer by keyboard does not reveal it');
+});
+
+test('the page module carries no backtick inside its own template literals', () => {
+  // Three times in one plan a comment written inside chatStyle or chatScript quoted a CSS property
+  // with backticks, and a backtick ENDS the template literal it sits in — the build broke each time,
+  // in a place the comment made look innocent. A test is cheaper than a fourth time. (The gate
+  // raised it as a convention; it is really a hazard of this file's shape.)
+  const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'chatPage.ts'), 'utf8');
+
+  assert.doesNotMatch(source, /\\`/, 'an escaped backtick — inside a template literal, write it as words instead');
 });

@@ -130,8 +130,18 @@ test('a link this page will not act on keeps its words and loses its link', () =
 test('fileTargetOf refuses everything that is not a plain relative file', () => {
   assert.deepStrictEqual(fileTargetOf('src/a.ts#L3'), { path: 'src/a.ts', line: 3 });
   assert.deepStrictEqual(fileTargetOf('a.ts'), { path: 'a.ts', line: 0 });
+  // A file without a dot is still a file, and the two ends of this must agree about that: the
+  // renderer used to demand an extension where the host's check did not, so `Dockerfile` was never
+  // offered as a link by a page whose host would happily have opened it.
+  assert.deepStrictEqual(fileTargetOf('Dockerfile'), { path: 'Dockerfile', line: 0 });
+  assert.deepStrictEqual(fileTargetOf('LICENSE#L2'), { path: 'LICENSE', line: 2 });
+  // `no-extension` was in this list until the code round pointed out that the renderer and the host
+  // disagreed about what a path is — Dockerfile and LICENSE are files, and the host would have
+  // opened them. What is refused is what ESCAPES, not what lacks a dot. `.git/config` is a path this
+  // will offer; it is inside the workspace, and refusing it here would be a policy invented in the
+  // wrong place — the host decides what exists.
   for (const bad of ['../a.ts', 'a/../../b.ts', '/abs/a.ts', 'C:/x/a.ts', 'C:\\x\\a.ts',
-    'https://e.com/a.ts', 'no-extension', '.git/config']) {
+    'https://e.com/a.ts']) {
     assert.strictEqual(fileTargetOf(bad), undefined, `${bad} was accepted as a workspace file`);
   }
 });
@@ -223,4 +233,12 @@ test('a list nested past any sane depth degrades to text instead of recursing', 
 
 test('an empty answer renders nothing rather than an empty paragraph', () => {
   assert.strictEqual(renderAnswer(''), '');
+});
+
+
+test('nothing empty is wrapped in a paragraph of its own', () => {
+  // An empty <p> is vertical space the model did not ask for, between things it did.
+  for (const markdown of ['<span></span>\n', 'text\n\n\n\nmore\n']) {
+    assert.doesNotMatch(renderAnswer(markdown), /<p>\s*<\/p>/, `an empty paragraph came out of: ${markdown}`);
+  }
 });

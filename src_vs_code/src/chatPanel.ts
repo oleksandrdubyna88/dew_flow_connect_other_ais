@@ -72,6 +72,15 @@ export interface ChatPanelHooks {
    * give: selecting the page gives what the page shows.</p>
    */
   readonly onCopyAnswer: (id: object, index: number) => void;
+  /**
+   * Open a file an ANSWER named, at a line.
+   *
+   * <p>A hook rather than something this module does, for the reason every other action here is one:
+   * `chatPanel.ts` is the `vscode` wiring and nothing else, and a function that reaches into the
+   * workspace, the filesystem and the active editor is not wiring — it is the half a test cannot
+   * reach. (gemini, the code round.)</p>
+   */
+  readonly onOpenFile: (id: object, path: string, line: number) => void;
 }
 
 /** Everything the page shows that can change after it is open. */
@@ -192,44 +201,6 @@ export function createChatPanel(
  * left here is the dispatch. That split exists because a wrong message type would otherwise have
  * shipped with every test green — a person's send quietly ignored. (codex, the plan round.)</p>
  */
-/**
- * Open a file an ANSWER named, if it is really inside this workspace.
- *
- * <p>The renderer checked the shape and `chatCommandOf` checked it again, and neither is enough: a
- * string can look confined and still leave through a symlink or a folder that is not where anyone
- * thought. So the path is resolved against each workspace root and the RESULT is what is checked —
- * and a reference that resolves nowhere is reported to the tab rather than opened somewhere else.</p>
- */
-async function openWorkspaceFile(
-  id: object,
-  requested: string,
-  line: number,
-  hooks: ChatPanelHooks,
-): Promise<void> {
-  for (const folder of vscode.workspace.workspaceFolders ?? []) {
-    const target = vscode.Uri.joinPath(folder.uri, requested);
-    if (!target.path.startsWith(folder.uri.path)) {
-      continue;
-    }
-    try {
-      await vscode.workspace.fs.stat(target);
-    } catch {
-      continue;
-    }
-    const editor = await vscode.window.showTextDocument(target);
-    if (line > 0) {
-      const at = new vscode.Position(Math.max(0, line - 1), 0);
-      editor.revealRange(new vscode.Range(at, at), vscode.TextEditorRevealType.InCenter);
-      editor.selection = new vscode.Selection(at, at);
-    }
-
-    return;
-  }
-
-  // Said rather than swallowed: a link that quietly does nothing is a link a person presses twice.
-  hooks.onPageError(id, `there is no ${requested} in this workspace`);
-}
-
 async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): Promise<void> {
   const command = chatCommandOf(message);
   switch (command.kind) {
@@ -264,7 +235,7 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
 
       return;
     case 'openFile':
-      await openWorkspaceFile(id, command.path, command.line, hooks);
+      hooks.onOpenFile(id, command.path, command.line);
 
       return;
     case 'copyAnswer':

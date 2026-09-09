@@ -205,8 +205,11 @@ function chatStyle(uiScale: number): string {
   .msg .what th, .msg .what td { border: 1px solid var(--vscode-panel-border); padding: 3px 8px; text-align: left; }
   .msg .what a.link { color: var(--vscode-textLink-foreground); cursor: pointer; text-decoration: none; }
   .msg .what a.link:hover { color: var(--vscode-textLink-activeForeground); text-decoration: underline; }
-  .msg .copy { font: inherit; font-size: .9em; color: var(--vscode-textLink-foreground); background: none; border: none; padding: 0; cursor: pointer; opacity: 0; }
-  .msg:hover .copy, .msg .copy:focus { opacity: 1; }
+  /* Dimmed, not erased. A zero opacity leaves an invisible target in the tab order and hides the
+     control entirely from a keyboard, a touch screen and anyone reading with one. Arriving anywhere
+     in the answer reveals it, which is what :focus-within is for. (gemini, the code round.) */
+  .msg .copy { font: inherit; font-size: .9em; color: var(--vscode-textLink-foreground); background: none; border: none; padding: 0; cursor: pointer; opacity: .55; }
+  .msg:hover .copy, .msg:focus-within .copy, .msg .copy:focus { opacity: 1; }
   hr.end { border: none; border-top: 1px solid var(--vscode-panel-border); margin: 14px 0 0; opacity: .55; }
   .empty { opacity: .6; }
   .thinking { opacity: .75; margin: 0 0 12px; }

@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
+import { isInside } from './chatMessages';
 import { ChatTabMemory, SavedTab, reloadedNote } from './chatTabs';
 import { ChatEntry, ChatPanels } from './chatPanels';
 import { ChatSession } from './chatSession';
@@ -761,6 +762,11 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
       onPageError: (_id, message) => {
         void vscode.window.showWarningMessage(`The chat page reported: ${message}`);
       },
+      onOpenFile: (id, requested, line) => {
+        void openWorkspaceFile(id, requested, line, (message) => {
+          void vscode.window.showWarningMessage(message);
+        });
+      },
       onCopyAnswer: (id, index) => {
         // The SOURCE, out of the thread the page was rendered from. A person copying an answer wants
         // the markdown they can paste into a plan or an issue, and that is the one thing selecting
@@ -772,6 +778,46 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         void vscode.env.clipboard.writeText(said.text);
       },
   };
+}
+
+/**
+ * Open a file an ANSWER named, if it is really inside this workspace.
+ *
+ * <p>The renderer checked the shape and `chatCommandOf` checked it again, and neither is enough: a
+ * string can look confined and still leave through a folder that merely starts with the same
+ * letters. So the path is resolved against each workspace root and the RESULT is what
+ * `isInside` decides on — a boundary at a separator, not a prefix.</p>
+ *
+ * <p>A reference that resolves nowhere is SAID rather than swallowed: a link that quietly does
+ * nothing is a link a person presses twice.</p>
+ */
+async function openWorkspaceFile(
+  _id: object,
+  requested: string,
+  line: number,
+  refuse: (message: string) => void,
+): Promise<void> {
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    const target = vscode.Uri.joinPath(folder.uri, requested);
+    if (!isInside(folder.uri.path, target.path)) {
+      continue;
+    }
+    try {
+      await vscode.workspace.fs.stat(target);
+    } catch {
+      continue;
+    }
+    const editor = await vscode.window.showTextDocument(target);
+    if (line > 0) {
+      const at = new vscode.Position(Math.max(0, line - 1), 0);
+      editor.revealRange(new vscode.Range(at, at), vscode.TextEditorRevealType.InCenter);
+      editor.selection = new vscode.Selection(at, at);
+    }
+
+    return;
+  }
+
+  refuse(`There is no ${requested} in this workspace.`);
 }
 
 /**

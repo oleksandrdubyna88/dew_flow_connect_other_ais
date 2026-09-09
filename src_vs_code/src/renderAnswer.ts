@@ -1,5 +1,6 @@
 import { Tokens, lexer } from 'marked';
 import { escapeHtml } from './webviewHtml';
+import { isConfinedRelativePath } from './chatMessages';
 
 /**
  * A model's answer, as a document.
@@ -33,8 +34,16 @@ import { escapeHtml } from './webviewHtml';
 /** How deep a list may nest before the rest is shown as text. A model has never needed more. */
 const MAX_DEPTH = 8;
 
-/** A file reference a model writes: `src/foo.ts:12`, `src/foo.ts#L12`, or the path alone. */
-const FILE_REFERENCE = /^(?!\/|[A-Za-z]:[\\/])([\w./-]+\.[A-Za-z][\w]*)(?:#L(\d+)|:(\d+))?$/;
+/**
+ * A file reference a model writes: `src/foo.ts:12`, `src/foo.ts#L12`, or the path alone.
+ *
+ * <p>The LINE is split off here; whether what is left is a path this product will open is
+ * `isConfinedRelativePath`'s question, and asking it there is the point — two modules with their own
+ * idea of what a path is had already disagreed once, and the disagreement was invisible: this one
+ * demanded a dot, so `Dockerfile`, `LICENSE` and `Makefile` were never offered as links by a page
+ * whose host would have opened them happily. (gemini, the code round.)</p>
+ */
+const FILE_REFERENCE = /^(.+?)(?:#L(\d+)|:(\d+))?$/;
 
 interface FileTarget {
   readonly path: string;
@@ -51,12 +60,13 @@ interface FileTarget {
  */
 export function fileTargetOf(href: string): FileTarget | undefined {
   const match = FILE_REFERENCE.exec(href);
-  if (match === null || href.includes('..')) {
+  const path = match?.[1] ?? '';
+  if (!isConfinedRelativePath(path)) {
     return undefined;
   }
-  const line = Number(match[2] ?? match[3] ?? 0);
+  const line = Number(match?.[2] ?? match?.[3] ?? 0);
 
-  return { path: match[1] ?? '', line: Number.isFinite(line) ? line : 0 };
+  return { path, line: Number.isFinite(line) ? line : 0 };
 }
 
 /** Only these two reach the outside world, and only through the host. */
@@ -145,6 +155,11 @@ function table(token: Tokens.Table, depth: number): string {
   return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
+/** A paragraph, or nothing at all: an empty one is vertical space the model did not ask for. */
+function paragraph(body: string): string {
+  return body.trim().length === 0 ? '' : `<p>${body}</p>`;
+}
+
 function blockToken(token: Tokens.Generic, depth: number): string {
   switch (token.type) {
     case 'space':
@@ -156,7 +171,7 @@ function blockToken(token: Tokens.Generic, depth: number): string {
       return `<h${level}>${inline(token.tokens ?? [], depth)}</h${level}>`;
     }
     case 'paragraph':
-      return `<p>${inline(token.tokens ?? [], depth)}</p>`;
+      return paragraph(inline(token.tokens ?? [], depth));
     case 'text':
       // Inside a list item, marked emits the item's prose as a bare text token.
       return 'tokens' in token && Array.isArray(token.tokens)
@@ -190,9 +205,9 @@ function blockToken(token: Tokens.Generic, depth: number): string {
     case 'html':
       // Escaped and SHOWN. A model that wrote a tag meant to show one, and this is the one place
       // where a renderer's default — pass it through — would be a hole rather than a feature.
-      return `<p>${escapeHtml(String(token.raw ?? ''))}</p>`;
+      return paragraph(escapeHtml(String(token.raw ?? '')));
     default:
-      return `<p>${escapeHtml(String(token.raw ?? ''))}</p>`;
+      return paragraph(escapeHtml(String(token.raw ?? '')));
   }
 }
 

@@ -143,6 +143,28 @@ export function isConfinedRelativePath(value: string): boolean {
   return /^[\w./-]+$/.test(value);
 }
 
+/**
+ * Is `absolute` really inside `root`?
+ *
+ * <p><b>Not a prefix.</b> With a root of `/w/app`, the path `/w/app-secret/config.json` starts with
+ * it and belongs to a different project — somebody else's, quite possibly. Containment is a boundary
+ * at a separator, so the root is compared with one appended, and equality with the root itself is
+ * allowed separately.</p>
+ *
+ * <p>Case-SENSITIVE, deliberately. Folding case would be a guess about the filesystem underneath,
+ * and the guess is wrong on one of the two this product runs on. A path that differs only in case is
+ * refused, which costs a person nothing — the reference came from a model, and it can be written
+ * again — where the opposite mistake costs them a file they never meant to open.</p>
+ */
+export function isInside(root: string, absolute: string): boolean {
+  if (root.length === 0) {
+    return false;
+  }
+  const bounded = root.endsWith('/') ? root : `${root}/`;
+
+  return absolute === root || absolute === bounded.slice(0, -1) || absolute.startsWith(bounded);
+}
+
 /** The line a file reference names, or 0 for "the top" — never negative, never a fraction. */
 function lineOf(value: unknown): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : 0;
