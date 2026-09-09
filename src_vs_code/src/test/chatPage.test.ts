@@ -1389,6 +1389,21 @@ test('an answer is captioned with the model that gave it', () => {
   assert.doesNotMatch(html, /The other AI/, 'an answer that knows its model still says "The other AI"');
 });
 
+test('what the person said is captioned as theirs, whatever else is going on', () => {
+  // A reviewer read the plan's sentence about the fallback as covering BOTH kinds of message and
+  // asked whether a person's own words could end up captioned `The other AI`. The code has never
+  // done that — the caption is chosen by role before anything looks at a model — but the question is
+  // fair enough to be worth a test rather than a paragraph.
+  const html = chatMessagesHtml([
+    { role: 'you', text: 'ask' },
+    { role: 'model', text: 'answered', model: { id: 'antigravity', label: 'Gemini' } },
+  ]);
+  const mine = html.slice(0, html.indexOf('msg model'));
+
+  assert.match(mine, />You</, "the person's own message lost its caption");
+  assert.doesNotMatch(mine, /The other AI|Gemini/, 'the person was captioned as a model');
+});
+
 test('an answer from before this existed still says something', () => {
   // A conversation restored from a tab that predates the field, or a turn a failure produced. The
   // caption falls back rather than rendering an empty line where a name should be.
