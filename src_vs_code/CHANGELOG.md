@@ -8,6 +8,11 @@ the hint are pinned to the bottom of the tab now, the conversation scrolls above
 a **Send** button beside the box for anyone who would rather click than press Enter — locked at the
 same moments the box is, because a second turn down the same pipe would interleave with the first.
 
+**A new answer no longer drags you away from what you were reading.** The tab opens looking at the
+last thing said rather than at the top, and an answer that arrives scrolls itself into view only if
+you were already at the bottom. Scroll up to re-read something and the conversation stays where you
+put it — including if the answer lands in the moment between your scroll and the screen redrawing.
+
 **The captured text no longer has a scrollbar of its own.** There were two on the page. The passage
 was boxed in because a long selection would otherwise push the composer off the screen when the tab
 opened; with the composer pinned, nothing can push it anywhere.

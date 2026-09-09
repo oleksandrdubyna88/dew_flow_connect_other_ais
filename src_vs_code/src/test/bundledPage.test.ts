@@ -311,6 +311,7 @@ test('the chat page the bundle produces runs, and its Send button sends exactly 
   const nodes: Record<string, Record<string, unknown>> = {};
   const node = (id: string) => (nodes[id] ??= {
     innerHTML: '', textContent: '', hidden: false, value: '', className: '',
+    scrollTop: 0, clientHeight: 0, scrollHeight: 0,
     disabled: / disabled(?=[ >])/.test(rendered.get(id) ?? ''),
     addEventListener(type: string, fn: () => void) { ((listeners[id] ??= {})[type] ??= []).push(fn); },
     focus() { /* the stub is focusable */ },
@@ -319,19 +320,30 @@ test('the chat page the bundle produces runs, and its Send button sends exactly 
     querySelectorAll: () => [],
   });
 
+  const onWindow: Record<string, Array<(event: { data: unknown }) => void>> = {};
+  const frames: Array<() => void> = [];
+
   assert.doesNotThrow(
-    () => new Function('document', 'window', 'acquireVsCodeApi', script)(
+    () => new Function('document', 'window', 'acquireVsCodeApi', 'requestAnimationFrame', script)(
       {
         getElementById: (id: string) => (rendered.has(id) ? node(id) : null),
         querySelectorAll: () => [],
         addEventListener() { /* the page listens on window */ },
         body: { style: {} },
       },
-      { addEventListener() { /* no host push in this test */ } },
+      {
+        addEventListener(type: string, fn: (event: { data: unknown }) => void) {
+          (onWindow[type] ??= []).push(fn);
+        },
+      },
       () => ({ postMessage: (message: Record<string, unknown>) => posted.push(message) }),
+      (fn: () => void) => { frames.push(fn); },
     ),
     'the minified chat page script threw on its first render',
   );
+  for (const fn of frames.splice(0)) {
+    fn();
+  }
 
   // The button exists in the shipped markup, its listener survived minification, and it reaches the
   // one send. A page whose button was renamed away would attach nothing and post nothing here.
@@ -345,6 +357,27 @@ test('the chat page the bundle produces runs, and its Send button sends exactly 
   assert.strictEqual(sends.length, 1, 'the shipped Send button did not send exactly one turn');
   assert.strictEqual(sends[0]?.['text'], 'does the shipped button work');
   assert.strictEqual(nodes['say']['disabled'], true, 'the shipped page left the composer open after a send');
+
+  // And a real push, which is what exercises the function the page carries as EMBEDDED SOURCE. A
+  // free identifier in it — a default parameter, a transpiler helper, a constant it closed over —
+  // does not exist in the page's scope and throws a ReferenceError only here, on the shipped
+  // bundle, with a state arriving. The gate raised exactly that hazard.
+  const scroll = nodes['scroll'];
+  assert.ok(scroll, 'the shipped page has no scrolling region');
+  scroll['clientHeight'] = 500;
+  scroll['scrollHeight'] = 2000;
+  scroll['scrollTop'] = 1500;
+  const push = onWindow['message'] ?? [];
+  assert.ok(push.length > 0, 'the shipped page is not listening for host state');
+  for (const fire of push) {
+    fire({ data: { type: 'state', messagesHtml: '<p>an answer</p>' } });
+  }
+  for (const fn of frames.splice(0)) {
+    fn();
+  }
+
+  assert.strictEqual(scroll['scrollTop'], 2000,
+    'the shipped page did not follow a reader who was at the bottom — the embedded rule did not run');
 });
 
 test('the chat page carries nothing from the host into the webview', () => {

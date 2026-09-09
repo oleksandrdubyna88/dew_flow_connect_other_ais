@@ -100,6 +100,13 @@ only when the whole ritual has run — not when the code works.
 - [ ] Where streaming is possible, partial text appears as it arrives and the final answer replaces it rendered.
 - [ ] Where it is not, nothing changed and the help says so.
 - [ ] Stop works mid-stream; partials after a stop are ignored.
+- [ ] **The scroll rule survives progressive rendering.** Inherited from the composer plan's story-2
+      plan round (gemini, Major), where it was rejected as not-yet-reachable: today the page renders
+      plain text with no image, embed or async highlighter, so one deferred scroll per push lands on
+      the final height. A streamed answer breaks that — the height keeps growing after the follow has
+      run, leaving a reader who WAS at the bottom short of it. Each partial must go through the same
+      `scheduleFollow()` the pushes use (`chatPage.ts`), never a scrollTop of its own, and a test
+      must prove a reader at the bottom is still at the bottom when the last token lands.
 - [ ] `npm test` green; the acceptance ritual complete; promoted on merge.
 
 ## Parallelism

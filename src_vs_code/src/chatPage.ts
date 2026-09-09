@@ -264,15 +264,38 @@ function chatScript(state: ChatPageState): string {
   // the source is also what makes the function the tests exercise the function the page runs.
   var shouldFollow = ${shouldFollow.toString()};
   var SLACK = ${FOLLOW_SLACK_PX};
+  var pendingFollow = 0;
+  // Where the PAGE last put the reader. A flag cleared on a later frame looked simpler and was
+  // wrong: it stays raised for as long as that frame has not arrived, and every scroll in between
+  // reads as the page's own. A position cannot get stuck. If a reader happens to land exactly where
+  // we did, they are at the bottom, which is the case where not cancelling is right anyway.
+  var scrolledItselfTo = -1;
   // A scroll set in the same tick as the write scrolls to a height the browser has not laid out yet
   // and lands short. The next frame has the real height, and setTimeout is the fallback for a host
   // that has no requestAnimationFrame - the bundled page runs in exactly such a stub.
   function afterLayout(fn) {
     if (typeof requestAnimationFrame === 'function') { requestAnimationFrame(fn); } else { setTimeout(fn, 0); }
   }
+  // THE TWO ENTRY POINTS for moving this page, and the contract stories 3 and 4 are held to: the
+  // jump control and the composer's resize go through scheduleFollow or landOnNewest, never through
+  // scrollTop of their own. One place decides, or the rule is four rules that agree by accident.
   function landOnNewest() {
     const scroll = document.getElementById('scroll');
-    if (scroll) { scroll.scrollTop = scroll.scrollHeight; }
+    if (!scroll) { return; }
+    // Our own write fires a scroll event. Without this flag the page would cancel its own next
+    // follow, and the rule would work exactly once per tab.
+    scroll.scrollTop = scroll.scrollHeight;
+    // What it CLAMPED to, not what we asked for: a browser answers scrollHeight - clientHeight.
+    scrolledItselfTo = scroll.scrollTop;
+  }
+  // Deferred to the next frame, and CANCELLABLE. The reader can move between the frame being asked
+  // for and the frame arriving - a drag, a wheel, Page Up - and a scroll that was right when it was
+  // scheduled is a hijack by the time it runs. Re-measuring in the callback cannot tell: the content
+  // is already in, so a reader who WAS at the bottom now measures short of it. Only the reader knows
+  // they moved, so the cancel is their scroll event. (Two vendors raised this on the plan round.)
+  function scheduleFollow() {
+    const token = ++pendingFollow;
+    afterLayout(function () { if (token === pendingFollow) { landOnNewest(); } });
   }
   function send() {
     const box = document.getElementById('say');
@@ -340,9 +363,17 @@ function chatScript(state: ChatPageState): string {
   // after layout, and after the fonts settle where the host reports them. Idempotent, so the two
   // extra calls cost nothing on a page that was already there.
   landOnNewest();
-  afterLayout(landOnNewest);
+  scheduleFollow();
   if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
-    document.fonts.ready.then(landOnNewest);
+    // Through the schedule, not straight to the scroll: fonts settle after the first paint, and a
+    // person who opened the tab and started reading upward in that gap must not be dragged back.
+    document.fonts.ready.then(scheduleFollow);
+  }
+  const scrollRegion = document.getElementById('scroll');
+  if (scrollRegion) {
+    scrollRegion.addEventListener('scroll', function () {
+      if (scrollRegion.scrollTop !== scrolledItselfTo) { pendingFollow++; }
+    });
   }
   window.addEventListener('message', function (event) {
     const data = event.data || {};
@@ -355,21 +386,41 @@ function chatScript(state: ChatPageState): string {
     const scroll = document.getElementById('scroll');
     const follow = !scroll || shouldFollow(scroll.scrollTop, scroll.clientHeight, scroll.scrollHeight, SLACK);
     let wrote = false;
+    // A CHANGE, not an assignment. A retry, or a poll that pushes the state again, assigns the same
+    // html - and counting that as an insertion scrolls a reader for content already in front of
+    // them. Compared against the element rather than a remembered copy: what the page is showing is
+    // the honest question, and our own generated markup round-trips through innerHTML unchanged.
     const messages = document.getElementById('messages');
-    if (messages && typeof data.messagesHtml === 'string') { messages.innerHTML = data.messagesHtml; wrote = true; }
+    if (messages && typeof data.messagesHtml === 'string' && messages.innerHTML !== data.messagesHtml) {
+      messages.innerHTML = data.messagesHtml;
+      wrote = true;
+    }
     const thinking = document.getElementById('thinking');
-    if (thinking && typeof data.thinkingHtml === 'string') { thinking.innerHTML = data.thinkingHtml; wrote = true; }
+    if (thinking && typeof data.thinkingHtml === 'string' && thinking.innerHTML !== data.thinkingHtml) {
+      thinking.innerHTML = data.thinkingHtml;
+      wrote = true;
+    }
     const capped = document.getElementById('capped');
-    if (capped && typeof data.cappedHtml === 'string') { capped.innerHTML = data.cappedHtml; wireCapped(); wrote = true; }
+    if (capped && typeof data.cappedHtml === 'string' && capped.innerHTML !== data.cappedHtml) {
+      capped.innerHTML = data.cappedHtml;
+      wireCapped();
+      wrote = true;
+    }
     // The picker is re-rendered rather than nudged: after "continue with a local model" the whole
     // list can be different, and a select that only had its value set would show a model it no
     // longer offers.
     const pickerBox = document.getElementById('pickerBox');
     if (pickerBox && typeof data.pickerHtml === 'string') { pickerBox.innerHTML = data.pickerHtml; wirePicker(); }
     const failure = document.getElementById('failure');
-    if (failure && typeof data.failureHtml === 'string') { failure.innerHTML = data.failureHtml; wrote = true; }
+    if (failure && typeof data.failureHtml === 'string' && failure.innerHTML !== data.failureHtml) {
+      failure.innerHTML = data.failureHtml;
+      wrote = true;
+    }
     const passage = document.getElementById('passage');
-    if (passage && typeof data.passage === 'string') { passage.textContent = data.passage; wrote = true; }
+    if (passage && typeof data.passage === 'string' && passage.textContent !== data.passage) {
+      passage.textContent = data.passage;
+      wrote = true;
+    }
     // A draft pushed into an OPEN tab. Appended rather than assigned, so a half-typed follow-up
     // is never thrown away by a second invocation - losing what somebody typed is the one thing
     // the queue in the session was also built to avoid.
@@ -393,7 +444,7 @@ function chatScript(state: ChatPageState): string {
     }
     // Rule 2, applied once for whatever this push contained - an answer, a failure, a thinking line
     // or a capped notice. There is one rule, not one per outcome.
-    if (wrote && follow) { afterLayout(landOnNewest); }
+    if (wrote && follow) { scheduleFollow(); }
   });
 }());`;
 }
