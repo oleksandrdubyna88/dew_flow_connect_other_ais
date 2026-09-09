@@ -813,22 +813,38 @@ context is the precedent for the other choice and it is the right one there: it 
 and `globalStorageUri`.
 
 **Where the path lives, and why it is not in `chatPanel.ts`.** `chatIcon.ts` holds the two file names
-as path segments and imports nothing. The only failure mode an icon has is a path that names a file
-nobody shipped — nothing type-checks a `Uri`, and a wrong one produces the generic icon and no error
-anywhere — so the segments the panel joins are the segments a test opens on disk. A regex over the
-source could only have proved that some string was written down. The tests also assert the two
-colours, the viewBox and the stroke weights, and that `.vscodeignore` excludes nothing under
-`media/`; `vsce ls` was run and lists both files.
+and imports nothing. The only failure mode an icon has is a path that names a file nobody shipped —
+nothing type-checks a `Uri`, and a wrong one produces the generic icon and no error anywhere. The
+code round refused a regex over `chatPanel.ts` for this, and it was right: a regex proves that
+somebody wrote a string down. So the RESOLUTION is a pure function, `chatTabIcon(join)` — the panel
+hands it `vscode.Uri.joinPath` and the test hands it a joiner of its own, and both observe the same
+two paths, which the test then opens on disk. One structural assertion survives, for the one thing no
+test here can reach: that `chatPanel.ts` assigns `panel.iconPath` at all.
+
+That assignment mutates a live object, which the immutability rule would ordinarily refuse. The rule
+governs OUR data; this handle is VS Code's, `iconPath` is settable only after creation, and every
+webview in this extension is configured the same way. Recorded at the line rather than worked around,
+because the alternative is a creation API that does not exist.
+
+**What the packaging test had to become.** Asserting that no `.vscodeignore` line STARTS with `media`
+was the first version, and it was green with `**/*.svg` sitting in the file — measured, not supposed.
+Each pattern is now expanded into the regex the packager's glob means by it, in one character-by-character
+pass, and run against the paths the panel actually asks for. A chain of `.replace` calls cannot do
+that job: the `.*` that `**/` expands to contains a `*`, which the later `*` rule rewrites into
+`[^/]*`. It was checked against `**/*.svg`, `media/**`, `**/media/**` and `media`, all four of which
+now fail it. `vsce ls` was also run and lists both files.
 
 **Not verified here.** The side-by-side against the Welcome tab needs a running workbench and a human
 eye. The geometry matches the numbers the plan measured, but "indistinguishable in size" is recorded
 as unverified rather than claimed.
 
-**The open tail, named by the plan round.** A panel restored by a `WebviewPanelSerializer` would not
-pass through `chatWithOtherAi`, so it would come back without an icon. There is no serializer in this
-extension today — `registerWebviewPanelSerializer` appears nowhere — but the plan that adds one
-(`a_conversation_survives_a_reload`) must route its restored panel through `createChatPanel`, or its
-tabs will wear the generic glyph again.
+**The tail is held by a test, not by a paragraph.** A panel restored by a `WebviewPanelSerializer`
+would not pass through `chatWithOtherAi`, so it would come back without an icon. There is no
+serializer in this extension today — `registerWebviewPanelSerializer` appears nowhere — so no tab
+loses anything yet; the plan that adds one (`a_conversation_survives_a_reload`) must route its
+restored panel through `createChatPanel`. `theTabWearsAnIcon.test.ts` walks `src/` and fails any file
+that registers a serializer without reaching `createChatPanel`, so the requirement arrives with the
+change that needs it rather than being remembered.
 
 ## The update check can trust `…/releases` again (2026-09-08)
 
