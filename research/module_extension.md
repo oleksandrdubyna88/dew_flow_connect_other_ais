@@ -2188,3 +2188,70 @@ Two places say it now, and they answer different questions:
 The finder that answers "what is in this workspace" moved out of `PanelProvider` into
 `snippetInWorkspace.ts`, because the copy command needed the same answer and two readers of the same
 four files would drift the moment somebody added a fifth.
+
+## An answer as a document — the renderer (2026-09-09)
+
+`renderAnswer(markdown): string` in `renderAnswer.ts` turns a model's answer into the elements it
+meant. It is pure — a string in, a string out, no host and no filesystem — which is what lets a file
+of hostile inputs drive it directly.
+
+**The input is UNTRUSTED, and that is the whole reason this file exists rather than a widened
+`bodyHtml`.** `helpPage.ts`'s `bodyHtml` marks up text this repository wrote; this marks up whatever
+another vendor's model emitted, which may be quoting an attacker's README.
+
+### The order of operations is the safety
+
+**Tokenise the RAW text, then escape at emission, per context.** Never the other way round.
+
+Escaping the whole string first and then running markup rules over the result is the tempting
+shortcut, and it was put to the review gate and refused for a specific reason: every parsing rule
+would then be reading entity-laden text, where a `>` blockquote marker has become `&gt;`, a code span
+carrying `&` has become `&amp;`, and a backslash-escaped asterisk is no longer adjacent to what it
+escaped. The rules get harder to state and each one is a new chance to be wrong about somebody's
+code — and this is code-heavy text by nature.
+
+Two contexts, two escapes, not interchangeable: **text** goes through `escapeHtml`; an **`href`**
+goes through a scheme allow-list FIRST and then `escapeHtml`. A target that is not `http:` or
+`https:` never becomes an attribute at all — it is left as the characters the model wrote. That keeps
+`javascript:`, `data:` and `vbscript:` out by construction rather than by a filter that has to
+enumerate them.
+
+Inside `inline`, code spans are held aside first so nothing within a backtick pair is seen by any
+later rule, then links, then the remaining text is escaped ONCE, then emphasis runs over the escaped
+text (safe, because `escapeHtml` touches only `& < > " '` and an asterisk is none of them), then the
+held constructs are put back. The placeholder is built from a control character and stripped from the
+input first, so a model cannot forge one.
+
+> **The first version of `inline` omitted the escape of the remaining text.** It tokenised correctly
+> and emitted the surrounding prose raw, and the hostile-input file caught `<script>alert(1)</script>`
+> reaching the page on its very first run. That is what the file is for, and it is why it should keep
+> growing rather than being trimmed once it is green.
+
+### What is supported, and what happens to everything else
+
+`SUPPORTED` is the list, exported as a constant so the test file can walk it and it cannot drift from
+what the code does: headings, paragraphs, ordered and unordered lists with one level of nesting,
+fenced code, thematic breaks, code spans, bold, italic, links and file references.
+
+Anything outside it is **not parsed and not dropped** — it renders as the literal characters the
+model wrote. A markdown table appears as its pipes, a blockquote as its `>`, a task list as `[ ]`.
+Ugly and honest, and a far smaller failure than a half-parsed one: a reader can still read the cells.
+That is the deliberate trade for not carrying a CommonMark parser, and it is why the extension still
+has zero runtime dependencies.
+
+### A file reference is data, not a link
+
+`renderAnswer` cannot know whether a path exists — it is pure, and a gate reviewer was right that
+deciding "resolvable → link, otherwise plain text" inside it would be a promise it has no way to
+keep. So `[there](src/chatPage.ts#L42)` becomes an anchor with **no `href` at all**, carrying
+`data-file` and `data-line`, and the page decides on a click. A link that looks live and is dead is
+worse than text.
+
+**Nothing autolinks.** A bare `https://…` in prose stays prose; the family has shipped that defect
+once. A URL becomes a link only when the model wrote it as one. And nothing emits `<img>`: an image
+renders as its `!` followed by a link to the target, so the reader can still reach it.
+
+> The renderer is not WIRED yet. `chatMessagesHtml`, the styles, the sides, the end rule, the copy
+> control and the `openExternal`/`openFile` handlers all live in `chatPage.ts` and `chatCommand.ts`,
+> which the chat-page lane owns. This module and its hostile-input file exist ahead of that lane,
+> which is what the plan's Parallelism section says has no conflicts.

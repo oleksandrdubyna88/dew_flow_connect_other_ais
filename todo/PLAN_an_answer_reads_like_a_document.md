@@ -1,6 +1,19 @@
 # PLAN — an answer reads like a document
 
-> Status: **plan only, nothing implemented yet.** Kind: **feature** (six asks, one rendering pass).
+> Status: **the RENDERER is implemented (2026-09-09, branch
+> `feat/an-answer-reads-like-a-document-renderer`); nothing is wired to it yet.** `renderAnswer` and
+> its hostile-input file exist and are tested; `chatMessagesHtml`, the styles, the sides, the end
+> rule, the copy control and the two bridge commands remain, and belong to the chat-page lane that
+> owns `chatPage.ts`.
+>
+> **The renderer decision went the OPPOSITE way to this plan's recommendation, and the reason is
+> recorded below.** The plan recommended `marked` with a custom renderer, as the extension's first
+> runtime dependency. What shipped is option 1 — a purpose-built renderer — but built the way the
+> gate's security finding demanded rather than the way this plan sketched it: it TOKENISES the raw
+> text and escapes at emission per context, instead of escaping the whole string first and running
+> markup rules over the result. The extension still has zero runtime dependencies.
+>
+> Kind: **feature** (six asks, one rendering pass).
 > Scope: the chat tab's message rendering — `src_vs_code/src/chatPage.ts` (`chatMessagesHtml`,
 > `chatStyle`, the copy control), one new pure module for the renderer, and the extension's FIRST
 > runtime dependency if the recommendation below is taken. Origin:
