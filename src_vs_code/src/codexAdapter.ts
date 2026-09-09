@@ -47,7 +47,11 @@ export const CODEX_ARGS: readonly string[] = ['--json', '-', '--skip-git-repo-ch
 export const codexAdapter: ChatAdapter = {
   shape: 'per-turn',
   announces: false,
-  argv: (resume) => (resume.length > 0
+  // Checked HERE too, not only where the id was read. `classify` is the only place one is minted
+  // today, so this line is safe by construction — and "safe by construction" is a proof a reader
+  // has to reconstruct. A command line that refuses on its own terms cannot be handed anything a
+  // future caller invented. (local, the second code round.)
+  argv: (resume) => (THREAD_ID.test(resume)
     ? ['exec', 'resume', resume, ...CODEX_ARGS]
     : ['exec', ...CODEX_ARGS]),
   // The prompt itself: there is no envelope, and the session writes it followed by EOF.

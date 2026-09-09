@@ -11,7 +11,8 @@ import { chatChoice, chatModelsFrom } from './chatModels';
 import { chatSettingsFrom } from './chatSettings';
 import { chatUiScale, createChatPanel, pushChatDraft, pushChatState } from './chatPanel';
 import { captureSelection, COPY_SCRIPT, argvFor, ran } from './selectionCapture';
-import { ChatHome, adapterFor, chatHome, chatRuntimeRefusal, defaultExecutableFor, launchSpecFor } from './cliChatLaunch';
+import { ChatHome, adapterFor, chatHome, chatRuntimeRefusal, defaultExecutableFor } from './cliChatLaunch';
+import { chatProcessFor } from './chatProcess';
 import { launch } from './processLauncher';
 import { resolvedExecutable } from './versionProbe';
 import { carriedTurn, openingTurn } from './chatPrompt';
@@ -305,16 +306,7 @@ function started(vendor: Vendor, resolved: string): { session: ChatSession; home
   const adapter = adapterFor(vendor.runtime);
 
   return {
-    session: new CliChatSession(
-      (resume) => {
-        const spec = launchSpecFor(vendor, home.dir, resume, resolved);
-
-        return launch(spec.executable, spec.args, { cwd: spec.cwd, shell: spec.shell });
-      },
-      DEFAULT_BUDGETS,
-      REAL_TIMERS,
-      adapter,
-    ),
+    session: new CliChatSession(chatProcessFor(vendor, home.dir, resolved), DEFAULT_BUDGETS, REAL_TIMERS, adapter),
     home,
   };
 }
