@@ -761,6 +761,16 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
       onPageError: (_id, message) => {
         void vscode.window.showWarningMessage(`The chat page reported: ${message}`);
       },
+      onCopyAnswer: (id, index) => {
+        // The SOURCE, out of the thread the page was rendered from. A person copying an answer wants
+        // the markdown they can paste into a plan or an issue, and that is the one thing selecting
+        // the page cannot give them - a selection gives what the page shows.
+        const said = threads.get(id)?.messages[index];
+        if (said === undefined || said.role !== 'model') {
+          return;
+        }
+        void vscode.env.clipboard.writeText(said.text);
+      },
   };
 }
 

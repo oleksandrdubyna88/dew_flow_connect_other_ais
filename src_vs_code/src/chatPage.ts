@@ -1,4 +1,5 @@
 import { escapeHtml, jsonForScript } from './webviewHtml';
+import { renderAnswer } from './renderAnswer';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
 
 /**
@@ -94,12 +95,26 @@ export function chatMessagesHtml(messages: readonly ChatMessage[]): string {
   }
 
   return messages
-    .map(
-      (message) =>
-        `<div class="msg ${message.role === 'you' ? 'you' : 'model'}">`
-        + `<div class="who">${message.role === 'you' ? 'You' : 'The other AI'}</div>`
-        + `<div class="what">${escapeHtml(message.text)}</div></div>`,
-    )
+    .map((message, index) => {
+      const mine = message.role === 'you';
+      // What the PERSON typed is not markdown until they say so: a question that begins with a hash
+      // is a question, not a heading, and rendering it would silently eat what they wrote.
+      const body = mine ? escapeHtml(message.text) : renderAnswer(message.text);
+      // The copy control carries the INDEX, and the host reads the message out of the same array
+      // this was rendered from - so what is copied is the markdown that arrived, which is the one
+      // thing a selection cannot give: selecting the page gives what the page shows.
+      const copy = mine
+        ? ''
+        : `<button type="button" class="copy" data-copy="${index}" title="Copy this answer as Markdown">Copy</button>`;
+      // A rule after an answer, not after a question. The operator asked for a row of asterisks and
+      // then settled on the rule, which is also what a row of asterisks BECOMES once markdown is
+      // rendered - a thematic break.
+      const end = mine ? '' : '<hr class="end">';
+
+      return `<div class="msg ${mine ? 'you' : 'model'}">`
+        + `<div class="who">${mine ? 'You' : 'The other AI'}${copy}</div>`
+        + `<div class="what">${body}</div>${end}</div>`;
+    })
     .join('');
 }
 
@@ -161,10 +176,38 @@ function chatStyle(uiScale: number): string {
   header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
   h1 { font-size: 1.2em; margin: 0; }
   .passage { border-left: 3px solid var(--vscode-panel-border); padding: 6px 0 6px 12px; margin: 0 0 16px; white-space: pre-wrap; opacity: .85; }
-  .msg { margin: 0 0 14px; }
-  .msg .who { font-size: .85em; opacity: .7; margin-bottom: 3px; }
-  .msg .what { white-space: pre-wrap; }
-  .msg.you .what { opacity: .85; }
+  /* A reading measure. A line that spans a wide tab is a line whose side says nothing, and the
+     sides are how the two speakers are told apart at a glance. */
+  .msg { margin: 0 0 18px; max-width: 46rem; }
+  /* The EDGE is the colour, not a filled box - the decision already shipped for the reviewer cards,
+     and for the same reason: a wall of filled blocks is harder to read than the text in it. */
+  .msg.you { margin-left: auto; border-right: 3px solid var(--vscode-textLink-foreground); padding-right: 10px; text-align: right; }
+  .msg.model { border-left: 3px solid var(--vscode-charts-green, var(--vscode-textLink-foreground)); padding-left: 10px; }
+  .msg .who { font-size: .85em; opacity: .7; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .msg.you .who { justify-content: flex-end; }
+  /* The PROSE takes the editor's foreground, and only the prose: the chrome around it - the hint,
+     the picker, the captions - belongs to --vscode-foreground, and overriding that on body produces
+     a seam between the two rather than a brighter page. (gemini, the plan round.) */
+  .msg .what { color: var(--vscode-editor-foreground); line-height: 1.55; }
+  .msg.you .what { white-space: pre-wrap; }
+  .msg .what > :first-child { margin-top: 0; }
+  .msg .what > :last-child { margin-bottom: 0; }
+  .msg .what h1, .msg .what h2, .msg .what h3, .msg .what h4, .msg .what h5, .msg .what h6 { font-size: 1.05em; margin: 1.2em 0 .4em; }
+  .msg .what p { margin: 0 0 .7em; }
+  .msg .what ul, .msg .what ol { margin: 0 0 .7em; padding-left: 1.6em; }
+  .msg .what li { margin: .15em 0; }
+  .msg .what code { font-family: var(--vscode-editor-font-family, monospace); font-size: .92em; background: var(--vscode-textCodeBlock-background, rgba(127,127,127,.18)); border-radius: 3px; padding: 0 .3em; }
+  /* Its own box, and it scrolls inside it: a long line of code must not widen the page. */
+  .msg .what pre { margin: 0 0 .7em; padding: 8px 10px; overflow-x: auto; background: var(--vscode-textCodeBlock-background, rgba(127,127,127,.14)); border-radius: 4px; }
+  .msg .what pre code { background: none; padding: 0; }
+  .msg .what blockquote { margin: 0 0 .7em; padding-left: 10px; border-left: 2px solid var(--vscode-panel-border); opacity: .9; }
+  .msg .what table { border-collapse: collapse; margin: 0 0 .7em; display: block; overflow-x: auto; }
+  .msg .what th, .msg .what td { border: 1px solid var(--vscode-panel-border); padding: 3px 8px; text-align: left; }
+  .msg .what a.link { color: var(--vscode-textLink-foreground); cursor: pointer; text-decoration: none; }
+  .msg .what a.link:hover { color: var(--vscode-textLink-activeForeground); text-decoration: underline; }
+  .msg .copy { font: inherit; font-size: .9em; color: var(--vscode-textLink-foreground); background: none; border: none; padding: 0; cursor: pointer; opacity: 0; }
+  .msg:hover .copy, .msg .copy:focus { opacity: 1; }
+  hr.end { border: none; border-top: 1px solid var(--vscode-panel-border); margin: 14px 0 0; opacity: .55; }
   .empty { opacity: .6; }
   .thinking { opacity: .75; margin: 0 0 12px; }
   .queued { opacity: .8; font-size: .9em; }
@@ -529,6 +572,29 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   if (typeof ResizeObserver === 'function') {
     const composer = document.getElementById('composer');
     if (composer) { new ResizeObserver(repinIfTheyWereAtTheBottom).observe(composer); }
+  }
+  // Delegated, because the answers are replaced wholesale on every push: a listener bound to each
+  // link would have to be re-bound after every one, and the one that was missed is the one that
+  // silently does nothing. The page never navigates and never reads a file - it names what it wants
+  // and the HOST decides, which is where the workspace root and the scheme are actually known.
+  const messagesRegion = document.getElementById('messages');
+  if (messagesRegion) {
+    messagesRegion.addEventListener('click', function (event) {
+      const target = event.target;
+      if (!target || typeof target.closest !== 'function') { return; }
+      const acted = target.closest('[data-open], [data-file], [data-copy]');
+      if (!acted || !acted.dataset) { return; }
+      if (typeof acted.dataset.open === 'string') {
+        vscode.postMessage({ type: 'command', command: 'openLink', url: acted.dataset.open });
+      } else if (typeof acted.dataset.file === 'string') {
+        vscode.postMessage({
+          type: 'command', command: 'openLink',
+          file: acted.dataset.file, line: Number(acted.dataset.line || 0),
+        });
+      } else if (typeof acted.dataset.copy === 'string') {
+        vscode.postMessage({ type: 'command', command: 'copyAnswer', index: Number(acted.dataset.copy) });
+      }
+    });
   }
   const jump = document.getElementById('jump');
   if (jump) {
