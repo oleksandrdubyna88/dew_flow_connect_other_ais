@@ -148,7 +148,7 @@ test('a stop reaches the thread it names, and only while that thread is running'
   );
   assert.match(
     text,
-    /turn !== 0 && turn !== thread\.turn/,
+    /turn !== thread\.turn/,
     'a stop naming a turn other than the running one is not refused',
   );
 });

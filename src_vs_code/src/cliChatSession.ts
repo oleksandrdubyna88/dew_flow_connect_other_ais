@@ -68,6 +68,7 @@ interface Pending {
 }
 
 const CLOSED = 'the conversation was closed';
+const STOPPED = 'you stopped this answer';
 
 export class CliChatSession implements ChatSession {
   private child: ProcessHandle | undefined;
@@ -194,6 +195,49 @@ export class CliChatSession implements ChatSession {
       return this.perTurn(text);
     }
 
+    // The stop handle is installed BEFORE the process is started, not after the question is written.
+    // Startup is 3.6-6.6 s measured — a large share of the wait a person presses stop to end — and a
+    // handle installed after it made a stop during launch a silent no-op: the process went on
+    // starting, took the question and answered it. (Four reviewers across three vendors, the code
+    // round, which is as clear a signal as that gate gives.)
+    const stopping = new Promise<TurnResult>((resolve) => {
+      this.endTurnAsStopped = (): void => {
+        // Everything `dispose` does to a start in progress, minus the disposal itself. A waiter
+        // nobody tells is a caller sitting out the whole startup budget for a turn already over.
+        this.cancelStartBudget?.();
+        this.cancelStartBudget = undefined;
+        const waiting = this.waitingForInit;
+        this.waitingForInit = undefined;
+        waiting?.(STOPPED);
+        // Kill FIRST, so `contextLost` is already true when the result is built. Reversed, the turn
+        // would report a conversation it no longer has and the caller would carry nothing into a
+        // process that heard nothing. (the local reviewer, the plan round.)
+        this.killChild();
+        const result = this.stopped();
+        // Whichever stage this turn had reached. `settle` ends one already waiting on the pipe and
+        // returns early when there is none; `resolve` ends one still in startup. Both are safe to
+        // run: a race settles once, and so does `settle`.
+        this.settle(result);
+        resolve(result);
+      };
+    });
+    const asking = this.askAndWait(text);
+    // Attached before the race. If the stop wins, this promise still settles later with nobody
+    // reading it, and a rejection nobody handles takes down the extension host rather than the turn.
+    asking.catch(() => undefined);
+
+    try {
+      return await Promise.race([stopping, asking]);
+    } finally {
+      // Every exit from this turn, including the ones that never reach `settle` — a start that
+      // failed returns its sentence directly. A closure left behind here is a stop that would kill
+      // an idle process later.
+      this.endTurnAsStopped = undefined;
+    }
+  }
+
+  /** Start the process if it is not up, write the question, and wait for the answer. */
+  private async askAndWait(text: string): Promise<TurnResult> {
     const started = await this.ensureStarted();
     if (started !== '') {
       return { ok: false, failure: started };
@@ -217,14 +261,6 @@ export class CliChatSession implements ChatSession {
         this.settle({ ok: false, failure: this.withRestart('the model did not answer in time') });
       });
       this.pending = { settle: resolve, cancelBudget };
-      this.endTurnAsStopped = (): void => {
-        // The order is the finding: kill FIRST, so `contextLost` is already true when the result is
-        // built, and only then settle. Reversed, the turn would report a conversation it still had
-        // and the caller would carry nothing into a process that heard nothing. (the local reviewer,
-        // the plan round — "the carry mark must be set before the turn resolves".)
-        this.killChild();
-        this.settle(this.stopped());
-      };
     });
   }
 
@@ -378,7 +414,7 @@ export class CliChatSession implements ChatSession {
       // turn costs the answer and nothing else. (codex, the plan round, asked for this to be proven
       // rather than asserted — `perTurnSession.test.ts` does.)
       this.endTurnAsStopped = (): void => {
-        finish({ ok: false, failure: 'you stopped this answer', stopped: true });
+        finish({ ok: false, failure: STOPPED, stopped: true });
       };
 
       child.onLine((line) => {
@@ -446,11 +482,11 @@ export class CliChatSession implements ChatSession {
     return this.contextLost
       ? {
         ok: false,
-        failure: 'you stopped this answer — the next question re-sends the conversation so far',
+        failure: `${STOPPED} — the next question re-sends the conversation so far`,
         contextLost: true,
         stopped: true,
       }
-      : { ok: false, failure: 'you stopped this answer', stopped: true };
+      : { ok: false, failure: STOPPED, stopped: true };
   }
 
   /**

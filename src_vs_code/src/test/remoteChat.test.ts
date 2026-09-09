@@ -626,3 +626,83 @@ test('a stop with no remote turn running tells the server nothing', async () => 
   session.stop();
   assert.deepStrictEqual(server.cancelled, [], 'the turn had finished; a late stop must be a no-op');
 });
+
+test('a stop while the question is still being submitted settles the turn at once', async () => {
+  // The stop signal used to be armed only after `submit` returned an id, so a stop pressed while the
+  // POST was in flight had no resolver to call — and a submit can take twenty seconds. (codex, the
+  // code round, twice.)
+  let releaseSubmit = (): void => undefined;
+  const held = new Promise<void>((resolve) => {
+    releaseSubmit = resolve;
+  });
+  const server = fakeServer([{ body: answered('too late') }], held);
+  const session = new RemoteChatSession(server.transport, vendor, BUDGETS, AT_ONCE);
+
+  const answering = session.send('explain this');
+  await new Promise((resolve) => setImmediate(resolve));
+  session.stop();
+
+  const result = await answering;
+  assert.strictEqual(result.ok, false, 'a stop during submission must end the turn, not wait it out');
+  assert.strictEqual(result.ok === false ? result.stopped : undefined, true);
+
+  // And when the submission finally lands, the job it created is cancelled rather than left running.
+  releaseSubmit();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepStrictEqual(
+    server.cancelled,
+    ['review-1'],
+    'a job whose submission finished after the stop must still be dropped',
+  );
+});
+
+test('a poll belonging to a stopped turn cannot come back to life during the next one', async () => {
+  // The defect three reviewers found in the first version. It used a `stopped` flag that the NEXT
+  // turn reset — so turn A's poll, sitting in an await when A was stopped, woke up after turn B had
+  // cleared the flag, decided it was not stopped after all, and carried on polling A's cancelled job
+  // and pushing A's queue positions into B's tab. A generation cannot be un-stopped.
+  let releasePoll = (): void => undefined;
+  const held = new Promise<void>((resolve) => {
+    releasePoll = resolve;
+  });
+  let firstPoll = true;
+  const positions: number[] = [];
+  const server = fakeServer([{ body: answered('the second answer') }]);
+  const racy: RemoteTransport = {
+    ...server.transport,
+    poll: async (id, waitSeconds) => {
+      server.polls.push({ id, waitSeconds });
+      if (firstPoll) {
+        firstPoll = false;
+        await held;
+
+        return { body: { status: 'queued', position: 9 }, failure: '', status: 200 };
+      }
+
+      return { body: answered('the second answer'), failure: '', status: 200 };
+    },
+  };
+  const session = new RemoteChatSession(racy, vendor, BUDGETS, AT_ONCE);
+
+  const first = session.send('one', (position) => positions.push(position));
+  await new Promise((resolve) => setImmediate(resolve));
+  session.stop();
+  await first;
+
+  // Turn two starts and finishes while turn one's poll is still held.
+  const second = await session.send('two');
+  assert.deepStrictEqual(second, { ok: true, answer: 'the second answer' });
+
+  // Now turn one's poll finally comes back. It must find itself stale and stop, not resume.
+  const pollsBefore = server.polls.length;
+  releasePoll();
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepStrictEqual(positions, [], 'a stopped turn must not push a queue position afterwards');
+  assert.strictEqual(
+    server.polls.length,
+    pollsBefore,
+    'the abandoned poll loop must not issue another poll once its turn is stale',
+  );
+});
