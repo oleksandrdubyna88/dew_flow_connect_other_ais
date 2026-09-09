@@ -84,3 +84,7 @@ deploy/.env
 deploy/data/
 deploy/logs/
 deploy/backup/
+
+# Phase-0 measurement transcripts: raw output from real signed-in vendor CLIs.
+# The TABLE belongs in the plan; the raw text does not belong in git.
+src_vs_code/measurements/

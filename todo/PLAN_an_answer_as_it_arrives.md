@@ -1,6 +1,12 @@
 # PLAN — an answer as it arrives
 
-> Status: **plan only, nothing implemented yet — CONDITIONAL on a measurement.** Kind: **feature**
+> Status: **PHASE 0 IS DONE (measured 2026-09-09) — Phase 1 is not built, and the measurement says
+> only one of three vendors could use it.** `agy` streams real deltas on `step_update`; `claude` and
+> `codex` emit nothing before their final answer. The window scales with answer length — 4 % of a
+> short turn, 38 % of a long one — and the plan's premise that eight silent seconds were recoverable
+> is REFUTED: most of that silence is the model thinking, before any vendor has a token to give.
+> Phase 1 stays unbuilt on that evidence; the table and the harness are below and committed.
+> Kind: **feature**
 > (accepted 2026-09-09: *"если можно стримить — стримь; если нет — и так пойдёт"*). Scope: the
 > session seam and its four implementations — `src_vs_code/src/chatSession.ts`,
 > `claudeAdapter.ts`, `codexAdapter.ts`, `agyAdapter.ts`, `cliChatSession.ts`,
@@ -34,7 +40,133 @@ table. **A Team server is expected to answer "no"**: it returns a job over the w
 there is a server change deployed by hand; that is an acceptable split and it is written down,
 not worked around.
 
-## Phase 1 — only where Phase 0 said yes
+### Phase 0 RESULTS — measured 2026-09-09
+
+Harness: [`src_vs_code/scripts/measure-stream.mjs`](../src_vs_code/scripts/measure-stream.mjs), run
+on Windows 11, node v24.18.0, against the real signed-in CLIs. Three measured runs per arm after one
+warm-up that is recorded and not counted. The launch spec is **imported** from `launchSpecFor`, not
+retyped, so this cannot measure a mode the product does not run. Raw transcripts are written to
+`src_vs_code/measurements/` and git-ignored — the table is what belongs here.
+
+The pinned prompt is mechanical and synthetic (*"write the numbers from 1 to N, one per line"*), so
+the answer can be checked without judging prose and nothing from this machine reaches a file. `N` is
+the second variable and it turned out to be the one that mattered.
+
+**Asking for 40 lines (a 110-character answer):**
+
+| vendor | arm | ok | turn (ms) | deltas | do they rebuild the answer? | stream window | usage event | usage at |
+|---|---|---|---|---|---|---|---|---|
+| `claude` | direct *(shipped)* | 3/3 | 3875 | 0 | whole answer, once, early | — | `assistant`, `result.success` | 3279 ms |
+| `claude` | `cmd.exe` | 3/3 | 4721 | 0 | whole answer, once, early | — | `assistant`, `result.success` | 4090 ms |
+| `codex` | direct | **impossible** | — | — | — | — | — | node refuses to spawn a `.cmd` without a shell |
+| `codex` | `cmd.exe` *(shipped)* | 3/3 | 7016 | 0 | no | — | `turn.completed` | 6472 ms |
+| `agy` | direct *(shipped)* | 3/3 | 4996 | 5 | **yes** | 203 ms | `step_update`, `result` | 4538 ms |
+| `agy` | `cmd.exe` | 3/3 | 5276 | 5 | **yes** | 254 ms | `step_update`, `result` | 4852 ms |
+
+**Asking `agy` for 400 lines**, because a 200 ms window on a 5 s turn is worth nothing and the
+question is whether it GROWS:
+
+| vendor | arm | ok | turn (ms) | deltas | stream window |
+|---|---|---|---|---|---|
+| `agy` | direct *(shipped)* | 3/3 | 9614 | 73 | **3656 ms** |
+| `agy` | `cmd.exe` | 3/3 | 9225 | 75 | **3829 ms** |
+
+#### What that says, question by question
+
+**1. Does the CLI emit partial answer text at all?**
+
+- **`agy`: YES, and genuinely.** `step_update` with `status: ACTIVE` and `step: agent_response`
+  carries fragments — `"1\n2\n…8\n"`, then `"9\n10\n…16\n1"`, then `"7\n18\n"` — which concatenate in
+  arrival order into exactly the final answer. That reconstruction is the test the harness applies,
+  and it is stricter than "some event carried a string" for a reason: a prefix test finds only the
+  FIRST fragment and undercounts fivefold, while a contains test alone would happily accept the
+  model's reasoning.
+- **`claude`: NO.** Four events. The `assistant` event carries the COMPLETE message, and it arrives
+  12 ms before `result.success`. That is not a stream, it is an early final — showing it would
+  advance the answer by twelve milliseconds.
+- **`codex`: NO.** Four events; the answer exists only in `item.completed.agent_message`.
+
+**2. What event carries it, and does it interleave with what the adapter already parses?**
+
+`agy`'s deltas ride `step_update`, which `agyAdapter.classify` currently returns as `NOTHING` — so
+the event is already arriving and already being discarded, and Phase 1 is a new `AdapterEvent` kind
+rather than a change to any existing branch. They interleave cleanly: `init`, then `step_update DONE
+user_input`, then the ACTIVE deltas, then `step_update DONE agent_response`, then `result`.
+
+**3. On Windows through `cmd.exe`, does buffering delay it until the end anyway?**
+
+**No — refuted.** For both vendors that resolve to a real `.exe` the two arms are within noise of each
+other (`claude` 3875 against 4721 ms, `agy` 4996 against 5276 ms with windows of 203 against 254 ms),
+and `agy` streams identically through the shell. The shell is not what makes a turn quiet.
+
+`codex` cannot be compared: it installs as `codex.cmd`, and node has refused to spawn a `.cmd`
+without a shell since the fix for CVE-2024-27980. That is a result rather than a gap — the product
+has no direct arm available for it either.
+
+#### The finding that decides it: the window SCALES with the answer
+
+At 110 characters `agy`'s deltas occupy the last **203 ms of a 4996 ms turn — 4 %**, which would spare
+a person nothing. At roughly 1.5 kB the same vendor streams for **3656 ms of a 9614 ms turn — 38 %**,
+across 73 deltas. So the silence is the model THINKING, not output being withheld, and the streaming
+half only becomes worth watching once an answer is long — which a real chat answer is, and the
+40-line probe is not.
+
+**This also corrects the plan's own premise.** *"Eight of those nine seconds are silent"* is true, but
+they are not silent because anything is being held back; the first four to six seconds are spent
+before any vendor has a token to give. No implementation can recover those.
+
+### The decision
+
+**Phase 1 is worth building for `agy` only, and it is NOT urgent.** One of three local vendors
+streams; for it the gain is real on long answers (38 % of the wait) and nil on short ones; the other
+two have nothing to stream and must keep an honest `Thinking…`. A Team server, as expected, answers
+"no" — it returns a job over the wire.
+
+Recorded rather than acted on now, because the seam it extends has just changed underneath it (see
+*Phase 1* below) and because one vendor at 38 %-on-long-answers is a smaller prize than the plan
+assumed when it was written. The evidence is here and the harness is committed, so whoever picks it
+up starts from numbers rather than from a guess.
+
+### What Phase 0 also recorded for a companion plan
+
+The harness reports where each vendor puts its token counts, because it was reading the same streams
+and [PLAN_who_said_it_and_what_it_cost.md](PLAN_who_said_it_and_what_it_cost.md) needs exactly that:
+
+| vendor | usage arrives on | when |
+|---|---|---|
+| `claude` | `assistant` **and** `result.success` | 3279 ms of a 3875 ms turn |
+| `codex` | `turn.completed` | 6472 ms of a 7016 ms turn |
+| `agy` | `step_update` (the `DONE agent_response` one) **and** `result` | 4538 ms of a 4996 ms turn |
+
+Every one of them is currently discarded — `codexAdapter.ts`'s own header comment already said so
+about `turn.completed`, and this confirms it for the other two. Note that all three publish usage on
+or before the terminal event, so a per-turn ledger needs no extra round trip.
+
+## Phase 1 — only where Phase 0 said yes (so: `agy` only, and not yet)
+
+Six constraints the plan round put on this half before it is written. They are recorded here rather
+than solved now, because Phase 1 is not being built:
+
+1. **The seam signature is no longer free.** `stop()` landed on `ChatSession` first
+   ([PLAN_a_turn_nobody_can_stop.md](PLAN_a_turn_nobody_can_stop.md)), and a third POSITIONAL
+   callback after `onWaiting` is the shape most likely to be got wrong by a caller. Decide between an
+   options object and a positional argument **before** the first line, and say which. (codex.)
+2. **A partial belongs to a TURN, not to a session.** The stop work already learned this the hard
+   way: a callback from a superseded turn must be dropped, not delivered into the next turn's
+   message. Reuse the turn identity that exists rather than inventing a second one. (codex.)
+3. **Only text that reconstructs the answer may be shown.** `agy` also emits `step_update` events for
+   tool activity and status; showing those as the answer would put the model's scratchpad in the
+   tab. The harness's rebuild test is the rule to port. (codex.)
+4. **The scroll rule must survive progressive rendering** — see the Definition of Done below.
+5. **The plain-to-rendered switch moves the geometry.** Partials render as plain text and markdown is
+   applied to the final answer only, deliberately, so a half-open fence does not flicker. A reviewer
+   asked for an incremental markdown renderer instead; that was declined as a much larger machine
+   whose only job is to make that flicker acceptable, and because the container's reserved geometry
+   belongs to the renderer plan
+   ([PLAN_an_answer_reads_like_a_document.md](PLAN_an_answer_reads_like_a_document.md)), not to two
+   designs at once. (gemini, rejected with reasons.)
+6. **A failure is not evidence of absence** — if a re-measurement is ever run, a hung or rate-limited
+   CLI must be reported as FAILED, never as "does not stream". The harness already enforces this.
 
 - `ChatSession.send(text, onWaiting?, onPartial?)` — a third optional callback; `Promise<TurnResult>`
   still resolves once with the whole answer (the final text is authoritative; partials are
@@ -94,7 +226,20 @@ only when the whole ritual has run — not when the code works.
 
 **Specific to this plan:** the Phase 0 table is part of the PR whatever it says; help sentence under the chat article naming which models stream and that a Team server does not; `module_extension.md` gains `onPartial`; CHANGELOG in the person's words; no manifest change.
 
-## Definition of Done
+## Definition of Done — PHASE 0 (this pull request)
+
+- [x] A harness that drives the REAL CLIs, importing the launch spec rather than retyping it.
+- [x] A failed, hung or unspawnable run is reported as such and never counted as "does not stream".
+- [x] The prompt is pinned, synthetic, and long enough that one chunk cannot hold the answer; the
+      answer LENGTH is varied, because it turned out to decide the result.
+- [x] Arrival is stamped per stdout CHUNK, before line splitting, so buffering is visible.
+- [x] Direct spawn compared against `cmd.exe` wherever the resolved file allows both.
+- [x] Answer deltas distinguished from reasoning, tool and status text by reconstruction.
+- [x] Three measured runs per arm after a warm-up; raw transcripts kept out of git.
+- [x] The table is in this file, with the per-vendor usage events a companion plan needs.
+- [x] A decision line saying which adapters stream, and whether Phase 1 is worth building.
+
+## Definition of Done — PHASE 1 (not this pull request)
 
 - [ ] Phase 0's table is in this file with numbers per adapter.
 - [ ] Where streaming is possible, partial text appears as it arrives and the final answer replaces it rendered.
