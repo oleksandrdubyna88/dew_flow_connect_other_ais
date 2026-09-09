@@ -1,5 +1,32 @@
 # Changelog
 
+## Extension 0.31.13 — 2026-09-09
+
+**All three vendor CLIs can answer a chat now, not just one.** Set `coai.chatModel` — or pick in the
+new *Chat other AIs* section — and the conversation goes to `claude`, `codex` or `antigravity`.
+
+The one that could answer was the one whose protocol had been measured. The other two were written
+off in a planning note as unable: *claude’s schema differs, codex has no multi-turn stdin*. Measured,
+half of that was wrong. `codex` does hold a conversation — through a session it stores and resumes,
+rather than a pipe it keeps open — and `claude` holds one exactly as `antigravity` does, and answers
+faster than either: 4.5 seconds for the first turn and 1.6 for the next, against 8.0 and 1.4.
+
+**And the panel has a place to set all this.** *Chat other AIs*, beside *Reviewers*: the prompt the
+selection travels with as a box you can write a paragraph in (one word, `Explain`, until you change
+it), the language the other AI answers in, who presses send, and which model. A reviewer on a runtime
+the chat cannot speak to is listed underneath with the reason rather than quietly missing — and a
+model you NAMED that cannot answer is shown as chosen and unable, instead of the panel quietly
+reading back somebody else.
+
+**Three things about other people’s programs, found by running them.** `claude` says nothing at all
+until it is asked — given an empty input it exits without a word — so waiting for it to announce
+itself reported a CLI that never started, for one that was working perfectly. A bare `codex` on
+Windows means `codex.cmd`, which is not something a program can simply start: it now says *codex
+could not be found* before a tab opens, instead of failing at the first question where it reads as
+the model refusing. And `codex` conversations are resumed by their own id rather than by "the last
+one" — which is the last one on the whole MACHINE, so two chat tabs would have answered each other.
+
+
 ## Server 0.18.14 — 2026-09-09
 
 **A reviewer that waited out its deadline now tells you what to do about it.** A local reviewer that
