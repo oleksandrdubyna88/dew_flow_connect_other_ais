@@ -421,6 +421,47 @@ flowchart LR
 Two functions are read by both halves, and that is the whole architecture of this section: what the
 panel shows and what the conversation uses cannot disagree, because neither has a reader of its own.
 
+### A provider is a ROW, and the pair is checked as a pair (2026-09-09)
+
+`chatProvidersFrom(vendors, catalog)` sits beside `chatModelsFrom` and answers a different question:
+not "which rows can chat" but "which providers exist, and what can each of them be pointed at". A
+provider carries its own model list — discovered for `codex` and `agy`, curated for Claude, a Team
+server's allowlist for a remote row — from `modelsFor`, with a model the server has withdrawn kept
+and marked rather than dropped.
+
+**A provider is a configured vendor ROW, not a runtime, and that was not the first draft.** The plan
+recommended resolving a chosen runtime to "the first enabled row of that runtime". Three vendors'
+reviewers rejected it independently on one round: two `codex` rows with different executables, base
+URLs or prices are two different backends, and picking whichever comes first is a coin toss that
+bills the wrong one with nothing on screen saying which — and the answer would change on a restart if
+the rows were ever reordered. A fourth finding extended it to Team servers, where one server hosts
+several vendor rows (`<server>-codex`, `<server>-claude`), so a server id alone cannot say which
+vendor is to answer. So resolution is a LOOKUP by row id rather than a search, and nothing in it can
+be ambiguous because nothing in it searches.
+
+`resolveChatPick(vendors, list, providerId, modelId)` turns a pair into the row that says HOW to run
+it. **The pair is checked as a pair**: a model-only membership check would accept `sonnet` against
+the `agy` row whenever any other provider offers a model by that name, and `vendor-routing.md`
+forbids a Claude model going through `agy` by name. The chosen model is returned BESIDE the row
+rather than written into it — a row's configured model belongs to the reviewer that row is, and a
+chat picking another model must not edit somebody's reviewer.
+
+`legacyPick` is what a saved `coai.chatModel` from before the pair means now. Naming a row keeps
+working and brings that row's own model with it. Naming a MODEL resolves only when exactly one
+provider offers it: with two, this code would be choosing a vendor — and a bill — on somebody's
+behalf from a value that never meant to say which, so it keeps the model and leaves the provider
+empty for the caller to strand and ask.
+
+`allowedModelsFor` **moved from `panelView.ts` to `models.ts`**, unchanged. It was always pure, but
+it lived in the file that renders the panel, so anything else needing the same answer had to import a
+webview renderer to get it. It now sits beside `modelsFor`, which consumes what it returns, and
+beside `RemoteProvenance`, which was already declared there.
+
+> The two SELECTS are not here yet. `chatPickerHtml` lives in `chatPage.ts` and the panel's control
+> in `panelView.ts`, both owned by other lanes; the `coai.chatProvider` setting ships with the UI
+> that reads it, since a setting drags a manifest entry, a help article and four translations behind
+> it. What exists is the pure half: the providers, the resolution, and the legacy rule.
+
 **One reader, both sides.** The section renders `chatSettingsFrom(...)` and the command calls
 `chatSettingsFrom(...)` — the same function over the same per-side config reader. That is why these
 four are NOT folded into `CoaiSettings`: two readers for one set of keys is a drift this repository

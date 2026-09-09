@@ -4,7 +4,6 @@ import {
   teamUsageBlock,
   usageScopeControl,
 } from './teamServerView';
-import { canonicalTeamServerUrl } from './teamServers';
 import { escapeHtml } from './escapeHtml';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
@@ -12,7 +11,7 @@ import { ChatModelList, chatModelsFrom } from './chatModels';
 import { CoaiSettings, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
-import { ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
+import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, ROLES, promptsFor, selectedFor } from './prompts';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
@@ -604,70 +603,6 @@ const KNOWS_ITS_OWN_ENDPOINT: ReadonlySet<string> = new Set(['codex', 'claude', 
  * — a guessed list would let somebody pick a model that was never going to be accepted. The row's
  * own saved model is added back by `modelsFor`, marked, so a selection never silently vanishes.</p>
  */
-/**
- * What a Team server allows, and whether the server has actually said so.
- *
- * <p>The two cannot be collapsed into a list length. When the catalog has not arrived this returns
- * the row's OWN model — never an empty list, because an empty one means "your server withdrew this
- * model" and `modelsFor` would mark it so, on every reload, for as long as a server stayed
- * unreachable. So a one-item list is ambiguous by construction, and the caption has to be told which
- * of the two it is looking at rather than counting.</p>
- *
- * <p>The shape is `RemoteProvenance`, declared beside the caption that reads it. It was declared
- * twice for one release — the same three fields, once here and once there — which is the beginning
- * of the drift this plan spent two stories closing on the other seam.</p>
- */
-function allowedModelsFor(vendor: Vendor, servers: readonly TeamServerState[]): RemoteProvenance {
-  if (vendor.runtime !== 'remote') {
-    return { models: [], named: vendor.id, catalog: 'no-server' };
-  }
-
-  // By ID first, because an address is CORRECTABLE and an id is not: fixing a typo in a hostname
-  // would otherwise orphan every row that matched the old string. The address is the fallback, for
-  // rows written before the id was recorded — and it is compared CANONICALLY, never as typed, since
-  // the row stores one spelling and the server entry holds whatever the person entered.
-  const url = canonicalTeamServerUrl(vendor.baseUrl);
-  const server = servers.find((s) => (vendor.teamServerId !== undefined && vendor.teamServerId.length > 0)
-    ? s.server.id === vendor.teamServerId
-    : canonicalTeamServerUrl(s.server.url) === url);
-  // Guarded by `typeof`, not by `!== undefined`: a JSON null passes the second and then has
-  // `.length` read off it, and this is a field a person can hand-write. Length-checked rather than
-  // `??`, because nullish coalescing keeps an EMPTY string — a row carrying `remoteVendor: ''` would
-  // be looked up in the catalog under a blank name. The C# side of this seam asks the same question
-  // the same way (`VendorIdentity.Recorded`), and two halves of one contract disagreeing about what
-  // counts as absent is how this whole plan started. Both raised on this story's rounds.
-  const named = typeof vendor.remoteVendor === 'string' && vendor.remoteVendor.length > 0
-    ? vendor.remoteVendor
-    : vendor.id;
-
-  // Three states, not two. "No server entry matches this row" is not "its catalog has not arrived
-  // yet" — it is what a person is left with after removing a Team server and keeping its reviewers,
-  // and sending them to a section that no longer lists their server is worse than saying nothing.
-  if (server === undefined) {
-    return { models: [vendor.model], named, catalog: 'no-server' };
-  }
-
-  if (server.catalog === undefined) {
-    // NOT an empty allowlist. An empty one means "this server no longer offers your model", and
-    // `modelsFor` would then mark every remote row's saved model as withdrawn — on every reload,
-    // before the first fetch has landed, and for as long as a server stays unreachable. A person
-    // would read that as their configuration having been dropped. Caught on the code round.
-    return { models: [vendor.model], named, catalog: 'waiting' };
-  }
-
-  return {
-    // Case-insensitively, because `RemoteProbe.Read` on the other side of this seam compares with
-    // `OrdinalIgnoreCase`. A server whose catalog says `DeepSeek` answers a row that recorded
-    // `deepseek` perfectly well, and this comparison showed that same row an empty dropdown and a
-    // caption saying the server allows it nothing. Neither side may lower-case the name it SENDS —
-    // that is the server's own spelling — but both must agree about which names are the same one.
-    // Found by the automated reviewer on this change's pull request.
-    models: (server.catalog.vendors ?? [])
-      .find((v) => v.id.toLowerCase() === named.toLowerCase())?.models ?? [],
-    named,
-    catalog: 'here',
-  };
-}
 
 /**
  * A reviewer the SERVER says it cannot run, named on its own card.

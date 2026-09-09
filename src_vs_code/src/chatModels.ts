@@ -1,6 +1,9 @@
 import { ChatModelChoice } from './chatPage';
 import { CHAT_RUNTIMES } from './cliChatLaunch';
+import { LocalEngine } from './localEngines';
+import { allowedModelsFor, ModelChoice, modelsFor } from './models';
 import { REMOTE_TURNS } from './remoteAsk';
+import { TeamServerState } from './teamServerView';
 import { Vendor } from './vendors';
 
 /**
@@ -190,4 +193,155 @@ function refusalWhenNothingIsOffered(list: ChatModelList): string {
   return why.length > 0
     ? `No model can answer a chat yet: ${why}`
     : 'Enable a reviewer on the antigravity runtime to chat with it.';
+}
+
+/**
+ * One provider a chat can be sent to — which is a configured vendor ROW, not a runtime.
+ *
+ * <p><b>The distinction is the whole design, and it was not the first draft's.</b> The plan
+ * recommended resolving a chosen runtime to "the first enabled row of that runtime". Three vendors'
+ * reviewers rejected that independently on one round, and they were right: two `codex` rows with
+ * different executables, base URLs or prices are two different backends, and picking whichever comes
+ * first is a coin toss that bills the wrong one with nothing on screen saying which — and the answer
+ * would change on a restart if the rows were ever reordered. A fourth finding extended it to Team
+ * servers, where ONE server hosts several vendor rows (`<server>-codex`, `<server>-claude`) so a
+ * server id alone cannot say which vendor is to answer.</p>
+ *
+ * <p>So a provider is a row, local and remote alike, and resolution is a LOOKUP rather than a
+ * search. Nothing here can be ambiguous, because nothing here searches.</p>
+ */
+export interface ChatProvider {
+  /** The vendor ROW id. This is the identity a saved choice stores and resolution looks up. */
+  readonly id: string;
+  readonly label: string;
+  readonly caption: string;
+  /** What this row can be pointed at — discovered, curated or a server's allowlist. */
+  readonly models: readonly ModelChoice[];
+}
+
+export interface ChatProviderList {
+  readonly providers: readonly ChatProvider[];
+  /** Rows that exist and are enabled, but cannot answer. Shown, not hidden. */
+  readonly refused: readonly RefusedModel[];
+}
+
+/**
+ * Everything a provider's model list is derived FROM, passed in rather than reached for.
+ *
+ * <p>`modelsFor` needs discovered Codex and agy lists, a local engine and a server allowlist. A
+ * function that took only the vendor rows would have to read those from somewhere else, and then it
+ * would not be pure — it would be a function whose answer depends on state its caller cannot see.
+ * (codex, the plan round.)</p>
+ */
+export interface ChatCatalog {
+  readonly discoveredCodex: readonly ModelChoice[];
+  readonly discoveredAgy: readonly ModelChoice[];
+  readonly localEngine?: LocalEngine | undefined;
+  readonly teamServers: readonly TeamServerState[];
+}
+
+/** The providers a chat may be sent to, and the reason for every configured row that is not one. */
+export function chatProvidersFrom(
+  vendors: readonly Vendor[],
+  catalog: ChatCatalog,
+): ChatProviderList {
+  const enabled = vendors.filter((vendor) => vendor.enabled);
+  const providers = enabled.filter(canChat).map((vendor): ChatProvider => ({
+    id: vendor.id,
+    label: vendor.model.length > 0 ? `${vendor.id} · ${vendor.model}` : vendor.id,
+    caption: captionOf(vendor),
+    models: modelsFor(
+      vendor.runtime,
+      catalog.discoveredCodex,
+      vendor.model,
+      catalog.localEngine,
+      catalog.discoveredAgy,
+      allowedModelsFor(vendor, catalog.teamServers).models,
+    ),
+  }));
+  const refused = enabled.filter((vendor) => !canChat(vendor)).map((vendor): RefusedModel => ({
+    id: vendor.id,
+    reason: `the chat can only speak to ${CHAT_RUNTIMES.join(', ')} and Team servers so far`
+      + ` — ${vendor.id} runs on ${vendor.runtime}`,
+  }));
+
+  return { providers, refused };
+}
+
+/** Either the row and model that will answer, or the sentence saying why nothing will. Never both. */
+export type ChatPick =
+  | { readonly ok: true; readonly row: Vendor; readonly model: string }
+  | { readonly ok: false; readonly refusal: string };
+
+/**
+ * A chosen (provider, model) pair, resolved to the row that says HOW to run it.
+ *
+ * <p><b>The pair is checked as a PAIR.</b> A model-only membership check would accept `sonnet`
+ * against the `agy` row whenever some other provider offers a model by that name — and
+ * `vendor-routing.md` forbids a Claude model going through `agy` by name. The check is therefore
+ * "this provider offers this model", never "somebody offers this model". (codex, the plan round.)</p>
+ *
+ * <p>The row is what the caller actually needs: it carries the runtime, the executable, the base
+ * URL, the price, and for a Team server the server AND `remoteVendor` — the field this family lost
+ * once for three releases. The chosen MODEL is returned beside it rather than written into the row,
+ * because a row's configured model belongs to the reviewer that row is, and a chat picking another
+ * model must not edit somebody's reviewer.</p>
+ */
+export function resolveChatPick(
+  vendors: readonly Vendor[],
+  list: ChatProviderList,
+  providerId: string,
+  modelId: string,
+): ChatPick {
+  const provider = list.providers.find((one) => one.id === providerId);
+  if (provider === undefined) {
+    const refused = list.refused.find((one) => one.id === providerId);
+
+    return {
+      ok: false,
+      refusal: refused?.reason
+        ?? `${providerId} is not a model this conversation can be sent to any more`,
+    };
+  }
+  const row = vendors.find((one) => one.id === providerId);
+  if (row === undefined) {
+    // The list and the rows disagreeing is a defect rather than a state, but it is reported as a
+    // sentence instead of thrown: the caller is a command handler, and a throw there closes a tab.
+    return { ok: false, refusal: `${providerId} is no longer configured` };
+  }
+  if (!provider.models.some((model) => model.id === modelId)) {
+    return { ok: false, refusal: `${providerId} does not offer ${modelId}` };
+  }
+
+  return { ok: true, row, model: modelId };
+}
+
+/**
+ * What a saved `coai.chatModel` from before the pair existed means now.
+ *
+ * <p>Every installation has one string today: the id of a reviewer row. That keeps working — it
+ * names a provider, and the provider's own configured model comes with it.</p>
+ *
+ * <p>A value naming a MODEL rather than a row resolves only when exactly ONE provider offers it.
+ * With two, this code would be choosing a vendor — and a bill — on somebody's behalf from a value
+ * that never meant to say which. Ambiguity keeps the model and leaves the provider empty, so the
+ * caller strands it and asks rather than guessing. (codex, the plan round.)</p>
+ */
+export function legacyPick(
+  list: ChatProviderList,
+  vendors: readonly Vendor[],
+  saved: string,
+): { readonly providerId: string; readonly modelId: string } {
+  if (saved.length === 0) {
+    return { providerId: '', modelId: '' };
+  }
+  const asRow = list.providers.find((one) => one.id === saved);
+  if (asRow !== undefined) {
+    return { providerId: saved, modelId: vendors.find((one) => one.id === saved)?.model ?? '' };
+  }
+  const offering = list.providers.filter((one) => one.models.some((model) => model.id === saved));
+
+  return offering.length === 1
+    ? { providerId: offering[0]!.id, modelId: saved }
+    : { providerId: '', modelId: saved };
 }
