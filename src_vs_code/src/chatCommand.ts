@@ -574,7 +574,7 @@ function newConversation(
       onStop: (id, turn) => {
         const found = panels.entryOf(id);
         const thread = threads.get(id);
-        if (found === undefined || thread === undefined || !thread.running) {
+        if (found === undefined || thread?.running !== true) {
           // Nothing is running, or the tab is already gone. A stop is a message about a turn, and
           // there is no turn — killing the process for it would cost the conversation for a keypress
           // that arrived too late to mean anything.
