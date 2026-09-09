@@ -101,6 +101,6 @@ only when the whole ritual has run — not when the code works.
 ## Parallelism
 
 Owns one line each in `chatPanel.ts` and `roundsLogPanel.ts`. **Tiny — land it first in its lane**,
-because [PLAN_a_conversation_survives_a_reload.md](../todo/PLAN_a_conversation_survives_a_reload.md) and
-[PLAN_the_tab_wears_an_icon.md](../todo/PLAN_the_tab_wears_an_icon.md) edit the same `createWebviewPanel`
+because [PLAN_a_conversation_survives_a_reload.md](PLAN_a_conversation_survives_a_reload.md) and
+[PLAN_the_tab_wears_an_icon.md](PLAN_the_tab_wears_an_icon.md) edit the same `createWebviewPanel`
 call afterwards.
