@@ -142,6 +142,31 @@ shipped editable only in `settings.json`, which is where a prompt goes to be for
 **Chat other AIs** section beside *Reviewers* now holds all four, with the prompt as a multi-line
 box because one word is the default rather than the limit.
 
+```mermaid
+flowchart LR
+  J["settings.json<br/>coai.chatPrompt · chatLanguage<br/>chatAutoSend · chatModel"]
+  R(["chatSettingsFrom()<br/>one reader, every fallback"])
+  P["Chat other AIs section<br/>panelView.chatBody"]
+  C["chatWithOtherAi<br/>the command"]
+  V["coai.vendors"]
+  M(["chatModelsFrom()<br/>offered · refused"])
+  T["the conversation tab"]
+
+  J --> R
+  R --> P
+  R --> C
+  V --> M
+  M --> P
+  M --> C
+  C --> T
+
+  classDef one fill:#1f6feb22,stroke:#1f6feb;
+  class R,M one;
+```
+
+Two functions are read by both halves, and that is the whole architecture of this section: what the
+panel shows and what the conversation uses cannot disagree, because neither has a reader of its own.
+
 **One reader, both sides.** The section renders `chatSettingsFrom(...)` and the command calls
 `chatSettingsFrom(...)` — the same function over the same per-side config reader. That is why these
 four are NOT folded into `CoaiSettings`: two readers for one set of keys is a drift this repository
