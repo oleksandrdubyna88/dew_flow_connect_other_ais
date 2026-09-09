@@ -99,6 +99,14 @@ export interface ChatPushState {
    * stale position would be pushed exactly once and then stick.</p>
    */
   readonly queued: number;
+  /**
+   * Which turn is in flight, counted from 1 — 0 when none is, or when it cannot be named.
+   *
+   * <p>The control that stops a turn is rendered INTO the thinking line with this number in it, so a
+   * control on screen names the turn it was drawn for and no other. That is the whole reason it
+   * travels with the state rather than being remembered by the page.</p>
+   */
+  readonly turn: number;
 }
 
 /**
@@ -292,7 +300,7 @@ export function pushChatState(entry: ChatEntry, state: ChatPushState): boolean {
     messagesHtml: chatMessagesHtml(state.messages),
     running: state.running,
     capped: state.capped,
-    thinkingHtml: chatStatusHtml(state.running, state.queued),
+    thinkingHtml: chatStatusHtml(state.running, state.queued, state.turn),
     cappedHtml: chatCappedHtml(state.capped),
     failureHtml: state.failure.length === 0 ? '' : `<div class="failure">${escapeHtml(state.failure)}</div>`,
     pickerHtml: chatPickerHtml(state.models, state.modelId),
