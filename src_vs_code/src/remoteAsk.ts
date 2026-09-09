@@ -33,8 +33,8 @@
  * role is a conversation, because every review carries one. Measured the same afternoon: empty role,
  * a model the catalog allows, and the answer came back.</p>
  *
- * <p>A `kind` field would say it better than an absence does, and it is a server change with its own
- * release. Recorded as the follow-up rather than smuggled into the role enum.</p>
+ * <p>An absence is a poor way to say something, so the turn also carries {@link CHAT_KIND} — sent
+ * ahead of the server that will read it, rather than smuggled into the role enum.</p>
  */
 export const CHAT_ROLE = '';
 
@@ -116,9 +116,9 @@ export function acceptedId(body: unknown): string {
 /**
  * What the server said about a review this poll.
  *
- * <p>The status strings are the server's, and an unknown one is treated as still running rather than
- * as a failure: a server that learns a new state must not turn every conversation into an error on
- * the day it ships. The deadline is what ends a turn that never resolves.</p>
+ * <p>The status strings are the server's, and one this build does not know is NAMED rather than
+ * waited out — see the comment where that decision is made. The deadline is what ends a turn that
+ * never resolves anyway; naming it is what makes the reason readable instead of a timeout.</p>
  */
 export function readStep(body: unknown): RemoteStep {
   const row = (body ?? {}) as Record<string, unknown>;
@@ -136,7 +136,7 @@ export function readStep(body: unknown): RemoteStep {
   if (status === 'failed' || status === 'error' || status === 'cancelled' || status === 'canceled') {
     return { kind: 'failure', failure: `the server reported: ${saidWhy(row, status)}` };
   }
-  if (status.length === 0 || RUNNING.includes(status)) {
+  if (status.length === 0 || RUNNING.has(status)) {
     return { kind: 'waiting', position };
   }
 
@@ -148,14 +148,23 @@ export function readStep(body: unknown): RemoteStep {
 }
 
 /** The states that mean "not finished yet". Measured from the server's own `JobStatus`. */
-const RUNNING: readonly string[] = ['queued', 'running', 'pending', 'claimed', 'waiting'];
+const RUNNING: ReadonlySet<string> = new Set(['queued', 'running', 'pending', 'claimed', 'waiting']);
 
-/** What the server said about a failure, in its own words when it gave any. */
+/**
+ * What the server said about a failure, in its own words when it gave any.
+ *
+ * <p>Three fields, in the order of how much they tell a person: what the vendor refused, then why
+ * the server stopped, then — when neither was given — the bare status, which at least names the
+ * state it ended in.</p>
+ */
 function saidWhy(row: Record<string, unknown>, status: string): string {
   const failure = typeof row['failure'] === 'string' ? row['failure'] : '';
+  if (failure.length > 0) {
+    return failure;
+  }
   const reason = typeof row['reason'] === 'string' ? row['reason'] : '';
 
-  return failure.length > 0 ? failure : reason.length > 0 ? reason : status;
+  return reason.length > 0 ? reason : status;
 }
 
 /**
