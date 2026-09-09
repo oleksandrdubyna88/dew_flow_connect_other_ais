@@ -7,6 +7,14 @@ which is no help at all when three conversations are open side by side. It carri
 green glyph now, in a light and a dark version, because a tab icon cannot read your theme.
 
 
+## Extension 0.31.20 — 2026-09-09
+
+**The prompt you type into the sidebar now stays typed.** *What to ask about the selection* was
+saving only when you clicked away, and the panel rebuilds itself whenever a probe, a version check or
+any other setting moves — several times a minute, none of it your doing. Whatever you had typed died
+with the page. It is written as you type now, and the panel will not rebuild itself underneath a box
+you are working in.
+
 ## Extension 0.31.19 — 2026-09-09
 
 **Ctrl+F works.** The chat tab, the rounds log and the help page each open with the editor's own find
