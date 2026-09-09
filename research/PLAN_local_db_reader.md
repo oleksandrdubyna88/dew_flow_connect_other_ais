@@ -29,7 +29,7 @@ reach the screen.
 
 Requirement 1's other half — filters applied IN SQL — did not ship either: the filters are applied in
 the page over everything that was sent, which is why the payload became 3.83 MB and why
-[todo/PLAN_the_log_asks_for_a_page.md](../todo/PLAN_the_log_asks_for_a_page.md) exists.
+[PLAN_the_log_asks_for_a_page.md](PLAN_the_log_asks_for_a_page.md) exists.
 
 ## Open tail — extracted, not dropped
 

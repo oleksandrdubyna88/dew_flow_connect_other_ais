@@ -9,7 +9,7 @@ import {
 } from '../roundsLog';
 import { Escalation } from '../escalations';
 import { RoundRecord, SessionFile } from '../rounds';
-import { DbFinding, DbLog, DbRound } from '../roundsDb';
+import { DbFinding, DbLog, DbRound, EMPTY_TOTALS } from '../roundsDb';
 
 /**
  * The rounds log: every round of every session, as rows a table can sort, filter and search.
@@ -242,15 +242,24 @@ function dbFinding(over: Partial<DbFinding> = {}): DbFinding {
 }
 
 function dbLog(over: Partial<DbRound> = {}): DbLog {
+  const findings = over.findings ?? [dbFinding()];
+
   return {
     rounds: [{
       repoPath: 'D:/rsd/dew_flow_connect_other_ais', branch: 'feat/shared-gate-rule',
       stage: 'CodeReview', number: 1, startedUtc: '2026-09-05T07:41:00.000Z',
-      sessionId: 'ba0c73a1', accepted: -1, rejected: -1, findings: [dbFinding()],
+      sessionId: 'ba0c73a1', accepted: -1, rejected: -1, findings,
+      cursor: '2026-09-05T07:41:00.000Z|1',
+      // The count FOLLOWS the findings unless a test names it on purpose. Once a paged server
+      // stopped sending findings with the list, this is what a row's status reads, so a fixture
+      // where the two disagree would be testing a state the server cannot produce.
+      foundCount: findings.length,
       ...over,
     }],
     blindSpots: [],
     defended: [],
+    totals: EMPTY_TOTALS,
+    paged: true,
   };
 }
 
@@ -272,6 +281,29 @@ test('once the decisions are recorded the row shows the split', () => {
 
   assert.equal(row.status, 'done');
   assert.deepEqual(row.decided, { accepted: 9, rejected: 4 });
+});
+
+test('a paged server sends the COUNT and not the findings, and the status still reads it', () => {
+  // The list stopped carrying findings — 3.78 MB of a 3.83 MB payload, for rounds nobody had
+  // opened. Without a count beside them, a round with an open gate and a round that raised nothing
+  // become the same row, and every clean round would read as awaiting a resolve nobody owes.
+  const [row] = rowsFrom(
+    [session([round()])], NOW, () => undefined, [], dbLog({ findings: [], foundCount: 4 })) as [LogRow];
+
+  assert.equal(row.status, 'awaiting');
+  assert.equal(row.foundCount, 4);
+  assert.equal(row.found.length, 0);
+  assert.equal(row.foundState, 'unasked', 'nobody has opened it, so nothing has been asked for');
+  assert.equal(row.origin, 'db');
+});
+
+test('a row the database has never heard of says so, rather than asking for what was never written', () => {
+  // The distinction the five states rest on. An empty answer cannot say whether a round was clean
+  // or was never recorded — and this row can, because the merge knows which half it came from.
+  const [row] = rowsFrom([session([round()])], NOW, () => undefined, []) as [LogRow];
+
+  assert.equal(row.origin, 'session');
+  assert.equal(row.foundState, 'absent');
 });
 
 test('a round that produced no findings has nothing to decide and stays done', () => {

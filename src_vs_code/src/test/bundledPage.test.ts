@@ -81,9 +81,13 @@ const LOG = {
       title: 'a finding', why: '', fix: '', role: 'Architecture', isGating: true,
       providers: 'codex', resolution: 'accept', reason: '', reRaised: false,
     }],
+    cursor: '2026-09-05T11:41:00.000Z|1',
+    foundCount: 1,
   }],
   blindSpots: [],
   defended: [],
+  totals: { rounds: 1, findings: 1, accepted: 1, rejected: 0, gating: 1, tokensIn: 0, tokensOut: 0, costUsd: 0 },
+  paged: true,
 };
 
 const PRICES = (model: string) =>

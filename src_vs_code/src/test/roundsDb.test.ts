@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DbLog, EMPTY_LOG, findingsByRound, parseLog, roundKeyOf } from '../roundsDb';
+import { DbLog, EMPTY_LOG, EMPTY_TOTALS, findingsByRound, parseLog, roundKeyOf } from '../roundsDb';
 import { blindSpotsHtml, LogRow, roundsLogHtml, rowsFrom } from '../roundsLog';
 import { RoundRecord, SessionFile } from '../rounds';
 
@@ -59,6 +59,8 @@ const LOG: DbLog = {
         resolution: 'reject', reason: 'the name is the domain word', reRaised: true,
       },
     ],
+    cursor: '2026-09-05T07:41:00.000Z|1',
+    foundCount: 2,
   }],
   blindSpots: [
     { kind: 'category', name: 'Reliability', accepted: 7, total: 9 },
@@ -72,6 +74,8 @@ const LOG: DbLog = {
     role: 'UxDxPerformance', isGating: false, providers: 'gemini',
     resolution: 'reject', reason: 'the name is the domain word', reRaised: true,
   }],
+  totals: EMPTY_TOTALS,
+  paged: true,
 };
 
 // ---------- believing another program's JSON, only as far as its shape ----------

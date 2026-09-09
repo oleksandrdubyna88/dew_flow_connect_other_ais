@@ -1448,6 +1448,39 @@ elsewhere. It lived inside `PanelProvider` beside `vscode`, so it could not be t
 is how a rule ships wrong and stays wrong, asserted by nothing but its own comment. Nine tests now
 say what it does.
 
+**The log asks for a page, and lets SQL do the counting (2026-09-09).** Reading the rounds database
+answered **3.83 MB**, of which the 236 round rows were **0.05 MB**. The other 98.7 % was 3 484
+findings, carried by every listed round although `detail()` draws them one at a time, on a click. The
+list now carries the rounds and, per round, only HOW MANY it found; `readFindings` fetches the
+sentences for the one round somebody opened.
+
+*What a row's `foundCount` is for.* The status column tells a gate still open from a round that raised
+nothing, and the only evidence for the second is that no finding exists. Once the list stopped
+carrying findings, that integer is what carries the fact.
+
+*Five states, five elements.* An opened row is `asking`, `failed` (with a retry), `none`, `not kept`,
+or the list itself. Four of them used to be one blank, and a blank reads as "this round was clean" —
+the defect [PLAN_findings_in_the_log.md](PLAN_findings_in_the_log.md) named and did not get to build.
+The last two are told apart by the row's ORIGIN rather than by the emptiness of an answer: a row the
+database holds and that found nothing is clean; a row that exists only in a session file was never
+recorded.
+
+*The boundary between the two halves of a row.* The page is built from the SESSION files — every row
+is a session round — and the database only enriches them, with the decision counts and the finding
+count. So the database read asks for `MAX_LIMIT` (1000) rounds rather than one page: that list is
+what gives every row its ✓/✗ badge, and a round without its findings costs about 220 bytes. The PAGE
+is a separate axis: `PAGE_SIZE` (200) rows of the merged, filtered, sorted list, with Newer/Older
+under the table. When the window does NOT cover the whole table, a row the list does not name is
+`unasked` rather than `not kept` — guessing "never recorded" about a round nobody checked would be a
+claim, and the server can answer it exactly.
+
+*Filters and sort are page-local, and the page says so.* Changing any of them returns to the first
+page: "next page" of a client-side filter over a server-side window is a promise nothing can keep.
+
+*Either half can be older than the other.* `readLog` asks with `--paged`; a server that does not know
+the flag exits 64 and it asks again without it, which is the answer that server gave yesterday. A new
+server asked WITHOUT the flag answers the old shape. All four pairings are tested.
+
 **A fan-out that copied its buffer per event cost the log page everything it knows (2026-09-09).**
 `replayingFan` in `processLauncher.ts` held what nobody had subscribed to yet with
 `held = [...held, value]` — the whole array, rebuilt, once per event. A caller that wants only stdout

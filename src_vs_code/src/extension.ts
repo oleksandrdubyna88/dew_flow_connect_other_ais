@@ -15,7 +15,7 @@ import { EscalationWatcher } from './escalationWatcher';
 import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
 import { parseSession, SessionFile } from './rounds';
-import { blindSpotsHtml, rowsFrom } from './roundsLog';
+import { blindSpotsHtml, LogRow, rowsFrom } from './roundsLog';
 import { RoundsLogPanel } from './roundsLogPanel';
 import { ExistingFile, ServerSettingsSync } from './serverSettingsSync';
 import { LOCK_STALE_AFTER_MS, lockIsStale } from './settingsLock';
@@ -53,6 +53,18 @@ export function activate(context: vscode.ExtensionContext): void {
     onForget: async (provider) => {
       await panelRef.forgetUsage(provider);
       await refreshRoundsLog(roundsLog, watcher, panelRef, true);
+    },
+    // A row was opened. The list no longer carries findings — 3.78 MB of a 3.83 MB payload, for
+    // rounds nobody had opened — so this is the read that replaces them, for the one round clicked.
+    onFindings: async (key) => {
+      const row = lastRows.find((r) => r.key === key);
+      if (row === undefined) {
+        await roundsLog.tell(key, 'failed', []);
+
+        return;
+      }
+      const found = await panelRef.roundFindings(row.dbKey.sessionId, row.dbKey.stage, row.dbKey.number);
+      await roundsLog.tell(key, found.state, found.findings);
     },
   });
   const panel = panelRef = new PanelProvider(context, watcher, dataDir(), async (id) => {
@@ -518,6 +530,23 @@ async function copyClaudeSnippet(): Promise<void> {
  * tables nobody could sort, filter or search, and a rewrite that reloaded the editor on every tick.
  * The page keeps the same command and the same data; only the surface changed.</p>
  */
+/**
+ * The rows as they were last built.
+ *
+ * <p>The page holds a row KEY and nothing else — every other field of a row is page state that never
+ * comes back, which is deliberate and is the lesson of the sidebar's disclosures. So when a row is
+ * opened and asks what its round found, this is what turns that key back into the session, the stage
+ * and the number the database keys a round by.</p>
+ */
+let lastRows: readonly LogRow[] = [];
+
+/** Hands the rows on, and keeps them, in one expression at each of the two call sites. */
+function remember(rows: readonly LogRow[]): readonly LogRow[] {
+  lastRows = rows;
+
+  return rows;
+}
+
 async function showRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher, panel: PanelProvider): Promise<void> {
   await watcher.refresh();
 
@@ -526,7 +555,9 @@ async function showRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher, pa
   // opened a log should not wait on a process to see it: the findings arrive in the next push, a
   // moment later. Raised by the gate as blocking the panel on an unannounced read.
   log.show(
-    rowsFrom(await readSessions(), Date.now(), await panel.modelPrice(), await panel.usageLines(), undefined, panel.vendorIds()),
+    remember(rowsFrom(
+      await readSessions(), Date.now(), await panel.modelPrice(), await panel.usageLines(), undefined,
+      panel.vendorIds())),
     watcher.openQuestions,
     await panel.usageTab());
   await refreshRoundsLog(log, watcher, panel, true);
@@ -539,11 +570,14 @@ async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher,
   }
   const fresh = await panel.roundsLog();
   log.update(
-    rowsFrom(await readSessions(), Date.now(), await panel.modelPrice(), await panel.usageLines(), fresh, panel.vendorIds()),
+    remember(rowsFrom(
+      await readSessions(), Date.now(), await panel.modelPrice(), await panel.usageLines(), fresh,
+      panel.vendorIds())),
     watcher.openQuestions,
     await panel.usageTab(),
     force,
-    blindSpotsHtml(fresh));
+    blindSpotsHtml(fresh),
+    fresh.totals);
 }
 
 /** The server's own session files: its data dir, or `COAI_DATA_DIR` when the person set one. */

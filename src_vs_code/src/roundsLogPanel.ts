@@ -2,6 +2,7 @@ import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
 import { Escalation } from './escalations';
 import { LogRow, questionsHtml, roundsLogHtml } from './roundsLog';
+import { DbTotals, EMPTY_TOTALS } from './roundsDb';
 import { Push, PushLedger, Region } from './pushLedger';
 import { LogCommand, logCommandOf, LogPageMessage } from './roundsLogMessages';
 
@@ -13,6 +14,15 @@ export interface RoundsLogHooks {
   readonly onUsageWindow: (window: string) => Promise<void>;
   /** ✕ beside a vendor on the spending tab. */
   readonly onForget: (provider: string) => Promise<void>;
+  /**
+   * A row was opened, and wants to know what that round found.
+   *
+   * <p>The list stopped carrying findings — measured at 3.78 MB of a 3.83 MB payload, for rounds
+   * nobody had opened — so this is the read that replaces them, for the one round somebody clicked
+   * on. It answers with the state as well as the findings, because an empty list and a failed read
+   * are different things to say about a round.</p>
+   */
+  readonly onFindings: (key: string) => Promise<void>;
 }
 
 /**
@@ -57,7 +67,8 @@ export class RoundsLogPanel {
     questions: readonly Escalation[];
     usage: string;
     spots: string;
-  } = { rows: [], questions: [], usage: '', spots: '' };
+    totals: DbTotals;
+  } = { rows: [], questions: [], usage: '', spots: '', totals: EMPTY_TOTALS };
 
   /**
    * The belt to the handshake's braces.
@@ -79,10 +90,16 @@ export class RoundsLogPanel {
     return this.panel !== undefined;
   }
 
-  show(rows: readonly LogRow[], questions: readonly Escalation[], usageHtml: string, spotsHtml = ''): void {
+  show(
+    rows: readonly LogRow[],
+    questions: readonly Escalation[],
+    usageHtml: string,
+    spotsHtml = '',
+    totals: DbTotals = EMPTY_TOTALS,
+  ): void {
     if (this.panel !== undefined) {
       this.panel.reveal();
-      this.update(rows, questions, usageHtml, true, spotsHtml);
+      this.update(rows, questions, usageHtml, true, spotsHtml, totals);
       return;
     }
     const panel = vscode.window.createWebviewPanel(
@@ -94,8 +111,9 @@ export class RoundsLogPanel {
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] },
     );
     this.panel = panel;
-    panel.webview.html = roundsLogHtml(rows, questions, crypto.randomBytes(16).toString('hex'), usageHtml, spotsHtml);
-    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml };
+    panel.webview.html = roundsLogHtml(
+      rows, questions, crypto.randomBytes(16).toString('hex'), usageHtml, spotsHtml, totals);
+    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals };
     this.rebuilt();
 
     panel.webview.onDidReceiveMessage((message: LogPageMessage) => this.received(logCommandOf(message)));
@@ -108,12 +126,40 @@ export class RoundsLogPanel {
   }
 
   /** Pushes what changed — the rows, the spending region, or both — and nothing when nothing did. */
-  update(rows: readonly LogRow[], questions: readonly Escalation[], usageHtml: string, force = false, spotsHtml = ''): void {
+  update(
+    rows: readonly LogRow[],
+    questions: readonly Escalation[],
+    usageHtml: string,
+    force = false,
+    spotsHtml = '',
+    totals: DbTotals = EMPTY_TOTALS,
+  ): void {
     if (this.panel === undefined) {
       return;
     }
-    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml };
+    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals };
     void this.pushAll(force);
+  }
+
+  /**
+   * What one opened row was told.
+   *
+   * <p>Sent OUTSIDE the ledger on purpose: the ledger exists so a region is not re-sent when nothing
+   * about it changed, and this is not a region — it is the answer to a question the page asked a
+   * moment ago, addressed to one row by its key.</p>
+   */
+  async tell(key: string, state: string, findings: readonly unknown[]): Promise<void> {
+    const panel = this.panel;
+    if (panel === undefined) {
+      return;
+    }
+    try {
+      await panel.webview.postMessage({ type: 'found', id: key, state, findings });
+    } catch (reason: unknown) {
+      // The row stays on "Reading…" until the person closes and opens it, which asks again. Silence
+      // here would be the blank this whole change exists to end.
+      console.error('ConnectOtherAIs: the rounds log did not take one round\'s findings', reason);
+    }
   }
 
   /**
@@ -140,6 +186,9 @@ export class RoundsLogPanel {
     }
     if (command.kind === 'forget') {
       void this.hooks.onForget(command.provider);
+    }
+    if (command.kind === 'findings') {
+      void this.hooks.onFindings(command.key);
     }
   }
 

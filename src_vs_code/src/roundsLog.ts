@@ -7,7 +7,10 @@ import { UsageEntry, Window, WINDOWS } from './usage';
 import { Vendor } from './vendors';
 import { MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
-import { BlindSpot, DbFinding, DbLog, decisionsByRound, EMPTY_LOG, findingsByRound, roundKeyOf } from './roundsDb';
+import {
+  BlindSpot, countsByRound, DbFinding, DbLog, DbTotals, decisionsByRound, EMPTY_LOG, EMPTY_TOTALS,
+  findingsByRound, roundKeyOf,
+} from './roundsDb';
 import { escapeHtml, jsonForScript } from './webviewHtml';
 
 /**
@@ -87,6 +90,39 @@ export interface LogRow {
    * from `findings`, which is that count and stays what it is.</p>
    */
   readonly found: readonly DbFinding[];
+  /**
+   * How many it found, which the row knows even before anybody asks WHAT it found.
+   *
+   * <p>The status column depends on it: a gate still open and a round that raised nothing look the
+   * same from the outside, and the only thing that tells them apart is whether a finding exists.</p>
+   */
+  readonly foundCount: number;
+  /**
+   * Why the findings are not on screen, when they are not.
+   *
+   * <p>Five states, because four of them used to be one blank and a blank reads as "clean":
+   * `unasked` — nobody has opened this row; `asking` — the read is in flight; `absent` — no database
+   * row exists for this round, so its findings were recorded nowhere; `failed` — the read errored or
+   * timed out, and there is a retry; `loaded` — `found` is what it found, however few.</p>
+   */
+  readonly foundState: 'unasked' | 'asking' | 'loaded' | 'absent' | 'failed';
+  /**
+   * Which half of the merge this row came from.
+   *
+   * <p>The page is built from the SESSION files and the database only enriches them, so a row can
+   * exist that the database has never heard of. That is the difference between a round that found
+   * nothing and one whose findings were never written down, and it is knowable here for free.</p>
+   */
+  readonly origin: 'db' | 'session';
+  /**
+   * The three fields the rounds database keys this round by.
+   *
+   * <p>Carried because the page holds only a row KEY, and the read an opened row makes needs the
+   * session, the RAW stage and the number. `stage` above is the display name — "code review" — while
+   * the database stores "CodeReview"; matching on the wrong one answers "no such round", which the
+   * page would then draw as findings that were never recorded.</p>
+   */
+  readonly dbKey: { readonly sessionId: string; readonly stage: string; readonly number: number };
 }
 
 /** The columns a header click can sort by. */
@@ -135,7 +171,13 @@ export function rowsFrom(
   vendorIds: readonly string[] = [],
 ): LogRow[] {
   const byRound = findingsByRound(log);
+  const counts = countsByRound(log);
   const decided = decisionsByRound(log);
+  // Whether the window covers the whole table. When it does, a row the list does not name is a row
+  // the database has never heard of, and saying so costs nothing. When it does NOT, the same row
+  // might simply be older than the window — and guessing "never recorded" would be a claim about a
+  // round nobody checked, so it is asked for instead and the server answers authoritatively.
+  const whole = log.rounds.length >= log.totals.rounds;
   // The CONFIGURED vendors, the same list the panel's cards are coloured from — not the providers
   // these rounds happen to name. A log holding a vendor somebody has since removed still colours it,
   // from its own name, and only such a stray may share a hue with a live reviewer.
@@ -143,7 +185,8 @@ export function rowsFrom(
 
   return sessions
     .flatMap((session) =>
-      session.rounds.map((round) => rowFrom(session, round, nowMs, priceOf, usage, { byRound, decidedBy: decided, colour })))
+      session.rounds.map((round) =>
+        rowFrom(session, round, nowMs, priceOf, usage, { byRound, counts, decidedBy: decided, colour, whole })))
     .sort((a, b) => (b.startedUtc || b.completedUtc).localeCompare(a.startedUtc || a.completedUtc));
 }
 
@@ -157,8 +200,11 @@ export function rowsFrom(
  */
 interface RowContext {
   readonly byRound: Map<string, readonly DbFinding[]>;
+  readonly counts: Map<string, number>;
   readonly decidedBy: Map<string, { accepted: number; rejected: number }>;
   readonly colour: VendorPalette;
+  /** Whether the list covers every round the database holds. See `rowsFrom`. */
+  readonly whole: boolean;
 }
 
 function rowFrom(
@@ -167,15 +213,21 @@ function rowFrom(
   nowMs: number,
   priceOf: PriceOfModel,
   usage: readonly UsageEntry[],
-  context: RowContext = { byRound: new Map(), decidedBy: new Map(), colour: vendorPalette([]) },
+  context: RowContext = {
+    byRound: new Map(), counts: new Map(), decidedBy: new Map(), colour: vendorPalette([]), whole: true,
+  },
 ): LogRow {
-  const { byRound, decidedBy, colour } = context;
+  const { byRound, counts, decidedBy, colour, whole } = context;
   const cost = costOf(round, priceOf, usage, nowMs);
   const key = roundKeyOf(
     session.state.sessionId, session.state.repoPath, session.state.branch, round.stage, round.number);
+  // A paged server sends no findings with the list, so `found` is empty until a row is opened; an
+  // older one sends them all and the row is `loaded` from the start. `counts` is what both have.
   const found = byRound.get(key) ?? [];
+  const known = counts.has(key);
+  const foundCount = counts.get(key) ?? found.length;
   const decided = decidedBy.get(key) ?? null;
-  const status = statusOf(round, found, decided);
+  const status = statusOf(round, foundCount, decided);
   const states = round.reviewerStates ?? [];
   const rows = reviewerRows(round);
 
@@ -204,7 +256,29 @@ function rowFrom(
     reviewers: reviewerLines(round),
     reviewerColours: rows.map((r) => colour(r.provider)),
     found,
+    foundCount,
+    foundState: foundState(known, whole, found),
+    origin: known ? 'db' : 'session',
+    dbKey: { sessionId: session.state.sessionId, stage: round.stage, number: round.number },
   };
+}
+
+/**
+ * What an unopened row already knows about its own findings.
+ *
+ * <p>A round the database has never heard of is `absent` from the start — asking for it would spawn
+ * a process to be told what this already knows. One it holds is `unasked` until somebody opens it,
+ * unless an older server already sent the findings, in which case they are here and it is
+ * `loaded`.</p>
+ */
+function foundState(known: boolean, whole: boolean, found: readonly DbFinding[]): LogRow['foundState'] {
+  if (!known) {
+    // Only when the list covered everything is "the list did not name it" the same as "the database
+    // does not hold it". Otherwise the row asks, and the server answers with the truth.
+    return whole ? 'absent' : 'unasked';
+  }
+
+  return found.length > 0 ? 'loaded' : 'unasked';
 }
 
 /**
@@ -222,7 +296,7 @@ function rowFrom(
  */
 function statusOf(
   round: RoundRecord,
-  found: readonly DbFinding[],
+  foundCount: number,
   decided: { accepted: number; rejected: number } | null,
 ): LogRow['status'] {
   if (round.status === 'running') {
@@ -232,7 +306,7 @@ function statusOf(
     return 'interrupted';
   }
 
-  return decided !== null && decided.accepted < 0 && found.length > 0 ? 'awaiting' : 'done';
+  return decided !== null && decided.accepted < 0 && foundCount > 0 ? 'awaiting' : 'done';
 }
 
 /**
@@ -703,12 +777,23 @@ function waitingFor(): string {
   return '<div class="empty">Reading the log…</div>';
 }
 
+/**
+ * How many rows one page holds.
+ *
+ * <p>Two hundred, from the operator on 2026-09-09: «у нас есть пагинаций. 200 на стр достаточно.»
+ * The same number the server pages its own list at, and it is a constant rather than a setting on
+ * purpose — a configurable page size is the first step towards a page-number strip, which is the
+ * growth this deliberately does not have.</p>
+ */
+export const PAGE_SIZE = 200;
+
 export function roundsLogHtml(
   rows: readonly LogRow[],
   questions: readonly Escalation[],
   nonce: string,
   usageHtml = '',
   spotsHtml = '',
+  totals: DbTotals = EMPTY_TOTALS,
 ): string {
   const headers = COLUMNS
     .map((c) => `<th data-sort="${c.key}"${c.numeric ? ' class="num"' : ''}>${c.label}</th>`)
@@ -789,6 +874,10 @@ export function roundsLogHtml(
   .finding .why { opacity: .85; margin: 2px 0 0; }
   .finding .verdict { opacity: .75; font-size: .92em; margin-top: 3px; }
   .finding .again { color: var(--vscode-charts-orange); font-size: .9em; }
+  .pager { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; }
+  .pager #pageinfo { opacity: .75; font-size: .92em; }
+  .await, .none, .nokeep, .broke { opacity: .8; font-size: .92em; margin-top: 8px; }
+  .broke { color: var(--vscode-charts-orange); }
   .spots { display: flex; flex-wrap: wrap; gap: 18px; }
   .spots table { width: auto; min-width: 260px; }
 </style>
@@ -816,6 +905,12 @@ export function roundsLogHtml(
 </table>
 </div>
 <div id="empty" class="empty"${rows.length === 0 ? '' : ' hidden'}>No rounds yet. A session appears once an AI calls <code>open</code> for a repository and branch.</div>
+<div class="pager">
+  <button type="button" class="secondary" id="prev">◀ Newer</button>
+  <button type="button" class="secondary" id="next">Older ▶</button>
+  <span id="pageinfo"></span>
+</div>
+<div id="recorded" class="hint"></div>
 <div class="hint">Showing <b>today</b> — <b>All dates</b> clears the range, and the pickers take a time as well as a day. Cost is <b>in / out / total</b> — <code>~</code> means worked out from a public price list rather than billed, <code>+</code> means one reviewer's model had no listed price so the total is a floor. Click a column to sort, a row to see its reviewers. The table advances by itself while a round runs; your sort, filters and search stay.</div>
 </section>
 <section id="tab-usage" hidden><div id="usage-body">${usageHtml || waitingFor()}</div></section>
@@ -853,7 +948,15 @@ export function roundsLogHtml(
   var cost3 = ${cost3.toString()};
   var costTitle = ${costTitle.toString()};
 
-  var state = { sortKey: 'startedUtc', dir: 'desc', filters: {}, search: '', expanded: {} };
+  var state = { sortKey: 'startedUtc', dir: 'desc', filters: {}, search: '', expanded: {}, page: 0 };
+  var PAGE_SIZE = ${PAGE_SIZE};
+  // What SQL counted over the WHOLE table, which is a different number from the length of what was
+  // sent. The operator asked for this in as many words: «суммы - скл счиатть (сколько всего и тд.)».
+  var TOTALS = ${JSON.stringify(totals)};
+  // Every filter, the search text and the sort all return to the first page. "Next page" of a
+  // client-side filter over a server-side window is a promise nothing can keep: the cursor moves in
+  // the unfiltered stream and rows skip or repeat across the boundary. (Plan round, gemini.)
+  function firstPage() { state.page = 0; }
   function localDay(d) {
     var p = function (n) { return (n < 10 ? '0' : '') + n; };
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
@@ -917,8 +1020,23 @@ export function roundsLogHtml(
   // finding is something this repository's author had not seen, which is the whole point of keeping
   // them.
   function foundHtml(row) {
+    // Five states, and each draws its OWN element. Four of them used to be one blank, and a blank
+    // reads as "this round was clean" — which is a lie about three of them.
+    if (row.foundState === 'asking') {
+      return '<div class="await">Reading what this round found…</div>';
+    }
+    if (row.foundState === 'failed') {
+      return '<div class="broke">Its findings could not be read. '
+        + '<button type="button" class="link" data-retry="' + esc(row.key) + '">Try again</button></div>';
+    }
+    if (row.foundState === 'absent') {
+      return '<div class="nokeep">The rounds database has no record of this round, so what it found '
+        + 'was never written down — it ran before the database existed.</div>';
+    }
     if (!row.found || row.found.length === 0) {
-      return '';
+      return row.foundCount > 0
+        ? '<div class="await">Reading what this round found…</div>'
+        : '<div class="none">This round found nothing.</div>';
     }
     var out = '<div class="findings">';
     for (var i = 0; i < row.found.length; i++) {
@@ -938,8 +1056,13 @@ export function roundsLogHtml(
     return out + '</div>';
   }
   function render() {
-    var shown = ROWS.filter(function (r) { return rowMatches(r, state.filters, state.search); });
-    shown.sort(function (a, b) { return compareRows(a, b, state.sortKey, state.dir); });
+    var matched = ROWS.filter(function (r) { return rowMatches(r, state.filters, state.search); });
+    matched.sort(function (a, b) { return compareRows(a, b, state.sortKey, state.dir); });
+    var pages = Math.max(1, Math.ceil(matched.length / PAGE_SIZE));
+    if (state.page > pages - 1) { state.page = pages - 1; }
+    if (state.page < 0) { state.page = 0; }
+    var from = state.page * PAGE_SIZE;
+    var shown = matched.slice(from, from + PAGE_SIZE);
     var html = '';
     for (var i = 0; i < shown.length; i++) {
       var r = shown[i];
@@ -966,9 +1089,21 @@ export function roundsLogHtml(
     }
     document.getElementById('rows').innerHTML = html;
     document.getElementById('empty').hidden = ROWS.length > 0;
-    document.getElementById('count').textContent = shown.length === ROWS.length
+    document.getElementById('count').textContent = matched.length === ROWS.length
       ? ROWS.length + ' round' + (ROWS.length === 1 ? '' : 's')
-      : shown.length + ' of ' + ROWS.length + ' rounds';
+      : matched.length + ' of ' + ROWS.length + ' rounds match';
+    document.getElementById('prev').disabled = state.page === 0;
+    document.getElementById('next').disabled = state.page >= pages - 1;
+    // Says which rows these are, never a bare count that could be read as a count of everything.
+    document.getElementById('pageinfo').textContent = matched.length === 0
+      ? 'nothing to show'
+      : 'rows ' + (from + 1) + '–' + (from + shown.length) + ' of ' + matched.length
+        + (pages > 1 ? ' · page ' + (state.page + 1) + ' of ' + pages : '');
+    document.getElementById('recorded').textContent = TOTALS.rounds === 0
+      ? ''
+      : 'The database has ' + TOTALS.rounds + ' rounds and ' + TOTALS.findings + ' findings — '
+        + TOTALS.accepted + ' accepted, ' + TOTALS.rejected + ' rejected, ' + TOTALS.gating
+        + ' gating. Counted by the database, not by this page.';
     var ths = document.querySelectorAll('th[data-sort]');
     for (var t = 0; t < ths.length; t++) {
       ths[t].className = ths[t].className.replace(/\\b(asc|desc)\\b/g, '').trim();
@@ -1001,25 +1136,55 @@ export function roundsLogHtml(
       var key = th.getAttribute('data-sort');
       if (state.sortKey === key) { state.dir = state.dir === 'asc' ? 'desc' : 'asc'; }
       else { state.sortKey = key; state.dir = key === 'startedUtc' ? 'desc' : 'asc'; }
+      firstPage();
       render();
+      return;
+    }
+    var retry = target.closest('[data-retry]');
+    if (retry) {
+      ask(retry.getAttribute('data-retry'), true);
       return;
     }
     var tr = target.closest('tr[data-key]');
     if (tr) {
       var k = tr.getAttribute('data-key');
-      if (state.expanded[k]) { delete state.expanded[k]; } else { state.expanded[k] = true; }
+      if (state.expanded[k]) { delete state.expanded[k]; } else { state.expanded[k] = true; ask(k, false); }
       render();
     }
   });
+
+  // Asked ONCE. A row keeps what it was told, so closing and reopening costs nothing — except after
+  // a failure, which is not cached, because a retry that answers from the failure is not a retry.
+  function ask(key, again) {
+    for (var i = 0; i < ROWS.length; i++) {
+      if (ROWS[i].key !== key) { continue; }
+      var state_ = ROWS[i].foundState;
+      if (state_ !== 'unasked' && !(again && state_ === 'failed')) { return; }
+      ROWS[i] = Object.assign({}, ROWS[i], { foundState: 'asking' });
+      vscode.postMessage({ type: 'command', command: 'findings', id: key });
+      render();
+      return;
+    }
+  }
   var selects = document.querySelectorAll('[data-filter]');
   for (var s = 0; s < selects.length; s++) {
     selects[s].addEventListener('change', function (event) {
       state.filters[event.target.getAttribute('data-filter')] = event.target.value;
+      firstPage();
       render();
     });
   }
   document.getElementById('search').addEventListener('input', function (event) {
     state.search = event.target.value;
+    firstPage();
+    render();
+  });
+  document.getElementById('prev').addEventListener('click', function () {
+    state.page = state.page - 1;
+    render();
+  });
+  document.getElementById('next').addEventListener('click', function () {
+    state.page = state.page + 1;
     render();
   });
   var fromInput = document.getElementById('from');
@@ -1029,6 +1194,7 @@ export function roundsLogHtml(
     // The upper bound INCLUDES the minute it names: the picker has minute granularity, so "to 23:59"
     // that stopped at 23:59:00.000 dropped the last minute of the day the page opens on.
     state.filters.to = asInstant(toInput.value, true);
+    firstPage();
     render();
   }
   // Today, from its first minute to its last — the range the page opens on, because the question
@@ -1073,8 +1239,31 @@ export function roundsLogHtml(
       document.getElementById('usage-body').innerHTML = message.html;
       return;
     }
+    if (message.type === 'found' && typeof message.id === 'string') {
+      for (var f = 0; f < ROWS.length; f++) {
+        if (ROWS[f].key === message.id) {
+          ROWS[f] = Object.assign({}, ROWS[f], {
+            found: message.findings || [], foundState: message.state || 'failed',
+          });
+        }
+      }
+      try { render(); } catch (e) { failed(String(e && e.message ? e.message : e)); }
+      return;
+    }
     if (message.type !== 'rows') { return; }
-    ROWS = message.rows || [];
+    // A tick rebuilds every row from the session files, and those rows know nothing about findings
+    // somebody has already opened. Carry them across, or a five-second tick would close every
+    // expanded row's list and ask for it again.
+    var held = {};
+    for (var h = 0; h < ROWS.length; h++) {
+      if (ROWS[h].foundState !== 'unasked') { held[ROWS[h].key] = ROWS[h]; }
+    }
+    ROWS = (message.rows || []).map(function (r) {
+      var was = held[r.key];
+      return was === undefined
+        ? r
+        : Object.assign({}, r, { found: was.found, foundState: was.foundState });
+    });
     if (typeof message.questions === 'string') {
       document.getElementById('questions').innerHTML = message.questions;
     }

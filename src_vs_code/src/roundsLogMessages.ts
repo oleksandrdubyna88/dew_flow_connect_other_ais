@@ -28,6 +28,7 @@ export type LogCommand =
   | { readonly kind: 'answer'; readonly id: string }
   | { readonly kind: 'usageWindow'; readonly window: string }
   | { readonly kind: 'forget'; readonly provider: string }
+  | { readonly kind: 'findings'; readonly key: string }
   | { readonly kind: 'ignore' };
 
 const IGNORE: LogCommand = { kind: 'ignore' };
@@ -66,6 +67,8 @@ export function logCommandOf(message: LogPageMessage | undefined | null): LogCom
       return { kind: 'usageWindow', window: id };
     case 'forgetUsage':
       return { kind: 'forget', provider: id };
+    case 'findings':
+      return { kind: 'findings', key: id };
     default:
       return IGNORE;
   }

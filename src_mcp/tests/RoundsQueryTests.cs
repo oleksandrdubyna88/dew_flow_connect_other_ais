@@ -61,12 +61,18 @@ public sealed class RoundsQueryTests : IDisposable
         round.Number.Should().Be(1);
         round.Accepted.Should().Be(1);
         round.Rejected.Should().Be(1);
-        round.Findings.Should().HaveCount(2);
-        round.Findings[0].Title.Should().Be("session file opened without FileShare");
-        round.Findings[0].Why.Should().NotBeEmpty("the page shows what the finding SAID, not that it existed");
-        round.Findings[0].Resolution.Should().Be("accept");
-        round.Findings[1].Resolution.Should().Be("reject");
-        round.Findings[1].Reason.Should().Be("the loop has a timeout");
+        round.Findings.Should().BeEmpty("a LISTED round carries counts; its findings are asked for when a row is opened");
+
+        // The findings themselves, through the read an opened row makes. They used to ride the list,
+        // which cost 3.78 MB of a 3.83 MB payload for rounds nobody had opened.
+        var found = RoundsQuery.FindingsOf(_dir, "s1", "CodeReview", 1);
+        found.Known.Should().BeTrue();
+        found.Findings.Should().HaveCount(2);
+        found.Findings[0].Title.Should().Be("session file opened without FileShare");
+        found.Findings[0].Why.Should().NotBeEmpty("the page shows what the finding SAID, not that it existed");
+        found.Findings[0].Resolution.Should().Be("accept");
+        found.Findings[1].Resolution.Should().Be("reject");
+        found.Findings[1].Reason.Should().Be("the loop has a timeout");
     }
 
     [Fact]
@@ -189,15 +195,6 @@ public sealed class RoundsQueryTests : IDisposable
         log.Rounds.Should().BeEmpty();
         log.BlindSpots.Should().BeEmpty();
         log.Defended.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void TheLimitFlagIsReadFromTheCommandLine_OrItsDefault()
-    {
-        Program.Limit(["--log", "--limit", "50"]).Should().Be(50);
-        Program.Limit(["--log"]).Should().Be(RoundsQuery.DefaultLimit);
-        Program.Limit(["--log", "--limit", "not a number"]).Should().Be(RoundsQuery.DefaultLimit);
-        Program.Limit(["--log", "--limit", "0"]).Should().Be(RoundsQuery.DefaultLimit, "nothing is not a page size");
     }
 
     [Fact]

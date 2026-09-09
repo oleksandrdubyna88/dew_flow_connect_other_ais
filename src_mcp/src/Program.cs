@@ -94,6 +94,16 @@ internal static class Program
         /// TypeScript — is the second copy of a decision this repository has twice paid for.
         /// </remarks>
         Providers,
+
+        /// <summary>
+        /// Print ONE round's findings as JSON and leave — what an opened row of the log asks for.
+        /// </summary>
+        /// <remarks>
+        /// It exists so the LIST does not have to carry them. Measured before it was written:
+        /// <c>--log</c> answered 3.83 MB, of which 3.78 MB was findings for rounds nobody had
+        /// opened.
+        /// </remarks>
+        Findings,
     }
 
     /// <summary>Which of the three this invocation is. Pure, so it is a unit test.</summary>
@@ -109,6 +119,7 @@ internal static class Program
                 "--ask-local" => Startup.AskLocal,
                 "--ask-remote" => Startup.AskRemote,
                 "--log" => Startup.Log,
+                "--findings" => Startup.Findings,
                 "--providers" => Startup.Providers,
                 _ => Startup.Usage,
             };
@@ -140,6 +151,9 @@ internal static class Program
 
             case Startup.Log:
                 return LogJson(args);
+
+            case Startup.Findings:
+                return FindingsJson(args);
 
             case Startup.Providers:
                 return await ProvidersJsonAsync();
@@ -231,14 +245,55 @@ internal static class Program
         try
         {
             Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
-                Store.RoundsQuery.Read(settings.DataDir, Limit(args)),
+                Store.RoundsQuery.Read(settings.DataDir, Limit(args), Before(args), withFindings: !Paged(args)),
                 Server.ServerJsonContext.Default.LoggedLog));
         }
         catch (Exception e) when (Unreadable(e))
         {
             Note(WhyUnreadable(e));
             Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
-                new Store.LoggedLog([], [], []), Server.ServerJsonContext.Default.LoggedLog));
+                new Store.LoggedLog([], [], [], new Store.LoggedTotals()), Server.ServerJsonContext.Default.LoggedLog));
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// One round's findings, for a row somebody just opened.
+    /// </summary>
+    /// <remarks>
+    /// <para>Exit code carries the distinction the page cannot otherwise make: <b>0</b> and a list
+    /// means the database holds this round and this is what it found — an empty list is then a clean
+    /// round. <b>69</b> (EX_UNAVAILABLE) means it has never heard of the round, so its findings were
+    /// recorded nowhere and "nothing found" would be a lie about it.</para>
+    /// <para>Without that, an opened row has one blank for four different truths, which is the defect
+    /// this mode was added to end.</para>
+    /// </remarks>
+    private static int FindingsJson(string[] args)
+    {
+        var flags = Flags(args);
+        var settings = Server.PanelSettings.FromEnvironment(Environment.GetEnvironmentVariable);
+        try
+        {
+            var answer = Store.RoundsQuery.FindingsOf(
+                settings.DataDir,
+                flags.GetValueOrDefault("--session", string.Empty),
+                flags.GetValueOrDefault("--stage", string.Empty),
+                int.TryParse(flags.GetValueOrDefault("--number", string.Empty), out var number) ? number : -1);
+
+            if (!answer.Known)
+            {
+                Note("no such round in the rounds database — its findings were never recorded.");
+                return 69; // EX_UNAVAILABLE
+            }
+
+            Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
+                answer, Server.ServerJsonContext.Default.LoggedRoundFindings));
+        }
+        catch (Exception e) when (Unreadable(e))
+        {
+            Note(WhyUnreadable(e));
+            return 69;
         }
 
         return 0;
@@ -287,15 +342,49 @@ internal static class Program
         }
     }
 
-    /// <summary>`--log --limit 50`, or the default. A number nobody can read is the default too.</summary>
+    /// <summary>
+    /// `--log --limit 50`, or the default — and never outside the bounds a page has.
+    /// </summary>
+    /// <remarks>
+    /// A number nobody can READ is the default; a number somebody can read but should not have is
+    /// clamped rather than refused, because `--limit 100000` is a wish for as much as there is and
+    /// an error would answer it with nothing. The plan round asked for this: the CLI is a boundary,
+    /// and a boundary that trusts its input is not one.
+    /// </remarks>
     internal static int Limit(string[] args)
     {
         var at = Array.IndexOf(args, "--limit");
 
-        return at >= 0 && at + 1 < args.Length && int.TryParse(args[at + 1], out var limit) && limit > 0
-            ? limit
+        return at >= 0 && at + 1 < args.Length && int.TryParse(args[at + 1], out var limit)
+            ? Math.Clamp(limit, 1, Store.RoundsQuery.MaxLimit)
             : Store.RoundsQuery.DefaultLimit;
     }
+
+    /// <summary>
+    /// `--before <cursor>`, or nothing — which asks for the first page.
+    /// </summary>
+    /// <remarks>
+    /// The cursor is opaque here on purpose: it is `started_utc|id`, the pair the list is ordered
+    /// by, and only <c>RoundsQuery</c> knows that. This checks that a value was given at all; a
+    /// value it cannot use is treated there as absent, which asks for the first page.
+    /// </remarks>
+    internal static string Before(string[] args)
+    {
+        var at = Array.IndexOf(args, "--before");
+
+        return at >= 0 && at + 1 < args.Length ? args[at + 1] : string.Empty;
+    }
+
+    /// <summary>
+    /// Whether the caller speaks the paged shape.
+    /// </summary>
+    /// <remarks>
+    /// The compatibility hinge, and it is one flag. An extension that predates paging never sends
+    /// it, so a NEW binary answers it exactly as it always did — findings inline, no totals — and
+    /// nothing goes silently empty in the field. A NEW extension always sends it, so an OLD binary
+    /// refuses the unknown argument with exit 64 and the extension retries without it.
+    /// </remarks>
+    internal static bool Paged(string[] args) => Array.IndexOf(args, "--paged") >= 0;
 
     internal static async Task<int> AskLocalAsync(string[] args)
     {
@@ -598,6 +687,12 @@ internal static class Program
 
         Takes no arguments; an MCP client starts it and speaks JSON-RPC over stdio.
         `--version` prints the version this binary was stamped with, and nothing else.
+        `--log --paged [--limit 200] [--before <cursor>]` prints a PAGE of the rounds database as
+        JSON, with the totals SQL counted over the whole table; without `--paged` it prints the
+        older shape, which carries every listed round's findings inline.
+        `--findings --session <id> --stage <stage> --number <n>` prints one round's findings; it
+        exits 69 when the database has never heard of that round, which is not the same as finding
+        nothing.
         Configure it in your client as:
 
           { "mcpServers": { "coai": { "command": "<full path to coai-mcp>" } } }
