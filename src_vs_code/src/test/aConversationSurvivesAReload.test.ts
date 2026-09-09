@@ -259,3 +259,22 @@ test('the first question after a restore carries the whole transcript', () => {
   assert.match(restore.slice(0, 2_500), /carry: \[\.\.\.saved\.messages\]/,
     'a restored conversation hands the next model nothing, so it answers a follow-up it never heard');
 });
+
+test('a push that changed nothing writes nothing', () => {
+  // `show` runs on every state push — a turn starting, a queue position moving, a failure clearing —
+  // and each of those used to rewrite up to twenty whole transcripts into one key. The comparison is
+  // by reference, which is exact because `thread.messages` is replaced rather than mutated.
+  const command = source('chatCommand.ts');
+
+  assert.match(command, /if \(thread\.savedMessages === thread\.messages && thread\.savedModelId === thread\.modelId\) \{\s*\n\s*return;/,
+    'every state push writes the whole store again, transcripts and all');
+  assert.match(command, /thread\.savedMessages = thread\.messages;/, 'nothing records what was written');
+});
+
+test('a question refused by a dead conversation comes back to the composer', () => {
+  const command = source('chatCommand.ts');
+  const guard = command.slice(command.indexOf('const refused = await reopened(thread);'));
+
+  assert.match(guard.slice(0, 600), /pushChatDraft\(entry, text\)/,
+    'the refusal threw away what the person typed, so they must write it again to try the fix');
+});

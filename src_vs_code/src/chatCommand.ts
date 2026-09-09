@@ -102,6 +102,9 @@ interface Thread extends ChatMemory {
   readonly saveId: string;
   /** The tab's heading, kept here because what is written down has to name the conversation. */
   readonly title: string;
+  /** What was last written to the store, so a push that changed nothing writes nothing. */
+  savedMessages?: readonly ChatMessage[];
+  savedModelId?: string;
   /**
    * A conversation restored from a reload, whose vendor process does not exist yet.
    *
@@ -196,9 +199,17 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
     modelId: thread.modelId,
     queued,
   });
-  // The one place the transcript reaches a page is the one place it is written down. A record per
-  // push is a record that cannot be a turn behind, and the store is small: a title, a passage, a
-  // model id and the messages.
+  // The one place the transcript reaches a page is the one place it is written down — but only when
+  // there is something new to write. `show` runs on every state push: a turn starting, a queue
+  // position moving, a failure clearing. Each of those used to rewrite up to twenty whole
+  // transcripts into one key, which is a lot of JSON on the extension host for a page that said the
+  // same words. The comparison is by REFERENCE, because `thread.messages` is replaced rather than
+  // mutated, so it is exact and costs nothing. (gemini, the code round.)
+  if (thread.savedMessages === thread.messages && thread.savedModelId === thread.modelId) {
+    return;
+  }
+  thread.savedMessages = thread.messages;
+  thread.savedModelId = thread.modelId;
   memory?.remember({
     id: thread.saveId,
     title: thread.title,
@@ -306,6 +317,10 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   const refused = await reopened(thread);
   if (refused.length > 0) {
     show(entry, false, refused);
+    // And the question comes BACK. The page cleared its composer when it sent, so a refusal that
+    // said only what was wrong would also have thrown away what the person typed — and they would
+    // have to write it again to try the fix they were just told to make. (gemini, the code round.)
+    pushChatDraft(entry, text);
 
     return;
   }
