@@ -1,5 +1,11 @@
 # Changelog
 
+## Extension 0.31.19 — 2026-09-09
+
+**Ctrl+F works.** The chat tab, the rounds log and the help page each open with the editor's own find
+bar now — a transcript of answers and a table built to be searched had both been pages nobody could
+search, because a webview only gets that bar when it is asked for one.
+
 ## Extension 0.31.18 · Server 0.18.15 — 2026-09-09
 
 **The log stopped sending every finding it has ever recorded, and started counting in SQL.** Reading

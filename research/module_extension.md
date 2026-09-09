@@ -685,6 +685,27 @@ leaves the round gated with nothing on screen — a crash traded for a hang, whi
 crash at least says that something happened. `id` and `question` remain the only two that decide
 whether a question can be shown; the rest is metadata, and metadata is rendered, not adjudicated.
 
+## Every page can be searched (2026-09-09)
+
+The three `WebviewPanel`s this extension opens — the chat tab (`chatPanel.ts`), the rounds log
+(`roundsLogPanel.ts`) and the help page (`helpPanel.ts`) — are created with `enableFindWidget: true`
+beside `enableScripts` and `localResourceRoots`. That option is the whole of Ctrl+F: VS Code gives a
+webview panel the editor's own find bar for it and for nothing else, and without it the shortcut is
+silently dead. Two of the three pages are long text somebody reads — a transcript of answers, and a
+table built to be searched — so a dead Ctrl+F was a defect on both.
+
+The help page is in although it has a search box of its own. The find bar is chrome ABOVE the
+webview and displaces nothing, and the test that holds this is a discovery — it walks `src/` for
+every `createWebviewPanel(` call rather than naming three files, so a fourth panel is covered the day
+it is written. A test like that cannot carry an exception for one file without becoming the
+hand-written list it replaces. The sidebar is not affected: it is a `WebviewView`, and the API has no
+such option for one.
+
+`panelsAreSearchable.test.ts` reads each call's own arguments — cut out by balanced parentheses, with
+comments stripped — rather than the whole file, so a file that grows a second panel is checked twice
+and a comment naming the option cannot stand in for it. It refuses a spread in those options as well,
+because a spread could override the value where a source scan cannot see it.
+
 ## The update check can trust `…/releases` again (2026-09-08)
 
 `installer.ts` asks GitHub for the newest release and offers its asset. That was safe only while a

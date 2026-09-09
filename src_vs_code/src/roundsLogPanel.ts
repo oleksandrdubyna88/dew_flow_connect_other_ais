@@ -111,7 +111,13 @@ export class RoundsLogPanel {
       vscode.ViewColumn.Active,
       // Kept alive while hidden behind another tab: the sort, the filters and the search text are
       // page state, and a page that is torn down when it is not visible loses them every time.
-      { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] },
+      // `enableFindWidget` is the whole of Ctrl+F — a table built to be searched had no find bar.
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        enableFindWidget: true,
+        localResourceRoots: [],
+      },
     );
     this.panel = panel;
     panel.webview.html = roundsLogHtml(
