@@ -23,8 +23,13 @@ export function response(parts: {
   readonly headers?: Record<string, string>;
 }): Response {
   // A 204 or 304 legitimately carries no body, and the constructor REFUSES a non-null body for
-  // those — which is the real rule, and one a hand-built object could break without noticing.
+  // those — the real rule, and one a hand-built object could break without noticing. Silently
+  // dropping a body somebody passed would hide their mistake instead, so it is named. Raised on the
+  // code round.
   const empty = parts.status === 204 || parts.status === 304;
+  if (empty && parts.body !== undefined) {
+    throw new Error(`a ${parts.status} carries no body — this fixture was given one: ${parts.body}`);
+  }
 
   return new Response(empty ? null : (parts.body ?? ''), {
     status: parts.status,
