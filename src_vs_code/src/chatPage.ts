@@ -209,7 +209,9 @@ export function chatStatusHtml(running: boolean, position: number): string {
  * change from a repeat. Two copies of these expressions would drift on the day one of them gains a
  * condition, and the symptom would be a page that scrolls on a push that changed nothing.</p>
  */
-function regionsOf(state: ChatPageState): Record<'messages' | 'thinking' | 'capped' | 'failure', string> {
+type Regions = Record<'messages' | 'thinking' | 'capped' | 'failure', string>;
+
+function regionsOf(state: ChatPageState): Regions {
   return {
     messages: chatMessagesHtml(state.messages),
     thinking: chatStatusHtml(state.running, 0),
@@ -219,9 +221,8 @@ function regionsOf(state: ChatPageState): Record<'messages' | 'thinking' | 'capp
 }
 
 /** The document, without its head or its script. */
-function chatBody(state: ChatPageState): string {
+function chatBody(state: ChatPageState, regions: Regions): string {
   const locked = state.running || state.capped;
-  const regions = regionsOf(state);
 
   return `<main id="scroll">
 <header><h1>${escapeHtml(state.title)}</h1>${zoomControlHtml(state.uiScale)}</header>
@@ -277,7 +278,7 @@ export function shouldFollow(
 }
 
 /** The page's behaviour. Its own function for the same reason the styles are. */
-function chatScript(state: ChatPageState): string {
+function chatScript(state: ChatPageState, regions: Regions): string {
   return `(function () {
   const vscode = acquireVsCodeApi();
   let captions = ${jsonForScript(Object.fromEntries(state.models.map((model) => [model.id, model.caption])))};
@@ -309,7 +310,7 @@ function chatScript(state: ChatPageState): string {
   // browser to serialise the DOM back to us on every push. Seeded with what the MARKUP holds, or the
   // first push would compare against nothing, read as a change, and scroll a reader for content that
   // was already on their screen.
-  var lastWritten = ${jsonForScript(regionsOf(state))};
+  var lastWritten = ${jsonForScript(regions)};
   // The ONE scroll event the page owes itself, armed by its own write and consumed by the event it
   // causes. Two shapes were tried and both were wrong: a flag cleared on a later frame stays raised
   // until that frame comes, so every scroll in between reads as the page's own; and a position kept
@@ -334,9 +335,15 @@ function chatScript(state: ChatPageState): string {
     // follow, and the rule would work exactly once per tab.
     const was = scroll.scrollTop;
     scroll.scrollTop = scroll.scrollHeight;
+    // Whoever brought them here, they are here: the control has nothing left to offer. Retiring it
+    // in the click handler alone left it standing for every other path that lands on the newest.
+    offerJump(false);
     // What it CLAMPED to, not what we asked for: a browser answers scrollHeight - clientHeight. And
     // null when nothing moved, because then no scroll event is coming to consume the arming.
     selfScrollTo = scroll.scrollTop === was ? null : scroll.scrollTop;
+    // Known NOW rather than sampled next frame. A run of keystrokes calls the re-pin several times
+    // before any frame arrives, and each one was reading a flag that had not been updated yet.
+    wasAtBottom = true;
   }
   // Deferred to the next frame, and CANCELLABLE. The reader can move between the frame being asked
   // for and the frame arriving - a drag, a wheel, Page Up - and a scroll that was right when it was
@@ -356,17 +363,24 @@ function chatScript(state: ChatPageState): string {
     if (!box || !box.style) { return; }
     box.style.height = 'auto';
     box.style.height = box.scrollHeight + 'px';
-    // The footer just changed height and nothing else is watching on this host - the engines without
-    // field-sizing are the ones this fallback exists for, and requirement 8 was promised to them
-    // too. Whoever changed the height says so; the pin itself is one function.
-    repinIfTheyWereAtTheBottom();
+    // Only where nothing else is watching. On a host WITH ResizeObserver this same height change
+    // reaches the observer too, and both firing means two re-pins and two queued samplings racing
+    // over one event. The engines without field-sizing are the ones this fallback exists for, and
+    // requirement 8 was promised to them as well. (gemini, the code round.)
+    if (typeof ResizeObserver !== 'function') { repinIfTheyWereAtTheBottom(); }
   }
   // A height change nobody asked for must not move the conversation out from under a reader. The
   // remembered flag is right here where re-measuring is not: they did NOT scroll, the region shrank
   // underneath them, so measuring now would call them scrolled away and leave the last answer behind
   // the box they are typing into.
   function repinIfTheyWereAtTheBottom() {
-    if (wasAtBottom) { landOnNewest(); }
+    if (wasAtBottom) {
+      landOnNewest();
+
+      return;
+    }
+    // Not at the bottom, so nothing moves - but the resize changed the numbers under them, and the
+    // next frame is when they can be read again.
     afterLayout(rememberWhereTheyAre);
   }
   function rememberWhereTheyAre() {
@@ -605,6 +619,11 @@ function chatScript(state: ChatPageState): string {
 }
 
 export function chatPageHtml(state: ChatPageState, nonce: string): string {
+  // Built once and handed to both. The markup writes these four strings and the script remembers
+  // them; serialising a long conversation twice per render is a cost that grows with the thing a
+  // person is most likely to have a lot of. (local, the code round.)
+  const regions = regionsOf(state);
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -617,9 +636,9 @@ ${chatStyle(state.uiScale)}
 </style>
 </head>
 <body>
-${chatBody(state)}
+${chatBody(state, regions)}
 <script nonce="${nonce}">
-${chatScript(state)}
+${chatScript(state, regions)}
 </script>
 </body>
 </html>`;
