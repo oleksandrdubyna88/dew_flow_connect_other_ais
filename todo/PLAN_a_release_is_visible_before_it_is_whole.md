@@ -77,7 +77,7 @@ Three consequences worth stating:
   that is a second belt; the release being honest about its own state is the braces, and braces
   first.
 - It does not fix the flaky test that made `win-arm64` fail. That is its own change:
-  [PLAN_the_shim_scenario_waits_too_briefly.md](PLAN_the_shim_scenario_waits_too_briefly.md).
+  [PLAN_the_shim_scenario_waits_too_briefly.md](../research/PLAN_the_shim_scenario_waits_too_briefly.md).
 - It does not re-cut `mcp-v0.18.13`. Re-running the failed leg uploads the missing asset to the
   existing release, which is cheaper than burning a tag and is what was done on the day.
 

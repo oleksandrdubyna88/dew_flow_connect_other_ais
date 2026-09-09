@@ -100,6 +100,41 @@ real and named here rather than implied:
 | Chat with other AI — the conversation | decisions only | `cliChatSession.test.ts`, `chatPage.test.ts`, `chatPanel.test.ts`, `chatMessages.test.ts`, `chatPrompt.test.ts` — the four ways a long-lived child ends and what each says; the page as it renders; the host boundary that refuses a model the conversation was not offered; and the two turns a model is ever sent: the opening one with its fenced passage, and the CARRIED one that hands a whole conversation to a model that never heard it (questions and answers both, attributed, fenced with a per-turn id, bounded at 60 000 characters with the loss stated). NOT covered: the switch itself — replacing a live session under an open panel is `vscode` state, and it belongs to the row below |
 | **Every command, through a real extension host** | **no** | There is no extension-host harness here yet: `@vscode/test-electron` downloads a VS Code build and runs a suite inside it, which no workflow does today. This is the largest single gap in the repository. **It is what stands between the settings lock's unit tests and its guarantee**: two hosts writing one file is the failure that started epic 2 of `PLAN_team_server_reviewer_never_called`, and the interleaving test above simulates it rather than reproducing it. |
 
+## A scenario that drives a real child process (2026-09-09)
+
+Two tests here launch the actual `coai-mcp --ask-remote` binary and kill it at a chosen moment. Three
+rules, each of them written after the corresponding failure.
+
+**A prerequisite is not the thing under test, and it gets its own budget.** The wait for the child to
+reach the interesting moment was a flat `TimeSpan.FromSeconds(30)`, chosen once against the machine
+the test was written on. On 2026-09-08 the `win-arm64` leg of the `mcp-v0.18.13` release matrix
+failed at 30 s 359 ms while the other five legs passed — a cold .NET start, a sign-in, a loopback
+HTTP round trip and a first write, immediately after a Release build of the whole solution, on the
+slowest machine of the six. It cost the release a platform: no `coai-mcp-0.18.13-win-arm64.zip` was
+ever published, and every Windows ARM install of that version answers 404. The bound is
+`PrerequisiteWait`, 120 s, and it costs a fast runner nothing — the wait returns the instant the
+condition holds.
+
+**A prerequisite deadline must say what it was waiting for, and what the child was doing.** All the
+evidence that failure left was `the condition was still false after 30s`, which cannot tell a slow
+machine from a child that died on the way — different failures with different cures. `WaitForAsync`
+takes the description and the child as REQUIRED parameters, gives up early when the child has already
+exited (a dead child cannot satisfy the condition; waiting out the rest only delays the report by two
+minutes), and its message names the wait, the elapsed time, the child's state as an OBSERVATION with
+when it was taken, and everything the child said on stderr.
+
+**A redirected stream must have a reader.** Both scenarios set `RedirectStandardError` and neither
+drained the pipe. A child that fills a redirected pipe nobody is reading blocks on its next write —
+for ever, since the parent's next act is to wait for it — and the symptom of that is a prerequisite
+wait running out on one machine and not another. Whether it caused this particular failure cannot be
+proved after the fact; a redirected stream with no reader is a latent hang either way. `StartShim`
+drains it, which is also where the diagnostic above gets the child's own words. Its `Dispose` kills
+the tree, because a wait that throws runs no `finally` of its own and a leaked `coai-mcp` holding a
+claim file is how one failing test makes the next three fail for unrelated reasons.
+
+Design record:
+[PLAN_the_shim_scenario_waits_too_briefly.md](PLAN_the_shim_scenario_waits_too_briefly.md).
+
 ## What this does NOT prove
 
 The most valuable section, and the first one people drop.
