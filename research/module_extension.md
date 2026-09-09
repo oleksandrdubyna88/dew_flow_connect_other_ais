@@ -237,7 +237,8 @@ its own.
   questions. `--json` gives `thread.started` with the id, and `item.completed` carries the answer.
 
 Measured through this build’s own session, two turns each, the second asking for a number planted
-in the first: `agy` 8.0 s then 1.4 s, `claude` 3.0 s then 1.6 s, `codex` 7.3 s then 6.7 s. All three
+in the first — **subject `9765c23`, harness `src_vs_code/scripts/live-chat.mjs` (`npm run test:live`),
+planted number 7431, Windows 11 on node 24.18.0, 2026-09-09**: `agy` 8.0 s then 1.4 s, `claude` 3.0 s then 1.6 s, `codex` 7.3 s then 6.7 s. All three
 kept their context. A 76 059-byte prompt reached `codex` through stdin in five seconds, which is why
 the prompt does not travel in argv — Windows caps a command line at 32 767 characters and a carried
 conversation is bounded at 60 000.
