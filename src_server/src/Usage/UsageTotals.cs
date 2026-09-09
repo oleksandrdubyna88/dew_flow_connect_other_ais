@@ -76,6 +76,29 @@ public sealed record VendorTotal(
     bool CostIsFloor,
     int UnpricedRuns);
 
+/// <summary>
+/// What one KIND of work cost, over a window: the gate, or asking.
+/// </summary>
+/// <remarks>
+/// <para>The owner asked for this on 2026-09-08 — *"счиатть, отделять"* — and the reason is that
+/// "what did the gate cost me" and "what did asking cost me" are two questions about the same
+/// vendors, which a single total answers neither of.</para>
+/// <para><b>A second small block, not a second row per vendor.</b> Splitting the vendor table by kind
+/// doubles it and leaves a reader adding pairs of rows together to get back the number they had
+/// before. The vendor rows stay what they were — everything that vendor cost — and this answers the
+/// one extra question beside them.</para>
+/// </remarks>
+public sealed record KindTotal(
+    string Kind,
+    int Runs,
+    int Failed,
+    long TokensIn,
+    long TokensOut,
+    double Seconds,
+    double? CostUsd,
+    bool CostIsFloor,
+    int UnpricedRuns);
+
 /// <summary>Aggregation, as pure functions over parsed lines.</summary>
 /// <remarks>
 /// <para><b>Failed runs are counted, never filtered.</b> A review that burned ninety seconds and
@@ -162,6 +185,39 @@ public static class UsageTotals
             priced > 0 && unpriced > 0,
             unpriced);
     }
+
+    /// <summary>
+    /// Per kind — the gate against asking — over the same lines.
+    /// </summary>
+    /// <remarks>
+    /// <para>Folded through <see cref="Fold"/> so the arithmetic is the SAME arithmetic: an unknown
+    /// price is never zero here either, and a failed run is counted rather than filtered, because a
+    /// conversation that burned ninety seconds and answered nothing spent exactly what one that
+    /// answered did.</para>
+    /// <para>Only the kinds that actually occur appear. A window with no conversations in it says so
+    /// by having one row, not by carrying a row of zeroes that reads as a measurement.</para>
+    /// </remarks>
+    public static IReadOnlyList<KindTotal> ByKind(IEnumerable<UsageLine> lines) =>
+        [.. lines
+            .GroupBy(l => JobKinds.Wire(l.Kind), StringComparer.Ordinal)
+            .Select(Fold)
+            .Select(AsKind)
+            .OrderByDescending(k => k.Runs)
+            .ThenBy(k => k.Kind, StringComparer.Ordinal)];
+
+    /// <summary>The same numbers, named for a kind rather than a vendor.</summary>
+    /// <remarks>
+    /// <see cref="Fold"/> folds a GROUP and names the result by that group's key, whatever the key
+    /// means; here it means a kind. Re-labelling it beats a second copy of the arithmetic, which is
+    /// how two totals on one page come to disagree about what a failed run costs.
+    /// </remarks>
+    private static KindTotal AsKind(VendorTotal folded) =>
+        new(folded.Vendor, folded.Runs, folded.Failed, folded.TokensIn, folded.TokensOut,
+            folded.Seconds, folded.CostUsd, folded.CostIsFloor, folded.UnpricedRuns);
+
+    /// <summary>Per kind, for one person.</summary>
+    public static IReadOnlyList<KindTotal> ByKindFor(IEnumerable<UsageLine> lines, string email) =>
+        ByKind(lines.Where(l => Same(l.Email, email)));
 }
 
 /// <summary>One person's spending, for the admin view.</summary>

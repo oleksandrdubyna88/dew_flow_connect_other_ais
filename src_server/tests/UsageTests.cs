@@ -59,8 +59,9 @@ public sealed class UsageTotalsTests
 
     private static UsageLine Line(
         string email = "dev@example.com", string vendor = "codex", string outcome = "ok",
-        double? cost = null, long tokensIn = 100, long tokensOut = 10, double seconds = 5) =>
-        new(At, email, vendor, "m", "Architecture", outcome, seconds, tokensIn, tokensOut, cost);
+        double? cost = null, long tokensIn = 100, long tokensOut = 10, double seconds = 5,
+        JobKind kind = JobKind.Review) =>
+        new(At, email, vendor, "m", "Architecture", outcome, seconds, tokensIn, tokensOut, cost, kind);
 
     [Fact]
     public void FailedRunsAreCountedAndTheirTokensTooBecauseTheyCostTheSame()
@@ -140,6 +141,56 @@ public sealed class UsageTotalsTests
         var totals = UsageTotals.ByVendor([Line(vendor: "claude"), Line(), Line(), Line()]);
 
         totals.Select(v => v.Vendor).Should().ContainInOrder("codex", "claude");
+    }
+
+    [Fact]
+    public void TheGateAndAskingAreCountedApart()
+    {
+        // The owner asked for this on 2026-09-08. Same vendors, two questions — "what did the gate
+        // cost me" and "what did asking cost me" — and a single total answers neither.
+        var kinds = UsageTotals.ByKind([
+            Line(tokensIn: 1000, tokensOut: 100),
+            Line(tokensIn: 1000, tokensOut: 100),
+            Line(tokensIn: 50, tokensOut: 20, kind: JobKind.Chat),
+        ]);
+
+        kinds.Should().HaveCount(2);
+        kinds[0].Kind.Should().Be("review");
+        kinds[0].Runs.Should().Be(2);
+        kinds[0].TokensIn.Should().Be(2000);
+        kinds[1].Kind.Should().Be("chat");
+        kinds[1].Runs.Should().Be(1);
+        kinds[1].TokensIn.Should().Be(50);
+    }
+
+    [Fact]
+    public void AWindowWithOnlyReviewsInItSaysSoByHavingOneRow()
+    {
+        // Not a row of zeroes: a zero is a measurement, and "we ran no conversations" is an absence.
+        var kinds = UsageTotals.ByKind([Line(), Line()]);
+
+        kinds.Should().ContainSingle().Which.Kind.Should().Be("review");
+    }
+
+    [Fact]
+    public void AFailedConversationIsCountedNotFiltered()
+    {
+        // It burned the seconds and the tokens whatever it answered. Hiding it is the one thing a
+        // spending record must not do — the same rule the vendor rows already follow.
+        var kinds = UsageTotals.ByKind([Line(outcome: "TimedOut", kind: JobKind.Chat)]);
+
+        kinds.Should().ContainSingle();
+        kinds[0].Runs.Should().Be(1);
+        kinds[0].Failed.Should().Be(1);
+    }
+
+    [Fact]
+    public void OnePersonsConversationsAreTheirsAlone()
+    {
+        var lines = new[] { Line(kind: JobKind.Chat), Line(email: "someone@example.com", kind: JobKind.Chat) };
+
+        UsageTotals.ByKindFor(lines, "dev@example.com").Should().ContainSingle()
+            .Which.Runs.Should().Be(1);
     }
 }
 
@@ -314,6 +365,57 @@ public sealed class LedgerRoundTripTests : IDisposable
         // Ninety seconds and no answer cost the same as ninety seconds and an answer.
         totals.Single().Failed.Should().Be(1);
         totals.Single().Seconds.Should().Be(90);
+    }
+
+    [Fact]
+    public void TheKindTravelsFromTheWriterToTheReader()
+    {
+        var ledger = new CoaiMcp.Runners.Reviewers.UsageLedger(_dir);
+        ledger.RecordJob("dev@example.com", "codex", "m", "", "ok", TimeSpan.FromSeconds(4), 1, 2, kind: "chat");
+        ledger.RecordJob("dev@example.com", "codex", "m", "Architecture", "ok", TimeSpan.FromSeconds(9), 3, 4, kind: "review");
+
+        var kinds = UsageTotals.ByKind(
+            new UsageReader(_dir).Read(new UsageRange(DateTimeOffset.MinValue, DateTimeOffset.MaxValue)).Lines);
+
+        kinds.Select(k => k.Kind).Should().BeEquivalentTo(["review", "chat"]);
+    }
+
+    [Fact]
+    public void ALineWrittenBeforeTheKindExistedIsReadAsAReview()
+    {
+        // The file is APPEND-ONLY and years old. Every line already on disk was written by a build
+        // that had no such field, and every one of them was a review — there was nothing else to be.
+        // Reading them as anything else, or refusing them, would put a hole in a spending record.
+        File.WriteAllText(
+            Path.Combine(_dir, "usage.jsonl"),
+            $$"""
+            {"utc":"{{DateTime.UtcNow:O}}","provider":"codex","model":"m","role":"Architecture","stage":"TeamServer","seconds":3.0,"tokensIn":5,"tokensOut":6,"costUsd":null,"outcome":"ok","email":"dev@example.com"}
+            """);
+
+        var lines = new UsageReader(_dir)
+            .Read(new UsageRange(DateTimeOffset.MinValue, DateTimeOffset.MaxValue)).Lines;
+
+        lines.Should().ContainSingle();
+        lines[0].Kind.Should().Be(JobKind.Review);
+        lines[0].TokensIn.Should().Be(5, "an old line is read whole, not merely tolerated");
+    }
+
+    [Fact]
+    public void AKindFromAServerNewerThanThisOneIsCountedRatherThanDropped()
+    {
+        // History that already happened and already cost money. Dropping it because a newer server
+        // wrote a word this build has not heard of would HIDE SPENDING, which is the one thing this
+        // file must never do.
+        File.WriteAllText(
+            Path.Combine(_dir, "usage.jsonl"),
+            $$"""
+            {"utc":"{{DateTime.UtcNow:O}}","provider":"codex","model":"m","role":"","stage":"TeamServer","seconds":3.0,"tokensIn":5,"tokensOut":6,"costUsd":null,"outcome":"ok","email":"dev@example.com","kind":"rehearsal"}
+            """);
+
+        var scan = new UsageReader(_dir).Read(new UsageRange(DateTimeOffset.MinValue, DateTimeOffset.MaxValue));
+
+        scan.Unreadable.Should().Be(0);
+        scan.Lines.Should().ContainSingle().Which.Kind.Should().Be(JobKind.Review);
     }
 }
 

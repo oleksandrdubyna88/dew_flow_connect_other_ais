@@ -123,6 +123,80 @@ Authorization: Bearer {{token}}
 
 ###
 
+# @name a_chat_carrying_a_review_role_is_refused
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "vendor": "codex", "model": "gpt-5.6-luna", "prompt": "p", "kind": "chat", "role": "Architecture" }
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('a chat carries no role, and dropping one silently is how a field comes to mean something else', () => {
+    assert.match(response.parsedBody.error, /carries no review role/);
+  });
+}}
+
+###
+
+# @name a_job_that_says_it_is_a_review_needs_a_role
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "vendor": "codex", "model": "gpt-5.6-luna", "prompt": "p", "kind": "review" }
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('a client that made a claim is held to it, and the refusal names the roles', () => {
+    assert.match(response.parsedBody.error, /needs a role/);
+    assert.match(response.parsedBody.error, /Architecture/);
+  });
+}}
+
+###
+
+# @name a_kind_this_server_does_not_know_is_refused_by_name
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "vendor": "codex", "model": "gpt-5.6-luna", "prompt": "p", "kind": "conversation" }
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('it names both kinds rather than leaving somebody to guess', () => {
+    assert.match(response.parsedBody.error, /not a kind of job/);
+    assert.match(response.parsedBody.error, /chat/);
+  });
+}}
+
+###
+
+# @name a_malformed_idempotency_key_is_refused_before_anything_is_queued
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "vendor": "codex", "model": "gpt-5.6-luna", "prompt": "p", "role": "Architecture", "idempotencyKey": "../../etc/passwd" }
+
+?? status == 400
+
+{{
+  const assert = require('node:assert');
+  test('a stranger string that becomes part of a lookup is checked for shape first', () => {
+    assert.match(response.parsedBody.error, /idempotency key/);
+  });
+}}
+
+###
+
 # @uncovered 403 GET /api/reviews/{id} (somebody else's review) — it needs a job that exists, which
 #            needs a configured vendor. Covered over real HTTP by
 #            ReviewEndpointTests.AnotherPersonsReviewIsForbiddenRatherThanHidden.

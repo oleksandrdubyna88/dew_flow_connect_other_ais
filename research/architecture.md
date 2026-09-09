@@ -66,7 +66,7 @@ passage. Routing it through the round state machine would have meant inventing a
 that has none — and the Team server refuses exactly that, measured: `'Chat' is not a review role`.
 What it accepts is a job with no role, which is also how the spending view will tell the two apart.
 The rest of that separation is a server change, written up as
-[../todo/PLAN_the_server_knows_a_chat_from_a_review.md](../todo/PLAN_the_server_knows_a_chat_from_a_review.md).
+[PLAN_the_server_knows_a_chat_from_a_review.md](PLAN_the_server_knows_a_chat_from_a_review.md).
 
 What the two edges share is `ChatSession` — one interface, a long-lived process behind one
 implementation and a poll loop behind the other, so the panel does not know which it holds. What

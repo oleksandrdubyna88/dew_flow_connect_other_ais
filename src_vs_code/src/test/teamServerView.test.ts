@@ -5,6 +5,8 @@ import { TeamServer, canonicalTeamServerUrl } from '../teamServers';
 import {
   TeamServerState,
   disclosure,
+  kindLine,
+  teamUsageBlock,
   slotSentence,
   contractNote,
   publishedNote,
@@ -264,4 +266,49 @@ test('the sentence reaches the row, beside the release line', () => {
   assert.match(html, /does not say which version/, 'the row carries it');
   assert.ok(!teamServerRow(state({ email: 'a@b.c', contract: 1 }), '').includes('does not say which version'),
     'and a current server’s row carries nothing');
+});
+
+const short = (n: number): string => `${n}`;
+
+test('the gate and asking are counted apart, under the rows they decompose', () => {
+  // The owner's ruling of 2026-09-08. Same vendors, same money, two questions — "what did the gate
+  // cost me" and "what did asking cost me" — and one total answers neither.
+  const html = kindLine([
+    { kind: 'review', runs: 12, failed: 1, tokensIn: 900, tokensOut: 100, seconds: 60 },
+    { kind: 'chat', runs: 3, failed: 0, tokensIn: 40, tokensOut: 10, seconds: 9 },
+  ], short);
+
+  assert.match(html, /reviews: 12/, 'named for a person, not for the wire');
+  assert.match(html, /conversations: 3/);
+  assert.match(html, /1000 tokens/, 'in and out together, which is what a person compares');
+  assert.match(html, /50 tokens/);
+});
+
+test('one kind alone says nothing at all', () => {
+  // A window with no conversations is an ABSENCE, not a conversation total of zero — and a zero is a
+  // measurement. This is also what makes the line safe against a server too old to send kinds.
+  assert.strictEqual(kindLine([{ kind: 'review', runs: 4, failed: 0, tokensIn: 1, tokensOut: 1, seconds: 1 }], short), '');
+  assert.strictEqual(kindLine([], short), '');
+});
+
+test('a server that has never heard of kinds renders exactly what it did before', () => {
+  // Shipped before every server is redeployed, which is the ordinary state of a fleet.
+  const older = teamUsageBlock(state({
+    usage: { window: 'today', vendors: [{ vendor: 'codex', tokensIn: 10, tokensOut: 2, runs: 1, failed: 0, seconds: 3 }] },
+  }), short);
+
+  assert.match(older, /codex/);
+  assert.ok(!older.includes('conversations'), 'nothing is claimed about a server that said nothing');
+});
+
+test('a kind a newer server invents is shown as it named it, never as markup', () => {
+  // Every string here comes off a wire. The escaper is the one escaper, and a kind this build does
+  // not know is still a fact about somebody's spending — shown, not dropped.
+  const html = kindLine([
+    { kind: 'review', runs: 1, failed: 0, tokensIn: 1, tokensOut: 1, seconds: 1 },
+    { kind: '<img src=x onerror=alert(1)>', runs: 2, failed: 0, tokensIn: 1, tokensOut: 1, seconds: 1 },
+  ], short);
+
+  assert.ok(!html.includes('<img'), 'a kind from a server is data, never markup');
+  assert.match(html, /&lt;img/);
 });

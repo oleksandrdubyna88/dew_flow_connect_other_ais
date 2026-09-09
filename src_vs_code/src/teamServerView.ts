@@ -1,4 +1,4 @@
-import { Catalog, CatalogVendor, SlotSummary, Usage } from './teamServerApi';
+import { Catalog, CatalogVendor, KindUsage, SlotSummary, Usage } from './teamServerApi';
 import { TeamServer, canonicalTeamServerUrl } from './teamServers';
 // The same comparator the coai-mcp update check uses. Two version comparisons in one panel that
 // disagreed about what "newer" means is a defect waiting for a version like 0.10.0.
@@ -101,7 +101,43 @@ export function teamUsageBlock(
 
   return `<div class="ts-usage"><b>${escape(state.server.name)}</b>
 ${cards}
+${kindLine(state.usage?.kinds ?? [], shortNumber)}
 </div>`;
+}
+
+/**
+ * What the gate cost, and what asking cost — beside each other, under the vendor rows.
+ *
+ * <p>The owner's ruling of 2026-09-08, in the words he used: *"счиатть, отделять"*. The vendors are
+ * the same vendors and the money is the same money, so one total answers neither question; and a
+ * second table of the same vendors split two ways would leave a reader adding pairs of rows to get
+ * back the number they already had. One line, under the rows it decomposes.</p>
+ *
+ * <p><b>Nothing at all when there is only one kind.</b> A window with no conversations in it is not
+ * a conversation total of zero — a zero is a measurement, and this would be an absence wearing one.
+ * Servers older than this field send no kinds and get the same silence, which is what makes this
+ * safe to ship before every server has it.</p>
+ */
+export function kindLine(
+  kinds: readonly KindUsage[],
+  shortNumber: (n: number) => string,
+): string {
+  if (kinds.length < 2) {
+    return '';
+  }
+
+  const parts = kinds.map((k) => {
+    const tokens = shortNumber(k.tokensIn + k.tokensOut);
+
+    return `${escape(named(k.kind))}: ${k.runs} · ${tokens} tokens`;
+  });
+
+  return `<div class="hint">${parts.join(' &middot; ')}</div>`;
+}
+
+/** What a kind is called on a page a person reads, rather than on the wire. */
+function named(kind: string): string {
+  return kind === 'chat' ? 'conversations' : kind === 'review' ? 'reviews' : kind;
 }
 
 /**

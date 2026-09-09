@@ -45,17 +45,40 @@ public static class ReviewEndpoints
 
             var now = DateTimeOffset.UtcNow;
             var budget = TimeSpan.FromSeconds(request.TimeoutSeconds);
+            JobKinds.TryRead(request.Kind, out var kind);
+            var role = request.Role ?? string.Empty;
+            var key = request.IdempotencyKey?.Trim() ?? string.Empty;
             var (job, refused, position) = jobs.Submit(new JobRecord(
                 JobId.New(),
                 caller.Email,
                 request.Vendor,
                 request.Model,
-                request.Role ?? string.Empty,
+                role,
                 request.Prompt,
                 JobStatus.Queued,
                 now,
                 now + (queueWait ?? JobTransitions.DefaultQueueWait),
-                budget));
+                budget,
+                kind,
+                IdempotencyKey: key,
+                Fingerprint: key.Length == 0
+                    ? string.Empty
+                    : Idempotency.Fingerprint(
+                        request.Vendor, request.Model, role, request.Prompt, kind, request.TimeoutSeconds)));
+
+            if (refused == SubmitRefusal.KeyUsedForSomethingElse)
+            {
+                // 409, not 400: the request is well formed and the key is well formed — what is wrong
+                // is that the two disagree with something the server already accepted. A person needs
+                // to know it was THIS key, because the fix is a new one.
+                return Results.Json(
+                    new ErrorDto(
+                        $"the idempotency key '{key}' was already used for a different request. A repeat "
+                        + "must carry the same vendor, model, role, kind, prompt and timeout; use a new key "
+                        + "for a new question."),
+                    ServerJsonContext.Default.ErrorDto,
+                    statusCode: StatusCodes.Status409Conflict);
+            }
 
             if (refused == SubmitRefusal.TooManyQueued)
             {
@@ -82,7 +105,12 @@ public static class ReviewEndpoints
         app.MapGet("/api/reviews/{id}", async (HttpContext ctx, string id, int? wait) =>
         {
             var caller = ctx.CallerOf();
-            var job = jobs.Find(id, caller.Email);
+            // A READ that writes, deliberately: this is the only evidence the server has that anybody
+            // is still listening. A job nobody polls holds a slot on a shared account and answers into
+            // nothing — the client that submitted it can die without saying so, and the cancel on tab
+            // close is best-effort by construction. `Polled` also decides the boundary, so a poll
+            // arriving after the window cannot revive what the sweep was entitled to drop.
+            var job = jobs.Polled(id, caller.Email, DateTimeOffset.UtcNow);
 
             // A finished job answers AT ONCE, whatever `wait` says. Waiting for a "change" that has
             // already happened is how a client that reconnects after a blip sits for 25 seconds
@@ -100,7 +128,10 @@ public static class ReviewEndpoints
                 while (job is not null && !job.IsTerminal && job.Status == was && DateTimeOffset.UtcNow < deadline)
                 {
                     await jobs.WaitForChangeAsync(id, deadline - DateTimeOffset.UtcNow, ctx.RequestAborted);
-                    job = jobs.Find(id, caller.Email);
+                    // Stamped again on every wake, not only when the request arrived: a long poll IS
+                    // somebody listening for as long as it is open, and a client holding one for
+                    // twenty-five seconds must not age towards abandonment while it does.
+                    job = jobs.Polled(id, caller.Email, DateTimeOffset.UtcNow);
                 }
             }
 
@@ -147,6 +178,18 @@ public static class ReviewEndpoints
         {
             return $"'{request.Role}' is not a review role. Allowed: "
                 + string.Join(", ", Enum.GetNames<ReviewRole>());
+        }
+
+        // What this job IS, checked against the role it carries. The whole table is in `JobKinds`,
+        // where it can be read as a table rather than reconstructed from branches.
+        if (JobKinds.Refusal(request.Kind, request.Role) is { } wrongKind)
+        {
+            return wrongKind;
+        }
+
+        if (Idempotency.Refusal(request.IdempotencyKey) is { } badKey)
+        {
+            return badKey;
         }
 
         if (catalog.Find(request.Vendor ?? string.Empty) is not { } vendor)

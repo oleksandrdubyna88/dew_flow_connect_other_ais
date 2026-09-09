@@ -58,12 +58,24 @@ public sealed record CatalogDto(
 /// account — that is the server's queue clock, and conflating the two was the plan round's blocking
 /// finding: a single deadline stamped at submit burns down while the job queues.
 /// </param>
+/// <param name="Kind">
+/// <c>review</c>, <c>chat</c>, or absent — and absent is NOT the same as <c>review</c>. It is a
+/// client older than the field, and it is judged exactly as it was before the field existed. See
+/// <see cref="JobKinds"/> for the table.
+/// </param>
+/// <param name="IdempotencyKey">
+/// The caller's own name for this attempt. Repeating it returns the job the first one made instead of
+/// making a second — see <see cref="Idempotency"/>. Optional: a client that sends none is accepting
+/// that a retry may cost two slots, which is what every client did before this existed.
+/// </param>
 public sealed record ReviewRequestDto(
     string Vendor,
     string Model,
     string Prompt,
     string? Role = null,
-    int TimeoutSeconds = 600);
+    int TimeoutSeconds = 600,
+    string? Kind = null,
+    string? IdempotencyKey = null);
 
 /// <param name="Position">Where it sits in its vendor's queue, 1-based; 0 once it is running.</param>
 public sealed record ReviewAcceptedDto(string Id, int Position);
@@ -101,7 +113,8 @@ public sealed record UsageEntryDto(
     long TokensOut = 0,
     double? CostUsd = null,
     string? Outcome = null,
-    string? Email = null);
+    string? Email = null,
+    string? Kind = null);
 
 /// <param name="Scope">"me" or "company", so a client cannot mistake one answer for the other.</param>
 /// <param name="People">Empty unless the scope is company.</param>
@@ -115,7 +128,14 @@ public sealed record UsageDto(
     string Scope,
     IReadOnlyList<VendorTotal> Vendors,
     IReadOnlyList<PersonTotal> People,
-    int? UnreadableLines);
+    int? UnreadableLines,
+    /// <summary>The gate against asking, over the same lines and the same window.</summary>
+    /// <remarks>
+    /// Trailing and defaulted so a client older than the field deserialises the answer unchanged: the
+    /// panel that shipped before this simply does not read the property, which is what it did when
+    /// the property did not exist.
+    /// </remarks>
+    IReadOnlyList<KindTotal>? Kinds = null);
 
 /// <summary>One account's persisted state, in its own directory.</summary>
 /// <param name="CooldownUntilUtc">Null when it is not rate-limited.</param>

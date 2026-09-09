@@ -145,6 +145,85 @@ Content-Type: application/json
 
 ###
 
+# @name a_client_that_sends_no_kind_is_still_accepted
+# The row every installed copy depends on. `coai-mcp --ask-remote` and every extension released
+# before the field existed send no kind at all, and refusing them would take every round and every
+# conversation on every machine down at once, on the day this server was deployed.
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "vendor": "codex", "model": "gpt-5.6-luna", "prompt": "p" }
+
+?? status == 202
+
+###
+
+# @name a_chat_is_accepted_with_no_role
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "vendor": "codex", "model": "gpt-5.6-luna", "prompt": "explain this", "kind": "chat" }
+
+?? status == 202
+
+###
+
+# @name a_repeated_submit_under_one_key_is_the_same_review
+# The failure this answers: the POST arrives, the job is accepted, and the response is lost on the
+# way back. Without the key the person pressing send again holds two slots for one question, on an
+# account where a slot is the scarcest thing there is.
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "vendor": "codex", "model": "gpt-5.6-luna", "prompt": "the same question", "kind": "chat", "idempotencyKey": "contract-turn-1" }
+
+?? status == 202
+
+{{
+  exports.firstId = response.parsedBody.id;
+}}
+
+###
+
+# @name repeating_it_answers_with_that_same_id
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "vendor": "codex", "model": "gpt-5.6-luna", "prompt": "the same question", "kind": "chat", "idempotencyKey": "contract-turn-1" }
+
+?? status == 202
+
+{{
+  const assert = require('node:assert');
+  test('a retry is answered with the first job, and the client cannot tell', () => {
+    assert.strictEqual(response.parsedBody.id, firstId);
+  });
+}}
+
+###
+
+# @name one_key_for_a_different_question_is_a_conflict
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "vendor": "codex", "model": "gpt-5.6-luna", "prompt": "an entirely different question", "kind": "chat", "idempotencyKey": "contract-turn-1" }
+
+?? status == 409
+
+{{
+  const assert = require('node:assert');
+  test('409, because the request is well formed and it is the two that disagree', () => {
+    assert.match(response.parsedBody.error, /use a new key/);
+  });
+}}
+
+###
+
 # @uncovered `done` and `failed(non_zero_exit | rate_limited | timed_out)` outcomes — they need a
 #            signed-in paid account and real vendor spend. Mocking the vendor would prove the mock
 #            works. The outcome mapping is covered by JobRunnerTests against a fake launcher.

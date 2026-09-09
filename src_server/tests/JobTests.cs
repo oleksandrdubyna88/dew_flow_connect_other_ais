@@ -33,10 +33,16 @@ public sealed class JobTransitionTests
     [Fact]
     public void AQueuedJobIsJudgedOnHowLongItHasWaited()
     {
+        // Polled all the way through, which is what this test is about: how long a job may wait for
+        // a free ACCOUNT. Its fixture used to poll never, and that quietly became a different test
+        // when abandonment landed — a job nobody asks about now goes at three minutes whatever its
+        // queue deadline says, which is `AbandonedJobTests`' subject and not this one's.
         var job = Queued(queueWait: TimeSpan.FromMinutes(10));
 
-        JobTransitions.IsExpired(job, Now.AddMinutes(9)).Should().BeFalse();
-        JobTransitions.IsExpired(job, Now.AddMinutes(10)).Should().BeTrue();
+        JobTransitions.IsExpired(job with { LastPolledUtc = Now.AddMinutes(9) }, Now.AddMinutes(9))
+            .Should().BeFalse();
+        JobTransitions.IsExpired(job with { LastPolledUtc = Now.AddMinutes(10) }, Now.AddMinutes(10))
+            .Should().BeTrue();
     }
 
     [Fact]
@@ -59,8 +65,11 @@ public sealed class JobTransitionTests
     [Fact]
     public void TheExpiryReasonSaysWhichClockRanOut()
     {
-        JobTransitions.ExpiryReason(Queued()).Should().Contain("queue").And.Contain("nothing was sent");
-        JobTransitions.ExpiryReason(JobTransitions.Start(Queued(), "a", Now)).Should().Contain("still running");
+        // At `Now`, so abandonment — which is checked first and reads very differently — has not
+        // fired: these two sentences are about the clocks the job's OWN deadlines set.
+        JobTransitions.ExpiryReason(Queued(), Now).Should().Contain("queue").And.Contain("nothing was sent");
+        JobTransitions.ExpiryReason(JobTransitions.Start(Queued(), "a", Now), Now)
+            .Should().Contain("still running");
     }
 }
 

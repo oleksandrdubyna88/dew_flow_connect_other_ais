@@ -126,8 +126,16 @@ public sealed class JobRunner(
                 RateLimited(vendor, slot, job, limited, now),
             ReviewAttempt.Failed { Outcome: ReviewerOutcome.NonZeroExit exit } =>
                 JobTransitions.Fail(job, FailureKind.NonZeroExit, Tail(exit.StdErrTail, exit.ExitCode), now),
+            // Its own sentence rather than the expiry one. This is the reviewer's OWN timeout firing,
+            // which is the case the server's backstop exists to be later than — and since abandonment
+            // joined the expiry reasons, borrowing that sentence could have described a job nobody
+            // was polling as one the vendor was too slow for. Two different events, two sentences.
             ReviewAttempt.Failed { Outcome: ReviewerOutcome.TimedOut } =>
-                JobTransitions.Fail(job, FailureKind.TimedOut, JobTransitions.ExpiryReason(job), now),
+                JobTransitions.Fail(
+                    job,
+                    FailureKind.TimedOut,
+                    $"the vendor did not answer within the {job.RunBudget.TotalSeconds:0}s it was given",
+                    now),
             // The tokens travel with THIS one. It is the failure that ran and was billed, and
             // dropping its usage wrote a spending line saying a broken vendor cost nothing.
             ReviewAttempt.Failed { Outcome: ReviewerOutcome.Unparseable bad } =>
@@ -216,7 +224,9 @@ public sealed class JobRunner(
                 finished.Status == JobStatus.Done ? "ok" : finished.Failure.ToString(),
                 finished.Elapsed,
                 finished.TokensIn,
-                finished.TokensOut);
+                finished.TokensOut,
+                costUsd: null,
+                kind: JobKinds.Wire(job.Kind));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
