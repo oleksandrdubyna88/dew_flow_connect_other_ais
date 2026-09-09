@@ -653,3 +653,75 @@ test('on open the page lands on the last message, and again once the fonts have 
   page.frames();
   assert.strictEqual(scroll.scrollTop, 3000, 'the page did not land on the last message after layout');
 });
+
+
+test('a reader who scrolls away before the frame runs is not yanked back', () => {
+  // The gate's best finding on this story, raised from two vendors: the follow is DEFERRED to the
+  // next frame, and a reader can move in between — by dragging, by a wheel, by Page Up. The scroll
+  // that was correct when it was scheduled is a hijack by the time it runs. Re-measuring in the
+  // callback cannot answer it, because the insertion has already made a bottom reader measure short;
+  // what is needed is knowing whether the READER moved, which only they can tell us.
+  const page = runChatPage();
+  const scroll = page.scrolledToBottom();
+
+  page.deliver({ type: 'state', messagesHtml: '<p>an answer</p>' });
+  scroll.scrollTop = 100;
+  page.fire('scroll', 'scroll');
+  page.frames();
+
+  assert.strictEqual(scroll.scrollTop, 100, 'the pending follow overrode a reader who had scrolled away');
+});
+
+test('the page scrolling itself does not count as the reader scrolling', () => {
+  // Setting scrollTop fires a scroll event. If that cancelled the next follow, the page would
+  // follow one answer and then never again — the rule would work once per tab.
+  const page = runChatPage();
+  const scroll = page.scrolledToBottom();
+
+  page.deliver({ type: 'state', messagesHtml: '<p>first</p>' });
+  page.frames();
+  assert.strictEqual(scroll.scrollTop, scroll.scrollHeight, 'the first answer was not followed');
+
+  scroll.scrollTop = scroll.scrollHeight - 10;
+  page.deliver({ type: 'state', messagesHtml: '<p>second</p>' });
+  page.frames();
+  assert.strictEqual(scroll.scrollTop, scroll.scrollHeight, 'a follow after the page moved itself was cancelled');
+});
+
+test('the slack the page follows by is the one that was tested, at the boundary', () => {
+  // A pure-function test passes while the call site hands the page a different number, or none. This
+  // drives the real script at exactly the boundary, both sides of it, through a real push.
+  for (const [remaining, followed] of [[FOLLOW_SLACK_PX, true], [FOLLOW_SLACK_PX + 1, false]] as const) {
+    const page = runChatPage();
+    const scroll = page.scrolledToBottom();
+    scroll.scrollTop = scroll.scrollHeight - scroll.clientHeight - remaining;
+    const before = scroll.scrollTop;
+
+    page.deliver({ type: 'state', messagesHtml: '<p>an answer</p>' });
+    page.frames();
+
+    assert.strictEqual(scroll.scrollTop === scroll.scrollHeight, followed,
+      `with ${remaining}px remaining the page ${followed ? 'did not follow' : 'followed'}`);
+    if (!followed) {
+      assert.strictEqual(scroll.scrollTop, before, 'a reader past the slack was moved anyway');
+    }
+  }
+});
+
+test('a push that changes nothing scrolls nobody, however many times it arrives', () => {
+  // A retry, or a poll that pushes the same state again, is not an insertion. Counting the
+  // ASSIGNMENT rather than the change would scroll a reader for content they are already looking at.
+  const page = runChatPage();
+  const scroll = page.scrolledToBottom();
+
+  page.deliver({ type: 'state', messagesHtml: '<p>an answer</p>' });
+  page.frames();
+  const after = scroll.scrollTop;
+
+  scroll.scrollTop = after - 300;
+  page.fire('scroll', 'scroll');
+  page.deliver({ type: 'state', messagesHtml: '<p>an answer</p>' });
+  page.frames();
+
+  assert.strictEqual(scroll.scrollTop, after - 300, 'an identical push moved the reader');
+});

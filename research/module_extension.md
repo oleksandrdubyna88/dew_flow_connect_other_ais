@@ -60,6 +60,47 @@ no margin, no padding, no font-family, no background, and the chosen text size n
 an unrelated push set it. The zoom now sits inside the rule, as `helpPage.ts` always had it, and a
 structural test fails the build if any rule on this page is swallowed again.
 
+### The chat page's scroll rule, decided once (2026-09-09)
+
+Three separate fixes move this page — the pinned composer, the *jump to newest* control, the growing
+composer — so the rule the operator decided (entry 23 of the bug list of 2026-09-09) is implemented
+ONCE and the others obey it. Deciding it three times is how a page ends up behaving differently
+depending on which change you provoked.
+
+1. **On open the tab looks at the last message.** The passage stays above it, reached by scrolling up.
+2. **A new answer scrolls to itself only if the reader was already at the bottom** — within
+   `FOLLOW_SLACK_PX` (48) of it, measured BEFORE the content is inserted.
+3. A reader who is scrolled up gets a *jump to newest* control (its own story).
+
+**`shouldFollow` is exported and its SOURCE is embedded into the page** by `toString()`, bound by
+assignment. That is the rounds log's idiom and it is not decoration: a function referenced only from
+a template string is one the minifier renames out from under the page, which shipped dead there
+twice. It references nothing outside itself — the slack is a parameter for that reason — and it is
+written as `!(distance > slack)` rather than `distance <= slack` so that an unmeasurable page (NaN,
+every comparison with which is false) follows: a page whose numbers cannot be read is a page whose
+reader has not scrolled away from anything.
+
+**The snapshot is the first statement of the one state handler.** Read after a write, `scrollHeight`
+already includes what arrived, so a reader who was at the bottom measures a screen short of it and
+is never followed — rule 2 becomes "never follow", silently, and only the real webview shows it.
+Every region arrives through that one handler, which is what makes the ordering true by construction
+rather than by remembering it in five places. A write counts only when the value actually CHANGED: a
+retry that assigns the same html is not an insertion, and scrolling for it moves a reader for content
+already in front of them.
+
+**Two entry points, and they are the contract.** `landOnNewest()` scrolls now; `scheduleFollow()`
+scrolls on the next frame and can be cancelled. Nothing else in this page may write `scrollTop` —
+the jump control and the composer's resize both go through these, or the one rule becomes four that
+agree by accident.
+
+**A deferred follow is cancelled by the reader, not by re-measuring.** The reader can move between
+the frame being asked for and the frame arriving, and re-measuring in the callback cannot tell: the
+content is already in, so a reader who *was* at the bottom now measures short of it. Only the reader
+knows they moved, so their scroll event invalidates the pending token. The page's own scroll is told
+apart by POSITION — `scrolledItselfTo`, recorded as what the browser clamped to — rather than by a
+flag cleared on a later frame, which stays raised for as long as that frame has not come and makes
+every scroll in between read as the page's own.
+
 ### One webview per SESSION, which no other page in here does (2026-09-08)
 
 Every other webview in this extension is a singleton — the rounds log and the help page each keep
