@@ -353,6 +353,52 @@ function pathsOfNumbers(value, path = '', depth = 0, found = []) {
 const squash = (text) => text.replace(/\s+/g, '');
 
 /**
+ * Walk the events in order, taking each fragment that is exactly what comes next in the answer.
+ *
+ * <p>`shape` is applied to both sides — identity for an EXACT tiling, `squash` for a canonical one —
+ * so the same walk answers both questions and the caller reports which succeeded.</p>
+ *
+ * <p>A fragment's SOURCE is the event kind and the JSON path together, not the path alone. A path on
+ * its own collapses two semantically different fields that happen to be spelled the same — a
+ * reasoning block and an answer block are both `message.content[].text` — and a stream assembled out
+ * of two different event types is not a stream. (codex, round 2.)</p>
+ */
+function tile(events, answer, shape) {
+  const target = shape(answer);
+  const deltas = [];
+  let cursor = 0;
+  if (target.length === 0) {
+    return { target, deltas, cursor, complete: false };
+  }
+  for (const event of events) {
+    if (event.adapterKind === 'answer') {
+      continue;
+    }
+    for (const one of event.strings) {
+      const piece = shape(one.text);
+      // The advancing offset IS the strictness: a fragment is accepted only when it sits at the
+      // cursor, which never moves backwards, so a stray `12` cannot match unless the answer's next
+      // unconsumed characters are `12`. One character is enough — excluding them was a false negative
+      // of my own making, because `agy` really does emit a single-character fragment when a token
+      // straddles a boundary, and dropping it stalled the cursor so every later fragment failed.
+      // Safety comes from the tiling and the single source, never from a minimum length.
+      if (piece.length >= 1 && cursor < target.length && target.startsWith(piece, cursor)) {
+        deltas.push({
+          atMs: event.atMs,
+          kind: event.kind,
+          path: one.path,
+          source: `${event.kind} · ${one.path}`,
+          chars: piece.length,
+        });
+        cursor += piece.length;
+      }
+    }
+  }
+
+  return { target, deltas, cursor, complete: cursor === target.length };
+}
+
+/**
  * What this run proved.
  *
  * <p>See the header for the three conditions a delta has to meet. The short version: it must be the
@@ -391,37 +437,25 @@ function classify(run, adapter) {
     });
   }
 
-  const flat = squash(answer);
-  const deltas = [];
-  let cursor = 0;
-  for (const event of events) {
-    if (event.adapterKind === 'answer' || flat.length === 0) {
-      continue;
-    }
-    for (const one of event.strings) {
-      const piece = squash(one.text);
-      // The advancing offset IS the strictness. A fragment is accepted only when it is exactly what
-      // comes next, from a cursor that never goes backwards, so a stray `12` cannot match unless the
-      // answer's next unconsumed characters are `12`.
-      // One character is enough to be a delta, and excluding them was a false negative of my own
-      // making: `agy` really does emit a single-character fragment when a token straddles a boundary
-      // ("…16\n1" then "7\n18\n"), and dropping it stalled the cursor so that every later fragment
-      // failed to match and a streaming vendor was reported as not streaming. Safety does not come
-      // from the minimum length — it comes from the three conditions below the loop: the pieces must
-      // tile the WHOLE answer, in order, from ONE path.
-      if (piece.length >= 1 && cursor < flat.length && flat.startsWith(piece, cursor)) {
-        deltas.push({ atMs: event.atMs, kind: event.kind, path: one.path, chars: piece.length });
-        cursor += piece.length;
-      }
-    }
-  }
-  const paths = [...new Set(deltas.map((delta) => delta.path))];
-  // Tiled the WHOLE answer, in order, from ONE field, in more than one piece. Anything less is not a
-  // stream: one piece covering everything is an early final, and several paths is coincidence.
-  const streams = deltas.length > 1 && cursor === flat.length && paths.length === 1;
+  // Tiled TWICE: once against the answer's exact bytes, once with both sides canonicalised of
+  // whitespace. Exact is the honest proof; canonical exists because a vendor's concatenated
+  // fragments and its own final answer can differ by a trailing newline, and reporting that as "not
+  // a stream" would be a false negative of the same family as the one below. WHICH of the two
+  // succeeded is reported rather than quietly assumed, because a canonical tiling is a weaker claim
+  // than an exact one. (codex, round 2.)
+  const exact = tile(events, answer, (text) => text);
+  const canonical = tile(events, answer, squash);
+  const tiled = exact.complete ? exact : canonical;
+  const deltas = tiled.deltas;
+  const sources = [...new Set(deltas.map((delta) => delta.source))];
+  // Tiled the WHOLE answer, in order, from ONE source, in more than one piece. Anything less is not
+  // a stream: one piece covering everything is an early final, and several sources is coincidence.
+  const streams = deltas.length > 1 && tiled.complete && sources.length === 1;
 
   const wholeAnswerEarly = events.some(
-    (event) => event.adapterKind !== 'answer' && event.strings.some((one) => squash(one.text) === flat),
+    (event) =>
+      event.adapterKind !== 'answer'
+      && event.strings.some((one) => squash(one.text) === squash(answer) && answer.length > 0),
   );
 
   return {
@@ -436,9 +470,11 @@ function classify(run, adapter) {
     terminalAtMs,
     streams,
     deltaCount: deltas.length,
-    coveredChars: cursor,
-    answerFlatChars: flat.length,
-    deltaPaths: paths,
+    /** Which tiling proved it: the answer's exact bytes, or both sides canonicalised of whitespace. */
+    tiling: exact.complete ? 'exact' : canonical.complete ? 'canonical' : 'none',
+    coveredChars: tiled.cursor,
+    answerFlatChars: tiled.target.length,
+    deltaPaths: sources,
     deltaKinds: [...new Set(deltas.map((delta) => delta.kind))],
     firstDeltaAtMs: deltas.length > 0 ? deltas[0].atMs : -1,
     /** How much of the wait a person would actually be spared. The number the decision turns on. */
@@ -557,13 +593,13 @@ const median = (values) => {
 };
 
 console.log('\n=== the table ===\n');
-console.log('| vendor | arm | ok | turn ms | deltas | streams? | stream window ms | delta path | usage event | usage at ms |');
-console.log('|---|---|---|---|---|---|---|---|---|---|');
+console.log('| vendor | arm | ok | turn ms | deltas | streams? | tiling | stream window ms | delta source | usage event | usage at ms |');
+console.log('|---|---|---|---|---|---|---|---|---|---|---|');
 for (const arm of arms) {
   const good = arm.results.filter((seen) => seen.ok);
   const label = `${arm.arm}${arm.shipped ? ' (shipped)' : ''}`;
   if (arm.unspawnable) {
-    console.log(`| ${arm.vendor} | ${label} | n/a | — | — | — | — | — | — | node refuses this file without a shell |`);
+    console.log(`| ${arm.vendor} | ${label} | n/a | — | — | — | — | — | — | — | node refuses this file without a shell |`);
     continue;
   }
   const one = good[0];
@@ -574,7 +610,7 @@ for (const arm of arms) {
       : one?.wholeAnswerEarly ? 'no — whole answer, once, early' : 'no';
   console.log(
     `| ${arm.vendor} | ${label} | ${good.length}/${arm.results.length} | ${median(good.map((s) => s.ms))} `
-    + `| ${median(good.map((s) => s.deltaCount))} | ${verdict} | ${median(good.map((s) => s.streamWindowMs))} `
+    + `| ${median(good.map((s) => s.deltaCount))} | ${verdict} | ${one?.tiling ?? '—'} | ${median(good.map((s) => s.streamWindowMs))} `
     + `| ${(one?.deltaPaths ?? []).join(' · ') || '—'} `
     + `| ${(one?.usageKinds ?? []).join(' · ') || '—'} | ${median(good.map((s) => s.usageAtMs))} |`,
   );
