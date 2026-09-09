@@ -401,10 +401,15 @@ costs a few hundred bytes, and a file deleted too early costs a process nobody c
 - [ ] Follow-up questions are answered in the same conversation without re-sending the passage on the
       local path, and correctly with a bounded transcript on the remote one.
 - [x] **Closing a tab kills its process; a process that dies is reported and re-created; VS Code
-      being force-killed leaves no orphan behind.** The last of those is the ledger: every child is
-      written down as it starts and struck out as it ends, and the next activation kills what is
-      still provably ours — the pid, the image and the start time must all match, because a pid
-      alone would be a licence to kill whatever the operating system handed that number to next.
+      being force-killed leaves no orphan behind — ON WINDOWS, WHERE THE MACHINE CAN BE ASKED.**
+      Every child is written down as it starts and struck out as it ends, and the next activation
+      ends what is still provably ours: the pid, the image and the start time must all match,
+      because a pid alone would be a licence to kill whatever the operating system handed that
+      number to next. **Two cases it deliberately does not cover**, because the alternative is
+      killing strangers: an activation that cannot run PowerShell keeps the record and retries
+      rather than guessing, and an owner pid the operating system has recycled onto a long-lived
+      process makes its file unreadable — bounded by removing it after a week, and by the reboot
+      that would end the orphan anyway. Named here rather than left to be discovered.
 - [ ] A turn cannot start while another is running.
 - [ ] `coai.chatAutoSend` decides who sends: at the default the keybinding sends and the menu waits
       with the composer filled and focused, and both other values behave as the table says. The

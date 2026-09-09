@@ -24,26 +24,18 @@ import { forget, remember } from './chatOrphans';
  * bundle and esbuild dutifully inlined a `require` into a webview. The guard exists for exactly
  * this, it caught it in one run, and the fix is a file the page's import graph never touches.</p>
  */
-export function chatProcessFor(
-  vendor: Vendor,
-  home: string,
-  resolved: string,
-  /** Where the ledger lives. Empty means no ledger — the tests, and nothing else. */
-  storageDir = '',
-): (resume: string) => ProcessHandle {
+export function chatProcessFor(vendor: Vendor, home: string, resolved: string): (resume: string) => ProcessHandle {
   return (resume) => {
     const spec = launchSpecFor(vendor, home, resume, resolved);
     const child = launch(spec.executable, spec.args, { cwd: spec.cwd, shell: spec.shell });
-    if (storageDir.length === 0) {
-      return child;
-    }
 
     // Written down BEFORE anything is asked of it, and SYNCHRONOUSLY: the window this guards
     // against is a force-kill, which is exactly what a queued write does not survive. A child
     // launched and orphaned a millisecond later would otherwise never have been written down.
-    remember(storageDir, child.pid, spec.executable);
+    // Where the ledger lives is not this function's business — it was bound once, at activation.
+    remember(child.pid, spec.executable);
     const strike = (): void => {
-      forget(storageDir, child.pid);
+      forget(child.pid);
     };
     child.onExit(strike);
     child.onError(strike);

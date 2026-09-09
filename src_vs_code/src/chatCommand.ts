@@ -74,18 +74,6 @@ interface Thread {
 
 const threads = new WeakMap<object, Thread>();
 
-/**
- * Where this conversation's children are written down.
- *
- * <p>Kept per conversation because a model SWITCH starts a new process long after the command that
- * opened the tab has returned, and the ledger's home is something only the extension knows.</p>
- */
-const storages = new WeakMap<object, string>();
-
-function storageOf(entry: ChatEntry): string {
-  return storages.get(entry.id) ?? '';
-}
-
 /** The tabs, narrowed to what `sessionKey` judges on. */
 function snapshots(): { active: TabSnapshot | undefined; all: TabSnapshot[] } {
   const all: TabSnapshot[] = [];
@@ -313,13 +301,13 @@ function matchedSession(panels: ChatPanels): ReturnType<typeof sourceSession> {
  * id, and the id is not known until the first turn has been answered. A persistent vendor ignores
  * the argument entirely and gets the same argv every time.</p>
  */
-function started(vendor: Vendor, resolved: string, storageDir: string): { session: ChatSession; home: ChatHome } {
+function started(vendor: Vendor, resolved: string): { session: ChatSession; home: ChatHome } {
   const home: ChatHome = emptyTempDir();
   const adapter = adapterFor(vendor.runtime);
 
   return {
     session: new CliChatSession(
-      chatProcessFor(vendor, home.dir, resolved, storageDir),
+      chatProcessFor(vendor, home.dir, resolved),
       DEFAULT_BUDGETS,
       REAL_TIMERS,
       adapter,
@@ -416,7 +404,7 @@ async function switchNow(entry: ChatEntry, modelId: string): Promise<void> {
 
   thread.session.dispose();
   thread.home.release();
-  const replacement = started(vendor, cli.resolved, storageOf(entry));
+  const replacement = started(vendor, cli.resolved);
   thread.session = replacement.session;
   thread.home = replacement.home;
   thread.modelId = modelId;
@@ -439,9 +427,8 @@ function newConversation(
   ready: Extract<Ready, { ok: true }>,
   state: { readonly title: string; readonly passage: string; readonly draft: string },
   resolved: string,
-  storageDir: string,
 ): ChatEntry {
-  const first = started(ready.vendor, resolved, storageDir);
+  const first = started(ready.vendor, resolved);
   const session = first.session;
   const entry = createChatPanel(
     {
@@ -488,7 +475,6 @@ function newConversation(
   );
   // Recorded against the entry's OWN id, which `createChatPanel` made — not against the tab key,
   // which can move under a live conversation. That distinction cost a whole code round.
-  storages.set(entry.id, storageDir);
   threads.set(entry.id, {
     session,
     home: first.home,
@@ -510,12 +496,7 @@ function newConversation(
  * @param panels the registry of open conversations
  * @param args what VS Code handed it — a menu item passes the webview, a keybinding passes nothing
  */
-export async function chatWithOtherAi(
-  panels: ChatPanels,
-  args: readonly unknown[],
-  /** Where the orphan ledger lives — `context.globalStorageUri.fsPath`. */
-  storageDir = '',
-): Promise<void> {
+export async function chatWithOtherAi(panels: ChatPanels, args: readonly unknown[]): Promise<void> {
   const config = vscode.workspace.getConfiguration('coai');
   const settings = chatSettingsFrom((key) => config.get(key));
   const ready = readyToChat(config, settings.model);
@@ -569,7 +550,7 @@ export async function chatWithOtherAi(
     title: match.label,
     passage: passage.text,
     draft: plan.send ? '' : turn,
-  }, cli.resolved, storageDir));
+  }, cli.resolved));
 
   opened.entry.panel.reveal();
   if (plan.send) {
