@@ -89,16 +89,18 @@ failed turn renders under the same rule as an answer. One rule, not one per outc
 Four stories, in order, one commit and one `review_code` each. Every one leaves `npm test` green
 and the page usable on its own.
 
-**Two corrections to the split, made after checking:**
+**One correction to the split — and one correction to that correction, which was mine:**
 
-- Its claim that `bundledPage.test.ts` executes `chatScript` against a fake DOM is **wrong** — the
-  "parses and runs" test there is the ROUNDS LOG page (it asserts on `seen['rows']`); the chat
-  page's bundle test only reads the bundle's text. The `typeof` guards it asks for are still
-  right, for two real reasons instead of the stated one: the older-Chromium host is the whole
-  point of finding 1, and the test harness below runs the script in Node, where
-  `requestAnimationFrame`, `CSS` and `ResizeObserver` genuinely do not exist.
 - There is no `thinkingRegion` helper. `chatPanel.ts:208-214` builds every pushed region by
   calling the same exported functions, so no markup is sliced and no opening tag is load-bearing.
+- **The split's constraint about the fake DOM is CORRECT and my first reading of it was not.**
+  `bundledPage.test.ts:310` — *'the chat page script the bundle produces parses and runs'* — has
+  executed the bundled, minified chat script against a stub DOM since before this branch, and that
+  stub supplies exactly `document`, `window` and `acquireVsCodeApi`: no `requestAnimationFrame`, no
+  `CSS`, no `ResizeObserver`. I had grepped the test folder for `chatPageHtml` and that test reaches
+  the page through `bundledChatPage()` instead, so it did not appear and I wrote that nothing ran
+  the chat script. **Every `typeof` guard stories 2 and 4 add is therefore load-bearing twice over**
+  — the older-Chromium host of finding 1, and an existing test that fails on a bare reference.
 
 **Found while reading for story 1, and not in any list: the page's `body` rule never applied.**
 `chatStyle` opened with `${zoomStyle(uiScale)}` — a bare `font-size: 13px;` outside any rule, and

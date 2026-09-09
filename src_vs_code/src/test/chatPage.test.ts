@@ -243,9 +243,13 @@ test('the text size the person chose is inside the body rule, so it applies befo
  *
  * <p>Every test above reads the page as a string, which is the right shape for markup and escaping
  * and the wrong one for a lock, a focus or a scroll — those are behaviour, and a string match on
- * behaviour asserts that a line was written rather than that it works. Nothing in this repository
- * executed the chat page's script before this: `bundledPage.test.ts` runs the ROUNDS LOG page (it
- * asserts on `seen['rows']`) and only reads the chat page's bundle text.</p>
+ * behaviour asserts that a line was written rather than that it works.</p>
+ *
+ * <p>`bundledPage.test.ts` already RUNS the shipped script — bundled and minified, which is the only
+ * place a minifier-renamed binding shows up — but against a stub that answers every id and records
+ * nothing. This harness is the other half: the script from source, elements only where the page
+ * renders one, listeners captured by name, and host messages delivered through the same `window`
+ * listener the webview uses. Neither replaces the other and both are cheap.</p>
  *
  * <p>Modelled on `runPage()` in `theLogLosesItsFirstPush.test.ts`. The fakes record what the page
  * did — listeners by event name, focus calls, the three scroll numbers — and `deliver` pushes a
@@ -270,10 +274,15 @@ interface Fake {
   querySelectorAll(): never[];
 }
 
+/** A style bag the page writes into. Its own function so no fixture needs an `as` cast. */
+function emptyStyle(): Record<string, string> {
+  return {};
+}
+
 function fake(): Fake {
   return {
     innerHTML: '', textContent: '', hidden: false, value: '', disabled: false, focused: 0,
-    scrollTop: 0, clientHeight: 0, scrollHeight: 0, style: {}, listeners: {},
+    scrollTop: 0, clientHeight: 0, scrollHeight: 0, style: emptyStyle(), listeners: {},
     addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); },
     focus() { this.focused += 1; },
     getAttribute: () => null,
@@ -297,11 +306,31 @@ function runChatPage(over: Partial<ChatPageState> = {}): RunningPage {
   const posted: Array<Record<string, unknown>> = [];
   const pending: Array<() => void> = [];
   const onWindow: Record<string, Array<(event: unknown) => void>> = {};
+  // Only the ids the page actually RENDERS answer, and each starts in the state the markup gives it.
+  // A registry that fabricates an element for any id asked of it lets a test pass against a page
+  // that has nothing to click — the listener is attached to a fake, the behaviour is asserted on a
+  // fake, and the shipped webview is inert. (The gate raised this looking ahead to story 3's jump
+  // control.) The `disabled` attribute is read across for the same reason: a page rendered locked
+  // whose fakes start unlocked is a page the tests cannot see the lock on.
+  const rendered = new Map(
+    [...html.matchAll(/<[a-z]+[^>]*\bid="([^"]+)"[^>]*>/g)].map((match) => [match[1], match[0]]),
+  );
   const document_ = {
-    getElementById: (id: string) => (seen[id] ??= fake()),
+    getElementById: (id: string) => {
+      const tag = rendered.get(id);
+      if (tag === undefined) {
+        return null;
+      }
+      if (seen[id] === undefined) {
+        seen[id] = fake();
+        seen[id].disabled = / disabled(?=[ >])/.test(tag);
+      }
+
+      return seen[id];
+    },
     querySelectorAll: () => [],
     addEventListener() { /* the page listens on window */ },
-    body: { style: {} as Record<string, string> },
+    body: { style: emptyStyle() },
   };
   const window_ = {
     addEventListener(type: string, fn: (event: unknown) => void) { (onWindow[type] ??= []).push(fn); },
@@ -318,6 +347,7 @@ function runChatPage(over: Partial<ChatPageState> = {}): RunningPage {
     seen,
     posted,
     fire(id, type, event = {}) {
+      assert.ok(seen[id], `the page never asked for #${id}, so nothing is listening on it`);
       for (const fn of seen[id]?.listeners[type] ?? []) {
         fn({ preventDefault() { /* the page calls this on Enter */ }, ...event });
       }
@@ -399,28 +429,65 @@ test('the Send button and Enter share one send, wired inside the nonced script',
   // dead. Every listener is attached in the nonced script.
   assert.doesNotMatch(body, / on[a-z]+="/, 'a control carries an inline handler the CSP will block');
 
+  // Both paths reach that one send — with the turn between them finished, because a send now locks
+  // the composer until the host says the turn is over. Firing them back to back would be asserting
+  // the defect the gate found rather than the two callers.
   const page = runChatPage();
   page.seen['say'].value = 'what does this do';
   page.fire('send', 'click');
+  page.deliver({ type: 'state', running: false, capped: false });
   page.seen['say'].value = 'and this';
   page.fire('say', 'keydown', { key: 'Enter', shiftKey: false });
 
-  const sends = page.posted.filter((m) => m['command'] === 'send');
+  const sends = page.posted.filter((message) => message['command'] === 'send');
   assert.strictEqual(sends.length, 2, 'the button and Enter did not both send');
-  assert.deepStrictEqual(sends.map((m) => m['text']), ['what does this do', 'and this']);
+  assert.deepStrictEqual(sends.map((message) => message['text']), ['what does this do', 'and this']);
 });
 
-test('a send hands focus back to the textarea, and a locked composer posts nothing', () => {
-  // Clicking a button moves focus to the button. Without this, every follow-up costs a mouse click
-  // back into the box — the same reason the lock already returns focus when a turn ends.
+test('a send locks the composer at once, before the host has said anything', () => {
+  // The gap the gate found, raised by two vendors independently: between posting and the host's
+  // `running: true` the composer stayed open, so a second Enter — or a click, now that there is a
+  // button — put a second turn down a pipe that carries one. Nothing on the host end had gone wrong
+  // yet; the page simply had not been told, and it did not need telling.
+  const page = runChatPage();
+  page.seen['say'].value = 'the first question';
+  page.fire('send', 'click');
+
+  assert.strictEqual(page.seen['say'].disabled, true, 'the box stayed open between the send and the answer');
+  assert.strictEqual(page.seen['send'].disabled, true, 'the Send button stayed open between the send and the answer');
+
+  page.seen['say'].value = 'and immediately a second';
+  page.fire('send', 'click');
+  page.fire('say', 'keydown', { key: 'Enter', shiftKey: false });
+  assert.strictEqual(
+    page.posted.filter((message) => message['command'] === 'send').length,
+    1,
+    'a second turn went down the pipe while the first was still in flight',
+  );
+});
+
+test('the composer comes back with the focus when the turn ends', () => {
+  // send() deliberately does NOT focus: it locks, and focusing a control you have just disabled is
+  // how a caret ends up in a box nobody can type in. The page already returned focus when a lock
+  // lifts, and that is now the single path — one place decides, whichever way the turn went.
   const page = runChatPage();
   page.seen['say'].value = 'ask';
   page.fire('send', 'click');
-  assert.ok(page.seen['say'].focused > 0, 'the Send button kept the focus it stole');
+  const stolen = page.seen['say'].focused;
 
+  page.deliver({ type: 'state', running: false, capped: false });
+
+  assert.ok(page.seen['say'].focused > stolen, 'the box did not get the focus back when the turn ended');
+  assert.strictEqual(page.seen['say'].disabled, false, 'the finished turn left the box locked');
+});
+
+test('a locked composer posts nothing, however it is asked', () => {
+  const page = runChatPage({ running: true });
   page.seen['say'].value = 'while a turn runs';
-  page.seen['say'].disabled = true;
-  const before = page.posted.length;
+
   page.fire('send', 'click');
-  assert.strictEqual(page.posted.length, before, 'a locked composer sent a second turn down the pipe');
+  page.fire('say', 'keydown', { key: 'Enter', shiftKey: false });
+
+  assert.strictEqual(page.posted.filter((message) => message['command'] === 'send').length, 0,
+    'a locked composer sent a turn');
 });

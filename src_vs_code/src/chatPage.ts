@@ -134,7 +134,7 @@ function chatStyle(uiScale: number): string {
   // did it this way (`helpPage.ts`); this one did not.
   return `  html, body { height: 100%; }
   body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 0; display: flex; flex-direction: column; overflow: hidden; ${zoomStyle(uiScale)} }
-  /* The conversation scrolls; the page does not. \`min-height: 0\` is what makes that true: a flex
+  /* The conversation scrolls; the page does not. The min-height of 0 is what makes that true: a flex
      child refuses to shrink below its content without it, so the region would never scroll, the
      body would instead, and the composer would leave the screen — the symptom this layout exists
      to end. (The gate raised it, and it is invisible to every test but a reading of this rule.) */
@@ -232,9 +232,22 @@ function chatScript(state: ChatPageState): string {
     if (text.length === 0) { return; }
     box.value = '';
     vscode.postMessage({ type: 'command', command: 'send', text: text });
-    // Clicking the button moves focus to the button. Without this every follow-up costs a mouse
-    // click back into the box - the same reason the lock below returns focus when a turn ends.
-    if (typeof box.focus === 'function') { box.focus(); }
+    // Locked HERE, not when the host gets round to saying so. Between the post and the state that
+    // comes back there was a window - small, and the width of a second Enter - in which a second
+    // turn went down a pipe that carries one. Two vendors found it independently; the page did not
+    // need telling that it had just sent something.
+    lock(true);
+    // And no focus call: focusing a control you have just disabled is how a caret ends up in a box
+    // nobody can type in. The unlock below already hands focus back when the turn ends, whichever
+    // way it went, and one place deciding that is the point.
+  }
+  // The one place either control's lock is written. Two controls deciding the same thing from the
+  // same inputs is two chances to disagree, and the one that disagrees is the one that sends.
+  function lock(locked) {
+    const box = document.getElementById('say');
+    const button = document.getElementById('send');
+    if (box) { box.disabled = locked; }
+    if (button) { button.disabled = locked; }
   }
   const say = document.getElementById('say');
   if (say) {
@@ -307,12 +320,7 @@ function chatScript(state: ChatPageState): string {
     // it while a turn is still in flight. (local, the second code round.)
     if (box && typeof data.running === 'boolean' && typeof data.capped === 'boolean') {
       const wasLocked = box.disabled;
-      box.disabled = data.running || data.capped;
-      // The button takes the box's lock rather than recomputing it. Two controls deciding the same
-      // thing from the same inputs is two chances to disagree, and the one that disagrees is the one
-      // that sends a second turn down a pipe that carries one.
-      const button = document.getElementById('send');
-      if (button) { button.disabled = box.disabled; }
+      lock(data.running || data.capped);
       // Back to the box when the turn ends. Without this every single follow-up costs a mouse click,
       // nine seconds after the last one — which is the whole conversation, one click at a time.
       if (wasLocked && !box.disabled && typeof box.focus === 'function') { box.focus(); }

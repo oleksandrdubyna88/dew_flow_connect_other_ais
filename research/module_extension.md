@@ -24,6 +24,42 @@ local model` the page would otherwise still show the remote one as selected whil
 somewhere else), a pushed state that has not changed is not sent at all, a `pick` naming a model the
 conversation was never offered is refused at the host boundary rather than trusted, and the
 composer takes focus back when a turn ends — without which every follow-up costs a mouse click.
+### The chat page's layout: one scrolling region, a pinned footer (2026-09-09)
+
+`chatPage.ts` renders two children of `body` and nothing else at the top level: `<main id="scroll">`
+holds the header, the passage, the failure box, the messages, the thinking line and the capped
+notice; `<footer id="composer">` holds the picker row, the textarea, the **Send** button and the
+hint. `body` is a flex column with `overflow: hidden`, so **the page itself never scrolls** — only
+the region does.
+
+`#scroll` carries `flex: 1 1 auto; min-height: 0; overflow-y: auto`, and the `min-height: 0` is the
+load-bearing line: a flex child refuses to shrink below its content without it, so the region would
+never scroll, the body would instead, and the composer would leave the screen — which is the exact
+symptom the layout exists to end.
+
+**The passage is no longer capped.** It used to carry `max-height: 180px; overflow-y: auto` — a
+second scrollbar on the same page — because a fifty-line selection would otherwise push the composer
+off screen on open. Pinning the composer retires that reason: what a long selection pushes down is
+the conversation. The block itself stays, for the reason it always had — a person must see a stale
+clipboard before they discover it in the answer.
+
+**One send, two callers, one lock.** `send()` is the only path; the Send button's listener is
+attached inside the nonced script (the page's CSP is `script-src 'nonce-…'`, so an inline handler
+would be a dead button) and Enter's keydown handler calls the same function. `send()` locks BOTH
+controls the moment it has posted, through a single `lock()` — not when the host's `running: true`
+comes back. That window was small and real: two vendors found it independently in the code round,
+and a second Enter inside it put a second turn down a pipe that carries one. Nothing focuses the box
+on send, because focusing a control you have just disabled is how a caret ends up somewhere nobody
+can type; the existing unlock path hands focus back when the turn ends, whichever way it went.
+
+**A defect fixed on the way in: the page's `body` rule had never applied.** The stylesheet opened
+with the zoom as a bare `font-size: 13px;` outside any rule. CSS has no such thing at the top level
+— a parser consuming a qualified rule appends every token to the prelude until it meets `{`, and `;`
+does not end one — so the selector became `font-size: 13px; body` and the whole rule was dropped:
+no margin, no padding, no font-family, no background, and the chosen text size never applied until
+an unrelated push set it. The zoom now sits inside the rule, as `helpPage.ts` always had it, and a
+structural test fails the build if any rule on this page is swallowed again.
+
 ### One webview per SESSION, which no other page in here does (2026-09-08)
 
 Every other webview in this extension is a singleton — the rounds log and the help page each keep

@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+**The box you type in stays where you put it.** It used to scroll away with the conversation, so
+asking a second question meant scrolling back down to find it. The composer, the model picker and
+the hint are pinned to the bottom of the tab now, the conversation scrolls above them, and there is
+a **Send** button beside the box for anyone who would rather click than press Enter — locked at the
+same moments the box is, because a second turn down the same pipe would interleave with the first.
+
+**The captured text no longer has a scrollbar of its own.** There were two on the page. The passage
+was boxed in because a long selection would otherwise push the composer off the screen when the tab
+opened; with the composer pinned, nothing can push it anywhere.
+
+**The chat tab had never used its own styles.** Its stylesheet began with a line that CSS does not
+allow where it stood, and a browser reading it threw away the rule that followed — the tab's
+margins, its font, its background and the text size you had chosen, all of it, on every open. The
+size only appeared when something unrelated happened to push it. Fixed, with a test that fails the
+build if any rule on that page is ever swallowed again.
+
 ## Extension 0.31.21 — 2026-09-09
 
 **A chat tab looks like a chat tab.** It wore the same generic icon as everything else in the editor,

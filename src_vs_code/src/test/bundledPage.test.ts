@@ -296,6 +296,57 @@ function bundledChatPage(): { bundle: string; html: string } {
   return { bundle, html };
 }
 
+test('the chat page the bundle produces runs, and its Send button sends exactly one turn', () => {
+  // The rounds log has had this since a minifier renamed a binding out from under it — twice. The
+  // chat page had only ever been READ here, and story 2 of this plan is about to embed a function
+  // by `toString()` into its script, which is precisely the shape that broke there. So the page is
+  // run as it SHIPS: bundled, minified, then executed against a stub DOM.
+  const { html } = bundledChatPage();
+  const script = html.split('<script nonce="n0nce">')[1].split('</script>')[0];
+  const posted: Array<Record<string, unknown>> = [];
+  const rendered = new Map(
+    [...html.matchAll(/<[a-z]+[^>]*\bid="([^"]+)"[^>]*>/g)].map((match) => [match[1], match[0]]),
+  );
+  const listeners: Record<string, Record<string, Array<() => void>>> = {};
+  const nodes: Record<string, Record<string, unknown>> = {};
+  const node = (id: string) => (nodes[id] ??= {
+    innerHTML: '', textContent: '', hidden: false, value: '', className: '',
+    disabled: / disabled(?=[ >])/.test(rendered.get(id) ?? ''),
+    addEventListener(type: string, fn: () => void) { ((listeners[id] ??= {})[type] ??= []).push(fn); },
+    focus() { /* the stub is focusable */ },
+    getAttribute: () => null,
+    setAttribute() { /* the page sets none */ },
+    querySelectorAll: () => [],
+  });
+
+  assert.doesNotThrow(
+    () => new Function('document', 'window', 'acquireVsCodeApi', script)(
+      {
+        getElementById: (id: string) => (rendered.has(id) ? node(id) : null),
+        querySelectorAll: () => [],
+        addEventListener() { /* the page listens on window */ },
+        body: { style: {} },
+      },
+      { addEventListener() { /* no host push in this test */ } },
+      () => ({ postMessage: (message: Record<string, unknown>) => posted.push(message) }),
+    ),
+    'the minified chat page script threw on its first render',
+  );
+
+  // The button exists in the shipped markup, its listener survived minification, and it reaches the
+  // one send. A page whose button was renamed away would attach nothing and post nothing here.
+  assert.ok(rendered.has('send'), 'the shipped chat page has no Send button');
+  nodes['say']['value'] = 'does the shipped button work';
+  for (const fire of listeners['send']?.['click'] ?? []) {
+    fire();
+  }
+
+  const sends = posted.filter((message) => message['command'] === 'send');
+  assert.strictEqual(sends.length, 1, 'the shipped Send button did not send exactly one turn');
+  assert.strictEqual(sends[0]?.['text'], 'does the shipped button work');
+  assert.strictEqual(nodes['say']['disabled'], true, 'the shipped page left the composer open after a send');
+});
+
 test('the chat page carries nothing from the host into the webview', () => {
   const { bundle } = bundledChatPage();
 
