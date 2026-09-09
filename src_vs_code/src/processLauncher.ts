@@ -337,31 +337,6 @@ function writeLine(child: ReturnType<typeof spawn>, line: string): boolean {
 }
 
 /**
- * Kill a process by NUMBER, for a caller that has proved the number is still theirs.
- *
- * <p>Everything else in this file kills through `child.kill()` for the reason stated below: a pid is
- * not an identity, and Windows hands used numbers out again. There is exactly one case where a
- * handle does not exist — a child recorded before the editor was force-killed, found again at the
- * next activation — and `chatLedger.ts` is what makes it safe: the image and the start time must
- * both still match before this is called. Nothing here re-checks that, so nothing else may call it.</p>
- */
-export function killByPid(pid: number): void {
-  if (pid <= 0) {
-    return;
-  }
-  if (process.platform !== 'win32') {
-    try {
-      process.kill(pid);
-    } catch {
-      // Gone between the check and the kill is the outcome we wanted anyway.
-    }
-
-    return;
-  }
-  spawnTaskkill(pid);
-}
-
-/**
  * Kill what we started — the whole tree when a shell is between us and the real process.
  *
  * <p><b>`child.kill()`, never `process.kill(pid)`</b>: a probe that exits in the same tick the timer

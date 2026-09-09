@@ -38,11 +38,12 @@ export function chatProcessFor(
       return child;
     }
 
-    // Written down BEFORE anything is asked of it, because the window this guards against is the
-    // whole of the child's life — including the first second of it.
-    void remember(storageDir, child.pid, spec.executable);
+    // Written down BEFORE anything is asked of it, and SYNCHRONOUSLY: the window this guards
+    // against is a force-kill, which is exactly what a queued write does not survive. A child
+    // launched and orphaned a millisecond later would otherwise never have been written down.
+    remember(storageDir, child.pid, spec.executable);
     const strike = (): void => {
-      void forget(storageDir, child.pid);
+      forget(storageDir, child.pid);
     };
     child.onExit(strike);
     child.onError(strike);

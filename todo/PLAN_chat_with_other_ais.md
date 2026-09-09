@@ -341,6 +341,22 @@ selection, watch a real answer land in the panel over BOTH paths (a local CLI mo
 Team-server model), kill the CLI process by hand mid-conversation and watch the panel recover, and
 record the observed timings beside the ones measured above.
 
+## What grows, and who retires it
+
+The orphan ledger writes files, which makes it a growth surface — and the rule is that a plan
+introducing one names its size, its owner and what an interruption leaves behind, before the first
+write. It was written first and the section second; the gate was right to ask.
+
+| What | How big | Who retires it | Interrupted |
+|---|---|---|---|
+| One ledger file per extension HOST, under `globalStorageUri` | A few hundred bytes: one row per live chat child, and a conversation has one at a time. A window with three chats open holds three rows | The owning window, on every change — the file is rewritten from memory as children start and end, and holds `[]` when nothing is running | A force-kill leaves the file with its rows. The next activation of ANY window reads it, ends what is still provably that window's, and deletes the file |
+| Files belonging to windows that are gone | One per force-kill that is never followed by another activation. In practice zero or one | The next activation, which removes the file once every row is settled | A sweep that runs out of its 30-second budget leaves the unasked rows in place and is retried at the next activation |
+| Rows nobody could resolve | Bounded by a week (`FORGET_AFTER_MS`), after which they are not asked about at all | The same sweep | A machine with no PowerShell keeps its rows and retries for a week, then stops asking. It kills nothing in the meantime |
+| A file whose owner pid was recycled onto a long-lived process | Would be invisible for ever, so it is removed once everything in it is past the week bound | The sweep, without asking about anything in it | Nothing: it is a delete, and a delete that fails is retried next time |
+
+Nothing here is unbounded, and the failure direction is always the same one: a file kept too long
+costs a few hundred bytes, and a file deleted too early costs a process nobody can find.
+
 ## Risks and open questions
 
 1. ~~**`Tab` object identity is an assumption about the host.**~~ **Measured 2026-09-08 and it

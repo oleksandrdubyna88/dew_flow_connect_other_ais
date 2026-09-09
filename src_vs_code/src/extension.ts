@@ -104,13 +104,19 @@ export function activate(context: vscode.ExtensionContext): void {
   // but neither runs when the editor is force-killed, and what survives that is a vendor CLI signed
   // in as the person with nobody to stop it. Every candidate is re-identified before anything is
   // killed; see `chatLedger.ts`, which is where that judgement lives.
-  void reconcile(context.globalStorageUri.fsPath).then((ended) => {
-    for (const one of ended) {
-      // Named rather than counted: a line saying "ended 1 process" is the one thing nobody can act
-      // on if it was ever the wrong one.
-      console.warn(`[coai] ended a chat process left by a previous session: ${one}`);
-    }
-  });
+  void reconcile(context.globalStorageUri.fsPath)
+    .then((ended) => {
+      for (const one of ended) {
+        // Named rather than counted: a line saying "ended 1 process" is the one thing nobody can act
+        // on if it was ever the wrong one.
+        console.warn(`[coai] ended a chat process left by a previous session: ${one}`);
+      }
+    })
+    // The outer edge of a detached call ends in a catch that says something — `reliability.md`, and
+    // an unhandled rejection during activation is a defect this repository has already paid for.
+    .catch((reason: unknown) => {
+      console.warn(`[coai] the chat orphan sweep failed: ${reason instanceof Error ? reason.message : reason}`);
+    });
 
   context.subscriptions.push(
     {
