@@ -54,14 +54,20 @@ the second variable and it turned out to be the one that mattered.
 
 **Asking for 40 lines (a 110-character answer):**
 
-| vendor | arm | ok | turn (ms) | deltas | streams? | stream window | delta field | usage event | usage at |
-|---|---|---|---|---|---|---|---|---|---|
-| `claude` | direct *(shipped)* | 3/3 | 3987 | 1 | no — whole answer, once, early | — | `message.content[].text` | `assistant`, `result.success` | 3366 ms |
-| `claude` | `cmd.exe` | 3/3 | 3822 | 1 | no — whole answer, once, early | — | `message.content[].text` | `assistant`, `result.success` | 3186 ms |
-| `codex` | direct | **impossible** | — | — | — | — | — | — | node refuses to spawn a `.cmd` without a shell |
-| `codex` | `cmd.exe` *(shipped)* | 3/3 | 6537 | 0 | no | — | — | `turn.completed` | 6036 ms |
-| `agy` | direct *(shipped)* | 3/3 | 4548 | 6 | **yes** | 253 ms | **`step_update.text_delta`** | `step_update`, `result` | 4113 ms |
-| `agy` | `cmd.exe` | 3/3 | 4207 | 5 | **yes** | 178 ms | **`step_update.text_delta`** | `step_update`, `result` | 3882 ms |
+| vendor | arm | ok | turn (ms) | deltas | streams? | tiling | window | delta source (event · field) | usage event | usage at |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `claude` | direct *(shipped)* | 3/3 | 3663 | 1 | no — whole answer, once, early | exact | — | `assistant · message.content[].text` | `assistant`, `result.success` | 3092 ms |
+| `claude` | `cmd.exe` | 3/3 | 3719 | 1 | no — whole answer, once, early | exact | — | `assistant · message.content[].text` | `assistant`, `result.success` | 3096 ms |
+| `codex` | direct | **impossible** | — | — | — | — | — | — | — | node refuses to spawn a `.cmd` without a shell |
+| `codex` | `cmd.exe` *(shipped)* | 3/3 | 6224 | 0 | no | none | — | — | `turn.completed` | 5692 ms |
+| `agy` | direct *(shipped)* | 3/3 | 4524 | 6 | **yes** | canonical | 203 ms | **`step_update · step_update.text_delta`** | `step_update`, `result` | 4205 ms |
+| `agy` | `cmd.exe` | 3/3 | 11356 | 5 | **yes** | exact | 203 ms | **`step_update · step_update.text_delta`** | `step_update`, `result` | 10998 ms |
+
+*Tiling* says how the proof was obtained: **exact** means the fragments reconstruct the answer's
+bytes; **canonical** means they do so only once both sides are canonicalised of whitespace, which is a
+weaker claim and is reported rather than hidden — a vendor's concatenated fragments and its own final
+answer can differ by a trailing newline. Both arms of `agy` stream; one happened to tile exactly and
+the other needed the canonical form, which is why the fallback exists and why it is labelled.
 
 **Asking `agy` for 400 lines**, because a 200 ms window on a 4.5 s turn is worth nothing and the
 question is whether it GROWS:
@@ -87,8 +93,11 @@ question is whether it GROWS:
   "reconstruct" an answer nobody streamed. A measurement that can say YES when the truth is NO is
   worse than no measurement. A delta now has to satisfy three conditions at once — it must match at
   an **advancing offset** (exactly what comes next, from a cursor that never goes backwards), the
-  pieces must **tile the whole answer** with nothing left over, and they must all come from **one JSON
-  path**. That is what produced the field name above, which is the thing Phase 1 actually needs.
+  pieces must **tile the whole answer** with nothing left over, and they must all come from **one
+  SOURCE** — the event kind AND the JSON path together, because a path on its own collapses two
+  semantically different fields that happen to be spelled the same (a reasoning block and an answer
+  block are both `message.content[].text`). That is what produced the source named above, which is
+  what Phase 1 needs in order to parse it.
 
   The strict rule then produced a false negative of its own, in the opposite direction, and it is
   worth recording: excluding single-character fragments stalled the cursor the first time `agy` split
@@ -112,7 +121,8 @@ user_input`, then the ACTIVE deltas, then `step_update DONE agent_response`, the
 **3. On Windows through `cmd.exe`, does buffering delay it until the end anyway?**
 
 **No — refuted.** For both vendors that resolve to a real `.exe` the two arms are within noise of each
-other (`claude` 3987 against 3822 ms, `agy` 4548 against 4207 ms with windows of 253 against 178 ms —
+other (`claude` 3663 against 3719 ms, `agy` streaming from the SAME field in both arms with the same
+203 ms window —
 the shell arm was FASTER in both, which is how you know you are reading noise), and `agy` streams
 identically through the shell, from the same field. The shell is not what makes a turn quiet.
 
@@ -122,7 +132,7 @@ has no direct arm available for it either.
 
 #### The finding that decides it: the window SCALES with the answer
 
-At 110 characters `agy`'s deltas occupy the last **253 ms of a 4548 ms turn — 6 %**, which would spare
+At 110 characters `agy`'s deltas occupy the last **203 ms of a 4524 ms turn — 4 %**, which would spare
 a person nothing. At roughly 1.5 kB the same vendor streams for **3932 ms of an 8978 ms turn — 44 %**,
 across 82 deltas. So the silence is the model THINKING, not output being withheld, and the streaming
 half only becomes worth watching once an answer is long — which a real chat answer is, and the
