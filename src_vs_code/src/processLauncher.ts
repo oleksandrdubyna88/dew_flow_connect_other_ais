@@ -156,13 +156,30 @@ function failedHandle(reason: string): ProcessHandle {
  */
 function replayingFan<T>(): { emit(value: T): void; on(listener: (value: T) => void): Unsubscribe } {
   let listeners: readonly ((value: T) => void)[] = [];
-  let held: readonly T[] = [];
+  /**
+   * What was emitted before anybody subscribed — APPENDED, never rebuilt.
+   *
+   * <p>This is the one array in this file that is mutated, and the reason is a measurement.
+   * `held = [...held, value]` copies the whole buffer on every event, so a child writing n lines
+   * that nobody reads costs O(n²): 130 000 emits took **64.09 s** that way and **0.01 s** with an
+   * append. A caller that only wants stdout never subscribes to `onLine`, so every line of every
+   * such call paid it — and `coai-mcp --log`, whose 4.9 MB arrive in 368 ms, then took **19.7 s** to
+   * reach `close`. That is past the 8-second cap in `capture`, which answers `(-1, '')` and throws
+   * the payload away, which is why the Review rounds page showed no findings and no decisions at
+   * all: three separate complaints, one copy.</p>
+   *
+   * <p>`coding-style.md` forbids mutating what a CALLER can see. Nothing can see this one: it is
+   * private to the closure, never returned, never passed to a listener — the drain hands the array
+   * away and puts a fresh one here, so the only mutation left is the append itself, which is what
+   * every accumulator in this extension already does. The values themselves are never touched.</p>
+   */
+  let held: T[] = [];
   let opened = false;
 
   return {
     emit(value: T): void {
       if (!opened) {
-        held = [...held, value];
+        held.push(value);
         return;
       }
       for (const listener of listeners) {
@@ -172,6 +189,9 @@ function replayingFan<T>(): { emit(value: T): void; on(listener: (value: T) => v
     on(listener: (value: T) => void): Unsubscribe {
       opened = true;
       listeners = [...listeners, listener];
+      // Swapped for a fresh array rather than emptied, so the drain costs one reference and not a
+      // shift of every element — and it is taken BEFORE the loop, so a listener that emits while it
+      // is being replayed to cannot see a half-drained buffer.
       const pending = held;
       held = [];
       for (const value of pending) {
