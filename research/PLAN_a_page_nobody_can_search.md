@@ -1,11 +1,40 @@
 # PLAN — a page nobody can search
 
-> Status: **plan only, nothing implemented yet.** Kind: **bug**. Scope: two webview panels —
-> `src_vs_code/src/chatPanel.ts`, `roundsLogPanel.ts`. Origin:
-> [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entry 14 (accepted for both surfaces).
+> Status: **IMPLEMENTED, 2026-09-09.** Kind: **bug**. Shipped in extension 0.31.19, pull request #154.
+> Scope as built: THREE webview panels — `src_vs_code/src/chatPanel.ts`, `roundsLogPanel.ts`,
+> `helpPanel.ts`. Origin: [BUGS_2026-09-09.md](../todo/BUGS_2026-09-09.md), entry 14.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_rounds_log_view.md](../research/PLAN_rounds_log_view.md).
+> Related docs: [module_extension.md](module_extension.md) — *Every page can be searched* — and
+> [PLAN_rounds_log_view.md](PLAN_rounds_log_view.md).
+
+## What shipped differently
+
+1. **The help page is IN, not optional.** The draft left it out because that page has a search box of
+   its own. It is included because the test is a DISCOVERY — it walks `src/` for every
+   `createWebviewPanel(` call rather than naming files, the doctrine `theLogRefusesToOpen.test.ts`
+   states — and a discovery that carries an exception for one file becomes the hand-written list it
+   exists to replace. The find bar is chrome ABOVE the webview, so the help page's own box is not
+   displaced.
+2. **The draft's test premise was false.** It said `chatPanel.test.ts` already fakes
+   `createWebviewPanel`; it does not — that file tests the pure registry `chatPanels.ts` and never
+   imports `vscode`. Every panel owner imports `vscode`, so none can be called in this suite; the test
+   is a structural source scan, the idiom of `theLogRefusesToOpen.test.ts:134-172`.
+3. **The code round rewrote that test, and it was right to.** The first version matched
+   `enableFindWidget: true` anywhere in a call, and three reviewers independently pointed out that a
+   string literal, a comment, or an object one level down would satisfy it while the call VS Code
+   receives had no such option — the guard staying green over exactly the dead Ctrl+F it was written
+   for. It now blanks comments, strings and regular expressions first (which is also what makes the
+   balanced-parenthesis cut of the arguments safe: a `)` inside a title can no longer close the
+   count), requires the option as a TOP-LEVEL property exactly once with a literal `true`, refuses a
+   spread among those properties, and walks `.tsx`/`.mts`/`.cts` as well. A second test drives all
+   seven evasions and both formattings through the same code.
+4. **Watched red twice** — once against the unfixed tree, and again after the rewrite by removing the
+   option from `helpPanel.ts` (`helpPanel.ts: this page cannot be searched`).
+
+## The open tail
+
+Manual verification was on Windows. **The macOS shortcut (Cmd+F) and macOS focus behaviour are not
+verified**, and were not claimed.
 
 ## The symptom
 
@@ -72,6 +101,6 @@ only when the whole ritual has run — not when the code works.
 ## Parallelism
 
 Owns one line each in `chatPanel.ts` and `roundsLogPanel.ts`. **Tiny — land it first in its lane**,
-because [PLAN_a_conversation_survives_a_reload.md](PLAN_a_conversation_survives_a_reload.md) and
-[PLAN_the_tab_wears_an_icon.md](PLAN_the_tab_wears_an_icon.md) edit the same `createWebviewPanel`
+because [PLAN_a_conversation_survives_a_reload.md](../todo/PLAN_a_conversation_survives_a_reload.md) and
+[PLAN_the_tab_wears_an_icon.md](../todo/PLAN_the_tab_wears_an_icon.md) edit the same `createWebviewPanel`
 call afterwards.

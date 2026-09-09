@@ -99,6 +99,6 @@ only when the whole ritual has run — not when the code works.
 
 Owns `chatPanel.ts` (the creation call and a serializer), `chatPanels.ts`, `extension.ts`
 (registration). **Does not touch `chatPage.ts`.** Queue it after
-[PLAN_a_page_nobody_can_search.md](PLAN_a_page_nobody_can_search.md) and before or after
+[PLAN_a_page_nobody_can_search.md](../research/PLAN_a_page_nobody_can_search.md) and before or after
 [PLAN_the_tab_wears_an_icon.md](PLAN_the_tab_wears_an_icon.md) — all three edit the same
 `createWebviewPanel` call, so they are sequenced in one lane, not parallel.

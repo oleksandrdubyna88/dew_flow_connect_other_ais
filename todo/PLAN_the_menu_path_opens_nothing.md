@@ -1,12 +1,37 @@
 # PLAN — the menu path opens the console instead of a tab
 
-> Status: **plan only, nothing implemented yet — and step 1 may close it without code.** Kind:
-> **bug (unconfirmed)**. Scope: the context-menu trigger — `src_vs_code/src/chatCommand.ts`,
-> `chatTrigger.ts`, `package.json` (`menus.webview/context`). Origin:
-> [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entry 10.
+> Status: **open — the CODE half of step 1 is done and finds no defect; the half only a person can do
+> is outstanding.** Kind: **bug (unconfirmed)**. Scope: the context-menu trigger —
+> `src_vs_code/src/chatCommand.ts`, `chatTrigger.ts`, `package.json` (`menus.webview/context`).
+> Origin: [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entry 10.
 >
 > Related docs: [module_extension.md](../research/module_extension.md),
 > [PLAN_chat_with_other_ais.md](../research/PLAN_chat_with_other_ais.md).
+
+## Step 1, the half that can be answered from the code — done 2026-09-09
+
+**The Output console in the screenshot cannot be ours.** This extension creates no output channel at
+all: `createOutputChannel` appears nowhere in `src_vs_code/src`. Nothing this product does can open
+one, so the `COAI probe` channel belongs to the probe extension whose menu item sits one line below
+ours — which is what the plan already suspected, now established rather than inferred.
+
+**The menu path cannot end silently either.** `chatWithOtherAi` has five early returns before
+`panels.open`, and every one of them raises a warning notification first: no model ready
+(`ready.refusal`), no matching Claude Code session tab, an empty passage (*"Nothing to explain — copy
+the text first."* — the one specific to this door, because the menu reads the clipboard as-is rather
+than capturing), a missing CLI executable, and a refused Team-server sign-in. So pressing OUR item
+produces either a chat tab or a notification saying why not. It cannot produce a console, and it
+cannot produce nothing.
+
+**The wiring is present and correctly scoped.** `package.json` contributes exactly one
+`webview/context` item, `coai.chatWithOtherAi` under `when: webviewId == 'claudeVSCodePanel'`, and the
+keybinding `ctrl+alt+a` under `activeWebviewPanelId == 'claudeVSCodePanel'` invokes the same command.
+
+**What is left, and only a person can do it:** disable the `COAI probe` extension, right-click in the
+Claude Code panel, press *Chat with other AI*, and record what happens. With `chatAutoSend` at `never`
+the expected outcome is a chat tab that is FILLED and waiting for Enter — not a sent turn. If that is
+what happens, this plan closes as *not a bug*, is promoted as a record, and the recommendation is to
+uninstall or rename the probe so the two items cannot sit side by side again.
 
 ## The symptom
 
