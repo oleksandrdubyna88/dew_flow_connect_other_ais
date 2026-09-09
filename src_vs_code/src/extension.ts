@@ -3,7 +3,8 @@ import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { ChatPanels } from './chatPanels';
-import { chatWithOtherAi } from './chatCommand';
+import { chatWithOtherAi, rememberChatsIn, restoreConversation } from './chatCommand';
+import { ChatTabMemory } from './chatTabs';
 import { openLedger, reconcile } from './chatOrphans';
 import { coaiDataDir } from './dataDir';
 import { installFailureHint, SingleFlight } from './coaiInstall';
@@ -116,6 +117,17 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // One registry per window: a conversation belongs to a Claude Code tab, and tabs are per window.
   const chatPanels = new ChatPanels();
+  // Where conversations are kept so a window reload does not empty every chat tab. `workspaceState`
+  // rather than `globalState`, which everything else here uses: a setting belongs to the person and
+  // is shared by every window of the profile, but a chat tab belongs to THIS workspace, and offering
+  // one window's conversations to another is the namesake defect wearing a different hat.
+  const chatTabMemory = new ChatTabMemory(context.workspaceState);
+  rememberChatsIn(chatTabMemory);
+  // A record is kept when a tab CLOSES as well as when it is reloaded, because a disposal cannot tell
+  // the two apart — VS Code disposes every panel on reload too, and deleting on disposal would erase
+  // the transcript at exactly the moment it is needed. A closed tab is simply never restored: VS Code
+  // only deserializes panels that were open. So the store is bounded by this sweep instead.
+  chatTabMemory.prune();
   // Bound once, and never asked for again: an extension host has one storage directory for its
   // whole life, and threading it through six functions paired a per-call path with a module-level
   // list of children — two things that must agree, with nothing making them.
@@ -166,6 +178,25 @@ export function activate(context: vscode.ExtensionContext): void {
     // Deactivation is not a tab closing: nobody has told VS Code about these panels, so both the
     // panel and the vendor process behind it have to be ended here or they outlive the extension.
     { dispose: () => chatPanels.closeAll() },
+    // How a chat tab comes back after a window reload. VS Code hands back the panel and whatever the
+    // page saved with `setState` — here, the conversation's own id — and the transcript is looked up
+    // by that. A panel whose conversation is not in the store is disposed rather than left as an
+    // empty tab pretending to be one: the record can have been pruned, or written by a build that
+    // stored a different shape.
+    vscode.window.registerWebviewPanelSerializer('coaiChat', {
+      deserializeWebviewPanel: (panel: vscode.WebviewPanel, state: unknown) => {
+        const id = (state as { id?: unknown } | null)?.id;
+        const saved = typeof id === 'string' ? chatTabMemory.saved(id) : undefined;
+        if (saved === undefined) {
+          panel.dispose();
+
+          return Promise.resolve();
+        }
+        restoreConversation(chatPanels, panel, saved, context.extensionUri);
+
+        return Promise.resolve();
+      },
+    }),
     // Both doors repaint. The panel's own button used to be the only path that did — it awaits
     // the command and then renders — so an update started from THIS menu left the Server section
     // showing the version it had replaced, which is the very symptom the button was fixed for.

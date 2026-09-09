@@ -91,12 +91,18 @@ export interface ChatPushState {
  *
  * @param known whether a model id the page asks for is one this conversation was actually offered
  * @param extensionUri where this extension was installed — the only way to name a file it ships
+ * @param restored the panel VS Code handed back after a window reload, for the serializer to fill.
+ *   Absent for a tab somebody opened, which is the ordinary case. It exists so that a RESTORED tab
+ *   is built here and nowhere else: the icon, the message wiring, the disposal and the zoom hook are
+ *   all set up in this one function, and a second place that made a chat panel would have to
+ *   remember every one of them, forever, on every change to any of them.
  */
 export function createChatPanel(
   state: ChatPageState,
   session: DisposableSession,
   hooks: ChatPanelHooks,
   extensionUri: vscode.Uri,
+  restored?: vscode.WebviewPanel,
 ): ChatEntry {
   // The conversation's own identity, created once and never replaced. See the module comment.
   const id = { conversation: state.title };
@@ -106,7 +112,7 @@ export function createChatPanel(
   // model is, one of them frozen. (gemini, the second code round.)
   offered.set(id, new Set(state.models.map((model) => model.id)));
 
-  const panel = vscode.window.createWebviewPanel(
+  const panel = restored ?? vscode.window.createWebviewPanel(
     'coaiChat',
     state.title,
     vscode.ViewColumn.Active,
@@ -119,6 +125,15 @@ export function createChatPanel(
       localResourceRoots: [],
     },
   );
+  if (restored !== undefined) {
+    // A panel VS Code rebuilt runs the page again, so the script has to be allowed again — the
+    // webview half of the options is settable and this is where it is set. The PANEL half is not:
+    // `retainContextWhenHidden` and `enableFindWidget` are fixed at creation and there is no API to
+    // change them afterwards, so whether a restored tab keeps its find bar is the workbench's call
+    // and not ours. Named here rather than pretended about.
+    restored.webview.options = { enableScripts: true, localResourceRoots: [] };
+    restored.title = state.title;
+  }
   // A pair, because a tab icon is workbench chrome and no theme reaches it — `var(--vscode-…)` is
   // unavailable there, and the colour has to be baked into the file. The paths are resolved by
   // `chatTabIcon` rather than spelled out here: a path written twice is a path that goes stale on the

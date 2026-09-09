@@ -32,6 +32,11 @@ margins, its font, its background and the text size you had chosen, all of it, o
 size only appeared when something unrelated happened to push it. Fixed, with a test that fails the
 build if any rule on that page is ever swallowed again.
 
+**Reloading the window no longer throws away your conversations.** Every open chat tab comes back
+with its questions and its answers, and a line saying it was closed by the reload. The model behind it
+is genuinely gone, so nothing is running until you ask again — and that first question carries the
+whole conversation across to a new session, which is said out loud because it is what it costs.
+
 ## Extension 0.31.21 — 2026-09-09
 
 **A chat tab looks like a chat tab.** It wore the same generic icon as everything else in the editor,

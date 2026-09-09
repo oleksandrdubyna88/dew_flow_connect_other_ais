@@ -1,7 +1,9 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
+import { ChatTabMemory, SavedTab, reloadedNote } from './chatTabs';
 import { ChatEntry, ChatPanels } from './chatPanels';
 import { ChatSession } from './chatSession';
 import { ChatMessage, ChatModelChoice } from './chatPage';
@@ -91,9 +93,41 @@ interface Thread extends ChatMemory {
    * chain is here, mirroring the one inside `cliChatSession`. (gemini, the code round.)</p>
    */
   turns: Promise<unknown>;
+  /**
+   * This conversation's id in the store, so what it is holding can be written down as it changes.
+   *
+   * <p>Not the entry's identity object — that one dies with the window. This is the string the page
+   * hands back to the serializer after a reload.</p>
+   */
+  readonly saveId: string;
+  /** The tab's heading, kept here because what is written down has to name the conversation. */
+  readonly title: string;
+  /**
+   * A conversation restored from a reload, whose vendor process does not exist yet.
+   *
+   * <p>Nothing is started when a tab comes back: the process behind it died with the window, a
+   * restored tab may never be spoken to again, and starting one per tab at every reload would spawn
+   * a CLI for each of them for nothing. The first question opens the session and hands it the whole
+   * transcript through `carry`, which is the handover a model switch already ships.</p>
+   */
+  reopen: boolean;
 }
 
 const threads = new WeakMap<object, Thread>();
+
+/**
+ * Where conversations are kept so a window reload does not empty them. Set once, in `activate`.
+ *
+ * <p>A module-level handle rather than a parameter on six signatures: the command has no context and
+ * neither do the callbacks a panel is wired with, and threading a store through both to reach two
+ * call sites would be a wide change for a narrow need. It is absent only in tests of this file's
+ * pure neighbours, and every use is guarded.</p>
+ */
+let memory: ChatTabMemory | undefined;
+
+export function rememberChatsIn(store: ChatTabMemory): void {
+  memory = store;
+}
 
 /** The tabs, narrowed to what `sessionKey` judges on. */
 function snapshots(): { active: TabSnapshot | undefined; all: TabSnapshot[] } {
@@ -162,6 +196,16 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
     modelId: thread.modelId,
     queued,
   });
+  // The one place the transcript reaches a page is the one place it is written down. A record per
+  // push is a record that cannot be a turn behind, and the store is small: a title, a passage, a
+  // model id and the messages.
+  memory?.remember({
+    id: thread.saveId,
+    title: thread.title,
+    passage: thread.passage,
+    modelId: thread.modelId,
+    messages: thread.messages,
+  });
 }
 
 /**
@@ -204,6 +248,47 @@ function asText(reason: unknown): string {
 }
 
 /**
+ * Give a restored conversation the process it has not got, or say why it cannot have one.
+ *
+ * <p>Returns an empty string when there is nothing to do, which is every ordinary turn. A refusal is
+ * the sentence the page shows: the model this conversation was having may no longer be configured,
+ * its CLI may be gone, a Team server may have signed out. All three are the same three checks the
+ * command makes before opening a tab at all — asked again here, because a reload can be a week and
+ * a machine rebuild away from the conversation it is restoring.</p>
+ */
+async function reopened(thread: Thread): Promise<string> {
+  if (!thread.reopen) {
+    return '';
+  }
+  const config = vscode.workspace.getConfiguration('coai');
+  const ready = readyToChat(config, thread.modelId);
+  if (!ready.ok) {
+    return ready.refusal;
+  }
+  const cli = await cliFor(ready.vendor);
+  if (cli.refusal.length > 0) {
+    return cli.refusal;
+  }
+  const remote = isRemote(ready.vendor) ? await remoteFor(ready.vendor) : { session: undefined, refusal: '' };
+  if (remote.refusal.length > 0) {
+    return remote.refusal;
+  }
+
+  const opened = started(ready.vendor, cli.resolved, remote.session);
+  thread.session.dispose();
+  thread.home.release();
+  thread.session = opened.session;
+  thread.home = opened.home;
+  thread.modelId = ready.modelId;
+  // The WHOLE memory object, not one field of it: a switch that set `forgetful` and forgot `asked`
+  // is a defect this file has already had once, and the type is what stops it happening twice.
+  Object.assign(thread, memoryOf(ready.vendor));
+  thread.reopen = false;
+
+  return '';
+}
+
+/**
  * One turn, start to finish.
  *
  * <p>The question is appended BEFORE the turn is sent, so the page shows it while the model is
@@ -212,6 +297,16 @@ function asText(reason: unknown): string {
 async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   const thread = threads.get(entry.id);
   if (thread === undefined) {
+    return;
+  }
+  // A conversation that came back from a reload has no process yet. It is opened HERE, on the first
+  // question and not before, so a window with five restored tabs starts nothing until one of them is
+  // spoken to — and the transcript is already in `carry`, so the model that answers is handed the
+  // whole thread exactly as it is after a model switch.
+  const refused = await reopened(thread);
+  if (refused.length > 0) {
+    show(entry, false, refused);
+
     return;
   }
   thread.messages = [...thread.messages, { role: 'you', text }];
@@ -545,8 +640,13 @@ function newConversation(
 ): ChatEntry {
   const first = started(ready.vendor, resolved, remote);
   const session = first.session;
+  // Minted here, once, and never seen by anybody: it goes into the page, comes back from the page
+  // after a reload, and names this conversation in the store. A title could not — two Claude Code
+  // sessions can share one, which is the defect `chatPanels.ts` was keyed by identity to avoid.
+  const saveId = randomUUID();
   const entry = createChatPanel(
     {
+      id: saveId,
       title: state.title,
       passage: state.passage,
       messages: [],
@@ -559,7 +659,42 @@ function newConversation(
       uiScale: chatUiScale(),
     },
     session,
-    {
+    conversationHooks(panels),
+    extensionUri,
+  );
+  // Recorded against the entry's OWN id, which `createChatPanel` made — not against the tab key,
+  // which can move under a live conversation. That distinction cost a whole code round.
+  threads.set(entry.id, {
+    session,
+    home: first.home,
+    passage: state.passage,
+    models: ready.models,
+    modelId: ready.modelId,
+    running: false,
+    // Counted from 1 by the first turn, so 0 is "this conversation has not asked anything yet" and
+    // can never be mistaken for a turn a stop could name.
+    turn: 0,
+    ...memoryOf(ready.vendor),
+    carry: [],
+    messages: [],
+    turns: Promise.resolve(),
+    saveId,
+    title: state.title,
+    reopen: false,
+  });
+
+  return entry;
+}
+
+/**
+ * Everything a chat page can ask of the host, for a conversation that is opened OR restored.
+ *
+ * <p>One object built in one place. Both paths create a panel, and a second copy of these six
+ * callbacks would be six chances for a restored tab to stop stopping turns, or to leak a session on
+ * close, the day one of them changes.</p>
+ */
+function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPanel>[2] {
+  return {
       onSend: (id, text) => {
         const found = panels.entryOf(id);
         if (found !== undefined) {
@@ -611,28 +746,78 @@ function newConversation(
       onPageError: (_id, message) => {
         void vscode.window.showWarningMessage(`The chat page reported: ${message}`);
       },
-    },
-    extensionUri,
-  );
-  // Recorded against the entry's OWN id, which `createChatPanel` made — not against the tab key,
-  // which can move under a live conversation. That distinction cost a whole code round.
-  threads.set(entry.id, {
-    session,
-    home: first.home,
-    passage: state.passage,
-    models: ready.models,
-    modelId: ready.modelId,
-    running: false,
-    // Counted from 1 by the first turn, so 0 is "this conversation has not asked anything yet" and
-    // can never be mistaken for a turn a stop could name.
-    turn: 0,
-    ...memoryOf(ready.vendor),
-    carry: [],
-    messages: [],
-    turns: Promise.resolve(),
-  });
+  };
+}
 
-  return entry;
+/**
+ * Bring one conversation back into a panel VS Code has just restored.
+ *
+ * <p>No process is started. The transcript is rendered, the composer works, and the session is opened
+ * by the first question — see `reopened`. The panel is built by `createChatPanel` like every other
+ * one, so the icon, the message wiring, the zoom hook and the disposal are the same code and cannot
+ * drift apart.</p>
+ */
+export function restoreConversation(
+  panels: ChatPanels,
+  panel: vscode.WebviewPanel,
+  saved: SavedTab,
+  extensionUri: vscode.Uri,
+): void {
+  const config = vscode.workspace.getConfiguration('coai');
+  const ready = readyToChat(config, saved.modelId);
+  // A dead session, and the page can never reach it: `reopened` replaces it before the first turn is
+  // sent. It answers rather than throws, because a `ChatSession` that rejects is a contract this
+  // codebase does not have — every failure here is a sentence.
+  const closed: ChatSession = {
+    send: () => Promise.resolve({ ok: false, failure: reloadedNote(saved.modelId) }),
+    stop: () => undefined,
+    dispose: () => undefined,
+  };
+  const entry = createChatPanel(
+    {
+      id: saved.id,
+      title: saved.title,
+      passage: saved.passage,
+      messages: saved.messages,
+      models: ready.ok ? ready.models : [],
+      modelId: saved.modelId,
+      running: false,
+      capped: false,
+      failure: ready.ok ? reloadedNote(saved.modelId) : ready.refusal,
+      draft: '',
+      uiScale: chatUiScale(),
+    },
+    closed,
+    conversationHooks(panels),
+    extensionUri,
+    panel,
+  );
+  threads.set(entry.id, {
+    session: closed,
+    home: { dir: '', release: () => undefined },
+    passage: saved.passage,
+    models: ready.ok ? ready.models : [],
+    modelId: saved.modelId,
+    running: false,
+    turn: 0,
+    // Replaced by `reopened` with the rules of whatever model actually answers — this conversation
+    // asks nothing until then, so neither field is consulted before it is right. Written out rather
+    // than taken from `memoryOf`, which needs a vendor, and a restored tab has none yet.
+    forgetful: false,
+    asked: 0,
+    // The whole transcript, ready to travel with the first question — the same handover a model
+    // switch performs, and the reason nothing has to resume a vendor thread.
+    carry: [...saved.messages],
+    messages: [...saved.messages],
+    turns: Promise.resolve(),
+    saveId: saved.id,
+    title: saved.title,
+    reopen: true,
+  });
+  // Its own key: the tab this conversation was opened FROM may be gone, may be a different object,
+  // or may already hold a live conversation of its own. A restored tab is its own thing until
+  // somebody closes it.
+  panels.open({}, saved.title, () => entry);
 }
 
 /**

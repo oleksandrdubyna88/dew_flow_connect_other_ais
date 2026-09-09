@@ -46,6 +46,15 @@ export interface ChatModelChoice {
 }
 
 export interface ChatPageState {
+  /**
+   * This conversation's own id, minted where the tab is made and never shown to anybody.
+   *
+   * <p>The page hands it straight back through `setState`, which is the only thing VS Code preserves
+   * about a webview across a window reload — so it is the whole of how a restored tab knows WHICH
+   * conversation it is. A title cannot do that job: two Claude Code sessions can both be called
+   * `main`, which is why `chatPanels.ts` is keyed by object identity rather than by name.</p>
+   */
+  readonly id: string;
   /** The Claude Code session this tab belongs to — its label, shown as the heading. */
   readonly title: string;
   readonly passage: string;
@@ -281,6 +290,10 @@ export function shouldFollow(
 function chatScript(state: ChatPageState, regions: Regions): string {
   return `(function () {
   const vscode = acquireVsCodeApi();
+  // The one thing VS Code keeps about this page across a window reload, and it hands it back to
+  // deserializeWebviewPanel. It is how a restored tab says which conversation it is — a title could
+  // not, because two Claude Code sessions can share one.
+  vscode.setState(${jsonForScript({ id: state.id })});
   let captions = ${jsonForScript(Object.fromEntries(state.models.map((model) => [model.id, model.caption])))};
   // The webview swallows a thrown error silently, and a page that stops responding to Enter with no
   // sign of why is the defect this trap exists to name. Same shape as the rounds log's.

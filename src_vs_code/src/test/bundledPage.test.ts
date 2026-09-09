@@ -277,6 +277,7 @@ function bundledChatPage(): { bundle: string; html: string } {
   };
   const html = module_.chatPageHtml(
     {
+      id: 'conversation-1',
       title: 'привет',
       passage: 'The reviewers are read-only.',
       messages: [{ role: 'model', text: 'because the worktree is pinned' }],
@@ -416,11 +417,17 @@ test('the chat page script the bundle produces parses and runs', () => {
   };
   const window_: Record<string, unknown> = { addEventListener() {} };
 
+  // `setState` as well as `postMessage`: the page hands VS Code its conversation id the moment it
+  // loads, so a fake without that method is a fake the real page cannot run against — which is what
+  // this test caught the day the id was added.
+  let kept: unknown;
   assert.doesNotThrow(
     () => new Function('document', 'window', 'acquireVsCodeApi', body)(
-      document_, window_, () => ({ postMessage() {} })),
+      document_, window_, () => ({ postMessage() {}, setState(value: unknown) { kept = value; } })),
     'the chat page script threw on its first render',
   );
+  assert.deepEqual(kept, { id: 'conversation-1' },
+    'the page did not tell VS Code which conversation it is, so a reload could not restore it');
   // The trap must be installed, not merely written: a webview swallows a thrown error, and a page
   // that stops answering Enter with no sign of why is the defect it exists to name.
   assert.strictEqual(typeof window_['onerror'], 'function', 'the page installed no error trap');

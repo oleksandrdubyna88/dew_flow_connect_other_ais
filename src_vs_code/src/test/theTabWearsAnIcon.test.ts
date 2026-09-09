@@ -99,14 +99,31 @@ test('a panel restored after a reload must be built the same way', () => {
       return entry.name.endsWith('.ts') ? [full] : [];
     });
 
-  for (const file of walk(root)) {
+  const files = walk(root);
+  // Whoever builds a chat panel — `createChatPanel` itself, and anything that calls it. A serializer
+  // may reach the builder through one of those rather than call it directly, which is what
+  // `extension.ts` does; what it may not do is make a panel of its own, because the builder is the
+  // only place that sets the icon, the message wiring and the disposal.
+  const builders = files
+    .filter((file) => /createChatPanel\(/.test(fs.readFileSync(file, 'utf8')))
+    .map((file) => path.basename(file, '.ts'));
+
+  assert.ok(builders.length > 0, 'nothing builds a chat panel any more, so this scan guards nothing');
+
+  for (const file of files) {
     const source = fs.readFileSync(file, 'utf8');
     if (!source.includes('registerWebviewPanelSerializer')) {
       continue;
     }
 
-    assert.match(source, /createChatPanel/,
-      `${path.basename(file)} restores a chat panel without building it the way an opened one is built`);
+    assert.ok(
+      builders.some((builder) => source.includes(`'./${builder}'`)),
+      `${path.basename(file)} restores a chat panel without going through the one place that builds one`,
+    );
+    assert.doesNotMatch(
+      source, /createWebviewPanel\(/,
+      `${path.basename(file)} makes a chat panel of its own, so a restored tab would wear no icon`,
+    );
   }
 });
 
