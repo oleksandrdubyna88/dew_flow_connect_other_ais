@@ -252,7 +252,7 @@ The build split recorded that only `antigravity` had an adapter, because `claude
 schema differs and `codex exec` was believed to have no multi-turn stdin. The owner asked for all
 three on 2026-09-08 and the belief was then MEASURED: `codex` holds a conversation through session
 resume, and `claude` holds one exactly as `agy` does — and faster. That work is its own plan,
-[PLAN_three_chat_adapters.md](PLAN_three_chat_adapters.md), because it changes the session’s shape
+[PLAN_three_chat_adapters.md](../research/PLAN_three_chat_adapters.md), because it changes the session’s shape
 rather than this feature’s surface. Until it lands, a non-`antigravity` row is refused by name.
 
 ### Settings
