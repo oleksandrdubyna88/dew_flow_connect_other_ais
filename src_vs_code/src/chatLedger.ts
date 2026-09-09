@@ -7,17 +7,24 @@
  * behind is an authenticated process nobody can see and nobody will stop.</p>
  *
  * <p>So every child is written down as it starts and struck out as it ends, and the next activation
- * reads what is left. In the ordinary case the file is empty and the whole mechanism costs nothing.</p>
+ * reads what is left. In the ordinary case there is nothing to read.</p>
+ *
+ * <p><b>One ledger per extension host, named after it.</b> `globalStorageUri` is SHARED by every VS
+ * Code window, so a single file would mean one window's activation reading another window's live
+ * children — and, since those children really are this extension's, verifying them as its own and
+ * killing them. A person with two windows would have watched a working conversation die when they
+ * opened the second. Raised as Blocking by the gate, and it is why the owner's pid is in the file
+ * NAME: a window only ever reads files whose owner is gone.</p>
  *
  * <p><b>Killing by pid is the dangerous part, and this module exists to make it safe.</b> The
  * launcher's own comment says it: Windows reuses pids, so a recorded number can belong to somebody
  * else's process by the time anybody reads it — killing it would be worse than the orphan. A record
  * is therefore three facts, and all three must still hold: the pid, the image it was, and WHEN it
- * started. A reused pid is a different program, or the same program started at a different time, and
- * either mismatch is enough to leave it alone.</p>
+ * started. The check and the kill happen inside ONE command, so almost nothing can happen between
+ * them; a separate query and kill leaves a window in which the pid can be handed on.</p>
  *
- * <p>Pure, so those rules are tests rather than claims — the file, the process query and the kill
- * are somebody else's job.</p>
+ * <p>Pure, so those rules are tests rather than claims — the files, the query and the kill are
+ * somebody else's job.</p>
  */
 
 /** One child, as the ledger remembers it. */
@@ -29,27 +36,44 @@ export interface ChildRecord {
   readonly startedMs: number;
 }
 
-/** What the operating system says about a pid NOW, or nothing when no such process exists. */
-export interface LivingProcess {
-  readonly image: string;
-  readonly createdMs: number;
-}
-
 /**
  * How far apart the two clocks may be and still mean the same start.
  *
- * <p>Ours is taken just before `spawn` returns and the OS's is taken when the process was created,
- * so the honest difference is milliseconds. Ten seconds is slack for a machine under load and a
- * clock that ticks between the two readings; it is nowhere near long enough for a pid to be recycled
- * onto a program of the same name, which is the only thing this tolerance risks.</p>
+ * <p>Ours is taken as `spawn` returns and the OS's is the process's creation time, so the honest
+ * difference is milliseconds. Both are absolute instants recorded once, so a clock the machine
+ * changes afterwards moves neither. Ten seconds is slack for a machine under load; it is nowhere
+ * near long enough for a pid to be recycled onto a program of the same name.</p>
  */
 export const NEAR_ENOUGH_MS = 10_000;
+
+/**
+ * How long an entry nobody could resolve is carried forward.
+ *
+ * <p>An activation that cannot ask the operating system anything — no PowerShell, a refusal, a
+ * machine that is not Windows — must not DELETE the record, or the orphan it could not verify
+ * becomes one nobody will ever find. So it is kept and retried. A week is the bound on that: past
+ * it, the pid means nothing on any machine that has rebooted, and the file would otherwise grow for
+ * ever. (codex, the plan round.)</p>
+ */
+export const FORGET_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** The image name a path means, for comparing with what the OS reports. */
 export function imageOf(executable: string): string {
   const tail = executable.split(/[\\/]/).pop() ?? '';
 
   return tail.toLowerCase();
+}
+
+/**
+ * An image name safe to put in a command.
+ *
+ * <p>It comes from a reviewer's `executablePath`, which is a person's own setting and therefore
+ * their own text. The verify-and-kill command carries it, so a name with a quote in it would be a
+ * quote in a PowerShell script. A file name has no business containing one; anything that does is
+ * not compared, and its record is left alone.</p>
+ */
+export function safeImage(image: string): boolean {
+  return /^[A-Za-z0-9](?:[A-Za-z0-9._+-]{0,120})$/.test(image);
 }
 
 /** The ledger with this child in it, and no duplicate pid — a reused number replaces the old row. */
@@ -62,20 +86,19 @@ export function forgotten(entries: readonly ChildRecord[], pid: number): readonl
   return entries.filter((known) => known.pid !== pid);
 }
 
-/**
- * Is the process now holding this pid the one we started?
- *
- * <p>Three facts, all of them required. A pid that nothing holds is already gone. A pid held by
- * another program is a recycled number. A pid held by the same program but started at another time
- * is a different run of it — somebody's own `claude`, most likely, which is precisely the thing that
- * must not be killed.</p>
- */
-export function isOurs(record: ChildRecord, alive: LivingProcess | undefined): boolean {
-  if (alive === undefined) {
-    return false;
-  }
+/** Old enough that its pid means nothing any more, whatever the operating system says. */
+export function tooOld(record: ChildRecord, now: number): boolean {
+  return now - record.startedMs > FORGET_AFTER_MS;
+}
 
-  return alive.image === record.image && Math.abs(alive.createdMs - record.startedMs) <= NEAR_ENOUGH_MS;
+/**
+ * Which records are worth asking the operating system about.
+ *
+ * <p>Not the ones too old to mean anything, and not the ones whose image could not appear in a
+ * command. Everything else is a candidate — the answer decides, not this.</p>
+ */
+export function worthAsking(entries: readonly ChildRecord[], now: number): readonly ChildRecord[] {
+  return entries.filter((record) => !tooOld(record, now) && safeImage(record.image));
 }
 
 /**
@@ -83,7 +106,8 @@ export function isOurs(record: ChildRecord, alive: LivingProcess | undefined): b
  *
  * <p>Junk-safe by design: this file is read at activation, and a half-written line — the shape a
  * force-kill leaves — must not stop an extension from starting. Anything unreadable is no ledger,
- * which loses at most the chance to tidy up one crash.</p>
+ * which loses at most the chance to tidy up one crash. A truncated row cannot half-match either:
+ * every one of the three facts is required, so half a record is no record.</p>
  */
 export function parseLedger(text: string): readonly ChildRecord[] {
   let value: unknown;
@@ -122,35 +146,75 @@ export function ledgerText(entries: readonly ChildRecord[]): string {
   return JSON.stringify(entries);
 }
 
-/**
- * What to ask Windows about a pid.
- *
- * <p>Two facts and nothing else, formatted by the shell so this side parses one line rather than a
- * JSON dialect that changes between PowerShell versions. `Get-CimInstance` rather than
- * `Get-Process`, because `Get-Process` reports a name with no extension and can throw on a process
- * it may not inspect — and the extension is half of what identifies the image.</p>
- *
- * <p>Measured on this machine: `pwsh.exe|1788944157495`.</p>
- */
-export function livingQuery(pid: number): string {
-  return `$p = Get-CimInstance Win32_Process -Filter "ProcessId=${pid}"; `
-    + 'if ($p) { "$($p.Name)|$([math]::Round(($p.CreationDate.ToUniversalTime() '
-    + "- [datetime]'1970-01-01').TotalMilliseconds))\" }";
+/** What a ledger file is called. The owner's pid is IN the name — see the note at the top. */
+export function ledgerName(ownerPid: number): string {
+  return `chat-children-${ownerPid}.json`;
+}
+
+/** The owner a ledger file belongs to, or 0 when the name is not one of ours. */
+export function ownerOf(fileName: string): number {
+  const found = /^chat-children-([0-9]{1,10})\.json$/.exec(fileName);
+
+  return found === null ? 0 : Number(found[1]);
 }
 
 /**
- * What the query answered, or nothing at all.
+ * The one command that checks and kills, because two commands leave a gap.
  *
- * <p>Nothing covers every unhappy shape on purpose — no such process, a refusal, an error on
- * stderr, a PowerShell that would not start. All of them mean the same thing here: this side cannot
- * prove the pid is ours, so it is left alone. A guard that fails OPEN would kill strangers.</p>
+ * <p>A query followed by a kill is a window in which the verified process can exit and its number be
+ * handed to somebody else — small, and the whole reason this module exists is that small windows
+ * around killing are not acceptable. So the three facts are compared and the tree is ended inside a
+ * single invocation, and the script says which it did.</p>
+ *
+ * <p><b>`taskkill /t`, not `Terminate`</b>: a Windows shim is a tree — `codex` is `codex.cmd` running
+ * `cmd.exe` running node — and ending only the root leaves the CLI that was actually working. The
+ * launcher's own kill has said this since it was written.</p>
+ *
+ * <p><b>`Get-CimInstance`, not `Get-Process`</b>: the latter reports a name with no extension and can
+ * throw on a process it may not inspect, and the extension is half of what identifies an image. The
+ * creation time is converted to epoch milliseconds HERE rather than parsed on the other side, so no
+ * date format, locale or time zone crosses the boundary. Measured on this machine.</p>
  */
-export function parseLiving(text: string): LivingProcess | undefined {
-  const line = text.split(/\r?\n/).map((one) => one.trim()).find((one) => one.includes('|'));
-  const [image, created] = (line ?? '').split('|');
-  const createdMs = Number(created);
+export function verifyAndKill(record: ChildRecord): string {
+  return [
+    `$p = Get-CimInstance Win32_Process -Filter "ProcessId=${record.pid}"`,
+    '$started = if ($p) { [math]::Round(($p.CreationDate.ToUniversalTime() '
+    + "- [datetime]'1970-01-01').TotalMilliseconds) } else { 0 }",
+    `if ($p -and $p.Name -eq '${record.image}' `
+    + `-and [math]::Abs($started - ${record.startedMs}) -le ${NEAR_ENOUGH_MS}) {`,
+    `  taskkill /pid ${record.pid} /t /f | Out-Null`,
+    '  "killed"',
+    '} elseif ($p) { "not ours" } else { "gone" }',
+  ].join('\n');
+}
 
-  return image !== undefined && image.length > 0 && Number.isFinite(createdMs) && createdMs > 0
-    ? { image: image.toLowerCase(), createdMs }
-    : undefined;
+/** What one verify-and-kill came to. Anything unreadable is `unknown` — and `unknown` keeps the row. */
+export type KillOutcome = 'killed' | 'not ours' | 'gone' | 'unknown';
+
+/**
+ * What the command said.
+ *
+ * <p>`unknown` is every unhappy shape — a refusal, an error on stderr, a PowerShell that would not
+ * start, a machine that is not Windows. It kills nothing and, unlike the other three, it does NOT
+ * settle the record: an entry nobody could ask about is retried at the next activation rather than
+ * quietly dropped, because dropping it is how an orphan becomes permanent.</p>
+ */
+export function killOutcome(exitCode: number, output: string): KillOutcome {
+  if (exitCode !== 0) {
+    return 'unknown';
+  }
+  const said = output.toLowerCase();
+  if (said.includes('killed')) {
+    return 'killed';
+  }
+  if (said.includes('not ours')) {
+    return 'not ours';
+  }
+
+  return said.includes('gone') ? 'gone' : 'unknown';
+}
+
+/** A record is settled — struck out — unless nobody could tell what it was. */
+export function settled(outcome: KillOutcome): boolean {
+  return outcome !== 'unknown';
 }

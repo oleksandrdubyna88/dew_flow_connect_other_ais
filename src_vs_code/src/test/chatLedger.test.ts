@@ -2,23 +2,29 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   ChildRecord,
+  FORGET_AFTER_MS,
   NEAR_ENOUGH_MS,
   forgotten,
   imageOf,
-  isOurs,
+  killOutcome,
+  ledgerName,
   ledgerText,
-  livingQuery,
+  ownerOf,
   parseLedger,
-  parseLiving,
   recorded,
+  safeImage,
+  settled,
+  tooOld,
+  verifyAndKill,
+  worthAsking,
 } from '../chatLedger';
 
 /**
  * The ledger that stops a force-killed editor from leaving an authenticated CLI running.
  *
- * <p>Every rule here is about the ONE dangerous thing this feature does: kill a process by a number
- * written down earlier. The launcher's own comment says why that is dangerous — Windows reuses pids
- * — and these are the tests that make it safe.</p>
+ * <p>Every rule here is about the ONE dangerous thing this feature does: end a process that a file
+ * says was ours. The launcher's own comment explains why that is dangerous — a pid is not an
+ * identity and Windows hands used numbers out again — and these are the tests that make it safe.</p>
  */
 
 const ours: ChildRecord = { pid: 4242, image: 'agy.exe', startedMs: 1_700_000_000_000 };
@@ -39,33 +45,41 @@ test('forgetting a pid nobody recorded changes nothing', () => {
   assert.deepStrictEqual([...forgotten([ours], 999)], [ours]);
 });
 
-test('a pid nothing holds is already gone, and is not killed', () => {
-  assert.strictEqual(isOurs(ours, undefined), false);
+test('the ledger is named after the window that owns it, and reads back the same way', () => {
+  // `globalStorageUri` is shared by every VS Code window. One file would mean one window's
+  // activation reading another window's LIVE children — and killing them, because they really are
+  // this extension's. A person with two windows would have watched a working conversation die.
+  assert.strictEqual(ledgerName(9182), 'chat-children-9182.json');
+  assert.strictEqual(ownerOf('chat-children-9182.json'), 9182);
 });
 
-test('a pid held by ANOTHER program is a recycled number, and is left alone', () => {
-  // The whole reason this module exists. Killing it would be worse than the orphan it was meant to
-  // clean up: the number belongs to whatever the operating system handed it to next.
-  assert.strictEqual(isOurs(ours, { image: 'chrome.exe', createdMs: ours.startedMs }), false);
+test('a file that is not one of ours has no owner, so nothing reads it', () => {
+  for (const stranger of ['settings.json', 'chat-children.json', 'chat-children-.json', 'chat-children-x.json', '']) {
+    assert.strictEqual(ownerOf(stranger), 0, `it claimed ownership of: ${stranger}`);
+  }
 });
 
-test('the same program started at ANOTHER time is somebody else’s run of it', () => {
-  // This is the case that would hurt most: a person's own `agy`, running their own work, killed by
-  // an extension tidying up after a crash it had nothing to do with.
-  assert.strictEqual(
-    isOurs(ours, { image: 'agy.exe', createdMs: ours.startedMs + NEAR_ENOUGH_MS + 1 }),
-    false,
-  );
-  assert.strictEqual(
-    isOurs(ours, { image: 'agy.exe', createdMs: ours.startedMs - NEAR_ENOUGH_MS - 1 }),
-    false,
-  );
+test('a record too old to mean anything is not asked about at all', () => {
+  // Past a week the number means nothing on any machine that has rebooted, and a file nobody can
+  // resolve would otherwise grow for ever.
+  const now = ours.startedMs + FORGET_AFTER_MS + 1;
+
+  assert.strictEqual(tooOld(ours, now), true);
+  assert.strictEqual(tooOld(ours, ours.startedMs + FORGET_AFTER_MS - 1), false);
+  assert.deepStrictEqual([...worthAsking([ours], now)], []);
+  assert.deepStrictEqual([...worthAsking([ours], ours.startedMs + 1000)], [ours]);
 });
 
-test('the same program at the same moment is ours, within a tolerance for two clocks', () => {
-  assert.strictEqual(isOurs(ours, { image: 'agy.exe', createdMs: ours.startedMs }), true);
-  assert.strictEqual(isOurs(ours, { image: 'agy.exe', createdMs: ours.startedMs + 900 }), true);
-  assert.strictEqual(isOurs(ours, { image: 'agy.exe', createdMs: ours.startedMs - 900 }), true);
+test('an image name that could not appear in a command is never put in one', () => {
+  // It comes from a reviewer's `executablePath`, which is a person's own text, and the
+  // verify-and-kill command carries it. A file name has no business holding a quote.
+  for (const bad of ["agy'.exe", 'agy" ; calc', 'a b.exe', 'agy$x', '', '..', "'"]) {
+    assert.strictEqual(safeImage(bad), false, `it would have put this in a script: ${bad}`);
+  }
+  for (const fine of ['agy.exe', 'codex.cmd', 'claude', 'node-22.exe', 'a_b+c.exe']) {
+    assert.strictEqual(safeImage(fine), true, `it refused an ordinary name: ${fine}`);
+  }
+  assert.deepStrictEqual([...worthAsking([{ ...ours, image: "a'b" }], ours.startedMs)], []);
 });
 
 test('an image name is compared as the operating system reports it, whatever path it came from', () => {
@@ -73,6 +87,40 @@ test('an image name is compared as the operating system reports it, whatever pat
   assert.strictEqual(imageOf('/usr/local/bin/claude'), 'claude');
   assert.strictEqual(imageOf('codex.cmd'), 'codex.cmd');
   assert.strictEqual(imageOf(''), '');
+});
+
+test('the command checks all three facts and ends a TREE, in one invocation', () => {
+  // One invocation, because a query followed by a kill is a window in which the verified process can
+  // exit and its number be handed on — and small windows around killing are the thing this module
+  // exists to close. A tree, because a Windows shim is `cmd.exe` running the real program.
+  const command = verifyAndKill(ours);
+
+  assert.match(command, /ProcessId=4242/, 'the pid is not in the query');
+  assert.match(command, /\$p\.Name -eq 'agy\.exe'/, 'the image is not compared');
+  assert.match(command, new RegExp(`Abs\\(\\$started - ${ours.startedMs}\\)`), 'the start time is not compared');
+  assert.match(command, new RegExp(`-le ${NEAR_ENOUGH_MS}`), 'the tolerance is not the documented one');
+  assert.match(command, /taskkill \/pid 4242 \/t \/f/, 'only the top process would be ended');
+  assert.match(command, /Get-CimInstance/, 'Get-Process reports a name with no extension');
+  // The epoch conversion happens in PowerShell, so no date format, locale or time zone crosses over.
+  assert.match(command, /TotalMilliseconds/);
+});
+
+test('the command says which of the three things it did', () => {
+  assert.strictEqual(killOutcome(0, 'killed\r\n'), 'killed');
+  assert.strictEqual(killOutcome(0, 'not ours'), 'not ours');
+  assert.strictEqual(killOutcome(0, 'gone'), 'gone');
+});
+
+test('anything else is unknown — and unknown kills nothing and KEEPS the record', () => {
+  // The direction this whole module errs in. An entry nobody could ask about is retried at the next
+  // activation, because dropping it is how an orphan becomes permanent.
+  for (const [code, said] of [[1, 'killed'], [0, ''], [0, 'Get-CimInstance : access denied'], [0, 'huh']] as const) {
+    assert.strictEqual(killOutcome(code, said), 'unknown', `it read a verdict out of: ${code} / ${said}`);
+  }
+  assert.strictEqual(settled('unknown'), false);
+  for (const outcome of ['killed', 'not ours', 'gone'] as const) {
+    assert.strictEqual(settled(outcome), true);
+  }
 });
 
 test('a ledger a force-kill left half-written is no ledger, not a crash at activation', () => {
@@ -104,24 +152,4 @@ test('what is written is what comes back', () => {
     [...parseLedger(ledgerText(entries))],
     [ours, { pid: 77, image: 'claude.exe', startedMs: 5 }],
   );
-});
-
-test('the question asked of Windows names the pid and returns two facts', () => {
-  const query = livingQuery(4242);
-
-  assert.match(query, /ProcessId=4242/);
-  assert.match(query, /Get-CimInstance/, 'Get-Process reports a name with no extension');
-  assert.match(query, /CreationDate/, 'without the start time a recycled pid is indistinguishable');
-});
-
-test('the answer is read as two facts, and anything else is no answer at all', () => {
-  // Measured on this machine, from the real query: `pwsh.exe|1788944157495`.
-  assert.deepStrictEqual(parseLiving('pwsh.exe|1788944157495'), { image: 'pwsh.exe', createdMs: 1788944157495 });
-  assert.deepStrictEqual(parseLiving('  AGY.EXE|1788944157495  \n'), { image: 'agy.exe', createdMs: 1788944157495 });
-
-  // Every unhappy shape means the same thing: this side cannot prove the pid is ours, so nothing is
-  // killed. A guard that failed OPEN would kill strangers.
-  for (const nothing of ['', 'agy.exe', '|123', 'agy.exe|', 'agy.exe|soon', 'agy.exe|0', 'Get-CimInstance : failed']) {
-    assert.strictEqual(parseLiving(nothing), undefined, `it read a process out of: ${nothing}`);
-  }
 });

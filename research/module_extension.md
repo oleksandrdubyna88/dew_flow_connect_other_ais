@@ -195,6 +195,14 @@ that is an authenticated process nobody can see and nobody will stop.
 So every child is written down as it starts and struck out as it ends, and the next activation reads
 what is left. In the ordinary case the file is empty and the whole mechanism costs nothing.
 
+**One ledger file per extension host, named after it.** `globalStorageUri` is shared by every VS
+Code window. A single file meant one window reading another window’s LIVE children and killing them
+as orphans — they really are this extension’s, so every identity check would have passed — and a
+person with two windows would have watched a working conversation die when they opened the second.
+The gate called it Blocking. The owner’s pid is in the file NAME, a window only reads files whose
+owner is gone, and two windows never write the same file, which also removes a cross-process write
+race that no in-memory promise could have covered.
+
 **The dangerous part is the killing, and the ledger exists to make it safe.** The launcher has said
 so since it was written: a pid is not an identity, Windows hands used numbers out again, and killing
 by number can end whatever now holds it. A record is therefore three facts — the pid, the image, and
@@ -202,14 +210,27 @@ WHEN it started — and all three must still hold. The operating system is asked
 now (`Get-CimInstance Win32_Process`, which reports the name WITH its extension, unlike
 `Get-Process`), and a mismatch on either fact leaves the process alone.
 
+**The check and the kill are ONE command.** A query followed by a kill is a window in which the
+verified process can exit and its number be handed to somebody else — small, and small windows
+around killing are precisely what this is for. The three facts are compared and the tree is ended
+inside a single PowerShell invocation, which also means a TREE kill: a Windows shim is a tree —
+`codex` is `codex.cmd` running `cmd.exe` running node — and ending only its root leaves the CLI that
+was actually working.
+
+**An answer nobody could get KEEPS the record.** No PowerShell, a refusal, a machine that is not
+Windows: the entry is retried at the next activation rather than dropped, because dropping it is how
+an orphan becomes permanent. A week is the bound on that — past it a pid means nothing on any
+machine that has rebooted.
+
 The case that decides the design is not the orphan. It is somebody’s own `claude`, running their own
 work, on a number an extension wrote down an hour ago: **killing that would be far worse than the
 orphan it was tidying up.** Every unhappy answer — no such process, a refusal, a PowerShell that
 would not start — means the same thing and kills nothing. The guard fails CLOSED.
 
-Verified live rather than reasoned: two real processes of the same image, one recorded honestly and
-one recorded with a start time an hour off. The first was ended, the second was left running, and
-the ledger came back empty.
+Verified live rather than reasoned, three processes and three ledger files: the orphan of a
+force-killed window was ENDED, a stranger of the same image recorded an hour off was LEFT ALONE,
+another window’s live child was LEFT ALONE and its file was not even read, the dead window’s file was
+removed and the live one was untouched.
 
 ### Three vendors, one seam (2026-09-09)
 
