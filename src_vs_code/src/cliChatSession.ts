@@ -1,4 +1,6 @@
 import { ProcessHandle, Unsubscribe } from './processLauncher';
+import { ChatAdapter } from './chatAdapter';
+import { agyAdapter } from './agyAdapter';
 import { ChatSession, TurnBudgets, TurnResult } from './chatSession';
 
 /**
@@ -59,16 +61,6 @@ export const REAL_TIMERS: Timers = {
   },
 };
 
-/** One line of the CLI's output, as far as this file cares. */
-interface CliEvent {
-  readonly event?: unknown;
-  readonly result?: {
-    readonly status?: unknown;
-    readonly response?: unknown;
-    readonly error?: unknown;
-  };
-}
-
 /** What a turn is waiting for, and how to end its wait. */
 interface Pending {
   readonly settle: (result: TurnResult) => void;
@@ -103,6 +95,15 @@ export class CliChatSession implements ChatSession {
   private generation = 0;
   /** Whether anything has been asked yet — a first turn has no conversation to lose. */
   private everSent = false;
+  /**
+   * The conversation's id in a PER-TURN vendor's own store.
+   *
+   * <p>Empty until the vendor names one. Every turn after that carries it, which is what makes a
+   * process-per-question hold a conversation at all — and it is an ID rather than "the last
+   * session", because "the last session" is the last one on the MACHINE and two chat tabs would
+   * then answer each other's questions.</p>
+   */
+  private sessionId = '';
   /** The next answer comes from a process that never heard the earlier turns. Told once, then cleared. */
   private contextLost = false;
   private queue: Promise<unknown> = Promise.resolve();
@@ -114,9 +115,18 @@ export class CliChatSession implements ChatSession {
    * @param timers the clock, injected so a test can expire a budget in a millisecond
    */
   constructor(
-    private readonly start: () => ProcessHandle,
+    private readonly start: (resume: string) => ProcessHandle,
     private readonly budgets: TurnBudgets,
     private readonly timers: Timers = REAL_TIMERS,
+    /**
+     * Which vendor's protocol this conversation speaks.
+     *
+     * <p>Defaulted, and the default is the one this file used to hardcode. That is deliberate: the
+     * seam arrived as a refactor, and every test written against the old behaviour had to pass
+     * unchanged to prove the refactor changed nothing. A caller that means another vendor passes
+     * one — `cliChatLaunch` does.</p>
+     */
+    private readonly adapter: ChatAdapter = agyAdapter,
   ) {}
 
   /** Whether a process is currently alive. For the tests, and for a caller that wants to say so. */
@@ -153,6 +163,9 @@ export class CliChatSession implements ChatSession {
     if (this.disposed) {
       return { ok: false, failure: CLOSED };
     }
+    if (this.adapter.shape === 'per-turn') {
+      return this.perTurn(text);
+    }
 
     const started = await this.ensureStarted();
     if (started !== '') {
@@ -160,7 +173,7 @@ export class CliChatSession implements ChatSession {
     }
 
     this.everSent = true;
-    const line = JSON.stringify({ event: 'user', message: { role: 'user', content: text } });
+    const line = this.adapter.encode(text);
     if (this.child?.writeLine(line) !== true) {
       // The pipe went between the last event and this write. Not an error to throw: the next send
       // starts a new process, which is what a person pressing Enter again expects to happen.
@@ -189,7 +202,7 @@ export class CliChatSession implements ChatSession {
     this.startOutcome = undefined;
     let child: ProcessHandle;
     try {
-      child = this.start();
+      child = this.start(this.sessionId);
     } catch (reason) {
       // `send` promises never to reject, and an injected launcher is somebody else's code.
       return Promise.resolve(`the model’s process could not be started: ${message(reason)}`);
@@ -199,6 +212,15 @@ export class CliChatSession implements ChatSession {
     this.generation += 1;
     this.listen(child, this.generation);
 
+    // A vendor that never announces itself is ready the moment it is running: `claude` says nothing
+    // at all until a turn arrives, so waiting for a ready event spends the whole startup budget and
+    // then reports a CLI that never started — for one that was working and had not been asked. Its
+    // first turn is bounded by the turn budget instead, which is the honest thing to bound.
+    if (!this.adapter.announces) {
+      this.ready = true;
+
+      return Promise.resolve('');
+    }
     // Ask what happened rather than wait to be told: the replay above may already have delivered it.
     if (this.ready) {
       return Promise.resolve('');
@@ -241,41 +263,94 @@ export class CliChatSession implements ChatSession {
     child.onExit(() => mine(() => this.onGone(ended(child.stderrTail()))));
   }
 
-  /** One line of NDJSON. Anything unreadable is skipped: a CLI may log where it pleases. */
+  /** One line, as the vendor's own adapter reads it. Anything it does not recognise is skipped. */
   private onLine(line: string): void {
-    let event: CliEvent;
-    try {
-      event = JSON.parse(line) as CliEvent;
-    } catch {
-      return;
-    }
-
-    if (event.event === 'init') {
+    const event = this.adapter.classify(line);
+    if (event.kind === 'ready') {
       this.ready = true;
       this.waitingForInit?.('');
 
       return;
     }
-    if (event.event !== 'result') {
-      return;
-    }
-
-    const status = typeof event.result?.status === 'string' ? event.result.status : '';
-    const answer = typeof event.result?.response === 'string' ? event.result.response : '';
-    const error = typeof event.result?.error === 'string' ? event.result.error : '';
-    if (status === 'SUCCESS') {
+    if (event.kind === 'answer') {
       const lost = this.contextLost;
       this.contextLost = false;
-      this.settle(lost
-        ? { ok: true, answer: answer.trim(), contextLost: true }
-        : { ok: true, answer: answer.trim() });
+      this.settle(lost ? { ok: true, answer: event.text, contextLost: true } : { ok: true, answer: event.text });
 
       return;
     }
-    // An ERROR result is an error, not an empty answer. The CLI reports a refused input this way -
-    // it is how the NDJSON schema was discovered - and a page showing nothing would look like a
-    // model with nothing to say.
-    this.settle({ ok: false, failure: error.length > 0 ? error : `the model answered with ${status || 'no status'}` });
+    if (event.kind === 'failure') {
+      this.settle({ ok: false, failure: event.failure });
+    }
+  }
+
+  /**
+   * One turn for a vendor that holds no pipe: a process, a prompt, an answer, an exit.
+   *
+   * <p>Nothing here waits for a ready event, because there is none — the process starts working the
+   * moment its input closes. The conversation survives the exit: it lives in the vendor's own store
+   * and the next turn resumes it by the id this one was told. That is the inverted half of the
+   * context rule, and it is why `stop()` does not mark a per-turn conversation lost.</p>
+   */
+  private perTurn(text: string): Promise<TurnResult> {
+    let child: ProcessHandle;
+    try {
+      child = this.start(this.sessionId);
+    } catch (reason) {
+      return Promise.resolve({ ok: false, failure: `the model’s process could not be started: ${message(reason)}` });
+    }
+    this.child = child;
+    this.generation += 1;
+    this.everSent = true;
+
+    // Written and then CLOSED: `codex exec -` reads until end of input, so a turn whose stream stays
+    // open is a turn that never starts. Measured, and the reason `writeAndEnd` exists at all.
+    if (!child.writeAndEnd(this.adapter.encode(text))) {
+      this.stop();
+
+      return Promise.resolve({ ok: false, failure: 'the model’s process had already gone; ask again to start a new one' });
+    }
+
+    return new Promise<TurnResult>((resolve) => {
+      let answer = '';
+      let failure = '';
+      let done = false;
+      const finish = (result: TurnResult): void => {
+        if (done) {
+          return;
+        }
+        done = true;
+        cancelBudget();
+        this.stop();
+        resolve(result);
+      };
+      const cancelBudget = this.timers.after(this.budgets.turnMs, () => {
+        finish({ ok: false, failure: 'the model did not answer in time' });
+      });
+
+      child.onLine((line) => {
+        const event = this.adapter.classify(line);
+        if (event.kind === 'session') {
+          this.sessionId = event.id;
+        } else if (event.kind === 'answer') {
+          answer = event.text;
+        } else if (event.kind === 'failure') {
+          failure = event.failure;
+        }
+      });
+      child.onError((reason) => finish({ ok: false, failure: `the model’s process failed to run: ${reason}` }));
+      // The exit IS the end of the turn here, not a death to report: whatever was said before it is
+      // the answer, and nothing was said means the process left without one.
+      child.onExit(() => {
+        if (failure.length > 0) {
+          finish({ ok: false, failure });
+        } else if (answer.length > 0) {
+          finish({ ok: true, answer });
+        } else {
+          finish({ ok: false, failure: ended(child.stderrTail()) });
+        }
+      });
+    });
   }
 
   /** The process has gone, whether it meant to or not. */
@@ -311,8 +386,11 @@ export class CliChatSession implements ChatSession {
   /** Kill the process and forget it. Idempotent — `dispose` and a budget can both arrive. */
   private stop(): void {
     // A killed process takes the conversation with it exactly as a dead one does - the budget that
-    // killed it does not make the loss less real, and the next answer must still say so.
-    this.contextLost = this.contextLost || this.everSent;
+    // killed it does not make the loss less real, and the next answer must still say so. UNLESS the
+    // vendor keeps the conversation itself: a per-turn child exits after every single answer, and
+    // reporting that as a loss would put "this answer does not remember the earlier ones" under
+    // every turn of a conversation that remembers all of them.
+    this.contextLost = this.adapter.shape === 'persistent' && (this.contextLost || this.everSent);
     const child = this.child;
     this.child = undefined;
     this.ready = false;

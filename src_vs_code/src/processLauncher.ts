@@ -46,6 +46,14 @@ export interface LaunchOptions {
 export interface ProcessHandle {
   /** Write one line (a newline is appended). `false` when the pipe is already gone. */
   writeLine(line: string): boolean;
+  /**
+   * Write, then CLOSE the input — for a child that reads its whole prompt and then works.
+   *
+   * <p>`codex exec -` is the case: it reads instructions from stdin and waits for more until the
+   * stream ends, so a turn written without this simply never starts. A persistent vendor must never
+   * be sent it — closing the pipe there ends the conversation.</p>
+   */
+  writeAndEnd(text: string): boolean;
   /** Raw stdout as it arrives. Replayed to the first subscriber; unsubscribe when done. */
   onStdout(listener: (chunk: string) => void): Unsubscribe;
   /** Whole stdout lines, split across chunk boundaries, each delivered once. */
@@ -115,6 +123,7 @@ export function launch(target: string, args: readonly string[], options: LaunchO
 function failedHandle(reason: string): ProcessHandle {
   return {
     writeLine: () => false,
+    writeAndEnd: () => false,
     onStdout: () => () => undefined,
     onLine: () => () => undefined,
     onExit: () => undefined,
@@ -267,6 +276,7 @@ function liveHandle(child: ReturnType<typeof spawn>, shell: boolean): ProcessHan
 
   return {
     writeLine: (line) => writeLine(child, line),
+    writeAndEnd: (text) => writeAndEnd(child, text),
     onStdout: stdout.on,
     onLine: lines.on,
     onExit: exited.on,
@@ -281,6 +291,21 @@ function liveHandle(child: ReturnType<typeof spawn>, shell: boolean): ProcessHan
       }
     },
   };
+}
+
+/** The whole prompt and then EOF, or `false` when the pipe has gone. Never throws. */
+function writeAndEnd(child: ReturnType<typeof spawn>, text: string): boolean {
+  const stdin = child.stdin;
+  if (stdin === null || stdin.destroyed || stdin.writableEnded) {
+    return false;
+  }
+  try {
+    stdin.end(text);
+
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** One line into the child, or `false` when the pipe has gone. Never throws. */

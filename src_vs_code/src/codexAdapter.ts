@@ -1,0 +1,70 @@
+import { ChatAdapter, NOTHING, parsed, text } from './chatAdapter';
+
+/**
+ * `codex` — no pipe at all: a process per turn, resuming a session the vendor stores itself.
+ *
+ * <p>The master plan recorded "codex exec has no multi-turn stdin" as a fact and built around it.
+ * Measured, half of that was wrong: there is no multi-turn stdin, and there IS a multi-turn
+ * conversation — through `resume`. Planted 4271 in one process, asked for it back in the next, and
+ * got 4271.</p>
+ *
+ * <p><b>Four things were measured here, and three of them changed this file.</b></p>
+ *
+ * <ol>
+ *   <li><b>The prompt goes on STDIN, not in argv.</b> `codex exec -` reads its instructions from
+ *       stdin — its own help says so — and a 76 059-byte prompt was answered in five seconds
+ *       outside a git repository. argv would not have carried it: Windows caps a command line at
+ *       32 767 characters and a carried conversation is bounded at 60 000. The stream must then be
+ *       CLOSED, or the process waits for more input and the turn never starts.</li>
+ *   <li><b>`--json` gives events instead of prose.</b> `thread.started` carries the id,
+ *       `item.completed` carries the answer as an `agent_message`, `turn.completed` ends it. Taking
+ *       "the last line of stdout" would have worked in the measurement and broken the first time a
+ *       usage block was printed after the answer — which it is.</li>
+ *   <li><b>Resume by ID, never by `--last`.</b> `--last` is the most recent session ON THE MACHINE,
+ *       so two chat tabs — or one chat and one review round — would answer each other's questions.
+ *       Measured: `codex exec resume &lt;id&gt;` returned the number planted in that thread.</li>
+ *   <li><b>`--skip-git-repo-check` does NOT disable the session store</b>, whatever its own help
+ *       says about not persisting session files. Both halves were run in a directory that is not a
+ *       repository at all, and the resume found its thread. So this feature's empty-temp-directory
+ *       rule needs no exception for codex.</li>
+ * </ol>
+ */
+
+/** The flags every codex turn carries. `exec` and any resume come first — see `argv`. */
+export const CODEX_ARGS: readonly string[] = ['--json', '-', '--skip-git-repo-check'];
+
+export const codexAdapter: ChatAdapter = {
+  shape: 'per-turn',
+  announces: false,
+  argv: (resume) => (resume.length > 0
+    ? ['exec', 'resume', resume, ...CODEX_ARGS]
+    : ['exec', ...CODEX_ARGS]),
+  // The prompt itself: there is no envelope, and the session writes it followed by EOF.
+  encode: (turn) => turn,
+  classify: (line) => {
+    const event = parsed(line);
+    if (event === undefined) {
+      return NOTHING;
+    }
+    const kind = text(event['type']);
+    if (kind === 'thread.started') {
+      const id = text(event['thread_id']);
+
+      return id.length > 0 ? { kind: 'session', id } : NOTHING;
+    }
+    if (kind === 'item.completed') {
+      const item = (event['item'] ?? {}) as Record<string, unknown>;
+
+      return text(item['type']) === 'agent_message'
+        ? { kind: 'answer', text: text(item['text']).trim() }
+        : NOTHING;
+    }
+    if (kind === 'turn.failed' || kind === 'error') {
+      const said = text(event['message']) || text(event['error']);
+
+      return { kind: 'failure', failure: said.length > 0 ? said : 'the model did not finish the turn' };
+    }
+
+    return NOTHING;
+  },
+};

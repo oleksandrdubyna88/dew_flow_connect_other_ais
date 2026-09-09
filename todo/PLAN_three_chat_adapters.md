@@ -1,6 +1,7 @@
 # PLAN — All three CLIs answer a chat, not just one
 
-> Status: **phase 0 measured (2026-09-08); nothing implemented yet.** Scope: `src_vs_code` — one new seam
+> Status: **IMPLEMENTED 2026-09-09.** All three vendors hold a two-turn conversation through this
+> build's own session and adapters, verified live — see *What the build measured* below. Scope: `src_vs_code` — one new seam
 > (`chatAdapter.ts`) plus two implementations beside the one `cliChatSession.ts` already has.
 >
 > Related docs: [PLAN_chat_with_other_ais.md](PLAN_chat_with_other_ais.md) (the master plan this
@@ -84,6 +85,44 @@ measured now. The rejection is recorded in that round; this plan is what superse
 - a killed process is not a lost conversation — `resume` still works — so `contextLost` must NOT be
   reported for this shape when the process merely exited, which is the opposite of the persistent
   rule and is the single most likely place for this change to go wrong.
+
+## What the BUILD measured, beyond phase 0 (2026-09-09)
+
+Three things the plan did not know, each found by running the thing rather than by reading it.
+
+**`claude` says NOTHING until it is asked.** Given an empty stdin it exits without a word, and its
+`init` arrives WITH the first answer rather than at startup. A session that waits for readiness
+before sending anything therefore waits out its whole 60-second startup budget and reports a CLI
+that never started — for one that was working perfectly and had not been spoken to. That is what
+the first live check did. It is now `ChatAdapter.announces`, a measured property of a vendor, and
+the early return it drives in `ensureStarted`.
+
+**`spawn` searches neither PATHEXT nor the shell.** A bare `codex` on Windows means `codex.cmd`,
+and spawning the bare name dies with `ENOENT` at the first turn — deep inside a conversation,
+where it reads as the model refusing rather than as a CLI that is not installed. Both new vendors
+are npm shims on this machine. `versionProbe` had known this since it was written (its
+`versionProbeCandidates` is the list); the resolution is now exported as `resolvedExecutable`,
+`LaunchSpec` carries the `shell` decision `needsShell` makes, and a CLI that cannot be found is
+refused in a sentence BEFORE a tab or a process exists.
+
+**`codex --json` gives events, and a `thread_id`.** `thread.started` names the conversation and
+`item.completed` carries the answer as an `agent_message`. Resuming by that id rather than by
+`--last` is the difference between two chat tabs holding two conversations and two chat tabs
+answering each other's questions — `--last` is the most recent codex session on the MACHINE.
+
+**The live check, run through this build's own `CliChatSession` and adapters** — two turns each,
+the second asking for a number planted in the first:
+
+| Vendor | Shape | Turn 1 | Turn 2 | Context |
+|---|---|---|---|---|
+| `agy` | persistent | 8.0 s | 1.4 s | kept |
+| `claude` | persistent | **3.0 s** | **1.6 s** | kept |
+| `codex` | per-turn | 7.3 s | 6.7 s | kept, and `contextLost` correctly false |
+
+`claude` is the fastest of the three by a wide margin, which phase 0 predicted and this confirms.
+A 76 059-byte prompt was answered by `codex` through stdin in five seconds, which is why the
+prompt does not travel in argv: Windows caps a command line at 32 767 characters and a carried
+conversation is bounded at 60 000.
 
 ## Build order
 

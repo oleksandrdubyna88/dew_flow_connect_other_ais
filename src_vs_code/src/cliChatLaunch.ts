@@ -1,3 +1,9 @@
+import { needsShell } from './cliVersions';
+import { Platform } from './vendorTerminal';
+import { ChatAdapter } from './chatAdapter';
+import { agyAdapter } from './agyAdapter';
+import { claudeAdapter } from './claudeAdapter';
+import { codexAdapter } from './codexAdapter';
 import { Vendor } from './vendors';
 
 /**
@@ -13,20 +19,52 @@ import { Vendor } from './vendors';
  */
 
 /**
- * The runtimes this feature can actually talk to. One today; three when the adapter plan lands.
+ * Every runtime that can hold a chat, and the adapter that speaks to it.
  *
- * <p>It lives HERE, next to the argv that implements it, rather than in `chatModels.ts` where the
+ * <p>It lives HERE, next to the launch that implements it, rather than in `chatModels.ts` where the
  * picker is built. A capability belongs with the code that provides it: the old direction had the
  * launch layer importing a constant out of a module that imports the PAGE, so a change to what the
- * chat can speak began in the presentation half. Adding a runtime is now one file — this one — and
- * the picker follows it. (codex, the second code round.)</p>
+ * chat can speak began in the presentation half. Adding a runtime is one entry in this map, and the
+ * picker follows it. (codex, the second code round.)</p>
+ *
+ * <p><b>Three, since 2026-09-09.</b> It was one because the master plan's build split recorded a
+ * limitation as fact — "claude's schema differs and codex exec has no multi-turn stdin". Measured,
+ * half of that was wrong: `codex` holds a conversation through `resume`, and `claude` holds one
+ * exactly as `agy` does, faster than either. `vendor-routing.md` still binds and this map is how:
+ * a Claude model reaches the `claude` CLI and never `agy`, because the runtime chooses the adapter
+ * AND the executable together.</p>
  */
-export const CHAT_RUNTIMES: readonly string[] = ['antigravity'];
+const ADAPTERS: Readonly<Record<string, { readonly adapter: ChatAdapter; readonly executable: string }>> = {
+  antigravity: { adapter: agyAdapter, executable: 'agy' },
+  claude: { adapter: claudeAdapter, executable: 'claude' },
+  codex: { adapter: codexAdapter, executable: 'codex' },
+};
+
+export const CHAT_RUNTIMES: readonly string[] = Object.keys(ADAPTERS);
+
+/** What a runtime's CLI is called when the reviewer's settings do not say. */
+export function defaultExecutableFor(runtime: string): string {
+  return ADAPTERS[runtime]?.executable ?? '';
+}
+
+/** The adapter for a runtime, or nothing when the chat cannot speak to it. */
+export function adapterFor(runtime: string): ChatAdapter | undefined {
+  return ADAPTERS[runtime]?.adapter;
+}
 
 /** What the chat needs from a launch, decided without touching the world. */
 export interface LaunchSpec {
   readonly executable: string;
   readonly args: readonly string[];
+  /**
+   * Whether this launch needs the platform shell.
+   *
+   * <p>True for exactly one case: a Windows `.cmd` or `.bat` shim, which node has refused to spawn
+   * directly since the 2024 argument-injection fix. Both new vendors are npm shims on this machine,
+   * so without this a chat with either of them died at its first turn on `spawn codex ENOENT` —
+   * found by the live check rather than by any test, which is what live checks are for.</p>
+   */
+  readonly shell: boolean;
   /** Empty means "wherever the caller likes" — but for this feature it is always a temp directory. */
   readonly cwd: string;
   /** Empty when the row can be launched; otherwise why it cannot. */
@@ -34,30 +72,13 @@ export interface LaunchSpec {
 }
 
 /**
- * The flags, and why each one is there.
+ * The flags `agy` is launched with. Re-exported from its adapter, which is where they now live.
  *
- * <ul>
- *   <li><b>`--input-format stream-json`</b> — the captured passage travels on STDIN. Measured: `-p`
- *       does not read stdin at all (the model answered "you did not attach the fragment"), and argv
- *       on Windows is the truncation trap this family has already been bitten by.</li>
- *   <li><b>`--output-format stream-json`</b> — one NDJSON event per line, which is what makes a turn
- *       distinguishable from a log line.</li>
- *   <li><b>`--mode plan`</b> — read-only. The task is "explain this paragraph"; nothing should be
- *       written by a model answering it. Measured to survive multi-turn, against a reviewer who
- *       called it a single-prompt batch.</li>
- *   <li><b>`--disable-slash-commands`</b> — the passage is another AI's text and can begin with a
- *       slash. This is the first of two guards; the fence in `chatPrompt.ts` is the second.</li>
- * </ul>
+ * <p>Kept as a name here because the argv and the protocol travelled together when they moved, and
+ * a caller that still asks this module for them should get the same answer as the adapter gives.</p>
  */
-export const AGY_ARGS: readonly string[] = [
-  '--mode',
-  'plan',
-  '--disable-slash-commands',
-  '--input-format',
-  'stream-json',
-  '--output-format',
-  'stream-json',
-];
+export { AGY_ARGS } from './agyAdapter';
+
 
 /**
  * Why this row cannot be chatted with, or an empty string.
@@ -131,15 +152,27 @@ function asText(reason: unknown): string {
  *
  * @param tempDir a directory with nothing in it — see the note below
  */
-export function launchSpecFor(vendor: Vendor, tempDir: string): LaunchSpec {
+export function launchSpecFor(
+  vendor: Vendor,
+  tempDir: string,
+  resume = '',
+  /** The file the vendor's name resolved to, from `resolvedExecutable`. Empty falls back to the name. */
+  resolved = '',
+  platform: Platform = process.platform === 'darwin' ? 'darwin' : process.platform === 'win32' ? 'win32' : 'linux',
+): LaunchSpec {
   const refusal = chatRuntimeRefusal(vendor);
-  if (refusal.length > 0) {
-    return { executable: '', args: [], cwd: '', refusal };
+  const known = ADAPTERS[vendor.runtime];
+  if (refusal.length > 0 || known === undefined) {
+    return { executable: '', args: [], cwd: '', shell: false, refusal };
   }
+  const executable = [resolved, vendor.executablePath, known.executable].find((name) => name.length > 0) ?? '';
 
   return {
-    executable: vendor.executablePath.length > 0 ? vendor.executablePath : 'agy',
-    args: AGY_ARGS,
+    executable,
+    shell: needsShell(executable, platform),
+    // From the adapter, because the command line and the wire protocol are one decision: a vendor
+    // launched with another's flags answers in a shape nobody here can read.
+    args: known.adapter.argv(resume),
     // An empty temp directory, never the workspace. The task is to explain a paragraph: handing a
     // third-party agent the source tree buys nothing but startup time, and on Windows a working
     // directory is also something `cmd.exe` searches before the PATH.

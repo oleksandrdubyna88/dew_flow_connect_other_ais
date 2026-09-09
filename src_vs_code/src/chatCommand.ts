@@ -5,14 +5,15 @@ import * as vscode from 'vscode';
 import { ChatEntry, ChatPanels } from './chatPanels';
 import { ChatSession } from './chatSession';
 import { ChatMessage, ChatModelChoice } from './chatPage';
-import { CliChatSession } from './cliChatSession';
+import { CliChatSession, REAL_TIMERS } from './cliChatSession';
 import { DEFAULT_BUDGETS } from './chatSession';
 import { chatChoice, chatModelsFrom } from './chatModels';
 import { chatSettingsFrom } from './chatSettings';
 import { chatUiScale, createChatPanel, pushChatDraft, pushChatState } from './chatPanel';
 import { captureSelection, COPY_SCRIPT, argvFor, ran } from './selectionCapture';
-import { ChatHome, chatHome, chatRuntimeRefusal, launchSpecFor } from './cliChatLaunch';
+import { ChatHome, adapterFor, chatHome, chatRuntimeRefusal, defaultExecutableFor, launchSpecFor } from './cliChatLaunch';
 import { launch } from './processLauncher';
+import { resolvedExecutable } from './versionProbe';
 import { carriedTurn, openingTurn } from './chatPrompt';
 import { LanguageCode } from './settingsShape';
 import { sourceSession, TabSnapshot } from './sessionKey';
@@ -291,15 +292,50 @@ function matchedSession(panels: ChatPanels): ReturnType<typeof sourceSession> {
   return sourceSession(active, all, panels.known());
 }
 
-/** A vendor process in an empty directory of its own, and the directory, held together. */
-function started(vendor: Vendor): { session: ChatSession; home: ChatHome } {
+/**
+ * A vendor process in an empty directory of its own, and the directory, held together.
+ *
+ * <p>The launch is built per TURN rather than once, because a vendor that keeps no process needs a
+ * different command line for its second question than for its first: `codex` resumes a thread by
+ * id, and the id is not known until the first turn has been answered. A persistent vendor ignores
+ * the argument entirely and gets the same argv every time.</p>
+ */
+function started(vendor: Vendor, resolved: string): { session: ChatSession; home: ChatHome } {
   const home: ChatHome = emptyTempDir();
-  const spec = launchSpecFor(vendor, home.dir);
+  const adapter = adapterFor(vendor.runtime);
 
   return {
-    session: new CliChatSession(() => launch(spec.executable, spec.args, { cwd: spec.cwd }), DEFAULT_BUDGETS),
+    session: new CliChatSession(
+      (resume) => {
+        const spec = launchSpecFor(vendor, home.dir, resume, resolved);
+
+        return launch(spec.executable, spec.args, { cwd: spec.cwd, shell: spec.shell });
+      },
+      DEFAULT_BUDGETS,
+      REAL_TIMERS,
+      adapter,
+    ),
     home,
   };
+}
+
+/**
+ * The FILE this vendor's CLI is, or the sentence saying it could not be found.
+ *
+ * <p>`spawn` searches neither PATHEXT nor the shell's own rules, so a bare name that every terminal
+ * resolves fails here with `ENOENT`. Asked once, before anything is created, so a missing CLI is a
+ * message about a missing CLI rather than a conversation that dies at its first turn.</p>
+ */
+async function cliFor(vendor: Vendor): Promise<{ resolved: string; refusal: string }> {
+  const asked = vendor.executablePath.length > 0 ? vendor.executablePath : defaultExecutableFor(vendor.runtime);
+  const resolved = await resolvedExecutable(asked);
+
+  return resolved.length > 0
+    ? { resolved, refusal: '' }
+    : {
+      resolved: '',
+      refusal: `${asked} could not be found. Install the ${vendor.runtime} CLI, or put its full path in that reviewer's settings.`,
+    };
 }
 
 /** The vendor row behind a model id, read fresh — the person may have edited settings since. */
@@ -341,7 +377,7 @@ function switchModel(entry: ChatEntry, modelId: string): void {
     });
 }
 
-function switchNow(entry: ChatEntry, modelId: string): void {
+async function switchNow(entry: ChatEntry, modelId: string): Promise<void> {
   const thread = threads.get(entry.id);
   if (thread === undefined || thread.modelId === modelId) {
     return;
@@ -358,9 +394,20 @@ function switchNow(entry: ChatEntry, modelId: string): void {
     return;
   }
 
+  // The same resolution the first launch did, because the model being switched TO may be a vendor
+  // whose CLI is not installed — and finding that out by spawning it would kill a conversation that
+  // was working a moment ago.
+  const cli = await cliFor(vendor);
+  if (cli.refusal.length > 0) {
+    void vscode.window.showWarningMessage(cli.refusal);
+    show(entry, false, cli.refusal);
+
+    return;
+  }
+
   thread.session.dispose();
   thread.home.release();
-  const replacement = started(vendor);
+  const replacement = started(vendor, cli.resolved);
   thread.session = replacement.session;
   thread.home = replacement.home;
   thread.modelId = modelId;
@@ -382,8 +429,9 @@ function newConversation(
   panels: ChatPanels,
   ready: Extract<Ready, { ok: true }>,
   state: { readonly title: string; readonly passage: string; readonly draft: string },
+  resolved: string,
 ): ChatEntry {
-  const first = started(ready.vendor);
+  const first = started(ready.vendor, resolved);
   const session = first.session;
   const entry = createChatPanel(
     {
@@ -487,6 +535,17 @@ export async function chatWithOtherAi(panels: ChatPanels, args: readonly unknown
     return;
   }
 
+  // Resolved BEFORE a tab exists, because `spawn` does not search PATHEXT: a bare `codex` on
+  // Windows means `codex.cmd`, and spawning the bare name fails with ENOENT at the first turn —
+  // deep inside a conversation, where it reads as the model refusing rather than as a CLI that is
+  // not installed. Said here instead, in a sentence somebody can act on.
+  const cli = await cliFor(ready.vendor);
+  if (cli.refusal.length > 0) {
+    void vscode.window.showWarningMessage(cli.refusal);
+
+    return;
+  }
+
   const turn = openingTurn(settings.prompt, settings.language, passage.text);
   // A factory, not a value: nothing is built — no process, no temp directory — for a tab that
   // already holds a conversation.
@@ -494,7 +553,7 @@ export async function chatWithOtherAi(panels: ChatPanels, args: readonly unknown
     title: match.label,
     passage: passage.text,
     draft: plan.send ? '' : turn,
-  }));
+  }, cli.resolved));
 
   opened.entry.panel.reveal();
   if (plan.send) {
