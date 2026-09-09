@@ -301,6 +301,10 @@ export class CliChatSession implements ChatSession {
     }
     this.child = child;
     this.generation += 1;
+    // A per-turn conversation is lost only when its THREAD is. A first turn that died before the
+    // vendor named one leaves nothing to resume, so this question opens a brand new conversation —
+    // and the answer must say so, exactly as a dead pipe's would. (gemini, the plan round.)
+    this.contextLost = this.contextLost || (this.everSent && this.sessionId.length === 0);
     this.everSent = true;
 
     // Written and then CLOSED: `codex exec -` reads until end of input, so a turn whose stream stays
@@ -341,14 +345,22 @@ export class CliChatSession implements ChatSession {
       child.onError((reason) => finish({ ok: false, failure: `the model’s process failed to run: ${reason}` }));
       // The exit IS the end of the turn here, not a death to report: whatever was said before it is
       // the answer, and nothing was said means the process left without one.
-      child.onExit(() => {
+      child.onExit((code) => {
         if (failure.length > 0) {
           finish({ ok: false, failure });
-        } else if (answer.length > 0) {
-          finish({ ok: true, answer });
-        } else {
-          finish({ ok: false, failure: ended(child.stderrTail()) });
+
+          return;
         }
+        if (answer.length > 0) {
+          const lost = this.contextLost;
+          this.contextLost = false;
+          finish(lost ? { ok: true, answer, contextLost: true } : { ok: true, answer });
+
+          return;
+        }
+        // The exit code is the one fact the operating system gives away for free, and it is the
+        // difference between "it crashed" and "it refused". (gemini, the plan round.)
+        finish({ ok: false, failure: leftWithNothing(code, child.stderrTail()) });
       });
     });
   }
@@ -400,6 +412,16 @@ export class CliChatSession implements ChatSession {
     this.unsubscribe = undefined;
     child?.kill();
   }
+}
+
+/** A per-turn child that exited without an answer, with whatever it gave away about why. */
+function leftWithNothing(code: number, stderr: string): string {
+  const tail = stderr.trim().slice(-400);
+  const said = tail.length === 0 ? '' : `: ${tail}`;
+
+  return code === 0
+    ? `the model’s process ended without answering${said}`
+    : `the model’s process ended with code ${code}${said}`;
 }
 
 /** What a child left behind, or that it left nothing — never a sentence ending in a bare colon. */

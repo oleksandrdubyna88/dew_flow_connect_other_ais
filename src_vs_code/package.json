@@ -576,7 +576,8 @@
     "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
     "vscode:prepublish": "npm run bundle",
     "package": "npm run test && npm run bundle && vsce package --no-dependencies",
-    "icon": "node scripts/generate-icon.mjs"
+    "icon": "node scripts/generate-icon.mjs",
+    "test:live": "npm run compile && node scripts/live-chat.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",

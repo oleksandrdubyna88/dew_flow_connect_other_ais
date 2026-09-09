@@ -40,6 +40,7 @@ interface FakeTurn {
   readonly prompt: string;
   say(line: string): void;
   exit(): void;
+  exitWith(code: number): void;
 }
 
 /**
@@ -53,7 +54,8 @@ function perTurnLauncher(): { start: (resume: string) => ProcessHandle; turns: F
 
   const start = (resume: string): ProcessHandle => {
     let lines: ((line: string) => void)[] = [];
-    let exits: (() => void)[] = [];
+    let exits: ((code: number) => void)[] = [];
+    let exitCode = 0;
     const held: string[] = [];
     let opened = false;
     let exited = false;
@@ -86,11 +88,11 @@ function perTurnLauncher(): { start: (resume: string) => ProcessHandle; turns: F
       },
       onExit: (listener) => {
         if (exited) {
-          listener(0);
+          listener(exitCode);
 
           return;
         }
-        exits = [...exits, () => listener(0)];
+        exits = [...exits, (code: number) => listener(code)];
       },
       onError: () => undefined,
       stderrTail: () => '',
@@ -117,7 +119,14 @@ function perTurnLauncher(): { start: (resume: string) => ProcessHandle; turns: F
       exit: () => {
         exited = true;
         for (const fire of exits.splice(0, exits.length)) {
-          fire();
+          fire(0);
+        }
+      },
+      exitWith: (code: number) => {
+        exited = true;
+        exitCode = code;
+        for (const fire of exits.splice(0, exits.length)) {
+          fire(code);
         }
       },
     });
@@ -205,7 +214,7 @@ test('a turn that ends without saying anything is a failure, not an empty answer
 
   const result = await turn;
   assert.ok(!result.ok);
-  assert.match(result.failure, /ended unexpectedly/);
+  assert.match(result.failure, /ended without answering/);
 });
 
 test('a failure event wins over an answer that never came', async () => {
@@ -289,4 +298,66 @@ test('a vendor that announces nothing is asked at once, not waited out', async (
   launcher.turns[0]!.say('the answer, with no init before it');
 
   assert.deepStrictEqual(await turn, { ok: true, answer: 'the answer, with no init before it' });
+});
+
+test('a thread that was never named IS a lost conversation, and the next answer says so', async () => {
+  // The inversion is not "never lost": it is "lost only when the THREAD is". A first turn that dies
+  // before `thread.started` leaves nothing to resume, so the next question opens a brand new
+  // conversation — and saying nothing about that is exactly the silence the persistent rule exists
+  // to prevent. (gemini, the plan round.)
+  const launcher = perTurnLauncher();
+  const session = new CliChatSession(launcher.start, BUDGETS, NEVER, codexAdapter);
+
+  const first = session.send('first');
+  await flush();
+  launcher.turns[0]!.exit();
+  assert.ok(!(await first).ok, 'a turn that said nothing was reported as an answer');
+
+  const second = session.send('second');
+  await flush();
+  launcher.turns[1]!.say(started('thread-2'));
+  launcher.turns[1]!.say(answered('a fresh start'));
+  launcher.turns[1]!.exit();
+
+  const result = await second;
+  assert.ok(result.ok);
+  assert.strictEqual(result.contextLost, true, 'a conversation that started again did not say so');
+  assert.strictEqual(launcher.turns[1]!.resume, '', 'it tried to resume a thread nobody named');
+});
+
+test('a thread that WAS named survives a failed turn, and the next one resumes it', async () => {
+  const launcher = perTurnLauncher();
+  const session = new CliChatSession(launcher.start, BUDGETS, NEVER, codexAdapter);
+
+  const first = session.send('first');
+  await flush();
+  launcher.turns[0]!.say(started('thread-1'));
+  launcher.turns[0]!.say(JSON.stringify({ type: 'turn.failed', message: 'the model gave up' }));
+  launcher.turns[0]!.exit();
+  assert.ok(!(await first).ok);
+
+  const second = session.send('second');
+  await flush();
+  launcher.turns[1]!.say(answered('carrying on'));
+  launcher.turns[1]!.exit();
+
+  const result = await second;
+  assert.ok(result.ok);
+  assert.strictEqual(result.contextLost, undefined, 'a thread that was still there was called lost');
+  assert.strictEqual(launcher.turns[1]!.resume, 'thread-1');
+});
+
+test('a process that dies with a code and no answer says which code', async () => {
+  // "ended unexpectedly" is true and unhelpful. A non-zero exit is the one fact the operating
+  // system gives away for free, and it is the difference between "it crashed" and "it refused".
+  const launcher = perTurnLauncher();
+  const session = new CliChatSession(launcher.start, BUDGETS, NEVER, codexAdapter);
+
+  const turn = session.send('what does this mean?');
+  await flush();
+  launcher.turns[0]!.exitWith(9);
+
+  const result = await turn;
+  assert.ok(!result.ok);
+  assert.match(result.failure, /9/, `the exit code is nowhere in: ${result.failure}`);
 });
