@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
+import { chatSettingsFrom } from './chatSettings';
 import { ViewHandle, isDisposedRejection } from './viewHandle';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { discoverEngine, LocalEngine, openAiBaseOf, probeEngine } from './localEngines';
@@ -465,6 +466,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       teamServers: this.teamServerStates(config),
       providers: this.providerHealth(),
       usageScope: this.usageScope,
+      // Through the reader the COMMAND uses, not a second one: the section edits exactly what the
+      // conversation will read, including every fallback for a value somebody typed by hand.
+      chat: chatSettingsFrom((key: string) => this.read(config)(key)),
     };
 
     // Two update paths, and which one runs is the whole fix for the pickers.

@@ -134,6 +134,32 @@ somebody's behalf:
 And the keybinding now says it is working: `withProgress` puts *Copying the selection…* in the status
 bar for the ~1.7 s PowerShell takes, because a shortcut that appears to do nothing gets pressed again,
 which is how one question becomes two.
+### The four settings, and where they are edited (2026-09-09)
+
+`coai.chatPrompt`, `coai.chatLanguage`, `coai.chatAutoSend` and `coai.chatModel` reach a MODEL —
+they decide what is asked, in which language, who presses send and which vendor is billed. They
+shipped editable only in `settings.json`, which is where a prompt goes to be forgotten; the
+**Chat other AIs** section beside *Reviewers* now holds all four, with the prompt as a multi-line
+box because one word is the default rather than the limit.
+
+**One reader, both sides.** The section renders `chatSettingsFrom(...)` and the command calls
+`chatSettingsFrom(...)` — the same function over the same per-side config reader. That is why these
+four are NOT folded into `CoaiSettings`: two readers for one set of keys is a drift this repository
+has already paid for twice, and the panel would eventually show something the conversation does not
+use. A test drives one settings file through the reader and asserts the section renders exactly what
+it returned.
+
+**A model named in the settings that cannot answer is shown as chosen, and as unable.** Without the
+option the browser falls back to the first one and the panel reads *the first one that can answer*
+while `settings.json` says `codex`: a section describing a state that is not the one the command
+will refuse. It is selected so what is configured is what is shown, and disabled so it cannot be
+picked again once it is left. Reviewers on other runtimes are named underneath with the reason,
+never quietly absent — the same rule the command follows.
+
+`PanelState.chat` is optional for the reason `teamServers` is: sixteen fixtures predate it, the
+files are stored CRLF, and a required field would have meant sixteen unreviewable whole-file diffs.
+Absent means the defaults, which is what an untouched panel shows anyway.
+
 ### A conversation is a process, and it ends four ways (2026-09-08)
 
 ```mermaid

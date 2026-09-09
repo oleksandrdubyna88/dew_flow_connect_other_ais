@@ -24,6 +24,28 @@ export const HELP = {
     'After a plan passes, the gate tells the assistant to break it into 2-4 epics and each epic into 2-4 logically complete stories, and to close every story properly: review the diff through this gate, fix what it accepts, update the documentation and the tests, commit — then start the next one. The gate measures the plan you sent (length, build steps, files, subsystems) and says whether it needs epics, stories or nothing; that is a heuristic, and the assistant is told it may disagree in writing. The order is given ONCE per assistant: each epic comes back here for its own plan review, and a piece of a split is told that it is one — build it as a single unit, close it properly, and say so if it is genuinely too big — rather than being told to split again, which would have no end.',
   splitWithFable:
     'The split itself is done by Fable at its highest version — deciding what the epics and stories ARE is the judgement that shapes everything after it — and the risky stories go back to it: payments, money, authentication, security, architecture, data migration. The ordinary ones run on Opus. Fable here is a model of YOUR assistant, not a reviewer in the list above, so this box is the whole decision: tick it if the assistant you use can run Fable. Until 0.29.4 the order was withheld unless a Fable REVIEWER was configured, which nobody does and nobody should — so the switch did nothing at all.',
+  chatPrompt:
+    'What the selected passage is sent with. One word — Explain — unless you change it, and the box '
+    + 'is several lines high because a word is not always enough: "explain this to somebody who knows '
+    + 'C# but not Rust" is a different question from "explain this". The passage itself always arrives '
+    + 'below your instruction, fenced and marked as material, so a paragraph that reads like an order '
+    + 'is treated as text rather than obeyed.',
+  chatLanguage:
+    'The language the OTHER AI answers in. Deliberately not the language of these help pages: that '
+    + 'one is English on most machines, and borrowing it would deliver English explanations — which '
+    + 'is the one thing this feature exists to avoid. English by default, because the models are best '
+    + 'at it; set it to yours if a dense English answer is what sent you here.',
+  chatAutoSend:
+    'Who presses send. The keybinding copies the selection itself, one keystroke earlier, so it can '
+    + 'be trusted to be the passage you meant — it asks straight away. The right-click menu cannot '
+    + 'copy for you (closing the menu takes the selection out of the panel), so it takes whatever you '
+    + 'last copied and fills the box for you to send, because it has no way to know how old that is. '
+    + 'Always sends on both paths; Never fills the box on both.',
+  chatModel:
+    'Which reviewer answers a chat. Empty means the first one that can, which is what most people '
+    + 'want. Only reviewers on a runtime the chat can speak to appear here; any other configured '
+    + 'reviewer is listed underneath with the reason, rather than quietly missing — a picker with a '
+    + 'gap in it cannot tell you whether it is a bug or a policy.',
   vendorStages:
     'Which stages this reviewer is asked. Measured over fourteen judged runs: a local model was '
     + '19 % useful on a plan and 3 % on code, while writing more findings than both hosted vendors '
