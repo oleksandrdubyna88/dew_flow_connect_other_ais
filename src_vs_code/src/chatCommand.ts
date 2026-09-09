@@ -199,6 +199,9 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
     models: thread.models,
     modelId: thread.modelId,
     queued,
+    // The turn a stop would name. Zero while nothing runs, which is also what the page renders no
+    // control for — a stop that names no turn is refused by the seam rather than obeyed loosely.
+    turn: running ? (threads.get(entry.id)?.turn ?? 0) : 0,
   });
   // The one place the transcript reaches a page is the one place it is written down — but only when
   // there is something new to write. `show` runs on every state push: a turn starting, a queue
@@ -670,6 +673,8 @@ function newConversation(
       modelId: ready.modelId,
       running: false,
       capped: false,
+      // Nothing is in flight on a page that has just opened, so there is no turn to stop.
+      turn: 0,
       failure: '',
       draft: state.draft,
       uiScale: chatUiScale(),
@@ -854,6 +859,8 @@ export function restoreConversation(
       modelId: saved.modelId,
       running: false,
       capped: false,
+      // Nothing is in flight on a page that has just opened, so there is no turn to stop.
+      turn: 0,
       failure: ready.ok ? reloadedNote(saved.modelId) : ready.refusal,
       draft: '',
       uiScale: chatUiScale(),

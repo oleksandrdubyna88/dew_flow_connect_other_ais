@@ -62,6 +62,16 @@ export interface ChatPageState {
   readonly messages: readonly ChatMessage[];
   readonly models: readonly ChatModelChoice[];
   readonly modelId: string;
+  /**
+   * Which turn is in flight, counted from 1 — and 0 when the page cannot say.
+   *
+   * <p>It is in the STATE rather than kept in the script because the thinking line is replaced
+   * wholesale on every push: the control that stops a turn is rendered with that turn's number in
+   * it, so a control on screen can only ever name the turn it was drawn for. The seam refuses a stop
+   * that names no turn at all, deliberately — a wildcard stop ends whatever is running, which by the
+   * time a late message lands can be the turn AFTER the one somebody pressed for.</p>
+   */
+  readonly turn: number;
   /** A turn is in flight: the composer is locked and the thinking line is shown. */
   readonly running: boolean;
   /**
@@ -213,6 +223,8 @@ function chatStyle(uiScale: number): string {
   hr.end { border: none; border-top: 1px solid var(--vscode-panel-border); margin: 14px 0 0; opacity: .55; }
   .empty { opacity: .6; }
   .thinking { opacity: .75; margin: 0 0 12px; }
+  #stop { font: inherit; font-size: .9em; color: var(--vscode-textLink-foreground); background: none; border: none; padding: 0 0 0 4px; cursor: pointer; text-decoration: underline; }
+  #stop[disabled] { opacity: .5; cursor: default; text-decoration: none; }
   .queued { opacity: .8; font-size: .9em; }
   .failure { border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border)); border-radius: 4px; padding: 8px 10px; margin: 0 0 12px; }
   .capped { border: 1px solid var(--vscode-panel-border); border-radius: 4px; padding: 10px 12px; margin: 0 0 10px; }
@@ -245,15 +257,20 @@ ${ZOOM_CSS}`;
  * <p>`position` is 0 when the server did not say, or when the turn has left the queue and is being
  * answered. Both are "no number to show", and neither is position zero.</p>
  */
-export function chatStatusHtml(running: boolean, position: number): string {
+export function chatStatusHtml(running: boolean, position: number, turn: number): string {
   if (!running) {
     return '';
   }
   const where = Number.isInteger(position) && position > 0
     ? ` <span class="queued">· waiting in the queue, ${position} ahead</span>`
     : '';
+  // No number, no button. The alternative is a control that posts a message the host will drop,
+  // which looks to a person exactly like a stop that did not work.
+  const stop = Number.isSafeInteger(turn) && turn > 0
+    ? ` <button type="button" id="stop" data-turn="${turn}">Stop</button>`
+    : '';
 
-  return `<p class="thinking">Thinking…${where}</p>`;
+  return `<p class="thinking">Thinking…${where}${stop}</p>`;
 }
 
 /**
@@ -269,7 +286,7 @@ type Regions = Record<'messages' | 'thinking' | 'capped' | 'failure', string>;
 function regionsOf(state: ChatPageState): Regions {
   return {
     messages: chatMessagesHtml(state.messages),
-    thinking: chatStatusHtml(state.running, 0),
+    thinking: chatStatusHtml(state.running, 0, state.turn),
     capped: chatCappedHtml(state.capped),
     failure: state.failure.length === 0 ? '' : `<div class="failure">${escapeHtml(state.failure)}</div>`,
   };
@@ -580,6 +597,23 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   // link would have to be re-bound after every one, and the one that was missed is the one that
   // silently does nothing. The page never navigates and never reads a file - it names what it wants
   // and the HOST decides, which is where the workspace root and the scheme are actually known.
+  // Delegated on the region that HOLDS the line rather than bound to the button, because the line is
+  // replaced wholesale on every push and a listener bound to the old button dies with it.
+  const thinkingRegion = document.getElementById('thinking');
+  if (thinkingRegion) {
+    thinkingRegion.addEventListener('click', function (event) {
+      const target = event.target;
+      if (!target || typeof target.closest !== 'function') { return; }
+      const control = target.closest('#stop');
+      if (!control || !control.dataset || control.disabled) { return; }
+      const turn = Number(control.dataset.turn);
+      if (!Number.isSafeInteger(turn) || turn <= 0) { return; }
+      // Disabled the instant it is pressed. A second press a moment later would name the same turn,
+      // and by the time it landed the host could have moved on to the next one.
+      control.disabled = true;
+      vscode.postMessage({ type: 'command', command: 'stop', turn: turn });
+    });
+  }
   const messagesRegion = document.getElementById('messages');
   if (messagesRegion) {
     messagesRegion.addEventListener('click', function (event) {

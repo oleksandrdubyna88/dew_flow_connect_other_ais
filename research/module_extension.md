@@ -29,6 +29,23 @@ local model` the page would otherwise still show the remote one as selected whil
 somewhere else), a pushed state that has not changed is not sent at all, a `pick` naming a model the
 conversation was never offered is refused at the host boundary rather than trusted, and the
 composer takes focus back when a turn ends — without which every follow-up costs a mouse click.
+### A turn can be stopped from the page it is running on (2026-09-09)
+
+The seam shipped first and waited: `ChatSession.stop()` and an `onStop(id, turn)` hook that takes a
+TURN NUMBER, because a wildcard stop ends whatever is running — which, by the time a late message
+lands, can be the turn AFTER the one somebody pressed for. So the page had to be able to name it.
+
+`turn` travels in the page state and in every push, and the control is rendered INTO the thinking
+line with that number in its markup. A control on screen can therefore only ever name the turn it
+was drawn for: nothing in the script remembers one across a push, which is the point. **No number,
+no button** — a control that posted a message the seam refuses would look to a person exactly like a
+stop that did not work.
+
+The listener is delegated on `#thinking` for the same reason the answers' links are delegated on
+`#messages`: the region is replaced wholesale on every push, and a listener bound to the old button
+dies with it. Pressing it disables it at once — a second press names the same turn, and by the time
+it landed the host could have moved on.
+
 ### An answer reads like a document (2026-09-09)
 
 A model's answer used to reach the page as `escapeHtml(text)` under `white-space: pre-wrap` — the

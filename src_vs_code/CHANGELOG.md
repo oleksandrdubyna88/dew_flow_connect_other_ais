@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**A turn can be stopped.** While an answer is coming there is a *Stop* beside *Thinking…* — for the
+question you saw was wrong the moment you sent it, and for the one that is taking far longer than it
+should. It stops the turn it is showing and no other, so a press that lands late cannot end the
+question you asked afterwards.
+## Unreleased
+
 **Answers read like answers.** Headings were hashes, lists were dashes, code was backticks and a
 link was its own address in brackets — everything a model wrote as Markdown arrived as Markdown. It
 is rendered now: headings, numbered and bulleted lists that nest, code in a code face and in its own

@@ -28,6 +28,7 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
     modelId: 'antigravity',
     running: false,
     capped: false,
+    turn: 0,
     failure: '',
     draft: '',
     uiScale: 0,
@@ -164,17 +165,17 @@ test('a turn waiting behind other people says so, and one being answered does no
   // A shared Team server queues twenty deep per person by design, so "still waiting" is minutes —
   // and an unchanging spinner is the one shape a busy server and a broken tab look identical in.
   // The position was already parsed out of every poll and thrown away. (gemini, the code round.)
-  assert.match(chatStatusHtml(true, 4), /Thinking/);
-  assert.match(chatStatusHtml(true, 4), /4 ahead/);
+  assert.match(chatStatusHtml(true, 4, 0), /Thinking/);
+  assert.match(chatStatusHtml(true, 4, 0), /4 ahead/);
 
   // Zero is "no number to show", not position zero: the server says 0 both when it did not count
   // and when the turn has left the queue and is being answered. Neither is a place in a line.
-  assert.strictEqual(chatStatusHtml(true, 0), '<p class="thinking">Thinking…</p>');
-  assert.strictEqual(chatStatusHtml(true, -1), '<p class="thinking">Thinking…</p>');
-  assert.strictEqual(chatStatusHtml(true, 1.5), '<p class="thinking">Thinking…</p>');
+  assert.strictEqual(chatStatusHtml(true, 0, 0), '<p class="thinking">Thinking…</p>');
+  assert.strictEqual(chatStatusHtml(true, -1, 0), '<p class="thinking">Thinking…</p>');
+  assert.strictEqual(chatStatusHtml(true, 1.5, 0), '<p class="thinking">Thinking…</p>');
 
   // Nothing at all when no turn is in flight — the region is emptied, not left saying "Thinking…".
-  assert.strictEqual(chatStatusHtml(false, 4), '');
+  assert.strictEqual(chatStatusHtml(false, 4, 0), '');
 });
 
 /**
@@ -1148,4 +1149,79 @@ test('the page module carries no backtick inside its own template literals', () 
   const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'chatPage.ts'), 'utf8');
 
   assert.doesNotMatch(source, /\\`/, 'an escaped backtick — inside a template literal, write it as words instead');
+});
+
+
+/* ------------------------------------------------------------------------------------------------
+ * The page half of "a turn nobody can stop". The seam landed first and has been waiting: it takes a
+ * TURN NUMBER and refuses a stop that names none, so the page has to know which turn it is showing.
+ * ---------------------------------------------------------------------------------------------- */
+
+test('a running turn offers a way to stop it, and names the turn it would stop', () => {
+  assert.match(chatStatusHtml(true, 0, 4), /<button type="button" id="stop" data-turn="4"/,
+    'a turn in flight offers no way out of it');
+  assert.match(chatStatusHtml(true, 0, 4), /Thinking/, 'the thinking line lost its words');
+});
+
+test('nothing offers a stop when nothing is running', () => {
+  assert.strictEqual(chatStatusHtml(false, 0, 4), '', 'an idle page offered to stop something');
+});
+
+test('a turn the page cannot name offers no stop at all', () => {
+  // The seam refuses a stop with no turn — deliberately, because a wildcard stop ends whatever is
+  // running, which by then can be the turn AFTER the one somebody pressed for. A page that cannot
+  // name the turn must not offer the button rather than post a message the host will drop.
+  for (const turn of [0, -1, 1.5, Number.NaN]) {
+    const html = chatStatusHtml(true, 0, turn);
+
+    assert.doesNotMatch(html, /id="stop"/, `a stop was offered for turn ${String(turn)}`);
+    assert.match(html, /Thinking/, `the thinking line vanished for turn ${String(turn)}`);
+  }
+});
+
+/** A stop control as the page sees one: a click on the region, with the control as its target. */
+function pressStop(page: RunningPage, control: { dataset: { turn: string }; disabled: boolean }): void {
+  page.fire('thinking', 'click', { target: { closest: () => control } });
+}
+
+test('pressing stop names its turn, and cannot name it twice', () => {
+  // Delegated on the region, because the thinking line is replaced wholesale on every push and a
+  // listener bound to the old button dies with it — the same reason the answers' links are.
+  const page = runChatPage({ running: true, turn: 7 });
+  const control = { dataset: { turn: '7' }, disabled: false };
+
+  pressStop(page, control);
+  pressStop(page, control);
+
+  assert.deepStrictEqual(
+    page.posted.filter((message) => message['command'] === 'stop'),
+    [{ type: 'command', command: 'stop', turn: 7 }],
+    'the second press sent a second stop, which by then could be the next turn',
+  );
+  assert.strictEqual(control.disabled, true, 'the control stayed pressable after being pressed');
+});
+
+test('the stop control names the turn it was rendered with, not one the page remembers', () => {
+  // Nothing in the script remembers a turn across a push: the number is in the markup, so a control
+  // on screen can only ever name the turn it was drawn for.
+  const page = runChatPage({ running: true, turn: 7 });
+
+  pressStop(page, { dataset: { turn: '8' }, disabled: false });
+
+  assert.deepStrictEqual(
+    page.posted.filter((message) => message['command'] === 'stop'),
+    [{ type: 'command', command: 'stop', turn: 8 }],
+    'the page stopped a turn other than the one its control named',
+  );
+});
+
+test('a stop control that names no turn posts nothing', () => {
+  const page = runChatPage({ running: true, turn: 7 });
+
+  for (const turn of ['0', '-1', '1.5', 'seven', '']) {
+    pressStop(page, { dataset: { turn }, disabled: false });
+  }
+
+  assert.deepStrictEqual(page.posted.filter((message) => message['command'] === 'stop'), [],
+    'a control with no usable turn posted a stop the host would only drop');
 });
