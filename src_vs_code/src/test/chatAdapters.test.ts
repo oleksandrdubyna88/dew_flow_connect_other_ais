@@ -191,3 +191,14 @@ test('codex: a real thread id is still a thread id', () => {
     { kind: 'session', id: '01a0851c-488c-7be0-9e51-e35c5fb2ce5c' },
   );
 });
+
+test('codex: argv refuses a resume id it would not have accepted, without asking who sent it', () => {
+  // `classify` is the only place an id is minted today, so the adapter is safe by construction —
+  // and by construction is a reason a reader has to reconstruct. The command line refuses on its
+  // own terms, so no future caller can hand it something it would not have made. (local.)
+  assert.deepStrictEqual([...codexAdapter.argv('id" & calc.exe')], ['exec', ...CODEX_ARGS]);
+  assert.deepStrictEqual(
+    [...codexAdapter.argv('01a0851c-488c-7be0-9e51-e35c5fb2ce5c')],
+    ['exec', 'resume', '01a0851c-488c-7be0-9e51-e35c5fb2ce5c', ...CODEX_ARGS],
+  );
+});
