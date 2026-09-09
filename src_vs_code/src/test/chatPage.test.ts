@@ -1369,3 +1369,53 @@ test('a stop control keeps the focus a push would have taken from it', () => {
 
   assert.ok(page.seen['stop'].focused > before, 'the keyboard lost the control when the line was redrawn');
 });
+
+
+/* ------------------------------------------------------------------------------------------------
+ * Who said it. Entry 17 of the operator's list: every answer was captioned `The other AI`, while
+ * switching the model mid-conversation is a shipped feature — so one tab routinely holds answers
+ * from two models with nothing on screen telling them apart.
+ * ---------------------------------------------------------------------------------------------- */
+
+test('an answer is captioned with the model that gave it', () => {
+  const html = chatMessagesHtml([
+    { role: 'you', text: 'ask' },
+    { role: 'model', text: 'first', model: { id: 'antigravity', label: 'Gemini 3.8 Flash' } },
+    { role: 'model', text: 'second', model: { id: 'remsoftdev-codex', label: 'GPT-5.6 (team)' } },
+  ]);
+
+  assert.match(html, /Gemini 3\.8 Flash/, 'the first answer does not say who gave it');
+  assert.match(html, /GPT-5\.6 \(team\)/, 'the second answer does not say who gave it');
+  assert.doesNotMatch(html, /The other AI/, 'an answer that knows its model still says "The other AI"');
+});
+
+test('an answer from before this existed still says something', () => {
+  // A conversation restored from a tab that predates the field, or a turn a failure produced. The
+  // caption falls back rather than rendering an empty line where a name should be.
+  const html = chatMessagesHtml([{ role: 'model', text: 'answered' }]);
+
+  assert.match(html, /The other AI/, 'an answer with no model recorded lost its caption entirely');
+});
+
+test('the caption wears its vendor colour, and two vendors do not share one', () => {
+  // The same colour the rounds list and the reviewer cards give that vendor — one call to
+  // `vendorPalette`, so a vendor a person has learned is the same colour everywhere.
+  const html = chatMessagesHtml([
+    { role: 'model', text: 'a', model: { id: 'antigravity', label: 'Gemini' } },
+    { role: 'model', text: 'b', model: { id: 'remsoftdev-codex', label: 'GPT' } },
+  ]);
+  const colours = [...html.matchAll(/class="who model-([a-z0-9-]+)"/g)].map((match) => match[1]);
+
+  assert.strictEqual(colours.length, 2, 'the captions carry no vendor of their own');
+  assert.notStrictEqual(colours[0], colours[1], 'two vendors were given the same class');
+});
+
+test('a model label that is markup is escaped like everything else', () => {
+  // It comes from a Team server's catalog, which is somebody else's text.
+  const html = chatMessagesHtml([
+    { role: 'model', text: 'x', model: { id: 'a', label: '<img src=x onerror=alert(1)>' } },
+  ]);
+
+  assert.doesNotMatch(html, /<img/i, 'a model label reached the page as markup');
+  assert.match(html, /&lt;img/, 'the label was dropped rather than shown');
+});
