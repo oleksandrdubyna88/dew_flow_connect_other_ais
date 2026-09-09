@@ -158,4 +158,4 @@ only when the whole ritual has run — not when the code works.
 **Last in the chat-page lane** — depends on the composer plan and the provider plan. Its pure half
 (`chatPresets.ts`, migration, tests) and the CRUD tab (new files) have no conflicts and can be built
 ahead; its `panelView.ts` half conflicts with
-[PLAN_the_prompt_box_forgets.md](PLAN_the_prompt_box_forgets.md) — that one lands first.
+[PLAN_the_prompt_box_forgets.md](../research/PLAN_the_prompt_box_forgets.md) — that one lands first.

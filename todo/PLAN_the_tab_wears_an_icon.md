@@ -103,6 +103,6 @@ only when the whole ritual has run — not when the code works.
 ## Parallelism
 
 Owns two files in `media/` and one line in `chatPanel.ts`. Sequenced with
-[PLAN_a_page_nobody_can_search.md](PLAN_a_page_nobody_can_search.md) and
+[PLAN_a_page_nobody_can_search.md](../research/PLAN_a_page_nobody_can_search.md) and
 [PLAN_a_conversation_survives_a_reload.md](PLAN_a_conversation_survives_a_reload.md) on the same
 `createWebviewPanel` call; otherwise free. Nothing waits on anybody — the asset is in the tree.

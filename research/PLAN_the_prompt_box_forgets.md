@@ -1,11 +1,66 @@
 # PLAN — the prompt box forgets what was typed
 
-> Status: **plan only, nothing implemented yet.** Kind: **bug**. Scope: the panel's *Chat other AIs*
-> section — `src_vs_code/src/panelView.ts`, `panelProvider.ts`. Origin:
-> [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entry 2.
+> Status: **IMPLEMENTED, 2026-09-09.** Kind: **bug**. Shipped in extension 0.31.20, pull request #156.
+> Scope as built: `src_vs_code/src/panelView.ts`, `panelProvider.ts`, `extension.ts`. Origin:
+> [BUGS_2026-09-09.md](../todo/BUGS_2026-09-09.md), entry 2.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_chat_with_other_ais.md](../research/PLAN_chat_with_other_ais.md).
+> Related docs: [module_extension.md](module_extension.md) — *A third answer beside repaint and
+> patch: WITHHOLD* — and [PLAN_chat_with_other_ais.md](PLAN_chat_with_other_ais.md).
+
+## What shipped differently — starting with the measurement, which refuted this plan
+
+**Step 1 was supposed to find which repaint killed the draft. It found that this document's central
+premise was wrong.** The plan below says the obvious fix makes things worse, because every save is a
+`config.update`, every update fires `onDidChangeConfiguration`, and the listener repaints — so the box
+would lose focus after every character. It cannot. `render()` assigns `webview.html` only when
+`staticKey` moves, and `staticKey`'s eleven fields are `settings`, `vendors`, `codexModels`,
+`localEngines`, `server`, `side`, `latestServerVersion`, `usageWindow`, `openSections`, `teamServers`
+and `usageScope`. `state.chat` is not one of them, and `state.settings` is `CoaiSettings`, which the
+chat keys are deliberately not part of. A chat setting cannot repaint the panel — now an assertion, so
+adding `chat` to the key fails with that sentence instead of making the box flicker.
+
+**What did kill it** is the same reading from the other side: `render()` runs unconditionally every
+five seconds from the escalation tick and recomputes all eleven, four of which move with nobody
+touching the panel — the local-engine probe, the server's own `--version`, the published release, the
+Team-server catalog — while `settings` moves whenever any other control is written from any window.
+
+**So half two changed shape.** Instead of teaching the configuration listener to recognise its own
+write, the panel gained a THIRD answer beside repaint and patch: **withhold**. A full `webview.html`
+assignment is held back while a `[data-setting]` control has focus, the live regions keep patching,
+and the key is not recorded while a paint is withheld, so the next render after focus leaves paints
+what this one could not. That covers all five repaint causes rather than one.
+
+Everything else the implementation carries, and the code round is why:
+
+- **The hold is capped at 30 seconds from the start of the editing SESSION**, renewed by neither a
+  keystroke nor a tab to the next control — the code round found the second half, and it is the same
+  defect twice. `focusout` is not guaranteed either: switch application mid-sentence and the panel
+  would never learn the box was abandoned.
+- **Nothing is lost by the paint that ends the hold.** The value was written 400 ms after the last
+  keystroke, and the paint carries `PanelState.focus` — `{ id, start, end }`, where the id is
+  `setting|vendor|role`, because a role-keyed control and a vendor-keyed one both carry
+  `data-setting="rounds"`. The caret rides on the debounced write that already happens.
+- **Writes queue and a render awaits the queue** until it is stable. Blur → `change` → write →
+  focusout → render is a race the render can win, re-stamping the box from the value being replaced.
+- **One write per change, not two.** `change` compares with the value a control held when it gained
+  FOCUS, not with the value last sent.
+- **Disposal forgets the editing state**, because closing the sidebar fires no `focusout`.
+- **The tests EXECUTE the page's script** against a fake document rather than scanning its text — the
+  plan round refused a scan, correctly: a script can hold an `input` listener, a debounce and a focus
+  message while posting the wrong key, a stale value or the wrong order.
+
+## The open tail
+
+1. **A `config.update` that REJECTS** — an unwritable `settings.json` — leaves the typed value in the
+   document and nowhere else, and the paint that eventually lands replaces it. The person is told by
+   the notification `save` already raises. Surviving it properly means the host keeping a shadow copy
+   of what every dirty control holds: a second source of truth for a control's value, which is the
+   drift this module has already paid for twice. Named rather than built.
+2. **This release shipped without its CHANGELOG entry.** The command that bumped the version and wrote
+   the note did both in one `node -e "…"`, and the note was a template literal — bash ran its
+   backticks as command substitution, so that edit matched nothing while the version bump beside it
+   landed. Silent, partial, and past review before anyone noticed, because nothing reads the
+   CHANGELOG. Restored in 0.31.21.
 
 ## The symptom
 
@@ -118,5 +173,5 @@ only when the whole ritual has run — not when the code works.
 
 Owns `panelView.ts` (the script block and the chat section) and `panelProvider.ts` (`write`,
 `save`, the configuration listener). **Does not touch `chatPage.ts`.** Runs in parallel with
-anything that does; conflicts with [PLAN_presets_above_the_composer.md](PLAN_presets_above_the_composer.md)
+anything that does; conflicts with [PLAN_presets_above_the_composer.md](../todo/PLAN_presets_above_the_composer.md)
 on the chat section of the panel — land this first, it is small.
