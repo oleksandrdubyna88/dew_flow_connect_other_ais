@@ -2,7 +2,7 @@
 
 > Status: **PHASE 0 IS DONE (measured 2026-09-09) — Phase 1 is not built, and the measurement says
 > only one of three vendors could use it.** `agy` streams real deltas on `step_update`; `claude` and
-> `codex` emit nothing before their final answer. The window scales with answer length — 6 % of a
+> `codex` emit nothing before their final answer. The window scales with answer length — 4 % of a
 > short turn, 44 % of a long one — and the plan's premise that eight silent seconds were recoverable
 > is REFUTED: most of that silence is the model thinking, before any vendor has a token to give.
 > Phase 1 stays unbuilt on that evidence; the table and the harness are below and committed.
@@ -268,7 +268,6 @@ only when the whole ritual has run — not when the code works.
 
 ## Definition of Done — PHASE 1 (not this pull request)
 
-- [ ] Phase 0's table is in this file with numbers per adapter.
 - [ ] Where streaming is possible, partial text appears as it arrives and the final answer replaces it rendered.
 - [ ] Where it is not, nothing changed and the help says so.
 - [ ] Stop works mid-stream; partials after a stop are ignored.
