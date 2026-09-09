@@ -116,6 +116,38 @@ export function remoteVendorRowId(serverId: string, remoteVendor: string): strin
 }
 
 /**
+ * The vendor name a SERVER knows this row by — which is not the row's own id.
+ *
+ * <p>The inverse of {@link remoteVendorRowId}, and it exists because the forward direction has been
+ * shipped without one. A row records `remoteVendor` since the field was added; every row saved
+ * before that has only its id, and the id is `<server>-<vendor>`. Sending it produces a 400 reading
+ * *"'remsoftdev-codex' is not a vendor here"* — zero tokens, seconds per round, and a message that
+ * reads exactly like a typo in a setting nobody typed. This repository shipped that in three
+ * releases; falling back to `vendor.id` here would have shipped it in a fourth, for every
+ * configuration older than the field. (codex, twice on the code round.)</p>
+ *
+ * <p>Only this server's own prefix comes off, so a vendor whose name contains hyphens keeps them. A
+ * row whose id does not begin with the prefix is left alone rather than guessed at: it is at least
+ * something the person can see in their own settings, which a guess would not be.</p>
+ */
+export function serverVendorOf(
+  vendor: { readonly id: string; readonly remoteVendor?: string | undefined },
+  serverId: string,
+): string {
+  // `typeof` and a length, not `??`: this is JSON a person edits, so `null` passes a nullish check
+  // and an empty string survives one. The same question `panelView` asks of the same field.
+  const recorded = typeof vendor.remoteVendor === 'string' ? vendor.remoteVendor.trim() : '';
+  if (recorded.length > 0) {
+    return recorded;
+  }
+
+  const prefix = `${serverId.toLowerCase()}-`;
+  const id = vendor.id.toLowerCase();
+
+  return id.startsWith(prefix) ? id.slice(prefix.length) : vendor.id;
+}
+
+/**
  * Read the saved list, keeping only entries that name something.
  *
  * <p>An entry saved before ids existed gets one derived from its name, so an upgrade does not orphan

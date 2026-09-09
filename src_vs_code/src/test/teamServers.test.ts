@@ -11,6 +11,7 @@ import {
   noProviderMessage,
   offerableProviders,
   remoteVendorRowId,
+  serverVendorOf,
   teamServerEndpoint,
   teamServerFingerprint,
   teamServersFrom,
@@ -93,6 +94,24 @@ test('a reviewer row is named by the server id, not by the editable display name
   // The display name can be changed; the row id cannot follow it without orphaning the row's usage
   // history and its vault key. Raised twice on the plan round.
   assert.strictEqual(remoteVendorRowId('remsoft-dev', 'codex'), 'remsoft-dev-codex');
+});
+
+test('a row written before remoteVendor existed still names its vendor to the server', () => {
+  // The signature of this defect is documented: a 400 saying `'<server>-<vendor>' is not a vendor
+  // here`, zero tokens, seconds per round — and this repository shipped it in three releases before
+  // `remoteVendor` existed. Falling back to the ROW id repeats it for every configuration saved
+  // before that field, which is every configuration older than three releases. (codex, twice.)
+  assert.strictEqual(serverVendorOf({ id: 'remsoft-dev-codex' }, 'remsoft-dev'), 'codex');
+  // A recorded one is taken as it stands, whatever the row is called.
+  assert.strictEqual(serverVendorOf({ id: 'anything', remoteVendor: 'gemini' }, 'remsoft-dev'), 'gemini');
+  // A server id that is not this row's prefix cannot be stripped, and guessing would be worse than
+  // sending what is there: the id is at least what a person can see in their settings.
+  assert.strictEqual(serverVendorOf({ id: 'other-codex' }, 'remsoft-dev'), 'other-codex');
+  // A hyphenated vendor keeps every hyphen it had — only the server's own prefix comes off.
+  assert.strictEqual(serverVendorOf({ id: 'remsoft-dev-gpt-5-codex' }, 'remsoft-dev'), 'gpt-5-codex');
+  // JSON a person edits: a blank or non-string field is an absent one, the same question
+  // `panelView` asks of the same field, asked the same way.
+  assert.strictEqual(serverVendorOf({ id: 'remsoft-dev-codex', remoteVendor: '  ' }, 'remsoft-dev'), 'codex');
 });
 
 test('a saved list survives a reload, and an entry from before ids gets one', () => {

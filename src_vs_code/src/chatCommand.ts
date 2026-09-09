@@ -7,10 +7,10 @@ import { ChatSession } from './chatSession';
 import { ChatMessage, ChatModelChoice } from './chatPage';
 import { CliChatSession, REAL_TIMERS } from './cliChatSession';
 import { DEFAULT_BUDGETS } from './chatSession';
-import { chatChoice, chatModelsFrom } from './chatModels';
+import { chatChoice, chatModelsFrom, memoryOf } from './chatModels';
 import { remoteIsFull } from './remoteAsk';
 import { remoteChatFor } from './chatRemote';
-import { rowBelongsTo, teamServersFrom } from './teamServers';
+import { TeamServer, rowBelongsTo, teamServersFrom } from './teamServers';
 import { readToken } from './teamServerAuth';
 import { coaiDataDir } from './dataDir';
 import { chatSettingsFrom } from './chatSettings';
@@ -54,9 +54,15 @@ interface Thread {
   modelId: string;
   /** Whether a turn is in flight. Only so a switch can say out loud that it is waiting for one. */
   running: boolean;
-  /** This model keeps no conversation of its own, so every turn re-sends one and they are counted. */
-  readonly forgetful: boolean;
-  /** How many turns have been ANSWERED. The cap is on turns, not on messages. */
+  /**
+   * This model keeps no conversation of its own, so every turn re-sends one and they are counted.
+   *
+   * <p>Not readonly, and that was the defect: the model can CHANGE under an open tab, and this
+   * describes the model rather than the tab. It comes from `memoryOf` in both places a session
+   * starts, so the two cannot disagree.</p>
+   */
+  forgetful: boolean;
+  /** How many turns THIS model has ANSWERED. The cap is on turns, not on messages. */
   asked: number;
   /**
    * The conversation to hand the NEXT turn, because the process it goes to never heard it.
@@ -83,15 +89,9 @@ interface Thread {
 
 const threads = new WeakMap<object, Thread>();
 
-/**
- * Does this model keep no memory of its own?
- *
- * <p>A Team server answers one question and forgets it, so every turn must carry the conversation
- * and the conversation must be capped — the bill for turn N is the bill for everything before it.
- * A local CLI holds it in its own process and has neither problem.</p>
- */
+/** Does this model keep no memory of its own? The rule, and its consequences, live in `chatModels`. */
 function forgetful(vendor: Vendor): boolean {
-  return vendor.runtime === 'remote';
+  return memoryOf(vendor).forgetful;
 }
 
 /** The tabs, narrowed to what `sessionKey` judges on. */
@@ -134,8 +134,18 @@ function pressCopy(): Promise<void> {
   });
 }
 
-/** Push the page's whole visible state, with the thread's own model list rather than an empty one. */
-function show(entry: ChatEntry, running: boolean, failure: string): void {
+/**
+ * Push the page's whole visible state, with the thread's own model list rather than an empty one.
+ *
+ * <p>A thread that is GONE pushes nothing. That is the guard for a tab closed while a turn was still
+ * in flight: the answer can arrive up to a poll later, and posting into a webview VS Code has torn
+ * down throws out of a callback nobody is catching. Forgetting the thread on close is what makes
+ * every reader of it — this one included — a no-op afterwards.</p>
+ *
+ * @param queued how many turns are ahead of this one on a Team server; 0 for none, and for a local
+ *   model, which has no queue
+ */
+function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): void {
   const thread = threads.get(entry.id);
   if (thread === undefined) {
     return;
@@ -149,6 +159,7 @@ function show(entry: ChatEntry, running: boolean, failure: string): void {
     failure,
     models: thread.models,
     modelId: thread.modelId,
+    queued,
   });
 }
 
@@ -222,7 +233,15 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
     ? carriedTurn(carrying, text, chatLanguage(), thread.forgetful ? REMOTE_CARRY_BUDGET : undefined)
     : text;
 
-  const result = await thread.session.send(sent);
+  // The queue position, pushed as it changes. A local session never calls this back; a Team server
+  // does on every poll, which is the difference between "the model is thinking" and "somebody else's
+  // round has the vendor and you are fourth". Guarded by the flag, because a turn that finished
+  // while a poll was in flight must not re-open the thinking line. (gemini, the code round.)
+  const result = await thread.session.send(sent, (position) => {
+    if (thread.running) {
+      show(entry, true, '', position);
+    }
+  });
   thread.running = false;
   if (!result.ok) {
     // The carry is NOT cleared here. A turn that failed carried nothing anywhere, and clearing it
@@ -370,12 +389,14 @@ function started(vendor: Vendor, resolved: string, remote?: ChatSession): { sess
  */
 async function remoteFor(vendor: Vendor): Promise<{ session: ChatSession | undefined; refusal: string }> {
   const servers = teamServersFrom(vscode.workspace.getConfiguration('coai').get('teamServers'));
-  const server = servers.find((one) => rowBelongsTo(vendor, one));
+  const server: TeamServer | undefined = servers.find((one) => rowBelongsTo(vendor, one));
   if (server === undefined) {
     return { session: undefined, refusal: `${vendor.id} belongs to a Team server this side no longer has.` };
   }
   const token = await readToken(coaiDataDir(), server.url);
-  const session = remoteChatFor(vendor, server.url, token);
+  // The whole server, not just its URL: its id is half of this row's own name, so it is what tells
+  // the row's id apart from the vendor name the server actually knows. See `serverVendorOf`.
+  const session = remoteChatFor(vendor, server, token);
 
   return session === undefined
     ? { session: undefined, refusal: `Sign in to ${server.name} to chat with ${vendor.id}.` }
@@ -474,6 +495,13 @@ async function switchNow(entry: ChatEntry, modelId: string): Promise<void> {
   thread.session = replacement.session;
   thread.home = replacement.home;
   thread.modelId = modelId;
+  // The memory rules move WITH the model. Left behind, they described the one just thrown away:
+  // switching to a Team server kept `forgetful` false, so the server — which remembers nothing —
+  // was asked turn two with no transcript behind it and the three-turn cap never applied; switching
+  // back kept it true, so a CLI that HAS a memory was refused a fourth question. Spread from the one
+  // function both callers use, so a field added there cannot be applied here and forgotten there.
+  // (codex, the code round.)
+  Object.assign(thread, memoryOf(vendor));
   // Everything said so far travels with the next question. Not sent now: nobody should be billed
   // for a conversation they moved and then never continued. Taken HERE rather than when the switch
   // was asked for, because this runs after the turn queue has drained — so an answer that was still
@@ -530,6 +558,11 @@ function newConversation(
         // too — disposal is idempotent, and the alternative is an authenticated child nobody owns.
         const thread = threads.get(id);
         panels.closeById(id);
+        // Forgotten, not merely disposed. A remote turn can be answered a poll after the tab went
+        // away, and `show` would then post state into a webview VS Code has torn down — a throw out
+        // of a callback nobody catches. Every reader of a thread starts by looking it up, so
+        // removing it turns all of them into no-ops at once. (codex and gemini, the code round.)
+        threads.delete(id);
         thread?.session.dispose();
         thread?.home.release();
       },
@@ -549,8 +582,7 @@ function newConversation(
     models: ready.models,
     modelId: ready.modelId,
     running: false,
-    forgetful: forgetful(ready.vendor),
-    asked: 0,
+    ...memoryOf(ready.vendor),
     carry: [],
     messages: [],
     turns: Promise.resolve(),

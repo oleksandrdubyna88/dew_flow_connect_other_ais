@@ -8,9 +8,9 @@
  * are its names.</p>
  *
  * <p><b>A chat turn IS a review job to the server.</b> One endpoint, one queue, one accounting. What
- * differs is the role it carries — `Chat` rather than a reviewer's role — so that a person reading
- * their spending can tell a conversation from a round, and so that a server can price or refuse them
- * differently without a new API.</p>
+ * differs is that it carries NO role — see {@link CHAT_ROLE}, which is a measurement rather than a
+ * choice — so that a person reading their spending can tell a conversation from a round, because
+ * every review carries one and nothing else does.</p>
  *
  * <p>Pure: every decision below is a test rather than a claim, and the socket is somebody else's job.</p>
  */
@@ -54,8 +54,29 @@ export const REMOTE_TURNS = 3;
 export type RemoteStep =
   /** Still queued or running. `position` is where it sits, or 0 when the server did not say. */
   | { readonly kind: 'waiting'; readonly position: number }
-  | { readonly kind: 'answer'; readonly text: string; readonly tokensIn: number; readonly tokensOut: number }
+  /**
+   * The answer, and only the answer.
+   *
+   * <p>It carried the turn's token counts for a while and nothing ever read them: the server is the
+   * system of record for usage — the job is a job in its ledger — and the panel's spending section
+   * reads them from there. A number nobody renders is not free, because the day somebody renders it
+   * a missing measurement will already have been rounded to `0`, which is the one thing a
+   * measurement that could not be taken must never look like. (codex, the code round.)</p>
+   */
+  | { readonly kind: 'answer'; readonly text: string }
   | { readonly kind: 'failure'; readonly failure: string };
+
+/**
+ * The shape a review id may have before it is put into an authenticated URL.
+ *
+ * <p>The id comes from the server, and it goes into `api/reviews/<id>` on a request carrying this
+ * machine's bearer token. A server that is compromised, or merely something answering in front of
+ * one, could send `../../api/servers` or an id carrying query syntax and steer that token at a route
+ * nobody chose. The same guard the catalog's vendor ids get in `isUsableVendorId`, and the thread
+ * ids in the local adapters — three places, one rule: a stranger's identifier is checked against the
+ * shape an identifier has before it becomes part of anything. (codex, the code round.)</p>
+ */
+const REVIEW_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 
 /** The body a submit carries. Shaped by `RemoteRequest` on the server's side. */
 export function requestBody(
@@ -67,11 +88,12 @@ export function requestBody(
   return { vendor, model, prompt, role: CHAT_ROLE, timeoutSeconds };
 }
 
-/** The id a submit was accepted under, or empty when the answer was not one. */
+/** The id a submit was accepted under, or empty when the answer was not one — or not an id. */
 export function acceptedId(body: unknown): string {
   const row = body as { id?: unknown } | null;
+  const said = typeof row === 'object' && row !== null && typeof row.id === 'string' ? row.id : '';
 
-  return typeof row === 'object' && row !== null && typeof row.id === 'string' ? row.id : '';
+  return REVIEW_ID.test(said) ? said : '';
 }
 
 /**
@@ -89,12 +111,7 @@ export function readStep(body: unknown): RemoteStep {
 
   if (status === 'done' || status === 'completed' || status === 'succeeded') {
     return answer.trim().length > 0
-      ? {
-        kind: 'answer',
-        text: answer.trim(),
-        tokensIn: count(row['tokensIn']),
-        tokensOut: count(row['tokensOut']),
-      }
+      ? { kind: 'answer', text: answer.trim() }
       // A finished review with nothing in it is a failure, not an empty answer: a page showing
       // nothing looks like a model with nothing to say. The same rule as the local adapters'.
       : { kind: 'failure', failure: 'the server finished the turn without an answer' };
@@ -122,10 +139,6 @@ function saidWhy(row: Record<string, unknown>, status: string): string {
   const reason = typeof row['reason'] === 'string' ? row['reason'] : '';
 
   return failure.length > 0 ? failure : reason.length > 0 ? reason : status;
-}
-
-function count(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
 /**
