@@ -93,6 +93,40 @@ second submit with a used idempotency key returns the first job; a job nobody po
 its slot. Extension-side: the client sends `kind` and a key, and a server that does not know either
 still answers — because a server older than the client is the ordinary state of a fleet.
 
+## What the live server said
+
+Three measurements against `coai.remsoft.dev`, each before the thing it justified was trusted.
+
+**A chat turn carries no review role** (2026-09-09, before the extension half shipped). The first
+version sent `role: "Chat"` and the server refused it in 0.2 s, naming the five real roles. What it
+accepted was a job with no role at all — which is the accident this plan exists to replace with a
+promise.
+
+**An unknown property is ignored, so the client could ship first** (2026-09-09, 56 ms). A body
+carrying `kind` was accepted exactly as one without it. That is what made it safe for extension
+0.31.15 to start sending a field no server had yet heard of — and it had to be measured rather than
+assumed, because System.Text.Json ignoring unknown members is a DEFAULT, one
+`UnmappedMemberHandling.Disallow` away from not being.
+
+**The whole new body against the OLD server** (2026-09-09, after this work was released and before
+the VM was updated). This is the measurement that matters to a person today, because the client half
+is deployed by an extension update and the server half by a person on a VM, and the two are never in
+step:
+
+```
+live server: {"ok":true,"version":"0.5.5"}
+sending fields: vendor, model, prompt, role, kind, timeoutSeconds, idempotencyKey
+key shape: 7f20bd66-f953-48ca-974d-d61a32298826 (36 chars)
+accepted 202 in 158ms
+turn took 3.5s
+answer: OK
+```
+
+A server that knows neither new field takes both and answers normally. **The deploy is the remaining
+step and it is deliberately a person's**: `deploy-server.yml` is `workflow_dispatch` only, because
+putting a new binary on the box everybody's reviews run through is a decision rather than a
+consequence of a tag.
+
 ## Definition of Done
 
 - [x] `kind` is part of the job contract, and NULLABLE rather than defaulted — which is the whole
