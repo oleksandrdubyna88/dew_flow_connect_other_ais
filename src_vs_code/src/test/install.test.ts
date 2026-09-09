@@ -1,3 +1,4 @@
+import * as child_process from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import assert from 'node:assert/strict';
@@ -143,6 +144,13 @@ const releaseWorkflow = () => workflowText('release.yml');
 
 const deployWorkflow = () => workflowText('deploy-server.yml');
 
+/** A script under `deploy/`, read as the host would read it — the deploy path is code too. */
+const deployScript = (file: string) =>
+  fs
+    .readFileSync(path.join(__dirname, '..', '..', '..', 'deploy', file), 'utf8')
+    .split('\r\n')
+    .join('\n');
+
 const ridsBuiltBy = (job: string) =>
   [...jobBlock(releaseWorkflow(), job).matchAll(/^\s+- rid:\s*(\S+)\s*$/gm)]
     .map((m) => m[1]!)
@@ -251,15 +259,28 @@ test('neither release nor deploy can hang past a stated bound', () => {
   );
 });
 
-test('every value that crosses into the remote root shell is validated first', () => {
-  // ssh joins its arguments back into ONE string and the remote shell re-parses it, so an argv
-  // element is not the boundary it looks like. The dispatch version was already pinned; the canary
-  // token PATH comes from a repository variable and reaches the same command.
+test('nothing crosses into a remote root shell, because there is no longer one to cross into', () => {
+  // This used to be about VALIDATING what crossed — the version, and the canary token path that
+  // arrived from a repository variable. Since the key became a forced command the property is
+  // stronger and simpler: the workflow sends a fixed verb and one already-pinned version, and
+  // everything it used to be trusted with — the token path, the staging directory, the script's own
+  // location — is a fact about the host now.
   const deploy = deployWorkflow();
 
-  assert.match(deploy, /\^\/\[A-Za-z0-9\._\/-\]\+\$/, 'the token path must be a plain absolute path');
-  assert.match(deploy, /is not a plain absolute path/, 'and anything else stops the run');
-  assert.doesNotMatch(deploy, /scp[^\n]*:\/tmp\//, 'and nothing is staged in world-writable /tmp');
+  // The COMMAND, not the word: the step that replaced it says in prose what it stopped doing, and
+  // that sentence is worth more than the assertion would be if it forbade the noun.
+  assert.doesNotMatch(deploy, /(^|\s)scp\s+-/m, 'a forced command has no scp, and nothing needs one');
+  assert.doesNotMatch(deploy, /COAI_CANARY_TOKEN_FILE/, "the canary token path is the host's");
+  assert.doesNotMatch(
+    deploy,
+    /ssh[^\n]*'[^'\n]*\/opt\//,
+    'no ssh command may name a path on the host — that coupling is what broke the first real deploy',
+  );
+
+  // The three verbs, and nothing else, are what the workflow is allowed to say.
+  assert.match(deploy, /"deploy \$VERSION"/, 'the deploy verb carries the version');
+  assert.match(deploy, /'deploy --rollback'/, 'the rollback is a verb too');
+  assert.match(deploy, /'health'/, 'and so is the loopback probe');
 });
 
 test('a deploy that never took effect is not "rolled back"', () => {
@@ -289,7 +310,16 @@ test('verification runs even when the deploy step itself failed', () => {
     /if: always\(\) && steps\.install\.outcome != 'skipped'/,
     'verification runs whenever the install was attempted',
   );
-  assert.match(deploy, /127\.0\.0\.1:8090\/api\/health/, 'loopback is asked before the edge');
+  // The loopback probe survived the move to a forced command as a VERB: the workflow asks `health`
+  // and the wrapper is what knows the unit's address. Both halves are asserted, because a probe
+  // that exists in only one of them is a probe that silently stopped separating "the unit is wrong"
+  // from "the edge is wrong".
+  assert.match(deploy, /\$SSH "\$USER_NAME@\$HOST" 'health'/, 'loopback is asked before the edge');
+  assert.match(
+    deployScript('coai-deploy-cmd.sh'),
+    /127\.0\.0\.1:8090\/api\/health/,
+    'and the wrapper is what knows where the unit answers',
+  );
 });
 
 test('the server smoke asks the binary its version the only way a server can be asked', () => {
@@ -350,15 +380,99 @@ test('the deploy workflow validates the version before it reaches a root shell',
   assert.match(deploy, /is not a version/, 'and anything else stops the run');
 });
 
-test('the deploy workflow runs the release script rather than its own steps', () => {
+test('the release script is still what runs, and it is the wrapper that runs it', () => {
   // The script on the host owns the release trail, the atomic symlink swap, the per-vendor canary
   // and the rollback. The day a workflow step starts doing its own systemctl restart, all four are
-  // gone and nothing says so.
+  // gone and nothing says so. Since the key became a forced command the CALL moved into the
+  // wrapper — so the assertion moved with it rather than being dropped.
   const deploy = deployWorkflow();
+  const wrapper = deployScript('coai-deploy-cmd.sh');
 
-  assert.match(deploy, /systemd-release\.sh --from/, 'it hands the PUBLISHED artefact to the script');
-  assert.match(deploy, /systemd-release\.sh --rollback/, 'and rolls back through the same script');
-  assert.doesNotMatch(deploy, /systemctl restart/, 'and never restarts the unit behind its back');
+  assert.match(wrapper, /--from/, 'the wrapper hands the PUBLISHED artefact to the script');
+  assert.match(wrapper, /--rollback/, 'and rolls back through the same script');
+  assert.doesNotMatch(deploy, /systemctl restart/, 'the workflow never restarts the unit behind its back');
+  assert.doesNotMatch(wrapper, /systemctl restart/, 'and neither does the wrapper');
+});
+
+test('the deploy key can press a button and nothing else', () => {
+  // The model is CredsForDevs', running on this same host since it shipped: whatever the client
+  // asked for arrives in SSH_ORIGINAL_COMMAND, and only the exact shapes below are honoured. A
+  // leaked key is an update button, not root. ConnectOtherAIs deployed over an unrestricted root
+  // key until 2026-09-09 and never had to.
+  const wrapper = deployScript('coai-deploy-cmd.sh');
+
+  assert.match(wrapper, /restrict,command=/, 'the authorized_keys line is documented in the file it names');
+  assert.match(wrapper, /\^\[0-9A-Za-z\._-\]\{1,40\}\$/, 'the version is validated on the SERVER');
+  assert.match(wrapper, /refused: this key accepts only/, 'and every other shape is refused');
+  // `nopull` is stripped before the version is parsed, or `deploy 0.5.5 nopull` would either be
+  // rejected outright or have its suffix pass through unvalidated. Raised on the plan round.
+  assert.ok(
+    wrapper.indexOf('nopull') < wrapper.indexOf('VERSION="${CMD#deploy }"'),
+    'the flag must be stripped before the version token is taken',
+  );
+});
+
+test('the wrapper refuses everything that is not one of its three verbs', () => {
+  // RUN, not read. The `case` block is the whole security boundary of a key that reaches a root
+  // account, and a regex asserted against its source proves the text is there, not that it decides
+  // anything. Every input below returns before the wrapper touches the network, the checkout or the
+  // release script, so this is safe to run anywhere `sh` exists.
+  const script = path.join(__dirname, '..', '..', '..', 'deploy', 'coai-deploy-cmd.sh');
+  const refused = [
+    'rm -rf /',
+    'deploy; rm -rf /',
+    'deploy ../../etc',
+    'deploy $(id)',
+    'deploy 0.5.5 extra',
+    `deploy ${'a'.repeat(41)}`,
+    'deploy',
+    '',
+    'bash',
+  ];
+
+  for (const command of refused) {
+    const run = child_process.spawnSync('sh', [script], {
+      env: { ...process.env, SSH_ORIGINAL_COMMAND: command },
+      encoding: 'utf8',
+    });
+
+    if (run.error !== undefined) {
+      return; // no POSIX sh on this machine; the CI runner has one and this is where it matters
+    }
+    assert.equal(run.status, 90, `'${command}' must be refused, not run`);
+    assert.match(run.stderr, /^refused: /, `'${command}' must say why it was refused`);
+  }
+});
+
+test('the wrapper repairs a stale checkout instead of failing on it', () => {
+  // The first real deploy failed because the host's release script was three commits behind the
+  // workflow invoking it. The fix belongs on the side that holds the truth, and it has to survive
+  // the OTHER thing that was true of that host: a working tree dirtied by a hand `chmod +x`, which
+  // would abort a plain pull for ever.
+  const wrapper = deployScript('coai-deploy-cmd.sh');
+
+  assert.match(wrapper, /merge --ff-only origin\/main/, 'the checkout is fast-forwarded');
+  assert.match(wrapper, /checkout -- \./, 'and local modifications to tracked files are discarded');
+  assert.match(wrapper, /--untracked-files=no/, 'while untracked files are left alone');
+  assert.match(wrapper, /timeout "\$NET_TIMEOUT"/, 'every network call is bounded');
+});
+
+test('both deploy scripts are committed executable', () => {
+  // The workflow starts these over ssh. `deploy/systemd-release.sh` was committed 100644, so the
+  // first deploy on any host with a fresh checkout died on `permission denied` — it worked here
+  // only because somebody chmod-ed it by hand, twice, because `git checkout` put the mode back.
+  // A comment cannot hold a file mode; this can.
+  const modes = child_process
+    .execSync('git ls-files -s deploy/coai-deploy-cmd.sh deploy/systemd-release.sh', {
+      cwd: path.join(__dirname, '..', '..', '..'),
+      encoding: 'utf8',
+    })
+    .trim()
+    .split('\n');
+
+  for (const line of modes) {
+    assert.match(line, /^100755 /, `${line.split('\t')[1]} must be executable in git`);
+  }
 });
 
 test('a deploy that swapped the binary and then failed its own check rolls back', () => {
