@@ -296,11 +296,21 @@ export function resolveChatPick(
   const provider = list.providers.find((one) => one.id === providerId);
   if (provider === undefined) {
     const refused = list.refused.find((one) => one.id === providerId);
+    if (refused !== undefined) {
+      return { ok: false, refusal: refused.reason };
+    }
+    // A row that exists and is switched OFF is not the same thing as a row that is gone, and the
+    // person can act on exactly one of them. `chatProvidersFrom` filters disabled rows out of BOTH
+    // lists — correctly, since a disabled row is not configured for anything — so without this the
+    // two states arrive here indistinguishable and both read as "no longer configured".
+    // (gemini, the code round.)
+    const disabled = vendors.find((one) => one.id === providerId && !one.enabled);
 
     return {
       ok: false,
-      refusal: refused?.reason
-        ?? `${providerId} is not a model this conversation can be sent to any more`,
+      refusal: disabled !== undefined
+        ? `${providerId} is switched off in the panel — turn it back on to send a chat to it`
+        : `${providerId} is not a model this conversation can be sent to any more`,
     };
   }
   const row = vendors.find((one) => one.id === providerId);
@@ -314,6 +324,19 @@ export function resolveChatPick(
   }
 
   return { ok: true, row, model: modelId };
+}
+
+/**
+ * What a legacy value resolved to, and — when it did not — which providers were in the way.
+ *
+ * <p>`candidates` is empty on every path but one: a saved MODEL that more than one provider offers.
+ * It exists so the caller can name them ("`gpt-5.2` is offered by `codex-cheap` and `codex-paid`")
+ * instead of asking a person to pick something out of a list they were never shown.</p>
+ */
+export interface LegacyPick {
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly candidates: readonly string[];
 }
 
 /**
@@ -331,17 +354,31 @@ export function legacyPick(
   list: ChatProviderList,
   vendors: readonly Vendor[],
   saved: string,
-): { readonly providerId: string; readonly modelId: string } {
+): LegacyPick {
   if (saved.length === 0) {
-    return { providerId: '', modelId: '' };
+    return { providerId: '', modelId: '', candidates: [] };
   }
+  // A ROW first, and the precedence is not arbitrary: every legacy value IS a row id, because that
+  // is the only thing the old picker ever offered (`chatModelsFrom` mapped each row to one entry
+  // keyed by `vendor.id`). A saved string that also happens to name a model is therefore a row that
+  // somebody named after a model, and reading it as the row is reading it as what it was written as.
+  // The model branch below exists for a value typed by hand into `settings.json`, which is the only
+  // way one can arrive. (gemini, the code round, asked for this precedence to be stated.)
   const asRow = list.providers.find((one) => one.id === saved);
   if (asRow !== undefined) {
-    return { providerId: saved, modelId: vendors.find((one) => one.id === saved)?.model ?? '' };
+    return {
+      providerId: saved,
+      modelId: vendors.find((one) => one.id === saved)?.model ?? '',
+      candidates: [],
+    };
   }
   const offering = list.providers.filter((one) => one.models.some((model) => model.id === saved));
+  if (offering.length === 1) {
+    return { providerId: offering[0]!.id, modelId: saved, candidates: [] };
+  }
 
-  return offering.length === 1
-    ? { providerId: offering[0]!.id, modelId: saved }
-    : { providerId: '', modelId: saved };
+  // Ambiguous, or offered by nobody. The model is KEPT either way so the caller can strand it under
+  // its own name, and the candidates come with it so the question can be "which of these two?"
+  // rather than "pick something". (gemini, the code round.)
+  return { providerId: '', modelId: saved, candidates: offering.map((one) => one.id) };
 }

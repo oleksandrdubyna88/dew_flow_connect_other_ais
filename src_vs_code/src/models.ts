@@ -349,6 +349,8 @@ export function allowedModelsFor(vendor: Vendor, servers: readonly TeamServerSta
     return { models: [vendor.model], named, catalog: 'waiting' };
   }
 
+  const wanted = named.toLowerCase();
+
   return {
     // Case-insensitively, because `RemoteProbe.Read` on the other side of this seam compares with
     // `OrdinalIgnoreCase`. A server whose catalog says `DeepSeek` answers a row that recorded
@@ -356,8 +358,11 @@ export function allowedModelsFor(vendor: Vendor, servers: readonly TeamServerSta
     // caption saying the server allows it nothing. Neither side may lower-case the name it SENDS —
     // that is the server's own spelling — but both must agree about which names are the same one.
     // Found by the automated reviewer on this change's pull request.
+    // `named` is lower-cased ONCE rather than inside the predicate. It was a fresh string allocation
+    // per catalog entry, per remote row, per rebuild of the picker — invisible at three rows and not
+    // at thirty. (gemini, the code round.)
     models: (server.catalog.vendors ?? [])
-      .find((v) => v.id.toLowerCase() === named.toLowerCase())?.models ?? [],
+      .find((v) => v.id.toLowerCase() === wanted)?.models ?? [],
     named,
     catalog: 'here',
   };
