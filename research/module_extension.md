@@ -974,8 +974,17 @@ read the same old value and the later write would drop the earlier one's convers
 from a rejection rather than staying poisoned, since a storage failure that silently stopped every
 later write would be indistinguishable from the bug this fixes.
 
-**The open tail.** A panel restored into a window where the conversation's record was pruned is
-disposed rather than left as an empty tab pretending to be one.
+**Two open tails.** A panel restored into a window where the conversation's record was pruned is
+disposed rather than left as an empty tab pretending to be one — silently, which is the right trade at
+window start and the wrong one if anybody reports the tab vanishing.
+
+And `chatCommand.ts` is 920 lines, over the 800 the coding-style rule allows; it was 720 before this
+change. The extraction that fixes it is real and named: `readyToChat`, `cliFor`, `remoteFor` and
+`started` are a coherent "what can answer, and how is it started" cluster with no tie to the thread
+registry, used by three callers — opening a tab, switching a model, and reopening a restored
+conversation. It is NOT done here on purpose: this diff has been through its code round, a file move
+afterwards would ship unreviewed movement, and two other plans are editing the same file. It is worth
+one small change of its own.
 
 ## The chat tab wears its own glyph (2026-09-09)
 
