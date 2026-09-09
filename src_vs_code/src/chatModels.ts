@@ -59,6 +59,31 @@ export function canChat(vendor: Vendor): boolean {
   return CHAT_RUNTIMES.includes(vendor.runtime) || vendor.runtime === 'remote';
 }
 
+/**
+ * The memory rules that belong to the MODEL, so that changing one changes them together.
+ *
+ * <p>A Team server answers one question and forgets it: every turn must carry the conversation, and
+ * the conversation must be capped, because the bill for turn N is the bill for everything before it.
+ * A local CLI holds it in its own process and has neither problem.</p>
+ *
+ * <p><b>Why this is a function and not two assignments.</b> A conversation that switches model
+ * replaces the session, the directory and the model id — and the first version left these two fields
+ * describing the model it had just thrown away. Both directions broke, each invisibly: local to a
+ * server left `forgetful` false, so the server was asked turn two with no transcript behind it and
+ * answered as if it were turn one, while the three-turn cap never applied at all; server to local
+ * left it true, so a CLI that HAS a memory was refused a fourth question. Spreading one object is
+ * what makes the next field added here impossible to update in one place and forget in the other.
+ * (codex, the code round.)</p>
+ *
+ * <p>`asked` is zero, and that is the half worth saying out loud: the cap counts the turns THIS
+ * model was asked, not the turns the tab has held. Carrying the count across would meet a person
+ * who chose a server model after four local turns with "this conversation is full" before they had
+ * asked it anything.</p>
+ */
+export function memoryOf(vendor: Vendor): { readonly forgetful: boolean; readonly asked: number } {
+  return { forgetful: vendor.runtime === 'remote', asked: 0 };
+}
+
 export function chatModelsFrom(vendors: readonly Vendor[]): ChatModelList {
   const enabled = vendors.filter((vendor) => vendor.enabled);
   const offered = enabled

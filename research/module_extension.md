@@ -264,7 +264,35 @@ JSON body through whatever sits in front of a server is where a 413 arrives at t
 Running, Done, Failed — so a fifth value means a server much newer than this client, or something in
 front of it answering for it, and three minutes of "Thinking…" is the worst way to say either.
 
-Measured live: a real turn through `coai.remsoft.dev`, answered in 5.2 seconds.
+**The vendor name the server knows is not the row's own id.** A row is called `<server>-<vendor>` so
+that two Team servers each offering `codex` do not collide, and `remoteVendor` records the half the
+server wants — but only since the field existed. Falling back to the row id for an older row sends
+the compound name, and the server answers *"'remsoftdev-codex' is not a vendor here"*: zero tokens,
+seconds per round, and a message that reads exactly like a typo in a setting nobody typed. This
+repository shipped that in three releases already. `serverVendorOf` in `teamServers.ts` is the
+inverse of `remoteVendorRowId` and lives beside it, so the two directions cannot drift apart.
+
+**The memory rules belong to the model, so switching one replaces them.** `memoryOf` answers both —
+whether the model keeps a conversation, and how many turns it has been asked — and both places a
+session starts spread that one object. The first version set them where a conversation was created
+and left them alone where its model CHANGED, which broke both directions invisibly: local to a
+server left the flag false, so a server that remembers nothing was asked turn two with no transcript
+and the three-turn cap never applied at all; server to local left it true, so a CLI that HAS a
+memory was refused a fourth question.
+
+**A stranger's identifier is checked before it becomes part of an authenticated URL.** The review id
+comes from the server and goes into `api/reviews/<id>` on a request carrying this machine's bearer
+token; `../../api/servers` would steer that token at a route nobody chose. The same guard the
+catalog's vendor ids get and the local adapters' thread ids get — three places, one rule.
+
+**A queue says where you are.** A shared server queues twenty deep per person by design, and the
+position was already parsed out of every poll and thrown away; minutes of an unchanging spinner is
+the one shape a busy server and a broken tab look identical in. `ChatSession.send` takes an optional
+progress callback that a local session never calls.
+
+Measured live against `coai.remsoft.dev`: a legacy row `remsoftdev-claude` resolves to `claude`, the
+server's own id — `639245409310726709-c7c8d927752342539710abbc0cb5142d` — passes the shape guard,
+and a real turn answered in 3.8 seconds.
 
 ### Three vendors, one seam (2026-09-09)
 

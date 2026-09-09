@@ -56,10 +56,10 @@ export class RemoteChatSession implements ChatSession {
     private readonly now: () => number = Date.now,
   ) {}
 
-  send(text: string): Promise<TurnResult> {
+  send(text: string, onWaiting?: (position: number) => void): Promise<TurnResult> {
     // One turn at a time, exactly as the local session does it: the server would take two, and the
     // transcript this side keeps would then be written out of order.
-    const mine = this.queue.then(() => this.turn(text)).catch((reason: unknown) => ({
+    const mine = this.queue.then(() => this.turn(text, onWaiting)).catch((reason: unknown) => ({
       ok: false as const,
       failure: `the turn failed unexpectedly: ${message(reason)}`,
     }));
@@ -79,7 +79,7 @@ export class RemoteChatSession implements ChatSession {
     }
   }
 
-  private async turn(text: string): Promise<TurnResult> {
+  private async turn(text: string, onWaiting?: (position: number) => void): Promise<TurnResult> {
     if (this.disposed) {
       return { ok: false, failure: 'the conversation was closed' };
     }
@@ -97,17 +97,30 @@ export class RemoteChatSession implements ChatSession {
       // login page, and reporting that as an answer would put a login page in the conversation.
       return { ok: false, failure: 'the server accepted the question but did not say which review it is' };
     }
+    // The window `dispose` cannot see: it ran while the POST was in flight, found `inFlight` empty
+    // and cancelled nothing — and the job the server has just accepted would then run, hold a vendor
+    // slot on a shared account and answer into a tab that closed. Checked HERE, where the id first
+    // exists, because that is the first moment there is anything to cancel. (codex, the code round.)
+    if (this.disposed) {
+      void this.transport.cancel(id);
+
+      return { ok: false, failure: 'the conversation was closed' };
+    }
     this.inFlight = id;
 
     try {
-      return await this.waitFor(id, deadline);
+      return await this.waitFor(id, deadline, onWaiting);
     } finally {
       this.inFlight = '';
     }
   }
 
   /** Poll until it answers, fails, or the deadline passes. */
-  private async waitFor(id: string, deadline: number): Promise<TurnResult> {
+  private async waitFor(
+    id: string,
+    deadline: number,
+    onWaiting?: (position: number) => void,
+  ): Promise<TurnResult> {
     let refusals = 0;
     while (!this.disposed) {
       const remaining = deadline - this.now();
@@ -137,6 +150,11 @@ export class RemoteChatSession implements ChatSession {
       if (step.kind === 'failure') {
         return { ok: false, failure: step.failure };
       }
+      // Where they are in the queue, said out loud. A shared Team server queues twenty deep per
+      // person by design, so "still waiting" can be minutes — and the position was already parsed
+      // here and thrown away, which left an unchanging spinner as the only thing a person could tell
+      // a busy server from a broken tab by. (gemini, the code round.)
+      onWaiting?.(step.position);
       // Still waiting. The server is SUPPOSED to have held the connection for as long as it was
       // asked to, in which case this pause is nothing beside it — but a server that answers
       // "queued" the instant it is asked would otherwise spin this loop with no yield at all, and

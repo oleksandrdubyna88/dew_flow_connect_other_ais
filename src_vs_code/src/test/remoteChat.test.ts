@@ -11,9 +11,11 @@ import {
   waitSecondsFor,
 } from '../remoteAsk';
 import { RemoteChatSession, RemoteTransport } from '../remoteChatSession';
-import { REQUEST_TIMEOUT_MS } from '../teamServerApi';
+import { REQUEST_TIMEOUT_MS, ServerResult } from '../teamServerApi';
+import { remoteChatFor, transportFor } from '../chatRemote';
 import { Timers } from '../cliChatSession';
 import { TurnBudgets } from '../chatSession';
+import { Vendor } from '../vendors';
 
 /**
  * A conversation held by a server that holds no conversation.
@@ -37,7 +39,11 @@ const AT_ONCE: Timers = {
 const answered = (text: string): unknown => ({ status: 'done', answer: text, tokensIn: 10, tokensOut: 3 });
 
 /** A server that says what the test tells it to, in order, and records what it was asked. */
-function fakeServer(replies: readonly { body?: unknown; failure?: string; status?: number }[]): {
+function fakeServer(
+  replies: readonly { body?: unknown; failure?: string; status?: number }[],
+  /** Held open, so a test can close the tab while the submit is still in flight. */
+  holdSubmit?: Promise<void>,
+): {
   transport: RemoteTransport;
   submitted: Record<string, unknown>[];
   polls: { id: string; waitSeconds: number }[];
@@ -55,6 +61,7 @@ function fakeServer(replies: readonly { body?: unknown; failure?: string; status
     transport: {
       submit: async (body) => {
         submitted.push(body);
+        await holdSubmit;
 
         return { body: { id: 'review-1' }, failure: '', status: 200 };
       },
@@ -96,12 +103,34 @@ test('an accepted submit gives its review id, and anything else gives none', () 
   }
 });
 
+test('an id the server invents is checked before it becomes an authenticated URL', () => {
+  // The id is a stranger's answer and it is interpolated into `api/reviews/<id>` on a request that
+  // carries the bearer token. A compromised or merely misconfigured server answering `../../x` or
+  // one carrying query syntax would send that token somewhere this side never meant to reach. The
+  // same guard the catalog's vendor ids get, and the thread ids in the local adapters. (codex.)
+  for (const hostile of [
+    { id: '../../api/servers' },
+    { id: 'review-1?wait=0&x=' },
+    { id: 'review 1' },
+    { id: 'review/1' },
+    { id: '' },
+    { id: `r${'e'.repeat(200)}` },
+  ]) {
+    assert.strictEqual(acceptedId(hostile), '', `it accepted the id: ${hostile.id}`);
+  }
+
+  // What a real server sends still passes — a GUID, and the shapes around it.
+  assert.strictEqual(
+    acceptedId({ id: '3afb5834-0c1e-4a9b-9f2d-5c7e8a1b2c3d' }),
+    '3afb5834-0c1e-4a9b-9f2d-5c7e8a1b2c3d',
+  );
+  assert.strictEqual(acceptedId({ id: 'review_1.2-3' }), 'review_1.2-3');
+});
+
 test('a finished review is its answer; a finished review with nothing in it is a failure', () => {
   assert.deepStrictEqual(readStep(answered('  it means this  ')), {
     kind: 'answer',
     text: 'it means this',
-    tokensIn: 10,
-    tokensOut: 3,
   });
   // The same rule the local adapters follow: a page showing nothing looks like a model with nothing
   // to say, which is a different thing from a turn that produced none.
@@ -249,4 +278,130 @@ test('a status this client does not know is named, not waited out', () => {
   // The two that ARE running stay running.
   assert.strictEqual(readStep({ status: 'queued', position: 3 }).kind, 'waiting');
   assert.strictEqual(readStep({ status: 'running' }).kind, 'waiting');
+});
+
+test('a tab closed while the question is still being SUBMITTED cancels what the server accepted', async () => {
+  // The window between the POST leaving and its answer arriving is the one the cancellation misses:
+  // `dispose` has nothing to cancel yet, and by the time the id exists the session is already
+  // closed. The job then runs, holds a vendor slot on a shared account, and answers into nothing —
+  // which is the exact thing closing a tab was supposed to prevent. (codex.)
+  let release = (): void => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const server = fakeServer([{ body: answered('nobody will read this') }], held);
+  const session = new RemoteChatSession(server.transport, vendor, BUDGETS, AT_ONCE);
+
+  const turn = session.send('explain this');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.strictEqual(server.submitted.length, 1, 'the submit had not left yet');
+  session.dispose();
+  release();
+
+  const result = await turn;
+  assert.ok(!result.ok);
+  assert.match(result.failure, /closed/);
+  assert.deepStrictEqual(server.cancelled, ['review-1'], 'the accepted job was left running');
+  assert.strictEqual(server.polls.length, 0, 'a closed session went on polling');
+});
+
+test('a queue tells the person where they are, rather than leaving them at "Thinking…"', async () => {
+  // A shared Team server queues twenty deep per person by design, and a poll already parses the
+  // position — it was read and thrown away. Minutes of an unchanging spinner is the one shape that
+  // cannot be told from a broken tab. (gemini.)
+  const server = fakeServer([
+    { body: { status: 'queued', position: 4 } },
+    { body: { status: 'queued', position: 2 } },
+    { body: { status: 'running', position: 0 } },
+    { body: answered('at last') },
+  ]);
+  const session = new RemoteChatSession(server.transport, vendor, BUDGETS, AT_ONCE);
+
+  const seen: number[] = [];
+  const result = await session.send('explain this', (position) => seen.push(position));
+
+  assert.deepStrictEqual(result, { ok: true, answer: 'at last' });
+  assert.deepStrictEqual(seen, [4, 2, 0], 'the queue position never reached the caller');
+});
+
+test('a caller that wants no progress is not required to take any', async () => {
+  // `ChatSession` is one interface with two implementations and the local one has no queue at all.
+  const server = fakeServer([{ body: { status: 'queued', position: 1 } }, { body: answered('done') }]);
+  const session = new RemoteChatSession(server.transport, vendor, BUDGETS, AT_ONCE);
+
+  assert.deepStrictEqual(await session.send('explain this'), { ok: true, answer: 'done' });
+});
+
+test('the wire carries the vendor the SERVER knows, and the status the server actually sent', async () => {
+  // Two things one seam answers. The vendor: a row saved before `remoteVendor` existed is called
+  // `<server>-<vendor>`, and sending that id produces a 400 reading "not a vendor here" — a defect
+  // this repository shipped in three releases. The status: a success arm reporting a literal 200 is
+  // a fact invented at the one place the real one was in hand, and the poll loop decides on exactly
+  // that field. (codex and gemini, the code round.)
+  const routes: string[] = [];
+  const bodies: unknown[] = [];
+  const asked = async <T>(
+    _url: string,
+    route: string,
+    attempt: { body?: unknown } = {},
+  ): Promise<ServerResult<T>> => {
+    routes.push(route);
+    if (attempt.body !== undefined) {
+      bodies.push(attempt.body);
+
+      return { ok: true, status: 202, contract: 1, value: { id: 'review-9' } as T };
+    }
+
+    return { ok: true, status: 203, contract: 1, value: { status: 'done', answer: 'yes' } as T };
+  };
+
+  const legacy: Vendor = {
+    id: 'remsoftdev-codex',
+    runtime: 'remote',
+    model: 'gpt-5-codex',
+    enabled: true,
+    plan: true,
+    code: true,
+    baseUrl: 'https://coai.remsoft.dev',
+    executablePath: '',
+    pricePerMillionIn: 0,
+    pricePerMillionOut: 0,
+  };
+  const server = { id: 'remsoftdev', name: 'RemSoft Dev', url: 'https://coai.remsoft.dev' };
+
+  const session = remoteChatFor(legacy, server, 'a-token', asked);
+  assert.ok(session !== undefined, 'a signed-in row got no session');
+  assert.deepStrictEqual(await session.send('explain this'), { ok: true, answer: 'yes' });
+
+  assert.strictEqual(
+    (bodies[0] as Record<string, unknown>)['vendor'],
+    'codex',
+    'the row id went to the server as a vendor name',
+  );
+  assert.deepStrictEqual(routes, ['api/reviews', 'api/reviews/review-9?wait=8']);
+
+  // A transport that reports what it was told. 202 and 203 are not shapes this server sends today —
+  // they are here because a literal would have swallowed either.
+  const transport = transportFor('https://coai.remsoft.dev', 'a-token', asked);
+  assert.strictEqual((await transport.submit({ a: 1 })).status, 202);
+  assert.strictEqual((await transport.poll('review-9', 8)).status, 203);
+});
+
+test('a row belonging to a server this side cannot reach gets no session at all', () => {
+  const server = { id: 'remsoftdev', name: 'RemSoft Dev', url: 'https://coai.remsoft.dev' };
+  const row: Vendor = {
+    id: 'remsoftdev-codex',
+    runtime: 'remote',
+    model: 'gpt-5-codex',
+    enabled: true,
+    plan: true,
+    code: true,
+    baseUrl: 'https://coai.remsoft.dev',
+    executablePath: '',
+    pricePerMillionIn: 0,
+    pricePerMillionOut: 0,
+  };
+
+  assert.strictEqual(remoteChatFor(row, server, ''), undefined, 'a signed-out row built a session');
+  assert.strictEqual(remoteChatFor(row, { ...server, url: '' }, 'a-token'), undefined);
 });

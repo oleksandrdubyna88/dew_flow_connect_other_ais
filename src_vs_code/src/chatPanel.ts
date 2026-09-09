@@ -10,6 +10,7 @@ import {
   chatMessagesHtml,
   chatPageHtml,
   chatPickerHtml,
+  chatThinkingHtml,
 } from './chatPage';
 import { escapeHtml } from './webviewHtml';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
@@ -60,6 +61,14 @@ export interface ChatPushState {
   readonly failure: string;
   readonly models: readonly ChatModelChoice[];
   readonly modelId: string;
+  /**
+   * How many turns are ahead of this one on a Team server, or 0 for none and for a local model.
+   *
+   * <p>Not optional. A push that says nothing about the queue would leave the last number on screen
+   * while the turn is being answered — and this state is deduplicated by its serialisation, so a
+   * stale position would be pushed exactly once and then stick.</p>
+   */
+  readonly queued: number;
 }
 
 /**
@@ -199,6 +208,7 @@ export function pushChatState(entry: ChatEntry, state: ChatPushState): boolean {
     messagesHtml: chatMessagesHtml(state.messages),
     running: state.running,
     capped: state.capped,
+    thinkingHtml: chatThinkingHtml(state.running, state.queued),
     cappedHtml: chatCappedHtml(state.capped),
     failureHtml: state.failure.length === 0 ? '' : `<div class="failure">${escapeHtml(state.failure)}</div>`,
     pickerHtml: chatPickerHtml(state.models, state.modelId),

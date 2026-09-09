@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { chatChoice, chatModelsFrom, chosenModel } from '../chatModels';
+import { chatChoice, chatModelsFrom, chosenModel, memoryOf } from '../chatModels';
 import { AGY_ARGS, CHAT_RUNTIMES, chatHome, launchSpecFor } from '../cliChatLaunch';
 import { Vendor } from '../vendors';
 
@@ -228,4 +228,23 @@ test('a runtime with no adapter is refused rather than launched through the wron
   assert.match(spec.refusal, /my-local runs on local/);
   assert.strictEqual(spec.executable, '', 'a refused row still produced something to run');
   assert.deepStrictEqual([...spec.args], []);
+});
+
+test('the memory rules belong to the MODEL, so switching one replaces them', () => {
+  // The defect this pins: a switch replaced the session, the home and the model id, and left
+  // `forgetful` describing the model that had just been thrown away. Both directions broke, each in
+  // the way that is hardest to see. Local to a Team server: the flag stayed false, so the server —
+  // which remembers nothing — was asked turn two with no transcript behind it and answered as if it
+  // were turn one, while the three-turn cap never applied at all. Server to local: the flag stayed
+  // true, so a CLI that HAS a memory was refused a fourth question and handed the smaller budget
+  // meant for a JSON body. One function answers it now, and both callers spread it. (codex.)
+  assert.deepStrictEqual(memoryOf(vendor({ runtime: 'remote' })), { forgetful: true, asked: 0 });
+  assert.deepStrictEqual(memoryOf(vendor({ runtime: 'claude' })), { forgetful: false, asked: 0 });
+
+  // Zero, and this is the half that is easy to get wrong. `asked` is what the three-turn cap counts,
+  // and the cap is about a model that re-sends the conversation every turn — so it counts the turns
+  // THIS model was asked, not the turns the tab has held. Carrying the count across a switch would
+  // meet a person who chose a server model after four local turns with "this conversation is full"
+  // before they had asked it anything.
+  assert.strictEqual(memoryOf(vendor({ runtime: 'remote' })).asked, 0);
 });

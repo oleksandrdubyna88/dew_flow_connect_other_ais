@@ -93,3 +93,39 @@ test('the passage never reaches PowerShell: the script is a constant, and it is 
     );
   }
 });
+
+test('a conversation that changes its model replaces its memory rules with it', () => {
+  // A structural guard because the thing it guards has no seam: `switchNow` needs a live extension
+  // host, and the defect it had was an OMISSION — three fields updated and a fourth left describing
+  // the model that was just thrown away. `memoryOf` is the one rule; what this asserts is that BOTH
+  // places that start a session take it from there, so adding a fifth field to it cannot be applied
+  // in one place and forgotten in the other. (codex, the code round.)
+  const text = read(join('src', 'chatCommand.ts'));
+
+  // SPREAD, in both places, so the object is taken whole. Reading one field out of it would be the
+  // same defect wearing a function call: the next field added to `memoryOf` would reach the new
+  // conversation and not the switched one.
+  assert.match(
+    text,
+    /\.\.\.memoryOf\(/,
+    'a new conversation does not take its memory rules from memoryOf',
+  );
+  assert.match(
+    text,
+    /Object\.assign\(thread, memoryOf\(/,
+    'a switch does not replace the memory rules with the new model\u2019s',
+  );
+});
+
+test('a closed tab is forgotten, not merely disposed', () => {
+  // The map outlived every tab that had ever been opened, and an answer arriving after a close then
+  // posted state into a webview VS Code had already torn down. Forgetting the thread makes both
+  // impossible at once, because every reader of it starts by looking it up.
+  const text = read(join('src', 'chatCommand.ts'));
+
+  assert.match(
+    text,
+    /onClosed:[\s\S]{0,900}?threads\.delete\(/,
+    'closing a tab leaves its conversation in the registry forever',
+  );
+});

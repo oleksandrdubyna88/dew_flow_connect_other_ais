@@ -132,6 +132,7 @@ function chatStyle(uiScale: number): string {
   .msg.you .what { opacity: .85; }
   .empty { opacity: .6; }
   .thinking { opacity: .75; margin: 0 0 12px; }
+  .queued { opacity: .8; font-size: .9em; }
   .failure { border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border)); border-radius: 4px; padding: 8px 10px; margin: 0 0 12px; }
   .capped { border: 1px solid var(--vscode-panel-border); border-radius: 4px; padding: 10px 12px; margin: 0 0 10px; }
   .capped p { margin: 0 0 8px; }
@@ -143,6 +144,29 @@ function chatStyle(uiScale: number): string {
 ${ZOOM_CSS}`;
 }
 
+/**
+ * The line shown while a turn is in flight, and where in a queue it is.
+ *
+ * <p>"Thinking…" is the whole truth for a local CLI: the process is running and it is thinking. It
+ * is a guess for a Team server, where the honest answer for most of the wait is that somebody else's
+ * round has the vendor. A shared server queues twenty deep per person by design, so an unchanging
+ * spinner for minutes is the one shape a busy server and a broken tab look identical in — and the
+ * position was already on the wire. (gemini, the code round.)</p>
+ *
+ * <p>`position` is 0 when the server did not say, or when the turn has left the queue and is being
+ * answered. Both are "no number to show", and neither is position zero.</p>
+ */
+export function chatThinkingHtml(running: boolean, position: number): string {
+  if (!running) {
+    return '';
+  }
+  const where = Number.isInteger(position) && position > 0
+    ? ` <span class="queued">· waiting in the queue, ${position} ahead</span>`
+    : '';
+
+  return `<p class="thinking">Thinking…${where}</p>`;
+}
+
 /** The document, without its head or its script. */
 function chatBody(state: ChatPageState): string {
   const locked = state.running || state.capped;
@@ -151,7 +175,7 @@ function chatBody(state: ChatPageState): string {
 <div class="passage" id="passage">${escapeHtml(state.passage)}</div>
 <div id="failure">${state.failure.length === 0 ? '' : `<div class="failure">${escapeHtml(state.failure)}</div>`}</div>
 <div id="messages">${chatMessagesHtml(state.messages)}</div>
-<div id="thinking">${state.running ? '<p class="thinking">Thinking…</p>' : ''}</div>
+<div id="thinking">${chatThinkingHtml(state.running, 0)}</div>
 <div id="capped">${chatCappedHtml(state.capped)}</div>
 <div id="pickerBox">${chatPickerHtml(state.models, state.modelId)}</div>
 <textarea id="say" rows="3" placeholder="Ask about the text above…"${locked ? ' disabled' : ''}>${escapeHtml(state.draft)}</textarea>
@@ -218,7 +242,7 @@ function chatScript(state: ChatPageState): string {
     const messages = document.getElementById('messages');
     if (messages && typeof data.messagesHtml === 'string') { messages.innerHTML = data.messagesHtml; }
     const thinking = document.getElementById('thinking');
-    if (thinking) { thinking.innerHTML = data.running ? '<p class="thinking">Thinking…</p>' : ''; }
+    if (thinking && typeof data.thinkingHtml === 'string') { thinking.innerHTML = data.thinkingHtml; }
     const capped = document.getElementById('capped');
     if (capped) { capped.innerHTML = data.cappedHtml || ''; wireCapped(); }
     // The picker is re-rendered rather than nudged: after "continue with a local model" the whole

@@ -34,7 +34,7 @@ export interface ChatSession {
    * Turns are serialised — a second `send` while one is in flight waits its turn rather than
    * interleaving down the same pipe.</p>
    */
-  send(text: string): Promise<TurnResult>;
+  send(text: string, onWaiting?: (position: number) => void): Promise<TurnResult>;
 
   /** End it. Safe to call twice; a session already gone stays gone. */
   dispose(): void;
