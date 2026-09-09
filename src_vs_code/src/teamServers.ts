@@ -206,3 +206,22 @@ export function noProviderMessage(server: string, advertised: readonly string[])
     + `extension can do ${IMPLEMENTED_PROVIDERS.join(', ')}. Ask the operator to enable Microsoft, `
     + `or update the extension.`;
 }
+
+/**
+ * Which Team server a reviewer row belongs to.
+ *
+ * <p>By id when the row records one, because an address is CORRECTABLE and an id is not: fixing a
+ * typo in a hostname would otherwise leave rows nothing would ever match again — their model list
+ * frozen, and removal quietly finding none of them. Found on a code round of the Team-server epic.</p>
+ *
+ * <p>It lived as a private rule inside the panel until the chat needed the same answer. Two copies
+ * of a matching rule is how one of them starts matching something else.</p>
+ */
+export function rowBelongsTo(
+  vendor: { readonly teamServerId?: string | undefined; readonly baseUrl: string },
+  server: TeamServer,
+): boolean {
+  return (vendor.teamServerId ?? '').length > 0
+    ? vendor.teamServerId === server.id
+    : canonicalTeamServerUrl(vendor.baseUrl) === canonicalTeamServerUrl(server.url);
+}

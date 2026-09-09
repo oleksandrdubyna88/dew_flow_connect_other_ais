@@ -87,7 +87,8 @@ export { AGY_ARGS } from './agyAdapter';
  * directory. `launchSpecFor` asks it too, so there is one sentence and one rule rather than two.</p>
  */
 export function chatRuntimeRefusal(vendor: Vendor): string {
-  if (CHAT_RUNTIMES.includes(vendor.runtime)) {
+  // A Team server needs no adapter and no executable: it takes a prompt over HTTP and answers it.
+  if (CHAT_RUNTIMES.includes(vendor.runtime) || vendor.runtime === 'remote') {
     return '';
   }
 

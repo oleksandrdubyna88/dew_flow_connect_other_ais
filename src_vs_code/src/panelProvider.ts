@@ -99,6 +99,7 @@ import {
   newTeamServerId,
   remoteVendorRowId,
   teamServersFrom,
+  rowBelongsTo,
 } from './teamServers';
 import { TeamServerState, slotSentence } from './teamServerView';
 import { coaiDataDir } from './dataDir';
@@ -1505,18 +1506,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     return answer === anyway;
   }
 
-  /**
-   * Whether a reviewer row belongs to this server.
-   *
-   * <p>By id when the row records one, because an address is correctable and an id is not: fixing a
-   * typo in a hostname would otherwise leave rows nothing would ever match again — their model list
-   * frozen, and removal quietly finding none of them. Caught on the code round.</p>
-   */
-  private static rowBelongsTo(vendor: Vendor, server: TeamServer): boolean {
-    return (vendor.teamServerId ?? '').length > 0
-      ? vendor.teamServerId === server.id
-      : canonicalTeamServerUrl(vendor.baseUrl) === canonicalTeamServerUrl(server.url);
-  }
 
   private serverNamed(id: string): TeamServer | undefined {
     return this.teamServers(vscode.workspace.getConfiguration('coai')).find((s) => s.id === id);
@@ -1587,7 +1576,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
 
     const rows = vendorsFrom(this.read(config)('vendors')).filter(
-      (v) => v.runtime === 'remote' && PanelProvider.rowBelongsTo(v, server),
+      (v) => v.runtime === 'remote' && rowBelongsTo(v, server),
     );
     const both = rows.length === 1 ? 'Remove it and 1 reviewer' : `Remove it and ${rows.length} reviewers`;
     const answer = await vscode.window.showWarningMessage(
