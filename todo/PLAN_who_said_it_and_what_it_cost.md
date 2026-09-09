@@ -43,7 +43,9 @@ vendor actually charged. The tab and the log both keep the tilde.
   money, estimated }` on `model` messages — recorded from what ACTUALLY answered (the resolved
   row and model from [PLAN_provider_then_model.md](PLAN_provider_then_model.md)), never from what
   is configured now.
-- The caption `The other AI` becomes the model's label in its vendor colour (the edge
+- The caption `The other AI` becomes the model's label in its vendor colour — for an ANSWER. What
+  the person said is captioned `You`, chosen by role before anything looks at a model; a reviewer
+  read an earlier wording as covering both and was right to ask (the edge
   [PLAN_an_answer_reads_like_a_document.md](../research/PLAN_an_answer_reads_like_a_document.md) draws).
 - A running total in the picker row: *this conversation: ~$0.13 · 9.2k tokens*, updated per turn.
 - The ledger: every chat turn writes a usage entry with `kind: chat`, the model, tokens, money and
