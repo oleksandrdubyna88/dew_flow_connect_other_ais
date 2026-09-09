@@ -122,8 +122,16 @@ export async function readFindings(
   if (code === EX_UNAVAILABLE) {
     return { state: 'absent', findings: [] };
   }
+  if (code !== 0) {
+    // Including 74, which is the database itself being unreadable — a third thing again, and one
+    // that says nothing about the round.
+    return { state: 'failed', findings: [] };
+  }
+  const findings = parseFindings(output);
 
-  return code === 0 ? { state: 'loaded', findings: parseFindings(output) } : { state: 'failed', findings: [] };
+  // Exit 0 with an answer nobody can read is a FAILED read. Turning it into an empty list would tell
+  // somebody a round was clean because a pipe was truncated. (Code round, codex.)
+  return findings === undefined ? { state: 'failed', findings: [] } : { state: 'loaded', findings };
 }
 
 /** The real spawn. Injectable above it, so every branch of both readers is a unit test. */

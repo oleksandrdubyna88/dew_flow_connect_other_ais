@@ -22,7 +22,10 @@ export interface RoundsLogHooks {
    * on. It answers with the state as well as the findings, because an empty list and a failed read
    * are different things to say about a round.</p>
    */
-  readonly onFindings: (key: string) => Promise<void>;
+  readonly onFindings: (
+    key: string,
+    round: { readonly sessionId: string; readonly stage: string; readonly number: number },
+  ) => Promise<void>;
 }
 
 /**
@@ -188,7 +191,8 @@ export class RoundsLogPanel {
       void this.hooks.onForget(command.provider);
     }
     if (command.kind === 'findings') {
-      void this.hooks.onFindings(command.key);
+      const { key, sessionId, stage, number } = command;
+      void this.hooks.onFindings(key, { sessionId, stage, number });
     }
   }
 

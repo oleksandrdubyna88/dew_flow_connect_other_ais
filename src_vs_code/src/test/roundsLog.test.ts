@@ -306,6 +306,17 @@ test('a row the database has never heard of says so, rather than asking for what
   assert.equal(row.foundState, 'absent');
 });
 
+test('a server too old to page has already sent everything, so a clean round is not asked about again', () => {
+  // The pairing that would have turned an honestly clean round into a failed read: the old shape
+  // carries every finding, so an empty list from it is the whole truth — and asking `--findings` of
+  // a binary that does not know the flag gets exit 64. (Code round, codex.)
+  const old = { ...dbLog({ findings: [] }), paged: false };
+  const [row] = rowsFrom([session([round()])], NOW, () => undefined, [], old) as [LogRow];
+
+  assert.equal(row.foundState, 'loaded');
+  assert.equal(row.found.length, 0);
+});
+
 test('a round that produced no findings has nothing to decide and stays done', () => {
   // Otherwise every clean round would sit in "awaiting decisions" for ever: there is no resolve to
   // make, so the server's -1 never moves.

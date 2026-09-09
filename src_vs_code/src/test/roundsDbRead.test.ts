@@ -137,6 +137,27 @@ test('a round the database has never heard of is ABSENT, which is not "it found 
   assert.equal(found.findings.length, 0);
 });
 
+test('an answer nobody can read is a FAILED read, not a round that found nothing', async () => {
+  // Exit 0 with a truncated pipe. Turning that into an empty list would tell somebody a round was
+  // clean because a process was killed halfway through writing about it. (Code round, codex.)
+  for (const output of ['{"findings": [{"ordi', 'not json at all', '{"rounds":[]}']) {
+    const { run } = calls({ code: 0, output });
+    const found = await readFindings('coai-mcp.exe', { sessionId: 's1', stage: 'CodeReview', number: 2 }, run);
+
+    assert.equal(found.state, 'failed', output);
+  }
+});
+
+test('a database that could not be READ is failed, and is not "no such round"', async () => {
+  // 74 is EX_IOERR — the file, not the round. It used to share 69 with "never recorded", which would
+  // have told somebody a round was never written down because a file was momentarily locked.
+  const { run } = calls({ code: 74, output: '' });
+
+  const found = await readFindings('coai-mcp.exe', { sessionId: 's1', stage: 'CodeReview', number: 2 }, run);
+
+  assert.equal(found.state, 'failed');
+});
+
 test('a read that failed is FAILED, and never a clean round', async () => {
   // The state all three reviewers of the plan round asked for, independently. A timed-out read that
   // answered "no findings" would tell somebody a round was clean because a process did not finish.
