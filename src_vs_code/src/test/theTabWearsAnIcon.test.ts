@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CHAT_ICON } from '../chatIcon';
+import { CHAT_TAB_ICON, chatTabIcon } from '../chatIcon';
 
 /**
  * The chat tab wears this product's own glyph, in green, in both themes.
@@ -11,22 +11,38 @@ import { CHAT_ICON } from '../chatIcon';
  * `iconPath` — a search of `src_vs_code/src` found not one. A person with three conversations open
  * had three tabs that looked like everything else.</p>
  *
- * <p>Structural where it has to be: `chatPanel.ts` imports `vscode`, so no test here can call it.
- * But the failure mode of an icon is not logic, it is a PATH — nothing type-checks a `Uri`, a wrong
- * one produces the generic icon and no error anywhere — so the segments the panel joins live in
- * `chatIcon.ts`, with no `vscode` import, and this file opens them on disk. A regex over the source
- * could only have proved that some string was written down.</p>
+ * <p>The failure mode of an icon is not logic, it is a PATH: nothing type-checks a `Uri`, and a wrong
+ * one produces the generic icon and no error anywhere. So the resolution is a pure function —
+ * `chatTabIcon` takes a joiner, the panel hands it `vscode.Uri.joinPath` and this file hands it one of
+ * its own — and the paths it produces are opened on disk here. The code round refused the first
+ * version's regex over `chatPanel.ts`, correctly: a regex could only have proved that somebody wrote
+ * a string down.</p>
  */
 
 const EXTENSION_ROOT = path.join(__dirname, '..', '..');
 const read = (file: string): string => fs.readFileSync(path.join(EXTENSION_ROOT, file), 'utf8');
+/** The joiner a test can watch, standing where `vscode.Uri.joinPath` stands in the panel. */
+const asPath = (...segments: readonly string[]): string => segments.join('/');
 
-test('both icon files are where the panel will look for them', () => {
-  for (const segments of [CHAT_ICON.light, CHAT_ICON.dark]) {
-    const file = path.join(EXTENSION_ROOT, ...segments);
+test('the icon resolves to two files, and both are in the tree', () => {
+  const resolved = chatTabIcon(asPath);
 
-    assert.ok(fs.existsSync(file), `${segments.join('/')} is named by the panel and is not in the tree`);
-    assert.match(fs.readFileSync(file, 'utf8'), /^<svg /, `${segments.join('/')} is not an svg`);
+  assert.deepEqual(resolved, { light: 'media/chat-light.svg', dark: 'media/chat.svg' });
+
+  for (const file of [resolved.light, resolved.dark]) {
+    const full = path.join(EXTENSION_ROOT, file);
+
+    assert.ok(fs.existsSync(full), `${file} is what the panel asks the workbench for, and is not here`);
+    assert.match(fs.readFileSync(full, 'utf8'), /^<svg /, `${file} is not an svg`);
+  }
+});
+
+test('the icon cannot name anything outside the folder this extension shipped', () => {
+  for (const segments of [CHAT_TAB_ICON.light, CHAT_TAB_ICON.dark]) {
+    for (const segment of segments) {
+      assert.ok(segment !== '..' && !/[\\/]/.test(segment),
+        `an icon segment that walks the tree resolves somewhere nobody meant: ${segment}`);
+    }
   }
 });
 
@@ -37,8 +53,9 @@ test('each icon is drawn for the ground it sits on, full bleed', () => {
   // `help-yellow.svg`, because a bright colour on white reads pale. Measured against the grounds they
   // actually sit on: 4.30:1 on white and 3.64:1 on a Light+ tab, 7.61:1 on Dark+ and 8.10:1 on Dark
   // Modern — every one of them past the 3:1 that WCAG asks of a graphical object.
-  const dark = read(path.join(...CHAT_ICON.dark));
-  const light = read(path.join(...CHAT_ICON.light));
+  const icons = chatTabIcon(asPath);
+  const dark = read(icons.dark);
+  const light = read(icons.light);
 
   assert.match(dark, /fill="#5CC46F"/);
   assert.match(light, /fill="#2E8B3E"/);
@@ -54,36 +71,83 @@ test('each icon is drawn for the ground it sits on, full bleed', () => {
   }
 });
 
-test('the chat tab asks for that icon, in both variants, from the extension’s own folder', () => {
+test('the chat tab asks the workbench for that pair', () => {
+  // The one thing no test in this suite can observe: `chatPanel.ts` imports `vscode`, which does not
+  // exist outside the extension host. Everything else about the icon is a call away, above.
   const source = read(path.join('src', 'chatPanel.ts'));
 
-  assert.match(source, /panel\.iconPath = \{/, 'no iconPath is set, so the tab wears the generic glyph');
-  assert.match(source, /light: vscode\.Uri\.joinPath\(extensionUri, \.\.\.CHAT_ICON\.light\)/);
-  assert.match(source, /dark: vscode\.Uri\.joinPath\(extensionUri, \.\.\.CHAT_ICON\.dark\)/);
-  // Built from the SHARED segments, not from a path written out a second time here — the second copy
-  // is the one that goes stale when a file is renamed, and nothing would say so.
-  assert.ok(!/['"]media\/chat/.test(source), 'the panel spells the icon path out instead of sharing it');
+  assert.match(source, /panel\.iconPath = chatTabIcon\(/,
+    'no iconPath is set, so the tab wears the generic glyph');
+  assert.match(read(path.join('src', 'extension.ts')),
+    /chatWithOtherAi\(chatPanels, context\.extensionUri, args\)/,
+    'the extension URI never leaves activate, so the panel has nothing to join');
 });
 
-test('the extension URI is handed to the panel rather than invented by it', () => {
-  // `createChatPanel` had no context and no URI, and neither did either of its callers; `context`
-  // exists only in `activate`. The URI is threaded, not the whole `ExtensionContext`: a function that
-  // needs a media folder should say that, and this one needs neither storage nor subscriptions.
-  assert.match(read(path.join('src', 'chatPanel.ts')), /extensionUri: vscode\.Uri/);
-  assert.match(read(path.join('src', 'chatCommand.ts')), /extensionUri: vscode\.Uri/);
-  assert.match(read(path.join('src', 'extension.ts')), /chatWithOtherAi\(chatPanels, context\.extensionUri, args\)/);
+test('a panel restored after a reload must be built the same way', () => {
+  // The code round's open tail, held rather than written down. There is no `WebviewPanelSerializer`
+  // in this extension today, so no tab loses its icon — but the plan that adds one restores a panel
+  // WITHOUT passing through `chatWithOtherAi`, and would hand back tabs wearing the generic glyph
+  // again. The day a serializer appears, the file that registers it has to reach `createChatPanel`.
+  const root = path.join(EXTENSION_ROOT, 'src');
+  const walk = (dir: string): string[] => fs.readdirSync(dir, { withFileTypes: true })
+    .flatMap((entry) => {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        return entry.name === 'test' ? [] : walk(full);
+      }
+
+      return entry.name.endsWith('.ts') ? [full] : [];
+    });
+
+  for (const file of walk(root)) {
+    const source = fs.readFileSync(file, 'utf8');
+    if (!source.includes('registerWebviewPanelSerializer')) {
+      continue;
+    }
+
+    assert.match(source, /createChatPanel/,
+      `${path.basename(file)} restores a chat panel without building it the way an opened one is built`);
+  }
 });
 
 test('nothing excludes the icons from the package a person installs', () => {
-  // The tests run against the source tree; a person runs a `.vsix`. `media/` is not excluded today,
-  // and this is what says so the day somebody tidies the ignore file — a shipped extension whose icon
-  // files were left out looks exactly like an extension that never set `iconPath`.
-  const ignored = read('.vscodeignore').split(/\r?\n/).map((line) => line.trim());
+  // The tests run against the source tree; a person runs a `.vsix`. Checking that no line STARTS with
+  // `media` was the first version and the code round was right about it: `**/*.svg` or `**/media/**`
+  // would exclude the icons and leave this green. Each pattern is turned into the regex the packager's
+  // glob means by it and run against the paths the panel actually asks for.
+  const patterns = read('.vscodeignore').split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#') && !line.startsWith('!'));
+  // One pass, character by character. A chain of `.replace` calls cannot do this: the `.*` that `**/`
+  // expands to contains a `*`, which the later `*` rule then rewrites into `[^/]*` — and the first
+  // version of this test passed happily while `**/*.svg` sat in the ignore file.
+  const asRegex = (pattern: string): RegExp => {
+    let out = '';
+    for (let i = 0; i < pattern.length; i += 1) {
+      const here = pattern[i];
+      if (here === '*' && pattern[i + 1] === '*' && pattern[i + 2] === '/') {
+        out += '(?:.*/)?';
+        i += 2;
+      } else if (here === '*' && pattern[i + 1] === '*') {
+        out += '.*';
+        i += 1;
+      } else if (here === '*') {
+        out += '[^/]*';
+      } else if (here === '?') {
+        out += '[^/]';
+      } else {
+        out += here.replace(/[.+^${}()|[\]\\]/, '\\$&');
+      }
+    }
 
-  for (const line of ignored) {
-    assert.ok(
-      line.length === 0 || line.startsWith('#') || !line.startsWith('media'),
-      `.vscodeignore excludes the icons the tab needs: ${line}`,
-    );
+    return new RegExp(`^${out}(?:/.*)?$`);
+  };
+  const icons = chatTabIcon(asPath);
+
+  for (const pattern of patterns) {
+    for (const icon of [icons.light, icons.dark]) {
+      assert.ok(!asRegex(pattern).test(icon),
+        `.vscodeignore keeps ${icon} out of the package, so an installed tab wears the generic glyph: ${pattern}`);
+    }
   }
 });

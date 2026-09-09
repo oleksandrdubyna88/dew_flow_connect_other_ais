@@ -12,7 +12,7 @@ import {
   chatPickerHtml,
   chatStatusHtml,
 } from './chatPage';
-import { CHAT_ICON } from './chatIcon';
+import { chatTabIcon } from './chatIcon';
 import { escapeHtml } from './webviewHtml';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
@@ -120,13 +120,16 @@ export function createChatPanel(
     },
   );
   // A pair, because a tab icon is workbench chrome and no theme reaches it — `var(--vscode-…)` is
-  // unavailable there, and the colour has to be baked into the file. The segments come from
-  // `chatIcon.ts` rather than being spelled out here: a path written twice is a path that goes stale
-  // on the first rename, and nothing type-checks a `Uri`.
-  panel.iconPath = {
-    light: vscode.Uri.joinPath(extensionUri, ...CHAT_ICON.light),
-    dark: vscode.Uri.joinPath(extensionUri, ...CHAT_ICON.dark),
-  };
+  // unavailable there, and the colour has to be baked into the file. The paths are resolved by
+  // `chatTabIcon` rather than spelled out here: a path written twice is a path that goes stale on the
+  // first rename, and nothing type-checks a `Uri`.
+  //
+  // An assignment onto a live object, which the immutability rule would ordinarily refuse. The rule
+  // governs OUR data; this handle is VS Code's, `iconPath` is settable only after creation, and every
+  // webview in this extension is configured the same way (`panel.webview.html = …`,
+  // `view.webview.options = …`). Raised by two reviewers on the code round; recorded rather than
+  // worked around, because the alternative is a creation API the API does not have.
+  panel.iconPath = chatTabIcon((...segments) => vscode.Uri.joinPath(extensionUri, ...segments));
   panel.webview.html = chatPageHtml(state, crypto.randomBytes(16).toString('hex'));
 
   const scale = pushUiScaleTo(panel.webview);
