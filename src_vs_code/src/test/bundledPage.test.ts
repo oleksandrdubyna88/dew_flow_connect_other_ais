@@ -164,7 +164,7 @@ test('the page script the bundle produces parses and runs', () => {
   };
   assert.doesNotThrow(
     () => new Function('document', 'window', 'acquireVsCodeApi', body)(
-      document_, { addEventListener() {} }, () => ({ postMessage() {} })),
+      document_, { addEventListener() {} }, () => ({ postMessage() {}, setState() {} })),
     'the page script threw on its first render',
   );
   assert.equal(seen['failed']?.textContent ?? '', '', 'the page reported an error to itself on first render');
@@ -337,7 +337,9 @@ test('the chat page the bundle produces runs, and its Send button sends exactly 
           (onWindow[type] ??= []).push(fn);
         },
       },
-      () => ({ postMessage: (message: Record<string, unknown>) => posted.push(message) }),
+      // `setState` too: the page hands VS Code its conversation id on load, so a fake without it
+      // is a fake the shipped page cannot run against.
+      () => ({ postMessage: (message: Record<string, unknown>) => posted.push(message), setState: () => undefined }),
       (fn: () => void) => { frames.push(fn); },
     ),
     'the minified chat page script threw on its first render',

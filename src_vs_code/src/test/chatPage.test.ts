@@ -394,7 +394,9 @@ function runChatPage(over: RunOptions = {}): RunningPage {
   new Function('document', 'window', 'acquireVsCodeApi', 'requestAnimationFrame', 'ResizeObserver', body)(
     document_,
     window_,
-    () => ({ postMessage: (message: Record<string, unknown>) => posted.push(message) }),
+    // `setState` as well as `postMessage`: the page tells VS Code which conversation it is the
+    // moment it loads, so a fake without it is a fake the real page cannot run against.
+    () => ({ postMessage: (message: Record<string, unknown>) => posted.push(message), setState: () => undefined }),
     (fn: () => void) => { pending.push(fn); },
     withoutResizeObserver === true ? undefined : FakeResizeObserver,
   );
