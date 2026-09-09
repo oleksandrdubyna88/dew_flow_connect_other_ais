@@ -136,7 +136,10 @@ test('nothing excludes the icons from the package a person installs', () => {
       } else if (here === '?') {
         out += '[^/]';
       } else {
-        out += here.replace(/[.+^${}()|[\]\\]/, '\\$&');
+        // Global, although `here` is one character: a sanitiser that escapes only the first match is
+        // a sanitiser that is wrong the day its input grows, and CodeQL is right to refuse to reason
+        // about which of those two this is.
+        out += here.replace(/[.+^${}()|[\]\\]/g, '\\$&');
       }
     }
 
