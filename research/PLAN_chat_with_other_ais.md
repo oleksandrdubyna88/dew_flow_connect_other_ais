@@ -1,13 +1,37 @@
 # PLAN — Chat with other AIs, from a selection
 
-> Status: **phases 0–3 built and through the gate (2026-09-08); phases 4–6 open.** The trigger
-> works end to end on this machine — a selection in a Claude Code session, one keypress, a tab named
-> after that session holding the other vendor’s answer. Scope: `src_vs_code` only — one command, one webview panel per Claude Code
-> session tab, a long-lived vendor-CLI process behind each panel, and the Team server's existing job
-> endpoint for remote models. **No change to `src_mcp` or `src_server` is needed.**
+> Status: **IMPLEMENTED, 2026-09-09.** All six phases shipped, each through this product's own gate:
+> the trigger and the panel section in 0.31.9–0.31.12, all three vendor CLIs in 0.31.13, and the
+> Team-server path in 0.31.15. A selection in a Claude Code session, one keypress, a tab named after
+> that session holding another vendor's answer — locally through a long-lived CLI process, or
+> remotely as a job on the company subscription, bounded at three turns.
+> One item is owed and it is not ours to build: chat turns are DISTINGUISHABLE in the spending view
+> (they carry no review role) but the view does not yet group on it, which needs a server change —
+> [../todo/PLAN_the_server_knows_a_chat_from_a_review.md](../todo/PLAN_the_server_knows_a_chat_from_a_review.md).
 >
-> Related docs: [research/architecture.md](../research/architecture.md),
-> [ARCHITECTURE.md](../ARCHITECTURE.md).
+> **Deviations.** Three, all of them measurements overruling the plan. (1) The plan wrote off two of
+> the three vendor CLIs — *"claude's schema differs and codex exec has no multi-turn stdin"* — and
+> both halves were wrong: `claude` holds a conversation exactly as `agy` does and answers faster than
+> either, `codex` holds one through a session it resumes rather than a pipe it keeps. That refutation
+> became its own story, [PLAN_three_chat_adapters.md](PLAN_three_chat_adapters.md). (2) The plan said
+> the transcript is never truncated; three reviewers refused it from two directions and the budget is
+> now measured and bounded — 60 000 characters to a pipe, 20 000 to a server, the smaller one because
+> a JSON body through whatever sits in front of a server is where a 413 arrives at turn three.
+> (3) The plan assumed a chat turn would carry a `Chat` role; the live server refuses that in 0.2 s
+> and is right to, so a chat carries no role at all — and, since 0.31.15, a `kind` field sent ahead of
+> the server that will read it.
+>
+> **The tail that became its own plan**: a vendor process that dies mid-conversation still loses the
+> context, and re-sending the whole transcript to cover somebody else's crash spends money silently —
+> [../todo/PLAN_a_dead_process_could_carry_the_conversation_too.md](../todo/PLAN_a_dead_process_could_carry_the_conversation_too.md),
+> deliberately gated on how often it actually happens.
+>
+> Scope: `src_vs_code` only — one command, one webview panel per Claude Code
+> session tab, a long-lived vendor-CLI process behind each panel, and the Team server's existing job
+> endpoint for remote models. **No change to `src_mcp` or `src_server` was needed**, which held.
+>
+> Related docs: [architecture.md](architecture.md), [module_extension.md](module_extension.md),
+> [../ARCHITECTURE.md](../ARCHITECTURE.md).
 
 ## The symptom
 
@@ -252,7 +276,7 @@ The build split recorded that only `antigravity` had an adapter, because `claude
 schema differs and `codex exec` was believed to have no multi-turn stdin. The owner asked for all
 three on 2026-09-08 and the belief was then MEASURED: `codex` holds a conversation through session
 resume, and `claude` holds one exactly as `agy` does — and faster. That work is its own plan,
-[PLAN_three_chat_adapters.md](../research/PLAN_three_chat_adapters.md), because it changes the session’s shape
+[PLAN_three_chat_adapters.md](PLAN_three_chat_adapters.md), because it changes the session’s shape
 rather than this feature’s surface. Until it lands, a non-`antigravity` row is refused by name.
 
 ### Settings
@@ -397,9 +421,11 @@ costs a few hundred bytes, and a file deleted too early costs a process nobody c
       Seen live on 2026-09-08 in 0.31.9: the tab carried the session’s own name, the passage stood
       at the top, the opening turn read `Explain` / `Answer in English.` over the fence, and the
       answer arrived in the tab with the composer waiting under it.
-- [ ] Two sessions **sharing a label** get two panels, and a follow-up never lands in the other one.
-- [ ] Follow-up questions are answered in the same conversation without re-sending the passage on the
-      local path, and correctly with a bounded transcript on the remote one.
+- [x] Two sessions **sharing a label** get two panels, and a follow-up never lands in the other one.
+      Keyed by the entry’s own id rather than by the tab, which cost a whole code round to learn.
+- [x] Follow-up questions are answered in the same conversation without re-sending the passage on the
+      local path, and correctly with a bounded transcript on the remote one — 20 000 characters,
+      newest turns kept, and a cut that says so inside the turn.
 - [x] **Closing a tab kills its process; a process that dies is reported and re-created; VS Code
       being force-killed leaves no orphan behind — ON WINDOWS, WHERE THE MACHINE CAN BE ASKED.**
       Every child is written down as it starts and struck out as it ends, and the next activation
@@ -410,18 +436,27 @@ costs a few hundred bytes, and a file deleted too early costs a process nobody c
       rather than guessing, and an owner pid the operating system has recycled onto a long-lived
       process makes its file unreadable — bounded by removing it after a week, and by the reboot
       that would end the orphan anyway. Named here rather than left to be discovered.
-- [ ] A turn cannot start while another is running.
-- [ ] `coai.chatAutoSend` decides who sends: at the default the keybinding sends and the menu waits
+- [x] A turn cannot start while another is running. Three times over: the page disables its composer,
+      the session serialises its own turns, and the thread chains them — because the keybinding does
+      not go through the composer.
+- [x] `coai.chatAutoSend` decides who sends: at the default the keybinding sends and the menu waits
       with the composer filled and focused, and both other values behave as the table says. The
       clipboard is never restored over something newer.
-- [ ] A remote conversation stops at three turns, saying so and offering the local model that has
+- [x] A remote conversation stops at three turns, saying so and offering the local model that has
       memory - rather than growing a transcript until the server refuses it.
-- [ ] Chat turns appear in the spending view, separated from review turns.
-- [ ] The model picker lists local rows and, when a Team server answers, its catalog rows too.
-- [ ] The section holds a multi-line prompt box, defaulting to the single word `Explain`, and what it
+- [ ] **NOT DONE, and moved out**: chat turns appear in the spending view, separated from review
+      turns. They are already distinguishable — a usage row with no review role is a conversation —
+      but grouping on it is a server change:
+      [../todo/PLAN_the_server_knows_a_chat_from_a_review.md](../todo/PLAN_the_server_knows_a_chat_from_a_review.md).
+- [x] The model picker lists local rows and, when a Team server answers, its catalog rows too — and
+      a row that cannot answer is listed WITH ITS REASON rather than quietly missing.
+- [x] The section holds a multi-line prompt box, defaulting to the single word `Explain`, and what it
       holds is what the passage is actually sent with.
-- [ ] The page zooms with the existing ± control and the setting is shared with every other page.
-- [ ] A running turn is visibly running; a failed turn says what failed.
-- [ ] All tests above pass, `npm test` green, and the live check's timings are recorded for both paths.
-- [ ] `research/architecture.md`, the five help languages and the CHANGELOG are updated.
-- [ ] This plan is promoted to `research/` with `IMPLEMENTED <date>` and its deviations recorded.
+- [x] The page zooms with the existing ± control and the setting is shared with every other page.
+- [x] A running turn is visibly running — and on a Team server it says where in the queue it is —
+      and a failed turn says what failed.
+- [x] All tests above pass, `npm test` green (996 tests, 995 pass, 1 pre-existing skip), and both
+      paths were measured live: a local CLI turn in 4.5 s cold / 1.6 s warm, a Team-server turn in
+      3.8 s through `coai.remsoft.dev`.
+- [x] `research/architecture.md`, the five help languages and the CHANGELOG are updated.
+- [x] This plan is promoted to `research/` with `IMPLEMENTED <date>` and its deviations recorded.

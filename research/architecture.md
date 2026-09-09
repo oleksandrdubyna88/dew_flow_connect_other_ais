@@ -33,7 +33,9 @@ C4Container
   Rel(mcp, creds, "creds config <key>, at startup")
   Rel(mcp, ext, "loopback: settings, round events, escalation")
   Rel(dev, ext, "configures, answers escalations")
-  Rel(ext, srv, "Microsoft sign-in, then a session token")
+  Rel(ext, srv, "Microsoft sign-in, then a session token; and a CHAT turn, as a job with no role")
+  Rel(ext, codex, "spawn — a CHAT, in an empty directory of its own")
+  Rel(ext, gem, "spawn — a CHAT, in an empty directory of its own")
   Rel(ext, mcp, "writes the Team server token file the shim reads")
   Rel(mcp, srv, "a review, when the reviewer is a Team server's")
   Rel(srv, codex, "spawn, one signed-in account per slot")
@@ -51,6 +53,27 @@ C4Container
 | Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [PLAN_team_server.md](PLAN_team_server.md) | **epics 1–3 complete, 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots, `login`, the job queue with the review endpoints, and per-person usage with the admin company view; every route has an `http/` contract. The client runtime (`remote`, `--ask-remote`) and the panel's *Team servers* section, add-a-reviewer and spending block are in; a sign-in belongs to a SIDE of the machine, and the *Server* section shows the address read-only with the server's version beside it. The container, the host edge and the release are epic 4 — and since 2026-09-08 a `server-v*` tag publishes six Native AOT binaries on a GitHub Release beside the image, with [deploy-server.yml](../.github/workflows/deploy-server.yml) driving `deploy/systemd-release.sh` on the host; the per-PERSON spending view is [../todo/PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md) |
 | Measurement bench (`coai-bench`) | [module_bench.md](module_bench.md) · [../src_bench/README.md](../src_bench/README.md) | **shipped 2026-09-04** — drives the published server over stdio, records whole, judges separately |
 | Tests: the harness, its flows, its gaps | [module_tests.md](module_tests.md) | **recorded 2026-09-06** — three suites in-repo, the flow catalogue derived from the tool registry, and the two gaps named (no extension host, no real vendor in CI) |
+
+## The extension gained two arrows of its own (2026-09-09)
+
+Until the chat, every vendor was reached through `coai-mcp`: the extension configured reviewers and
+read rounds, and the shim did the spawning. *Chat other AIs* gave the extension two edges the diagram
+above now carries — it launches a vendor CLI itself, and it submits a job to the Team server itself.
+
+**Both were deliberate, and the reason is the same one: a chat is not a review.** A review is a round
+with roles, thresholds, findings and a verdict; a chat is one person asking one question about one
+passage. Routing it through the round state machine would have meant inventing a role for something
+that has none — and the Team server refuses exactly that, measured: `'Chat' is not a review role`.
+What it accepts is a job with no role, which is also how the spending view will tell the two apart.
+The rest of that separation is a server change, written up as
+[../todo/PLAN_the_server_knows_a_chat_from_a_review.md](../todo/PLAN_the_server_knows_a_chat_from_a_review.md).
+
+What the two edges share is `ChatSession` — one interface, a long-lived process behind one
+implementation and a poll loop behind the other, so the panel does not know which it holds. What
+they do NOT share is memory: a CLI keeps the conversation in its own process, a server keeps none,
+and that difference is `memoryOf` in `chatModels.ts` — it decides whether the transcript travels with
+every turn and whether the conversation is capped, and it travels with the model when the person
+changes it.
 
 ## The one interface neither container owns (2026-09-06)
 

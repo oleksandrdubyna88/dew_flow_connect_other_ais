@@ -3,7 +3,7 @@
 > Status: **plan only, nothing implemented yet.** Scope: `src_server` and the shared job contract;
 > the extension half already ships and works around what is missing here.
 >
-> Related docs: [PLAN_chat_with_other_ais.md](PLAN_chat_with_other_ais.md) (phase 5 is what raised
+> Related docs: [PLAN_chat_with_other_ais.md](../research/PLAN_chat_with_other_ais.md) (phase 5 is what raised
 > all of this), [../research/module_extension.md](../research/module_extension.md).
 
 ## Why this exists

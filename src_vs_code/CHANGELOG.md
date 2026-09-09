@@ -1,5 +1,36 @@
 # Changelog
 
+## Extension 0.31.15 — 2026-09-09
+
+**A Team server can answer a chat now.** Pick one of your Team server's models in *Chat other AIs*
+and the passage goes to the company subscription instead of a CLI on this machine — the same queue
+your reviews go through, the same accounting, and no vendor CLI to install.
+
+It works differently from a local model and the page says so before you choose it. A server holds no
+conversation: it answers one question and forgets it, so every follow-up carries the whole thread
+across again and the bill for the third question is the bill for all three. **Three turns is the
+limit**, and when you reach it the page offers the local model that does remember. While you wait,
+it now tells you where you are — *waiting in the queue, 4 ahead* — because on a shared server most
+of the wait is somebody else's round holding the vendor, and an unchanging spinner is the one thing
+a busy server and a broken tab look identical as.
+
+**Switching the model mid-conversation was carrying the wrong rules across.** Switching from a local
+CLI to a Team server left the conversation thinking its model had a memory: the server was asked the
+second question with none of the first behind it and answered as though the thread had restarted,
+and the three-turn limit never applied at all. Switching back did the opposite — a local model that
+remembers everything was refused a fourth question. Both are fixed, and the rules now travel with
+the model rather than with the tab.
+
+**A reviewer row saved before this spring could not chat at all.** Rows are named `<server>-<vendor>`
+and the older ones do not record which half the server knows, so the whole name was being sent — and
+the server answers *"'remsoftdev-codex' is not a vendor here"*, which reads exactly like a typo in a
+setting you never typed. The name is now derived from the row, and older rows work.
+
+**Closing a tab while your question was still being sent left the job running on the server**, using
+a slot on the shared account to answer into a window that had gone. It is cancelled now, whichever
+moment you close it in.
+
+
 ## Extension 0.31.14 — 2026-09-09
 
 **The panel can tell when a Team server is older than it is.** The server has been putting its API
