@@ -7,7 +7,7 @@ import { isInside } from './chatMessages';
 import { ChatTabMemory, SavedTab, reloadedNote } from './chatTabs';
 import { ChatEntry, ChatPanels } from './chatPanels';
 import { ChatSession } from './chatSession';
-import { ChatMessage, ChatModelChoice } from './chatPage';
+import { AnsweredBy, ChatMessage, ChatModelChoice } from './chatPage';
 import { CliChatSession, REAL_TIMERS } from './cliChatSession';
 import { DEFAULT_BUDGETS } from './chatSession';
 import { ChatMemory, chatChoice, chatModelsFrom, isRemote, memoryOf } from './chatModels';
@@ -368,7 +368,10 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
     // appends a second `you` directly on top of the first. One line saying what happened makes the
     // transcript true, and it is only then worth carrying. (gemini, the plan round, Blocking.)
     if (result.stopped === true) {
-      thread.messages = [...thread.messages, { role: 'model', text: '(you stopped this answer)' }];
+      // One line, deliberately: a structural guard in `chatWiring.test.ts` reads the ORDERING here
+      // as a regex, and breaking the append across lines breaks its pattern without changing what it
+      // guards. The ordering is load-bearing and the guard is right to watch it.
+      thread.messages = [...thread.messages, { role: 'model', text: STOPPED_ANSWER, model: answeredBy(thread) }];
     }
     // And only a vendor that LOST the conversation needs it re-sent. `contextLost` on the failure arm
     // is the session saying which of the two it is: a killed process that held the thread says yes, a
@@ -397,7 +400,10 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   const answer = result.contextLost === true
     ? `(the conversation restarted — this answer does not remember the earlier ones)\n\n${result.answer}`
     : result.answer;
-  thread.messages = [...thread.messages, { role: 'model', text: answer }];
+  // Recorded from the model that ANSWERED, at the moment it did. Reading the setting later would
+  // relabel every earlier answer the day somebody switches models, and switching mid-conversation
+  // is a shipped feature — the thread is carried across, so one tab routinely holds two.
+  thread.messages = [...thread.messages, { role: 'model', text: answer, model: answeredBy(thread) }];
   thread.asked += 1;
   show(entry, false, '');
 }
@@ -823,6 +829,22 @@ async function openWorkspaceFile(
   }
 
   refuse(`There is no ${requested} in this workspace.`);
+}
+
+/** What a stopped turn leaves in the transcript, so it never ends on a dangling question. */
+const STOPPED_ANSWER = '(you stopped this answer)';
+
+/**
+ * Which model a turn was answered by, as the page will caption it.
+ *
+ * <p>The label is the one the picker offered, so the caption reads as the name a person chose from
+ * rather than an id. A model that is not in the list any more — a Team server that withdrew it — is
+ * still named by its id: what answered is a fact about the past, and the page's job is to say it.</p>
+ */
+function answeredBy(thread: Thread): AnsweredBy {
+  const chosen = thread.models.find((model) => model.id === thread.modelId);
+
+  return { id: thread.modelId, label: chosen?.label ?? thread.modelId };
 }
 
 /**

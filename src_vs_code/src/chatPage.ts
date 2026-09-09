@@ -1,6 +1,7 @@
 import { escapeHtml, jsonForScript } from './webviewHtml';
 import { renderAnswer } from './renderAnswer';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
+import { vendorPalette } from './vendorColour';
 
 /**
  * The conversation tab: the passage that started it, what has been said, and a box to say more.
@@ -34,9 +35,32 @@ import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl'
  */
 
 /** One thing said, by one of the two parties. */
+/** Which model gave an answer — recorded when it ARRIVED, never looked up afterwards. */
+export interface AnsweredBy {
+  readonly id: string;
+  readonly label: string;
+}
+
 export interface ChatMessage {
   readonly role: 'you' | 'model';
   readonly text: string;
+  /**
+   * The model that gave this answer, for a `model` message.
+   *
+   * <p>Optional because two kinds of message legitimately have none: what the PERSON said, and an
+   * answer from before this field existed — a conversation restored from a tab that predates it.
+   * Both fall back to the old caption rather than rendering an empty line where a name should be.</p>
+   *
+   * <p>It is what ANSWERED, not what is configured. Switching the model mid-conversation is a
+   * shipped feature and the thread is carried across, so a tab routinely holds answers from two
+   * models; reading the current setting would relabel every one of them.</p>
+   */
+  readonly model?: AnsweredBy | undefined;
+}
+
+/** A model id as a class name. Ids come from a Team server's catalog, so they are not trusted. */
+export function modelClass(id: string): string {
+  return `model-${id.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 48)}`;
 }
 
 /** A model the picker may offer. `remote` models say what they cannot do. */
@@ -113,6 +137,9 @@ export function chatMessagesHtml(messages: readonly ChatMessage[]): string {
       // The copy control carries the INDEX, and the host reads the message out of the same array
       // this was rendered from - so what is copied is the markdown that arrived, which is the one
       // thing a selection cannot give: selecting the page gives what the page shows.
+      const said = !mine && message.model !== undefined && message.model.label.length > 0
+        ? `<span class="who ${modelClass(message.model.id)}">${escapeHtml(message.model.label)}</span>`
+        : `<span class="who">${mine ? 'You' : 'The other AI'}</span>`;
       const copy = mine
         ? ''
         : `<button type="button" class="copy" data-copy="${index}" title="Copy this answer as Markdown">Copy</button>`;
@@ -122,7 +149,7 @@ export function chatMessagesHtml(messages: readonly ChatMessage[]): string {
       const end = mine ? '' : '<hr class="end">';
 
       return `<div class="msg ${mine ? 'you' : 'model'}">`
-        + `<div class="who">${mine ? 'You' : 'The other AI'}${copy}</div>`
+        + `<div class="who">${said}${copy}</div>`
         + `<div class="what">${body}</div>${end}</div>`;
     })
     .join('');
@@ -159,7 +186,23 @@ export function chatCappedHtml(capped: boolean): string {
 }
 
 /** The page's own styles. Its own function so the document below stays readable. */
-function chatStyle(uiScale: number): string {
+/**
+ * A colour rule per model the page knows about, from the palette every other surface uses.
+ *
+ * <p>One call to `vendorPalette` answers here, in the rounds list and on the reviewer cards, so a
+ * vendor a person has learned is the same colour wherever they meet it. A model that answered once
+ * and is no longer offered gets no rule and falls back to the ordinary caption colour — which is
+ * honest: the page cannot say what colour a vendor it has never been told about would have.</p>
+ */
+function modelColours(models: readonly ChatModelChoice[]): string {
+  const colour = vendorPalette(models.map((model) => model.id));
+
+  return models
+    .map((model) => `  .msg .who.${modelClass(model.id)} { color: ${colour(model.id)}; opacity: 1; }`)
+    .join('\n');
+}
+
+function chatStyle(uiScale: number, models: readonly ChatModelChoice[] = []): string {
   // The zoom goes INSIDE the body rule, and that is not a tidiness preference. It used to sit above
   // it, where CSS has no such thing as a declaration: a parser consuming a qualified rule appends
   // every token to the prelude until it meets `{`, and `;` does not end one — so the selector became
@@ -242,6 +285,7 @@ function chatStyle(uiScale: number): string {
   #send:hover:not([disabled]) { background: var(--vscode-button-hoverBackground); }
   #send[disabled] { opacity: .6; cursor: default; }
   .hint { font-size: .85em; opacity: .6; margin-top: 4px; }
+${modelColours(models)}
 ${ZOOM_CSS}`;
 }
 
@@ -781,7 +825,7 @@ export function chatPageHtml(state: ChatPageState, nonce: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(state.title)}</title>
 <style>
-${chatStyle(state.uiScale)}
+${chatStyle(state.uiScale, state.models)}
 </style>
 </head>
 <body>

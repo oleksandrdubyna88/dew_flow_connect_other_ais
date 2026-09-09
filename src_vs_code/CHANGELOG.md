@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+**Every answer says which model gave it**, in that model's own colour — the same colour it has in the
+rounds list and on its reviewer card. Switching models mid-conversation has always carried the
+thread across, so a tab could hold answers from two of them looking identical; now the one you
+switched away from and the one you switched to are told apart at a glance.
+
 **A turn can be stopped.** While an answer is coming there is a *Stop* beside *Thinking…* — for the
 question you saw was wrong the moment you sent it, and for the one that is taking far longer than it
 should. It stops the turn it is showing and no other, so a press that lands late cannot end the

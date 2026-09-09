@@ -29,6 +29,27 @@ local model` the page would otherwise still show the remote one as selected whil
 somewhere else), a pushed state that has not changed is not sent at all, a `pick` naming a model the
 conversation was never offered is refused at the host boundary rather than trusted, and the
 composer takes focus back when a turn ends — without which every follow-up costs a mouse click.
+### Every answer says which model gave it (2026-09-09)
+
+Every answer was captioned `The other AI`, while switching the model mid-conversation is a shipped
+feature and the thread is carried across — so one tab routinely held answers from two models with
+nothing on screen telling them apart.
+
+`ChatMessage.model` is recorded when the answer ARRIVES, from the model that gave it. Reading the
+setting at render time would relabel every earlier answer the day somebody switched, which is the
+defect stated backwards. It is optional for two honest reasons: what the PERSON said has no model,
+and an answer from before the field existed has none either — both fall back to the old caption
+rather than rendering an empty line where a name should be.
+
+**The colour is the vendor's own**, through the same `vendorPalette` the rounds list and the reviewer
+cards call, so a vendor a person has learned is that colour wherever they meet it. The caption
+carries a class per model and `chatStyle` emits one rule per model the page knows; a model that
+answered once and is no longer offered gets no rule and falls back to the ordinary caption colour,
+which is honest — the page cannot say what colour a vendor it has never been told about would have.
+
+The label comes from the picker, so the caption reads as the name a person chose from; a model the
+catalog has withdrawn is still named by its id, because what answered is a fact about the past.
+
 ### A turn can be stopped from the page it is running on (2026-09-09)
 
 The seam shipped first and waited: `ChatSession.stop()` and an `onStop(id, turn)` hook that takes a
