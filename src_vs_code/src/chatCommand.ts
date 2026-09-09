@@ -20,7 +20,7 @@ import { ChatHome, adapterFor, chatHome, chatRuntimeRefusal, defaultExecutableFo
 import { chatProcessFor } from './chatProcess';
 import { launch } from './processLauncher';
 import { resolvedExecutable } from './versionProbe';
-import { REMOTE_CARRY_BUDGET, carriedTurn, openingTurn } from './chatPrompt';
+import { CARRY_BUDGET, REMOTE_CARRY_BUDGET, carriedTurn, openingTurn } from './chatPrompt';
 import { LanguageCode } from './settingsShape';
 import { sourceSession, TabSnapshot } from './sessionKey';
 import { triggerPlan } from './chatTrigger';
@@ -220,9 +220,10 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   // because the process it is going to never heard any of it. Putting the carried version in the
   // transcript would print the entire history back at them under their own one-line question.
   const carrying = thread.carry;
-  const sent = carrying.length > 0
-    ? carriedTurn(carrying, text, chatLanguage(), thread.forgetful ? REMOTE_CARRY_BUDGET : undefined)
-    : text;
+  // Named, because a budget is the kind of thing that must be readable at a glance: a server takes
+  // less than a pipe, and which one this conversation is is the whole difference.
+  const budget = thread.forgetful ? REMOTE_CARRY_BUDGET : CARRY_BUDGET;
+  const sent = carrying.length > 0 ? carriedTurn(carrying, text, chatLanguage(), budget) : text;
 
   // The queue position, pushed as it changes. A local session never calls this back; a Team server
   // does on every poll, which is the difference between "the model is thinking" and "somebody else's
