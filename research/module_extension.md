@@ -57,6 +57,21 @@ left against each workspace root and checks the RESULT is still inside before op
 reference that resolves nowhere is reported to the tab rather than opened somewhere else. The page
 is a surface; the host is the boundary.
 
+**Containment is not a prefix, and that is the boundary's real shape.** `isInside` compares against
+the root with a separator appended: with a root of `/w/app`, the path `/w/app-secret/config.json`
+starts with it and belongs to a different project. It is case-SENSITIVE on purpose — folding case
+would be a guess about the filesystem underneath, wrong on one of the two this product runs on, and
+the cheap direction to be wrong in is refusing a reference a model can simply write again.
+
+**One grammar for what a file reference is.** The renderer used to demand a dot before it would
+offer a link while the host's own check did not, so `Dockerfile`, `LICENSE` and `Makefile` were never
+offered by a page whose host would have opened them. `fileTargetOf` splits the line off and asks
+`isConfinedRelativePath` — the host's function — about the rest.
+
+**The panel delegates, as it does for everything else.** Opening the file is `onOpenFile`, a hook,
+and the work lives with the other host actions: `chatPanel.ts` is the `vscode` wiring, and a function
+that reaches into the workspace, the filesystem and the active editor is not wiring.
+
 **A bare address in prose is not a link.** GFM autolinks one, and this family has already shipped a
 defect of exactly that shape — a URL inside a person's name that GitHub made clickable. A link is a
 link only when the model typed the bracket.

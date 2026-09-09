@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { chatCommandOf } from '../chatMessages';
+import { chatCommandOf, isInside } from '../chatMessages';
 
 /**
  * What the page said, read without a host.
@@ -149,5 +149,32 @@ test('a copy names an answer by an index that is really an index', () => {
   for (const index of [-1, 1.5, '2', undefined, Number.NaN]) {
     assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'copyAnswer', index }),
       { kind: 'ignore' }, `index ${String(index)} was accepted`);
+  }
+});
+
+
+test('a sibling folder that merely starts with the workspace root is not inside it', () => {
+  // A string prefix is not containment. With a root of `/w/app`, the path `/w/app-secret/x` starts
+  // with it and is a different project — the one belonging to somebody who did not open this tab.
+  assert.strictEqual(isInside('/w/app', '/w/app/src/a.ts'), true);
+  assert.strictEqual(isInside('/w/app', '/w/app'), true);
+  assert.strictEqual(isInside('/w/app', '/w/app-secret/config.json'), false,
+    'a sibling sharing the root\'s first letters was treated as inside it');
+  assert.strictEqual(isInside('/w/app/', '/w/app-secret/config.json'), false);
+  assert.strictEqual(isInside('/w/app', '/w/other/a.ts'), false);
+  assert.strictEqual(isInside('/w/app', '/w/App/a.ts'), false,
+    'containment was decided case-insensitively, which is a guess about the filesystem');
+});
+
+test('an extensionless file a model names is still a file', () => {
+  // Dockerfile, LICENSE, Makefile. The renderer used to demand a dot before it would offer a link,
+  // while the host's own check did not — so the two disagreed about what a path IS, and the reader
+  // simply never got a link to any of them. (gemini, the code round.)
+  for (const named of ['Dockerfile', 'LICENSE', 'src/routes/index']) {
+    assert.deepStrictEqual(
+      chatCommandOf({ type: 'command', command: 'openLink', file: named }),
+      { kind: 'openFile', path: named, line: 0 },
+      `${named} was refused as a workspace file`,
+    );
   }
 });
