@@ -4,7 +4,7 @@
 > opens a page with one sortable, filterable, searchable table over every round of every session, and
 > `rounds.md` — with its five-second rewrite, its markdown renderers and their 27 tests — is gone.
 > Epic 3 (findings inside an expanded row) was not built and is its own plan:
-> [PLAN_findings_in_the_log.md](../todo/PLAN_findings_in_the_log.md).
+> [PLAN_findings_in_the_log.md](PLAN_findings_in_the_log.md).
 >
 > **Deviations.** The sort and filter predicates are not "pure functions under test" beside a page
 > copy — they are the page's: `compareRows` and `rowMatches` reference nothing outside their

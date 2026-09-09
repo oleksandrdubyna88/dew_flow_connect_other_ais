@@ -3,7 +3,7 @@
 > Status: **Epic 1 IMPLEMENTED, 2026-09-05** — the server writes `coai.db` (sessions, rounds,
 > reviewers, every finding with its resolution and reason, FTS5 search) and 24 tests cover it over
 > real SQLite. **Epic 2 (the extension reads it) is NOT built** and is extracted into
-> [todo/PLAN_local_db_reader.md](../todo/PLAN_local_db_reader.md); **Epic 3 (the five-window
+> [todo/PLAN_local_db_reader.md](PLAN_local_db_reader.md); **Epic 3 (the five-window
 > measurement) is not run.** Scope as built: `src_mcp/src/Store/{RoundsDb,Schema,RoundContext,AgentLog}.cs`,
 > `PanelService` (two call sites, both best-effort), `SessionStore.OpenedUtc`, `research/module_server.md`.
 >
@@ -35,7 +35,7 @@
 >    its session file as before. Written down rather than half-built.
 >
 > Related docs: [PLAN_rounds_log_view.md](PLAN_rounds_log_view.md) — the page this feeds;
-> [todo/PLAN_findings_in_the_log.md](../todo/PLAN_findings_in_the_log.md) — closed by this plan's
+> [todo/PLAN_findings_in_the_log.md](PLAN_findings_in_the_log.md) — closed by this plan's
 > findings table once the reader lands; [module_server.md](module_server.md),
 > [module_extension.md](module_extension.md).
 
@@ -114,7 +114,7 @@ round record keeps counts.
 2. `sql.js` in the VSIX; `RoundsDbReader` opening the file's bytes read-only; the page's provider
    pushes query results; the JSON path stays as the fallback when there is no database yet.
 3. The page: findings under an expanded row (closing
-   [todo/PLAN_findings_in_the_log.md](../todo/PLAN_findings_in_the_log.md)); the search box queries FTS through the
+   [todo/PLAN_findings_in_the_log.md](PLAN_findings_in_the_log.md)); the search box queries FTS through the
    provider with a small debounce, results replacing the table.
 
 ### Epic 3 — measured

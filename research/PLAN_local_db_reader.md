@@ -1,12 +1,41 @@
 # PLAN — the rounds log page reads the database
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/{roundsLog.ts,
-> roundsLogPanel.ts, extension.ts}`, a `sql.js` dependency in the VSIX, their tests,
-> `research/module_extension.md`.
+> Status: **IMPLEMENTED, 2026-09-09.** Scope as built: `src_mcp/src/Store/RoundsQuery.cs`,
+> `src_mcp/src/Program.cs` (`--log`), `src_vs_code/src/{roundsDbRead.ts, roundsLog.ts,
+> roundsLogPanel.ts}`, their tests, `research/module_extension.md`.
 >
-> The other half of [research/PLAN_local_db.md](../research/PLAN_local_db.md), whose Epic 1 shipped on
-> 2026-09-05: the server now writes `coai.db` with every finding, its resolution and the reason. The
-> page still flattens the session files on every tick and therefore still shows counts.
+> The other half of [PLAN_local_db.md](PLAN_local_db.md), whose Epic 1 shipped on 2026-09-05.
+
+## Deviations — the reader is the SERVER, and there is no `sql.js`
+
+The plan's requirement 4 was a WebAssembly SQLite bundled into the VSIX, reading `coai.db` over its
+bytes. That is not what shipped, and the thing that killed it is the plan's own gate finding 1: in
+write-ahead mode the newest transactions live in `coai.db-wal`, which a byte snapshot can neither
+lock nor see — so the page would silently miss exactly the round the person just ran, and could hit
+`SQLITE_CORRUPT` on a torn read. The finding said "checkpoint, copy under a lock, or read through the
+server", and the third is what was built.
+
+`coai-mcp --log` opens the database read-only with a busy timeout and answers the page in JSON, so
+the WAL is handled by the process that owns the schema, there is no native module and no WASM blob in
+the VSIX, and every query lives beside the table it queries
+(`RoundsQuery.cs`, and the doc comment there says why). The JSON session files stay as the live half:
+the page merges database rounds with the sessions that are running right now.
+
+Requirements 1 and 2 shipped — rows, findings under an expanded row with their resolutions, and the
+two blind-spot views the operator named as the purpose (`GroupedBy`, an SQL aggregate, plus the
+`re_raised`/`reject` list). It then took
+[PLAN_the_log_never_gets_its_findings.md](PLAN_the_log_never_gets_its_findings.md) for any of it to
+reach the screen.
+
+Requirement 1's other half — filters applied IN SQL — did not ship either: the filters are applied in
+the page over everything that was sent, which is why the payload became 3.83 MB and why
+[todo/PLAN_the_log_asks_for_a_page.md](../todo/PLAN_the_log_asks_for_a_page.md) exists.
+
+## Open tail — extracted, not dropped
+
+Requirement 3, the FTS search box, is NOT built. `findings_fts` exists in the schema
+(`src_mcp/src/Store/Schema.cs:115`) and nothing queries it. Extracted to
+[todo/PLAN_the_log_searches_the_findings.md](../todo/PLAN_the_log_searches_the_findings.md).
 
 ## What must be true when this is done
 
@@ -68,8 +97,10 @@ make those two queries first-class rather than something a person exports and pi
 
 ## Definition of Done
 
-- [ ] The page reads the database, with the JSON path as the fallback.
-- [ ] Findings, resolutions and reasons appear under an expanded row.
-- [ ] Search is FTS, debounced.
-- [ ] A test asserts the database rows equal the session-file rows for the same data.
-- [ ] `module_extension.md` describes the reader; this plan promoted.
+- [x] The page reads the database — through `coai-mcp --log`, not `sql.js`; the session files stay as
+      the live half rather than a fallback. See *Deviations*.
+- [x] Findings, resolutions and reasons appear under an expanded row.
+- [ ] ~~Search is FTS, debounced~~ — **not built**, extracted to
+      [todo/PLAN_the_log_searches_the_findings.md](../todo/PLAN_the_log_searches_the_findings.md).
+- [x] A test asserts the database rows equal the session-file rows for the same data.
+- [x] `module_extension.md` describes the reader; this plan promoted.
