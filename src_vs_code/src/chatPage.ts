@@ -19,8 +19,13 @@ import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl'
  * <p><b>The passage is at the top and it is not decoration.</b> The menu path takes whatever is in
  * the clipboard and cannot know whether it is the passage just selected or something copied an hour
  * ago — the gate raised that three times. Showing the text the conversation is ABOUT is how a person
- * sees a stale clipboard instead of discovering it in the answer. It is capped in height and scrolls:
- * a fifty-line selection would otherwise push the composer off the screen on open.</p>
+ * sees a stale clipboard instead of discovering it in the answer.</p>
+ *
+ * <p><b>It used to be capped in height with a scrollbar of its own, and is not any more.</b> The cap
+ * existed because "a fifty-line selection would otherwise push the composer off the screen on open"
+ * — and the composer is pinned now, so nothing can push it anywhere. What a long selection pushes
+ * down is the conversation, which is what the page scrolls to anyway. Two scrollbars on one page was
+ * the price of the old arrangement and the operator named it.</p>
  *
  * <p><b>The composer is disabled while a turn runs, and that is a feature.</b> A real explanation
  * took 9.4 s when it was measured, and eight of those seconds are silent. Two turns down one NDJSON
@@ -121,11 +126,24 @@ export function chatCappedHtml(capped: boolean): string {
 
 /** The page's own styles. Its own function so the document below stays readable. */
 function chatStyle(uiScale: number): string {
-  return `  ${zoomStyle(uiScale)}
-  body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 16px 20px; }
+  // The zoom goes INSIDE the body rule, and that is not a tidiness preference. It used to sit above
+  // it, where CSS has no such thing as a declaration: a parser consuming a qualified rule appends
+  // every token to the prelude until it meets `{`, and `;` does not end one — so the selector became
+  // `font-size: 13px; body`, and the whole body rule was dropped. The page had no margin, no
+  // padding, no font and no background of its own for as long as that stood. The help page always
+  // did it this way (`helpPage.ts`); this one did not.
+  return `  html, body { height: 100%; }
+  body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 0; display: flex; flex-direction: column; overflow: hidden; ${zoomStyle(uiScale)} }
+  /* The conversation scrolls; the page does not. \`min-height: 0\` is what makes that true: a flex
+     child refuses to shrink below its content without it, so the region would never scroll, the
+     body would instead, and the composer would leave the screen — the symptom this layout exists
+     to end. (The gate raised it, and it is invisible to every test but a reading of this rule.) */
+  #scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px 20px 0; }
+  #composer { flex: 0 0 auto; padding: 8px 20px 12px; }
+  .compose { display: flex; gap: 8px; align-items: flex-end; }
   header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
   h1 { font-size: 1.2em; margin: 0; }
-  .passage { border-left: 3px solid var(--vscode-panel-border); padding: 6px 0 6px 12px; margin: 0 0 16px; white-space: pre-wrap; opacity: .85; max-height: 180px; overflow-y: auto; }
+  .passage { border-left: 3px solid var(--vscode-panel-border); padding: 6px 0 6px 12px; margin: 0 0 16px; white-space: pre-wrap; opacity: .85; }
   .msg { margin: 0 0 14px; }
   .msg .who { font-size: .85em; opacity: .7; margin-bottom: 3px; }
   .msg .what { white-space: pre-wrap; }
@@ -138,8 +156,11 @@ function chatStyle(uiScale: number): string {
   .capped p { margin: 0 0 8px; }
   .picker { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; }
   .caption { font-size: .85em; opacity: .7; }
-  textarea { width: 100%; box-sizing: border-box; min-height: 64px; font: inherit; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); border-radius: 4px; padding: 8px; }
+  textarea { flex: 1 1 auto; min-width: 0; box-sizing: border-box; min-height: 64px; font: inherit; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); border-radius: 4px; padding: 8px; }
   textarea[disabled] { opacity: .6; }
+  #send { flex: 0 0 auto; font: inherit; color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: none; border-radius: 4px; padding: 8px 14px; cursor: pointer; }
+  #send:hover:not([disabled]) { background: var(--vscode-button-hoverBackground); }
+  #send[disabled] { opacity: .6; cursor: default; }
   .hint { font-size: .85em; opacity: .6; margin-top: 4px; }
 ${ZOOM_CSS}`;
 }
@@ -171,15 +192,22 @@ export function chatStatusHtml(running: boolean, position: number): string {
 function chatBody(state: ChatPageState): string {
   const locked = state.running || state.capped;
 
-  return `<header><h1>${escapeHtml(state.title)}</h1>${zoomControlHtml(state.uiScale)}</header>
+  return `<main id="scroll">
+<header><h1>${escapeHtml(state.title)}</h1>${zoomControlHtml(state.uiScale)}</header>
 <div class="passage" id="passage">${escapeHtml(state.passage)}</div>
 <div id="failure">${state.failure.length === 0 ? '' : `<div class="failure">${escapeHtml(state.failure)}</div>`}</div>
 <div id="messages">${chatMessagesHtml(state.messages)}</div>
 <div id="thinking">${chatStatusHtml(state.running, 0)}</div>
 <div id="capped">${chatCappedHtml(state.capped)}</div>
+</main>
+<footer id="composer">
 <div id="pickerBox">${chatPickerHtml(state.models, state.modelId)}</div>
+<div class="compose">
 <textarea id="say" rows="3" placeholder="Ask about the text above…"${locked ? ' disabled' : ''}>${escapeHtml(state.draft)}</textarea>
-<div class="hint">Enter sends · Shift+Enter for a new line</div>`;
+<button type="button" id="send"${locked ? ' disabled' : ''}>Send</button>
+</div>
+<div class="hint">Enter sends · Shift+Enter for a new line</div>
+</footer>`;
 }
 
 /** The page's behaviour. Its own function for the same reason the styles are. */
@@ -204,12 +232,21 @@ function chatScript(state: ChatPageState): string {
     if (text.length === 0) { return; }
     box.value = '';
     vscode.postMessage({ type: 'command', command: 'send', text: text });
+    // Clicking the button moves focus to the button. Without this every follow-up costs a mouse
+    // click back into the box - the same reason the lock below returns focus when a turn ends.
+    if (typeof box.focus === 'function') { box.focus(); }
   }
   const say = document.getElementById('say');
   if (say) {
     say.addEventListener('keydown', function (event) {
       if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send(); }
     });
+  }
+  // The second caller of the ONE send. Attached here rather than as an onclick attribute: the page's
+  // CSP is script-src 'nonce-...', so an inline handler is not merely untidy, it is a dead button.
+  const sendButton = document.getElementById('send');
+  if (sendButton) {
+    sendButton.addEventListener('click', function () { send(); });
   }
   function wirePicker() {
     const model = document.getElementById('model');
@@ -271,6 +308,11 @@ function chatScript(state: ChatPageState): string {
     if (box && typeof data.running === 'boolean' && typeof data.capped === 'boolean') {
       const wasLocked = box.disabled;
       box.disabled = data.running || data.capped;
+      // The button takes the box's lock rather than recomputing it. Two controls deciding the same
+      // thing from the same inputs is two chances to disagree, and the one that disagrees is the one
+      // that sends a second turn down a pipe that carries one.
+      const button = document.getElementById('send');
+      if (button) { button.disabled = box.disabled; }
       // Back to the box when the turn ends. Without this every single follow-up costs a mouse click,
       // nine seconds after the last one — which is the whole conversation, one click at a time.
       if (wasLocked && !box.disabled && typeof box.focus === 'function') { box.focus(); }
