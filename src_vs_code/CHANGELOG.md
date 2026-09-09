@@ -6,8 +6,6 @@
 question you saw was wrong the moment you sent it, and for the one that is taking far longer than it
 should. It stops the turn it is showing and no other, so a press that lands late cannot end the
 question you asked afterwards.
-## Unreleased
-
 **Answers read like answers.** Headings were hashes, lists were dashes, code was backticks and a
 link was its own address in brackets — everything a model wrote as Markdown arrived as Markdown. It
 is rendered now: headings, numbered and bulleted lists that nest, code in a code face and in its own
@@ -26,9 +24,6 @@ into a plan or an issue. Selecting the page still gives you what the page shows.
 
 **The text is brighter and has room to breathe.** It was the colour of a button label, packed at the
 editor's interface size.
-
-## Unreleased
-
 **The box you type in stays where you put it.** It used to scroll away with the conversation, so
 asking a second question meant scrolling back down to find it. The composer, the model picker and
 the hint are pinned to the bottom of the tab now, the conversation scrolls above them, and there is
