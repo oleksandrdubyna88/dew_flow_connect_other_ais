@@ -32,6 +32,19 @@ on every machine stops working with a message about roles.
 keeps working) or `chat`. The role stays required for a review and absent for a chat, which is what
 already happens; the difference is that it becomes a promise rather than an accident.
 
+**The CLIENT half is already done, deliberately ahead of the server.** `CHAT_KIND` ships in every
+chat body from extension 0.31.14 (`remoteAsk.ts`). It had to go first: the day the server requires a
+role for a job it reads as a review — which is what `review` being the default MEANS — a client
+sending a blank role and no `kind` is refused, and that client is every copy already installed. One
+sending `kind: 'chat'` is not. Raised by codex on the code round of phase 5, against this plan's own
+claim that an old client keeps working, and it was right.
+
+Safe today, and measured rather than assumed: `coai.remsoft.dev` accepted a body carrying `kind` in
+56 ms on 2026-09-09, exactly as it accepted one without — an unknown property is ignored, which is
+System.Text.Json's default and one `UnmappedMemberHandling.Disallow` away from not being. So the
+server change is now purely additive: read the field, default it to `review`, and the fleet is
+already sending it.
+
 Then `UsageReader` can group by it, and the panel's spending section can show conversations beside
 rounds rather than instead of them — which is the half of the owner's *"счиатть, отделять"* that
 this repository cannot honour on its own.
@@ -70,7 +83,8 @@ still answers — because a server older than the client is the ordinary state o
 ## Definition of Done
 
 - [ ] `kind` is part of the job contract, defaulted so no existing client changes behaviour.
-- [ ] The extension sends it, and still works against a server that ignores it.
+- [x] The extension sends it, and still works against a server that ignores it. *(0.31.14, measured
+      against the live server before the server knew the field.)*
 - [ ] `UsageReader` carries it and the panel's spending section separates conversations from rounds.
 - [ ] A job nobody polls expires and frees its vendor slot.
 - [ ] A repeated submit with one idempotency key produces one job.

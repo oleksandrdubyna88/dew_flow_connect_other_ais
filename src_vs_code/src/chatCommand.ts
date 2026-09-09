@@ -7,7 +7,7 @@ import { ChatSession } from './chatSession';
 import { ChatMessage, ChatModelChoice } from './chatPage';
 import { CliChatSession, REAL_TIMERS } from './cliChatSession';
 import { DEFAULT_BUDGETS } from './chatSession';
-import { chatChoice, chatModelsFrom, memoryOf } from './chatModels';
+import { ChatMemory, chatChoice, chatModelsFrom, isRemote, memoryOf } from './chatModels';
 import { remoteIsFull } from './remoteAsk';
 import { remoteChatFor } from './chatRemote';
 import { TeamServer, rowBelongsTo, teamServersFrom } from './teamServers';
@@ -37,8 +37,14 @@ import { Vendor, vendorsFrom } from './vendors';
  * reason `chatPanel.ts` is thin — what cannot be tested should be small.</p>
  */
 
-/** What a conversation is, beyond its process. Keyed by the entry's own id, weak so it dies with it. */
-interface Thread {
+/**
+ * What a conversation is, beyond its process. Keyed by the entry's own id, weak so it dies with it.
+ *
+ * <p>It EXTENDS `ChatMemory` rather than restating its fields, which is what makes them impossible
+ * to update in one of the two places a session starts and forget in the other: `memoryOf` is checked
+ * against that type at its source, and both callers take the whole object.</p>
+ */
+interface Thread extends ChatMemory {
   /**
    * The conversation itself — REPLACED when the person picks another model.
    *
@@ -54,16 +60,6 @@ interface Thread {
   modelId: string;
   /** Whether a turn is in flight. Only so a switch can say out loud that it is waiting for one. */
   running: boolean;
-  /**
-   * This model keeps no conversation of its own, so every turn re-sends one and they are counted.
-   *
-   * <p>Not readonly, and that was the defect: the model can CHANGE under an open tab, and this
-   * describes the model rather than the tab. It comes from `memoryOf` in both places a session
-   * starts, so the two cannot disagree.</p>
-   */
-  forgetful: boolean;
-  /** How many turns THIS model has ANSWERED. The cap is on turns, not on messages. */
-  asked: number;
   /**
    * The conversation to hand the NEXT turn, because the process it goes to never heard it.
    *
@@ -88,11 +84,6 @@ interface Thread {
 }
 
 const threads = new WeakMap<object, Thread>();
-
-/** Does this model keep no memory of its own? The rule, and its consequences, live in `chatModels`. */
-function forgetful(vendor: Vendor): boolean {
-  return memoryOf(vendor).forgetful;
-}
 
 /** The tabs, narrowed to what `sessionKey` judges on. */
 function snapshots(): { active: TabSnapshot | undefined; all: TabSnapshot[] } {
@@ -404,7 +395,7 @@ async function remoteFor(vendor: Vendor): Promise<{ session: ChatSession | undef
 }
 
 async function cliFor(vendor: Vendor): Promise<{ resolved: string; refusal: string }> {
-  if (forgetful(vendor)) {
+  if (isRemote(vendor)) {
     // A Team server has no executable to find. Saying so here keeps the caller's shape: one
     // question, one refusal, before anything is created.
     return { resolved: '', refusal: '' };
@@ -480,7 +471,7 @@ async function switchNow(entry: ChatEntry, modelId: string): Promise<void> {
   // whose CLI is not installed — and finding that out by spawning it would kill a conversation that
   // was working a moment ago.
   const cli = await cliFor(vendor);
-  const remote = forgetful(vendor) ? await remoteFor(vendor) : { session: undefined, refusal: '' };
+  const remote = isRemote(vendor) ? await remoteFor(vendor) : { session: undefined, refusal: '' };
   const cannot = cli.refusal.length > 0 ? cli.refusal : remote.refusal;
   if (cannot.length > 0) {
     void vscode.window.showWarningMessage(cannot);
@@ -643,7 +634,7 @@ export async function chatWithOtherAi(panels: ChatPanels, args: readonly unknown
 
     return;
   }
-  const remote = forgetful(ready.vendor) ? await remoteFor(ready.vendor) : { session: undefined, refusal: '' };
+  const remote = isRemote(ready.vendor) ? await remoteFor(ready.vendor) : { session: undefined, refusal: '' };
   if (remote.refusal.length > 0) {
     void vscode.window.showWarningMessage(remote.refusal);
 

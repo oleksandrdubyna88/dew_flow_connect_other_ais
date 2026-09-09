@@ -242,12 +242,16 @@ opposite things.
 
 **Two measurements changed the design before any of it was trusted.**
 
-- **A chat turn carries no review ROLE.** The first version sent `Chat`, which the server refuses
-  outright — and it is right to: a role there carries a shipped prompt, a threshold and a round
-  budget, and a test walks every value of that enum asserting each asks for an honest empty findings
-  list. What the server does accept is a job with no role, which is also the separation the owner
-  asked for: a usage row with no role is a conversation, because every review has one. That it is a
-  validation gap rather than a contract is written up as its own plan.
+- **A chat turn carries no review ROLE, and says `kind: chat` instead.** The first version sent
+  `Chat` as a role, which the server refuses outright — and it is right to: a role there carries a
+  shipped prompt, a threshold and a round budget, and a test walks every value of that enum asserting
+  each asks for an honest empty findings list. What the server does accept is a job with no role,
+  which is also the separation the owner asked for: a usage row with no role is a conversation,
+  because every review has one. But an absence is not a contract, so the turn ALSO carries the `kind`
+  field that `todo/PLAN_the_server_knows_a_chat_from_a_review.md` will add — sent before the server
+  reads it, because the day a job defaulting to `review` requires a role, a client sending a blank
+  role and no kind is refused, and that client is every copy already installed. Measured before
+  shipping it: a body carrying `kind` was accepted in 56 ms, exactly as one without.
 - **A poll may not ask for longer than this side will wait.** `ask` aborts every request at ten
   seconds; the long poll was asking the server to hold for twenty-five. Every poll would have failed
   with *"it did not answer within 10s"*, for a server behaving perfectly. Two constants in two files,

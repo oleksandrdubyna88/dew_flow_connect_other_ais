@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  CHAT_KIND,
   CHAT_ROLE,
   REMOTE_TURNS,
   acceptedId,
@@ -90,6 +91,14 @@ test('a chat turn carries NO review role, which is what tells it from a review',
 
   assert.strictEqual(body['role'], CHAT_ROLE);
   assert.strictEqual(CHAT_ROLE, '', 'a chat is being sent as a review role again');
+  // And it says what it IS, rather than letting an absence say it. The follow-up plan makes `kind`
+  // part of the contract with `review` as the default, so a client sending neither is read as a
+  // review — and the day the server requires a role for one, every chat sending a blank role and no
+  // kind stops working with a message about roles. Sending it now is what makes this client the old
+  // client that KEEPS working, and it costs nothing: measured against the live server on 2026-09-09,
+  // a body carrying `kind` was accepted in 56 ms, exactly as one without it. (codex, the code round.)
+  assert.strictEqual(body['kind'], CHAT_KIND);
+  assert.strictEqual(CHAT_KIND, 'chat');
   assert.strictEqual(body['vendor'], 'claude');
   assert.strictEqual(body['model'], 'claude-opus-5');
   assert.strictEqual(body['prompt'], 'explain this');
