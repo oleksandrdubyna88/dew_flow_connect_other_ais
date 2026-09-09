@@ -19,13 +19,23 @@ namespace CoaiMcp;
 /// </remarks>
 internal static class Program
 {
-    private const string AppName = "coai-mcp";
+    /// <summary>
+    /// What this program calls itself — defined where the code that READS its stderr can see it.
+    /// </summary>
+    /// <remarks>
+    /// It was a private constant here, so the tag in front of every note this process writes was
+    /// unknowable to <c>BoundedScheduler</c>, which reads that stream to explain a failure. Two
+    /// things needed it on 2026-09-08: anchoring a progress recogniser, and knowing which lines are
+    /// OURS and therefore worth quoting whole. See <see cref="Runners.Reviewers.ShimNotes"/>.
+    /// </remarks>
+    private const string AppName = Runners.Reviewers.ShimNotes.AppName;
 
     /// <summary>The server's own identity; the CLIENT config key is `coai`, and that shorter
     /// name is what prefixes the tools (`mcp__coai__review_plan`).</summary>
     private const string ServerName = "connect-other-ais";
 
-    private static void Note(string message) => Console.Error.WriteLine($"[{AppName}] {message}");
+    private static void Note(string message) =>
+        Console.Error.WriteLine($"{Runners.Reviewers.ShimNotes.Prefix}{message}");
 
     /// <summary>What this process was started to do, before any of it happens.</summary>
     internal enum Startup

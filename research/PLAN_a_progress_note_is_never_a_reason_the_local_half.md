@@ -116,6 +116,32 @@ is gone once `AcquireAsync` has returned, and progress is excluded from selectio
 that inline construction creates a flush race (both sentences are one `Note()` call each on the same
 stream; a completed write cannot land after one that started later).
 
+## What the CODE round changed
+
+It found the plan's own Definition of Done unmet. *"Reports `LocalAsk.QueuedOutMessage`, whole"* — it
+did not, and neither the plan nor its first tests noticed, because the test asserted the opening of
+the sentence and the cure is its last clause. Measured: the reported reason is capped at 160
+characters, `QueuedOutMessage` is 340–359, so what a person actually read ended
+`…One caller uses t.` and named no cure at all. (codex, three findings across two roles.)
+
+- **`ShimNotes`** (new) holds the name this program calls itself, the `[coai-mcp] ` prefix `Note` puts
+  in front of every line, and the two questions that prefix answers — *did we write this*, and *what
+  is the sentence without the tag*. It was a private constant in the shim's `Program`, unreachable
+  from the code that reads the stream, and both real findings needed it.
+- **The cap is for a vendor's line.** Ours are bounded by the 400-character tail already, so `Quote`
+  lets them through whole.
+- **`LocalAsk.IsProgress` is anchored** rather than a substring search: `error: waiting for the local
+  engine at …: connection refused` would otherwise have been called progress and hidden — the picker
+  suppressing the only line that said anything. Three findings, two vendors.
+- **`NothingButScaffolding` triggers on ANY progress note**, not every line being one: a reviewer that
+  waited and then crashed was sent back to quoting a stack frame. (gemini.)
+
+Rejected with reasons, and worth naming because both sounded right: that the CRLF arithmetic breaks
+the boundary (measured — a cut between the CR and the LF still leaves the next line whole; a test now
+covers every offset around the pair), and that `meaningful[0]` returns the first progress note rather
+than the verdict (progress notes are filtered out before that index is taken, which is what the
+passing test shows).
+
 ## Evidence
 
 | reverted | test | failure |
@@ -126,8 +152,11 @@ stream; a completed write cannot land after one that started later).
 | the same | `ATailCutExactlyAtALineBoundaryKeepsEveryWholeLine` | `Expected tail to start with "Error: the whole first line of the tail", but "st line of the tail…"` |
 | the same | `AStderrOfOneOverlongLineStillYieldsAReason` | `Expected tail to start with "Error: yyy", but "yyyy…" differs near "yyy" (index 0)` |
 | the last-line fallback | `WhenEveryLineIsAProgressNote_TheSentenceSaysSo` | `Expected sentence "exit 69: [coai-mcp] waiting for the local engine at …" to contain "still waiting"` |
+| the 160-character cap applied to our own sentence | `AQueuedOutLocalReviewer_CarriesItsCureAndNotJustItsOpening` | `Expected sentence "…so its question was never asked. One caller uses t." to contain "Give the reviewers more time"` |
+| `IsProgress` as a substring search | `AnErrorThatMerelyMentionsWaitingIsStillTheReason` | `Expected LocalAsk.IsProgress(vendor) to be False because we did not write this line, but found True` |
+| `NothingButScaffolding` requiring EVERY line | `AProgressNoteFollowedByACrashStillSaysItWasWaiting` | `Expected sentence "exit 69: Node.js v20.20.2" to contain "still waiting"` |
 
-Whole suite: **1105 tests, 1104 pass, 0 fail, 1 skipped.**
+Whole suite: **1110 tests, 1109 pass, 0 fail, 1 skipped.**
 
 One test was strengthened after it passed against the unfixed code: `AReasonIsNeverHalfALine` first
 used forty lines of one width, and the 400-character cut landed exactly on a newline by arithmetic

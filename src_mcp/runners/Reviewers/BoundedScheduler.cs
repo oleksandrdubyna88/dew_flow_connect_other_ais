@@ -529,7 +529,7 @@ public static class ReviewerSummaryFactory
         }
 
         var line = meaningful.FirstOrDefault(Announces) ?? meaningful[0];
-        return $": {(line.Length <= ReasonLength ? line : $"{line[..ReasonLength]}…")}";
+        return $": {Quote(line)}";
     }
 
     /// <summary>
@@ -543,9 +543,24 @@ public static class ReviewerSummaryFactory
     /// line is at least something a person can search for. (codex, the plan round.)
     /// </remarks>
     private static string NothingButScaffolding(IReadOnlyList<string> lines) =>
-        lines.All(IsProgressNote)
+        lines.Any(IsProgressNote)
             ? " — it was still waiting for its engine when it stopped, and gave no other reason"
-            : $": {(lines[^1].Length <= ReasonLength ? lines[^1] : $"{lines[^1][..ReasonLength]}…")}";
+            : $": {Quote(lines[^1])}";
+
+    /// <summary>
+    /// The line, capped — unless we wrote it.
+    /// </summary>
+    /// <remarks>
+    /// <para><see cref="ReasonLength"/> exists for a VENDOR's line, which can be any length at all.
+    /// Our own sentences are written to be read, and are bounded by the stderr budget already.</para>
+    /// <para>Cutting them cost the whole point of one. Measured on the code round: a queued-out local
+    /// reviewer reported <c>…so its question was never asked. One caller uses t.</c> — 160 characters
+    /// of a 340-character verdict, ending mid-word, with every cure it names past the cut. The plan's
+    /// own Definition of Done said "reports <c>QueuedOutMessage</c>, WHOLE", and it did not.
+    /// (codex, three findings across two roles.)</para>
+    /// </remarks>
+    private static string Quote(string line) =>
+        ShimNotes.Ours(line) || line.Length <= ReasonLength ? line : $"{line[..ReasonLength]}…";
 
     private static bool Announces(string line) =>
         Announcements.Any(a => line.Contains(a, StringComparison.OrdinalIgnoreCase));

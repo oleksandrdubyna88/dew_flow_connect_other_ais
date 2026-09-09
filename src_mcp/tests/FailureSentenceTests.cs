@@ -129,6 +129,61 @@ public sealed class FailureSentenceTests
     }
 
     /// <summary>
+    /// And carries it WHOLE — the cure is the last sentence of it.
+    /// </summary>
+    /// <remarks>
+    /// Found by the code round, and it is the plan's own Definition of Done unmet: the reported
+    /// reason is capped at 160 characters, <c>QueuedOutMessage</c> is 340–359, and everything a
+    /// person can act on — more time, fewer local roles, a second engine — lives past the cap. The
+    /// cap exists for a VENDOR's line, which can be any length at all; our own sentences are written
+    /// to be read and are bounded by construction. (codex, three findings, two roles.)
+    /// </remarks>
+    [Fact]
+    public void AQueuedOutLocalReviewer_CarriesItsCureAndNotJustItsOpening()
+    {
+        var sentence = ReviewerSummaryFactory.Describe(new ReviewerOutcome.NonZeroExit(69, LocalShimStdErr()));
+
+        sentence.Should().Contain("Give the reviewers more time")
+            .And.Contain("point this vendor at a second engine.")
+            .And.NotEndWith("…");
+    }
+
+    /// <summary>
+    /// A vendor's line is still capped, because a vendor's line can be any length at all.
+    /// </summary>
+    [Fact]
+    public void AVendorsOwnLineIsStillCut()
+    {
+        var shouting = "Error: " + new string('z', 300);
+
+        ReviewerSummaryFactory.Describe(new ReviewerOutcome.NonZeroExit(1, shouting)).Should().EndWith("…");
+    }
+
+    /// <summary>
+    /// Windows writes CRLF, and this machine is where the defect was measured.
+    /// </summary>
+    /// <remarks>
+    /// Raised twice on the code round as a boundary the character arithmetic would get wrong. It
+    /// does not — a cut landing between the CR and the LF still leaves the next line whole — but
+    /// nothing said so, and a property nobody can see is a property the next edit can lose.
+    /// </remarks>
+    [Fact]
+    public void ACrlfTailStillBeginsWhereALineBegins()
+    {
+        const string kept = "Error: the whole first line of the tail";
+        var above = "[coai-mcp] a line the tail has no room for";
+
+        // Every offset around the CR-LF pair, so whichever way the arithmetic lands it is covered.
+        for (var nudge = 0; nudge < 4; nudge++)
+        {
+            var stdErr = above + "\r\n" + kept + "\r\n" + new string('x', 400 - kept.Length - nudge);
+
+            ReviewerExecutor.TailOf(stdErr).Should().NotStartWith("\n")
+                .And.NotStartWith("o room for", "a CRLF boundary must not leave half a line");
+        }
+    }
+
+    /// <summary>
     /// The named-set exclusion, beside the remote one that already exists.
     /// </summary>
     /// <remarks>
@@ -145,6 +200,46 @@ public sealed class FailureSentenceTests
         var sentence = ReviewerSummaryFactory.Describe(new ReviewerOutcome.NonZeroExit(69, LocalShimStdErr()));
 
         sentence.Should().NotContain("ahead,").And.NotContain("so far");
+    }
+
+    /// <summary>
+    /// A line that MENTIONS the waiting phrase is not one of ours, and is not swallowed.
+    /// </summary>
+    /// <remarks>
+    /// Three findings from two vendors on the code round, and they were right: the recogniser was a
+    /// bare substring search, so a vendor or wrapper reporting <c>error: waiting for the local engine
+    /// at …: connection refused</c> would be classified as progress and hidden — the reason-picker
+    /// suppressing the only line that said anything. It is anchored to the shim's own tag now.
+    /// </remarks>
+    [Fact]
+    public void AnErrorThatMerelyMentionsWaitingIsStillTheReason()
+    {
+        const string vendor = "error: waiting for the local engine at 127.0.0.1: connection refused";
+
+        LocalAsk.IsProgress(vendor).Should().BeFalse("we did not write this line");
+        ReviewerSummaryFactory.Describe(new ReviewerOutcome.NonZeroExit(1, vendor))
+            .Should().Contain("connection refused");
+    }
+
+    /// <summary>
+    /// Waiting, and then a crash: the useful half is that it never got started.
+    /// </summary>
+    /// <remarks>
+    /// A reviewer killed while it was queuing prints its waiting notes and then whatever the runtime
+    /// prints on the way down. Requiring EVERY line to be a progress note sent that case back to the
+    /// last-line fallback — a stack frame, which tells a person nothing they can act on. (gemini,
+    /// the code round.)
+    /// </remarks>
+    [Fact]
+    public void AProgressNoteFollowedByACrashStillSaysItWasWaiting()
+    {
+        var killed = "[coai-mcp] " + LocalAsk.WaitingMessage(Endpoint, 2, TimeSpan.FromSeconds(60), "m", 7) + "\n"
+            + "    at Module._compile (node:internal/modules/cjs/loader:1234:14)\n"
+            + "Node.js v20.20.2";
+
+        var sentence = ReviewerSummaryFactory.Describe(new ReviewerOutcome.NonZeroExit(69, killed));
+
+        sentence.Should().Contain("still waiting").And.NotContain("Node.js v");
     }
 
     /// <summary>A reason never begins in the middle of a line.</summary>
