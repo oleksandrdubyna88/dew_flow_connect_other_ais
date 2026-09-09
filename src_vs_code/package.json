@@ -612,5 +612,8 @@
   "galleryBanner": {
     "color": "#2D508A",
     "theme": "dark"
+  },
+  "dependencies": {
+    "marked": "^18.0.12"
   }
 }
