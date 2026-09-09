@@ -312,6 +312,8 @@ interface RunningPage {
   scrolledUp(): Fake;
   /** Resolve `document.fonts.ready`. Await it: what it queued runs on the microtask queue. */
   fontsSettle(): Promise<void>;
+  /** The composer's height changed — what a growing or shrinking box does to the footer. */
+  composerResized(): void;
 }
 
 /**
@@ -373,13 +375,21 @@ function runChatPage(over: Partial<ChatPageState> = {}): RunningPage {
   const window_ = {
     addEventListener(type: string, fn: (event: unknown) => void) { (onWindow[type] ??= []).push(fn); },
   };
+  // Captured so a test can say "the composer changed height", which is the event story 4 reacts to.
+  let observed: (() => void) | undefined;
+  class FakeResizeObserver {
+    constructor(callback: () => void) { observed = callback; }
+    observe() { /* the page observes one element */ }
+    disconnect() { /* nothing to release in a fake */ }
+  }
 
 
-  new Function('document', 'window', 'acquireVsCodeApi', 'requestAnimationFrame', body)(
+  new Function('document', 'window', 'acquireVsCodeApi', 'requestAnimationFrame', 'ResizeObserver', body)(
     document_,
     window_,
     () => ({ postMessage: (message: Record<string, unknown>) => posted.push(message) }),
     (fn: () => void) => { pending.push(fn); },
+    FakeResizeObserver,
   );
 
   const region = () => {
@@ -406,17 +416,26 @@ function runChatPage(over: Partial<ChatPageState> = {}): RunningPage {
   return {
     seen,
     posted,
+    // Both fire the scroll event a real reader's movement fires. A test that placed somebody
+    // silently would be testing a position nobody can reach: you get anywhere in a scrolling region
+    // BY scrolling, and the page is entitled to learn where they are the same way.
     scrolledToBottom() {
       const scroll = region();
       scroll.scrollTop = 1500;
+      this.fire('scroll', 'scroll');
 
       return scroll;
     },
     scrolledUp() {
       const scroll = region();
       scroll.scrollTop = 200;
+      this.fire('scroll', 'scroll');
 
       return scroll;
+    },
+    composerResized() {
+      assert.ok(observed, 'the page is not watching the composer for a height change');
+      observed();
     },
     fontsSettle() {
       settleFonts();
@@ -889,4 +908,87 @@ test('a locked composer does not get the focus from a jump', () => {
 
   assert.strictEqual(scroll.scrollTop, scroll.scrollHeight, 'the jump did not scroll while a turn ran');
   assert.strictEqual(page.seen['say'].focused, focusedBefore, 'the jump focused a box nobody can type in');
+});
+
+
+/* ------------------------------------------------------------------------------------------------
+ * Story 4: the composer grows with the question, up to 30 % of the viewport, and its height changing
+ * never moves a reader who did not scroll.
+ * ---------------------------------------------------------------------------------------------- */
+
+test('the composer has a ceiling of thirty percent of the viewport, a floor, and scrolls inside past it', () => {
+  const css = chatPageHtml(state(), 'n0nce').split('<style>')[1].split('</style>')[0];
+  const box = ruleFor(css, 'textarea');
+
+  assert.match(box, /max-height: 30vh/, 'the composer has no ceiling');
+  assert.match(box, /min-height: 64px/, 'the composer lost its floor');
+  assert.match(box, /overflow-y: auto/, 'past the ceiling the text has nowhere to go');
+  assert.match(box, /field-sizing: content/, 'the composer does not size itself to its content');
+});
+
+test('a host without field-sizing gets the input handler, and the ceiling stays the one in the CSS', () => {
+  // The gate's blocking finding on the plan: `field-sizing` is Chromium-only and this extension
+  // declares support back to VS Code 1.85, whose engine has never heard of it. On such a host the
+  // box would silently never grow — it works on the machine it was written on, which is the whole
+  // shape of the defect. Node has no `CSS` at all, so the harness IS that host.
+  const page = runChatPage();
+  const box = page.seen['say'];
+
+  box.value = 'one\ntwo\nthree\nfour';
+  box.scrollHeight = 220;
+  page.fire('say', 'input');
+
+  assert.deepStrictEqual(box.style['height'], '220px', 'the fallback did not size the box to its content');
+  const script = chatPageHtml(state(), 'n0nce').split('<script nonce="n0nce">')[1];
+  assert.match(script, /CSS\.supports\('field-sizing', 'content'\)/, 'the page does not ask whether it needs the fallback');
+  assert.doesNotMatch(script, /innerHeight \* 0\.3|30 \/ 100/, 'the page computed a second ceiling of its own');
+});
+
+test('the composer shrinks back after a send and after the text is deleted', () => {
+  // A ceiling with no way down is a box that stays tall for the rest of the conversation.
+  const page = runChatPage();
+  const box = page.seen['say'];
+
+  box.value = 'one\ntwo\nthree';
+  box.scrollHeight = 180;
+  page.fire('say', 'input');
+  assert.strictEqual(box.style['height'], '180px');
+
+  box.scrollHeight = 64;
+  page.fire('send', 'click');
+  assert.strictEqual(box.style['height'], '64px', 'the box stayed tall after the question was sent');
+
+  box.value = 'one\ntwo';
+  box.scrollHeight = 120;
+  page.fire('say', 'input');
+  box.value = 'one';
+  box.scrollHeight = 64;
+  page.fire('say', 'input');
+  assert.strictEqual(box.style['height'], '64px', 'the box stayed tall after its text was deleted');
+});
+
+test('a composer that grows keeps a reader at the bottom at the bottom', () => {
+  // The other side of rule 2: a height change nobody asked for must not move the conversation out
+  // from under someone. Here the flag IS right where re-measuring is not, because the reader did not
+  // scroll — the region shrank underneath them.
+  const page = runChatPage();
+  const scroll = page.scrolledToBottom();
+  scroll.scrollTop = scroll.scrollHeight - scroll.clientHeight;
+
+  scroll.clientHeight -= 100;
+  page.composerResized();
+  page.frames();
+
+  assert.strictEqual(scroll.scrollTop, scroll.scrollHeight, 'a growing composer pushed the last answer out of view');
+});
+
+test('a composer that grows leaves a reader who scrolled up where they were', () => {
+  const page = runChatPage();
+  const scroll = page.scrolledUp();
+
+  scroll.clientHeight -= 100;
+  page.composerResized();
+  page.frames();
+
+  assert.strictEqual(scroll.scrollTop, 200, 'a growing composer moved a reader who was reading something else');
 });

@@ -164,7 +164,12 @@ function chatStyle(uiScale: number): string {
   .capped p { margin: 0 0 8px; }
   .picker { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; }
   .caption { font-size: .85em; opacity: .7; }
-  textarea { flex: 1 1 auto; min-width: 0; box-sizing: border-box; min-height: 64px; font: inherit; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); border-radius: 4px; padding: 8px; }
+  /* The 30 % lives HERE and only here, so the CSS path and the JavaScript fallback below cannot
+     disagree about where the ceiling is: the fallback sets a height and this caps it. field-sizing
+     is Chromium-only, which is not a limitation in a page that renders nowhere but VS Code's own
+     webview - but the manifest declares support back to 1.85, whose engine has never heard of it,
+     and there the fallback does the growing. */
+  textarea { flex: 1 1 auto; min-width: 0; box-sizing: border-box; min-height: 64px; max-height: 30vh; field-sizing: content; overflow-y: auto; resize: none; font: inherit; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); border-radius: 4px; padding: 8px; }
   textarea[disabled] { opacity: .6; }
   #send { flex: 0 0 auto; font: inherit; color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: none; border-radius: 4px; padding: 8px 14px; cursor: pointer; }
   #send:hover:not([disabled]) { background: var(--vscode-button-hoverBackground); }
@@ -330,6 +335,20 @@ function chatScript(state: ChatPageState): string {
   // scheduled is a hijack by the time it runs. Re-measuring in the callback cannot tell: the content
   // is already in, so a reader who WAS at the bottom now measures short of it. Only the reader knows
   // they moved, so the cancel is their scroll event. (Two vendors raised this on the plan round.)
+  // ASKED, not assumed. The gate's blocking finding on the plan: a page that takes field-sizing on
+  // faith works on the machine it was written on and silently never grows anywhere else, which is
+  // the one failure mode a person cannot report because nothing happens.
+  var sizesItself = typeof CSS !== 'undefined' && typeof CSS.supports === 'function'
+    && CSS.supports('field-sizing', 'content');
+  // Height from content, ceiling from the CSS. Called on input, after a send has emptied the box and
+  // after a draft is pushed into it - shrinking back is a call, not a hope.
+  function fitComposer() {
+    if (sizesItself) { return; }
+    const box = document.getElementById('say');
+    if (!box || !box.style) { return; }
+    box.style.height = 'auto';
+    box.style.height = box.scrollHeight + 'px';
+  }
   function offerJump(show) {
     const control = document.getElementById('jump');
     if (control) { control.hidden = !show; }
@@ -345,6 +364,7 @@ function chatScript(state: ChatPageState): string {
     if (text.length === 0) { return; }
     box.value = '';
     vscode.postMessage({ type: 'command', command: 'send', text: text });
+    fitComposer();
     // Locked HERE, not when the host gets round to saying so. Between the post and the state that
     // comes back there was a window - small, and the width of a second Enter - in which a second
     // turn went down a pipe that carries one. Two vendors found it independently; the page did not
@@ -367,6 +387,7 @@ function chatScript(state: ChatPageState): string {
     say.addEventListener('keydown', function (event) {
       if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send(); }
     });
+    say.addEventListener('input', fitComposer);
   }
   // The second caller of the ONE send. Attached here rather than as an onclick attribute: the page's
   // CSP is script-src 'nonce-...', so an inline handler is not merely untidy, it is a dead button.
@@ -428,6 +449,28 @@ function chatScript(state: ChatPageState): string {
       if (shouldFollow(scrollRegion.scrollTop, scrollRegion.clientHeight, scrollRegion.scrollHeight, SLACK)) {
         offerJump(false);
       }
+    });
+  }
+  // A footer whose height changes takes the room from the conversation above it. A reader who was at
+  // the bottom did NOT scroll - the region shrank underneath them - so re-measuring would call them
+  // scrolled away and leave the last answer behind the box they are typing into: rule 2 broken from
+  // the other side. What they WERE is the only measurement that survives the resize, so it is taken
+  // before the layout changes and acted on after. A host without ResizeObserver keeps today's
+  // behaviour rather than breaking.
+  if (typeof ResizeObserver === 'function' && scrollRegion) {
+    let wasAtBottom = true;
+    const composer = document.getElementById('composer');
+    const watcher = new ResizeObserver(function () {
+      if (wasAtBottom) { landOnNewest(); }
+      afterLayout(function () {
+        wasAtBottom = shouldFollow(
+          scrollRegion.scrollTop, scrollRegion.clientHeight, scrollRegion.scrollHeight, SLACK);
+      });
+    });
+    if (composer) { watcher.observe(composer); }
+    scrollRegion.addEventListener('scroll', function () {
+      wasAtBottom = shouldFollow(
+        scrollRegion.scrollTop, scrollRegion.clientHeight, scrollRegion.scrollHeight, SLACK);
     });
   }
   const jump = document.getElementById('jump');
@@ -505,6 +548,7 @@ function chatScript(state: ChatPageState): string {
       const box2 = document.getElementById('say');
       if (box2) {
         box2.value = box2.value.length > 0 ? box2.value + '\\n\\n' + data.draft : data.draft;
+        fitComposer();
         if (typeof box2.focus === 'function') { box2.focus(); }
       }
     }
