@@ -361,3 +361,37 @@ test('a process that dies with a code and no answer says which code', async () =
   assert.ok(!result.ok);
   assert.match(result.failure, /9/, `the exit code is nowhere in: ${result.failure}`);
 });
+
+test('a thread that cannot be resumed is dropped, rather than failing every turn after it', async () => {
+  // A stored session can go: the vendor prunes it, a machine is re-imaged, a version changes its
+  // format. Retrying the same dead id forever turns one bad turn into a conversation that can never
+  // answer again. One turn is lost, the thread with it, and the next question starts a new one and
+  // says so. (gemini, the code round.)
+  const launcher = perTurnLauncher();
+  const session = new CliChatSession(launcher.start, BUDGETS, NEVER, codexAdapter);
+
+  const first = session.send('first');
+  await flush();
+  launcher.turns[0]!.say(started('thread-1'));
+  launcher.turns[0]!.say(answered('one'));
+  launcher.turns[0]!.exit();
+  await first;
+
+  // The resume fails: no thread, no answer, a non-zero exit — the shape of a session that is gone.
+  const second = session.send('second');
+  await flush();
+  assert.strictEqual(launcher.turns[1]!.resume, 'thread-1', 'it did not even try to resume');
+  launcher.turns[1]!.exitWith(1);
+  assert.ok(!(await second).ok);
+
+  const third = session.send('third');
+  await flush();
+  assert.strictEqual(launcher.turns[2]!.resume, '', 'it tried the dead thread again');
+  launcher.turns[2]!.say(started('thread-2'));
+  launcher.turns[2]!.say(answered('a fresh start'));
+  launcher.turns[2]!.exit();
+
+  const result = await third;
+  assert.ok(result.ok);
+  assert.strictEqual(result.contextLost, true, 'the new conversation did not say it was new');
+});

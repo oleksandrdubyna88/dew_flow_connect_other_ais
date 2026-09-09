@@ -30,6 +30,17 @@ import { ChatAdapter, NOTHING, parsed, text } from './chatAdapter';
  * </ol>
  */
 
+/**
+ * What a thread id may look like before it is put in a command line.
+ *
+ * <p>Not paranoia about a vendor: it is untrusted input by POSITION. The id arrives on another
+ * process's stdout and leaves in an argv that, on Windows, goes through `cmd.exe` — `codex` is
+ * `codex.cmd` there and node will not spawn a `.cmd` without a shell. `&`, `|` and a quote are the
+ * whole attack. A UUID is what the vendor sends; anything else is not a thread this adapter will
+ * resume. (codex and gemini, the code round, independently.)</p>
+ */
+const THREAD_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
+
 /** The flags every codex turn carries. `exec` and any resume come first — see `argv`. */
 export const CODEX_ARGS: readonly string[] = ['--json', '-', '--skip-git-repo-check'];
 
@@ -50,7 +61,7 @@ export const codexAdapter: ChatAdapter = {
     if (kind === 'thread.started') {
       const id = text(event['thread_id']);
 
-      return id.length > 0 ? { kind: 'session', id } : NOTHING;
+      return THREAD_ID.test(id) ? { kind: 'session', id } : NOTHING;
     }
     if (kind === 'item.completed') {
       const item = (event['item'] ?? {}) as Record<string, unknown>;

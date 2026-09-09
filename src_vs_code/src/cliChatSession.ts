@@ -315,9 +315,12 @@ export class CliChatSession implements ChatSession {
       return Promise.resolve({ ok: false, failure: 'the model’s process had already gone; ask again to start a new one' });
     }
 
+    const resuming = this.sessionId;
+
     return new Promise<TurnResult>((resolve) => {
       let answer = '';
       let failure = '';
+      let named = false;
       let done = false;
       const finish = (result: TurnResult): void => {
         if (done) {
@@ -336,6 +339,7 @@ export class CliChatSession implements ChatSession {
         const event = this.adapter.classify(line);
         if (event.kind === 'session') {
           this.sessionId = event.id;
+          named = true;
         } else if (event.kind === 'answer') {
           answer = event.text;
         } else if (event.kind === 'failure') {
@@ -357,6 +361,13 @@ export class CliChatSession implements ChatSession {
           finish(lost ? { ok: true, answer, contextLost: true } : { ok: true, answer });
 
           return;
+        }
+        // A RESUME that produced neither a thread nor an answer is a thread that is gone — pruned
+        // by the vendor, left behind by a version change, on a machine that was re-imaged. Keeping
+        // the id would retry the same dead conversation for ever; dropping it costs this one turn
+        // and the next question starts a new conversation and says so. (gemini, the code round.)
+        if (resuming.length > 0 && !named && answer.length === 0) {
+          this.sessionId = '';
         }
         // The exit code is the one fact the operating system gives away for free, and it is the
         // difference between "it crashed" and "it refused". (gemini, the plan round.)

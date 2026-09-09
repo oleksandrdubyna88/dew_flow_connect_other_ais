@@ -162,3 +162,32 @@ test('codex: an item that is not an agent message is not the answer', () => {
     'nothing',
   );
 });
+
+test('codex: a thread id that is not a thread id is refused, because argv can reach a shell', () => {
+  // On Windows `codex` is `codex.cmd`, and node will not spawn a `.cmd` without a shell — so the
+  // resume id travels through `cmd.exe`. It arrives from another process's stdout, which makes it
+  // untrusted input in a command line: `&`, `|` and `"` are the whole attack. A UUID is what the
+  // vendor sends; anything else is not resumed. (codex and gemini, the code round.)
+  for (const hostile of [
+    '01a0851c & calc.exe',
+    'id" | whoami',
+    'a`b',
+    'a$(id)',
+    'a;b',
+    '../../etc/passwd',
+    '',
+  ]) {
+    assert.strictEqual(
+      codexAdapter.classify(JSON.stringify({ type: 'thread.started', thread_id: hostile })).kind,
+      'nothing',
+      `a thread id was accepted: ${hostile}`,
+    );
+  }
+});
+
+test('codex: a real thread id is still a thread id', () => {
+  assert.deepStrictEqual(
+    codexAdapter.classify('{"type":"thread.started","thread_id":"01a0851c-488c-7be0-9e51-e35c5fb2ce5c"}'),
+    { kind: 'session', id: '01a0851c-488c-7be0-9e51-e35c5fb2ce5c' },
+  );
+});
