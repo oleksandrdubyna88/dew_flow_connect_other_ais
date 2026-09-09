@@ -1419,10 +1419,39 @@ test('the caption wears its vendor colour, and two vendors do not share one', ()
     { role: 'model', text: 'a', model: { id: 'antigravity', label: 'Gemini' } },
     { role: 'model', text: 'b', model: { id: 'remsoftdev-codex', label: 'GPT' } },
   ]);
-  const colours = [...html.matchAll(/class="who model-([a-z0-9-]+)"/g)].map((match) => match[1]);
+  const colours = [...html.matchAll(/class="author model-([a-z0-9-]+)"/g)].map((match) => match[1]);
 
   assert.strictEqual(colours.length, 2, 'the captions carry no vendor of their own');
   assert.notStrictEqual(colours[0], colours[1], 'two vendors were given the same class');
+});
+
+test('the caption is its own element, not a second one wearing the container\'s class', () => {
+  // A `.who` span inside a `.who` div: every rule written for the row — its flex, its gap, its
+  // margin, its opacity — landed on the label as well, and the next person to change the row's
+  // layout would have moved the text with it without knowing why. (gemini, the code round, twice.)
+  const html = chatMessagesHtml([
+    { role: 'you', text: 'ask' },
+    { role: 'model', text: 'answered', model: { id: 'antigravity', label: 'Gemini' } },
+  ]);
+
+  assert.doesNotMatch(html, /class="who"[^>]*>\s*<span class="who/, 'a .who is nested inside a .who');
+  assert.match(html, /<span class="author model-antigravity">Gemini<\/span>/, 'the label has no class of its own');
+  assert.match(html, /<span class="author">You<\/span>/, 'the person\'s caption has no class of its own');
+});
+
+test('an answer from a model the picker no longer offers keeps its colour', () => {
+  // The colours were built from the picker's CURRENT list, so switching models — which carries the
+  // whole thread across, and is the feature this caption exists for — left every earlier answer
+  // with a class and no rule. The ids are in the messages; the page can simply read them.
+  const html = chatPageHtml(state({
+    models: [{ id: 'claude', label: 'Claude', caption: 'local' }],
+    modelId: 'claude',
+    messages: [{ role: 'model', text: 'from before', model: { id: 'antigravity', label: 'Gemini' } }],
+  }), 'n0nce');
+  const css = html.split('<style>')[1].split('</style>')[0];
+
+  assert.match(css, /\.author\.model-antigravity \{/, 'an answer from a withdrawn model lost its colour');
+  assert.match(css, /\.author\.model-claude \{/, 'the offered model lost its colour');
 });
 
 test('a model label that is markup is escaped like everything else', () => {
