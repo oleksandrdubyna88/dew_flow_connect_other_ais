@@ -113,6 +113,11 @@ answering each other's questions — `--last` is the most recent codex session o
 **The live check, run through this build's own `CliChatSession` and adapters** — two turns each,
 the second asking for a number planted in the first:
 
+**Subject** `9765c23` · **harness** [`src_vs_code/scripts/live-chat.mjs`](../src_vs_code/scripts/live-chat.mjs)
+(`npm run test:live`) · **pinned**: the planted number 7431, two turns per vendor, the second asking
+for it back, each conversation in an empty temp directory of its own · **machine**: Windows 11,
+node 24.18.0, `agy` 0.7.x, `claude` 2.1.258, `codex` on the npm shim · **date** 2026-09-09.
+
 | Vendor | Shape | Turn 1 | Turn 2 | Context |
 |---|---|---|---|---|
 | `agy` | persistent | 8.0 s | 1.4 s | kept |
