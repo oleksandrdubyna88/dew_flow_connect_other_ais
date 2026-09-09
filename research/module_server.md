@@ -348,7 +348,15 @@ and over `findings`. The first draft had eight scalar subqueries, which is five 
 where conditional sums are one.
 
 *Without `--paged` nothing changes.* The same binary answers the shape it answered yesterday,
-findings inline, so an extension that predates paging is not broken by a server that does not.
+findings inline, **and with the same default of 300** — `LegacyLimit`, because an extension too old
+to send the flag is also too old to ask for a second page, so shrinking its default to 200 would
+simply take a hundred rounds off the only list it can show. A paged caller whose database cannot be
+read is told so with **74**; the legacy shape keeps exit 0 and an empty log, which is what it has
+always answered.
+
+*The cursor's timestamp is validated, not only its number.* `0000|1` used to parse and then compare
+`0000` against `started_utc`, matching nothing — so a malformed cursor answered with an EMPTY page
+instead of the first one, which is the opposite of treating it as absent.
 
 ## What a round can be asked afterwards (2026-09-08)
 

@@ -1488,6 +1488,22 @@ a failed read. All four pairings are tested.
 empty list when the text is not JSON or carries no findings array, because an empty list is a CLAIM —
 it says the round was clean — and a truncated pipe must not be allowed to make it.
 
+*An unread log is not an authority.* `DbLog.read` says whether the database was ASKED at all, and
+`rowsFrom` will not call a round *not kept* against a log nobody read. The page is painted BEFORE the
+first read on purpose — reading spawns a process — and without that flag an unread log and a read
+empty one were the same value (`0 >= 0`), so every row on the first paint said the database had no
+record of it, and the tick that knew better was held off by the row already drawn. The tick's merge
+therefore carries only what a READ produced — `loaded`, `asking`, `failed` — and lets `absent` and
+`unasked` be recomputed from the fresher log.
+
+*The totals arrive by a push, not in the HTML.* Same reason: the page opens before the database is
+read, so the line under the table opens empty and a `totals` region fills it in. Stored and never
+pushed, it stayed empty for ever.
+
+*A loaded row whose count disagrees with what arrived offers a retry.* The count comes from the list
+and the sentences from a later read, and the database moves between them; without this the row drew
+"Reading…" for ever, because `ask` refuses a loaded row.
+
 *The round's identity travels with the request.* The page sends the session, the stage and the number
 alongside the row key, so the extension host looks nothing up. It used to consult a module-level copy
 of the last rows it had built, which answers wrongly for any row a later refresh dropped; three

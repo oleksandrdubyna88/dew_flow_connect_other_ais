@@ -177,7 +177,9 @@ export function rowsFrom(
   // the database has never heard of, and saying so costs nothing. When it does NOT, the same row
   // might simply be older than the window — and guessing "never recorded" would be a claim about a
   // round nobody checked, so it is asked for instead and the server answers authoritatively.
-  const whole = log.rounds.length >= log.totals.rounds;
+  // `read` first: an unread log is not an authority on anything, and treating it as one made every
+  // row on the page's first paint say the database had no record of it. (Code round, CodeRabbit.)
+  const whole = log.read && log.rounds.length >= log.totals.rounds;
   // A server too old to page sent every finding it had, so an empty list from IT is the whole truth
   // about that round — asking again would send `--findings` to a binary that does not know the flag,
   // exit 64, and turn an honestly clean round into a failed read. (Code round, codex.)
@@ -1063,8 +1065,13 @@ export function roundsLogHtml(
         + 'was never written down — it ran before the database existed.</div>';
     }
     if (!row.found || row.found.length === 0) {
+      // A row can be loaded with nothing in it while the count says otherwise: the count comes
+      // from the list and the sentences from a later read, and the database moves between them.
+      // Without this it drew "Reading…" for ever, because ask() refuses a loaded row. (CodeRabbit.)
       return row.foundCount > 0
-        ? '<div class="await">Reading what this round found…</div>'
+        ? '<div class="broke">This round recorded ' + row.foundCount
+          + ' findings, and the read came back with none. '
+          + '<button type="button" class="link" data-retry="' + esc(row.key) + '">Try again</button></div>'
         : '<div class="none">This round found nothing.</div>';
     }
     var out = '<div class="findings">';
@@ -1188,7 +1195,11 @@ export function roundsLogHtml(
     for (var i = 0; i < ROWS.length; i++) {
       if (ROWS[i].key !== key) { continue; }
       var state_ = ROWS[i].foundState;
-      if (state_ !== 'unasked' && !(again && state_ === 'failed')) { return; }
+      // A loaded row with nothing in it and a count that says otherwise is retryable too — it is a
+      // disagreement, not an answer. (CodeRabbit, on the pull request.)
+      var mismatched = state_ === 'loaded' && ROWS[i].foundCount > 0
+        && (!ROWS[i].found || ROWS[i].found.length === 0);
+      if (state_ !== 'unasked' && !(again && (state_ === 'failed' || mismatched))) { return; }
       ROWS[i] = Object.assign({}, ROWS[i], { foundState: 'asking' });
       // The dbKey travels WITH the request. The extension host used to look the row up in a
       // module-level copy of the last rows it built, which is a shared mutable global three
@@ -1274,6 +1285,14 @@ export function roundsLogHtml(
       document.getElementById('usage-body').innerHTML = message.html;
       return;
     }
+    if (message.type === 'totals' && message.totals) {
+      // The page is painted before the database is read, so the line under the table opens on
+      // nothing and is filled by this. It used to be stored on the panel and pushed nowhere, which
+      // left the whole SQL-totals line permanently empty. (Code round, CodeRabbit.)
+      TOTALS = message.totals;
+      try { render(); } catch (e) { failed(String(e && e.message ? e.message : e)); }
+      return;
+    }
     if (message.type === 'found' && typeof message.id === 'string') {
       for (var f = 0; f < ROWS.length; f++) {
         if (ROWS[f].key === message.id) {
@@ -1289,9 +1308,15 @@ export function roundsLogHtml(
     // A tick rebuilds every row from the session files, and those rows know nothing about findings
     // somebody has already opened. Carry them across, or a five-second tick would close every
     // expanded row's list and ask for it again.
+    // Only what a READ produced is carried: loaded because the sentences are here, asking
+    // because a request is in flight, failed because the retry button must survive a tick. NOT
+    // absent and not unasked — those are derived from the log, and a fresh row derived from a
+    // fresher log is the better answer. Holding absent is how a first paint with no database
+    // outlived every push that knew better. (Code round, CodeRabbit.)
     var held = {};
     for (var h = 0; h < ROWS.length; h++) {
-      if (ROWS[h].foundState !== 'unasked') { held[ROWS[h].key] = ROWS[h]; }
+      var was = ROWS[h].foundState;
+      if (was === 'loaded' || was === 'asking' || was === 'failed') { held[ROWS[h].key] = ROWS[h]; }
     }
     ROWS = (message.rows || []).map(function (r) {
       var was = held[r.key];

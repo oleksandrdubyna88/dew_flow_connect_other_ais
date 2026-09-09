@@ -24,14 +24,17 @@ It then took one more fix to be visible to anybody:
 [PLAN_the_log_never_gets_its_findings.md](PLAN_the_log_never_gets_its_findings.md). The list was
 built, correct, and thrown away by a launcher that took nineteen seconds to close.
 
-## Open tail — handed to another plan, not dropped
+## The tail, and where it was built
 
-DoD item 2, *"a round without kept findings says so"*, is NOT built: a round recorded before the
-database existed renders an empty area, and an empty area reads as "clean". Its own gate named this
-as finding 6 — *"not kept" needs its own visible element* — and it is still true. It is taken over by
-[PLAN_the_log_asks_for_a_page.md](PLAN_the_log_asks_for_a_page.md), which has to answer
-it anyway: once findings are fetched when a row is opened, *not yet asked for* becomes a fourth state
-that also looks like a blank.
+DoD item 2, *"a round without kept findings says so"*, was not built HERE: a round recorded before
+the database existed rendered an empty area, and an empty area reads as "clean". Its own gate named
+it as finding 6 — *"not kept" needs its own visible element*.
+
+It was built the same day by
+[PLAN_the_log_asks_for_a_page.md](PLAN_the_log_asks_for_a_page.md), which had to answer it anyway:
+once findings are fetched when a row is opened, *not yet asked for* becomes another state that also
+looks like a blank. `foundHtml` now draws five distinct elements — asking, failed with a retry, none,
+not kept, and the list — so nothing about an opened row is a shared blank any more.
 
 ## The gap
 
@@ -95,7 +98,7 @@ know WHICH four still means opening the session file, or the resolve step's answ
 ## Definition of Done
 
 - [x] An expanded row shows the round's findings — from the database, not from `pending`.
-- [ ] ~~A round without kept findings says so~~ — **not built**, handed to
-      [PLAN_the_log_asks_for_a_page.md](PLAN_the_log_asks_for_a_page.md). See *Open tail*.
+- [x] A round without kept findings says so — built by
+      [PLAN_the_log_asks_for_a_page.md](PLAN_the_log_asks_for_a_page.md), not here. See *The tail*.
 - [x] The server-side question is answered in writing: findings live in `coai.db`, so the session
       file does not grow at all. See *Deviations*.

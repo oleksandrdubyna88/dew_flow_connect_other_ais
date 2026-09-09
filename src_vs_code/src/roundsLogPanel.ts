@@ -243,7 +243,7 @@ export class RoundsLogPanel {
   }
 
   private async pushEach(force: boolean): Promise<void> {
-    const { rows, questions, usage, spots } = this.latest;
+    const { rows, questions, usage, spots, totals } = this.latest;
     // A RECORD over `Region` rather than a list: adding a region to the union without giving it a
     // push here is then a compile error rather than a region that silently never updates.
     // (gemini, the code round.)
@@ -254,6 +254,13 @@ export class RoundsLogPanel {
       },
       usage: { content: usage, message: () => ({ type: 'usage', html: usage }) },
       spots: { content: spots, message: () => ({ type: 'spots', html: spots }) },
+      // The page is painted before the database is read, so the line under the table opens on
+      // nothing. This is what fills it in. It used to be recorded in `latest` and pushed nowhere,
+      // which left the whole SQL-totals line permanently empty. (Code round, CodeRabbit.)
+      totals: {
+        content: JSON.stringify(totals),
+        message: () => ({ type: 'totals', totals }),
+      },
     };
 
     for (const region of Object.keys(regions) as Region[]) {

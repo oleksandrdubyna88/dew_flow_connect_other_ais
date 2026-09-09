@@ -141,24 +141,47 @@ public sealed class RoundsPagingTests : IDisposable
     [Fact]
     public void TheTotalsCountTheWholeTable_NotThePage()
     {
+        // TWO rounds, with the page holding one of them. A single-round fixture would pass just as
+        // well if the aggregates were scoped to the page, which is the thing being asserted against.
+        // (CodeRabbit, on the pull request.)
+        var older = new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
         using (var db = RoundsDb.Open(_dir, _log)!)
         {
-            var findings = new[] { Found("a"), Found("b"), Found("c") };
-            db.RecordRound(Session(), Round(1, DateTime.UtcNow.AddMinutes(-5)), findings);
+            var first = new[] { Found("a"), Found("b"), Found("c") };
+            db.RecordRound(Session(), Round(1, older), first);
             db.RecordDecisions("s1", "CodeReview", 1,
             [
-                new Decision.Accepted(findings[0]),
-                new Decision.Accepted(findings[1]),
-                new Decision.Rejected(findings[2], "not worth the machinery"),
+                new Decision.Accepted(first[0]),
+                new Decision.Accepted(first[1]),
+                new Decision.Rejected(first[2], "not worth the machinery"),
             ]);
+
+            var second = new[] { Found("d"), Found("e") };
+            db.RecordRound(Session(), Round(2, older.AddMinutes(1)), second);
+            db.RecordDecisions("s1", "CodeReview", 2,
+                [new Decision.Accepted(second[0]), new Decision.Rejected(second[1], "no")]);
         }
 
-        var totals = RoundsQuery.Read(_dir, limit: 1).Totals;
+        var log = RoundsQuery.Read(_dir, limit: 1);
 
-        totals.Rounds.Should().Be(1);
-        totals.Findings.Should().Be(3);
-        totals.Accepted.Should().Be(2);
-        totals.Rejected.Should().Be(1);
+        log.Rounds.Should().ContainSingle().Which.Number.Should().Be(2, "the page is one round");
+        log.Totals.Rounds.Should().Be(2, "and the totals are both");
+        log.Totals.Findings.Should().Be(5);
+        log.Totals.Accepted.Should().Be(3);
+        log.Totals.Rejected.Should().Be(2);
+        log.Totals.Gating.Should().Be(5, "gating is counted over the whole table too, not the page");
+    }
+
+    [Fact]
+    public void ACursorWhoseTimestampIsNonsense_AsksForTheFirstPage_NotForNothing()
+    {
+        // `0000|1` parsed happily — only the number after the separator was checked — and then
+        // compared `0000` against `started_utc`, which matches nothing. A malformed cursor answered
+        // with an EMPTY page instead of the first one. (CodeRabbit, on the pull request.)
+        Fill(5);
+
+        RoundsQuery.Read(_dir, before: "0000|1").Rounds.Should().HaveCount(5);
+        RoundsQuery.Read(_dir, before: "not a time|7").Rounds.Should().HaveCount(5);
     }
 
     [Fact]

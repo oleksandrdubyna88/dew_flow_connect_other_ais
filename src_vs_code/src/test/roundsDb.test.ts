@@ -75,6 +75,7 @@ const LOG: DbLog = {
     resolution: 'reject', reason: 'the name is the domain word', reRaised: true,
   }],
   totals: EMPTY_TOTALS,
+  read: true,
   paged: true,
 };
 
@@ -95,7 +96,14 @@ test('nonsense, or a shape from a future server, is an empty log rather than a b
   // page that goes blank for a reason nobody can see from the outside.
   assert.deepEqual(parseLog('not json at all'), EMPTY_LOG);
   assert.deepEqual(parseLog(''), EMPTY_LOG);
-  assert.deepEqual(parseLog('{"rounds":null}'), EMPTY_LOG);
+
+  // A server that ANSWERED, with nothing in it, is not the same as no answer: the page is painted
+  // before the database is read, and a row may only be called "never recorded" against a read that
+  // happened. So this one parses to an empty list that says it was read.
+  const answered = parseLog('{"rounds":null}');
+  assert.equal(answered.rounds.length, 0);
+  assert.equal(answered.read, true);
+  assert.equal(EMPTY_LOG.read, false, 'and the value that means "not asked" says so');
   assert.equal(parseLog('{"rounds":[{}]}').rounds[0]?.accepted, -1, 'nobody closed a gate we know nothing about');
   assert.equal(parseLog('{"rounds":[{}]}').rounds[0]?.findings.length, 0);
 });

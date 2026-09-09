@@ -20,8 +20,8 @@ has no record of it at all.
 appear twice or vanish — and the key is a pair, because two rounds can start in the same second.
 
 **Either half can be older than the other.** A new extension asks a server that cannot page and gets
-yesterday's answer; a new server asked without the flag answers yesterday's shape. Nothing goes
-silently empty in the field.
+yesterday's answer — with the same three hundred rows it always had; a new server asked without the
+flag answers yesterday's shape. Nothing goes silently empty in the field.
 
 ## Team server 0.5.6 — 2026-09-09
 

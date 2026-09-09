@@ -174,8 +174,10 @@ rejected update at `RoundsDb.cs:180`); `findings` carries `role, is_gating, prov
 
 ### 3 — a round's findings on demand (`src_mcp`)
 
-`--findings --round <sessionId> <stage> <number>` answers the findings of exactly one round, in the
-same `LoggedFinding` shape the page already renders. This is the only new command, and it exists so
+`--findings --session <id> --stage <stage> --number <n>` answers the findings of exactly one round,
+in the same `LoggedFinding` shape the page already renders. (The plan first wrote this positionally,
+as `--round <sessionId> <stage> <number>`; it shipped as flags, matching `Flags(args)`, which every
+other one-shot mode already uses.) This is the only new command, and it exists so
 that opening a row costs one small read instead of the list costing 3.78 MB.
 
 **A round it does not know is not an empty answer.** It exits non-zero with a one-line reason, so the
@@ -244,7 +246,7 @@ is a different plan with a different name.
 | # | Test | RED symptom expected |
 |---|---|---|
 | 1 | `RoundsQueryTests`: a database with 250 rounds answers 200, and `Totals.Rounds` says 250 | today it answers 250 and there are no totals |
-| 2 | `RoundsQueryTests`: `offset` 200 answers the remaining 50, newest-first ordering preserved | no offset exists |
+| 2 | `RoundsQueryTests`: the next page starts at the last row's CURSOR and answers the remaining 50, newest-first ordering preserved | no paging exists |
 | 3 | `RoundsQueryTests`: a listed round carries no findings | it carries them all |
 | 4 | `RoundsQueryTests`: `Totals` counts accepted, rejected and gating across the WHOLE table, not the page | no totals |
 | 5 | `RoundsQueryTests`: `--findings` for one round returns exactly that round's findings, in ordinal order | the command does not exist |
