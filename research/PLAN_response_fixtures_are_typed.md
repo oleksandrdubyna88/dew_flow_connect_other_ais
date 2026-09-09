@@ -36,10 +36,13 @@ branch cut through the files' own constants and broke six tests.
 
 ## What must be true when it is done
 
-1. Exactly **one** `as Response` remains in the extension's tests, in one file, with the note the
-   doctrine asks for beside it.
-2. The factory takes what the production code actually reads — `ok`, `status`, `headers`, `text` —
-   and nothing else, so a caller cannot forget a field it does not know about.
+1. **No** `as Response` remains anywhere under `src/test`. *(The plan aimed for one, with the note
+   the doctrine allows; a reviewer asked why a fixture pretends at all, and the answer removed the
+   last one. See "What shipped differently" below — this line records what is true, not what was
+   proposed.)*
+2. The factory is `response({ status, body?, headers? })` and returns the runtime's own `Response`:
+   `ok` is DERIVED from the status rather than passed in, `text()` is real, and `json()`, `clone()`
+   and `bodyUsed` are correct without anybody implementing them.
 3. `headers` is filled by default, so a fixture that says nothing about them still behaves like a
    real response rather than throwing.
 4. Every existing fixture goes through it, and no test's meaning changes: the suite is green before
@@ -52,8 +55,11 @@ branch cut through the files' own constants and broke six tests.
 - **`src_vs_code/src/test/responseFixture.ts`** — new. One exported `response(parts)`, one cast, one
   note explaining why the cast stays and what it has already cost. A sibling of
   `teamServerSession.contract.ts`, which is the precedent for a non-`.test.ts` module in this folder.
-- **`teamServerApi.test.ts`** — its `stub()` builds the response through the factory.
-- **`teamServerAuth.test.ts`**, **`teamServerSide.test.ts`** — the same, at every site.
+- **`teamServerApi.test.ts:24`** — its `stub()` builds the response through the factory; the one test
+  that needs a body which FAILS (`teamServerApi.test.ts:306`) uses a `ReadableStream` that errors,
+  which is what a truncated payload is.
+- **`teamServerAuth.test.ts`** (5 sites: 56, 320, 349, 357, 451) and **`teamServerSide.test.ts`**
+  (5 sites: 65, 236, 239, 369, 471) — the same, at every one.
 - Placement matters and is why this is its own change: the helper is IMPORTED, so nothing is inserted
   between a file's own constants and the code that reads them.
 
@@ -106,6 +112,9 @@ asserting the suite is green before the red test runs — would forbid the pract
 
 ## The open tail
 
+- The release that would have carried this work was backed OUT of its pull request. The repository
+  cuts a release as its own `chore(release):` commit, and a CHANGELOG entry describing a feature
+  whose code is not in the diff is a document about somebody else's change. It follows separately.
 - `as typeof fetch` remains at every stub site. It is a different cast with a different risk — a
   function shape, not a fixture standing in for a value with members to forget — and nothing has gone
   wrong with it. Worth a look if `fetch`'s signature ever grows an overload these stubs would miss.

@@ -307,13 +307,15 @@ test('a body that cannot be read keeps the number the server already gave', asyn
   // `response.text()` throws on a truncated payload, and the catch arm would otherwise answer
   // `undefined` for a server that had already said what it speaks — losing it on the call that
   // most wants it.
-  // A REAL response with one method replaced, rather than an object pretending to be one: the
-  // headers have to behave for this test to mean anything, and they are exactly what a hand-built
-  // stand-in gets wrong. `Object.assign` shadows `text` with an own property; everything else is
-  // still the runtime's.
-  const broken = Object.assign(response({ status: 200, headers: { [CONTRACT_HEADER]: '4' } }), {
-    text: async (): Promise<string> => { throw new Error('unexpected end of body'); },
+  // A real response whose BODY fails, rather than a response with `text` monkey-patched over. The
+  // first version shadowed the method with `Object.assign`, which works but describes a `Response`
+  // that cannot exist — one whose reader disagrees with its own stream. A stream that errors is what
+  // a truncated payload actually is, and the headers stay the runtime's throughout. Raised on the
+  // code round.
+  const truncated = new ReadableStream({
+    start: (controller) => controller.error(new Error('unexpected end of body')),
   });
+  const broken = new Response(truncated, { status: 200, headers: { [CONTRACT_HEADER]: '4' } });
   const fetchImpl = (async () => broken) as typeof fetch;
 
   const answer = await ask('https://s', 'api/catalog', { fetchImpl });
