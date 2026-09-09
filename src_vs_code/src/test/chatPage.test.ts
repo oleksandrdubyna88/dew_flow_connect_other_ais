@@ -173,3 +173,254 @@ test('a turn waiting behind other people says so, and one being answered does no
   // Nothing at all when no turn is in flight — the region is emptied, not left saying "Thinking…".
   assert.strictEqual(chatStatusHtml(false, 4), '');
 });
+
+/**
+ * The stylesheet is PARSED, not just concatenated.
+ *
+ * <p>Found while building the pinned composer: the page's styles opened with a bare
+ * `font-size: 13px;` — the zoom — outside any rule, and CSS has no such thing at the top level. A
+ * parser consuming a qualified rule appends every token to the prelude until it meets `{`, and `;`
+ * does not end one, so the prelude became `font-size: 13px; body` — an invalid selector, and the
+ * whole `body` rule with it. Confirmed against a real parser (esbuild reads exactly that as the
+ * selector), which is why this is a structural test rather than a string match: a selector cannot
+ * contain a semicolon, on this page or any rule added to it later.</p>
+ */
+interface Rule {
+  readonly selector: string;
+  readonly body: string;
+}
+
+/**
+ * The stylesheet as rules — comments stripped FIRST, because that is the order a parser works in
+ * and a comment may contain anything, this file's own explanations included. Flat rules only, which
+ * is all these pages have; an at-rule with a nested block would need a real parser and this would
+ * have to be told so rather than quietly mis-reading it.
+ */
+function rules(css: string): Rule[] {
+  assert.ok(!css.includes('@media') && !css.includes('@supports'), 'this reader cannot see inside a nested at-rule');
+
+  return css
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('}')
+    .flatMap((chunk) => {
+      const [selector, body] = chunk.split('{');
+      return body === undefined ? [] : [{ selector: selector.trim(), body: body.trim() }];
+    });
+}
+
+function ruleFor(css: string, selector: string): string {
+  const found = rules(css).find((rule) => rule.selector === selector);
+  assert.ok(found, `there is no rule for ${selector}`);
+
+  return found.body;
+}
+
+test('no rule in the page styles is swallowed by a declaration outside a rule', () => {
+  const html = chatPageHtml(state(), 'n0nce');
+  const css = html.split('<style>')[1].split('</style>')[0];
+
+  for (const rule of rules(css)) {
+    assert.ok(
+      !rule.selector.includes(';'),
+      `a selector cannot contain ";" — this prelude swallowed the rule after it: ${JSON.stringify(rule.selector)}`,
+    );
+  }
+});
+
+test('the text size the person chose is inside the body rule, so it applies before anything is pushed', () => {
+  // scalePx(2) is 13 × 1.1² = 15.73. It must land in the body block itself: the zoom's live push
+  // sets body.style.fontSize, so a size that only arrives with a push is a page that opens at the
+  // wrong size and corrects itself when something unrelated happens.
+  const css = chatPageHtml(state({ uiScale: 2 }), 'n0nce').split('<style>')[1].split('</style>')[0];
+  const bodyRule = ruleFor(css, 'body');
+
+  assert.ok(bodyRule.includes('15.73px'), `the chosen text size is not in the body rule: ${bodyRule}`);
+});
+
+
+/**
+ * The page's script, RUN.
+ *
+ * <p>Every test above reads the page as a string, which is the right shape for markup and escaping
+ * and the wrong one for a lock, a focus or a scroll — those are behaviour, and a string match on
+ * behaviour asserts that a line was written rather than that it works. Nothing in this repository
+ * executed the chat page's script before this: `bundledPage.test.ts` runs the ROUNDS LOG page (it
+ * asserts on `seen['rows']`) and only reads the chat page's bundle text.</p>
+ *
+ * <p>Modelled on `runPage()` in `theLogLosesItsFirstPush.test.ts`. The fakes record what the page
+ * did — listeners by event name, focus calls, the three scroll numbers — and `deliver` pushes a
+ * host message through the same `window` listener the webview would.</p>
+ */
+interface Fake {
+  innerHTML: string;
+  textContent: string;
+  hidden: boolean;
+  value: string;
+  disabled: boolean;
+  focused: number;
+  scrollTop: number;
+  clientHeight: number;
+  scrollHeight: number;
+  style: Record<string, string>;
+  listeners: Record<string, Array<(event: unknown) => void>>;
+  addEventListener(type: string, fn: (event: unknown) => void): void;
+  focus(): void;
+  getAttribute(): null;
+  setAttribute(): void;
+  querySelectorAll(): never[];
+}
+
+function fake(): Fake {
+  return {
+    innerHTML: '', textContent: '', hidden: false, value: '', disabled: false, focused: 0,
+    scrollTop: 0, clientHeight: 0, scrollHeight: 0, style: {}, listeners: {},
+    addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); },
+    focus() { this.focused += 1; },
+    getAttribute: () => null,
+    setAttribute() { /* the page sets none */ },
+    querySelectorAll: () => [],
+  };
+}
+
+interface RunningPage {
+  seen: Record<string, Fake>;
+  posted: Array<Record<string, unknown>>;
+  fire(id: string, type: string, event?: Record<string, unknown>): void;
+  deliver(message: Record<string, unknown>): void;
+  frames(): void;
+}
+
+function runChatPage(over: Partial<ChatPageState> = {}): RunningPage {
+  const html = chatPageHtml(state(over), 'n0nce');
+  const body = html.split('<script nonce="n0nce">')[1].split('</script>')[0];
+  const seen: Record<string, Fake> = {};
+  const posted: Array<Record<string, unknown>> = [];
+  const pending: Array<() => void> = [];
+  const onWindow: Record<string, Array<(event: unknown) => void>> = {};
+  const document_ = {
+    getElementById: (id: string) => (seen[id] ??= fake()),
+    querySelectorAll: () => [],
+    addEventListener() { /* the page listens on window */ },
+    body: { style: {} as Record<string, string> },
+  };
+  const window_ = {
+    addEventListener(type: string, fn: (event: unknown) => void) { (onWindow[type] ??= []).push(fn); },
+  };
+
+  new Function('document', 'window', 'acquireVsCodeApi', 'requestAnimationFrame', body)(
+    document_,
+    window_,
+    () => ({ postMessage: (message: Record<string, unknown>) => posted.push(message) }),
+    (fn: () => void) => { pending.push(fn); },
+  );
+
+  return {
+    seen,
+    posted,
+    fire(id, type, event = {}) {
+      for (const fn of seen[id]?.listeners[type] ?? []) {
+        fn({ preventDefault() { /* the page calls this on Enter */ }, ...event });
+      }
+    },
+    deliver(message) {
+      for (const fn of onWindow['message'] ?? []) {
+        fn({ data: message });
+      }
+    },
+    frames() {
+      for (const fn of pending.splice(0)) {
+        fn();
+      }
+    },
+  };
+}
+
+test('the composer, the Send button, the picker and the hint sit in a pinned footer', () => {
+  const html = chatPageHtml(state(), 'n0nce');
+  const footer = html.slice(html.indexOf('<footer'), html.indexOf('</footer>'));
+  const region = html.slice(html.indexOf('<main'), html.indexOf('</main>'));
+
+  assert.ok(html.indexOf('<footer') > html.indexOf('id="messages"'), 'the footer is not after the conversation');
+  for (const inFooter of ['id="pickerBox"', 'id="say"', 'id="send"', 'class="hint"']) {
+    assert.ok(footer.includes(inFooter), `${inFooter} is not in the pinned footer`);
+  }
+  for (const inRegion of ['id="passage"', 'id="messages"', 'id="thinking"', 'id="capped"']) {
+    assert.ok(region.includes(inRegion), `${inRegion} is not in the scrolling region`);
+  }
+});
+
+test('the page has one scrolling region: the body cannot scroll and the region can', () => {
+  // The `min-height: 0` is the whole of it. Without it a flex child refuses to shrink below its
+  // content, the region never scrolls, the body does instead — and the composer leaves the screen,
+  // which is the symptom this plan exists for. (The gate raised it; it cannot be unit-tested any
+  // other way than by reading the rule, because there is no layout engine here.)
+  const css = chatPageHtml(state(), 'n0nce').split('<style>')[1].split('</style>')[0];
+
+  assert.match(ruleFor(css, 'body'), /overflow: hidden/, 'the body can still scroll');
+  assert.match(ruleFor(css, 'body'), /flex-direction: column/, 'the body is not a flex column');
+  assert.match(ruleFor(css, '#scroll'), /min-height: 0/, 'the scrolling region will refuse to shrink');
+  assert.match(ruleFor(css, '#scroll'), /overflow-y: auto/, 'the scrolling region does not scroll');
+});
+
+test('the passage has no inner scroll and is still visibly the text being discussed', () => {
+  const passage = ruleFor(chatPageHtml(state(), 'n0nce').split('<style>')[1].split('</style>')[0], '.passage');
+
+  assert.ok(!passage.includes('max-height'), 'the passage is still capped, so it has its own scrollbar');
+  assert.ok(!passage.includes('overflow-y'), 'the passage still scrolls inside itself');
+  assert.match(passage, /border-left/, 'the passage stopped looking like the text being discussed');
+});
+
+test('the Send button is locked exactly when the textarea is', () => {
+  for (const [over, locked] of [[{ running: true }, true], [{ capped: true }, true], [{}, false]] as const) {
+    const html = chatPageHtml(state(over), 'n0nce');
+    const button = html.slice(html.indexOf('id="send"'), html.indexOf('>', html.indexOf('id="send"')));
+    const box = html.slice(html.indexOf('id="say"'), html.indexOf('>', html.indexOf('id="say"')));
+
+    assert.strictEqual(button.includes('disabled'), locked, `the Send button's lock disagrees with ${JSON.stringify(over)}`);
+    assert.strictEqual(box.includes('disabled'), locked, `the textarea's lock disagrees with ${JSON.stringify(over)}`);
+  }
+
+  // And it keeps agreeing when the host pushes a state, which is where the two could drift apart.
+  const page = runChatPage();
+  page.deliver({ type: 'state', running: true, capped: false });
+  assert.strictEqual(page.seen['send']?.disabled, true, 'a running turn left the Send button open');
+  page.deliver({ type: 'state', running: false, capped: false });
+  assert.strictEqual(page.seen['send']?.disabled, false, 'the finished turn left the Send button locked');
+});
+
+test('the Send button and Enter share one send, wired inside the nonced script', () => {
+  const html = chatPageHtml(state(), 'n0nce');
+  const script = html.split('<script nonce="n0nce">')[1].split('</script>')[0];
+  const body = html.slice(html.indexOf('<body>'), html.indexOf('<script'));
+
+  assert.strictEqual(script.split('function send()').length - 1, 1, 'there is more than one way to send');
+  assert.match(html, /<button type="button" id="send"/, 'Send is not a plain button');
+  // CSP is `script-src 'nonce-…'`, so an inline handler would be blocked and the button would be
+  // dead. Every listener is attached in the nonced script.
+  assert.doesNotMatch(body, / on[a-z]+="/, 'a control carries an inline handler the CSP will block');
+
+  const page = runChatPage();
+  page.seen['say'].value = 'what does this do';
+  page.fire('send', 'click');
+  page.seen['say'].value = 'and this';
+  page.fire('say', 'keydown', { key: 'Enter', shiftKey: false });
+
+  const sends = page.posted.filter((m) => m['command'] === 'send');
+  assert.strictEqual(sends.length, 2, 'the button and Enter did not both send');
+  assert.deepStrictEqual(sends.map((m) => m['text']), ['what does this do', 'and this']);
+});
+
+test('a send hands focus back to the textarea, and a locked composer posts nothing', () => {
+  // Clicking a button moves focus to the button. Without this, every follow-up costs a mouse click
+  // back into the box — the same reason the lock already returns focus when a turn ends.
+  const page = runChatPage();
+  page.seen['say'].value = 'ask';
+  page.fire('send', 'click');
+  assert.ok(page.seen['say'].focused > 0, 'the Send button kept the focus it stole');
+
+  page.seen['say'].value = 'while a turn runs';
+  page.seen['say'].disabled = true;
+  const before = page.posted.length;
+  page.fire('send', 'click');
+  assert.strictEqual(page.posted.length, before, 'a locked composer sent a second turn down the pipe');
+});

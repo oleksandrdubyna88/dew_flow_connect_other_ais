@@ -78,6 +78,102 @@ failed turn renders under the same rule as an answer. One rule, not one per outc
 - Manual, recorded in the promotion: open a chat with a 60-line passage — the page lands on the
   last message; scroll up, ask; the answer does not yank; the jump control appears.
 
+## Stories — the split, and the gate's thirteen findings placed
+
+> Split on 2026-09-09 by Fable (the gate's own command routes the split decision to it), then
+> checked against the repository. **One swap from the build order above, and it is an improvement:
+> the scroll rule lands BEFORE the composer's growth.** A footer whose height changes needs the
+> at-bottom rule to already exist — findings 5 and 11 are about exactly that — and a pure function
+> that has not been written cannot be called.
+
+Four stories, in order, one commit and one `review_code` each. Every one leaves `npm test` green
+and the page usable on its own.
+
+**Two corrections to the split, made after checking:**
+
+- Its claim that `bundledPage.test.ts` executes `chatScript` against a fake DOM is **wrong** — the
+  "parses and runs" test there is the ROUNDS LOG page (it asserts on `seen['rows']`); the chat
+  page's bundle test only reads the bundle's text. The `typeof` guards it asks for are still
+  right, for two real reasons instead of the stated one: the older-Chromium host is the whole
+  point of finding 1, and the test harness below runs the script in Node, where
+  `requestAnimationFrame`, `CSS` and `ResizeObserver` genuinely do not exist.
+- There is no `thinkingRegion` helper. `chatPanel.ts:208-214` builds every pushed region by
+  calling the same exported functions, so no markup is sliced and no opening tag is load-bearing.
+
+**Found while reading for story 1, and not in any list: the page's `body` rule never applied.**
+`chatStyle` opened with `${zoomStyle(uiScale)}` — a bare `font-size: 13px;` outside any rule, and
+CSS has no such thing at the top level. A parser consuming a qualified rule appends tokens to the
+prelude until `{`, and `;` does not end one, so the selector became `font-size: 13px; body` and the
+whole rule was dropped: no `margin: 0`, no `padding`, no font-family, no background, and the chosen
+text size never applied until something unrelated pushed it. Confirmed against a real parser
+(esbuild reads exactly that as the selector). Fixed first, with two RED tests, because story 1's
+flex layout goes on `body` and would have been dropped with it.
+
+### Story 1 — one scrolling region, a pinned footer, a Send button
+
+`chatBody`: `<main id="scroll">` wraps header, passage, `#failure`, `#messages`, `#thinking`,
+`#capped`; `<footer id="composer">` after it holds `#pickerBox`, a `.compose` row of the textarea
+and `<button type="button" id="send">`, and the hint. `chatStyle`: `html, body { height: 100% }`;
+body becomes a flex column with `overflow: hidden` and no padding; `#scroll { flex: 1 1 auto;
+min-height: 0; overflow-y: auto }` — the `min-height: 0` IS finding 8, without it the child refuses
+to shrink and the page keeps two scroll surfaces; `#composer { flex: 0 0 auto }`. `.passage` loses
+`max-height`/`overflow-y` in this same commit. `chatScript`: `send()` hands focus back; a click
+listener on `#send` calls the one `send()`; the Send button's `disabled` is set from the textarea's
+in the same block — one lock, never two. The header comment at lines 19-24 is rewritten.
+
+**Findings: 8, 12, 13.** **Expensive if wrong: yes** — it is the skeleton four queued plans build
+on, the CSS cannot be unit-tested, and a missing `min-height: 0` reproduces the exact symptom while
+every test stays green.
+
+### Story 2 — the scroll rule
+
+New exports `FOLLOW_SLACK_PX = 48` and `shouldFollow(scrollTop, clientHeight, scrollHeight, slack)`
+— finding 4's concrete boundary: follow iff `scrollHeight - (scrollTop + clientHeight) <= slack`;
+48 follows, 49 does not; overscroll, nothing-to-scroll and a non-finite input all follow (a page
+that cannot measure is a page whose reader has not scrolled). Embedded into the script by
+`toString()` and bound by assignment — the `roundsLog.ts:850` idiom, because the minifier renames
+declarations. In the `state` handler the snapshot is the FIRST statement, before any `innerHTML`
+write, and the scroll is applied in `afterLayout` (`requestAnimationFrame`, `setTimeout` where it
+does not exist): findings 3 and 6, true by construction because every region arrives through that
+one handler. On open, `landOnNewest()` runs immediately, again after layout, and once more after
+`document.fonts.ready` where it exists — finding 10's lifecycle point.
+
+**Findings: 3, 4, 6, 10.** **Expensive if wrong: yes** — a wrong ordering silently turns rule 2
+into "never follow", and only the real webview shows it.
+
+### Story 3 — jump to newest
+
+`<button type="button" id="jump" hidden>` inside the footer, `position: absolute` out of flow so
+showing it changes neither the footer's height nor `#scroll`'s `clientHeight` — finding 2. Shown
+only when `!follow && wrote`; a click scrolls to the newest, hides itself and returns focus; a
+`scroll` listener retires it once `shouldFollow` reads true — finding 7's missing lifecycle.
+
+**Findings: 2, 7.** **Expensive if wrong: no** — a defect here is a missing or lingering button.
+
+### Story 4 — the composer grows, shrinks back, and moves nobody
+
+`textarea` gains `max-height: 30vh; field-sizing: content; overflow-y: auto`, keeping
+`min-height: 64px`; the 30 % lives in that one rule for both paths. Feature detection is finding 1:
+`CSS.supports('field-sizing', 'content')`, and where it is false an `input` handler sets
+`height = 'auto'` then `scrollHeight + 'px'`, with the CSS ceiling and inner scroll unchanged —
+called on input, after `send()` clears the box, and after a pushed draft, so shrink-back is a call
+rather than a hope (finding 9). A `ResizeObserver` on `#composer`, where it exists, re-pins a
+reader who WAS at the bottom when the footer's height changes — findings 11 and 5; the flag is what
+the reader was before the resize, which is the only measurement that survives it. Documentation,
+CHANGELOG and the recorded manual check close the branch here.
+
+**Findings: 1, 5, 9, 11.** **Expensive if wrong: yes** — the detection cannot be observed from a
+test on the host that matters, and the re-pinning interacts with story 2's ordering.
+
+### The test harness
+
+Stories 2-4 need the script RUN, not read. `runChatPage(state)` follows `runPage()` in
+`theLogLosesItsFirstPush.test.ts:179`: slice the script out of `chatPageHtml`, execute it with
+`new Function('document', 'window', 'acquireVsCodeApi', …)`, fake elements recording listeners,
+`focused`, `style`, `value`, `disabled`, `hidden` and the three scroll numbers; return
+`{ seen, posted, fire, deliver, fireFrames }`. It is the first test in this repository to execute
+the chat page's script at all.
+
 ## Acceptance — one PR per plan, and the gate on both sides of it
 
 This plan ships as **its own branch (`fix/the-composer-stays-put`) and its own pull request**, and the PR is accepted
