@@ -19,7 +19,7 @@
 > for ever; a per-turn exit names its code; and the live check became `npm run test:live`, in the
 > repository rather than in a scratch directory.
 >
-> Scope: `src_vs_code`. Related docs: [../todo/PLAN_chat_with_other_ais.md](../todo/PLAN_chat_with_other_ais.md)
+> Scope: `src_vs_code`. Related docs: [PLAN_chat_with_other_ais.md](PLAN_chat_with_other_ais.md)
 > (the master plan this extends), [module_extension.md](module_extension.md).
 
 ## Why this plan exists

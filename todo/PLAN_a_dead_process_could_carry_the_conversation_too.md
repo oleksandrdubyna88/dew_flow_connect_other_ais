@@ -6,7 +6,7 @@
 > not what to do about it — that part is already written and shipped for the neighbouring case.
 >
 > Related docs: [research/module_extension.md](../research/module_extension.md),
-> [research/PLAN_chat_with_other_ais.md](PLAN_chat_with_other_ais.md).
+> [research/PLAN_chat_with_other_ais.md](../research/PLAN_chat_with_other_ais.md).
 
 ## The symptom, and why it is only half a symptom
 
