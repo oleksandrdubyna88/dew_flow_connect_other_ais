@@ -190,7 +190,7 @@ than solved now, because Phase 1 is not being built:
    asked for an incremental markdown renderer instead; that was declined as a much larger machine
    whose only job is to make that flicker acceptable, and because the container's reserved geometry
    belongs to the renderer plan
-   ([PLAN_an_answer_reads_like_a_document.md](PLAN_an_answer_reads_like_a_document.md)), not to two
+   ([PLAN_an_answer_reads_like_a_document.md](../research/PLAN_an_answer_reads_like_a_document.md)), not to two
    designs at once. (gemini, rejected with reasons.)
 6. **A failure is not evidence of absence** — if a re-measurement is ever run, a hung or rate-limited
    CLI must be reported as FAILED, never as "does not stream". The harness already enforces this.
@@ -285,4 +285,4 @@ only when the whole ritual has run — not when the code works.
 **Phase 0 has no conflicts at all** — a script and a table — and can run in any lane at any time.
 Phase 1 conflicts with [PLAN_a_turn_nobody_can_stop.md](PLAN_a_turn_nobody_can_stop.md) on `send`'s
 signature (stop goes first) and with the chat-page lane on the message region (queues behind
-[PLAN_an_answer_reads_like_a_document.md](PLAN_an_answer_reads_like_a_document.md)).
+[PLAN_an_answer_reads_like_a_document.md](../research/PLAN_an_answer_reads_like_a_document.md)).

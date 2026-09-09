@@ -44,7 +44,7 @@ vendor actually charged. The tab and the log both keep the tilde.
   row and model from [PLAN_provider_then_model.md](PLAN_provider_then_model.md)), never from what
   is configured now.
 - The caption `The other AI` becomes the model's label in its vendor colour (the edge
-  [PLAN_an_answer_reads_like_a_document.md](PLAN_an_answer_reads_like_a_document.md) draws).
+  [PLAN_an_answer_reads_like_a_document.md](../research/PLAN_an_answer_reads_like_a_document.md) draws).
 - A running total in the picker row: *this conversation: ~$0.13 · 9.2k tokens*, updated per turn.
 - The ledger: every chat turn writes a usage entry with `kind: chat`, the model, tokens, money and
   the `estimated` flag; the log page reads them as rows with a *Conversation* kind, priced through
@@ -112,5 +112,5 @@ only when the whole ritual has run — not when the code works.
 Two halves with different owners. **The ledger and log half** (`chatLedger.ts`, `usage.ts`,
 `roundsLog.ts`) has no conflict with the chat-page lane and can run beside it. **The tab half**
 (`ChatMessage`, caption, total) touches `chatPage.ts` and queues behind
-[PLAN_an_answer_reads_like_a_document.md](PLAN_an_answer_reads_like_a_document.md). Build the seam
+[PLAN_an_answer_reads_like_a_document.md](../research/PLAN_an_answer_reads_like_a_document.md). Build the seam
 (`ChatMessage.model`) first in the lane that gets there first; the other half reads it.

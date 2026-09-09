@@ -1,14 +1,47 @@
-# PLAN — an answer reads like a document
-
-> Status: **plan only, nothing implemented yet.** Kind: **feature** (six asks, one rendering pass).
-> Scope: the chat tab's message rendering — `src_vs_code/src/chatPage.ts` (`chatMessagesHtml`,
-> `chatStyle`, the copy control), one new pure module for the renderer, and the extension's FIRST
-> runtime dependency if the recommendation below is taken. Origin:
-> [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entries 4, 5, 6, 7, 8, 18.
+> Status: **IMPLEMENTED, 2026-09-09** (PR #168). Kind: **feature** — six of the operator's reports
+> that are one rendering pass. Scope: `src_vs_code/src/renderAnswer.ts` (new),
+> `chatPage.ts`, `chatMessages.ts`, `chatPanel.ts`, `chatCommand.ts`.
+> Origin: [../todo/BUGS_2026-09-09.md](../todo/BUGS_2026-09-09.md), entries 4, 5, 6, 7, 8, 18.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_chat_with_other_ais.md](../research/PLAN_chat_with_other_ais.md),
-> [PLAN_reviewer_card_colours.md](../research/PLAN_reviewer_card_colours.md).
+> ### What shipped differently, and what it cost
+>
+> **The dependency question went the other way, and the plan round is why.** This plan leaned toward
+> widening `bodyHtml` (`helpPage.ts`) to keep the extension's advertised zero runtime dependencies.
+> Both reviewers refused it with the same argument: *escape first, mark up second* as a REGEX
+> pipeline breaks on a fence containing entities — escaping the string first turns `<` into `&lt;`
+> inside the code the reader is shown — and cannot count nesting at all. So `marked` tokenizes and
+> the emitting is ours, and the line in `module_extension.md` that advertised no dependencies now
+> says one, with the reason beside it.
+>
+> **`renderAnswer` is not pure in the way this plan promised, and could not be.** It said the
+> renderer would decide whether a file reference resolves, and a synchronous pure function cannot ask
+> the filesystem anything. gemini caught it on the plan round: the renderer emits a `data-file`
+> anchor and the HOST resolves on click. That is better than what was planned — the page never
+> carries an `href` at all, so there is nothing for a `javascript:` URL to be.
+>
+> **The hostile-input file earned its place on its first run.** It found GFM autolinking a bare
+> address in prose — the defect this family shipped once already, from the other direction — and a
+> weakness in its own assertions: they matched the WORD `onerror`, which flags escaped text that
+> merely mentions one and would miss a hostile tag nobody had thought of. They assert on the tag
+> names that came out, against the allow-list.
+>
+> **Three defects the code round found in the implementation.** A workspace containment check written
+> as `startsWith(root)`, which admits `/w/app-secret` when the root is `/w/app`; a renderer that
+> demanded a dot in a filename where the host's own check did not, so `Dockerfile` and `LICENSE` were
+> never offered as links by a page whose host would have opened them; and a copy control at
+> `opacity: 0`, invisible to a keyboard and a screen reader while still sitting in the tab order.
+>
+> **A hazard of this file's shape, three times in one plan:** a backtick in a comment INSIDE a
+> template literal ends the literal, and the build then fails on a line of prose. It is a red test
+> now.
+>
+> **Nine of twenty-seven code-round findings were a stale base** read as deletions — `main` moved
+> three times while this was being written. Rebasing immediately before the round, not at the start
+> of the branch, is the answer.
+>
+> **The open tail:** copy during a streamed answer. Turns are append-only so an index is stable
+> today, but a partial answer becomes copyable mid-flight the moment streaming lands — recorded as a
+> DoD item on [../todo/PLAN_an_answer_as_it_arrives.md](../todo/PLAN_an_answer_as_it_arrives.md).
 
 ## The goal
 
@@ -68,7 +101,7 @@ Either way: **no autolinking of bare URLs** (the family has shipped that defect 
   The webview loads nothing itself: `localResourceRoots: []` (`chatPanel.ts:99`) stays.
 - **Sides and colours.** `.msg.you` right-aligned (caption too) in one fixed non-vendor colour;
   `.msg.model` left, its EDGE in the answering model's vendor colour — the current tab model's
-  until [PLAN_who_said_it_and_what_it_cost.md](PLAN_who_said_it_and_what_it_cost.md) puts a model
+  until [PLAN_who_said_it_and_what_it_cost.md](../todo/PLAN_who_said_it_and_what_it_cost.md) puts a model
   on every message, then per message. Both keep a max width so a long line does not span the tab.
 - **The end of an answer.** A rule after every `model` message — `<hr class="end">` styled from the
   palette. The operator asked for a row of asterisks; a rendered rule is what a row of asterisks
