@@ -3,6 +3,7 @@ import { TeamServer, canonicalTeamServerUrl } from './teamServers';
 // The same comparator the coai-mcp update check uses. Two version comparisons in one panel that
 // disagreed about what "newer" means is a defect waiting for a version like 0.10.0.
 import { compareVersions } from './coaiInstall';
+import { SERVER_CONTRACT_REQUIRED } from './teamServerApi';
 // The ONE escaper, imported rather than copied. A private second copy is the anti-pattern the
 // security rule names by example — "three byte-identical private copies | hardening one left the
 // other two behind" — and byte-identical is exactly what this one was. Caught on the code round.
@@ -41,6 +42,16 @@ export interface TeamServerState {
   readonly problem: string;
   /** Whether {@link catalog} predates the last failed attempt. */
   readonly stale: boolean;
+  /**
+   * The HTTP contract this server last said it speaks, or undefined when nothing is known.
+   *
+   * <p>Three states and the last two are not the same. A number is what it answered with. `0` is a
+   * server that ANSWERED and named nothing, which is a real fact about its age. `undefined` is a
+   * server that has not been reached, or whose answer was unreadable — recorded as nothing, because
+   * a dropped connection is not evidence that a server is old, and treating it as such would flash a
+   * warning on every network blip.</p>
+   */
+  readonly contract?: number | undefined;
   /** What this server says has been spent on it, in the window the panel is showing. */
   readonly usage?: Usage | undefined;
   /**
@@ -239,6 +250,32 @@ export function publishedNote(state: TeamServerState, published: string): string
     : `${published} is the newest published — this one is up to date.`;
 }
 
+/**
+ * Said out loud when this panel needs a newer server than the one answering.
+ *
+ * <p>The mirror of the server's 426: it refuses a client it can no longer serve, and this reports a
+ * server this panel can no longer read. Reports rather than refuses, deliberately — the panel that
+ * stopped talking to a server it merely suspects would turn a warning into an outage, which is the
+ * failure the server's own contract comment refuses for the other direction.</p>
+ *
+ * <p>Silent in the two states that are not evidence: a server that has never answered, and one that
+ * is new enough. A mechanism that talks when nothing is wrong is one people learn to scroll past
+ * before the day it is true.</p>
+ */
+export function contractNote(state: TeamServerState): string {
+  const said = state.contract;
+  if (said === undefined || said >= SERVER_CONTRACT_REQUIRED) {
+    return '';
+  }
+
+  const speaks = said === 0
+    ? 'does not say which version of the API it speaks'
+    : `speaks version ${said} of the API`;
+
+  return `⚠ This server ${speaks}, and this extension needs ${SERVER_CONTRACT_REQUIRED} or later. `
+    + 'Reviews sent here may be read wrongly by one half or the other — update the Team server.';
+}
+
 /** One server's rows. */
 export function teamServerRow(state: TeamServerState, published = ''): string {
   const signedIn = state.email.length > 0;
@@ -248,6 +285,7 @@ export function teamServerRow(state: TeamServerState, published = ''): string {
   const stop = (state.busy ?? '').length > 0 ? ' disabled' : '';
   const slots = (state.catalog?.vendors ?? []).map((v) => escape(slotSentence(v))).join('; ');
   const release = publishedNote(state, published);
+  const contract = contractNote(state);
 
   return `<div class="ts-row" data-server="${id}">
   <div class="ts-head">
@@ -256,6 +294,7 @@ export function teamServerRow(state: TeamServerState, published = ''): string {
   </div>
   <div class="ts-acct">${accountGlyph(signedIn)} ${escape(signedIn ? state.email : 'no account')}</div>
   <div class="hint">${escape(statusSentence(state))}</div>
+  ${contract.length > 0 ? `<div class="hint ts-warn">${escape(contract)}</div>` : ''}
   ${release.length > 0 ? `<div class="hint ts-release">${escape(release)}</div>` : ''}
   ${slots.length > 0 ? `<div class="ts-slots">${slots}</div>` : ''}
   <div class="hint ts-warn">${escape(disclosure(state.server.url))}</div>

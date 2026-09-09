@@ -62,7 +62,7 @@ function serverSaying(email: string): typeof fetch {
       ? JSON.stringify({ microsoftScope: GOOD_SCOPE, providers: ['microsoft'] })
       : JSON.stringify({ token: `token-for-${email}`, expiresUtc: '2027-01-01T00:00:00Z', email });
 
-    return { ok: true, status: 200, text: async () => body } as Response;
+    return { ok: true, status: 200, headers: new Headers(), text: async () => body } as Response;
   }) as typeof fetch;
 }
 
@@ -233,12 +233,13 @@ test('a silent mint that comes back as the WRONG account writes nothing', async 
       if ((init.method ?? 'GET') === 'DELETE') {
         ended.push(url);
 
-        return { ok: true, status: 204, text: async () => '' } as Response;
+        return { ok: true, status: 204, headers: new Headers(), text: async () => '' } as Response;
       }
 
       return {
         ok: true,
         status: 200,
+        headers: new Headers(),
         text: async () => (url.endsWith('/api/client-config')
           ? JSON.stringify({ microsoftScope: GOOD_SCOPE, providers: ['microsoft'] })
           : JSON.stringify({
@@ -365,7 +366,7 @@ test('a stale token is ENDED on the server before a new one is asked for', async
       if ((init.method ?? 'GET') === 'DELETE') {
         ended.push(String(input));
 
-        return { ok: true, status: 204, text: async () => '' } as Response;
+        return { ok: true, status: 204, headers: new Headers(), text: async () => '' } as Response;
       }
 
       return (await (serverSaying('a@b.c') as (i: unknown, o: unknown) => Promise<Response>)(input, init));

@@ -26,6 +26,43 @@ export const CONTRACT_HEADER = 'X-Coai-Contract';
 export const CONTRACT_VERSION = 1;
 
 /**
+ * The oldest server contract this panel can work with.
+ *
+ * <p>The mirror of the server's `Coai:MinimumClientContract`, and it carries the same rule: **raise
+ * it only when an older server would be MISREAD**, never merely because a newer one exists. The
+ * value of the mechanism is that it stays quiet until it matters, and a warning that appears because
+ * somebody bumped a number is one people learn to scroll past before the day it is true.</p>
+ *
+ * <p>One, because nothing has moved yet. The server's own comment argues for building the mechanism
+ * before the first breaking change — "the day a response shape moves, the old clients are already in
+ * the field with no way to say what they speak" — and this half is subject to exactly that: the day
+ * it matters, the panels that cannot read the header are already installed.</p>
+ */
+export const SERVER_CONTRACT_REQUIRED = 1;
+
+/**
+ * What the server said it speaks, from a response it already sent.
+ *
+ * <p>Three answers, and the difference between the last two is the whole point. A number is what it
+ * speaks. `0` is a server that ANSWERED and named nothing — genuinely old, since every release since
+ * the mechanism landed sets the header. `undefined` is "not known": no response arrived at all, or
+ * what arrived was not a number, and neither of those is evidence about the server's age. Recording
+ * a dropped connection as `0` would flash a skew warning on every network blip.</p>
+ */
+function contractOf(response: Response): number | undefined {
+  const said = response.headers.get(CONTRACT_HEADER);
+  if (said === null) {
+    return 0;
+  }
+
+  // `v2`, `beta`, or anything a proxy invented: something is answering that is not this server, and
+  // reporting it as ancient would be a guess dressed as a fact.
+  const parsed = Number(said);
+
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+/**
  * What a server said, or why it could not be asked.
  *
  * <p>`status` is on BOTH arms. A success used to discard it, which meant no caller could tell
@@ -35,8 +72,8 @@ export const CONTRACT_VERSION = 1;
  * one field.</p>
  */
 export type ServerResult<T> =
-  | { readonly ok: true; readonly status: number; readonly value: T }
-  | { readonly ok: false; readonly status: number; readonly message: string };
+  | { readonly ok: true; readonly status: number; readonly contract: number | undefined; readonly value: T }
+  | { readonly ok: false; readonly status: number; readonly contract: number | undefined; readonly message: string };
 
 export interface ClientConfig {
   readonly microsoftScope: string;
@@ -111,7 +148,7 @@ export async function ask<T>(
   // would have had the catalog and usage calls carry the bearer token in the clear. Two reviewers
   // found it. The measure belongs on the road in, not at each door.
   if (!isHttpsOrLoopback(url)) {
-    return { ok: false, status: 0, message: INSECURE };
+    return { ok: false, status: 0, contract: undefined, message: INSECURE };
   }
 
   const controller = new AbortController();
@@ -142,18 +179,19 @@ export async function ask<T>(
     const response = await send(teamServerEndpoint(url, route), request);
     const text = await response.text();
     if (!response.ok) {
-      return { ok: false, status: response.status, message: said(text, response.status) };
+      return { ok: false, status: response.status, contract: contractOf(response), message: said(text, response.status) };
     }
 
     return {
       ok: true,
       status: response.status,
+      contract: contractOf(response),
       value: (text.length > 0 ? JSON.parse(text) : {}) as T,
     };
   } catch (e) {
     // Includes the deadline: an aborted request is a server that did not answer, which is exactly
     // what a person needs told, and is not different in kind from one that refused the connection.
-    return { ok: false, status: 0, message: reason(e) };
+    return { ok: false, status: 0, contract: undefined, message: reason(e) };
   } finally {
     clearTimeout(deadline);
   }
@@ -208,6 +246,7 @@ export async function fetchClientConfig(
     return {
       ok: false,
       status: 0,
+      contract: answer.contract,
       message: `the Team server at ${canonicalTeamServerUrl(url)} asked for a sign-in permission this `
         + `extension will not request (${cut(String(answer.value.microsoftScope), 80)}). It must be `
         + 'api://<application id>/coai.access.',

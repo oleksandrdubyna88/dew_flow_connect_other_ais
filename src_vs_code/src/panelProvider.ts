@@ -199,6 +199,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     usage?: Usage | undefined;
     problem: string;
     stale: boolean;
+    contract?: number | undefined;
   }> = {};
   /** The newest published server version, and when GitHub last answered. */
   private latestServer = '';
@@ -1367,6 +1368,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // <the wrong person>" with no sign that anything had gone wrong. Caught on the code round.
         problem: known?.problem ?? (failed?.message ?? ''),
         stale: known?.stale ?? false,
+        contract: known?.contract,
         busy: this.busy[server.id] ?? '',
       };
     });
@@ -1658,6 +1660,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // recorded on this server", which is a measurement, not an absence of one.
       problem: problem.length > 0 ? problem : (spent.ok ? '' : spent.message),
       stale: answer.ok ? false : known?.catalog !== undefined,
+      // Only when an HTTP response actually arrived. `undefined` means the call never reached a
+      // server — a timeout, a refused connection, a URL that is not https — and recording that as
+      // "this server named nothing" would report every network blip as a server too old to talk to.
+      contract: answer.contract ?? known?.contract,
     };
   }
 

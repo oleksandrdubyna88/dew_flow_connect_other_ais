@@ -53,7 +53,7 @@ function serverThatWorks(): typeof fetch & { seen: string[] } {
       ? JSON.stringify({ microsoftScope: GOOD_SCOPE, providers: ['microsoft'] })
       : JSON.stringify({ token: 'server-token', expiresUtc: '2027-01-01T00:00:00Z', email: 'a@b.c' });
 
-    return { ok: true, status: 200, text: async () => body } as Response;
+    return { ok: true, status: 200, headers: new Headers(), text: async () => body } as Response;
   }) as typeof fetch & { seen: string[] };
   impl.seen = seen;
 
@@ -317,7 +317,7 @@ test('a session that cannot be SAVED is ended again rather than left open', asyn
         ? JSON.stringify({ microsoftScope: GOOD_SCOPE, providers: ['microsoft'] })
         : JSON.stringify({ token: 'server-token', expiresUtc: '2027-01-01T00:00:00Z', email: 'a@b.c' });
 
-      return { ok: true, status: 200, text: async () => body } as Response;
+      return { ok: true, status: 200, headers: new Headers(), text: async () => body } as Response;
     }) as typeof fetch;
 
     // A data directory that cannot hold a `servers` folder, because a file of that name is there.
@@ -349,11 +349,12 @@ test('an account outside the company domain is told that, not told to retry', as
         return {
           ok: true,
           status: 200,
+          headers: new Headers(),
           text: async () => JSON.stringify({ microsoftScope: GOOD_SCOPE, providers: ['microsoft'] }),
         } as Response;
       }
 
-      return { ok: false, status: 403, text: async () => '{"error":"domain"}' } as Response;
+      return { ok: false, status: 403, headers: new Headers(), text: async () => '{"error":"domain"}' } as Response;
     }) as typeof fetch;
 
     const result = await signIn(SERVER, host(dir, store(), [], forbidding));
