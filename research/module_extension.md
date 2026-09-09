@@ -185,6 +185,32 @@ never quietly absent — the same rule the command follows.
 files are stored CRLF, and a required field would have meant sixteen unreviewable whole-file diffs.
 Absent means the defaults, which is what an untouched panel shows anyway.
 
+### What a force-killed editor leaves behind (2026-09-09)
+
+A chat is a vendor CLI signed in as the person, and it lives as long as its tab. Closing the tab
+kills it; deactivating the extension kills them all. **Neither runs when VS Code is force-killed** —
+the Task Manager, a battery that goes, an installer that restarts the machine — and what survives
+that is an authenticated process nobody can see and nobody will stop.
+
+So every child is written down as it starts and struck out as it ends, and the next activation reads
+what is left. In the ordinary case the file is empty and the whole mechanism costs nothing.
+
+**The dangerous part is the killing, and the ledger exists to make it safe.** The launcher has said
+so since it was written: a pid is not an identity, Windows hands used numbers out again, and killing
+by number can end whatever now holds it. A record is therefore three facts — the pid, the image, and
+WHEN it started — and all three must still hold. The operating system is asked who holds the number
+now (`Get-CimInstance Win32_Process`, which reports the name WITH its extension, unlike
+`Get-Process`), and a mismatch on either fact leaves the process alone.
+
+The case that decides the design is not the orphan. It is somebody’s own `claude`, running their own
+work, on a number an extension wrote down an hour ago: **killing that would be far worse than the
+orphan it was tidying up.** Every unhappy answer — no such process, a refusal, a PowerShell that
+would not start — means the same thing and kills nothing. The guard fails CLOSED.
+
+Verified live rather than reasoned: two real processes of the same image, one recorded honestly and
+one recorded with a start time an hour off. The first was ended, the second was left running, and
+the ledger came back empty.
+
 ### Three vendors, one seam (2026-09-09)
 
 The chat answered on one runtime because the master plan recorded a limitation as fact:

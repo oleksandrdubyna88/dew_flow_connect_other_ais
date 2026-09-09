@@ -62,6 +62,7 @@ function fakeChild(): FakeChild {
 
   return {
     handle: {
+      pid: 1234,
       writeAndEnd: (text: string) => {
       written.push(text);
 

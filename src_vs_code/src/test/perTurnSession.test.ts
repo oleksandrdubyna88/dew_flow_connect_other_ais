@@ -62,6 +62,7 @@ function perTurnLauncher(): { start: (resume: string) => ProcessHandle; turns: F
     const turn: { resume: string; prompt: string } = { resume, prompt: '' };
 
     const handle: ProcessHandle = {
+      pid: 4242,
       // Both, because this launcher drives both shapes: a per-turn child is written to and CLOSED,
       // a persistent one is written a line at a time down a pipe that stays open.
       writeLine: (line: string) => {
