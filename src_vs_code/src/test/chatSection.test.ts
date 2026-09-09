@@ -4,7 +4,7 @@ import { PanelState, panelHtml } from '../panelView';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS, Vendor } from '../vendors';
 import { SNIPPET_VERSION } from '../claudeSnippet';
-import { ChatSettings, chatSettingsFrom } from '../chatSettings';
+import { CHAT_AUTO_SEND, ChatSettings, chatSettingsFrom } from '../chatSettings';
 import { escapeHtml } from '../escapeHtml';
 
 /**
@@ -99,7 +99,9 @@ test('who presses send is a choice, and its three values are all offered', () =>
   const body = chatSection(panelHtml(state(), 'n0nce'));
 
   assert.match(body, /<select[^>]*data-setting="chatAutoSend"/);
-  for (const value of ['always', 'keyboard', 'never']) {
+  // From the catalog, not retyped: a fourth value added to `CHAT_AUTO_SEND` and not rendered would
+  // leave a hand-written list green while the control lost an option. (codex and gemini.)
+  for (const value of CHAT_AUTO_SEND) {
     assert.ok(body.includes(`value="${value}"`), `${value} is not on offer`);
   }
   assert.match(body, /<option value="keyboard" selected>/, 'the default is not the selected one');

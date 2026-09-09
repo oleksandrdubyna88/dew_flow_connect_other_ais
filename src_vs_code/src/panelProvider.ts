@@ -466,9 +466,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       teamServers: this.teamServerStates(config),
       providers: this.providerHealth(),
       usageScope: this.usageScope,
-      // Through the reader the COMMAND uses, not a second one: the section edits exactly what the
-      // conversation will read, including every fallback for a value somebody typed by hand.
-      chat: chatSettingsFrom((key: string) => this.read(config)(key)),
+      // Straight from the configuration, exactly as the COMMAND reads it — not through the
+      // per-side reader beside it. These four are person-level by design (`chatSettings.ts` says
+      // so, and none of them is in `OVERLAID_SETTINGS`), so routing them through an overlay that
+      // will never hold them would only invite somebody to add them to it one day and split the
+      // one reader in two.
+      chat: chatSettingsFrom((key: string) => config.get(key)),
     };
 
     // Two update paths, and which one runs is the whole fix for the pickers.
