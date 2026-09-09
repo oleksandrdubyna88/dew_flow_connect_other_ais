@@ -6,6 +6,7 @@ import {
   TeamServerState,
   disclosure,
   slotSentence,
+  contractNote,
   publishedNote,
   statusSentence,
   teamServerRow,
@@ -230,4 +231,37 @@ test('a name or an email with markup in it cannot become markup', () => {
   assert.ok(!hostile.includes('<img'));
   assert.ok(!hostile.includes('<script>'));
   assert.ok(hostile.includes('&lt;img'));
+});
+
+/**
+ * The other half of a contract the server has been holding up alone.
+ *
+ * <p>`ContractVersion` puts `X-Coai-Contract` on every response and says why: "a newer client knows
+ * what it is doing better than an older server does, and its own check against the response header
+ * is the right place to decide". This is that check. It REPORTS — the server is the half that
+ * refuses, and a panel that stopped talking to a server it merely suspects would turn a warning
+ * into an outage.</p>
+ */
+test('a server too old for this panel is said out loud, and nothing else is', () => {
+  const at = (contract: number | undefined): TeamServerState => state({ email: 'a@b.c', contract });
+
+  // Silence in the two states that are not evidence.
+  assert.strictEqual(contractNote(at(undefined)), '', 'a server that never answered is not accused');
+  assert.strictEqual(contractNote(at(1)), '', 'and neither is one that is new enough');
+  assert.strictEqual(contractNote(at(2)), '', 'a server AHEAD of this panel is its own business');
+
+  // A server that answered and named nothing is genuinely old — every release since the mechanism
+  // landed sets the header.
+  const legacy = contractNote(at(0));
+  assert.match(legacy, /does not say which version/, 'the sentence says what is missing');
+  assert.match(legacy, /update the Team server/, 'and where the fix is');
+  assert.doesNotMatch(legacy, /refus|blocked|cannot connect/i, 'it reports, it does not refuse');
+});
+
+test('the sentence reaches the row, beside the release line', () => {
+  const html = teamServerRow(state({ email: 'a@b.c', contract: 0 }), '');
+
+  assert.match(html, /does not say which version/, 'the row carries it');
+  assert.ok(!teamServerRow(state({ email: 'a@b.c', contract: 1 }), '').includes('does not say which version'),
+    'and a current server’s row carries nothing');
 });

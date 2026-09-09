@@ -13,7 +13,7 @@ import {
 
 /** A `fetch` that answers what the test says, and records what it was asked. */
 function stub(
-  answer: (url: string, init: RequestInit) => { status: number; body: string } | Promise<never>,
+  answer: (url: string, init: RequestInit) => { status: number; body: string; headers?: Record<string, string> } | Promise<never>,
 ): typeof fetch & { seen: { url: string; init: RequestInit }[] } {
   const seen: { url: string; init: RequestInit }[] = [];
   const impl = (async (input: unknown, init: RequestInit = {}) => {
@@ -24,6 +24,9 @@ function stub(
     return {
       ok: result.status >= 200 && result.status < 300,
       status: result.status,
+      // A real `Response` always carries these; the stub did not, which is why nothing could test
+      // what the server says back about itself.
+      headers: new Headers(result.headers ?? {}),
       text: async () => result.body,
     } as Response;
   }) as typeof fetch & { seen: typeof seen };
@@ -218,4 +221,65 @@ test('usage names its window and its scope on the wire', async () => {
 
   assert.ok(fetchImpl.seen[0]?.url.includes('window=today'));
   assert.ok(fetchImpl.seen[0]?.url.includes('scope=company'));
+});
+
+// ---------- what the SERVER says about itself ----------
+
+/**
+ * The contract rides both ways, and until now the panel read only its own half.
+ *
+ * <p>`ContractVersion` in the server puts `X-Coai-Contract` on every response for exactly this, and
+ * says so: "a newer client knows what it is doing better than an older server does, and its own
+ * check against the response header is the right place to decide". The panel sent its number and
+ * threw away the answer.</p>
+ */
+test('a server that says what it speaks is heard', async () => {
+  const fetchImpl = stub(() => ({ status: 200, body: '{}', headers: { [CONTRACT_HEADER]: '2' } }));
+
+  const answer = await ask('https://s', 'api/catalog', { fetchImpl });
+
+  assert.strictEqual(answer.contract, 2);
+});
+
+test('a server that says nothing is legacy, not unknown', async () => {
+  // It ANSWERED — it simply predates the header. That is a fact about the server, and a different
+  // one from never having been reached.
+  const fetchImpl = stub(() => ({ status: 200, body: '{}' }));
+
+  const answer = await ask('https://s', 'api/catalog', { fetchImpl });
+
+  assert.strictEqual(answer.contract, 0);
+});
+
+test('the number rides the failure arm too, because that is where it matters most', async () => {
+  // A 426 is the server refusing this client as too old. The one thing a caller wants at that
+  // moment is what the other side speaks, and a result that carried it only on success would drop
+  // it exactly then.
+  const fetchImpl = stub(() => ({ status: 426, body: '{"error":"too old"}', headers: { [CONTRACT_HEADER]: '3' } }));
+
+  const answer = await ask('https://s', 'api/catalog', { fetchImpl });
+
+  assert.strictEqual(answer.ok, false);
+  assert.strictEqual(answer.contract, 3);
+});
+
+test('no response at all leaves the contract unknown rather than legacy', async () => {
+  // The distinction the whole feature turns on. A dropped connection must not be recorded as "this
+  // server is old" — the panel would flash a skew warning on every network blip.
+  const fetchImpl = stub(() => Promise.reject(new Error('socket hang up')) as Promise<never>);
+
+  const answer = await ask('https://s', 'api/catalog', { fetchImpl });
+
+  assert.strictEqual(answer.ok, false);
+  assert.strictEqual(answer.contract, undefined);
+});
+
+test('a header that is not a number is unknown, never legacy', async () => {
+  // `v2` is something else answering on that URL, or a proxy inventing a value. Reading it as 0
+  // would report a modern server as ancient.
+  const fetchImpl = stub(() => ({ status: 200, body: '{}', headers: { [CONTRACT_HEADER]: 'v2' } }));
+
+  const answer = await ask('https://s', 'api/catalog', { fetchImpl });
+
+  assert.strictEqual(answer.contract, undefined);
 });

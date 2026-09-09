@@ -179,6 +179,27 @@ so hard to see. See `ReviewerSummaryFactory` and `RemoteAsk.IsProgress` in the r
 and it asks about *every* vendor precisely because a canary that asked only about claude would still
 have missed defect 2.
 
+**The contract is read in both directions now (2026-09-09).** `ContractVersion` puts
+`X-Coai-Contract` on every response for a stated reason — "a newer client knows what it is doing
+better than an older server does, and its own check against the response header is the right place
+to decide" — and until this landed the panel sent its own number and threw the answer away. The one
+direction that worked was the server refusing a client as too old (426); a panel talking to a server
+too old for IT had no idea.
+
+`ask()` now records it on BOTH arms of `ServerResult`, which matters most on the failure arm: a 426
+is precisely the moment a caller wants to know what the other side speaks. Three states, and the last
+two are not the same thing — a number is what it answered with, `0` is a server that ANSWERED and
+named nothing, and `undefined` is not knowing: no response arrived, or what arrived was not a number.
+`panelProvider` keeps the last known value through an `undefined`, so a dropped connection cannot
+report a healthy server as ancient.
+
+`SERVER_CONTRACT_REQUIRED` in `teamServerApi.ts` is the mirror of the server's
+`Coai:MinimumClientContract` and carries the same rule: raise it only when an older server would be
+MISREAD, never because a newer one exists. `contractNote` says so in the row when it is true and
+stays silent otherwise — and it REPORTS rather than refuses, because a panel that stopped talking to
+a server it merely suspects would turn a warning into an outage, which is the failure the server's
+own comment refuses for the mirror case.
+
 **And who is allowed to run it (2026-09-09).** CI reaches this host through a key carrying a
 **forced command** — `restrict,command="/opt/coai/src/deploy/coai-deploy-cmd.sh"` — so the key can
 start nothing else: no shell, no pty, no forwarding, no `scp`. The wrapper honours exactly
