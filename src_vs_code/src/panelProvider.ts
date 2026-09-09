@@ -31,7 +31,7 @@ import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverP
 import { DbLog, EMPTY_LOG } from './roundsDb';
 import { ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
-import { readLog } from './roundsDbRead';
+import { Found, MAX_LIMIT, readFindings, readLog } from './roundsDbRead';
 import { sideKey, sideLabel } from './coaiInstall';
 import {
   fetchTable,
@@ -331,9 +331,29 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
     const server = serverPath(this.context.globalStorageUri);
     this.roundsLogAt = Date.now();
-    this.roundsLogCache = server === undefined ? EMPTY_LOG : await readLog(server.fsPath);
+    this.roundsLogCache = server === undefined
+      ? EMPTY_LOG
+      // The whole window rather than one page: this list is what gives every row its decision
+      // counts, and the page paginates the rows it already holds. See MAX_LIMIT for the arithmetic.
+      : await readLog(server.fsPath, { limit: MAX_LIMIT });
 
     return this.roundsLogCache;
+  }
+
+  /**
+   * What ONE round found, read when somebody opens its row.
+   *
+   * <p>Not cached, and not on the tick: this is a read a person asked for by clicking, and it is
+   * small — one round's findings against the 3.78 MB the list used to carry for every round whether
+   * or not anybody looked. A machine with no server installed answers `failed`, which the row draws
+   * as a retry rather than as "this round found nothing".</p>
+   */
+  async roundFindings(sessionId: string, stage: string, number: number): Promise<Found> {
+    const server = serverPath(this.context.globalStorageUri);
+
+    return server === undefined
+      ? { state: 'failed', findings: [] }
+      : readFindings(server.fsPath, { sessionId, stage, number });
   }
 
   /**

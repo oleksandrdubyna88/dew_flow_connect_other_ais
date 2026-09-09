@@ -112,4 +112,5 @@ public sealed record DecisionDto(int Finding, string Action, string Reason = "")
 [JsonSerializable(typeof(HumanAnswer))]
 [JsonSerializable(typeof(List<DecisionDto>))]
 [JsonSerializable(typeof(Store.LoggedLog))]
+[JsonSerializable(typeof(Store.LoggedRoundFindings))]
 internal sealed partial class ServerJsonContext : JsonSerializerContext;

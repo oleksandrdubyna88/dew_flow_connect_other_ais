@@ -8,7 +8,7 @@
 > never built.
 >
 > **Boundary, named on both sides.** Paging and the SQL totals are
-> [PLAN_the_log_asks_for_a_page.md](PLAN_the_log_asks_for_a_page.md). That plan owns *which rows the
+> [PLAN_the_log_asks_for_a_page.md](../research/PLAN_the_log_asks_for_a_page.md). That plan owns *which rows the
 > page holds*; this one owns *how a person finds a row that is not among them*. They meet at one
 > point: a search must not be a filter over the loaded page, and that plan's footer must be able to
 > say it is showing search results rather than a page. Build that one first.

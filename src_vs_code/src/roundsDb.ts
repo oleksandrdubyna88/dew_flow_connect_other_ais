@@ -44,8 +44,46 @@ export interface DbRound {
   /** How the caller closed the gate; -1 until it did. */
   readonly accepted: number;
   readonly rejected: number;
+  /**
+   * The findings themselves — only in the OLD shape, which a server before 0.19 answers.
+   *
+   * <p>They used to ride every listed round: measured at <b>3.78 MB of a 3.83 MB payload</b>, for
+   * rounds nobody had opened. A paged server sends none of them here and answers `--findings` for
+   * the one round somebody clicked on.</p>
+   */
   readonly findings: readonly DbFinding[];
+  /** Where the next page starts. Empty from a server that does not page. */
+  readonly cursor: string;
+  /**
+   * How many findings this round produced.
+   *
+   * <p>Load-bearing rather than decoration: the page tells a gate still open from a round that
+   * raised nothing, and the only evidence for the second is that no finding exists. Once the list
+   * stopped carrying findings, this is what carries that fact.</p>
+   */
+  readonly foundCount: number;
 }
+
+/**
+ * What the whole table adds up to — counted by SQL, never by the array that was sent.
+ *
+ * <p>From the operator, 2026-09-09: «суммы - скл счиатть (сколько всего и тд.)». A count taken over
+ * a page is a count of the page, and the page is not the question anybody is asking.</p>
+ */
+export interface DbTotals {
+  readonly rounds: number;
+  readonly findings: number;
+  readonly accepted: number;
+  readonly rejected: number;
+  readonly gating: number;
+  readonly tokensIn: number;
+  readonly tokensOut: number;
+  readonly costUsd: number;
+}
+
+export const EMPTY_TOTALS: DbTotals = {
+  rounds: 0, findings: 0, accepted: 0, rejected: 0, gating: 0, tokensIn: 0, tokensOut: 0, costUsd: 0,
+};
 
 /** How often one kind of thing was accepted — by category, by role, or by vendor. */
 export interface BlindSpot {
@@ -59,9 +97,20 @@ export interface DbLog {
   readonly rounds: readonly DbRound[];
   readonly blindSpots: readonly BlindSpot[];
   readonly defended: readonly DbFinding[];
+  readonly totals: DbTotals;
+  /**
+   * Whether the server that answered can page at all.
+   *
+   * <p>False for one too old to know `--paged`, and the page says so instead of showing a Next
+   * button that would answer with the same rows. The two halves of this product update separately,
+   * so both directions of skew are ordinary.</p>
+   */
+  readonly paged: boolean;
 }
 
-export const EMPTY_LOG: DbLog = { rounds: [], blindSpots: [], defended: [] };
+export const EMPTY_LOG: DbLog = {
+  rounds: [], blindSpots: [], defended: [], totals: EMPTY_TOTALS, paged: false,
+};
 
 /**
  * The server's JSON, believed only as far as its shape.
@@ -70,7 +119,7 @@ export const EMPTY_LOG: DbLog = { rounds: [], blindSpots: [], defended: [] };
  * page that throws on one unexpected field is a page that goes blank for a reason nobody can see
  * from the outside.</p>
  */
-export function parseLog(text: string): DbLog {
+export function parseLog(text: string, paged = false): DbLog {
   try {
     const raw = JSON.parse(text) as Partial<DbLog>;
 
@@ -78,10 +127,42 @@ export function parseLog(text: string): DbLog {
       rounds: (raw.rounds ?? []).map(round),
       blindSpots: (raw.blindSpots ?? []).filter((s) => typeof s?.name === 'string'),
       defended: (raw.defended ?? []).map(finding),
+      totals: totalsOf(raw.totals),
+      paged,
     };
   } catch {
     return EMPTY_LOG;
   }
+}
+
+/** One round's findings, as `--findings` answers them. */
+export function parseFindings(text: string): readonly DbFinding[] {
+  try {
+    const raw = JSON.parse(text) as { findings?: Partial<DbFinding>[] };
+
+    return (raw.findings ?? []).map(finding);
+  } catch {
+    return [];
+  }
+}
+
+function number(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function totalsOf(raw: Partial<DbTotals> | undefined): DbTotals {
+  return raw === undefined || raw === null
+    ? EMPTY_TOTALS
+    : {
+      rounds: number(raw.rounds),
+      findings: number(raw.findings),
+      accepted: number(raw.accepted),
+      rejected: number(raw.rejected),
+      gating: number(raw.gating),
+      tokensIn: number(raw.tokensIn),
+      tokensOut: number(raw.tokensOut),
+      costUsd: number(raw.costUsd),
+    };
 }
 
 function round(raw: Partial<DbRound>): DbRound {
@@ -95,6 +176,10 @@ function round(raw: Partial<DbRound>): DbRound {
     accepted: raw.accepted ?? -1,
     rejected: raw.rejected ?? -1,
     findings: (raw.findings ?? []).map(finding),
+    cursor: raw.cursor ?? '',
+    // An OLD server carries the findings and no count, so the count is what it carries. A round
+    // with neither is a round that found nothing, which is what zero says.
+    foundCount: raw.foundCount ?? (raw.findings ?? []).length,
   };
 }
 
@@ -164,6 +249,21 @@ export function findingsByRound(log: DbLog): Map<string, readonly DbFinding[]> {
  * lands, which is the only honest way to tell "nothing was accepted" from "nobody has said yet" —
  * and the log page read neither, so a round with thirteen open findings displayed as `done`.</p>
  */
+/**
+ * How many findings each round produced, by the same key.
+ *
+ * <p>Separate from the findings themselves because the LIST no longer carries those: a row needs
+ * the number to say whether a gate is still open, and the sentences only when somebody opens it.</p>
+ */
+export function countsByRound(log: DbLog): Map<string, number> {
+  const byRound = new Map<string, number>();
+  for (const one of log.rounds) {
+    byRound.set(roundKeyOf(one.sessionId, one.repoPath, one.branch, one.stage, one.number), one.foundCount);
+  }
+
+  return byRound;
+}
+
 export function decisionsByRound(log: DbLog): Map<string, { accepted: number; rejected: number }> {
   const byRound = new Map<string, { accepted: number; rejected: number }>();
   for (const one of log.rounds) {

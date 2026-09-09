@@ -1,5 +1,28 @@
 # Changelog
 
+## Extension 0.31.18 · Server 0.18.15 — 2026-09-09
+
+**The log stopped sending every finding it has ever recorded, and started counting in SQL.** Reading
+the rounds database answered **3.83 MB**, of which the rows themselves were 0.05 MB — the rest was
+3 484 findings, shipped for every round although the page opens them one at a time. It now sends the
+rounds and their counts, and fetches a round's findings when somebody opens its row.
+
+**The table pages, two hundred rows at a time**, with Newer / Older under it and a line saying which
+rows those are. Under that, what the database counted over the whole table: how many rounds, how many
+findings, how many accepted, rejected and gating. Counted by SQL, not by the length of what was sent.
+
+**An opened row is honest about all five things it can be.** It used to draw a blank for four of them,
+and a blank reads as "this round was clean". Now it says whether it is reading, whether the read
+failed and offers to try again, whether the round genuinely found nothing, and whether the database
+has no record of it at all.
+
+**Paging is keyed, not counted**, so a round finishing while you are on page two cannot make a row
+appear twice or vanish — and the key is a pair, because two rounds can start in the same second.
+
+**Either half can be older than the other.** A new extension asks a server that cannot page and gets
+yesterday's answer; a new server asked without the flag answers yesterday's shape. Nothing goes
+silently empty in the field.
+
 ## Team server 0.5.6 — 2026-09-09
 
 **Your spending page can now tell the gate apart from asking.** Reviews and conversations go to the

@@ -316,6 +316,30 @@ extension owns no SQLite for the same reason it owns no native module — the al
 WebAssembly build in the VSIX to query a file this binary already writes. Version skew is ordinary:
 a server without the flag exits 64 and the page shows what it always showed.
 
+
+**A page of it, and the totals counted where the table is (2026-09-09).** `--log --paged` answers
+`RoundsQuery.Read(dataDir, limit, before)`: `DefaultLimit` is 200, `MaxLimit` 1000, and both a limit
+and a cursor are validated at the boundary — a limit is clamped rather than refused, an unreadable
+cursor asks for the first page.
+
+*Keyed, never `OFFSET`.* Rounds are inserted at the top of `started_utc DESC`, so an offset shifts
+every later page when a round finishes mid-read, and a row is then seen twice or never. The cursor is
+the PAIR `started_utc|id`, and the ordering carries the id too, because two rounds can start in the
+same second.
+
+*The list carries no findings.* It carries `FoundCount` — one subquery per row — because the page
+needs the number to say whether a gate is still open, and the sentences only when somebody opens a
+row. `--findings --session <id> --stage <stage> --number <n>` answers those, and exits **69** when
+the database has never heard of the round: an empty list cannot say whether a round was clean or was
+never recorded, so the exit code says it rather than leaving the renderer to guess.
+
+*`LoggedTotals` is two statements, one scan each* — `COUNT(*)` and conditional `SUM`s over `rounds`
+and over `findings`. The first draft had eight scalar subqueries, which is five passes over one table
+where conditional sums are one.
+
+*Without `--paged` nothing changes.* The same binary answers the shape it answered yesterday,
+findings inline, so an extension that predates paging is not broken by a server that does not.
+
 ## What a round can be asked afterwards (2026-09-08)
 
 Two lines and one directory, added because a round that answered nothing could not be questioned:
