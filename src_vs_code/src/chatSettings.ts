@@ -1,5 +1,5 @@
 import { DEFAULT_CHAT_PROMPT } from './chatPrompt';
-import { LanguageCode } from './settingsShape';
+import { LANGUAGES, LanguageCode } from './settingsShape';
 
 /**
  * The four settings the chat feature owns, parsed from whatever `settings.json` actually holds.
@@ -40,7 +40,14 @@ export interface ChatSettings {
   readonly model: string;
 }
 
-const LANGUAGES: readonly LanguageCode[] = ['en', 'es', 'de', 'ru', 'uk'];
+/**
+ * The codes, taken from the catalog rather than written out again.
+ *
+ * <p>There were two lists: this one, and `LANGUAGES` in `settingsShape.ts` with the native labels
+ * the menus are built from. Two lists of the same five things drift the day a sixth is added — the
+ * menu would offer it and this reader would refuse it, silently, back to English.</p>
+ */
+const CODES: readonly LanguageCode[] = LANGUAGES.map((language) => language.code);
 
 /** A string, or the fallback — `settings.json` is a file a person edits by hand. */
 function text(value: unknown, fallback: string): string {
@@ -63,7 +70,7 @@ export function chatSettingsFrom(read: (key: string) => unknown): ChatSettings {
     // English by default, and NOT `coai.helpLanguage`: that one is set to English on the owner's
     // machine, so borrowing it would have delivered English explanations — exactly what the feature
     // exists to avoid. One setting cannot answer two questions that disagree.
-    language: LANGUAGES.includes(language as LanguageCode) ? (language as LanguageCode) : 'en',
+    language: CODES.includes(language as LanguageCode) ? (language as LanguageCode) : 'en',
     autoSend: CHAT_AUTO_SEND.includes(autoSend as ChatAutoSend)
       ? (autoSend as ChatAutoSend)
       : DEFAULT_AUTO_SEND,

@@ -7,7 +7,9 @@ import {
 import { canonicalTeamServerUrl } from './teamServers';
 import { escapeHtml } from './escapeHtml';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
-import { CoaiSettings, enabledCodeRoles, roleIsOn } from './settingsShape';
+import { ChatSettings, chatSettingsFrom } from './chatSettings';
+import { ChatModelList, chatModelsFrom } from './chatModels';
+import { CoaiSettings, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
@@ -147,6 +149,18 @@ export interface PanelState {
    * button rather than as an error.</p>
    */
   readonly cliStatus: Readonly<Record<string, CliStatus>>;
+  /**
+   * The four settings the chat feature owns.
+   *
+   * <p>Optional for the same reason {@link teamServers} is: the provider always supplies it, and
+   * sixteen test fixtures predate it. Absent means the defaults, which is what a panel that has
+   * never been touched shows anyway.</p>
+   *
+   * <p>Its own field rather than part of {@link CoaiSettings} because it has its own reader —
+   * `chatSettingsFrom` — and the command uses that reader without a panel in sight. Two readers for
+   * one set of keys is the drift this repository has already paid for twice.</p>
+   */
+  readonly chat?: ChatSettings | undefined;
 }
 
 /**
@@ -163,6 +177,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
   const body = [
     `<div id="live-questions">${questionsSection(state.questions)}</div>`,
     section('reviewers', 'Reviewers', open, reviewersBody(state)),
+    section('chat', 'Chat other AIs', open, chatBody(state.chat ?? DEFAULT_CHAT, state.vendors)),
     section('prompts', 'Prompts per round', open, promptsBody(state)),
     section('gate', 'The gate', open, gateBody(state.settings)),
     section('limits', 'Limits', open, limitsBody(state.settings, state.vendors.filter((v) => v.enabled && v.code).length)),
@@ -243,6 +258,75 @@ ${body}
 </script>
 </body>
 </html>`;
+}
+
+/** What the section shows when nothing has been configured — the reader's own fallbacks. */
+const DEFAULT_CHAT: ChatSettings = chatSettingsFrom(() => undefined);
+
+/**
+ * The option for a model the settings NAME and the chat cannot use.
+ *
+ * <p>Without it the browser falls back to the first option and the section reads "the first one that
+ * can answer" while `settings.json` says `codex` — a panel describing a state that is not the one
+ * the command will refuse. Selected, so what is configured is what is shown; disabled, so it cannot
+ * be chosen again once it is left. Three reviewers raised this from three directions on one round.</p>
+ */
+function strandedOption(model: string, models: ChatModelList): string {
+  if (model.length === 0 || models.offered.some((offered) => offered.id === model)) {
+    return '';
+  }
+
+  return `    <option value="${escapeHtml(model)}" selected disabled>${escapeHtml(model)} — cannot answer a chat</option>`;
+}
+
+/**
+ * The `Chat other AIs` section.
+ *
+ * <p>Four settings that reach a MODEL rather than a pixel, which is why they are here instead of in
+ * `settings.json` where they started: a prompt nobody can see is a prompt nobody corrects, and the
+ * one that ships is a single word.</p>
+ *
+ * <p><b>The model list is the models that can ANSWER, and the ones that cannot are named.</b> Same
+ * rule as the command: a person who configured `codex` and finds a picker quietly missing it cannot
+ * tell a bug from a policy. The list comes from `chatModelsFrom`, which is the same function the
+ * conversation itself picks from — one source, so the picker and the tab cannot disagree.</p>
+ */
+function chatBody(chat: ChatSettings, vendors: readonly Vendor[]): string {
+  const models = chatModelsFrom(vendors);
+  const refusals = models.refused.map((row) => row.reason);
+
+  return `<div class="field">
+  ${labelled('chatPrompt', 'What to ask about the selection', 'chatPrompt')}
+  <textarea id="chatPrompt" data-setting="chatPrompt" rows="3"
+    placeholder="${escapeHtml(DEFAULT_CHAT.prompt)}">${escapeHtml(chat.prompt)}</textarea>
+</div>
+<div class="field">
+  ${labelled('chatLanguage', 'Answer in', 'chatLanguage')}
+  <select id="chatLanguage" data-setting="chatLanguage">
+${LANGUAGES.map((language) =>
+    `    <option value="${language.code}"${language.code === chat.language ? ' selected' : ''}>`
+    + `${escapeHtml(language.label)}</option>`).join('\n')}
+  </select>
+</div>
+<div class="field">
+  ${labelled('chatAutoSend', 'Who presses send', 'chatAutoSend')}
+  <select id="chatAutoSend" data-setting="chatAutoSend">
+    <option value="keyboard"${chat.autoSend === 'keyboard' ? ' selected' : ''}>The keybinding sends; the menu waits</option>
+    <option value="always"${chat.autoSend === 'always' ? ' selected' : ''}>Always send at once</option>
+    <option value="never"${chat.autoSend === 'never' ? ' selected' : ''}>Never — always let me press Enter</option>
+  </select>
+</div>
+<div class="field">
+  ${labelled('chatModel', 'Which model answers', 'chatModel')}
+  <select id="chatModel" data-setting="chatModel">
+    <option value=""${chat.model.length === 0 ? ' selected' : ''}>The first one that can answer</option>
+${models.offered.map((model) =>
+    `    <option value="${escapeHtml(model.id)}"${model.id === chat.model ? ' selected' : ''}>`
+    + `${escapeHtml(model.label)}</option>`).join('\n')}
+${strandedOption(chat.model, models)}
+  </select>
+${refusals.map((reason) => `  <div class="hint">${escapeHtml(reason)}</div>`).join('\n')}
+</div>`;
 }
 
 /**
@@ -1234,6 +1318,10 @@ const CSS = `
      the defect - not the boxes themselves. */
   .vendor .stages.off { opacity: .55; }
   .sec-server    > summary { color: var(--tone-uxdx); }
+  /* The chat borrows the UX tone rather than taking a sixth colour: it is the one section that is
+     not about the gate at all, and a new hue would say "another kind of setting" when what it is
+     is another kind of WORK. */
+  .sec-chat      > summary { color: var(--tone-uxdx); }
   .sec-usage     > summary { color: var(--tone-arch); }
   .sec-rounds    > summary { color: var(--tone-plan); }
   .section > summary::-webkit-details-marker { display: none; }
