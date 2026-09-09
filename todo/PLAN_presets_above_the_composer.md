@@ -7,7 +7,7 @@
 > 12, 21b and 24; entry 1 was withdrawn in favour of this plan.
 >
 > Depends on: [PLAN_provider_then_model.md](PLAN_provider_then_model.md) (a model preset is a
-> provider+model pair) and [PLAN_the_composer_stays_put.md](PLAN_the_composer_stays_put.md) (the
+> provider+model pair) and [PLAN_the_composer_stays_put.md](../research/PLAN_the_composer_stays_put.md) (the
 > Send button carries the re-ask caption).
 >
 > Related docs: [module_extension.md](../research/module_extension.md),

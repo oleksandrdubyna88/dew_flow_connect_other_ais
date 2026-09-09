@@ -130,7 +130,7 @@ only when the whole ritual has run — not when the code works.
 ## Parallelism
 
 Owns `chatModels.ts`, the two settings, and `chatPickerHtml` in `chatPage.ts`. Queues behind
-[PLAN_the_composer_stays_put.md](PLAN_the_composer_stays_put.md) in the chat-page lane;
+[PLAN_the_composer_stays_put.md](../research/PLAN_the_composer_stays_put.md) in the chat-page lane;
 **[PLAN_presets_above_the_composer.md](PLAN_presets_above_the_composer.md) depends on this one** —
 its model presets are pairs. The pure half (`chatProvidersFrom`, resolution, tests) has no
 conflicts and can be written ahead of the lane.

@@ -118,7 +118,7 @@ only when the whole ritual has run — not when the code works.
 
 Owns the session files (`chatSession.ts`, `cliChatSession.ts`, `remoteChatSession.ts`) and the
 `stop` route in `chatCommand.ts`; **touches `chatPage.ts` in one function (`chatStatusHtml`)**, so
-it queues behind [PLAN_the_composer_stays_put.md](PLAN_the_composer_stays_put.md) in the chat-page
+it queues behind [PLAN_the_composer_stays_put.md](../research/PLAN_the_composer_stays_put.md) in the chat-page
 lane — or lands its seam half first and its page half after. Conflicts with
 [PLAN_an_answer_as_it_arrives.md](PLAN_an_answer_as_it_arrives.md) on `send`'s signature: this one
 goes first, streaming extends it.
