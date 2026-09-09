@@ -1448,6 +1448,21 @@ elsewhere. It lived inside `PanelProvider` beside `vscode`, so it could not be t
 is how a rule ships wrong and stays wrong, asserted by nothing but its own comment. Nine tests now
 say what it does.
 
+**A fan-out that copied its buffer per event cost the log page everything it knows (2026-09-09).**
+`replayingFan` in `processLauncher.ts` held what nobody had subscribed to yet with
+`held = [...held, value]` — the whole array, rebuilt, once per event. A caller that wants only stdout
+never subscribes to `onLine`, so every line of every such call paid it: measured at **64.09 s** for
+130 000 emits against **0.01 s** for an append.
+
+What that cost, concretely: `coai-mcp --log` answers 4.9 MB in 368 ms, and `close` then took
+**19.7 s** to arrive — past the 8-second cap in `capture`, which answers `(-1, '')` and discards the
+payload it is already holding. `readLog` maps a non-zero code to `EMPTY_LOG`, so the Review rounds
+page had no findings and no accepted/rejected counts, ever, in any round; and every click on the
+usage-window buttons waited eight seconds behind the same read before anything was pushed. Three
+complaints, one copy. The buffer is appended to now (the one mutated array in that file, private to
+the closure, with the measurement written beside it): the read is **0.22 s**, and 211 of 379 rows
+arrive carrying their findings and their decisions.
+
 **A reviewer's colour is its own, everywhere.** `vendorPalette(configuredIds)` decides the colours of
 a whole list at once and returns the lookup every view uses. Only the vendor word is coloured; the
 rest of the row is exactly as it was.

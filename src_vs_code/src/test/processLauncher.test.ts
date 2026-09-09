@@ -226,3 +226,53 @@ test('a shell is never pointed at the opened workspace by omission', () => {
   assert.strictEqual(workingDirectory(true, 'C:/chosen'), 'C:/chosen', 'an explicit choice was overridden');
   assert.strictEqual(workingDirectory(false, undefined), undefined, 'a non-shell child was moved for no reason');
 });
+
+/**
+ * A child that writes a great deal, with nobody listening to its lines.
+ *
+ * <p>Reported 2026-09-09 as three separate complaints about the Review rounds page — no findings, no
+ * accepted/rejected counts, and window buttons that would not switch. One cause: `coai-mcp --log`
+ * answers 4.9 MB in 368 ms, and the launcher took **19.7 seconds** to fire `close` afterwards, past
+ * the 8-second cap in `capture`, which then answered `(-1, '')` and threw the whole payload away.</p>
+ *
+ * <p>The cost was `replayingFan` holding an unread value by rebuilding its array: `held = [...held,
+ * value]`, once per line. Measured on the shape alone — 130 000 emits cost **64.09 s** that way and
+ * **0.01 s** with an append. Nobody subscribes to `onLine` on this path, so every line paid it.</p>
+ *
+ * <p>The assertion is wall-clock on purpose. There is no unit smaller than "it finished" that would
+ * have caught this: every line was delivered, in order, with the right content — only late.</p>
+ */
+test('a child that writes many lines nobody reads still finishes promptly', async () => {
+  const LINES = 40_000;
+  const child = launch(NODE, [
+    '-e',
+    `for (let i = 0; i < ${LINES}; i++) console.log('line ' + i + ' of something a probe never reads');`,
+  ]);
+
+  // Deliberately NOT subscribing to onLine — that is the path `capture` takes, and the one that was
+  // quadratic. stdout is read because a caller that wants the whole output does exactly this.
+  let chars = 0;
+  child.onStdout((chunk) => { chars += chunk.length; });
+
+  const started = Date.now();
+  const finished = await ended(child, 'a child writing many lines');
+  const took = Date.now() - started;
+
+  assert.equal(finished.code, 0, 'the child itself is fine; it is the launcher that was slow');
+  assert.ok(chars > LINES * 10, `all of it arrived: ${chars} characters`);
+  assert.ok(took < 4_000, `it took ${took} ms — the fan is rebuilding its buffer per line again`);
+});
+
+test('a value emitted before anybody subscribes is still delivered, in order', async () => {
+  // The property the fix must not lose. The buffer is appended to rather than rebuilt; a listener
+  // that arrives late still receives everything, and in the order it happened.
+  const child = launch(NODE, ['-e', "console.log('first'); console.log('second'); console.log('third');"]);
+
+  await ended(child, 'a short child');
+
+  // Subscribed AFTER the child has exited: everything it said is replayed.
+  const seen: string[] = [];
+  child.onLine((line) => seen.push(line));
+
+  assert.deepEqual(seen, ['first', 'second', 'third']);
+});

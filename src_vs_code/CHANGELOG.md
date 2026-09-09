@@ -1,5 +1,14 @@
 # Changelog
 
+## Extension 0.31.16 — 2026-09-09
+
+**The Review rounds page has its findings back.** It had none — no list of what was found, no
+accepted/rejected counts, and the Today/Week/Month buttons took eight seconds to do nothing. One
+cause: the process fan-out rebuilt its whole buffer on every line nobody had subscribed to yet, so
+reading the rounds database took 19.7 seconds for output that had arrived in 0.4, and the reader
+gave up and threw the answer away. The buffer is appended to now. The read is 0.2 seconds, and the
+page draws what every round found and what was decided about it.
+
 ## Extension 0.31.15 — 2026-09-09
 
 **A Team server can answer a chat now.** Pick one of your Team server's models in *Chat other AIs*
