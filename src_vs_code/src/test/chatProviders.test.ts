@@ -233,7 +233,7 @@ test('a legacy chatModel naming a ROW resolves to that row and its configured mo
   const vendors = [vendor({ id: 'codex', runtime: 'codex', model: 'gpt-5.2' })];
   const list = chatProvidersFrom(vendors, CATALOG);
 
-  assert.deepStrictEqual(legacyPick(list, vendors, 'codex'), { providerId: 'codex', modelId: 'gpt-5.2' });
+  assert.deepStrictEqual(legacyPick(list, vendors, 'codex'), { providerId: 'codex', modelId: 'gpt-5.2', candidates: [] });
 });
 
 test('a legacy value naming a MODEL resolves only when exactly one provider offers it', () => {
@@ -243,7 +243,7 @@ test('a legacy value naming a MODEL resolves only when exactly one provider offe
   const onlyList = chatProvidersFrom(only, CATALOG);
   assert.deepStrictEqual(
     legacyPick(onlyList, only, 'gpt-5.2-mini'),
-    { providerId: 'codex', modelId: 'gpt-5.2-mini' },
+    { providerId: 'codex', modelId: 'gpt-5.2-mini', candidates: [] },
     'one provider offers it, so there is nothing to guess',
   );
 
@@ -254,7 +254,7 @@ test('a legacy value naming a MODEL resolves only when exactly one provider offe
   const bothList = chatProvidersFrom(both, CATALOG);
   assert.deepStrictEqual(
     legacyPick(bothList, both, 'gpt-5.2-mini'),
-    { providerId: '', modelId: 'gpt-5.2-mini' },
+    { providerId: '', modelId: 'gpt-5.2-mini', candidates: ['codex-a', 'codex-b'] },
     'two providers offer it, so the person must say which — the model is kept, stranded',
   );
 });
@@ -263,7 +263,7 @@ test('an empty legacy value picks nothing, so the first provider can answer as i
   const vendors = [vendor({ id: 'codex', runtime: 'codex', model: 'gpt-5.2' })];
   const list = chatProvidersFrom(vendors, CATALOG);
 
-  assert.deepStrictEqual(legacyPick(list, vendors, ''), { providerId: '', modelId: '' });
+  assert.deepStrictEqual(legacyPick(list, vendors, ''), { providerId: '', modelId: '', candidates: [] });
 });
 
 /**
@@ -306,5 +306,52 @@ test('the wire never carries the prefixed row id, which is the 400 this family h
     body['vendor'],
     'srv1-codex',
     'sending the row id is the measured failure: a 400 saying it is not a vendor here, for no tokens',
+  );
+});
+
+test('a provider that is switched off says so, instead of reading as one that is gone', () => {
+  // Two states a person can act on in different ways, and `chatProvidersFrom` filters both out of
+  // its lists — correctly, since a disabled row is configured for nothing. Without this they arrive
+  // at the refusal indistinguishable. (gemini, the code round.)
+  const off = vendor({ id: 'codex', runtime: 'codex', model: 'gpt-5.2', enabled: false });
+  const list = chatProvidersFrom([off], CATALOG);
+
+  const picked = resolveChatPick([off], list, 'codex', 'gpt-5.2');
+
+  assert.strictEqual(picked.ok, false);
+  assert.match(
+    picked.ok === false ? picked.refusal : '',
+    /switched off/,
+    'a row that is merely off must not be reported as one that no longer exists',
+  );
+});
+
+test('a provider that never existed still reads as gone, not as switched off', () => {
+  const list = chatProvidersFrom([vendor({ id: 'codex', runtime: 'codex' })], CATALOG);
+
+  const picked = resolveChatPick([], list, 'never-was', 'gpt-5.2');
+
+  assert.strictEqual(picked.ok, false);
+  assert.doesNotMatch(picked.ok === false ? picked.refusal : '', /switched off/);
+});
+
+test('an ambiguous legacy model names the providers that offer it', () => {
+  // So the caller can ask "which of these two?" rather than "pick something". (gemini.)
+  const both = [
+    vendor({ id: 'codex-a', runtime: 'codex', model: 'gpt-5.2' }),
+    vendor({ id: 'codex-b', runtime: 'codex', model: 'gpt-5.2' }),
+  ];
+  const list = chatProvidersFrom(both, CATALOG);
+
+  assert.deepStrictEqual(legacyPick(list, both, 'gpt-5.2-mini').candidates, ['codex-a', 'codex-b']);
+});
+
+test('a legacy value nobody offers strands with no candidates to suggest', () => {
+  const vendors = [vendor({ id: 'codex', runtime: 'codex', model: 'gpt-5.2' })];
+  const list = chatProvidersFrom(vendors, CATALOG);
+
+  assert.deepStrictEqual(
+    legacyPick(list, vendors, 'a-model-that-went-away'),
+    { providerId: '', modelId: 'a-model-that-went-away', candidates: [] },
   );
 });
