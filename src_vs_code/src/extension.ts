@@ -161,7 +161,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // 'Chat with other AI' item in Claude Code's own right-click menu — and the command tells them
     // apart by what VS Code hands it, because only one of them can copy the selection itself.
     vscode.commands.registerCommand('coai.chatWithOtherAi', (...args: unknown[]) => {
-      void chatWithOtherAi(chatPanels, args);
+      void chatWithOtherAi(chatPanels, context.extensionUri, args);
     }),
     // Deactivation is not a tab closing: nobody has told VS Code about these panels, so both the
     // panel and the vendor process behind it have to be ended here or they outlive the extension.
