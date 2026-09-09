@@ -33,12 +33,19 @@ export type ChatCommand =
   | { readonly kind: 'send'; readonly text: string }
   | { readonly kind: 'pick'; readonly id: string }
   /**
-   * End the turn numbered `turn`; `0` means whichever is running.
+   * End the turn numbered `turn`, and no other. Always 1 or more.
    *
    * <p>The number is what stops a LATE stop from ending the turn after the one it was pressed for.
    * The page disables its own control, but a keybinding does not go through it and a bridge message
-   * can land a tick after the answer did — by which time the next question may already be in flight.
-   * Zero is what a page too old to name a turn sends, and it still means the useful thing.</p>
+   * can land a tick after the answer did — by which time the next question may already be in
+   * flight.</p>
+   *
+   * <p><b>There is no wildcard, deliberately.</b> The first draft let a missing number mean "whichever
+   * is running", for a page too old to send one. Two vendors pointed out that this hands back the
+   * exact defect the number exists to prevent — and there is no such page: `stop` and its turn number
+   * are being added in the same release, so a page that can ask for a stop can always say which one.
+   * A stop that names no turn is therefore not a stop, and is ignored like any other message this
+   * host does not understand.</p>
    */
   | { readonly kind: 'stop'; readonly turn: number }
   | { readonly kind: 'zoom'; readonly delta: number }
@@ -71,15 +78,17 @@ function zoomOf(message: PageMessage): ChatCommand {
 }
 
 /**
- * Which turn a stop names, or `0` for "whichever is running".
+ * Which turn a stop names, or `0` for "this named no turn at all".
  *
- * <p>Clamped the way the zoom delta is, and for the same reason: the value comes from a surface the
- * host does not control, and this one is compared against a live counter. Anything that is not a
- * whole positive number is not a turn — a page too old to send one, and a page sending nonsense,
- * both mean the same thing here and are treated the same way.</p>
+ * <p>`0` is not a value a caller may act on — `chatCommandOf` turns it into `ignore`. It exists only
+ * so this function has something to return for input that is not a turn: a missing field, a string,
+ * a negative, a fraction, `NaN`, an unsafe integer. All of those mean the message cannot be obeyed,
+ * and refusing them here is the boundary rule — a value from a surface the host does not control is
+ * validated before it reaches anything that acts on it. (Three vendors, the code round: an earlier
+ * version coerced every one of these into a wildcard that stopped whatever happened to be running.)</p>
  */
 function turnOf(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
     return 0;
   }
 
@@ -119,8 +128,11 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
 
       return id.length === 0 ? IGNORE : { kind: 'pick', id };
     }
-    case 'stop':
-      return { kind: 'stop', turn: turnOf(message.turn) };
+    case 'stop': {
+      const turn = turnOf(message.turn);
+
+      return turn === 0 ? IGNORE : { kind: 'stop', turn };
+    }
     case 'restart':
       return { kind: 'restart' };
     case 'useLocal':

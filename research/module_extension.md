@@ -372,8 +372,9 @@ stateDiagram-v2
   Asking --> Ready: result SUCCESS
   Asking --> Ready: result ERROR (the model refused; the process lives)
   Asking --> Failed: turn budget · exit · error
+  Starting --> Stopped: stop (the person), before init
   Asking --> Stopped: stop (the person)
-  Stopped --> Starting: the next send, carrying the transcript
+  Stopped --> Starting: the next send, carrying the transcript ONLY when contextLost
   Failed --> Starting: the next send, with contextLost
   Ready --> [*]: dispose
   Starting --> [*]: dispose (the waiter is told at once)
@@ -398,6 +399,20 @@ the turn being ended lives in a closure created by that turn and cleared the mom
 route. A stop one tick late finds `undefined`; a stop after the next turn began finds that turn's own
 closure, which is why the host also checks the turn NUMBER before calling this at all.
 
+**The handle is armed before the process starts, not after the question is written.** Startup is a
+measured 3.6–6.6 s — a large share of the wait a person is pressing stop to end — and the first draft
+armed it only once the line had gone down the pipe, which made a stop during launch a silent no-op:
+the process went on starting, took the question and answered it. Four reviewers across three vendors
+found that on the code round. A stop during startup now cancels the start budget, tells the waiter,
+kills the child and settles the turn, which is everything `dispose` does to a start in progress minus
+the disposal itself.
+
+**There is no stop wildcard.** The bridge refuses a `stop` that does not name a turn, and refuses one
+naming anything that is not a whole positive number — a string, a negative, a fraction, `NaN`. An
+earlier version let a missing number mean "whichever is running", for a page too old to send one;
+three vendors pointed out that this hands back the exact defect the number exists to prevent, and
+there is no such page, because `stop` and its turn number ship in the same release.
+
 What a stop costs differs by session shape, and the session knows which it is:
 
 | shape | vendor | what the kill costs | what the next turn does |
@@ -419,7 +434,16 @@ complaint the feature answers. The job is cancelled on the server in the same br
 api/reviews/{id}`, which already existed — because a queued job holds a slot on a shared vendor
 account and the drop-on-no-poll sweep would not take it back for three minutes. Whatever the abandoned
 poll eventually answers is dropped; a race settles once, so an answer landing after a stop cannot turn
-a stopped turn into an answered one.
+a stopped turn into an answered one. That race covers the SUBMIT as well as the polling, because a
+POST can take twenty seconds and a stop pressed during one must not be waited out.
+
+Which turn a remote poll belongs to is a **generation number**, not a boolean. The first draft used a
+`stopped` flag that the next turn reset — so turn A's poll, sitting in an `await` when A was stopped,
+woke up after turn B had cleared the flag, decided it was not stopped after all, and carried on
+polling A's cancelled job and pushing A's queue positions into B's tab. Three reviewers found it. A
+number cannot be un-stopped: each turn captures its own value, every stop and every new turn moves the
+session past it, and the loop re-checks staleness the instant each poll returns rather than at the top
+of the next iteration.
 
 `chatCommand.ts` records the stop in the transcript before carrying it. The question is appended
 *before* the turn is sent, so a turn ending without an answer leaves the transcript on a dangling

@@ -774,3 +774,52 @@ test('a stop that arrives after the next turn has started does not stop that one
   assert.strictEqual(result.ok, false, 'this stop names the turn that IS running, and stops it');
   assert.strictEqual(child.killed(), 1, 'exactly one kill, for the turn that was actually running');
 });
+
+test('a stop while the process is still starting ends the turn instead of being ignored', async () => {
+  // The code round's clearest signal: four reviewers across three vendors, independently. Startup is
+  // 3.6-6.6 s measured — a large share of the wait a person presses stop to end — and the first
+  // version installed the stop handle only AFTER the question was written, so a stop during launch
+  // was a silent no-op: the process went on starting, took the question and answered it.
+  const child = fakeChild();
+  const session = new CliChatSession(() => child.handle, BUDGETS, fakeTimers());
+
+  const answering = session.send('why is it pinned?');
+  await flush();
+  // Deliberately NO init: the child is still starting, which is the whole case.
+  session.stop();
+
+  const result = await answering;
+  assert.strictEqual(result.ok, false, 'a stop during startup must end the turn');
+  assert.strictEqual(result.ok === false ? result.stopped : undefined, true);
+  assert.strictEqual(child.killed(), 1, 'the starting process must be killed, not left to run on');
+  assert.strictEqual(child.written.length, 0, 'the question must never be written after a stop');
+});
+
+test('a stop during startup does not leave the next question waiting on the dead one', async () => {
+  const first = fakeChild();
+  const second = fakeChild();
+  let handed = 0;
+  const session = new CliChatSession(
+    () => {
+      handed += 1;
+
+      return handed === 1 ? first.handle : second.handle;
+    },
+    BUDGETS,
+    fakeTimers(),
+  );
+
+  const stopped = session.send('one');
+  await flush();
+  session.stop();
+  await stopped;
+
+  const next = session.send('two');
+  await flush();
+  second.say(INIT);
+  await flush();
+  second.say(ok('answer two'));
+
+  assert.strictEqual((await next).ok, true, 'the session must still answer after a stop during startup');
+  assert.strictEqual(handed, 2, 'the next question must start its own process');
+});

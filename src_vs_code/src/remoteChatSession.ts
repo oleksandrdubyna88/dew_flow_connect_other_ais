@@ -76,14 +76,16 @@ export class RemoteChatSession implements ChatSession {
   private running = false;
 
   /**
-   * The person stopped THIS turn. Cleared when the next one starts.
+   * Which turn is current. Bumped by every new turn AND by every stop.
    *
-   * <p>Deliberately not `disposed`: that flag is terminal and every guard reading it means "this
-   * session is over". A stop ends a turn and leaves the session able to take another, so it needs a
-   * flag of its own — reusing `disposed` would have made the second question after a stop return
-   * "the conversation was closed" for a conversation that is open.</p>
+   * <p>A GENERATION rather than a boolean, and the difference is a defect three reviewers found in
+   * the first version. That one used a `stopped` flag reset at the start of each turn — so a poll
+   * loop belonging to turn A, sitting in an `await` when A was stopped, woke up after turn B had
+   * cleared the flag, decided it was not stopped after all, and carried on polling A's cancelled job
+   * and pushing A's queue positions into B's tab. A number cannot be un-stopped: turn A captures its
+   * own value and every later stop or turn moves the session past it for good.</p>
    */
-  private stopped = false;
+  private generation = 0;
 
   /** Settles the turn without waiting for the poll in flight. Undefined when no turn is waiting. */
   private wakeOnStop: (() => void) | undefined;
@@ -131,16 +133,34 @@ export class RemoteChatSession implements ChatSession {
       // finished work for nothing.
       return;
     }
-    this.stopped = true;
+    // Past this line the turn that was running is stale for good, whatever it is awaiting and
+    // whatever turn comes next.
+    this.generation += 1;
     const id = this.inFlight;
     this.inFlight = '';
     if (id.length > 0) {
-      void this.transport.cancel(id);
+      this.drop(id);
     }
-    // Undefined in the window between `submit` going out and its id coming back. That window is not
-    // lost: `turn` checks `stopped` where the id first exists, exactly as it already checks
-    // `disposed` there, and cancels then.
+    // Undefined only in the window between `submit` going out and its id coming back; that window is
+    // covered where the id first exists, by the same staleness check.
     this.wakeOnStop?.();
+  }
+
+  /**
+   * Tell the server to drop a job, and never let saying so break anything.
+   *
+   * <p>Nothing waits for this and nothing can act on its failure — the turn is already over on this
+   * side. What matters is that a `DELETE` refused by a network blip becomes a dropped promise rather
+   * than an unhandled rejection in the extension host, which is a window taken down for a job that
+   * the server's own sweep will collect anyway. (codex and gemini, the code round.)</p>
+   */
+  private drop(id: string): void {
+    void this.transport.cancel(id).catch(() => undefined);
+  }
+
+  /** Whether the turn that captured `mine` is still the one this session is running. */
+  private stale(mine: number): boolean {
+    return this.disposed || mine !== this.generation;
   }
 
   dispose(): void {
@@ -150,7 +170,7 @@ export class RemoteChatSession implements ChatSession {
     if (id.length > 0) {
       // A queued review nobody is waiting for is a vendor slot somebody else could have had, and on
       // a shared account that is the scarcest thing the server has. Cancelled, not abandoned.
-      void this.transport.cancel(id);
+      this.drop(id);
     }
   }
 
@@ -158,12 +178,23 @@ export class RemoteChatSession implements ChatSession {
     if (this.disposed) {
       return { ok: false, failure: 'the conversation was closed' };
     }
-    // A NEW turn, so last turn's stop is spent. Reset here rather than in `stop` itself, because
-    // between the two is exactly where a person decides whether to ask again.
-    this.stopped = false;
+    const mine = this.generation + 1;
+    this.generation = mine;
     this.running = true;
+    // The stop signal is armed BEFORE the submit, and the race covers the submit as well as the
+    // polling. Armed after, a stop pressed while the POST was still in flight had no resolver to
+    // call and nothing to cancel, so the person went on waiting out a request that can take twenty
+    // seconds. (codex, the code round, twice.)
+    const stopping = new Promise<TurnResult>((resolve) => {
+      this.wakeOnStop = () => resolve(STOPPED);
+    });
+    const asking = this.submitAndWait(text, mine, onWaiting);
+    // Attached before the race: the loser still settles, with nobody reading it, and a rejection
+    // nobody handles is an unhandled rejection in the extension host.
+    asking.catch(() => undefined);
+
     try {
-      return await this.submitAndWait(text, onWaiting);
+      return await Promise.race([stopping, asking]);
     } finally {
       this.running = false;
       this.wakeOnStop = undefined;
@@ -171,8 +202,12 @@ export class RemoteChatSession implements ChatSession {
     }
   }
 
-  /** The turn proper, with `running` already true so a stop arriving mid-flight is not a no-op. */
-  private async submitAndWait(text: string, onWaiting?: (position: number) => void): Promise<TurnResult> {
+  /** Submit the question and wait for its answer; `mine` is the generation this turn belongs to. */
+  private async submitAndWait(
+    text: string,
+    mine: number,
+    onWaiting?: (position: number) => void,
+  ): Promise<TurnResult> {
     const deadline = this.now() + this.budgets.turnMs;
     const seconds = Math.max(1, Math.floor(this.budgets.turnMs / 1000));
     // One name for this TURN — the SAME one when this is the person retrying a turn that failed,
@@ -202,54 +237,46 @@ export class RemoteChatSession implements ChatSession {
     // and cancelled nothing — and the job the server has just accepted would then run, hold a vendor
     // slot on a shared account and answer into a tab that closed. Checked HERE, where the id first
     // exists, because that is the first moment there is anything to cancel. (codex, the code round.)
-    if (this.disposed) {
-      void this.transport.cancel(id);
+    // A close or a stop that ran while the POST was in flight found no id to cancel, because there
+    // was none yet. Checked HERE because this is the first moment the job has a name — otherwise it
+    // runs to the end of its budget on a shared vendor account and answers into nothing. The two
+    // keep their own sentences: a closed tab and a stopped answer send a person to different places.
+    if (this.stale(mine)) {
+      this.drop(id);
 
-      return { ok: false, failure: 'the conversation was closed' };
-    }
-    // The same window, for the same reason, for a stop instead of a close: `stop` ran while the POST
-    // was in flight, found no id to cancel and settled nothing. Checked HERE because this is the
-    // first moment the job has a name. (The dispose case above is the precedent; a stop needed it
-    // too and would otherwise have left the job running for the sweep to find.)
-    if (this.stopped) {
-      void this.transport.cancel(id);
-
-      return STOPPED;
+      return this.disposed ? { ok: false, failure: 'the conversation was closed' } : STOPPED;
     }
     this.inFlight = id;
 
-    const waiting = this.waitFor(id, deadline, onWaiting);
-    // Attached BEFORE the race. If the stop wins, this promise still settles later with nobody
-    // reading it, and a rejection nobody handles is an unhandled rejection that takes the window
-    // down rather than the turn.
-    waiting.catch(() => undefined);
-
-    return Promise.race([
-      waiting,
-      new Promise<TurnResult>((resolve) => {
-        this.wakeOnStop = () => resolve(STOPPED);
-      }),
-    ]);
+    return this.waitFor(id, deadline, mine, onWaiting);
   }
 
   /** Poll until it answers, fails, or the deadline passes. */
   private async waitFor(
     id: string,
     deadline: number,
+    mine: number,
     onWaiting?: (position: number) => void,
   ): Promise<TurnResult> {
     let refusals = 0;
-    // `stopped` as well as `disposed`: the race has already settled the turn, and this loop carrying
-    // on would keep polling a job the server has been told to cancel.
-    while (!this.disposed && !this.stopped) {
+    // Staleness, not just disposal: once this turn has been stopped the race has already answered
+    // its caller, and carrying on would poll a job the server has been told to drop.
+    while (!this.stale(mine)) {
       const remaining = deadline - this.now();
       if (remaining <= 0) {
-        void this.transport.cancel(id);
+        this.drop(id);
 
         return { ok: false, failure: 'the server did not answer in time' };
       }
 
       const asked = await this.transport.poll(id, waitSecondsFor(remaining));
+      // Checked the instant the await returns, not at the top of the next iteration. A poll holds the
+      // connection for up to eight seconds, and a stop pressed during one must not be answered by
+      // reading its result, calling this turn's `onWaiting` into a tab now showing a different turn,
+      // or looping once more. (gemini, codex and the local reviewer, the code round.)
+      if (this.stale(mine)) {
+        break;
+      }
       if (asked.status === 429) {
         // The shared-account ceiling doing its job: somebody else's round has the vendor. Waiting is
         // the answer, and the wait grows so that a queue full for a minute is not polled every second.

@@ -580,10 +580,13 @@ function newConversation(
           // that arrived too late to mean anything.
           return;
         }
-        if (turn !== 0 && turn !== thread.turn) {
+        if (turn !== thread.turn) {
           // The page named a turn that is no longer the running one, which is what a late or a
           // repeated press looks like from here. Refused rather than applied to whatever happens to
           // be in flight now — that turn is a different question the person has not asked to stop.
+          // There is no wildcard to fall back to: the bridge already refuses a stop that names no
+          // turn, so `turn` here is always a real number a page chose. (codex and gemini, the code
+          // round, on both halves of this rule.)
           return;
         }
         thread.session.stop();

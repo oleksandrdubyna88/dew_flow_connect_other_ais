@@ -83,24 +83,21 @@ test('a stop carries the turn it means to stop', () => {
   );
 });
 
-test('a stop from a page too old to name a turn still stops the running one', () => {
-  // A webview retained across a reload can be older than the extension talking to it — the reason
-  // this module ignores what it does not know rather than refusing it. An older page posts no turn,
-  // and zero means "whichever is running", which is what that page was built to mean.
-  assert.deepStrictEqual(
-    chatCommandOf({ type: 'command', command: 'stop' }),
-    { kind: 'stop', turn: 0 },
-  );
+test('a stop that names no turn is not a stop', () => {
+  // There is no wildcard. The first version let a missing number mean "whichever is running", which
+  // hands back the exact defect the number exists to prevent — and no such page can exist, because
+  // `stop` and its turn number ship in the same release. (codex and gemini, the code round.)
+  assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'stop' }), { kind: 'ignore' });
 });
 
-test('a stop naming a turn that is not a whole positive number names no turn at all', () => {
-  // Same rule the zoom delta follows: a value from a surface the host does not control is clamped to
-  // something meaningful rather than trusted into an index.
-  for (const turn of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 'two', null]) {
+test('a stop naming something that is not a turn is refused, not applied to whatever is running', () => {
+  // The boundary rule: a value from a surface the host does not control is validated before it
+  // reaches anything that acts on it. Every one of these used to become "stop whatever is running".
+  for (const turn of [-1, 0, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 2, 'two', null, {}]) {
     assert.deepStrictEqual(
       chatCommandOf({ type: 'command', command: 'stop', turn }),
-      { kind: 'stop', turn: 0 },
-      `a turn of ${String(turn)} should have been read as no turn`,
+      { kind: 'ignore' },
+      `a turn of ${String(turn)} should have been refused outright`,
     );
   }
 });
