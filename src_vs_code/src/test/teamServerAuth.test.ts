@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { response } from './responseFixture';
 import {
   AuthHost,
   RENEW_WITHIN_MS,
@@ -53,7 +54,7 @@ function serverThatWorks(): typeof fetch & { seen: string[] } {
       ? JSON.stringify({ microsoftScope: GOOD_SCOPE, providers: ['microsoft'] })
       : JSON.stringify({ token: 'server-token', expiresUtc: '2027-01-01T00:00:00Z', email: 'a@b.c' });
 
-    return { ok: true, status: 200, headers: new Headers(), text: async () => body } as Response;
+    return response({ status: 200, body: body });
   }) as typeof fetch & { seen: string[] };
   impl.seen = seen;
 
@@ -317,7 +318,7 @@ test('a session that cannot be SAVED is ended again rather than left open', asyn
         ? JSON.stringify({ microsoftScope: GOOD_SCOPE, providers: ['microsoft'] })
         : JSON.stringify({ token: 'server-token', expiresUtc: '2027-01-01T00:00:00Z', email: 'a@b.c' });
 
-      return { ok: true, status: 200, headers: new Headers(), text: async () => body } as Response;
+      return response({ status: 200, body: body });
     }) as typeof fetch;
 
     // A data directory that cannot hold a `servers` folder, because a file of that name is there.
@@ -346,15 +347,10 @@ test('an account outside the company domain is told that, not told to retry', as
     const forbidding = (async (input: unknown) => {
       const url = String(input);
       if (url.endsWith('/api/client-config')) {
-        return {
-          ok: true,
-          status: 200,
-          headers: new Headers(),
-          text: async () => JSON.stringify({ microsoftScope: GOOD_SCOPE, providers: ['microsoft'] }),
-        } as Response;
+        return response({ status: 200, body: JSON.stringify({ microsoftScope: GOOD_SCOPE, providers: ['microsoft'] }) });
       }
 
-      return { ok: false, status: 403, headers: new Headers(), text: async () => '{"error":"domain"}' } as Response;
+      return response({ status: 403, body: '{"error":"domain"}' });
     }) as typeof fetch;
 
     const result = await signIn(SERVER, host(dir, store(), [], forbidding));
@@ -448,7 +444,7 @@ test('a bearer token cannot travel over plain http, whatever the call', async ()
     const counting = (async () => {
       sent += 1;
 
-      return { ok: true, status: 200, headers: new Headers(), text: async () => '{}' } as Response;
+      return response({ status: 200, body: '{}' });
     }) as typeof fetch;
     const insecure = { ...SERVER, url: 'http://coai.example.com' };
 

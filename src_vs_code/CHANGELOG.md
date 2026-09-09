@@ -1,5 +1,25 @@
 # Changelog
 
+## Extension 0.31.14 — 2026-09-09
+
+**The panel can tell when a Team server is older than it is.** The server has been putting its API
+version on every response since the mechanism shipped — its own design note says the client's check
+against that header is the right place to decide what to do about it — and the panel sent its own
+number and threw the answer away. It reads it now, and says so in the *Team servers* row when a
+server is behind what this extension needs.
+
+It reports rather than refuses, and the asymmetry is deliberate: a server that keeps serving a client
+it cannot satisfy corrupts state, so it refuses; a panel that stopped talking to a server it merely
+suspects would turn a warning into an outage.
+
+Three states, and the middle one is the reason this took care to get right. A number is what the
+server said. Nothing said, on an answer that arrived, is a genuinely old server. Nothing known — no
+answer at all, or an answer that is not a number — records nothing and stays quiet, so a dropped
+connection cannot make a healthy server look ancient.
+
+Nothing about this is visible while every server is current, which is the point: it exists so that
+the day a response shape moves, the panels already installed can say what they are looking at.
+
 ## Extension 0.31.13 — 2026-09-09
 
 **All three vendor CLIs can answer a chat now, not just one.** Set `coai.chatModel` — or pick in the

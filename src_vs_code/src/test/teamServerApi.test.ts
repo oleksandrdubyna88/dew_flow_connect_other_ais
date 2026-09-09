@@ -1,5 +1,6 @@
 import * as assert from 'node:assert';
 import { test } from 'node:test';
+import { response } from './responseFixture';
 import {
   CONTRACT_HEADER,
   ask,
@@ -21,14 +22,9 @@ function stub(
     seen.push({ url, init });
     const result = await answer(url, init);
 
-    return {
-      ok: result.status >= 200 && result.status < 300,
-      status: result.status,
-      // A real `Response` always carries these; the stub did not, which is why nothing could test
-      // what the server says back about itself.
-      headers: new Headers(result.headers ?? {}),
-      text: async () => result.body,
-    } as Response;
+    // The real constructor: `ok` is DERIVED from the status here rather than computed by the stub,
+    // which is one fewer thing a fixture can get wrong.
+    return response({ status: result.status, body: result.body, headers: result.headers ?? {} });
   }) as typeof fetch & { seen: typeof seen };
   impl.seen = seen;
 
@@ -311,12 +307,14 @@ test('a body that cannot be read keeps the number the server already gave', asyn
   // `response.text()` throws on a truncated payload, and the catch arm would otherwise answer
   // `undefined` for a server that had already said what it speaks — losing it on the call that
   // most wants it.
-  const fetchImpl = (async () => ({
-    ok: true,
-    status: 200,
-    headers: new Headers({ [CONTRACT_HEADER]: '4' }),
-    text: async () => { throw new Error('unexpected end of body'); },
-  }) as unknown as Response) as typeof fetch;
+  // A REAL response with one method replaced, rather than an object pretending to be one: the
+  // headers have to behave for this test to mean anything, and they are exactly what a hand-built
+  // stand-in gets wrong. `Object.assign` shadows `text` with an own property; everything else is
+  // still the runtime's.
+  const broken = Object.assign(response({ status: 200, headers: { [CONTRACT_HEADER]: '4' } }), {
+    text: async (): Promise<string> => { throw new Error('unexpected end of body'); },
+  });
+  const fetchImpl = (async () => broken) as typeof fetch;
 
   const answer = await ask('https://s', 'api/catalog', { fetchImpl });
 
