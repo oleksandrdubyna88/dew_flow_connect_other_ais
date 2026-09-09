@@ -147,6 +147,6 @@ only when the whole ritual has run — not when the code works.
 ## Parallelism
 
 **Owns `chatMessagesHtml` and `chatStyle` in `chatPage.ts`, plus the new renderer module.** Queues
-behind [PLAN_the_composer_stays_put.md](PLAN_the_composer_stays_put.md) in the chat-page lane (same
+behind [PLAN_the_composer_stays_put.md](../research/PLAN_the_composer_stays_put.md) in the chat-page lane (same
 style block). The renderer module and its hostile-input tests can be written BEFORE the lane
 reaches this plan — that half has no conflicts at all.

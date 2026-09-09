@@ -1,11 +1,60 @@
 # PLAN — the composer stays put, grows with the question, and the page scrolls once
 
-> Status: **plan only, nothing implemented yet.** Kind: **bug** (four of them, one layout). Scope:
-> the chat tab's page — `src_vs_code/src/chatPage.ts` (`chatBody`, `chatStyle`, `chatScript`).
-> Origin: [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entries 3, 9, 11 and the decision in 23.
+> Status: **IMPLEMENTED, 2026-09-09** (PR #161). All four stories. Kind: **bug** (four of them, one
+> layout). Scope: the chat tab's page — `src_vs_code/src/chatPage.ts`.
+> Origin: [../todo/BUGS_2026-09-09.md](../todo/BUGS_2026-09-09.md), entries 3, 9, 11 and the decision
+> in 23.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_chat_with_other_ais.md](../research/PLAN_chat_with_other_ais.md).
+> Related docs: [module_extension.md](module_extension.md),
+> [PLAN_chat_with_other_ais.md](PLAN_chat_with_other_ais.md).
+>
+> ### What shipped differently, and what it cost
+>
+> **The build order was swapped, and it was an improvement.** The scroll rule landed BEFORE the
+> composer's growth: a footer whose height changes needs the at-bottom rule to already exist, and a
+> pure function that has not been written cannot be called. Fable made that call in the split.
+>
+> **Three defects were found that no report contained.**
+> 1. *The page's `body` rule had never applied.* The stylesheet opened with the zoom as a bare
+>    `font-size: 13px;` outside any rule; a CSS parser appends tokens to a prelude until `{` and `;`
+>    does not end one, so the selector became `font-size: 13px; body` and the whole rule was dropped
+>    — no margin, no padding, no font, no background, and the chosen text size never applied until
+>    something unrelated pushed it. Confirmed against a real parser before it was believed.
+> 2. *Nothing locked the composer between posting a turn and the host's answer* — a window one Enter
+>    wide, into a pipe that carries one turn.
+> 3. *A repeat push counted as an insertion*, so a retry scrolled a reader for content already in
+>    front of them.
+>
+> **Telling the page's own scroll from the reader's took three shapes.** A flag cleared on a later
+> frame (stays raised until that frame comes); a position kept indefinitely (turns the bottom into a
+> magic pixel — a reader who scrolls away and comes BACK to it reads as the page for the rest of the
+> tab's life); and finally a one-shot arming consumed by the event it causes. Only the third is
+> right, and the first two were each caught by a test rather than by review.
+>
+> **A regression this branch introduced and the gate caught:** requiring a string before writing meant
+> a state that OMITS `cappedHtml` or `failureHtml` left the old notice on screen, where the protocol
+> has always read "not mentioned" as "gone".
+>
+> **The gate ran six rounds** — a plan round and a code round per story pair — and its findings
+> changed the design four times: the `field-sizing` feature detection (the manifest declares support
+> back to VS Code 1.85, whose engine has never heard of the property, so a page that assumed would
+> have worked on the machine it was written on and silently never grown anywhere else); the
+> cancellable deferred follow; the fonts-settled correction dying with the follow it belongs to; and
+> a cancelled follow handing over the jump control, without which an answer arrives and nobody is
+> told. On the last round codex was out of budget — eight of twelve reviewers answered.
+>
+> **A correction to this plan's own record:** it claimed nothing in this repository executed the chat
+> page's script. `bundledPage.test.ts:310` had, since before the branch; the grep that missed it
+> looked for `chatPageHtml`, and that test reaches the page through `bundledChatPage()`. Every
+> `typeof` guard here is load-bearing twice over — the old engine, and that test.
+>
+> **The open tail:** the manual check the test plan describes (a 60-line passage, the page landing on
+> the last message, no yank while scrolled up, the control appearing, the box growing and shrinking)
+> has NOT been run by a person. Everything above is proved by tests and by a bundled, minified page
+> driven through a real push; none of it is proved by an eye.
+>
+> Test names shipped in the repository's own idiom — prose in lower case — rather than the PascalCase
+> this plan wrote.
 
 ## The symptoms — four, and they are one layout
 
@@ -48,7 +97,7 @@ failed turn renders under the same rule as an answer. One rule, not one per outc
   constant.
 - **A Send button at the right-hand end of the composer.** It obeys the same lock as the textarea
   (`locked = state.running || state.capped`, `chatPage.ts:172`) and calls the one `send()`
-  (`chatPage.ts:200-207`) — never a second path. Later, [PLAN_presets_above_the_composer.md](PLAN_presets_above_the_composer.md)
+  (`chatPage.ts:200-207`) — never a second path. Later, [PLAN_presets_above_the_composer.md](../todo/PLAN_presets_above_the_composer.md)
   gives this button a second caption; build it as a button, not an icon, so a caption fits.
 - The scroll rule as a **pure function** — `shouldFollow(scrollTop, clientHeight, scrollHeight,
   slack)` — in the page script, with its source embedded in the test the way `roundsLog.ts` embeds
@@ -218,8 +267,8 @@ only when the whole ritual has run — not when the code works.
 ## Parallelism
 
 **Owns `chatPage.ts` — the whole file.** Nothing else that touches `chatPage.ts` may run beside it:
-[PLAN_an_answer_reads_like_a_document.md](PLAN_an_answer_reads_like_a_document.md),
-[PLAN_a_turn_nobody_can_stop.md](PLAN_a_turn_nobody_can_stop.md),
-[PLAN_provider_then_model.md](PLAN_provider_then_model.md) and
-[PLAN_presets_above_the_composer.md](PLAN_presets_above_the_composer.md) all queue behind it. It is
+[PLAN_an_answer_reads_like_a_document.md](../todo/PLAN_an_answer_reads_like_a_document.md),
+[PLAN_a_turn_nobody_can_stop.md](../todo/PLAN_a_turn_nobody_can_stop.md),
+[PLAN_provider_then_model.md](../todo/PLAN_provider_then_model.md) and
+[PLAN_presets_above_the_composer.md](../todo/PLAN_presets_above_the_composer.md) all queue behind it. It is
 the skeleton they build on, so it goes FIRST in the chat-page lane.
