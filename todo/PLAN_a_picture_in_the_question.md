@@ -1,6 +1,12 @@
 # PLAN — a picture in the question
 
-> Status: **plan only, nothing implemented yet — CONDITIONAL on a measurement.** Kind: **feature**.
+> Status: **PHASE 0 IS DONE (measured 2026-09-09) — Phase 1 is not built, and the measurement says
+> it is worth building.** `claude` and `agy` both read a number out of a real PNG and said it back;
+> `codex` is untested rather than refused (its account hit a usage limit mid-probe) and must be
+> re-run before it is refused by name anywhere. **The mechanism is a file PATH named in the prompt**
+> — the one vector that works for both vendors that answered — which means the vendor process opens
+> the file itself, and the temp file's location and lifetime are part of the contract rather than an
+> implementation detail. Kind: **feature**.
 > Scope: the page's paste handling and CSP (`chatPage.ts:287`), a host handler in `chatCommand.ts`,
 > a temp-file discipline beside `chatOrphans.ts`, and the session seam plus adapters. Origin:
 > [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entry 13.
@@ -27,6 +33,69 @@ image in a non-interactive turn, and how, is not known.** Establish for `claude`
    scope here; recorded as the server's next item.
 
 Results as a table in this file. If no local adapter takes one, promote this plan as a record.
+
+### Phase 0 RESULTS — measured 2026-09-09
+
+Harness: [`src_vs_code/scripts/measure-image.mjs`](../src_vs_code/scripts/measure-image.mjs), run on
+Windows 11, node v24.18.0, against the real signed-in CLIs, with the launch spec **imported** from
+`launchSpecFor` so it cannot measure a mode the product does not run.
+
+**The image says something, and that is the whole design of the probe.** A CLI exiting 0 does not
+prove the model received a picture — an unknown field in a JSON turn can be ignored silently and an
+unsupported payload dropped, and either way the process answers cheerfully. So
+[`tokenPng.mjs`](../src_vs_code/scripts/tokenPng.mjs) draws a four-digit number into a real PNG
+(hand-rolled: a CRC, `node:zlib`, and 5×7 digit glyphs — no dependency, and readable in a diff), the
+prompt asks for that number back and nothing else, and **only the number appearing in the answer
+counts as receipt**.
+
+| vendor | vector | outcome | what it said |
+|---|---|---|---|
+| `claude` | inline base64 block | **received** | answered `7431` |
+| `claude` | a path in the prompt | **received** | answered `7431` |
+| `agy` | inline base64 block | not representable | the turn's `message.content` is a STRING — there is no block to put an image in |
+| `agy` | a path in the prompt | **received** | answered `7431` |
+| `codex` | inline base64 block | not representable | the turn IS the prompt text — there is no structure to carry a block |
+| `codex` | a path in the prompt | **inconclusive — the account, not the vendor** | *"You've hit your usage limit… try again at Sep 10th, 2026 12:41 AM"* |
+
+#### The answers, question by question
+
+**1. Does it take an image at all?** **`claude` and `agy`: yes, proven** — both read the number out
+of the picture and said it back. `codex` is **not yet known**: its account ran out of credit during
+the probe, and that is a fact about this afternoon rather than about the vendor. It must be re-run
+before anything is decided for it.
+
+**2. By what mechanism?** **A path to a file on disk, named in the prompt** — and that is the
+finding that matters, because it is the ONE vector that works for both vendors that answered.
+`claude` also accepts an inline base64 `image` block in its `stream-json` turn, which its
+`message.content` array has room for; `agy` and `codex` have nowhere to put one — their turns carry
+a string and a bare prompt respectively, so inline is not merely unsupported there, it is
+unrepresentable in the shape this extension sends.
+
+That also says something Phase 1 needs: with the path vector the CLI **opens the file itself**, so
+what is being built is not an attachment travelling with the turn but a file the vendor process must
+be able to read. The temp file's location and lifetime are therefore part of the contract, not an
+implementation detail.
+
+**3. Does it survive `cmd.exe`?** The question mostly dissolves: a path is a couple of hundred
+characters and goes on stdin with the rest of the prompt, exactly as prose does today. The base64
+route is the one that would have strained a command line — 556 characters for a 415-byte PNG, and a
+real screenshot is measured in megabytes — and it is only available on `claude`, which takes it on
+stdin too.
+
+### The decision
+
+**Phase 1 is worth building, and the mechanism is a file path.** Two of the three local vendors are
+proven to read a picture that way, the third is untested rather than refused, and the plan's own
+`{ path, mime }` attachment shape turns out to be right — now measured rather than assumed.
+
+Two amendments Phase 1 should carry from this:
+
+* **The base64-over-the-bridge step is only needed to get the clipboard image to the HOST.** From
+  there it is a file on disk and a path in the prompt; no adapter needs to carry base64, and only
+  `claude` could take it if one did.
+* **`codex` must be re-probed** (`npm run measure:image -- codex`) before it is given a refusal by
+  name in the page. Refusing a vendor on the strength of a spent credit balance is exactly the
+  silent feature-kill this probe was shaped to avoid.
 
 ## Phase 1 — only where Phase 0 said yes
 
@@ -90,7 +159,22 @@ only when the whole ritual has run — not when the code works.
 
 **Specific to this plan:** the Phase 0 table is in the PR whatever it says; help sentence under the chat article naming which models take a picture; `module_extension.md` gains the attachment on the seam, the CSP change and the temp-file discipline; CHANGELOG in the person's words; no manifest change; the security note (CSP widened to `data:` images only) called out in the PR body for the gate.
 
-## Definition of Done
+## Definition of Done — PHASE 0 (this pull request)
+
+- [x] The probe drives the REAL CLIs, importing the launch spec rather than retyping it.
+- [x] **A run that exits 0 is not a yes.** The image carries a readable token, the prompt demands it
+      back, and only the token in the answer counts as receipt.
+- [x] **A "no" is distinguishable from "I could not find the way".** Seven named outcomes, of which
+      `unavailable`, `failed`, `unspawnable` and `no-answer` are facts about this machine and are
+      excluded from any conclusion about a vendor. `codex` landed in exactly that bucket, with its own
+      sentence recorded, and is written down as untested rather than as refused.
+- [x] **Both transmission vectors tried** — inline base64 and a path on disk — before Phase 1 designs
+      an attachment shape, with "not representable" recorded where a vendor's turn has nowhere to put
+      a block.
+- [x] The table is in this file, with the environment and the payload sizes.
+- [x] A decision line saying whether Phase 1 is worth building, and by what mechanism.
+
+## Definition of Done — PHASE 1 (not this pull request)
 
 - [ ] Phase 0's table is here with the mechanism per adapter.
 - [ ] Where supported: paste → thumbnail → sent → answered; the temp file is owned and removed.
