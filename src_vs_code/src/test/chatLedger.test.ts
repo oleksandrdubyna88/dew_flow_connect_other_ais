@@ -153,3 +153,18 @@ test('what is written is what comes back', () => {
     [ours, { pid: 77, image: 'claude.exe', startedMs: 5 }],
   );
 });
+
+test('a taskkill that was REFUSED is not a kill, and keeps the record', () => {
+  // It used to print "killed" whatever taskkill did, so an access-denied refusal struck out the
+  // record and left the process running — the exact outcome this module exists to prevent.
+  assert.match(verifyAndKill(ours), /LASTEXITCODE/, 'the kill reports success without checking it');
+  assert.strictEqual(killOutcome(0, 'refused'), 'unknown');
+  assert.strictEqual(settled(killOutcome(0, 'refused')), false, 'a refused kill struck out its record');
+});
+
+test('an image this side would not put in a command produces NO command', () => {
+  // `worthAsking` filters these earlier. Saying it here too means the guarantee does not have to be
+  // reconstructed from another function by whoever reads this one.
+  assert.strictEqual(verifyAndKill({ ...ours, image: "agy'; calc; '.exe" }), '');
+  assert.notStrictEqual(verifyAndKill(ours), '');
+});

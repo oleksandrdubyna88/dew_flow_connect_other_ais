@@ -166,9 +166,14 @@ export function ownerOf(fileName: string): number {
  * around killing are not acceptable. So the three facts are compared and the tree is ended inside a
  * single invocation, and the script says which it did.</p>
  *
- * <p><b>`taskkill /t`, not `Terminate`</b>: a Windows shim is a tree — `codex` is `codex.cmd` running
- * `cmd.exe` running node — and ending only the root leaves the CLI that was actually working. The
- * launcher's own kill has said this since it was written.</p>
+ * <p><b>`taskkill` with the tree flags, not `Terminate`</b>: a Windows shim is a tree — `codex` is
+ * `codex.cmd` running `cmd.exe` running node — and ending only the root leaves the CLI that was
+ * actually working. Its EXIT CODE is checked: a `taskkill` that was refused used to be reported as
+ * a kill, which struck out the record and left the process running. (codex, the code round.)</p>
+ *
+ * <p>An image this side would not put in a command yields NO command — empty, which the caller reads
+ * as "nothing could be asked". `worthAsking` says the same thing earlier; a guarantee a reader has to
+ * reconstruct from another function is a guarantee waiting to be broken.</p>
  *
  * <p><b>`Get-CimInstance`, not `Get-Process`</b>: the latter reports a name with no extension and can
  * throw on a process it may not inspect, and the extension is half of what identifies an image. The
@@ -176,6 +181,10 @@ export function ownerOf(fileName: string): number {
  * date format, locale or time zone crosses the boundary. Measured on this machine.</p>
  */
 export function verifyAndKill(record: ChildRecord): string {
+  if (!safeImage(record.image)) {
+    return '';
+  }
+
   return [
     `$p = Get-CimInstance Win32_Process -Filter "ProcessId=${record.pid}"`,
     '$started = if ($p) { [math]::Round(($p.CreationDate.ToUniversalTime() '
@@ -183,7 +192,7 @@ export function verifyAndKill(record: ChildRecord): string {
     `if ($p -and $p.Name -eq '${record.image}' `
     + `-and [math]::Abs($started - ${record.startedMs}) -le ${NEAR_ENOUGH_MS}) {`,
     `  taskkill /pid ${record.pid} /t /f | Out-Null`,
-    '  "killed"',
+    '  if ($LASTEXITCODE -eq 0) { "killed" } else { "refused" }',
     '} elseif ($p) { "not ours" } else { "gone" }',
   ].join('\n');
 }
@@ -204,6 +213,11 @@ export function killOutcome(exitCode: number, output: string): KillOutcome {
     return 'unknown';
   }
   const said = output.toLowerCase();
+  if (said.includes('refused')) {
+    // The tree kill itself failed — access denied, a process protected from us. Unknown, so the
+    // record is KEPT and tried again rather than struck out over a process that is still running.
+    return 'unknown';
+  }
   if (said.includes('killed')) {
     return 'killed';
   }
