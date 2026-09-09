@@ -210,6 +210,40 @@ function chatBody(state: ChatPageState): string {
 </footer>`;
 }
 
+/**
+ * How close to the bottom still counts as being AT the bottom, in pixels.
+ *
+ * <p>The operator's rule says "a line or two of slack"; the gate asked for a number, and it is right
+ * to — a boundary a reader can land on is a boundary a test has to name. 48 is about two lines at
+ * the base size and three at the largest zoom step down. It is a constant rather than something
+ * derived from the font size on purpose: a reader a hair short of the bottom considers themselves at
+ * the bottom whatever size they are reading at, and a slack that shrinks with the text would make
+ * the rule behave differently for the people most likely to have scrolled.</p>
+ */
+export const FOLLOW_SLACK_PX = 48;
+
+/**
+ * Was the reader at the bottom — and therefore should a new answer be scrolled to?
+ *
+ * <p>Rule 2 of the decided scroll behaviour (entry 23, settled 2026-09-09). Pure, and taking its
+ * slack as a parameter rather than reading the constant, because its SOURCE is embedded into the
+ * page: it must reference nothing outside itself or the page gets a function whose free variable
+ * does not exist there.</p>
+ *
+ * <p>Written as `!(distance > slack)` rather than `distance <= slack` for the case that reaches it
+ * most rarely and matters anyway: a page that cannot measure itself yields NaN, every comparison
+ * with NaN is false, and the negation turns that into "follow". A page whose numbers are unreadable
+ * is a page whose reader has not scrolled away from anything.</p>
+ */
+export function shouldFollow(
+  scrollTop: number,
+  clientHeight: number,
+  scrollHeight: number,
+  slack: number,
+): boolean {
+  return !(scrollHeight - (scrollTop + clientHeight) > slack);
+}
+
 /** The page's behaviour. Its own function for the same reason the styles are. */
 function chatScript(state: ChatPageState): string {
   return `(function () {
@@ -225,6 +259,21 @@ function chatScript(state: ChatPageState): string {
     vscode.postMessage({ type: 'pageError', message: String(message) });
   };
   ${zoomScript()}
+  // Bound by ASSIGNMENT, not declared: the minifier renames a declaration and leaves the name in the
+  // template string that calls it, which is how the rounds log shipped a dead page twice. Embedding
+  // the source is also what makes the function the tests exercise the function the page runs.
+  var shouldFollow = ${shouldFollow.toString()};
+  var SLACK = ${FOLLOW_SLACK_PX};
+  // A scroll set in the same tick as the write scrolls to a height the browser has not laid out yet
+  // and lands short. The next frame has the real height, and setTimeout is the fallback for a host
+  // that has no requestAnimationFrame - the bundled page runs in exactly such a stub.
+  function afterLayout(fn) {
+    if (typeof requestAnimationFrame === 'function') { requestAnimationFrame(fn); } else { setTimeout(fn, 0); }
+  }
+  function landOnNewest() {
+    const scroll = document.getElementById('scroll');
+    if (scroll) { scroll.scrollTop = scroll.scrollHeight; }
+  }
   function send() {
     const box = document.getElementById('say');
     if (!box || box.disabled) { return; }
@@ -286,24 +335,41 @@ function chatScript(state: ChatPageState): string {
   }
   wirePicker();
   wireCapped();
+  // Rule 1: the tab opens looking at the last thing said, not at the passage above it. Three times,
+  // because the height is not final until the fonts are: now (the first paint is already close),
+  // after layout, and after the fonts settle where the host reports them. Idempotent, so the two
+  // extra calls cost nothing on a page that was already there.
+  landOnNewest();
+  afterLayout(landOnNewest);
+  if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+    document.fonts.ready.then(landOnNewest);
+  }
   window.addEventListener('message', function (event) {
     const data = event.data || {};
     if (data.type !== 'state') { return; }
+    // BEFORE any write. Read after one, scrollHeight already includes what just arrived, so a reader
+    // who was at the bottom measures as a screen short of it and is never followed - rule 2 turns
+    // silently into "never follow", and the only place that shows is the real webview. One snapshot
+    // at the head of the one handler every region arrives through is what makes it true by
+    // construction rather than by remembering to do it in five places.
+    const scroll = document.getElementById('scroll');
+    const follow = !scroll || shouldFollow(scroll.scrollTop, scroll.clientHeight, scroll.scrollHeight, SLACK);
+    let wrote = false;
     const messages = document.getElementById('messages');
-    if (messages && typeof data.messagesHtml === 'string') { messages.innerHTML = data.messagesHtml; }
+    if (messages && typeof data.messagesHtml === 'string') { messages.innerHTML = data.messagesHtml; wrote = true; }
     const thinking = document.getElementById('thinking');
-    if (thinking && typeof data.thinkingHtml === 'string') { thinking.innerHTML = data.thinkingHtml; }
+    if (thinking && typeof data.thinkingHtml === 'string') { thinking.innerHTML = data.thinkingHtml; wrote = true; }
     const capped = document.getElementById('capped');
-    if (capped) { capped.innerHTML = data.cappedHtml || ''; wireCapped(); }
+    if (capped && typeof data.cappedHtml === 'string') { capped.innerHTML = data.cappedHtml; wireCapped(); wrote = true; }
     // The picker is re-rendered rather than nudged: after "continue with a local model" the whole
     // list can be different, and a select that only had its value set would show a model it no
     // longer offers.
     const pickerBox = document.getElementById('pickerBox');
     if (pickerBox && typeof data.pickerHtml === 'string') { pickerBox.innerHTML = data.pickerHtml; wirePicker(); }
     const failure = document.getElementById('failure');
-    if (failure) { failure.innerHTML = data.failureHtml || ''; }
+    if (failure && typeof data.failureHtml === 'string') { failure.innerHTML = data.failureHtml; wrote = true; }
     const passage = document.getElementById('passage');
-    if (passage && typeof data.passage === 'string') { passage.textContent = data.passage; }
+    if (passage && typeof data.passage === 'string') { passage.textContent = data.passage; wrote = true; }
     // A draft pushed into an OPEN tab. Appended rather than assigned, so a half-typed follow-up
     // is never thrown away by a second invocation - losing what somebody typed is the one thing
     // the queue in the session was also built to avoid.
@@ -325,6 +391,9 @@ function chatScript(state: ChatPageState): string {
       // nine seconds after the last one — which is the whole conversation, one click at a time.
       if (wasLocked && !box.disabled && typeof box.focus === 'function') { box.focus(); }
     }
+    // Rule 2, applied once for whatever this push contained - an answer, a failure, a thinking line
+    // or a capped notice. There is one rule, not one per outcome.
+    if (wrote && follow) { afterLayout(landOnNewest); }
   });
 }());`;
 }
