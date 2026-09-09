@@ -138,8 +138,15 @@ call rather than a hope.
 that rule 2 refuses IS the right instrument: a reader at the bottom did not scroll — the region
 shrank underneath them — so re-measuring would call them scrolled away and leave the last answer
 behind the box they are typing into. What they WERE is the only measurement that survives the resize.
-A `ResizeObserver` on `#composer` re-pins them through `landOnNewest()`; a host without one keeps
-today's behaviour rather than breaking.
+A `ResizeObserver` on `#composer` re-pins them through `landOnNewest()`, and where the host has none
+the fallback that sized the box says so itself — those are the same hosts, since an engine without
+`field-sizing` is an old engine, and the promise was made to them too. Whoever changed the height
+reports it; the pin is one function.
+
+**A follow the reader cancels hands them the jump control instead.** An answer can arrive while
+somebody is at the bottom — so a follow is scheduled rather than done — and they can scroll up inside
+that frame. Cancelling is right; leaving them scrolled up with an answer they were never taken to and
+nothing on screen saying it came is not.
 
 **A write is compared against what was LAST WRITTEN, not against the element.** Reading `innerHTML`
 back makes the browser serialise the whole subtree on every push, and what comes back is normalised —
