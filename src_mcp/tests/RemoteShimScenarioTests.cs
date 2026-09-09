@@ -291,7 +291,7 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
             info.ArgumentList.Add(argument);
         }
 
-        using var process = Process.Start(info)!;
+        using var shim = StartShim(info);
         // Waits for a READABLE claim, not for the file to appear. Waiting on File.Exists killed the
         // shim in the window between creating the file and writing it, which is a real window and a
         // real defect — it left a claim naming no job, and the parent could not cancel. It is fixed
@@ -299,9 +299,11 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         // needs so the test cannot depend on how fast the machine is. It failed on a win-x64 release
         // runner and nowhere else: `Expected string to be "job-77" ... but "" has a length of 0`.
         await WaitForAsync(
-            () => RemoteRuntime.ReadClaim(invocation.JobFile).JobId.Length > 0, TimeSpan.FromSeconds(30));
-        process.Kill(entireProcessTree: true);
-        await process.WaitForExitAsync();
+            () => RemoteRuntime.ReadClaim(invocation.JobFile).JobId.Length > 0,
+            "the claim file to name its job",
+            shim);
+        shim.Process.Kill(entireProcessTree: true);
+        await shim.Process.WaitForExitAsync();
 
         var claim = RemoteRuntime.ReadClaim(invocation.JobFile);
         claim.JobId.Should().Be("job-77");
@@ -365,14 +367,15 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
                 info.ArgumentList.Add(argument);
             }
 
-            using var process = Process.Start(info)!;
+            using var shim = StartShim(info);
             // As early as this can be arranged: the instant ANYTHING appears under the claim's name,
             // including the sibling being written. On a slow machine that lands inside the write.
             await WaitForAsync(
                 () => File.Exists(invocation.JobFile) || File.Exists(invocation.JobFile + ".writing"),
-                TimeSpan.FromSeconds(30));
-            process.Kill(entireProcessTree: true);
-            await process.WaitForExitAsync();
+                "the claim file or its .writing sibling to appear",
+                shim);
+            shim.Process.Kill(entireProcessTree: true);
+            await shim.Process.WaitForExitAsync();
 
             if (File.Exists(invocation.JobFile))
             {
@@ -383,19 +386,228 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         }
     }
 
-    private static async Task WaitForAsync(Func<bool> condition, TimeSpan limit)
+    /// <summary>
+    /// How long a PREREQUISITE may take before the interesting part can begin.
+    /// </summary>
+    /// <remarks>
+    /// <para>It was thirty seconds, chosen once against the machine the test was written on, and it
+    /// cost `mcp-v0.18.13` its Windows ARM build: five of six release legs passed the same test and
+    /// the sixth ran out at 30s 359ms, so no `coai-mcp-0.18.13-win-arm64.zip` was ever published and
+    /// every install of that version on that platform answers 404.</para>
+    /// <para>This wait measures nothing. It is spent on a cold .NET start, a sign-in, an HTTP round
+    /// trip and a first write, immediately after a Release build of the whole solution, on whichever
+    /// of six machines the matrix picked. A generous bound costs a fast runner nothing — the wait
+    /// returns the instant the condition holds — and costs a slow one a passing build. What a
+    /// prerequisite must never do is give up quietly and leave a sentence nobody can act on.</para>
+    /// </remarks>
+    private static readonly TimeSpan PrerequisiteWait = TimeSpan.FromSeconds(120);
+
+    /// <summary>
+    /// The shim, running, with its stderr being READ.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Reading it is not for the diagnostic; it is so the child can run at all.</b> Both
+    /// scenarios set <c>RedirectStandardError</c> and neither drained the pipe, and a child that
+    /// fills a redirected pipe nobody is reading BLOCKS on its next write — for ever, since the
+    /// parent's next act is to wait for it. The symptom of that is a prerequisite wait running out
+    /// on one machine and not another, which is exactly the failure being fixed here; whether it was
+    /// this failure cannot be proved after the fact, but a redirected stream with no reader is a
+    /// latent hang either way.</para>
+    /// <para>Disposal kills the tree. A wait that throws leaves no <c>finally</c> of its own, and a
+    /// leaked <c>coai-mcp</c> holding a claim file is how one failing test makes the next three
+    /// fail for a reason that has nothing to do with them. (codex and local, the plan round.)</para>
+    /// </remarks>
+    private sealed record RunningShim(Process Process, StringBuilder Heard) : IDisposable
     {
+        /// <summary>Everything the child has said so far, safe to read while it is still saying it.</summary>
+        public string Said
+        {
+            get
+            {
+                lock (Heard)
+                {
+                    return Heard.ToString().Trim();
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            try
+            {
+                if (!Process.HasExited)
+                {
+                    Process.Kill(entireProcessTree: true);
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // Already gone, and its handle with it. Nothing to kill and nothing to report.
+            }
+
+            Process.Dispose();
+        }
+    }
+
+    /// <summary>Starts the shim with its stderr redirected AND drained.</summary>
+    private static RunningShim StartShim(ProcessStartInfo info)
+    {
+        info.RedirectStandardError = true;
+        info.UseShellExecute = false;
+
+        var heard = new StringBuilder();
+        var process = Process.Start(info)!;
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data is not null)
+            {
+                lock (heard)
+                {
+                    heard.AppendLine(e.Data);
+                }
+            }
+        };
+        process.BeginErrorReadLine();
+
+        return new RunningShim(process, heard);
+    }
+
+    /// <summary>
+    /// Waits for a prerequisite, and gives up EARLY when the child that must satisfy it has died.
+    /// </summary>
+    /// <remarks>
+    /// <para>The description and the child are required rather than optional, so a call site cannot
+    /// go back to a bare condition and a hand-picked number: the whole defect was one constant,
+    /// chosen once, with a failure sentence that named neither what was awaited nor who was meant to
+    /// deliver it. (codex, the plan round: making tests 1–2 pass while the scenarios still pass 30s
+    /// would fix nothing.)</para>
+    /// <para>A dead child cannot satisfy the condition, so waiting out the rest of the budget only
+    /// delays the report by two minutes. The condition is read ONCE more after an exit is seen,
+    /// because a child can satisfy it on its way out — and the state is reported as an OBSERVATION
+    /// with the moment it was taken, since a process can change state between the check and the
+    /// sentence. (codex again, and the same point from local twice.)</para>
+    /// </remarks>
+    private static async Task WaitForAsync(
+        Func<bool> condition, string what, RunningShim shim, TimeSpan? limit = null)
+    {
+        var deadline = limit ?? PrerequisiteWait;
         var clock = Stopwatch.StartNew();
-        while (clock.Elapsed < limit)
+        while (clock.Elapsed < deadline)
         {
             if (condition())
             {
                 return;
             }
 
+            if (Gone(shim.Process) is { } code && !condition())
+            {
+                throw Failure(what, clock.Elapsed, $"had exited with {code}", shim);
+            }
+
             await Task.Delay(50);
         }
 
-        throw new TimeoutException($"the condition was still false after {limit.TotalSeconds:0}s");
+        throw Failure(what, clock.Elapsed, StateOf(shim.Process), shim);
+    }
+
+    /// <summary>The exit code if the child is gone, or nothing while it lives.</summary>
+    /// <remarks>
+    /// Guarded, because both properties throw once the handle is gone — and a test that dies with
+    /// <c>InvalidOperationException</c> instead of its own timeout has thrown away the evidence it
+    /// exists to produce. (gemini, the plan round.)
+    /// </remarks>
+    private static int? Gone(Process process)
+    {
+        try
+        {
+            return process.HasExited ? process.ExitCode : null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static string StateOf(Process process) =>
+        Gone(process) is { } code ? $"had exited with {code}" : "was still running";
+
+    private static TimeoutException Failure(string what, TimeSpan waited, string state, RunningShim shim)
+    {
+        var said = shim.Said;
+
+        return new TimeoutException(
+            $"waiting for {what}: it was still not true after {waited.TotalSeconds:0.0}s. "
+            + $"The child {state} when that was checked. "
+            + (said.Length == 0 ? "It had said nothing on stderr." : $"It had said:{Environment.NewLine}{said}"));
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // What a prerequisite wait has to say when it runs out (2026-09-09).
+    //
+    // mcp-v0.18.13, 2026-09-08 17:35 UTC. The win-arm64 leg of the release matrix failed:
+    //
+    //   failed …AShimKilledMidClaim_LeavesEitherNothingOrAWholeClaim_NeverHalf (30s 359ms)
+    //     System.TimeoutException : the condition was still false after 30s
+    //
+    // Five of six legs passed the same test, and the build before it was clean — so this was a WAIT
+    // that ran out, not a binary that was wrong. It cost the release a platform: no
+    // coai-mcp-0.18.13-win-arm64.zip was ever published and every Windows ARM install of that
+    // version answers 404. The sentence above is every word of evidence there was, and it cannot
+    // tell a slow machine from a child that died on the way.
+    // ------------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task AFailedWait_NamesWhatItWaitedForAndWhatTheChildSaid()
+    {
+        // A child that says something and stops: both halves of the diagnostic, in one run.
+        using var shim = StartShim(new ProcessStartInfo(ShimExe) { ArgumentList = { "--not-a-real-flag" } });
+        await shim.Process.WaitForExitAsync();
+
+        var failure = await Record.ExceptionAsync(
+            () => WaitForAsync(() => false, "the claim file to appear", shim, TimeSpan.FromMilliseconds(200)));
+
+        failure.Should().BeOfType<TimeoutException>().Which.Message
+            .Should().Contain("the claim file to appear", "the wait must say what it was waiting FOR")
+            .And.Contain("exited", "and that the child was gone, which is a different cure from a slow one")
+            .And.Contain("64", "naming the code it exited with")
+            .And.Contain("unknown argument", "and quoting what the child said on its way out");
+    }
+
+    /// <summary>
+    /// A child that stays: no arguments, so it serves MCP and waits on a stdin nobody closes.
+    /// </summary>
+    private static RunningShim StartLivingShim() =>
+        StartShim(new ProcessStartInfo(ShimExe) { RedirectStandardInput = true });
+
+    [Fact]
+    public async Task AFailedWait_SaysTheChildWasStillRunning()
+    {
+        using var shim = StartLivingShim();
+
+        var failure = await Record.ExceptionAsync(
+            () => WaitForAsync(() => false, "something that never happens", shim, TimeSpan.FromMilliseconds(200)));
+
+        failure.Should().BeOfType<TimeoutException>().Which.Message
+            .Should().Contain("still running", "a live child and a dead one send a reader to different places")
+            .And.Contain("0.2s", "and the wait says how long it actually waited");
+    }
+
+    /// <summary>
+    /// The other side: a condition that comes true late still returns, rather than being outrun.
+    /// </summary>
+    /// <remarks>
+    /// The whole point of the change is that the deadline is generous. A test that only ever proves
+    /// the failure path would pass just as well against a wait that gave up immediately. (gemini,
+    /// the plan round, asked for a local stand-in for the slow runner.)
+    /// </remarks>
+    [Fact]
+    public async Task AWaitReturnsWhenTheConditionComesTrueLate()
+    {
+        using var shim = StartLivingShim();
+        var clock = Stopwatch.StartNew();
+
+        await WaitForAsync(() => clock.Elapsed > TimeSpan.FromMilliseconds(300), "a late condition", shim);
+
+        clock.Elapsed.Should().BeGreaterThan(TimeSpan.FromMilliseconds(300));
     }
 }
