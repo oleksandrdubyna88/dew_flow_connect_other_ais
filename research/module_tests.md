@@ -89,6 +89,7 @@ real and named here rather than implied:
 
 | Flow | Covered | By |
 |---|---|---|
+| The chat tab's page | yes, as it ships | `bundledPage.test.ts` runs the bundled, minified page and drives its **Send** button through to the one posted turn, asserting the composer locks on the way — the flow the pinned composer added. `chatPage.test.ts` runs the same script from source through `runChatPage()`, which answers only the ids the page actually renders, so a control that stops being rendered stops being testable rather than silently passing |
 | The rounds log page | yes, as it ships | `bundledPage.test.ts` bundles and minifies the real module and runs the page script — the only test that catches a minifier-renamed binding, which shipped twice |
 | Install / update the server | decisions only | `install.test.ts` (RID choice, asset names, companion policy, the release workflow's own guarantees) |
 | Copy the config block / the CLAUDE.md snippet | decisions only | `install.test.ts`, `panelServerPromptAgreement.test.ts` |
