@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { ChatPanels } from './chatPanels';
 import { chatWithOtherAi } from './chatCommand';
+import { reconcile } from './chatOrphans';
 import { coaiDataDir } from './dataDir';
 import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
@@ -99,6 +100,15 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // One registry per window: a conversation belongs to a Claude Code tab, and tabs are per window.
   const chatPanels = new ChatPanels();
+  // What the LAST run left behind. Deactivation ends every chat child, and so does closing a tab —
+  // but neither runs when the editor is force-killed, and what survives that is a vendor CLI signed
+  // in as the person with nobody to stop it. Every candidate is re-identified before anything is
+  // killed; see `chatLedger.ts`, which is where that judgement lives.
+  void reconcile(context.globalStorageUri.fsPath).then((killed) => {
+    if (killed > 0) {
+      console.warn(`[coai] ended ${killed} chat process(es) left by a previous session`);
+    }
+  });
 
   context.subscriptions.push(
     {
@@ -123,7 +133,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // 'Chat with other AI' item in Claude Code's own right-click menu — and the command tells them
     // apart by what VS Code hands it, because only one of them can copy the selection itself.
     vscode.commands.registerCommand('coai.chatWithOtherAi', (...args: unknown[]) => {
-      void chatWithOtherAi(chatPanels, args);
+      void chatWithOtherAi(chatPanels, args, context.globalStorageUri.fsPath);
     }),
     // Deactivation is not a tab closing: nobody has told VS Code about these panels, so both the
     // panel and the vendor process behind it have to be ended here or they outlive the extension.

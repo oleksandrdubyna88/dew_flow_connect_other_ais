@@ -384,8 +384,11 @@ record the observed timings beside the ones measured above.
 - [ ] Two sessions **sharing a label** get two panels, and a follow-up never lands in the other one.
 - [ ] Follow-up questions are answered in the same conversation without re-sending the passage on the
       local path, and correctly with a bounded transcript on the remote one.
-- [ ] Closing a tab kills its process; a process that dies is reported and re-created; VS Code being
-      force-killed leaves no orphan behind.
+- [x] **Closing a tab kills its process; a process that dies is reported and re-created; VS Code
+      being force-killed leaves no orphan behind.** The last of those is the ledger: every child is
+      written down as it starts and struck out as it ends, and the next activation kills what is
+      still provably ours — the pid, the image and the start time must all match, because a pid
+      alone would be a licence to kill whatever the operating system handed that number to next.
 - [ ] A turn cannot start while another is running.
 - [ ] `coai.chatAutoSend` decides who sends: at the default the keybinding sends and the menu waits
       with the composer filled and focused, and both other values behave as the table says. The

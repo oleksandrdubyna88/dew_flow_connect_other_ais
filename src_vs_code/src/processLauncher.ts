@@ -44,6 +44,15 @@ export interface LaunchOptions {
 }
 
 export interface ProcessHandle {
+  /**
+   * The child's process id, or 0 when it never started.
+   *
+   * <p>For the LEDGER, and for nothing else here: a chat child is written down as it starts so a
+   * force-killed editor cannot leave an authenticated CLI running. Killing by this number is only
+   * safe against a process whose identity has been re-checked — see `chatLedger.ts`, and the note
+   * on `killTree` below for why the launcher itself never does it.</p>
+   */
+  readonly pid: number;
   /** Write one line (a newline is appended). `false` when the pipe is already gone. */
   writeLine(line: string): boolean;
   /**
@@ -122,6 +131,7 @@ export function launch(target: string, args: readonly string[], options: LaunchO
  */
 function failedHandle(reason: string): ProcessHandle {
   return {
+    pid: 0,
     writeLine: () => false,
     writeAndEnd: () => false,
     onStdout: () => () => undefined,
@@ -275,6 +285,7 @@ function liveHandle(child: ReturnType<typeof spawn>, shell: boolean): ProcessHan
   });
 
   return {
+    pid: child.pid ?? 0,
     writeLine: (line) => writeLine(child, line),
     writeAndEnd: (text) => writeAndEnd(child, text),
     onStdout: stdout.on,
@@ -323,6 +334,31 @@ function writeLine(child: ReturnType<typeof spawn>, line: string): boolean {
     // learns the turn failed from `onExit`/`onError`, which is where it can say so.
     return false;
   }
+}
+
+/**
+ * Kill a process by NUMBER, for a caller that has proved the number is still theirs.
+ *
+ * <p>Everything else in this file kills through `child.kill()` for the reason stated below: a pid is
+ * not an identity, and Windows hands used numbers out again. There is exactly one case where a
+ * handle does not exist — a child recorded before the editor was force-killed, found again at the
+ * next activation — and `chatLedger.ts` is what makes it safe: the image and the start time must
+ * both still match before this is called. Nothing here re-checks that, so nothing else may call it.</p>
+ */
+export function killByPid(pid: number): void {
+  if (pid <= 0) {
+    return;
+  }
+  if (process.platform !== 'win32') {
+    try {
+      process.kill(pid);
+    } catch {
+      // Gone between the check and the kill is the outcome we wanted anyway.
+    }
+
+    return;
+  }
+  spawnTaskkill(pid);
 }
 
 /**
