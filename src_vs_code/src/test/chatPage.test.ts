@@ -1299,6 +1299,56 @@ test('the next turn gets its own control, live', () => {
   assert.strictEqual(page.seen['stop'].disabled, false, 'the next turn inherited the last one\'s stop');
 });
 
+test('a turn that ends forgets the stop it was asked for', () => {
+  // `stopAsked` was never cleared, and *Start a new conversation* keeps the same page: the turns
+  // begin again at 1, and a stale 7 would have disabled the seventh question of the next
+  // conversation before anybody pressed anything. It is about the turn in flight, so when nothing is
+  // in flight it is about nothing.
+  const page = runChatPage({ running: true, turn: 7 });
+  page.fire('thinking', 'click', { target: { closest: () => ({ dataset: { turn: '7' }, disabled: false }) } });
+
+  page.deliver({ type: 'state', thinkingHtml: '', running: false, capped: false });
+  page.deliver({
+    type: 'state',
+    thinkingHtml: '<p class="thinking">Thinking…<button type="button" id="stop" data-turn="7">Stop</button></p>',
+    running: true,
+    capped: false,
+  });
+
+  assert.strictEqual(page.seen['stop'].disabled, false,
+    'a later turn with the same number inherited a stop nobody had asked for');
+});
+
+test('pressing stop says that it is stopping', () => {
+  // Stopping is not instant — a vendor process has to be killed and a turn resolved — and a greyed
+  // out control still reading "Stop" cannot be told from one that did nothing.
+  const page = runChatPage({ running: true, turn: 7 });
+  const control = { dataset: { turn: '7' }, disabled: false, textContent: 'Stop' };
+  page.fire('thinking', 'click', { target: { closest: () => control } });
+
+  assert.strictEqual(control.textContent, 'Stopping…', 'the control said nothing about what it had done');
+});
+
+test('a redrawn control that is already stopping says so, and does not take the keyboard', () => {
+  // Focusing a disabled control leaves a keyboard on something with no action left. The place to be
+  // is wherever the person was, not on an inert button.
+  const page = runChatPage({ running: true, turn: 7 });
+  page.focusOn('stop');
+  const before = page.seen['stop'].focused;
+  page.fire('thinking', 'click', { target: { closest: () => ({ dataset: { turn: '7' }, disabled: false }) } });
+
+  page.deliver({
+    type: 'state',
+    thinkingHtml: '<p class="thinking">Thinking…<button type="button" id="stop" data-turn="7">Stop</button></p>',
+    running: true,
+    capped: false,
+  });
+
+  assert.strictEqual(page.seen['stop'].disabled, true);
+  assert.strictEqual(page.seen['stop'].textContent, 'Stopping…', 'the redrawn control forgot what was asked of it');
+  assert.strictEqual(page.seen['stop'].focused, before, 'the keyboard was put on a control with nothing left to do');
+});
+
 test('a stop control keeps the focus a push would have taken from it', () => {
   // Replacing the line destroys the element the keyboard was on. For a remote turn the line is
   // replaced every time the queue position moves, so somebody who tabbed to Stop would lose it

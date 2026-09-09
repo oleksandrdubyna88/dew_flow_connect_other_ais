@@ -618,6 +618,9 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       // Disabled the instant it is pressed. A second press a moment later would name the same turn,
       // and by the time it landed the host could have moved on to the next one.
       control.disabled = true;
+      // Said, not merely greyed. Killing a vendor process and resolving the turn takes a moment, and
+      // a dimmed control still reading Stop cannot be told from one that did nothing at all.
+      control.textContent = 'Stopping…';
       stopAsked = turn;
       vscode.postMessage({ type: 'command', command: 'stop', turn: turn });
     });
@@ -688,8 +691,13 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       wrote = true;
       const redrawn = document.getElementById('stop');
       if (redrawn) {
-        if (Number(redrawn.dataset && redrawn.dataset.turn) === stopAsked) { redrawn.disabled = true; }
-        if (hadFocus && typeof redrawn.focus === 'function') { redrawn.focus(); }
+        if (Number(redrawn.dataset && redrawn.dataset.turn) === stopAsked) {
+          redrawn.disabled = true;
+          redrawn.textContent = 'Stopping…';
+        }
+        // Only onto a control that still has something to do. Putting a keyboard on a disabled
+        // button leaves it somewhere with no action left, which is worse than leaving it be.
+        if (hadFocus && !redrawn.disabled && typeof redrawn.focus === 'function') { redrawn.focus(); }
       }
     }
     // These two clear when they are NOT mentioned - the protocol has always meant that, and a
@@ -733,6 +741,14 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     // Only a real boolean moves the lock. A state that says nothing about running - a partial push,
     // or a null across the bridge - must leave the composer as it is rather than quietly unlocking
     // it while a turn is still in flight. (local, the second code round.)
+    // A stop is about the turn in flight. When nothing is in flight it is about nothing — and
+    // holding on to the number would disable the same-numbered turn of the NEXT conversation, since
+    // restarting keeps this page and begins counting again. (gemini and local, the code round, from
+    // two directions.) The phrase the restart button uses is deliberately not written here: comments
+    // in this template ship to the browser, and a test that looks for that text found this one.
+    if (data.running === false) {
+      stopAsked = 0;
+    }
     if (box && typeof data.running === 'boolean' && typeof data.capped === 'boolean') {
       const wasLocked = box.disabled;
       lock(data.running || data.capped);
