@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import {
   ChildRecord,
   FORGET_AFTER_MS,
+  afterSweep,
+  filesToSweep,
   NEAR_ENOUGH_MS,
   forgotten,
   imageOf,
@@ -167,4 +169,33 @@ test('an image this side would not put in a command produces NO command', () => 
   // reconstructed from another function by whoever reads this one.
   assert.strictEqual(verifyAndKill({ ...ours, image: "agy'; calc; '.exe" }), '');
   assert.notStrictEqual(verifyAndKill(ours), '');
+});
+
+test('a file whose owner is still running is not opened at all', () => {
+  // The whole reason the owner's pid is in the name. Opening it would mean verifying processes that
+  // really ARE this extension's — every check would pass — and killing a conversation somebody is
+  // reading in another VS Code window.
+  const alive = (pid: number): boolean => pid === 200;
+  const files = filesToSweep(
+    ['chat-children-100.json', 'chat-children-200.json', 'chat-children-300.json', 'settings.json'],
+    300,
+    alive,
+  );
+
+  assert.deepStrictEqual([...files], [{ name: 'chat-children-100.json', owner: 100 }]);
+});
+
+test('this window never sweeps its own ledger, whatever the operating system says about it', () => {
+  assert.deepStrictEqual([...filesToSweep(['chat-children-42.json'], 42, () => false)], []);
+});
+
+test('a ledger is removed only when everything in it was asked AND answered', () => {
+  const record = { pid: 1, image: 'agy.exe', startedMs: 5 };
+
+  assert.strictEqual(afterSweep([], true), 'remove');
+  // Something nobody could resolve, or a sweep that ran out of time: the file stays, because one
+  // kept too long costs a few hundred bytes and one removed too early costs a process nobody can find.
+  assert.strictEqual(afterSweep([record], true), 'rewrite');
+  assert.strictEqual(afterSweep([], false), 'rewrite');
+  assert.strictEqual(afterSweep([record], false), 'rewrite');
 });
