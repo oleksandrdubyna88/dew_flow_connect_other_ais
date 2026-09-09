@@ -1,5 +1,33 @@
 # Changelog
 
+## Server 0.18.14 — 2026-09-09
+
+**A reviewer that waited out its deadline now tells you what to do about it.** A local reviewer that
+never got the graphics card reported this:
+
+```
+local/Conventions FAILED after 290.0s: exit 69: l Qwen3.5-35B-A3B-Q5_vk128:latest, pid 52068)
+```
+
+A sentence beginning mid-word. Nothing had crashed — the reviewer waited its whole five-minute
+deadline for an engine that was busy with somebody else's round, which is a normal thing to happen
+and has three cures: give the reviewers more time, run fewer local roles per round, or point that
+vendor at a second engine. All three were written, printed, and thrown away.
+
+Three things were losing them. The shim writes its progress notes to the same place as its verdict,
+and the note came first; the kept portion of that output was cut by character count, so it began in
+the middle of a line; and the sentence a person reads was capped at 160 characters, which is shorter
+than the verdict — so even when the right line won, everything you could act on was past the cut.
+Our own sentences are no longer cut, the kept portion is whole lines, and a progress note is never
+mistaken for a reason. A reviewer killed while it was still queuing now says it was still waiting,
+instead of quoting a stack frame.
+
+**A review that found nothing keeps its evidence.** An `ok` outcome with zero findings used to drop
+the vendor's raw answer, so a round where eight reviewers all answered `{"findings": []}` on a diff
+another reviewer found eleven things in could not be asked about afterwards. That answer is kept
+now, the reviewer's audit line names the file, and both stages log what they assembled AND what each
+reviewer was handed — two numbers that are the same only while nothing between them is broken.
+
 ## Extension 0.31.12 — 2026-09-08
 
 **Switching the model in a chat tab now takes the conversation with it.** Both the questions and
