@@ -58,6 +58,9 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
     /// <summary>The token that stops the vendor process of a job that is running right now.</summary>
     private readonly Dictionary<string, CancellationTokenSource> _running = new(StringComparer.Ordinal);
 
+    /// <summary>Which job one caller's idempotency key names. See <see cref="Keyed"/>.</summary>
+    private readonly Dictionary<(string Email, string Key), string> _keys = [];
+
     /// <summary>How many of one person's reviews may WAIT. The next is refused.</summary>
     /// <remarks>
     /// Separate from <see cref="PerCallerRunning"/> and counting a different state, which is what the
@@ -81,20 +84,41 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
     /// one key would otherwise both find nothing and both create a job, which is the exact duplicate
     /// the key exists to prevent — and the window is widest under precisely the conditions that
     /// produce a retry. (codex, plan round.)</para>
-    /// <para>The mapping lives on the job RECORD rather than in a dictionary beside it, so there is
-    /// no second lifetime to keep in step: <see cref="Sweep"/> forgets a finished job an hour later
-    /// and the key goes with it. A separate index would have needed its own pruning, and an index
-    /// that outlives what it points at is how a repeat comes to return a 404. (gemini, plan round.)</para>
+    /// <para>The key is found through an INDEX, and the index is pruned in the same loop that forgets
+    /// the job — see <see cref="Keyed"/>. The plan round's objection to having one at all was that an
+    /// index outliving what it points at hands a repeat the id of a job nobody can poll; the code
+    /// round's objection to the scan that replaced it was that one submit then cost a walk of the
+    /// whole server's history under this lock. One loop answers both.</para>
     /// </remarks>
-    public (JobRecord? Job, SubmitRefusal Refusal, int Position) Submit(JobRecord job)
+    /// <param name="nowUtc">
+    /// The clock the expiry check above uses. Defaulted to the real one, because most callers submit
+    /// a job stamped now and have no opinion; passed explicitly by the endpoint, which already has
+    /// the value, and by any test whose records are stamped somewhere other than the present — a job
+    /// dated an hour ago is instantly abandoned against a clock it never agreed to.
+    /// </param>
+    public (JobRecord? Job, SubmitRefusal Refusal, int Position) Submit(
+        JobRecord job, DateTimeOffset? nowUtc = null)
     {
+        var at = nowUtc ?? DateTimeOffset.UtcNow;
         lock (_gate)
         {
             if (job.IdempotencyKey.Length > 0 && Keyed(job.Email, job.IdempotencyKey) is { } already)
             {
-                return already.Fingerprint == job.Fingerprint
-                    ? (already, SubmitRefusal.None, Position(already))
-                    : (null, SubmitRefusal.KeyUsedForSomethingElse, 0);
+                if (already.Fingerprint != job.Fingerprint)
+                {
+                    return (null, SubmitRefusal.KeyUsedForSomethingElse, 0);
+                }
+
+                // A job whose clock has run out is NOT what a retry should be handed: it is dead and
+                // the sweep simply has not reached it yet, so answering 202 with it would give the
+                // person an id that fails the moment they poll it. Ended here, and the submit then
+                // falls through and makes the new job they actually asked for. (local, code round.)
+                if (!JobTransitions.IsExpired(already, at))
+                {
+                    return (already, SubmitRefusal.None, Position(already));
+                }
+
+                Expire(already, at);
             }
 
             var queued = _jobs.Values.Count(j => j.Email == job.Email && j.Status == JobStatus.Queued);
@@ -104,6 +128,13 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
             }
 
             _jobs[job.Id] = job;
+            if (job.IdempotencyKey.Length > 0)
+            {
+                // Overwrites, which matters on the one path that reaches here with a key already
+                // filed: the previous job under it had expired and was just ended, so the key must
+                // now name the live one.
+                _keys[KeyOf(job.Email, job.IdempotencyKey)] = job.Id;
+            }
             Wake(job.Id);
 
             return (job, SubmitRefusal.None, Position(job));
@@ -112,15 +143,20 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
 
     /// <summary>This caller's job under this key, whatever state it is in. Call under the lock.</summary>
     /// <remarks>
-    /// A scan, not an index. At this deployment's ceiling — twenty queued per person and an hour of
-    /// finished work — it is a walk of a few hundred records under a lock that already does exactly
-    /// that to count somebody's queue, and it cannot fall out of step with the jobs it describes.
+    /// <para>An index, not a scan. The first version walked <c>_jobs.Values</c> on every keyed submit,
+    /// under the lock that every claim, poll and finish also takes — and <c>_jobs</c> holds an hour of
+    /// everybody's finished work, so the cost of one submit grew with the whole server's history.
+    /// Three reviewers across two vendors said the same thing about it.</para>
+    /// <para><b>Pruned in the SAME loop that removes the job.</b> That was the plan round's objection
+    /// to an index and it is a real one: an index that outlives what it points at hands a retry the
+    /// id of a job nobody can poll any more. One loop, one lock, no second lifetime.</para>
     /// </remarks>
     private JobRecord? Keyed(string email, string key) =>
-        _jobs.Values.FirstOrDefault(j =>
-            j.IdempotencyKey.Length > 0
-            && string.Equals(j.IdempotencyKey, key, StringComparison.Ordinal)
-            && string.Equals(j.Email, email, StringComparison.OrdinalIgnoreCase));
+        _keys.TryGetValue(KeyOf(email, key), out var id) && _jobs.TryGetValue(id, out var job) ? job : null;
+
+    /// <summary>How a key is filed. The email is case-insensitive; the key the caller chose is not.</summary>
+    private static (string Email, string Key) KeyOf(string email, string key) =>
+        (email.ToLowerInvariant(), key);
 
     /// <summary>
     /// Somebody asked about this job: it is not abandoned.
@@ -146,7 +182,11 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
             {
                 return job;
             }
-            if (JobTransitions.IsAbandoned(job, nowUtc))
+            // Every clock, not only abandonment. A job past its RUN deadline is dead too, and
+            // stamping it would keep answering "running" to a client the sweep is about to fail —
+            // and, worse, keep its vendor process alive until the timer next fires. One question,
+            // asked in one place. (local, code round.)
+            if (JobTransitions.IsExpired(job, nowUtc))
             {
                 return Expire(job, nowUtc);
             }
@@ -286,11 +326,14 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
             // The ENDED records are returned, not the ones as they were: each carries the sentence
             // that says why it ended, so the caller logs the reason this store decided rather than
             // computing a second one that can disagree with it.
-            var expired = _jobs.Values
-                .Where(j => JobTransitions.IsExpired(j, nowUtc))
-                .ToList()
-                .Select(job => Expire(job, nowUtc))
-                .ToList();
+            // One pass, one list. `Expire` mutates `_jobs`, so the candidates are materialised before
+            // any of them is ended — but only once, since a second materialisation would extend the
+            // time this lock is held for nothing. (gemini, code round.)
+            var expired = new List<JobRecord>();
+            foreach (var job in _jobs.Values.Where(j => JobTransitions.IsExpired(j, nowUtc)).ToList())
+            {
+                expired.Add(Expire(job, nowUtc));
+            }
 
             foreach (var old in _jobs.Values
                 .Where(j => j.IsTerminal && j.FinishedUtc is { } at && nowUtc - at > _keep)
@@ -298,6 +341,12 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
             {
                 _jobs.Remove(old.Id);
                 _waiters.Remove(old.Id);
+                // In the SAME loop, so the index cannot outlive what it points at — which would hand
+                // a retry the id of a job nobody can poll any more.
+                if (old.IdempotencyKey.Length > 0)
+                {
+                    _keys.Remove(KeyOf(old.Email, old.IdempotencyKey));
+                }
             }
 
             return expired;
@@ -411,10 +460,14 @@ public sealed class JobStore(int perCallerQueued = 20, int perCallerRunning = 3,
     /// </remarks>
     private JobRecord Expire(JobRecord job, DateTimeOffset nowUtc)
     {
+        // The token FIRST. Everything after it is bookkeeping this process can redo; the vendor
+        // process is the thing that goes on costing money if it is missed, so nothing is allowed to
+        // come between deciding to expire and stopping it. `Cancel` is idempotent, so the sweep and
+        // a poll arriving together are safe. (local, code round.)
+        Stop(job.Id);
         var ended = JobTransitions.Fail(
             job, FailureKind.Cancelled, JobTransitions.ExpiryReason(job, nowUtc), nowUtc);
         _jobs[job.Id] = ended;
-        Stop(job.Id);
         Wake(job.Id);
 
         return ended;

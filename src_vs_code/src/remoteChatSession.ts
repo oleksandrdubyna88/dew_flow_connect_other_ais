@@ -48,6 +48,21 @@ export class RemoteChatSession implements ChatSession {
   private disposed = false;
   private queue: Promise<unknown> = Promise.resolve();
 
+  /**
+   * The key of a turn that FAILED, kept so the person's own retry is recognised as one.
+   *
+   * <p>This is the half that makes the key worth having, and the first version did not have it: a
+   * key minted per `send` is a key minted per ATTEMPT, and the attempt this exists for is the second
+   * one. The failure is a POST that arrived and whose answer did not come back — the person presses
+   * send again on the same question, and with a fresh key the server has no way to know it is the
+   * same question and makes a second paid job. (codex, the code round, twice.)</p>
+   *
+   * <p>Kept only across a FAILURE and only for identical text. A turn that answered is finished, so
+   * the next question is a new one; different text is a different question, which the server would
+   * refuse under this key anyway — it binds a key to a fingerprint of what was asked.</p>
+   */
+  private retry: { readonly text: string; readonly key: string } | undefined;
+
   constructor(
     private readonly transport: RemoteTransport,
     private readonly vendor: RemoteVendor,
@@ -87,16 +102,23 @@ export class RemoteChatSession implements ChatSession {
     }
     const deadline = this.now() + this.budgets.turnMs;
     const seconds = Math.max(1, Math.floor(this.budgets.turnMs / 1000));
-    // One name for this TURN, minted here and used once. It is what makes a submit whose answer was
-    // lost repeatable: the server hands back the job the first attempt made rather than starting a
-    // second one on an account where a slot is the scarcest thing there is. A server that has not
-    // learned the field ignores it, which is measured, not assumed.
+    // One name for this TURN — the SAME one when this is the person retrying a turn that failed,
+    // which is the whole point: the server then hands back the job the first attempt made rather
+    // than starting a second on an account where a slot is the scarcest thing there is. A server
+    // that has not learned the field ignores it, which is measured rather than assumed.
+    const key = this.retry?.text === text ? this.retry.key : this.key();
     const sent = await this.transport.submit(
-      requestBody(this.vendor.vendor, this.vendor.model, text, seconds, this.key()),
+      requestBody(this.vendor.vendor, this.vendor.model, text, seconds, key),
     );
     if (sent.failure.length > 0) {
+      // Kept, because THIS is the case the key exists for: the request may well have been accepted
+      // and only its answer lost, and the next press of send must be able to say so.
+      this.retry = { text, key };
+
       return { ok: false, failure: sent.failure };
     }
+    // Accepted, so there is nothing left to repeat: from here the id is what identifies the turn.
+    this.retry = undefined;
     const id = acceptedId(sent.body);
     if (id.length === 0) {
       // A 2xx whose body is not a review: something in front of the server can answer 200 with a

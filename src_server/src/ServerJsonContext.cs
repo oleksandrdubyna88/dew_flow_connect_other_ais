@@ -133,9 +133,20 @@ public sealed record UsageDto(
     /// <remarks>
     /// Trailing and defaulted so a client older than the field deserialises the answer unchanged: the
     /// panel that shipped before this simply does not read the property, which is what it did when
-    /// the property did not exist.
+    /// the property did not exist. Defaulted to <c>[]</c> and NOT nullable — doctrine §4 and §7, and
+    /// the reason bites here: a consumer could not otherwise tell "this server sent no kinds" from
+    /// "this window had none", and those are different facts. (codex and gemini, code round.)
     /// </remarks>
-    IReadOnlyList<KindTotal>? Kinds = null);
+    IReadOnlyList<KindTotal> Kinds = null!)
+{
+    /// <summary>Never null, whatever a deserialiser did with the property.</summary>
+    /// <remarks>
+    /// A record's positional default cannot be <c>[]</c> and survive JSON deserialisation, which
+    /// writes the property directly and will write <c>null</c> for an absent one. Normalising at the
+    /// boundary is what the rule asks for, so nothing downstream has to ask.
+    /// </remarks>
+    public IReadOnlyList<KindTotal> Kinds { get; init; } = Kinds ?? [];
+}
 
 /// <summary>One account's persisted state, in its own directory.</summary>
 /// <param name="CooldownUntilUtc">Null when it is not rate-limited.</param>

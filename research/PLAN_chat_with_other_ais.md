@@ -5,8 +5,8 @@
 > Team-server path in 0.31.15. A selection in a Claude Code session, one keypress, a tab named after
 > that session holding another vendor's answer — locally through a long-lived CLI process, or
 > remotely as a job on the company subscription, bounded at three turns.
-> One item is owed and it is not ours to build: chat turns are DISTINGUISHABLE in the spending view
-> (they carry no review role) but the view does not yet group on it, which needs a server change —
+> Nothing is owed. The one item this plan had to leave open — separating conversations from rounds
+> in the spending view — needed the SERVER, and shipped on the same day in Team server 0.5.6:
 > [PLAN_the_server_knows_a_chat_from_a_review.md](PLAN_the_server_knows_a_chat_from_a_review.md).
 >
 > **Deviations.** Three, all of them measurements overruling the plan. (1) The plan wrote off two of
@@ -444,10 +444,11 @@ costs a few hundred bytes, and a file deleted too early costs a process nobody c
       clipboard is never restored over something newer.
 - [x] A remote conversation stops at three turns, saying so and offering the local model that has
       memory - rather than growing a transcript until the server refuses it.
-- [ ] **NOT DONE, and moved out**: chat turns appear in the spending view, separated from review
-      turns. They are already distinguishable — a usage row with no review role is a conversation —
-      but grouping on it is a server change:
+- [x] Chat turns appear in the spending view, separated from review turns. Moved out when this plan
+      shipped, because it needed the SERVER, and done on 2026-09-09 in Team server 0.5.6:
       [PLAN_the_server_knows_a_chat_from_a_review.md](PLAN_the_server_knows_a_chat_from_a_review.md).
+      A turn carries `kind` rather than being recognised by the role it lacks, and the *Team servers*
+      block counts conversations beside rounds.
 - [x] The model picker lists local rows and, when a Team server answers, its catalog rows too — and
       a row that cannot answer is listed WITH ITS REASON rather than quietly missing.
 - [x] The section holds a multi-line prompt box, defaulting to the single word `Explain`, and what it

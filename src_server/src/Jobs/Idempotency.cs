@@ -48,36 +48,49 @@ public static class Idempotency
             : "an idempotency key must be 1-128 characters of letters, digits, '-', '_', '.' or ':'";
     }
 
+    /// <summary>What goes between two parts of a fingerprint, written as an escape on purpose.</summary>
+    /// <remarks>
+    /// A unit separator, and it is <c>\u001f</c> in SOURCE rather than the character itself: a control
+    /// character pasted into a file is invisible in a diff, in a review, and in every editor that shows
+    /// it as a space. The length prefix beside it is what actually makes a fingerprint unambiguous, so
+    /// this only has to be something a reader can see is deliberate. (local, code round — it was
+    /// declared below the method that used it.)
+    /// </remarks>
+    private const char Separator = '\u001f';
+
     /// <summary>
     /// What this request WAS, condensed, so a key reused for a different one can be told apart.
     /// </summary>
     /// <remarks>
-    /// A hash rather than the fields themselves, because the prompt is the whole transcript of a
+    /// <para>A hash rather than the fields themselves, because the prompt is the whole transcript of a
     /// conversation and keeping a second copy of it per job to answer one equality question is a cost
-    /// with no return. SHA-256 over the fields that decide what runs and what it costs; the timeout is
-    /// in it because two submissions differing only in their budget are two different asks of the
-    /// vendor.
+    /// with no return. SHA-256 over the fields that decide what runs, WHO it runs for, and what it
+    /// costs; the timeout is in it because two submissions differing only in their budget are two
+    /// different asks of the vendor.</para>
+    /// <para><b>The email is in it</b> so the value is caller-scoped by construction and not only by
+    /// where it happens to be looked up. Two people are allowed to choose the same key, and a
+    /// fingerprint that did not know whose it was would be one refactor away from matching across
+    /// them. (gemini, code round.)</para>
+    /// <para><b>Hashed incrementally, never assembled.</b> A prompt is a whole conversation and can be
+    /// large; building one string out of it to hash would double that allocation on every submit, for a
+    /// body the server has already paid to read once. Each part is fed to the hash as it stands.
+    /// (local, code round.)</para>
     /// </remarks>
-    /// <summary>What goes between two parts of a fingerprint, written as an escape on purpose.</summary>
-    /// <remarks>
-    /// A unit separator, and it is <c>\u001f</c> in source rather than the character itself: a control
-    /// character pasted into a file is invisible in a diff, in a review and in every editor that shows it
-    /// as a space. The length prefix beside it is what actually makes the fingerprint unambiguous, so this
-    /// only has to be something a reader can see is deliberate.
-    /// </remarks>
-    private const char Separator = '\u001f';
-
-    public static string Fingerprint(string vendor, string model, string role, string prompt, JobKind kind, int timeoutSeconds)
+    public static string Fingerprint(
+        string email, string vendor, string model, string role, string prompt, JobKind kind, int timeoutSeconds)
     {
-        // Length-prefixed, so `("ab","c")` and `("a","bc")` are two
-        // different fingerprints rather than one. A prompt can contain anything at all, including
-        // whatever separator seemed safe, so the length of each part is written before it.
-        var builder = new StringBuilder();
-        foreach (var part in new[] { vendor, model, role, prompt, JobKinds.Wire(kind), timeoutSeconds.ToString() })
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        foreach (var part in new[]
+                 { email, vendor, model, role, prompt, JobKinds.Wire(kind), timeoutSeconds.ToString() })
         {
-            builder.Append(part.Length).Append(':').Append(part).Append(Separator);
+            // Length-prefixed, so ("ab","c") and ("a","bc") are two fingerprints rather than one. A
+            // prompt can contain ANY text — it is a conversation quoted from somewhere else — so no
+            // separator is safe on its own; the length is what makes it unambiguous.
+            hash.AppendData(Encoding.UTF8.GetBytes($"{part.Length}:"));
+            hash.AppendData(Encoding.UTF8.GetBytes(part));
+            hash.AppendData(Encoding.UTF8.GetBytes(Separator.ToString()));
         }
 
-        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(builder.ToString())));
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 }

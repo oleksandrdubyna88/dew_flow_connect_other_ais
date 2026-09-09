@@ -42,8 +42,8 @@ public sealed class AbandonedJobTests
 
         JobTransitions.IsExpired(job, Now.AddMinutes(3)).Should().BeTrue();
         JobTransitions.ExpiryReason(job, Now.AddMinutes(3))
-            .Should().Contain("nobody asked about this review")
-            .And.Contain("submit it again", "a person needs to know what to do about it");
+            .Should().Contain("nobody asking about it")
+            .And.Contain("send it again", "a person needs to know what to do about it");
     }
 
     [Fact]
@@ -82,14 +82,14 @@ public sealed class AbandonedJobTests
         var stale = Queued(Now);
         var muchLater = Now + JobTransitions.DefaultQueueWait + TimeSpan.FromMinutes(1);
 
-        JobTransitions.ExpiryReason(stale, muchLater).Should().Contain("nobody asked");
+        JobTransitions.ExpiryReason(stale, muchLater).Should().Contain("nobody asking");
     }
 
     [Fact]
     public void APollKeepsAJobAlive()
     {
         var jobs = new JobStore();
-        jobs.Submit(Queued(Now));
+        jobs.Submit(Queued(Now), Now);
 
         // Two and a half minutes in, somebody asks. The clock restarts from there, not from submit.
         jobs.Polled("id", "dev@example.com", Now.AddSeconds(150)).Should().NotBeNull();
@@ -106,14 +106,14 @@ public sealed class AbandonedJobTests
         // dropped — and whether it survived would depend on when the sweep timer last happened to
         // fire, which is not a rule anybody can reason about.
         var jobs = new JobStore();
-        jobs.Submit(Queued(Now));
+        jobs.Submit(Queued(Now), Now);
 
         var answered = jobs.Polled("id", "dev@example.com", Now.AddMinutes(5));
 
         answered.Should().NotBeNull();
         answered!.Status.Should().Be(JobStatus.Failed);
         answered.Failure.Should().Be(FailureKind.Cancelled);
-        answered.Reason.Should().Contain("nobody asked");
+        answered.Reason.Should().Contain("nobody asking");
     }
 
     [Fact]
@@ -123,14 +123,14 @@ public sealed class AbandonedJobTests
         // running, goes on spending against the shared account and goes on holding the slot. The
         // token the runner awaits on is what actually frees it. (codex, plan round.)
         var jobs = new JobStore();
-        jobs.Submit(Queued(Now));
+        jobs.Submit(Queued(Now), Now);
         var claimed = jobs.TryClaim("codex", "a", Now);
         claimed.Should().NotBeNull();
 
         var expired = jobs.Sweep(Now + JobTransitions.RunningAbandonedAfter);
 
         expired.Should().ContainSingle();
-        expired[0].Reason.Should().Contain("nobody asked");
+        expired[0].Reason.Should().Contain("nobody asking");
         claimed!.Value.Token.IsCancellationRequested.Should().BeTrue(
             "the vendor process must be stopped, not merely disowned");
     }
@@ -141,7 +141,7 @@ public sealed class AbandonedJobTests
         // The sweep returns the ENDED records, so the pump logs the sentence the store decided
         // rather than working out a second one that can disagree with it.
         var jobs = new JobStore();
-        jobs.Submit(Queued(Now));
+        jobs.Submit(Queued(Now), Now);
 
         var expired = jobs.Sweep(Now.AddMinutes(3));
 
