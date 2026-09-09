@@ -96,7 +96,14 @@ export function createChatPanel(
     'coaiChat',
     state.title,
     vscode.ViewColumn.Active,
-    { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] },
+    // `enableFindWidget` is the whole of Ctrl+F: the editor's find bar never reaches a webview panel
+    // without it, and an answer long enough to be worth searching is the ordinary case here.
+    {
+      enableScripts: true,
+      retainContextWhenHidden: true,
+      enableFindWidget: true,
+      localResourceRoots: [],
+    },
   );
   panel.webview.html = chatPageHtml(state, crypto.randomBytes(16).toString('hex'));
 

@@ -52,7 +52,9 @@ export function showHelp(): void {
     'coaiHelp',
     'ConnectOtherAIs — Help',
     vscode.ViewColumn.Active,
-    { enableScripts: true, localResourceRoots: [] },
+    // The page has a search box of its own; the find bar is chrome ABOVE the webview and displaces
+    // nothing, and one behaviour everywhere beats a page where Ctrl+F is dead for no visible reason.
+    { enableScripts: true, enableFindWidget: true, localResourceRoots: [] },
   );
   const render = (): void => {
     if (panel !== undefined) {
