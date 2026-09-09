@@ -91,37 +91,18 @@ The answer's LENGTH is the second variable: a stream whose deltas all arrive in 
 fraction of a second spares nobody, and whether that fraction grows with the answer is what
 the decision turns on.`;
 
-/** Options parsed independently of the optional positional vendor, so either order works. */
-function optionsFrom(argv) {
-  const args = argv.slice(2);
-  if (args.includes('--help') || args.includes('-h')) {
-    return { help: true };
-  }
-  const at = args.indexOf('--lines');
-  let lines = 40;
-  if (at >= 0) {
-    const given = args[at + 1] ?? '';
-    if (!/^[0-9]{1,4}$/.test(given) || Number(given) < 1 || Number(given) > 2000) {
-      return { error: `--lines needs a whole number from 1 to 2000, not "${given}"` };
-    }
-    lines = Number(given);
-  }
-  const positional = args.filter((arg, index) => !arg.startsWith('--') && index !== at + 1);
-  const vendor = positional[0] ?? 'all';
-  if (vendor !== 'all' && VENDORS[vendor] === undefined) {
-    return { error: `unknown vendor: ${vendor}` };
-  }
+// The parser lives in `src/` and is unit-tested, because it decides how many real signed-in turns
+// this script spends and importing this file to test it would run a measurement. Its first version
+// read `measure:stream -- agy` as `all` and billed three accounts instead of one.
+const { measureOptionsFrom } = await import(`${OUT}measureStreamArgs.js`);
 
-  return { lines, vendor };
-}
-
-const options = optionsFrom(process.argv);
-if (options.help === true) {
+const options = measureOptionsFrom(process.argv.slice(2), Object.keys(VENDORS));
+if (options.kind === 'help') {
   console.log(USAGE);
   process.exit(0);
 }
-if (options.error !== undefined) {
-  console.error(`${options.error}\n\n${USAGE}`);
+if (options.kind === 'error') {
+  console.error(`${options.message}\n\n${USAGE}`);
   process.exit(2);
 }
 
@@ -530,7 +511,11 @@ async function measure(name, useShell, raw) {
       }
       const run = await runOnce(spec, useShell, beat);
       const seen = classify(run, vendor.adapter);
-      process.stdout.write('\r');
+      if (live) {
+        // Guarded for the same reason the heartbeat is: a carriage return redraws a line for a
+        // person and leaves a stray character in a captured log. (CodeRabbit, on the pull request.)
+        process.stdout.write('\r');
+      }
       console.log(
         `${label} … `
         + (seen.unspawnable
@@ -640,4 +625,8 @@ console.log(
     ? 'SOME RUNS FAILED — a failed run is NOT evidence that a CLI does not stream. Exit 1.'
     : 'every run reached a terminal event and exited 0.',
 );
-process.exit(anyFailed ? 1 : 0);
+// `exitCode`, not `exit()`. This script's whole output is the report, and `process.exit` can end the
+// process before a piped or redirected stdout has drained — which is exactly how it is run when the
+// table is being captured. Setting the code lets node exit on its own once the writes are out.
+// (CodeRabbit, on the pull request.)
+process.exitCode = anyFailed ? 1 : 0;
