@@ -1,11 +1,26 @@
 # PLAN — All three CLIs answer a chat, not just one
 
-> Status: **IMPLEMENTED 2026-09-09.** All three vendors hold a two-turn conversation through this
-> build's own session and adapters, verified live — see *What the build measured* below. Scope: `src_vs_code` — one new seam
-> (`chatAdapter.ts`) plus two implementations beside the one `cliChatSession.ts` already has.
+> Status: **IMPLEMENTED, 2026-09-09.** All three vendor CLIs answer a chat, behind one seam
+> (`chatAdapter.ts`) with three implementations. Verified live through this build's own session:
+> two turns each, the second asking for a number planted in the first, all three kept it.
 >
-> Related docs: [PLAN_chat_with_other_ais.md](PLAN_chat_with_other_ais.md) (the master plan this
-> extends), [research/module_extension.md](../research/module_extension.md).
+> **What shipped differently.** The plan expected two shapes and found a third axis: **who speaks
+> first**. `claude` says nothing at all until it is asked — given an empty stdin it exits without a
+> word — so a session that waits for a ready event spends its whole startup budget and reports a
+> CLI that never started, for one that was working. That is `ChatAdapter.announces`, and phase 0
+> had only half-caught it (it knew `init` came once per TURN; it did not know none comes before
+> one). Two more the plan did not foresee: `spawn` searches neither PATHEXT nor the shell, so a
+> bare `codex` on Windows dies with `ENOENT` at the first turn — `resolvedExecutable` and
+> `LaunchSpec.shell` answer that now; and `codex --json` names its thread, so the resume is by ID
+> rather than by `--last`, which would have made two chat tabs answer each other.
+>
+> **What the gate added over three rounds.** A codex thread id is validated before it can reach an
+> argv that goes through `cmd.exe`; a thread that cannot be resumed is dropped instead of retried
+> for ever; a per-turn exit names its code; and the live check became `npm run test:live`, in the
+> repository rather than in a scratch directory.
+>
+> Scope: `src_vs_code`. Related docs: [../todo/PLAN_chat_with_other_ais.md](../todo/PLAN_chat_with_other_ais.md)
+> (the master plan this extends), [module_extension.md](module_extension.md).
 
 ## Why this plan exists
 

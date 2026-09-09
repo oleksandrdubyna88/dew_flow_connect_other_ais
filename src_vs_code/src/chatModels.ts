@@ -10,14 +10,14 @@ import { Vendor } from './vendors';
  * was not offered, and "was not offered" has to mean the same thing in both places or that check is
  * theatre.</p>
  *
- * <p><b>Only runtimes with an adapter appear, and today that is `antigravity`.</b> Not a preference
- * — a measurement: the NDJSON schema, the ready event and the answer event were established by
- * running `agy` and reading its refusals. `claude` and `codex` were measured on 2026-09-08 and BOTH
- * hold a conversation, but each in its own shape, which is a seam this module does not have yet:
- * [todo/PLAN_three_chat_adapters.md](../../todo/PLAN_three_chat_adapters.md). Until it lands, a row
- * on another runtime is refused BY NAME rather than routed through a protocol it does not speak —
- * `vendor-routing.md` is explicit that a Claude model never goes through `agy`, and silently doing
- * it would be the exact failure that rule was written for.</p>
+ * <p><b>Only runtimes with an ADAPTER appear, and since 2026-09-09 that is all three vendor CLIs.</b>
+ * Each speaks its own shape — two hold a conversation in one process and `codex` resumes a stored
+ * one — and every shape was measured rather than read out of a manual:
+ * [research/PLAN_three_chat_adapters.md](../../research/PLAN_three_chat_adapters.md). What is
+ * refused now is a runtime with no adapter at all — a local OpenAI endpoint, a Team server — and it
+ * is refused BY NAME rather than routed through a protocol it does not speak: `vendor-routing.md`
+ * is explicit that a Claude model never goes through `agy`, and the adapter map keeps that by
+ * choosing the adapter and the executable together.</p>
  */
 
 /** Why a row is not on offer, in words a person can act on. */
