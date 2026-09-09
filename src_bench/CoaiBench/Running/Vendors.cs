@@ -3,6 +3,12 @@ using System.Text.Json.Nodes;
 namespace CoaiBench.Running;
 
 /// <summary>One vendor as the operator has actually configured it.</summary>
+public static class VendorRuntimes
+{
+    /// <summary>The runtime word that means "a Team server answers this", as the panel writes it.</summary>
+    public const string Remote = "remote";
+}
+
 public sealed record VendorConfig(
     string Id,
     string Runtime = "",
@@ -128,9 +134,12 @@ public static class Vendors
                 ["executablePath"] = vendor.ExecutablePath,
                 ["enabled"] = true,
             };
-            // Written only when there IS one, exactly as the panel writes it: a local vendor's row
-            // carries no empty field for a concept that does not apply to it.
-            if (vendor.RemoteVendor.Length > 0)
+            // Written only for a REMOTE row that has one, exactly as the panel writes it. The
+            // length test alone was not enough: `Read` preserves whatever a settings file carries,
+            // so a local row left holding a stale value from when it was remote would have had the
+            // field written back out — the same shape of silent mismatch this whole change exists to
+            // end, pointing the other way. (CodeRabbit, on the pull request.)
+            if (vendor.Runtime == VendorRuntimes.Remote && vendor.RemoteVendor.Length > 0)
             {
                 row["remoteVendor"] = vendor.RemoteVendor;
             }
