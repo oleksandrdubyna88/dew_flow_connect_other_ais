@@ -12,6 +12,7 @@ import {
   OPEN_BY_DEFAULT,
   panelHtml,
   staticKey,
+  withholdsRepaint,
   VSCODE_COMMAND_FOR,
 } from './panelView';
 import { parseSession, SessionFile } from './rounds';
@@ -231,6 +232,23 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   /** The rounds database as last read, and when — a read is a process spawn. */
   private roundsLogCache: DbLog = EMPTY_LOG;
   private roundsLogAt = 0;
+  /**
+   * When a control in the page gained focus, and which one. 0 means none has it.
+   *
+   * <p>What `withholdsRepaint` reads. The page reports both edges, and a transition between two
+   * controls reports neither — the focusout of the one being left arrives before the focusin of the
+   * one being entered.</p>
+   */
+  private editingSince = 0;
+  private editingSetting = '';
+  /**
+   * Every write, in the order the page asked for it.
+   *
+   * <p>`onDidReceiveMessage` used to fire `void this.write(...)` per message, so two writes raced
+   * and a render could read a configuration a write had not finished applying. They queue now, and
+   * `render` awaits the queue.</p>
+   */
+  private queued: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -247,7 +265,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     view.onDidDispose(() => this.held.release(view));
     view.webview.options = { enableScripts: true };
     view.webview.onDidReceiveMessage(
-      (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string; open?: boolean; role?: string; round?: number }) => {
+      (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string; open?: boolean; role?: string; round?: number; setting?: string; editing?: boolean }) => {
         if (m.type === 'section' && m.id !== undefined) {
           this.openSections = m.open === true
             ? [...new Set([...this.openSections, m.id])]
@@ -255,7 +273,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         } else if (m.type === 'prompt' && m.role !== undefined && m.round !== undefined) {
           void this.choosePrompt(m.role, m.round, String(m.value));
         } else if (m.type === 'setting') {
-          void this.write({ key: m.key, value: m.value, vendor: m.vendor, role: m.role });
+          this.enqueue(() => this.write({ key: m.key, value: m.value, vendor: m.vendor, role: m.role }));
+        } else if (m.type === 'focus') {
+          this.editing(m.editing === true, m.setting ?? '');
         } else if (m.type === 'command') {
           void this.run(m.command, m.id);
         }
@@ -457,6 +477,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     if (this.held.view === undefined) {
       return;
     }
+    // Never render from a configuration this panel has not finished writing. Blur fires `change`
+    // and then `focusout`, and the render the release asks for would otherwise overtake the write
+    // it followed and re-stamp the box with the value being replaced — the symptom, reintroduced by
+    // the fix. `queued` never stays rejected; see `enqueue`.
+    await this.queued;
     const config = vscode.workspace.getConfiguration('coai');
     const settings = settingsFrom((section) => config.get(section));
     const vendors = vendorsFrom(this.read(config)('vendors'));
@@ -494,6 +519,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // will never hold them would only invite somebody to add them to it one day and split the
       // one reader in two.
       chat: chatSettingsFrom((key: string) => config.get(key)),
+      // Only while something IS focused — and by the time a paint gets past the hold below, that
+      // means the hold ran out under it. An ordinary paint carries nothing and steals nobody's
+      // focus.
+      focus: this.editingSince > 0 ? this.editingSetting : '',
     };
 
     // Two update paths, and which one runs is the whole fix for the pickers.
@@ -517,7 +546,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
 
     const key = staticKey(state);
-    if (key !== this.paintedKey) {
+    // A third answer, between the two: WITHHOLD. Assigning the html rebuilds the document, and a
+    // document rebuilt under a focused control takes the caret and anything typed since the last
+    // write with it — which is how `поясни` was lost, five times a minute, to probes and version
+    // checks nobody asked for. The key is deliberately NOT recorded while a paint is withheld, so
+    // the next render after focus leaves paints what this one could not.
+    if (key !== this.paintedKey && !withholdsRepaint(this.editingSince, Date.now())) {
       // Guarded as well as null-checked, because disposal can still land between the line above and
       // this one — and recorded only AFTER the paint succeeded. Setting it first was a defect of
       // its own: a disposal here left `paintedKey` claiming this state was painted, so the view VS
@@ -935,6 +969,38 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * the vendor list back unchanged, and `coai.rounds` was never written at all — which read, from
    * the panel, as a number that would not stick.</p>
    */
+  /**
+   * Put one write on the queue, and keep the queue usable whatever it does.
+   *
+   * <p>The work runs on both settle paths of the promise before it, and its own rejection is
+   * swallowed here — a chain left rejected would never write another setting and would take
+   * `render`'s `await` down with it, so a single failed update would freeze the panel for the life
+   * of the window. A failure has already been reported to the person by {@link save}, which is the
+   * only place that knows what could not be written.</p>
+   */
+  private enqueue(work: () => Promise<void>): void {
+    this.queued = this.queued.then(work, work).catch(() => undefined);
+  }
+
+  /**
+   * The page reporting that a control gained or lost focus.
+   *
+   * <p>Losing it renders at once: a paint withheld while the person was typing has been waiting for
+   * exactly this, and `render` awaits the write queue first, so the paint it produces carries what
+   * was typed rather than what it replaced.</p>
+   */
+  private editing(editing: boolean, setting: string): void {
+    if (editing) {
+      this.editingSince = Date.now();
+      this.editingSetting = setting;
+
+      return;
+    }
+    this.editingSince = 0;
+    this.editingSetting = '';
+    void this.render();
+  }
+
   private async write(message: SettingMessage): Promise<void> {
     const write = settingWrite(message);
     if (write === undefined) {
