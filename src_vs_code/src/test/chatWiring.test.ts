@@ -129,3 +129,46 @@ test('a closed tab is forgotten, not merely disposed', () => {
     'closing a tab leaves its conversation in the registry forever',
   );
 });
+
+test('a stop reaches the thread it names, and only while that thread is running', () => {
+  // The guarantee the plan states as "a double press cannot stop the NEXT turn". The session refuses
+  // a stop that names nothing, but the host must refuse one that names the WRONG thing: a bridge
+  // message can be late, and by the time it lands the next turn may already be in flight.
+  const text = read(join('src', 'chatCommand.ts'));
+
+  assert.match(
+    text,
+    /onStop:[\s\S]{0,600}?panels\.entryOf\(id\)/,
+    'a stop is routed by the page id, so it can reach a thread that is not the one that sent it',
+  );
+  assert.match(
+    text,
+    /thread\.running/,
+    'a stop is applied without checking that the thread has a turn to stop',
+  );
+  assert.match(
+    text,
+    /turn !== 0 && turn !== thread\.turn/,
+    'a stop naming a turn other than the running one is not refused',
+  );
+});
+
+test('a stopped turn is written into the transcript before the conversation is carried', () => {
+  // The finding that ordering is load-bearing. The question is appended BEFORE the turn is sent, so a
+  // turn that ends without an answer leaves the transcript ending on a dangling question. Carrying
+  // that into a fresh process hands the next model a question nobody answered and no sign that it was
+  // abandoned — and the turn after it appends a second `you` on top of the first. (gemini, the plan
+  // round, Blocking.)
+  const text = read(join('src', 'chatCommand.ts'));
+
+  assert.match(
+    text,
+    /result\.stopped[\s\S]{0,500}?thread\.messages = \[\.\.\.thread\.messages,/,
+    'a stopped turn leaves the transcript ending on a question nobody answered',
+  );
+  assert.match(
+    text,
+    /result\.stopped === true[\s\S]{0,900}?thread\.carry = \[\.\.\.thread\.messages\]/,
+    'the carry is taken BEFORE the stop is recorded, so it carries the dangling question',
+  );
+});

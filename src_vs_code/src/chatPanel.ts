@@ -43,6 +43,13 @@ export interface ChatPanelHooks {
   readonly onSend: (id: object, text: string) => void;
   /** The person chose a different model — already checked against the offered list. */
   readonly onPick: (id: object, modelId: string) => void;
+  /**
+   * The person stopped the answer they were waiting for.
+   *
+   * <p>`turn` is the turn the page believed was running; `0` means "whichever is". The host checks
+   * it, because this message can land after the turn it names has already finished.</p>
+   */
+  readonly onStop: (id: object, turn: number) => void;
   /** VS Code closed the tab — the registry must forget it and end its session. */
   readonly onClosed: (id: object) => void;
   /** Start again with the same passage. */
@@ -163,6 +170,10 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
       } else {
         hooks.onPageError(id, `that model is not one this conversation offers: ${command.id}`);
       }
+
+      return;
+    case 'stop':
+      hooks.onStop(id, command.turn);
 
       return;
     case 'restart':

@@ -550,3 +550,79 @@ test('a turn that was ACCEPTED leaves no key to reuse', async () => {
   assert.notStrictEqual(submitted[1]?.['idempotencyKey'], submitted[0]?.['idempotencyKey']);
   assert.strictEqual(minted, 2);
 });
+
+/**
+ * Stopping a turn a SERVER is running.
+ *
+ * <p>The remote half has no process to kill and no conversation to lose. What it has is a job on
+ * somebody else's machine, holding a slot on a shared vendor account, and a poll that may be holding
+ * a connection open for another eight seconds. So a stop here is two obligations that pull apart: the
+ * person must see it took AT ONCE, and the server must be told so the slot is freed rather than left
+ * to the drop-on-no-poll sweep three minutes later.</p>
+ */
+
+test('stopping a remote turn settles it at once, without waiting for the poll in flight', async () => {
+  // The finding two reviewers raised independently: a poll holds the connection for up to eight
+  // seconds, and a person who pressed stop is not waiting eight seconds to learn it worked.
+  let releasePoll = (): void => undefined;
+  const held = new Promise<void>((resolve) => {
+    releasePoll = resolve;
+  });
+  const server = fakeServer([{ body: { status: 'queued', position: 2 } }]);
+  const slowPoll: RemoteTransport = {
+    ...server.transport,
+    poll: async (id, waitSeconds) => {
+      server.polls.push({ id, waitSeconds });
+      await held;
+
+      return { body: answered('too late to matter'), failure: '', status: 200 };
+    },
+  };
+  const session = new RemoteChatSession(slowPoll, vendor, BUDGETS, AT_ONCE);
+
+  const answering = session.send('explain this');
+  await new Promise((resolve) => setImmediate(resolve));
+  session.stop();
+
+  const result = await answering;
+  assert.strictEqual(result.ok, false, 'a stopped turn is not an answer');
+  assert.strictEqual(result.ok === false ? result.stopped : undefined, true);
+  assert.deepStrictEqual(server.cancelled, ['review-1'], 'the server must be told, not left to its sweep');
+
+  // And the answer that arrives afterwards is dropped rather than resolving the turn a second time.
+  releasePoll();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.strictEqual(
+    (await answering).ok,
+    false,
+    'a poll landing after a stop must not turn a stopped turn into an answered one',
+  );
+});
+
+test('a remote conversation still works after a turn is stopped', async () => {
+  // `stop` is not `dispose`: the session stays open. A server holds no conversation anyway, so the
+  // only thing that must survive is the session's own ability to submit again.
+  const server = fakeServer([{ body: answered('the second answer') }]);
+  const session = new RemoteChatSession(server.transport, vendor, BUDGETS, AT_ONCE);
+
+  const first = session.send('one');
+  await new Promise((resolve) => setImmediate(resolve));
+  session.stop();
+  await first;
+
+  const second = await session.send('two');
+  assert.deepStrictEqual(second, { ok: true, answer: 'the second answer' });
+  assert.strictEqual(server.submitted.length, 2, 'the session must still be able to ask');
+});
+
+test('a stop with no remote turn running tells the server nothing', async () => {
+  const server = fakeServer([{ body: answered('done') }]);
+  const session = new RemoteChatSession(server.transport, vendor, BUDGETS, AT_ONCE);
+
+  session.stop();
+  assert.deepStrictEqual(server.cancelled, [], 'nothing was running, so nothing should be cancelled');
+
+  await session.send('one');
+  session.stop();
+  assert.deepStrictEqual(server.cancelled, [], 'the turn had finished; a late stop must be a no-op');
+});

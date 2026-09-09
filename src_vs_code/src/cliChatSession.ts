@@ -108,6 +108,18 @@ export class CliChatSession implements ChatSession {
   private contextLost = false;
   private queue: Promise<unknown> = Promise.resolve();
   private disposed = false;
+  /**
+   * How to end the turn that is running now, as a stop. Undefined when none is.
+   *
+   * <p>This IS the turn's identity, and it is a closure rather than a number so that it cannot name
+   * the wrong turn: it is created by the turn it ends and cleared the moment that turn settles by
+   * ANY route — answered, failed, timed out, stopped. A stop arriving one tick late therefore finds
+   * `undefined` and does nothing, and a stop arriving after the NEXT turn has started finds that
+   * turn's own closure. A counter compared by hand would have had to be right in six places; this is
+   * right because there is nowhere else to put it. (codex and gemini, the plan round — "a delayed
+   * stop can terminate the following turn because stop has no turn identity".)</p>
+   */
+  private endTurnAsStopped: (() => void) | undefined;
 
   /**
    * @param start launches the vendor process — injected, so this file spawns nothing itself
@@ -145,6 +157,21 @@ export class CliChatSession implements ChatSession {
     return mine;
   }
 
+  /**
+   * End the turn that is running now; leave the session able to answer the next question.
+   *
+   * <p>The kill is the one `dispose` has always used. What is different is the sequel: `disposed` is
+   * NOT set, so the next `send` starts a process again, and for a vendor that held the conversation
+   * in the killed process the turn reports `contextLost` so its caller re-sends the transcript. For
+   * a per-turn vendor `killChild` leaves the thread id alone and the next turn resumes by it, which
+   * is why this method needs no branch of its own for the two shapes.</p>
+   */
+  stop(): void {
+    // Not guarded on `disposed` separately: a disposed session has already settled its turn, so the
+    // closure is gone and this is the same no-op by the same rule.
+    this.endTurnAsStopped?.();
+  }
+
   dispose(): void {
     this.disposed = true;
     // A start that has not finished is waiting too, and nobody was telling it. Closing a tab used to
@@ -155,7 +182,7 @@ export class CliChatSession implements ChatSession {
     this.waitingForInit = undefined;
     waiting?.(CLOSED);
     this.settle({ ok: false, failure: CLOSED });
-    this.stop();
+    this.killChild();
   }
 
   /** One turn, start to finish, with nothing else in the pipe. */
@@ -177,7 +204,7 @@ export class CliChatSession implements ChatSession {
     if (this.child?.writeLine(line) !== true) {
       // The pipe went between the last event and this write. Not an error to throw: the next send
       // starts a new process, which is what a person pressing Enter again expects to happen.
-      this.stop();
+      this.killChild();
 
       return { ok: false, failure: 'the model’s process had already gone; ask again to start a new one' };
     }
@@ -186,10 +213,18 @@ export class CliChatSession implements ChatSession {
       const cancelBudget = this.timers.after(this.budgets.turnMs, () => {
         // Killed, not merely abandoned: a process that has stopped answering must not be handed the
         // next turn as though nothing happened.
-        this.stop();
+        this.killChild();
         this.settle({ ok: false, failure: this.withRestart('the model did not answer in time') });
       });
       this.pending = { settle: resolve, cancelBudget };
+      this.endTurnAsStopped = (): void => {
+        // The order is the finding: kill FIRST, so `contextLost` is already true when the result is
+        // built, and only then settle. Reversed, the turn would report a conversation it still had
+        // and the caller would carry nothing into a process that heard nothing. (the local reviewer,
+        // the plan round — "the carry mark must be set before the turn resolves".)
+        this.killChild();
+        this.settle(this.stopped());
+      };
     });
   }
 
@@ -237,7 +272,7 @@ export class CliChatSession implements ChatSession {
         // and "installed, and refusing your sign-in". Read BEFORE the kill, which reads better
         // beside it. (local, the plan round.)
         const said = child.stderrTail().trim().slice(-300);
-        this.stop();
+        this.killChild();
         resolve(said.length === 0
           ? 'the model’s process did not start'
           : `the model’s process did not start: ${said}`);
@@ -310,7 +345,7 @@ export class CliChatSession implements ChatSession {
     // Written and then CLOSED: `codex exec -` reads until end of input, so a turn whose stream stays
     // open is a turn that never starts. Measured, and the reason `writeAndEnd` exists at all.
     if (!child.writeAndEnd(this.adapter.encode(text))) {
-      this.stop();
+      this.killChild();
 
       return Promise.resolve({ ok: false, failure: 'the model’s process had already gone; ask again to start a new one' });
     }
@@ -327,13 +362,24 @@ export class CliChatSession implements ChatSession {
           return;
         }
         done = true;
+        // Cleared on EVERY exit from this turn, exactly as `settle` does for the persistent shape:
+        // a stop that arrives after the turn ended must find nothing to end.
+        this.endTurnAsStopped = undefined;
         cancelBudget();
-        this.stop();
+        this.killChild();
         resolve(result);
       };
       const cancelBudget = this.timers.after(this.budgets.turnMs, () => {
         finish({ ok: false, failure: 'the model did not answer in time' });
       });
+      // No `contextLost` here, and that is the inversion this shape is built on: `killChild` marks a
+      // conversation lost only for a PERSISTENT adapter, and the thread id this turn was told lives
+      // on in `this.sessionId`, so the next question resumes the same conversation. Stopping a codex
+      // turn costs the answer and nothing else. (codex, the plan round, asked for this to be proven
+      // rather than asserted — `perTurnSession.test.ts` does.)
+      this.endTurnAsStopped = (): void => {
+        finish({ ok: false, failure: 'you stopped this answer', stopped: true });
+      };
 
       child.onLine((line) => {
         const event = this.adapter.classify(line);
@@ -395,8 +441,27 @@ export class CliChatSession implements ChatSession {
       : failure;
   }
 
-  /** End whatever turn is waiting, once. */
+  /** What a stopped turn on THIS vendor looks like, asked after the process is already gone. */
+  private stopped(): TurnResult {
+    return this.contextLost
+      ? {
+        ok: false,
+        failure: 'you stopped this answer — the next question re-sends the conversation so far',
+        contextLost: true,
+        stopped: true,
+      }
+      : { ok: false, failure: 'you stopped this answer', stopped: true };
+  }
+
+  /**
+   * End whatever turn is waiting, once.
+   *
+   * <p>The single choke point for a persistent turn, which is why the stop closure is cleared here:
+   * every way a turn can end goes through this method, so there is no route that leaves a stale
+   * closure behind for a late stop to find.</p>
+   */
   private settle(result: TurnResult): void {
+    this.endTurnAsStopped = undefined;
     const pending = this.pending;
     if (pending === undefined) {
       return;
@@ -406,8 +471,13 @@ export class CliChatSession implements ChatSession {
     pending.settle(result);
   }
 
-  /** Kill the process and forget it. Idempotent — `dispose` and a budget can both arrive. */
-  private stop(): void {
+  /**
+   * Kill the process and forget it. Idempotent — `dispose` and a budget can both arrive.
+   *
+   * <p>Named for what it does rather than for what asks for it, because a PUBLIC `stop` now exists
+   * beside it and means something narrower: this ends the process, that ends the turn.</p>
+   */
+  private killChild(): void {
     // A killed process takes the conversation with it exactly as a dead one does - the budget that
     // killed it does not make the loss less real, and the next answer must still say so. UNLESS the
     // vendor keeps the conversation itself: a per-turn child exits after every single answer, and

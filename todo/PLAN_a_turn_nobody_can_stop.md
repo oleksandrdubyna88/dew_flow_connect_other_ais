@@ -1,6 +1,11 @@
 # PLAN — a turn nobody can stop
 
-> Status: **plan only, nothing implemented yet.** Kind: **bug** (accepted 2026-09-09). Scope: the
+> Status: **the SEAM half is implemented (2026-09-09, branch `fix/a-turn-nobody-can-stop-seam`); the
+> PAGE half — the Stop button in `chatStatusHtml` — is not yet built.** `ChatSession.stop()` exists on
+> the seam and in both implementations, the three session shapes behave as this plan describes, and
+> `chatCommand.ts` routes a `stop` message to the right thread and refuses one naming a turn that is
+> no longer running. What remains is the button that posts it, which belongs to the chat-page lane
+> because that lane owns `chatPage.ts`. Kind: **bug** (accepted 2026-09-09). Scope: the
 > chat session seam and the page — `src_vs_code/src/chatSession.ts`, `cliChatSession.ts`,
 > `remoteChatSession.ts`, `chatCommand.ts`, `chatPage.ts` (the thinking line only). Origin:
 > [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entry 15.
