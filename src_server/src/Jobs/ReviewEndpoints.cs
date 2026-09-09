@@ -44,56 +44,13 @@ public static class ReviewEndpoints
             }
 
             var now = DateTimeOffset.UtcNow;
-            var budget = TimeSpan.FromSeconds(request.TimeoutSeconds);
-            JobKinds.TryRead(request.Kind, out var kind);
-            var role = request.Role ?? string.Empty;
             var key = request.IdempotencyKey?.Trim() ?? string.Empty;
-            var (job, refused, position) = jobs.Submit(new JobRecord(
-                JobId.New(),
-                caller.Email,
-                request.Vendor,
-                request.Model,
-                role,
-                request.Prompt,
-                JobStatus.Queued,
-                now,
-                now + (queueWait ?? JobTransitions.DefaultQueueWait),
-                budget,
-                kind,
-                IdempotencyKey: key,
-                Fingerprint: key.Length == 0
-                    ? string.Empty
-                    : Idempotency.Fingerprint(
-                        caller.Email, request.Vendor, request.Model, role, request.Prompt, kind,
-                        request.TimeoutSeconds)),
-                now);
+            var (job, refused, position) = jobs.Submit(
+                Accepted(caller, request, key, now, queueWait), now);
 
-            if (refused == SubmitRefusal.KeyUsedForSomethingElse)
+            if (Rejected(ctx, jobs, refused, key) is { } rejection)
             {
-                // 409, not 400: the request is well formed and the key is well formed — what is wrong
-                // is that the two disagree with something the server already accepted. A person needs
-                // to know it was THIS key, because the fix is a new one.
-                return Results.Json(
-                    new ErrorDto(
-                        $"the idempotency key '{key}' was already used for a different request. A repeat "
-                        + "must carry the same vendor, model, role, kind, prompt and timeout; use a new key "
-                        + "for a new question."),
-                    ServerJsonContext.Default.ErrorDto,
-                    statusCode: StatusCodes.Status409Conflict);
-            }
-
-            if (refused == SubmitRefusal.TooManyQueued)
-            {
-                // A queue nobody drains is just a way to hold other people's turn, so the refusal is
-                // a 429 with a time — not a silent accept that never runs.
-                ctx.Response.Headers.RetryAfter = RetryAfterSeconds;
-
-                return Results.Json(
-                    new ErrorDto(
-                        $"you already have {jobs.PerCallerQueued} reviews waiting. They run as accounts "
-                        + "free up; this one was not accepted so it cannot sit behind them."),
-                    ServerJsonContext.Default.ErrorDto,
-                    statusCode: StatusCodes.Status429TooManyRequests);
+                return rejection;
             }
 
             await Task.CompletedTask;
@@ -150,6 +107,80 @@ public static class ReviewEndpoints
                 ? Results.NoContent()
                 : Missing(id, caller.Email, jobs);
         }).RequireCaller(gate);
+    }
+
+    /// <summary>
+    /// The job a well-formed request becomes.
+    /// </summary>
+    /// <remarks>
+    /// Out of the handler because it is a dozen lines of construction and none of it is a decision —
+    /// which is what made the handler read as though it had more branches than it has. (SonarCloud
+    /// S3776: 19 against the 15 this repository allows.)
+    /// </remarks>
+    private static JobRecord Accepted(
+        Caller caller, ReviewRequestDto request, string key, DateTimeOffset now, TimeSpan? queueWait)
+    {
+        // Its shape was checked by `Refusal` before anything reached here, so this cannot fail.
+        JobKinds.TryRead(request.Kind, out var kind);
+        var role = request.Role ?? string.Empty;
+
+        return new JobRecord(
+            JobId.New(),
+            caller.Email,
+            request.Vendor,
+            request.Model,
+            role,
+            request.Prompt,
+            JobStatus.Queued,
+            now,
+            now + (queueWait ?? JobTransitions.DefaultQueueWait),
+            TimeSpan.FromSeconds(request.TimeoutSeconds),
+            kind,
+            IdempotencyKey: key,
+            Fingerprint: key.Length == 0
+                ? string.Empty
+                : Idempotency.Fingerprint(
+                    caller.Email, request.Vendor, request.Model, role, request.Prompt, kind,
+                    request.TimeoutSeconds));
+    }
+
+    /// <summary>
+    /// What the STORE refused, as an answer — or null when it refused nothing.
+    /// </summary>
+    /// <remarks>
+    /// Two refusals, and they are different kinds of wrong. A 409 says the request is well formed and
+    /// so is the key: what disagrees is the two of them against something this server already
+    /// accepted, and the fix is a new key, so the message names the one that collided. A 429 says the
+    /// person is holding as many waiting reviews as they may, and it carries a time — a queue nobody
+    /// drains is just a way to hold other people's turn, and a silent accept that never runs is worse
+    /// than being told.
+    /// </remarks>
+    private static IResult? Rejected(HttpContext ctx, JobStore jobs, SubmitRefusal refused, string key)
+    {
+        if (refused == SubmitRefusal.KeyUsedForSomethingElse)
+        {
+            return Results.Json(
+                new ErrorDto(
+                    $"the idempotency key '{key}' was already used for a different request. A repeat "
+                    + "must carry the same vendor, model, role, kind, prompt and timeout; use a new key "
+                    + "for a new question."),
+                ServerJsonContext.Default.ErrorDto,
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        if (refused == SubmitRefusal.TooManyQueued)
+        {
+            ctx.Response.Headers.RetryAfter = RetryAfterSeconds;
+
+            return Results.Json(
+                new ErrorDto(
+                    $"you already have {jobs.PerCallerQueued} reviews waiting. They run as accounts "
+                    + "free up; this one was not accepted so it cannot sit behind them."),
+                ServerJsonContext.Default.ErrorDto,
+                statusCode: StatusCodes.Status429TooManyRequests);
+        }
+
+        return null;
     }
 
     /// <summary>Why this submission cannot be accepted, or null.</summary>
