@@ -111,34 +111,39 @@ public sealed class UsageReader(string dataDir)
         try
         {
             var entry = JsonSerializer.Deserialize(text, ServerJsonContext.Default.UsageEntryDto);
+            if (entry is null)
+            {
+                return null;
+            }
 
             // Invariant culture and RoundtripKind: the writer stamps ISO-8601 with "O", and parsing
             // that with the machine's own culture is how the same file reads differently on a
             // developer's box and on the VM. RoundtripKind keeps the offset instead of shifting it
             // into local time.
-            return entry is null
-                || !DateTimeOffset.TryParse(
-                    entry.Utc,
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.RoundtripKind,
-                    out var at)
-                ? null
-                : new UsageLine(
-                    at.ToUniversalTime(),
-                    entry.Email ?? string.Empty,
-                    entry.Provider ?? string.Empty,
-                    entry.Model ?? string.Empty,
-                    entry.Role ?? string.Empty,
-                    entry.Outcome ?? string.Empty,
-                    entry.Seconds,
-                    entry.TokensIn,
-                    entry.TokensOut,
-                    entry.CostUsd,
-                    // A kind this build does not know is READ AS A REVIEW rather than refused. The
-                    // line is history: it already happened and it already cost money, and dropping
-                    // it from a spending report because a newer server wrote a word this one has not
-                    // heard would hide spending — which is the one thing this file must never do.
-                    JobKinds.TryRead(entry.Kind, out var kind) ? kind : JobKinds.WhenNotSaid);
+            if (!DateTimeOffset.TryParse(
+                    entry.Utc, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var at))
+            {
+                return null;
+            }
+
+            // A kind this build does not know is READ AS A REVIEW rather than refused. The line is
+            // history: it already happened and it already cost money, and dropping it from a spending
+            // report because a newer server wrote a word this one has not heard would hide spending —
+            // which is the one thing this file must never do.
+            var kind = JobKinds.TryRead(entry.Kind, out var said) ? said : JobKinds.WhenNotSaid;
+
+            return new UsageLine(
+                at.ToUniversalTime(),
+                entry.Email ?? string.Empty,
+                entry.Provider ?? string.Empty,
+                entry.Model ?? string.Empty,
+                entry.Role ?? string.Empty,
+                entry.Outcome ?? string.Empty,
+                entry.Seconds,
+                entry.TokensIn,
+                entry.TokensOut,
+                entry.CostUsd,
+                kind);
         }
         catch (JsonException)
         {

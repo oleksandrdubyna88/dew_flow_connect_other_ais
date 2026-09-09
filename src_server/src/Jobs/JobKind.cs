@@ -57,29 +57,28 @@ public static class JobKinds
     /// </remarks>
     public static bool TryRead(string? said, out JobKind kind)
     {
-        kind = WhenNotSaid;
-        if (string.IsNullOrWhiteSpace(said))
-        {
-            return true;
-        }
+        var found = Named(said);
+        kind = found ?? WhenNotSaid;
 
-        // The NAMES, matched explicitly. `Enum.TryParse` also accepts the underlying numbers, so
-        // `kind: "1"` would have arrived as a chat and `kind: "0"` as a review — values no contract
-        // mentions, from a caller who cannot have meant them, deciding what a spending row says.
-        // (codex, code round.)
-        var named = said.Trim();
-        foreach (var known in Enum.GetValues<JobKind>())
-        {
-            if (Wire(known).Equals(named, StringComparison.OrdinalIgnoreCase))
-            {
-                kind = known;
-
-                return true;
-            }
-        }
-
-        return false;
+        return found is not null || string.IsNullOrWhiteSpace(said);
     }
+
+    /// <summary>The kind spelled by this name, or null when no kind is spelled that way.</summary>
+    /// <remarks>
+    /// The NAMES, matched explicitly. <c>Enum.TryParse</c> also accepts the underlying numbers, so
+    /// <c>kind: "1"</c> would have arrived as a chat and <c>kind: "0"</c> as a review — values no
+    /// contract mentions, from a caller who cannot have meant them, deciding what a spending row
+    /// says. (codex, code round.)
+    /// <para>Its own function because <see cref="TryRead"/> has an <c>out</c> parameter, which cannot
+    /// be assigned from inside a lambda; returning a nullable instead is what lets the search be one
+    /// expression rather than a loop. (SonarCloud S3267.)</para>
+    /// </remarks>
+    private static JobKind? Named(string? said) =>
+        string.IsNullOrWhiteSpace(said)
+            ? null
+            : Enum.GetValues<JobKind>()
+                .Cast<JobKind?>()
+                .FirstOrDefault(k => Wire(k!.Value).Equals(said.Trim(), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Whether the caller said anything at all about what this job is.</summary>
     public static bool WasSaid(string? said) => !string.IsNullOrWhiteSpace(said);

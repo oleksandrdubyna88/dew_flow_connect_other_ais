@@ -57,7 +57,13 @@ public sealed class JobPump(
             // The store's own sentence, not a second one worked out here. It has already decided
             // WHICH clock ran out — an abandoned job and a timed-out one read very differently, and
             // recomputing after the record went terminal would have got the answer wrong.
-            log.LogInformation("job {Id} for {Email} {Reason}", job.Id, job.Email, job.Reason);
+            //
+            // Guarded, because the arguments are not constants and a sweep on a busy server walks
+            // every expired job to build them for a sink that may be discarding them. (CA1873.)
+            if (log.IsEnabled(LogLevel.Information))
+            {
+                log.LogInformation("job {Id} for {Email} {Reason}", job.Id, job.Email, job.Reason);
+            }
         }
     }
 

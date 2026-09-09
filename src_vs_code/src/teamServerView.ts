@@ -135,9 +135,20 @@ export function kindLine(
   return `<div class="hint">${parts.join(' &middot; ')}</div>`;
 }
 
-/** What a kind is called on a page a person reads, rather than on the wire. */
+/**
+ * What a kind is called on a page a person reads, rather than on the wire.
+ *
+ * <p>A table, so a kind this build has not heard of falls through to its own name rather than to a
+ * branch somebody has to trace. The server may know one this panel does not — that is the ordinary
+ * state of a fleet — and showing what it said is better than showing nothing.</p>
+ */
+const KIND_NAMES: Readonly<Record<string, string>> = {
+  chat: 'conversations',
+  review: 'reviews',
+};
+
 function named(kind: string): string {
-  return kind === 'chat' ? 'conversations' : kind === 'review' ? 'reviews' : kind;
+  return KIND_NAMES[kind] ?? kind;
 }
 
 /**
