@@ -61,6 +61,25 @@ public sealed record ReviewerSettings(string Provider)
     /// answering as "slower than the deadline", which was true and useless.
     /// </remarks>
     public int MaxTokens { get; init; } = 8192;
+
+    /// <summary>
+    /// This reviewer was handed everything in its prompt and may reach nothing else.
+    /// </summary>
+    /// <remarks>
+    /// <para>False by default, because the local code round is the opposite case: its reviewer is
+    /// given a read-only worktree pinned to the branch's commit precisely so it can check the diff
+    /// against the code around it, and a reviewer that cannot read is a worse reviewer there.</para>
+    /// <para>True is the Team server's case. Its job runs in an empty temporary directory, the diff
+    /// is already inside the prompt, and the box holds every other slot's sign-in on the same disk
+    /// under the same user — so a tool that reads a file or runs a command is not one the review
+    /// needs, and it is a way for a prompt to have another account's credentials quoted back to its
+    /// author (finding 1 of the product audit of 2026-09-09). The adapters read it:
+    /// <see cref="ClaudeRuntime"/> asks the CLI to deny every file, shell, web and sub-agent tool.
+    /// Codex and antigravity take no new flag, because <c>-s read-only</c> and <c>--mode plan</c> are
+    /// already the strongest sandboxes those CLIs offer; what they leave open — reads — is the
+    /// operating system's to bound, and <c>PLAN_team_server_unprivileged.md</c> owns that.</para>
+    /// </remarks>
+    public bool Confined { get; init; }
 }
 
 /// <summary>One reviewer launch, fully described: the process, and where its answer lands.</summary>

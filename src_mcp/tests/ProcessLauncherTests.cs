@@ -15,7 +15,13 @@ namespace CoaiMcp.Tests;
 /// <para>The child is the suite's own <c>FakeCli</c>, for the reason
 /// <see cref="FakeCliInvocations"/> gives — one process rather than <c>dotnet FakeCli.dll</c>'s
 /// two, so a killed timeout leaves nothing behind.</para>
+/// <para>In the <c>fakecli-env</c> collection because it LAUNCHES the fake CLI, whose behaviour is
+/// steered by process-wide environment variables that other classes set and clear. A verb this
+/// class passes in argv is only read when <c>FAKECLI_MODE</c> is unset, so running beside a class
+/// that sets it is a race with nothing holding it off — and the environment tests below print
+/// nothing at all when they lose it.</para>
 /// </remarks>
+[Collection("fakecli-env")]
 public sealed class ProcessLauncherTests
 {
     /// <summary>Bigger than any pipe buffer on any platform here, so the write MUST block.</summary>
@@ -53,8 +59,61 @@ public sealed class ProcessLauncherTests
     /// <summary>An exit code no runtime produces by accident, so seeing it back means the CHILD chose it.</summary>
     private const string RefusesWithCode = "7";
 
+    /// <summary>The variable a confined launch is handed on the request itself, and must still see.</summary>
+    private const string HandedOver = "COAI_HANDED_OVER";
+
     private static ProcessRequest Request(params string[] args) =>
         new(FakeCliInvocations.Exe, args, AppContext.BaseDirectory);
+
+    [Fact]
+    public async Task AConfinedChildDoesNotInheritTheParentsEnvironment()
+    {
+        // The allowlist, observed on a process rather than asserted on a dictionary: `env-names`
+        // prints every variable NAME the child was actually started with. The canary stands for the
+        // server's own configuration, which on the Team server is in every reviewer's environment
+        // today; PATH and HOME stand for what a CLI cannot start without; the handed-over name is
+        // the caller's own variable, applied last as before.
+        using var canary = new Canary();
+        var request = Request("env-names") with
+        {
+            InheritsEnvironment = false,
+            Environment = HandedOverVariables(),
+            Timeout = NoBudgetPressure,
+        };
+
+        var result = await new ProcessLauncher().RunAsync(request, TestContext.Current.CancellationToken);
+
+        result.ExitCode.Should().Be(0,
+            "a child must still be able to START on the allowlist alone; it said: {0}", result.StdErr);
+        var names = Names(result.StdOut);
+        names.Should().NotContain(canary.Name,
+            "nothing the parent did not choose to hand over may cross into a process running somebody else's prompt");
+        names.Should().Contain(name => IsThePlatformsSpellingOf(name, "PATH"),
+            "the CLI is found through it and starts its own children through it");
+        names.Should().Contain(HandedOver, "the request's own variables are applied on top, exactly as before");
+        if (!OperatingSystem.IsWindows())
+        {
+            names.Should().Contain("HOME",
+                "a Node runtime with no HOME fails in initialisation, before it reads a prompt (gemini, plan round)");
+        }
+    }
+
+    [Fact]
+    public async Task AnUnconfinedChildInheritsEverythingAsBefore()
+    {
+        // The positive companion, for the same reason the read-everything test below exists: a
+        // launcher that handed a child nothing at all would pass the negative test above. And it is
+        // the local coai-mcp's contract — the developer's own CLIs in the developer's own
+        // environment, sign-ins and proxies included — which this change must not move.
+        using var canary = new Canary();
+        var request = Request("env-names") with { Timeout = NoBudgetPressure };
+
+        var result = await new ProcessLauncher().RunAsync(request, TestContext.Current.CancellationToken);
+
+        result.ExitCode.Should().Be(0);
+        Names(result.StdOut).Should().Contain(canary.Name,
+            "the default is the parent's whole environment, and nothing that already calls the launcher asked for less");
+    }
 
     [Fact]
     public async Task AChildThatNeverReadsItsStdinIsStillKilledOnTime()
@@ -184,5 +243,48 @@ public sealed class ProcessLauncherTests
 
         result.StdOut.Should().Be("a perfectly ordinary answer");
         result.Truncated.Should().BeFalse();
+    }
+
+    /// <summary>What the confined launch is handed on the request itself.</summary>
+    /// <remarks>
+    /// The child is a .NET apphost, and on a machine where the runtime was installed by hand it is
+    /// found through <c>DOTNET_ROOT</c> — the test's own plumbing rather than anything about the
+    /// launcher, so it rides the request like any caller's variable and is not a name asserted on.
+    /// </remarks>
+    private static Dictionary<string, string?> HandedOverVariables()
+    {
+        var handed = new Dictionary<string, string?> { [HandedOver] = "yes" };
+        if (Environment.GetEnvironmentVariable("DOTNET_ROOT") is { Length: > 0 } dotnetRoot)
+        {
+            handed["DOTNET_ROOT"] = dotnetRoot;
+        }
+
+        return handed;
+    }
+
+    /// <summary>One name per line is what <c>env-names</c> prints; Windows ends its lines in CR LF.</summary>
+    private static IReadOnlyList<string> Names(string stdout) =>
+        stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line.TrimEnd('\r')).ToList();
+
+    /// <summary>
+    /// Windows prints the variable as <c>Path</c> and resolves it case-insensitively; Linux prints
+    /// <c>PATH</c> and would keep a <c>path</c> apart. The assertion follows the platform, so that a
+    /// Linux <c>path</c> could never pass for the one the CLI is found through.
+    /// </summary>
+    private static bool IsThePlatformsSpellingOf(string name, string expected) =>
+        string.Equals(name, expected,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    /// <summary>
+    /// A variable that exists in THIS process for one test and is gone when the test is — the suite
+    /// shares a process, so a canary left behind is a canary the next launch inherits.
+    /// </summary>
+    private sealed class Canary : IDisposable
+    {
+        public string Name { get; } = $"COAI_CANARY_{Guid.NewGuid():N}";
+
+        public Canary() => Environment.SetEnvironmentVariable(Name, "the parent's own configuration");
+
+        public void Dispose() => Environment.SetEnvironmentVariable(Name, null);
     }
 }
