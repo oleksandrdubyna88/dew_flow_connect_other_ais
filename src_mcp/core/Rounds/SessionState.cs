@@ -165,17 +165,6 @@ public enum Stage
     Done,
 }
 
-/// <summary>
-/// How many reviewers were asked, how many answered — and who was never asked at all.
-/// </summary>
-/// <param name="Excluded">
-/// Reviewers the operator ENABLED for this stage that the round could not run, each as
-/// <c>name: reason</c>. Empty on almost every round, and the reason it exists is the one where it is
-/// not: a reviewer that is asked and fails has always been reported honestly, and one that never
-/// entered the roster was reported by nothing at all. On 2026-09-07 that made a Team-server reviewer
-/// invisible for a day — the log said "4 enabled" and "3 reviewer(s)" eleven seconds apart, and the
-/// verdict said "all 3 reviewers answered", which was true about what it asked.
-/// </param>
 /// <summary>A role the round decided not to ask for, and why.</summary>
 /// <remarks>
 /// <para>Structured rather than a finished sentence, which the plan round asked for: a caller parsing
@@ -189,6 +178,17 @@ public enum Stage
 /// </remarks>
 public sealed record SkippedRole(string Role, string Reason);
 
+/// <summary>
+/// How many reviewers were asked, how many answered — and who was never asked at all.
+/// </summary>
+/// <param name="Excluded">
+/// Reviewers the operator ENABLED for this stage that the round could not run, each as
+/// <c>name: reason</c>. Empty on almost every round, and the reason it exists is the one where it is
+/// not: a reviewer that is asked and fails has always been reported honestly, and one that never
+/// entered the roster was reported by nothing at all. On 2026-09-07 that made a Team-server reviewer
+/// invisible for a day — the log said "4 enabled" and "3 reviewer(s)" eleven seconds apart, and the
+/// verdict said "all 3 reviewers answered", which was true about what it asked.
+/// </param>
 public sealed record ReviewerSummary(
     int Asked,
     int Answered,

@@ -445,7 +445,25 @@ not asked*, never *could not run*.
 The list is DERIVED from the difference between the scheduled roles and the ones that survived the
 filter, so the sentence a caller reads and the roles a round actually ran cannot disagree; and the
 reason is one `const` that both the log line and the clause are built from, so one decision cannot
-come to be described in two ways. `StageRun.MakeWork` returns `RoundWork(Reviewers, NotAsked)` rather
+come to be described in two ways.
+
+**Each omitted role carries the reason ITS OWN rule gave it**, and that is the code round's finding.
+Mapping the difference onto a single reason works while there is one rule and tells the caller the
+wrong thing with complete confidence the day there are two: a role dropped for some future cause
+would be reported as having no rules to judge against. `RolesNotAsked` sits beside
+`RolesWithRulesInMind` for that reason — a second rule adds a reason there, next to the filter that
+produces it, rather than inheriting one from a mapping somewhere else.
+
+**And a round whose whole roster was filtered out says so in its refusal.** That path returns before
+any summary exists, so it would otherwise be refused with a sentence about vendors — sending somebody
+to check a configuration that is perfectly correct. Raised twice on the code round.
+
+**The role travels as a string, and that is the ring, not laziness.** Three reviewers asked for
+`ReviewRole` instead, quoting the rule against primitive obsession. `ReviewRole` lives in
+`CoaiMcp.Runners`; `ReviewerSummary` lives in `CoaiMcp.Core`, which references NOTHING — that purity
+is itself held by a test. `Failures` carries `provider/Role: reason` as a string for the same reason,
+and moving the enum across the ring to type one field would be a larger change than this one, in the
+opposite direction to the architecture. `StageRun.MakeWork` returns `RoundWork(Reviewers, NotAsked)` rather
 than a bare list, because the decision is made where the roles are chosen and the sentence is written
 where the round ends, and nothing carried the fact across that gap before.
 
