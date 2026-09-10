@@ -41,7 +41,7 @@
 >
 > **The open tail:** copy during a streamed answer. Turns are append-only so an index is stable
 > today, but a partial answer becomes copyable mid-flight the moment streaming lands — recorded as a
-> DoD item on [../todo/PLAN_an_answer_as_it_arrives.md](../todo/PLAN_an_answer_as_it_arrives.md).
+> DoD item on [../todo/PLAN_an_answer_as_it_arrives.md](PLAN_an_answer_as_it_arrives.md).
 
 ## The goal
 
