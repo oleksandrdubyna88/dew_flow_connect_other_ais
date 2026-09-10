@@ -237,6 +237,14 @@ public sealed class EndToEndTests : IAsyncLifetime
         var code = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope));
         code.GetProperty("verdict").GetString().Should().Be("proceed");
         code.GetProperty("reviewers").GetString().Should().Contain("all 6 reviewers answered", "3 roles x 2 providers");
+        // And WHY it is three roles and not four. This fixture repository has no written rules, so
+        // the Conventions reviewers are dropped — correctly, because a conventions pass with nothing
+        // to judge against would invent a standard — and until now that was said only in the server's
+        // own log. The AI that called the gate got a thinner round and no sentence at all.
+        code.GetProperty("reviewers").GetString().Should()
+            .Contain("Conventions was not asked")
+            .And.Contain("no written rules")
+            .And.NotContain("could not run", "a decision this gate made must not read as a failure");
         Parse(await service.ResolveAsync(_repo, "feature", "[]")).GetProperty("stage").GetString().Should().Be("Done");
 
         // The trail replays the whole story.
@@ -263,6 +271,11 @@ public sealed class EndToEndTests : IAsyncLifetime
 
         code.GetProperty("verdict").GetString().Should().Be("call_human");
         code.GetProperty("reviewers").GetString().Should().Contain("0 of 6").And.Contain("rate limited");
+        // A round can fail AND have skipped a role, and the failure must not swallow the skip: an
+        // implementation that built the sentence only for the happy path would still pass the check
+        // above while this reader — the one whose round went wrong — learned nothing about the
+        // fourth role. (codex, the plan round.)
+        code.GetProperty("reviewers").GetString().Should().Contain("Conventions was not asked");
         code.GetProperty("instruction").GetString().Should().Contain("do not proceed on your own");
     }
 

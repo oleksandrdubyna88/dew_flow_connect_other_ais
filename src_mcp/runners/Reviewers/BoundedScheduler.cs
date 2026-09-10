@@ -456,16 +456,23 @@ public static class ReviewerSummaryFactory
     /// empty is the ordinary case — but a round that leaves one out and says nothing is how a
     /// Team-server reviewer stayed invisible for a day.
     /// </param>
+    /// <param name="notAsked">
+    /// Roles the round decided not to ask for at all, each with its reason. Empty on almost every
+    /// round; the one where it is not is a repository with no written rules, whose Conventions
+    /// reviewers are dropped correctly and used to be mentioned only in the server's own log.
+    /// </param>
     public static ReviewerSummary From(
         IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results,
-        IReadOnlyList<string>? excluded = null) =>
+        IReadOnlyList<string>? excluded = null,
+        IReadOnlyList<SkippedRole>? notAsked = null) =>
         new(
             results.Count,
             results.Count(r => r.Outcome is ReviewerOutcome.Ok),
             [.. results
                 .Where(r => r.Outcome is not ReviewerOutcome.Ok)
                 .Select(r => $"{r.Invocation.Provider}/{r.Invocation.Role}: {Describe(r.Outcome)}")],
-            [.. excluded ?? []]);
+            [.. excluded ?? []],
+            [.. notAsked ?? []]);
 
     public static string Describe(ReviewerOutcome outcome) => outcome switch
     {

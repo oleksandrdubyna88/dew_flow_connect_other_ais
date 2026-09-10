@@ -172,4 +172,66 @@ public sealed class ConventionsPassTests
         PromptCatalog.ForRound(PromptCatalog.PlanRole, 1, NoChoice)
             .Id.Should().Be("plan-critique");
     }
+
+    /// <remarks>
+    /// The open tail of the conventions-is-its-own-role plan. A round in a repository with no written
+    /// rules drops its Conventions reviewers — correctly, because a conventions pass with nothing to
+    /// judge against would invent a standard — and the ONLY place that was said was the server's own
+    /// log. The AI that called the gate was handed a thinner round and no sentence saying why.
+    /// </remarks>
+    [Fact]
+    public void ARoundThatSkippedARole_SaysSoToTheCaller()
+    {
+        var summary = ReviewerSummary.AllAnswered(3) with
+        {
+            NotAsked = [new SkippedRole("Conventions", "this repository has no written rules for it to judge against")],
+        };
+
+        summary.Sentence.Should().Contain("Conventions")
+            .And.Contain("not asked")
+            .And.Contain("no written rules");
+    }
+
+    [Fact]
+    public void ASkippedRole_DoesNotReadAsAFailure()
+    {
+        // A reviewer that could not run is a problem; a role nobody asked for is a decision. Reported
+        // in the same words, a correct round reads as a degraded one.
+        var summary = ReviewerSummary.AllAnswered(3) with
+        {
+            NotAsked = [new SkippedRole("Conventions", "this repository has no written rules for it to judge against")],
+        };
+
+        summary.Sentence.Should().StartWith("all 3 reviewers answered");
+        summary.Sentence.Should().NotContain("could not run");
+        summary.Sentence.Should().NotContain("failed");
+    }
+
+    [Fact]
+    public void ARoundThatSkippedNothing_ReadsExactlyAsItAlwaysDid()
+    {
+        // This file's own rule, as an assertion: an addition for the rare round must not change the
+        // sentence of every ordinary one.
+        ReviewerSummary.AllAnswered(4).Sentence.Should().Be("all 4 reviewers answered");
+        new ReviewerSummary(4, 3, ["codex/Architecture: timeout"]).Sentence
+            .Should().Be("4 reviewers answered; failed: codex/Architecture: timeout".Replace("4 reviewers", "3 of 4 reviewers"));
+    }
+
+    [Fact]
+    public void EveryClauseAtOnce_KeepsItsOrder_WithTheSkipLast()
+    {
+        // A deadline explains the failures, the failures explain the count, and what was never asked
+        // for is last because it is the only one of the three that is not a problem.
+        var summary = new ReviewerSummary(4, 2, ["codex/Architecture: timeout"], ["gemini/Conventions: no key"])
+        {
+            EndedByDeadline = TimeSpan.FromMinutes(10),
+            NotAsked = [new SkippedRole("Conventions", "this repository has no written rules for it to judge against")],
+        };
+
+        summary.Sentence.Should().Be(
+            "2 of 4 reviewers answered; failed: codex/Architecture: timeout; "
+            + "the round reached its 10 minute limit and the reviewers still running were cancelled; "
+            + "1 enabled reviewer could not run: gemini/Conventions: no key; "
+            + "Conventions was not asked: this repository has no written rules for it to judge against");
+    }
 }
