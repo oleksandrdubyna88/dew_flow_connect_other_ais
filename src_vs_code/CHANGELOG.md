@@ -6,6 +6,30 @@
 rules layout and still warns about an older local snippet. Distributed gate text is built
 from the pinned canonical source; an interrupted generation recovers on the next build.
 
+## Extension 0.31.22 · Server 0.18.16 — 2026-09-10
+
+> This one carries **0.31.19, 0.31.20 and 0.31.21 as well**. Those three were written down and
+> versioned but never tagged, so nobody outside this repository ever received them — Ctrl+F in the
+> three webviews, the sidebar prompt that stays typed, and the chat tab's own icon are all in this
+> release, and their sections below are kept as they were written rather than folded in here.
+
+**A code round reviews what your branch changed, not what `main` did while you worked.** The diff
+went to the reviewers against the TIP of the base branch, so anything merged after you branched
+arrived as something YOUR branch had deleted. Measured on 2026-09-08: two vendors independently filed
+the same Blocking finding saying a release branch had deleted three source files and reverted the
+extension a version — none of it true, the branch had not touched them — and three of that round's 24
+gating findings were about work somebody else had merged, in a round that had cost 932k input tokens.
+It is a merge-base diff now, so a busy repository stops turning other people's commits into your
+phantom deletions.
+
+**A round that reviewed less than it was asked to says so, to the AI that asked.** A code round in a
+repository with no written rules drops its *Conventions* reviewers, which is right — a conventions
+pass with nothing to judge against invents a standard. It used to say that only in the server's own
+log: the caller got a shorter round and no sentence explaining it. The reason travels back now, and
+it is worded as a statement rather than a failure. Each omitted role carries its OWN reason, derived
+from the rule that dropped it, so a filter added later cannot make the gate say the wrong thing with
+complete confidence.
+
 **A conversation says what it has cost.** Beside the model picker, updated as answers arrive — which
 is where you decide whether to ask again or start fresh, and that decision is the one the number is
 for: each question carries the whole conversation with it, so it is billed for the ones before it. A
