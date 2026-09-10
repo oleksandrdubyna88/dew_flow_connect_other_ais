@@ -67,6 +67,14 @@ jobs:
       #     Test code and tooling, which is what `**/tests/**` already does for the .NET half.
       #     Without it a pull request that adds a test suite fails the 80 % new-code coverage gate
       #     for having added tests.
+      #
+      #   both lists            + .claude/hooks/**
+      #     The Claude host adapter, which exists to run `git rev-parse` and then the pinned
+      #     resolver — the developer's toolchain again, so S4036 fires for the same reason and can
+      #     never be satisfied for the same reason. Same caveat as above: real defects there are no
+      #     longer looked for either, and what guards it instead is
+      #     `src_vs_code/src/test/claudeAdapter.test.mjs`, which runs the hook and asserts what it
+      #     emits — including the case where the submodule is missing.
       - name: Begin
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -77,8 +85,8 @@ jobs:
             /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.cs.vscoveragexml.reportsPaths="coverage/*.xml"             /d:sonar.javascript.lcov.reportPaths="coverage/extension.lcov"             /d:sonar.typescript.lcov.reportPaths="coverage/extension.lcov" \
-            /d:sonar.exclusions="**/bin/**,**/obj/**,artifacts/**,**/node_modules/**,src_mcp/tests_fakecli/**,src_vs_code/scripts/**" \
-            /d:sonar.coverage.exclusions="**/tests/**,**/*.Tests/**,src_mcp/tests_fakecli/**,http/**,src_vs_code/src/test/**,src_vs_code/scripts/**"
+            /d:sonar.exclusions="**/bin/**,**/obj/**,artifacts/**,**/node_modules/**,src_mcp/tests_fakecli/**,src_vs_code/scripts/**,.claude/hooks/**" \
+            /d:sonar.coverage.exclusions="**/tests/**,**/*.Tests/**,src_mcp/tests_fakecli/**,http/**,src_vs_code/src/test/**,src_vs_code/scripts/**,.claude/hooks/**"
       - name: Build
         run: dotnet build dew_flow_connect_other_ais.slnx -c Release --no-incremental
       - name: Test with coverage

@@ -76,9 +76,16 @@ test('the hook emits every always-rule, from the pinned canonical source', (t) =
     cwd: root, encoding: 'utf8', timeout: 120_000, maxBuffer: 8 * 1024 * 1024, windowsHide: true,
   });
 
+  // Matched as a literal line rather than through a pattern built from the id. Escaping a string
+  // into a regex is a thing to get subtly wrong — CodeQL said so about the first version of this
+  // line, and it was right in general even though these ids are a constant list — and `startsWith`
+  // cannot be got wrong at all.
+  const opened = emitted.split('\n').map((line) => line.trimEnd());
   for (const id of ALWAYS) {
-    assert.match(emitted, new RegExp(`^BEGIN RULE ${id.replace(/\./g, '\\.')} sha256:`, 'm'),
-      `${id} did not reach the session`);
+    assert.ok(
+      opened.some((line) => line.startsWith(`BEGIN RULE ${id} sha256:`)),
+      `${id} did not reach the session`,
+    );
   }
   assert.match(emitted, /rules\.mjs explain/,
     'the hook must still send the reader to explain/read for the rules its neutral task cannot select');
