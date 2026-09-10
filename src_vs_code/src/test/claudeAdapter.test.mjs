@@ -40,14 +40,19 @@ test('the session-start hook is wired, and points at a file that exists', () => 
   // an argument, addressed through ${CLAUDE_PROJECT_DIR}. A relative path was the first version and
   // CodeRabbit was right about it — a session started outside the project root would have failed to
   // find the file, and the hook's own careful degradation cannot run when node cannot load it.
-  const commands = (settings.hooks?.SessionStart ?? [])
+  const declared = (settings.hooks?.SessionStart ?? [])
     .flatMap((entry) => entry.hooks ?? [])
-    .map((hook) => [hook.command ?? '', ...(hook.args ?? [])].join(' '));
+    .filter((hook) => hook.type === 'command');
+  const wired = declared.find((hook) => hook.command === 'node');
 
-  assert.ok(
-    commands.some((command) => command.includes(`\${CLAUDE_PROJECT_DIR}/${HOOK}`)),
-    `no SessionStart hook runs ${HOOK} by an absolute path — a session started outside the project `
-      + 'root would not find it, and one started inside would get 561 bytes of instructions',
+  // The exact contract, not a substring of it. A substring match would accept a different command,
+  // or the right one with extra arguments appended — and the whole point of exec form is that what
+  // runs is exactly this and nothing a shell got to reinterpret.
+  assert.deepEqual(
+    { command: wired?.command, args: wired?.args },
+    { command: 'node', args: [`\${CLAUDE_PROJECT_DIR}/${HOOK}`] },
+    `no SessionStart hook runs ${HOOK} by an absolute path in exec form — a session started outside `
+      + 'the project root would not find it, and one started inside would get 561 bytes of instructions',
   );
   assert.ok(fs.existsSync(path.join(root, HOOK)), `${HOOK} is wired but missing`);
 });
