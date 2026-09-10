@@ -159,7 +159,7 @@ Fifteen reviewers across a plan round and a code round.
 Rejected, with reasons recorded in the session: six findings claiming this branch deletes the chat
 subsystem — the gate diffs `origin/main..HEAD` with two dots, main gained the chat work mid-review,
 and a three-dot diff shows nine files and no chat file at all. That is the defect
-[../todo/PLAN_the_gate_diffs_from_a_moving_base.md](../todo/PLAN_the_gate_diffs_from_a_moving_base.md)
+[PLAN_the_gate_diffs_from_a_moving_base.md](PLAN_the_gate_diffs_from_a_moving_base.md)
 was written for this morning. Also rejected: two findings asking to drop the nullish check and use a
 bare `String()` (which renders a missing field as the word `undefined`, and a test asserts against
 it), one asking to release the handle unconditionally (the race the handle exists for), and one

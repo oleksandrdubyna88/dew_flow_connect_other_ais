@@ -1,11 +1,48 @@
 # PLAN — the gate reviews a diff against a base that moved under it
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_mcp/runners/Context/ContextAssembler.cs`,
-> and whatever in `src_mcp/src/Server/PanelService.cs` decides what a code round is a diff OF.
+> Status: **IMPLEMENTED, 2026-09-10.** Shipped in pull request #176. Scope as built:
+> `src_mcp/runners/Context/ContextAssembler.cs` and its one caller,
+> `src_mcp/src/Server/PanelService.cs`.
 >
-> Related docs: [module_runners.md](../research/module_runners.md),
-> [PLAN_the_server_has_a_release_line.md](../research/PLAN_the_server_has_a_release_line.md) — the
-> round that found it.
+> Related docs: [module_runners.md](module_runners.md) — *What a code round is a diff OF* — and
+> [PLAN_the_server_has_a_release_line.md](PLAN_the_server_has_a_release_line.md), the round that
+> found it.
+
+## What shipped differently
+
+1. **There were THREE call sites, not the two this document counts.** `cat-file -s` sizes the OLD
+   side of a binary and takes a rev rather than a range, so it has no three-dot form at all — it
+   would have gone on reading a blob from somebody else's commit while both diffs were fixed.
+2. **The merge base is resolved explicitly rather than written as `A...B`.** Identical diff, three
+   gains: the commit can be NAMED in the round's audit (three dots leave it inside git), the
+   `cat-file` site is reachable by the same value, and the fallback is a branch of a conditional
+   instead of an error parsed out of stderr.
+3. **A SHALLOW checkout is told apart from unrelated histories.** `git merge-base` fails identically
+   for both, and falling back silently on a truncated clone would have reproduced the entire defect
+   on a repository whose histories DO meet. `rev-parse --is-shallow-repository` is asked only on the
+   path that already failed. From the plan round.
+4. **The fallback pins the ref to a commit** — the code round's finding, said by three reviewers
+   independently, and it is this same defect one layer down: `origin/main` is read three times per
+   round, and another session advancing it between two of them is a review of two snapshots that
+   nobody could reproduce from a log naming only the ref.
+5. **Which closed an argument injection two reviewers named.** Every value reaching a `{x}..{sha}`
+   range or a `{x}:{path}` argument is an object id by construction now: a "ref" beginning with a
+   dash is an OPTION to git, and `--output=` is one that writes a file. A base naming no commit is
+   refused rather than handed to a command line.
+6. **The reviewer is told when the diff is tip-to-tip**, in the diff's own header rather than only in
+   our log — the one state in which a deletion below may be somebody else's commit.
+
+RED was watched by restoring the two-dot form: the branch's diff carried `somebody-elses.cs` and
+`theirs.png`, both committed to the base after the branch was cut.
+
+## The open tail
+
+The per-file `git diff` — one process per changed text file, plus one `cat-file` per binary — was
+raised twice as a performance finding. It is real and it is pre-existing, and it is also
+LOAD-BEARING: each text file rides its own diff so that elision stays whole-file, which is what lets
+`DiffShaper` drop a file rather than a hunk when the budget runs out. Batching would mean re-splitting
+one combined output back into files, which is the parsing this design deliberately does not do. Worth
+its own change, not this one.
 
 ## The symptom, measured
 
