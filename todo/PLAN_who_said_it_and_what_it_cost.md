@@ -40,6 +40,13 @@
 >    a moment later. A turn nobody reported numbers for reads as unknown rather than as free.
 > 5. **The record carries the conversation's TITLE.** Not in the plan, and without it the log's *What*
 >    column reads as a UUID for every conversation row.
+> 6. **A cumulative vendor's MONEY is refused rather than differenced** (ruled 2026-09-10). The first
+>    version mirrored the token rule and subtracted the bills too; that was unreachable code, since the
+>    one cumulative vendor reports no money at all, and it went. A refusal — `null`, "nobody told us
+>    what this turn cost" — replaces it rather than a clamp, because recording a running total as one
+>    turn's bill is the same defect the token rule exists to prevent. Checked against the two other
+>    paths that turn tokens into money, the public price lists and the rate a person types on a vendor
+>    row: both are dollars per million applied when a row is DRAWN, and neither touches this.
 >
 > Companion: [PLAN_the_log_names_the_model.md](PLAN_the_log_names_the_model.md) — the same defect
 > on the review side (steps 2 and 3 open there). One decision, two surfaces; build them together
@@ -100,11 +107,23 @@ UUID conversation id and a plan filename in it, not estimated:
 | 200 | 18.8 MB |
 | 1000 (nobody types this) | 94 MB |
 
-**Nothing retires it, and that is a decision rather than an omission.** The file IS the history:
-`conversationTotal` sums it, so deleting old lines would silently change what a past conversation is
-recorded to have cost — a ledger that quietly forgets is worse than one that is large, and at the
-sizes above it is not large. It is a plain file in the person's own data directory, named in the help;
-deleting it is theirs to do and costs them only the history.
+**Nothing retires it. The operator was asked with these numbers in front of them and ruled "keep it
+for ever" on 2026-09-10** — so this is settled rather than merely unimplemented, which is the
+difference that stops it being raised a fourth time. The file IS the history: `conversationTotal` sums
+it, so deleting old lines would silently change what a past conversation is recorded to have cost, and
+a ledger that quietly forgets is worse than one that is large. At the sizes above it is not large. It
+is a plain file in the person's own data directory, named in the help; deleting it is theirs to do and
+costs them only the history.
+
+The two alternatives were put and refused, and are written down so a future reader does not have to
+re-derive them:
+
+| instead | what it costs |
+|---|---|
+| trim by age or by count | the file stops growing, and *"what did I spend last year"* is answered **wrongly** rather than not at all |
+| roll trimmed lines up into one summary per conversation | truth and a bound, at the price of a second record type in the format and the code around it |
+
+If a bound is ever wanted, the roll-up is the only version of it that does not lie.
 
 What did need fixing is the cost of HOLDING it. The log page ticks every five seconds while it is
 open and re-read and re-parsed the whole file on each one; `PanelProvider.chatLines` now caches the

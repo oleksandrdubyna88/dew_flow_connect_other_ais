@@ -2476,9 +2476,19 @@ without which turn one at 1000 and turn two at 1200 would have been recorded as 
 conversation on that vendor over-billed increasingly the longer it ran (the gate caught the plan doing
 exactly that). The key is the runtime and not the vendor row's id, because a row id is a person's own
 editable text: two Codex accounts as `codex-work` and `codex-home` would otherwise have been
-differenced by neither. `turnCost` applies the same rule to money — dead code today, since the one
-cumulative vendor prices nothing, and written so that the tokens and the bill cannot drift apart the
-day it does.
+differenced by neither.
+
+**Money is REFUSED for such a vendor rather than differenced (2026-09-10).** `turnCost` mirrored
+`turnTokens` and subtracted the bills too, which was unreachable code — the one cumulative vendor
+reports `costUsd: null` — and the operator ruled the arithmetic out. What stands in its place is not a
+clamp but a refusal: a cumulative vendor's per-turn money is `null`, because a running total is not
+what one turn cost and recording it as one would over-report every turn but the first, which is
+exactly the token defect the gate caught before this shipped. `null` means "nobody told us", and the
+log page then prices the row from the public list by the model that answered and marks it with the
+tilde. The deletion was checked against the two other things here that turn tokens into money — the
+public price lists, and the rate a person types on a vendor row — and neither goes through `turnCost`:
+both are dollars per million tokens applied when a row is DRAWN, while `turnCost` is only ever about a
+figure a vendor put on the wire itself.
 
 **Every turn is recorded, not every ANSWER.** The write sits before the branch in `oneTurn`, so a turn
 that was stopped or that fell over is written down with its outcome — those are the ones somebody

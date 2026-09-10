@@ -575,7 +575,7 @@ export class CliChatSession implements ChatSession {
     }
     const cumulative = this.adapter.cumulative;
     const tokens = turnTokens(cumulative, raw, this.threadTotals);
-    const costUsd = turnCost(cumulative, raw, this.threadTotals);
+    const costUsd = turnCost(cumulative, raw);
     // The RAW figures, never the differenced ones: the next turn subtracts from what the vendor last
     // SAID, and subtracting from an already-differenced number would make every turn but the first
     // the difference of two differences.

@@ -93,9 +93,16 @@ export interface ChatAdapter {
    *
    * <p>`codex` counts up: turn one reports 1000, turn two reports 1200, and 1200 is not what turn two
    * cost. Recording what it says would over-bill every conversation on that vendor increasingly, the
-   * longer it ran. The session subtracts what the thread last reported — see `normalised` in
+   * longer it ran. The session subtracts what the thread last reported — see `perTurnUsage` in
    * `cliChatSession.ts` — so a `TurnResult` always carries the cost of ONE turn whatever the vendor
    * counts in.</p>
+   *
+   * <p><b>It governs the TOKENS. A cumulative vendor's money is refused, not differenced</b> —
+   * `turnCost` answers `null` for one, because no vendor has ever been seen billing a running total
+   * and inventing the arithmetic for it was dead code the operator ruled out on 2026-09-10. A `null`
+   * bill means "nobody told us what this turn cost", and the log page prices such a row from a public
+   * list instead and marks it as an estimate. Today the one cumulative vendor reports no money at
+   * all, so nothing observable turns on this.</p>
    *
    * <p><b>It lives on the adapter because it is a fact about the wire protocol</b>, and the adapter is
    * where this codebase keeps those. It was first a list of runtime NAMES in `chatUsage.ts`, and a
