@@ -27,23 +27,13 @@ import { asText } from './asText';
  */
 
 /**
- * The RUNTIMES that report a cumulative total per thread rather than the cost of one turn.
- *
- * <p><b>Runtimes, not vendor rows.</b> Whether the numbers are cumulative is a fact about the wire
- * protocol — it is the `codex` CLI's `turn.completed` block that counts up — and a vendor row is a
- * person's own entry whose id they choose. Somebody running two Codex accounts as `codex-work` and
- * `codex-home` would have had neither of them differenced, and both conversations would have been
- * over-billed in the log, increasingly, the longer they ran: exactly the defect {@link turnTokens}
- * exists to prevent, reintroduced through the key.</p>
- */
-const CUMULATIVE = ['codex'];
-
-/**
  * One chat turn, as it is written to disk.
  *
- * <p>`tokensIn` and `tokensOut` are always the cost of THIS TURN, whatever the vendor reported —
- * see {@link turnTokens}. `costUsd` is `null` unless the vendor actually billed a number, which is
- * what lets the reader tell a bill from an estimate without a second field to keep in step.</p>
+ * <p>`tokensIn` and `tokensOut` are always the cost of THIS TURN, whatever the vendor counts in — the
+ * SESSION differences a cumulative reporter before the record is built, because a session's life is
+ * exactly a vendor thread's life. `costUsd` is `null` unless the vendor actually billed a number,
+ * which is what lets the reader tell a bill from an estimate without a second field to keep in
+ * step.</p>
  */
 export interface ChatTurnRecord {
   readonly utc: string;
@@ -79,39 +69,54 @@ export interface ReportedUsage {
 }
 
 /**
- * The tokens THIS turn cost, from what the vendor reported and what it had reported before.
+ * The tokens THIS turn cost, from what the vendor reported and what the thread had reported before.
  *
- * <p><b>`codex` reports a cumulative maximum for the thread, not a per-turn figure</b> — the plan
- * says so in its own limitations section, and a reviewer caught that the plan then went on to record
- * and sum those numbers per turn anyway. Turn one reporting 1 000 and turn two reporting 1 200
- * cumulative would have been written down as 2 200, and every conversation on that vendor would have
- * been over-billed in the log, increasingly, the longer it ran.</p>
+ * <p><b>`codex` reports a cumulative maximum for the thread, not a per-turn figure</b> — the plan says
+ * so in its own limitations section, and a reviewer caught that the plan then went on to record and
+ * sum those numbers per turn anyway. Turn one reporting 1 000 and turn two reporting 1 200 cumulative
+ * would have been written down as 2 200, and every conversation on that vendor would have been
+ * over-billed in the log, increasingly, the longer it ran.</p>
  *
- * <p>So a cumulative reporter's numbers are DIFFERENCED against what it last said. A total that goes
- * backwards — a new thread, a vendor that changed its mind, a resumed conversation whose earlier
- * turns this process never saw — is treated as a fresh start rather than as a negative cost, because
- * a negative number of tokens is not a thing that can be true.</p>
+ * <p><b>`cumulative` is a BOOLEAN the adapter declares, not a name matched against a list.</b> It was
+ * a list of runtime names here, and a gate reviewer named the flaw: implementing `ChatAdapter` was
+ * then not enough to be billed correctly, because an unlisted runtime defaulted silently to per-turn.
+ * A required field on the interface cannot be forgotten — the compiler asks. (gemini, the code
+ * round.)</p>
+ *
+ * <p><b>A total that goes BACKWARDS is a fresh baseline, not a free turn.</b> A vendor thread that
+ * restarted, compacted its context or evicted a cache reports a number below the last one; the turn
+ * still cost what it says it cost, and clamping the difference to zero would silently drop it. This
+ * function used to say "fresh start" in its own comment and return a zero — the code and the comment
+ * disagreed, and the comment was right. (gemini, the code round.)</p>
  */
 export function turnTokens(
-  runtime: string,
+  cumulative: boolean,
   reported: ReportedUsage,
   previous: { readonly tokensIn: number; readonly tokensOut: number } | undefined,
 ): { readonly tokensIn: number; readonly tokensOut: number } {
-  if (!CUMULATIVE.includes(runtime) || previous === undefined) {
+  if (!cumulative || previous === undefined || wentBackwards(reported, previous)) {
     return { tokensIn: Math.max(0, reported.tokensIn), tokensOut: Math.max(0, reported.tokensOut) };
   }
 
   return {
-    tokensIn: Math.max(0, reported.tokensIn - previous.tokensIn),
-    tokensOut: Math.max(0, reported.tokensOut - previous.tokensOut),
+    tokensIn: reported.tokensIn - previous.tokensIn,
+    tokensOut: reported.tokensOut - previous.tokensOut,
   };
+}
+
+/** Whether the running total dropped, which means the thread this reports for is not the old one. */
+function wentBackwards(
+  reported: ReportedUsage,
+  previous: { readonly tokensIn: number; readonly tokensOut: number },
+): boolean {
+  return reported.tokensIn < previous.tokensIn || reported.tokensOut < previous.tokensOut;
 }
 
 /**
  * What THIS turn was billed, by the same rule and for the same reason as {@link turnTokens}.
  *
- * <p>Differenced for a cumulative reporter, and separately from the tokens because the two can be
- * missing independently — a vendor can report tokens and no money, which two of the three do.</p>
+ * <p>Differenced separately from the tokens because the two can be missing independently — a vendor
+ * can report tokens and no money, which two of the three do.</p>
  *
  * <p><b>This is dead code today and is written anyway.</b> The one cumulative vendor reports
  * `costUsd: null`, so nothing reaches the second branch. Leaving money un-differenced beside tokens
@@ -120,14 +125,15 @@ export function turnTokens(
  * the conversation, and nothing would say which of the two numbers to believe.</p>
  */
 export function turnCost(
-  runtime: string,
+  cumulative: boolean,
   reported: ReportedUsage,
   previous: { readonly costUsd: number | null } | undefined,
 ): number | null {
   if (reported.costUsd === null) {
     return null;
   }
-  if (!CUMULATIVE.includes(runtime) || previous === undefined || previous.costUsd === null) {
+  if (!cumulative || previous === undefined || previous.costUsd === null
+    || reported.costUsd < previous.costUsd) {
     // Passed through UNTOUCHED, deliberately. This is what a vendor said it charged — `claude` bills
     // figures like 0.107958 — and rounding somebody else's invoice to make it prettier is not this
     // module's business.
@@ -138,12 +144,12 @@ export function turnCost(
   // arrives as 0.30000000000000004. Cleaned up here, at four decimals, which is the precision the
   // rest of this product already counts money in — a round is fractions of a cent and two decimals
   // would read as free.
-  return Math.round(Math.max(0, reported.costUsd - previous.costUsd) * 10_000) / 10_000;
+  return round4(reported.costUsd - previous.costUsd);
 }
 
-/** Whether a RUNTIME's numbers are cumulative, so a caller knows to keep the last ones. */
-export function reportsCumulative(runtime: string): boolean {
-  return CUMULATIVE.includes(runtime);
+/** Four decimals, the precision this product counts money in. Cents would read a real cost as free. */
+function round4(usd: number): number {
+  return Math.round(usd * 10_000) / 10_000;
 }
 
 /**
@@ -177,23 +183,21 @@ export interface FinishedTurn {
   readonly utc: string;
   /** The vendor ROW that answered — what the log page prices by. */
   readonly provider: string;
-  /**
-   * The CLI shape behind that row, which is what decides whether its numbers are cumulative.
-   *
-   * <p>Separate from `provider` because a row's id is a person's own text and its runtime is not.
-   * It is not written down: by the time a record exists the differencing has already happened, and
-   * the runtime of a turn from last week answers no question the log page asks.</p>
-   */
-  readonly runtime: string;
   readonly model: string;
   readonly conversation: string;
   readonly title: string;
   readonly seconds: number;
   readonly outcome: ChatOutcome;
-  /** What the vendor said about this turn, or nothing when it said nothing. */
-  readonly reported: ReportedUsage | undefined;
-  /** What that same conversation's vendor last reported, for the cumulative reporters. */
-  readonly previous: ReportedUsage | undefined;
+  /**
+   * What this ONE turn cost, or nothing when the vendor said nothing.
+   *
+   * <p>Already normalised: a cumulative vendor was differenced by its SESSION, which is the only
+   * thing whose lifetime is exactly the vendor thread's. This function is therefore not where the
+   * cumulative rule lives, and the record it writes cannot be wrong about which vendor produced it.
+   * (gemini, the code round — the rule used to reach out of the adapter layer and into the command
+   * that orchestrates the page.)</p>
+   */
+  readonly usage: ReportedUsage | undefined;
 }
 
 /**
@@ -209,16 +213,15 @@ export interface FinishedTurn {
  * that billed silently — which is the accounting hole the gate raised against the plan.</p>
  */
 export function chatTurnRecord(turn: FinishedTurn): ChatTurnRecord {
-  const reported = turn.reported ?? { tokensIn: 0, tokensOut: 0, costUsd: null };
-  const tokens = turnTokens(turn.runtime, reported, turn.previous);
+  const usage = turn.usage ?? { tokensIn: 0, tokensOut: 0, costUsd: null };
 
   return {
     utc: turn.utc,
     provider: turn.provider,
     model: turn.model,
-    tokensIn: tokens.tokensIn,
-    tokensOut: tokens.tokensOut,
-    costUsd: turnCost(turn.runtime, reported, turn.previous),
+    tokensIn: Math.max(0, usage.tokensIn),
+    tokensOut: Math.max(0, usage.tokensOut),
+    costUsd: usage.costUsd,
     seconds: turn.seconds,
     outcome: turn.outcome,
     conversation: turn.conversation,
@@ -308,7 +311,12 @@ export function conversationTotal(
   return {
     tokensIn: mine.reduce((total, record) => total + record.tokensIn, 0),
     tokensOut: mine.reduce((total, record) => total + record.tokensOut, 0),
-    costUsd: billed.length === 0 ? null : billed.reduce((total, record) => total + (record.costUsd ?? 0), 0),
+    // Rounded, for the reason `turnCost` rounds its own subtraction: $0.10 + $0.20 is $0.30 and
+    // arrives as 0.30000000000000004, and a running total shown to a person must not read as float
+    // noise. (gemini, the code round.)
+    costUsd: billed.length === 0
+      ? null
+      : round4(billed.reduce((total, record) => total + (record.costUsd ?? 0), 0)),
     estimated: mine.length > billed.length,
   };
 }

@@ -47,6 +47,8 @@ export const CODEX_ARGS: readonly string[] = ['--json', '-', '--skip-git-repo-ch
 export const codexAdapter: ChatAdapter = {
   shape: 'per-turn',
   announces: false,
+  // The `turn.completed` block counts UP across the thread — see the branch that reads it below.
+  cumulative: true,
   // Checked HERE too, not only where the id was read. `classify` is the only place one is minted
   // today, so this line is safe by construction — and "safe by construction" is a proof a reader
   // has to reconstruct. A command line that refuses on its own terms cannot be handed anything a

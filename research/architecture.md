@@ -75,6 +75,34 @@ and that difference is `memoryOf` in `chatModels.ts` — it decides whether the 
 every turn and whether the conversation is capped, and it travels with the model when the person
 changes it.
 
+### And a ledger of its own, because it now spends on its own (2026-09-10)
+
+Spending an edge means accounting for it. `usage.jsonl` is written by `coai-mcp` and only READ by the
+extension — one line per reviewer per round — and a chat turn appeared in it nowhere, so the money the
+extension's two new arrows spent was recorded by nobody.
+
+The extension therefore writes **`chat-usage.jsonl`**, beside the server's file in the same data
+directory, and the log page **merges the two in memory** (`mergedRows` in `roundsLog.ts`) into one
+table with a *Kind* column. The alternative — chat rows inside `usage.jsonl` — was rejected on the
+gate's plan round for the reason that decides most seams here: **its two writers release on different
+days.** A format shared by two programs that ship separately is a contract nobody wrote down, and this
+repository has already paid for one of those (`remoteVendor`, dropped by every component written
+before it existed). Two files and one merge costs one extra read and lets either half move alone.
+
+The reviewers' other objection — that two extension hosts appending to one file tear each other's
+lines — was measured rather than believed (`npm run measure:append`): eight processes × 1000 records,
+116 MB with 60 KB lines among them, 8000 whole records of 8000 and nothing torn. `O_APPEND` /
+`FILE_APPEND_DATA` is what `appendFile` opens with and what those guarantee.
+
+**Where the vendor-shaped knowledge lives is the other decision.** `codex` reports a token total that
+counts UP across a thread; the other two price each turn. Normalising that belongs to the SESSION,
+because a session's lifetime is exactly a vendor thread's lifetime — it holds the id it resumes by,
+and a replacement session (a model switch, a window reload) starts a new thread whose count starts
+again. So `TurnResult` always carries the cost of ONE turn whatever its vendor counts in, `ChatAdapter`
+declares `cumulative` as a required field the compiler asks for, and nothing above the session knows
+that vendors differ. The rule reached two layers higher in the first draft, and a gate reviewer named
+what that costs: implementing `ChatAdapter` would not have been enough to be billed correctly.
+
 ## The one interface neither container owns (2026-09-06)
 
 The Team-server **token file** is written by the extension and read by `coai-mcp`, and neither is the

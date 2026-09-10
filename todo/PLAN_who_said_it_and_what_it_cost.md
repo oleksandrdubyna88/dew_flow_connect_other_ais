@@ -80,6 +80,34 @@ vendor actually charged. The tab and the log both keep the tilde.
   the `estimated` flag; the log page reads them as rows with a *Conversation* kind, priced through
   the same `modelPrice` the rounds use (`panelProvider.ts`), filterable by kind.
 
+## What it costs to keep — the ledger's growth budget
+
+The family rule asks anything that GROWS to name its budget before the first write, and the gate's
+code round asked for it by name. One record is **270 bytes** — measured, with a real model name, a
+UUID conversation id and a plan filename in it, not estimated:
+
+| turns a day | a year on disk |
+|---|---|
+| 50 (a busy person) | **4.7 MB** |
+| 200 | 18.8 MB |
+| 1000 (nobody types this) | 94 MB |
+
+**Nothing retires it, and that is a decision rather than an omission.** The file IS the history:
+`conversationTotal` sums it, so deleting old lines would silently change what a past conversation is
+recorded to have cost — a ledger that quietly forgets is worse than one that is large, and at the
+sizes above it is not large. It is a plain file in the person's own data directory, named in the help;
+deleting it is theirs to do and costs them only the history.
+
+What did need fixing is the cost of HOLDING it. The log page ticks every five seconds while it is
+open and re-read and re-parsed the whole file on each one; `PanelProvider.chatLines` now caches the
+parse and re-reads only when the file's size or mtime moves (`stat` is one syscall, a parse of a
+year's records is not).
+
+**An interrupted write costs its own line and nothing else.** Records are appended whole and
+newline-terminated, so a torn tail is dropped by `parseChatUsage` exactly as `usage.ts` drops one from
+the server's ledger. A write is not awaited by the turn that made it — a person's answer must not wait
+on a disk — and `deactivate` drains the queue, which is the one moment that costs nobody anything.
+
 ## Build order
 
 1. RED tests (below).

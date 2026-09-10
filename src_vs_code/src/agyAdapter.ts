@@ -27,6 +27,8 @@ export const AGY_ARGS: readonly string[] = [
 
 export const agyAdapter: ChatAdapter = {
   shape: 'persistent',
+  // Per-turn: each `result` carries the tokens of the turn it ends, not the pipe's running total.
+  cumulative: false,
   announces: true,
   argv: () => AGY_ARGS,
   encode: (turn) => JSON.stringify({ event: 'user', message: { role: 'user', content: turn } }),
