@@ -12,6 +12,12 @@
 
 **And choosing a provider clears the model chosen under the one before it**, so the two halves cannot describe a pair nobody selected. A prompt deleted in the presets tab is shown in the picker as deleted, with what is being sent instead, rather than quietly reading as the main one. A dropdown also stops holding the panel still after you choose in it — that pause exists to protect text you are in the middle of typing, and a dropdown has none, which is why the model list beside the provider re-fills at once now instead of when you click away.
 
+**A chat opens on a fresh installation again.** `coai.chatModel` is empty by default — the option reads *The first one that can answer* — and an empty value resolved to no provider at all, so the keybinding answered with a refusal that had a leading space and no name in it. It resolves to the first reviewer that can answer, which is what the option has always said.
+
+**And a Claude model is no longer offered through Antigravity.** That subscription bundles Gemini, Claude and GPT-OSS behind one CLI, so Claude models are selectable there — and selecting one spends a metered quota to reach a model that is already on an unlimited plan through its own CLI. Fifty runs of the 2026-09-01 comparison campaign were lost that way, invisibly. The chat picker does not offer that combination now, on either surface.
+
+**A provider that is gone no longer lends its models to the picker.** With a reviewer row removed while it was the chosen one, the first row’s models filled the box beside it and offered a pair nobody had chosen; the saved model is shown as unavailable instead.
+
 ## Extension 0.32.3 · Server 0.18.17 — 2026-09-10
 
 > **0.32.0, 0.32.1 and 0.32.2 do not exist.** The change below landed with the manifest already at

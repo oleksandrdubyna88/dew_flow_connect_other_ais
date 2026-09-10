@@ -259,11 +259,54 @@ test('a legacy value naming a MODEL resolves only when exactly one provider offe
   );
 });
 
-test('an empty legacy value picks nothing, so the first provider can answer as it always did', () => {
-  const vendors = [vendor({ id: 'codex', runtime: 'codex', model: 'gpt-5.2' })];
+test('an empty setting IS the first provider that can answer, which is what the picker promises', () => {
+  // THE GUARANTEE CHANGED, because the old one was never kept. This test used to assert the SHAPE
+  // `{providerId: '', ...}` under the title "so the first provider can answer as it always did" — and
+  // nothing downstream made that true: `resolveChatPick(vendors, list, '', '')` finds no provider
+  // with an empty id and refuses with `" is not a model this conversation can be sent to any more"`,
+  // a sentence with a leading space and no name in it. `coai.chatModel` is EMPTY by default and the
+  // panel labels that option "The first one that can answer", so a fresh installation pressing the
+  // keybinding got that refusal. Found by the code round (gemini) while it was asking a narrower
+  // question about `chatModelName`.
+  const vendors = [
+    vendor({ id: 'codex', runtime: 'codex', model: 'gpt-5.2' }),
+    vendor({ id: 'agy', runtime: 'antigravity', model: 'gemini-3.7-flash-high' }),
+  ];
   const list = chatProvidersFrom(vendors, CATALOG);
 
-  assert.deepStrictEqual(legacyPick(list, vendors, ''), { providerId: '', modelId: '', candidates: [] });
+  assert.deepStrictEqual(legacyPick(list, vendors, ''), { providerId: 'codex', modelId: 'gpt-5.2', candidates: [] });
+  assert.strictEqual(resolveChatPick(vendors, list, 'codex', 'gpt-5.2').ok, true, 'the resolved pair is still refused');
+});
+
+test('with nothing configured at all there is no first provider to invent', () => {
+  assert.deepStrictEqual(legacyPick({ providers: [], refused: [] }, [], ''), { providerId: '', modelId: '', candidates: [] });
+});
+
+test('a model of ANOTHER vendor is not offered by this provider — vendor-routing.md is MANDATORY', () => {
+  // The antigravity subscription bundles Gemini, Claude and GPT-OSS behind one CLI, so
+  // `claude-sonnet-4-6` is selectable there — and `vendor-routing.md` forbids selecting it there by
+  // name: the same model sits on an unlimited Claude subscription while every agy call is drawn
+  // against a quota that is neither unlimited nor cheap. That rule cost three cells of the
+  // 2026-09-01 comparison campaign to learn, and the waste was invisible in the results.
+  const vendors = [vendor({ id: 'agy', runtime: 'antigravity', model: 'gemini-3.7-flash-high' })];
+  const list = chatProvidersFrom(vendors, {
+    ...CATALOG,
+    discoveredAgy: [
+      { id: 'gemini-3.8-flash-low', label: 'Gemini 3.8 Flash (Low)' },
+      { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Thinking)' },
+    ],
+  });
+  const offered = list.providers[0]!.models.map((one) => one.id);
+
+  assert.ok(offered.includes('gemini-3.8-flash-low'), 'the row lost the models it is actually for');
+  assert.ok(!offered.includes('claude-sonnet-4-6'), 'a Claude model is offered through agy, which the routing rule forbids');
+});
+
+test('the rule does not disarm the CLI a model belongs to', () => {
+  const vendors = [vendor({ id: 'claude', runtime: 'claude', model: 'sonnet' })];
+  const list = chatProvidersFrom(vendors, CATALOG);
+
+  assert.ok(list.providers[0]!.models.some((one) => one.id === 'sonnet'), 'the claude row lost its own models');
 });
 
 /**

@@ -9,6 +9,7 @@ import { EscalationWatcher } from './escalationWatcher';
 import { ModelChoice, parseAgyModels, parseCodexModels } from './models';
 import {
   isPanelCommand,
+  PanelState,
   liveRegions,
   OPEN_BY_DEFAULT,
   panelHtml,
@@ -243,6 +244,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * controls reports neither — the focusout of the one being left arrives before the focusin of the
    * one being entered.</p>
    */
+  /** The discovery payload last written, so an unchanged one is not written again. */
+  private discoveryWritten = '';
   private editingSince = 0;
   private editingId = '';
   private editingCaret: readonly [number, number] = [0, 0];
@@ -604,13 +607,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // builds its catalog empty and a model chosen in the section above resolves to nothing, opening
     // the conversation on the row's own model instead. Written on every render, so it is as fresh as
     // the panel is.
-    await this.context.globalState.update(DISCOVERY_KEY, {
-      codex: state.codexModels,
-      agy: state.agyModels,
-      catalogs: Object.fromEntries(
-        state.teamServers.flatMap((one) => (one.catalog === undefined ? [] : [[one.server.id, one.catalog]])),
-      ),
-    });
+    await this.rememberDiscovery(state);
 
     // Two update paths, and which one runs is the whole fix for the pickers.
     //
@@ -1076,6 +1073,44 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * exactly this, and `render` awaits the write queue first, so the paint it produces carries what
    * was typed rather than what it replaced.</p>
    */
+  /**
+   * What this panel DISCOVERED, left where the chat command can read it.
+   *
+   * <p>Three of the four model sources are fetched — the `codex` and `agy` CLIs' own lists and a
+   * Team server's allowlist — and every fetch happens here. The command cannot repeat them to open a
+   * tab, so without this it builds its catalog empty and a model chosen in the chat section resolves
+   * to nothing, opening the conversation on the row's own model instead.</p>
+   *
+   * <p><b>Written only when it CHANGED.</b> A render happens for reasons that have nothing to do
+   * with discovery — a usage tick, a question arriving, any setting written in any window — and
+   * awaiting a serialisation of every discovered model and every Team catalog before each repaint is
+   * disk churn in front of the paint. Compared as text, which is what is stored anyway. (gemini and
+   * codex, the code round.)</p>
+   *
+   * <p>And it never takes the panel down with it: a store that cannot be written is a chat that
+   * resolves models the older way, not a sidebar that fails to render.</p>
+   */
+  private async rememberDiscovery(state: PanelState): Promise<void> {
+    const discovered = {
+      codex: state.codexModels,
+      agy: state.agyModels,
+      catalogs: Object.fromEntries(
+        (state.teamServers ?? []).flatMap((one) =>
+          (one.catalog === undefined ? [] : [[one.server.id, { ...one.catalog, url: one.server.url }]])),
+      ),
+    };
+    const written = JSON.stringify(discovered);
+    if (written === this.discoveryWritten) {
+      return;
+    }
+    try {
+      await this.context.globalState.update(DISCOVERY_KEY, discovered);
+      this.discoveryWritten = written;
+    } catch (error) {
+      console.error('coai: the discovered model lists could not be stored', error);
+    }
+  }
+
   private editing(editing: boolean, id: string, start: number, end: number): void {
     if (editing) {
       // Only the FIRST focus of a session starts the clock. Tabbing from one control to the next
@@ -1130,14 +1165,17 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         return;
       }
       case 'plain':
-        await this.save(config, write.key, write.value);
-        // A setting that INVALIDATES another is cleared with it. One case today, and it is the chat
-        // pair: `chatModelName` names one of `chatModel`'s models, so choosing a different provider
-        // leaves it holding the previous one's — a value the panel would strand in its select while
-        // the conversation quietly opened on the row's own model instead.
+        // A setting that INVALIDATES another is cleared BEFORE it, not after. One case today, and it
+        // is the chat pair: `chatModelName` names one of `chatModel`'s models, so choosing a
+        // different provider leaves it holding the previous one's — a value the panel would strand
+        // in its select while the conversation quietly opened on the row's own model instead. The
+        // order matters for the crash in between: cleared first, an extension host killed mid-write
+        // leaves a provider with no model, which is a state the pair has a meaning for. Written
+        // first, it would leave the NEW provider paired with the OLD provider's model. (codex.)
         for (const stale of clearedByWriting(write.key)) {
           await this.save(config, stale, '');
         }
+        await this.save(config, write.key, write.value);
         // Turning the per-side switch ON seeds this side with what it reads today, so nothing
         // changes until something is edited. An empty overlay looks identical - until the first
         // shared edit on another side silently changes this one, which is the surprise this feature
