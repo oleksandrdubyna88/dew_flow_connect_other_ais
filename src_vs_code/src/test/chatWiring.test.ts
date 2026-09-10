@@ -172,3 +172,45 @@ test('a stopped turn is written into the transcript before the conversation is c
     'the carry is taken BEFORE the stop is recorded, so it carries the dangling question',
   );
 });
+
+/**
+ * The third thing no unit test can see: a read that goes AROUND the one accessor.
+ *
+ * <p>`panelProvider` has said since the per-side switch shipped that "a read that goes around it is
+ * a setting that silently stays shared" — and its accessor was private, so three reads went around
+ * it. Both files below import `vscode` and cannot be exercised here, which is exactly the shape the
+ * `argvFor` guard above was written for: the fact is in the source, so the source is what is
+ * checked.</p>
+ *
+ * <p>It matters most for `vendors`, because that row carries `executablePath`. On a machine with the
+ * switch on, a shared read hands a WSL window the Windows npm shim.</p>
+ */
+const DIRECT_VENDORS = /\.get(?:<[^>]*>)?\(\s*'vendors'\s*\)/g;
+
+test('the chat reads vendors only through the per-side reader, never straight off the shared configuration', () => {
+  const text = read(join('src', 'chatCommand.ts'));
+
+  assert.deepStrictEqual(
+    [...text.matchAll(DIRECT_VENDORS)].map((hit) => hit[0]),
+    [],
+    'a direct read of vendors bypasses this side’s overlay — go through the per-side reader',
+  );
+  assert.match(
+    text,
+    /sideConfigReader/,
+    'nothing in the chat builds a per-side reader, so every setting it reads is the shared one',
+  );
+});
+
+test('the server settings file is fed this side’s settings, not only the shared ones', () => {
+  // The same bypass with a wider blast radius: this file is what coai-mcp reads, so a shared read
+  // here runs the GATE's reviewers off another side's vendor list, not only the chat.
+  const text = read(join('src', 'extension.ts'));
+
+  assert.deepStrictEqual(
+    [...text.matchAll(DIRECT_VENDORS)].map((hit) => hit[0]),
+    [],
+    'the server is handed the shared vendors, whatever this side has configured',
+  );
+  assert.match(text, /sideConfigReader/, 'nothing here builds a per-side reader');
+});
