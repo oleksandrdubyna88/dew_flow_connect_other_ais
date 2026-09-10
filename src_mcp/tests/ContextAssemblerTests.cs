@@ -171,10 +171,28 @@ public sealed class ContextAssemblerTests : IAsyncLifetime
         var collected = await _assembler.CollectAsync(_repo, "stranger", "feature", ct: TestContext.Current.CancellationToken);
 
         collected.Kind.Should().Be(DiffBase.NoCommonAncestor, "the one case three dots cannot answer");
-        collected.ComparedAgainst.Should().Be("stranger", "the fallback compares against what it was given");
+        // A COMMIT even here. `stranger` is read three times — the numstat, each file's diff, a
+        // binary's old side — and a ref another session can advance between two of them is a review
+        // of two snapshots that nobody could reproduce from a log naming only the ref.
+        collected.ComparedAgainst.Should().MatchRegex("^[0-9a-f]{7,64}$",
+            "the fallback pins the ref to a commit rather than carrying a moving one");
         // And it is the two-dot diff, not an empty list dressed up as one: the stranger's own file is
         // absent from `feature` and shows as a deletion, which is exactly what two dots means here.
         var paths = collected.Files.Select(f => f.Path).ToList();
         paths.Should().Contain("app.cs").And.Contain("stranger.cs");
+    }
+
+    [Fact]
+    public async Task ABaseThatNamesNoCommit_IsRefusedRatherThanHandedToGit()
+    {
+        // The one place a caller's own string would have reached a command line. A "ref" beginning
+        // with a dash is an OPTION to git, and `--output=` is one that writes a file; every value
+        // that reaches a range or a `rev:path` argument is an object id by the time it gets there.
+        // (gemini, the code round.)
+        var refused = async () => await _assembler.CollectAsync(
+            _repo, "--output=owned.txt", "feature", ct: TestContext.Current.CancellationToken);
+
+        await refused.Should().ThrowAsync<ContextException>().WithMessage("*names no commit*");
+        File.Exists(Path.Combine(_repo, "owned.txt")).Should().BeFalse("git was never asked to write it");
     }
 }
