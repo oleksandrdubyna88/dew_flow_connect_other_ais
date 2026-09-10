@@ -176,11 +176,25 @@ public enum Stage
 /// invisible for a day — the log said "4 enabled" and "3 reviewer(s)" eleven seconds apart, and the
 /// verdict said "all 3 reviewers answered", which was true about what it asked.
 /// </param>
+/// <summary>A role the round decided not to ask for, and why.</summary>
+/// <remarks>
+/// <para>Structured rather than a finished sentence, which the plan round asked for: a caller parsing
+/// a summary gets a role it can name, the punctuation of the clause is decided in one place beside
+/// the clauses it sits next to, and a second reason one day is a second VALUE rather than a second
+/// way of writing a sentence.</para>
+/// <para>NOT a failure, and the wording must never let it read as one. A reviewer that could not run
+/// is a problem — something was enabled and the round could not deliver it. A role that was not asked
+/// is a DECISION this gate made, with a reason; reporting the two in the same words would teach a
+/// caller to treat a correct round as a degraded one.</para>
+/// </remarks>
+public sealed record SkippedRole(string Role, string Reason);
+
 public sealed record ReviewerSummary(
     int Asked,
     int Answered,
     ImmutableArray<string> Failures,
-    ImmutableArray<string> Excluded = default)
+    ImmutableArray<string> Excluded = default,
+    ImmutableArray<SkippedRole> NotAsked = default)
 {
     public static ReviewerSummary AllAnswered(int asked) => new(asked, asked, []);
 
@@ -215,16 +229,25 @@ public sealed record ReviewerSummary(
                 ? $"{answered}; the round reached its {limit.TotalMinutes:0} minute limit "
                   + "and the reviewers still running were cancelled"
                 : answered;
+            // No early return here any more: a round can skip a role while excluding nobody, and the
+            // clause below has to be reachable in that case — which is the ordinary one.
             var left = Excluded.IsDefaultOrEmpty ? [] : Excluded;
-            if (left.Length == 0)
-            {
-                return withDeadline;
-            }
-
             var plural = left.Length == 1 ? string.Empty : "s";
+            var withExcluded = left.Length == 0
+                ? withDeadline
+                : $"{withDeadline}; {left.Length} enabled reviewer{plural} "
+                  + $"could not run: {string.Join("; ", left)}";
 
-            return $"{withDeadline}; {left.Length} enabled reviewer{plural} "
-                + $"could not run: {string.Join("; ", left)}";
+            // LAST of the three additions, and the order carries meaning: a deadline explains the
+            // failures, the failures explain the count, and what was never asked for is last because
+            // it is the only one of the three that is not a problem. Its own verb, too — "not asked"
+            // and never "could not run", so a correct round cannot read as a degraded one.
+            var skipped = NotAsked.IsDefaultOrEmpty ? [] : NotAsked;
+
+            return skipped.Length == 0
+                ? withExcluded
+                : $"{withExcluded}; "
+                  + string.Join("; ", skipped.Select(s => $"{s.Role} was not asked: {s.Reason}"));
         }
     }
 }
