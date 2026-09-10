@@ -375,11 +375,19 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   const budget = thread.forgetful ? REMOTE_CARRY_BUDGET : CARRY_BUDGET;
   const sent = carrying.length > 0 ? carriedTurn(carrying, text, chatLanguage(), budget) : text;
 
-  // When the person asked, and which vendor row heard it — both taken BEFORE the turn, because a
-  // model switch can land while it runs and the ledger must name the model that actually answered.
+  // When the person asked, which ROW heard it, and which of that row's models — all taken BEFORE the
+  // turn, because the ledger must name what actually answered rather than what is configured by the
+  // time the answer lands.
+  //
+  // The row is `providerId` and the model is `modelId`, and keeping those apart matters here more
+  // than anywhere: this file used to hold ONE id that was both, and a rebase onto the split brought
+  // `vendorFor(thread.modelId)` — which looks a row up by a MODEL name, finds nothing, and made the
+  // ledger silently record no turn at all. An empty `modelId` means "whatever the row is set to",
+  // which is what the row itself says.
   const askedUtc = new Date().toISOString();
   const askedMs = Date.now();
-  const answering = vendorFor(thread.modelId);
+  const answering = vendorFor(thread.providerId);
+  const answeringModel = thread.modelId.length > 0 ? thread.modelId : (answering?.model ?? '');
 
   // The queue position, pushed as it changes. A local session never calls this back; a Team server
   // does on every poll, which is the difference between "the model is thinking" and "somebody else's
@@ -399,6 +407,7 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
     utc: askedUtc,
     seconds: Math.round((Date.now() - askedMs) / 1000),
     vendor: answering,
+    model: answeringModel,
     outcome: outcomeOf(result),
     // BOTH arms. A turn that was stopped or that fell over can still have been priced by its vendor
     // — `codex` sends its numbers on a line of their own — and those are the turns worth finding.
@@ -479,6 +488,8 @@ function ledger(
     readonly utc: string;
     readonly seconds: number;
     readonly vendor: Vendor | undefined;
+    /** Which of that row's models answered — the row's own when the tab named none. */
+    readonly model: string;
     readonly outcome: ChatOutcome;
     readonly usage: ReportedUsage | undefined;
   },
@@ -489,7 +500,7 @@ function ledger(
   void recordChatTurn(coaiDataDir(), chatTurnRecord({
     utc: turn.utc,
     provider: turn.vendor.id,
-    model: turn.vendor.model,
+    model: turn.model,
     conversation: thread.saveId,
     title: thread.title,
     seconds: turn.seconds,
