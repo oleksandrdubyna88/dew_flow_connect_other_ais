@@ -276,7 +276,7 @@ Rejected, with reasons recorded in the session: three Blocking findings claiming
 reverted the extension's chat modules and its version. They were an artefact of the gate's own
 diff — `origin/main..HEAD`, two dots — after main moved mid-review; a three-dot diff showed nine
 files and no extension source at all. That is a real defect in the gate and it has its own plan:
-[../todo/PLAN_the_gate_diffs_from_a_moving_base.md](../todo/PLAN_the_gate_diffs_from_a_moving_base.md).
+[PLAN_the_gate_diffs_from_a_moving_base.md](PLAN_the_gate_diffs_from_a_moving_base.md).
 
 **Not done here:** the `server-v0.5.5` tag itself. It is the first thing that happens after this
 merges — cutting it before would have published exactly the incomplete line this plan removes.

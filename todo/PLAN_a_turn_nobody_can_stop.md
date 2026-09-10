@@ -89,7 +89,7 @@ only when the whole ritual has run — not when the code works.
    `src_vs_code`, the whole suite, not the one file.
 3. **Gate, after the code.** `review_code` with the scope = the *Definition of Done* below plus the
    symptom, and the diff `main...fix/a-turn-nobody-can-stop` — three dots; the two-dot moving-base trap is recorded in
-   `todo/PLAN_the_gate_diffs_from_a_moving_base.md`. `resolve`; repeat until `proceed`.
+   `research/PLAN_the_gate_diffs_from_a_moving_base.md`. `resolve`; repeat until `proceed`.
 4. **Documentation.** `research/module_extension.md` says what the code now does;
    `research/architecture.md` if a cross-module seam moved.
 5. **Help.** Every new command and setting has an article in `helpContent.ts` —
