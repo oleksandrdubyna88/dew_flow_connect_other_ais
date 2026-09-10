@@ -19,7 +19,13 @@
 >
 > ### The open tail
 >
-> 1. **`codex`'s probe must be re-run** before it is refused as anything but untested.
+> 1. **`codex` stays refused as UNTESTED, and the probe is NOT being re-run.** The operator decided
+>    that on 2026-09-10, asked directly. So this is not an open task: the refusal a person reads —
+>    *"whether codex can read a picture has not been measured — its account hit a usage limit during
+>    the measurement, which is not the same as a no"* — is the shipped answer, not a placeholder for
+>    one. It says untested rather than incapable because that is what is known, and it points at the
+>    two providers that were measured. What would re-open it is somebody wanting codex to carry a
+>    picture, not tidiness.
 > 2. **The Team server has no place for an image on the wire.** It is deployed by hand and shipped
 >    separately, so the client can send one long before the server can take one.
 
