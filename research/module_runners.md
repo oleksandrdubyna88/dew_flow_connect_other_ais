@@ -39,7 +39,7 @@ sequenceDiagram
 
 | Type | File | Role |
 |---|---|---|
-| `IProcessLauncher` / `ProcessLauncher` | `Processes/ProcessLauncher.cs` | the ONE process seam; timeout kills the entire tree; `StdIn` carries every long or multi-line input, BOM-less UTF-8, and a child that exits before reading is not an exception |
+| `IProcessLauncher` / `ProcessLauncher` | `Processes/ProcessLauncher.cs` | the ONE process seam; one deadline over the write, the read and the wait, and it kills the entire tree; `StdIn` carries every long or multi-line input, BOM-less UTF-8, and a child that exits before reading is not an exception; each stream is kept up to `MaxOutputChars` and says so when it is cut |
 | `ExecutableResolver` | `Processes/ExecutableResolver.cs` | npm Windows shims: the PATHEXT resolution `Process.Start` does not do |
 | `WorktreeManager`, `WorktreeLease` | `Worktrees/WorktreeManager.cs` | one detached tree per round, `coai-wt-` prefix under OUR storage; prune-on-open; disposal = finally; never touches a human's worktree |
 | `SubmodulePopulator` | `Worktrees/SubmodulePopulator.cs` | fills the round tree's submodules from the PARENT checkout, not the remote — git populates none in a linked worktree, and in this family the project's rules ARE one; offline, pinned, never fatal, and refused when the source is reached through a reparse point |
@@ -204,6 +204,48 @@ Both cost a whole run each; see [RESULTS_first_real_run.md](RESULTS_first_real_r
 - **A bare command name is not startable.** `Process.Start` does not read `PATHEXT`, so it finds
   npm's extensionless shell script and fails. `ExecutableResolver` tries the executable extensions
   first and the bare name last, and never rewrites an explicit path.
+
+## The launcher's two ceilings, and why the write is a task (2026-09-10)
+
+Found by the product audit of 2026-09-09 (finding 3), and both halves are the same mistake in two
+places: a bound applied one step after the thing it was meant to bound.
+
+**One deadline, over the whole operation.** `RunToCompletionAsync` used to write the prompt to the
+child's stdin and only THEN create its timeout. A pipe holds about 4 KiB on Windows and 64 KiB on
+Linux, and a shaped diff is up to 192 KiB, so every reviewer launch writes past the buffer and blocks
+until the child reads. A child that never reads — a sign-in prompt, a TTY check, a CLI that died
+before its first read — therefore held the launch for as long as it lived, with the clock not started
+and the caller's token unconsulted. On the Team server that is an account's lock held past the job's
+own budget by a review the sweep cannot end, because the runner is inside the launcher.
+
+Measured, with a ten-second child, a 300 ms budget and a 1 MiB prompt: **10 s 070 ms, `TimedOut =
+false`** — the write blocked until the child exited on its own, and by the time the clock existed
+there was nothing left to time out. The same test returns in well under a second now.
+
+The linked, timed token is created before a byte is written, and the three concurrent halves —
+writing, reading, waiting — are all ended by it. The tree kill is what actually frees a blocked
+write: it closes the child's end of the pipe, so a write that ignored its token (an anonymous pipe on
+Windows does) fails at once with the `IOException` this launcher has always read as the child's
+decision. `WriteStdInAsync` closes stdin in a `finally`, because a child waiting for EOF is waiting
+for exactly that, and a deadline that skipped the close would hang the NEXT launch instead of this one.
+
+**A ceiling on output, enforced while the stream is read.** `BeginOutputReadLine` delivers a LINE, so
+a child writing two hundred megabytes without a newline had already been buffered by the framework
+before any callback could count it — a ceiling checked per line fires after the allocation it exists
+to prevent. The reader is a character drain into `BoundedText` now, capped by
+`ProcessRequest.MaxOutputChars` (8 Mi characters — 16 MiB, since a .NET char is two bytes). Past the
+cap the stream is still READ and no longer kept, so a runaway cannot block on a pipe nobody drains,
+and the kept text ends with `[coai: output truncated after N characters]`: a silently cut answer is
+one a parser fails on for a reason nobody can find.
+
+Two things came free with the raw reader, and one of them is a defect nobody had reported. The line
+reader `AppendLine`d every line, so **every vendor answer this product has ever read came back with a
+line ending the vendor did not write** — invisible to JSON parsing, which is why it survived. And the
+drain has a five-second grace after the child is gone: a pipe stays open while any process holds its
+write end, a grandchild inherits both, and a handle that outlived the tree kill would hang the
+launcher rather than the process it belongs to.
+
+The whole `src_mcp` suite — 1147 tests — passed unedited across this change.
 
 ## External dependencies
 
