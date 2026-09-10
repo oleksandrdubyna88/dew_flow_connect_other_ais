@@ -47,6 +47,7 @@ function asProse(title: string): string {
  * the phrase, and this goes red rather than quietly losing the coverage.
  */
 const ALIAS: Record<string, string> = {
+  'coai.editChatPresets': 'edit chat presets',
   'coai.copyConfigBlock': 'copy the mcp config block',
   'coai.copyClaudeSnippet': 'copy the claude.md snippet',
   'coai.answerQuestion': 'answer it in the panel',
