@@ -89,6 +89,17 @@ export interface ChatPageState {
   readonly models: readonly ChatModelChoice[];
   /** Every provider this conversation may put a question to, each with its own models. */
   readonly providers: readonly ChatProvider[];
+  /**
+   * Who would answer a re-ask, or empty when there is nothing to re-ask.
+   *
+   * <p>The gesture is an EMPTY box and Enter — free to take, because an empty box has always been
+   * refused — and a feature whose only trigger is pressing Enter on nothing is a feature nobody
+   * discovers. So the Send button reads *Re-ask · <model>* whenever this is set, which is both the
+   * second way in and the only way to know the first exists.</p>
+   *
+   * <p>The HOST decides: it knows which model gave the last answer and which one is chosen now.</p>
+   */
+  readonly reask: string;
   /** The prompts a person saved, as buttons above the composer. */
   readonly promptPresets: readonly PromptPreset[];
   /** The models a person saved, likewise. */
@@ -462,7 +473,7 @@ ${chatPresetRowsHtml(state.promptPresets, state.modelPresets)}
 <div id="pickerBox">${chatPickerHtml({ providers: state.providers, refused: [] }, state.providerId, state.modelId)}</div>
 <div class="compose">
 <textarea id="say" rows="3" placeholder="Ask about the text above…"${locked ? ' disabled' : ''}>${escapeHtml(state.draft)}</textarea>
-<button type="button" id="send"${locked ? ' disabled' : ''}>Send</button>
+<button type="button" id="send"${locked ? ' disabled' : ''}>${state.reask.length > 0 ? `Re-ask · ${escapeHtml(state.reask)}` : 'Send'}</button>
 </div>
 <div class="hint">Enter sends · Shift+Enter for a new line</div>
 </footer>`;
@@ -639,11 +650,24 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       }
     });
   }
+  // Set by the host with every state, and read by send() below: an empty box means "ask the other
+  // model the same thing" only while there IS another model to ask.
+  var canReask = ${jsonForScript(state.reask.length > 0)};
   function send() {
     const box = document.getElementById('say');
     if (!box || box.disabled) { return; }
     const text = box.value.trim();
-    if (text.length === 0) { return; }
+    if (text.length === 0) {
+      // The whole of entry 24. Text in the box is a question and must never be swallowed by this;
+      // an empty box was refused before this existed and is refused still when there is nothing to
+      // re-ask, so nothing that used to work has changed meaning.
+      if (canReask) {
+        vscode.postMessage({ type: 'command', command: 'reask' });
+        lock(true);
+      }
+
+      return;
+    }
     box.value = '';
     vscode.postMessage({ type: 'command', command: 'send', text: text });
     fitComposer();
@@ -924,6 +948,13 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     // Only a real boolean moves the lock. A state that says nothing about running - a partial push,
     // or a null across the bridge - must leave the composer as it is rather than quietly unlocking
     // it while a turn is still in flight. (local, the second code round.)
+    // Who a re-ask would go to, which is also the button's caption: the gesture is an empty box and
+    // Enter, and a feature whose only trigger is pressing Enter on nothing is one nobody discovers.
+    if (typeof data.reask === 'string') {
+      canReask = data.reask.length > 0;
+      const reaskButton = document.getElementById('send');
+      if (reaskButton) { reaskButton.textContent = canReask ? 'Re-ask · ' + data.reask : 'Send'; }
+    }
     // A stop is about the turn in flight. When nothing is in flight it is about nothing — and
     // holding on to the number would disable the same-numbered turn of the NEXT conversation, since
     // restarting keeps this page and begins counting again. (gemini and local, the code round, from

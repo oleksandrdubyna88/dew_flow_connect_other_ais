@@ -4,7 +4,13 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 import { isInside } from './chatMessages';
-import { ModelPreset, PromptPreset, chatModelPresetsFrom, chatPromptPresetsFrom } from './chatPresets';
+import {
+  ModelPreset,
+  PromptPreset,
+  chatModelPresetsFrom,
+  chatPromptPresetsFrom,
+  reaskFrom,
+} from './chatPresets';
 import { ChatTabMemory, SavedTab, reloadedNote } from './chatTabs';
 import { ChatEntry, ChatPanels } from './chatPanels';
 import { ChatSession } from './chatSession';
@@ -220,6 +226,9 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
     // The turn a stop would name. Zero while nothing runs, which is also what the page renders no
     // control for — a stop that names no turn is refused by the seam rather than obeyed loosely.
     turn: running ? (thread?.turn ?? 0) : 0,
+    // Who would answer a re-ask. Empty while a turn runs: the button is locked anyway, and offering
+    // to re-ask something that is still being answered is offering a question nobody asked yet.
+    reask: running || thread === undefined ? '' : reaskLabel(thread),
   });
   // The one place the transcript reaches a page is the one place it is written down — but only when
   // there is something new to write. `show` runs on every state push: a turn starting, a queue
@@ -331,6 +340,31 @@ async function reopened(thread: Thread): Promise<string> {
  */
 /** What a stopped turn leaves in the transcript, so it never ends on a dangling question. */
 const STOPPED_ANSWER = '(you stopped this answer)';
+
+/**
+ * Ask the model chosen NOW the question the last answer was given to.
+ *
+ * <p>Entry 24. The conversation goes across MINUS that answer — an answer somebody rejected, handed
+ * to the next model, is a model being asked to agree with it — and the question is re-sent verbatim,
+ * because it is what they want answered again rather than re-typed.</p>
+ *
+ * <p>It goes through `oneTurn`, which is the point: a re-ask is a turn. Everything a turn already
+ * does — the lock, the turn number a stop can name, the transcript, the model recorded on the
+ * answer, the cap on a forgetful conversation — happens because this is not a second path.</p>
+ */
+async function oneReask(entry: ChatEntry, thread: Thread): Promise<void> {
+  const again = reaskFrom(thread.messages, thread.providerId);
+  if (again === undefined) {
+    return;
+  }
+  // The rejected answer and its question leave the transcript: the question comes back as this
+  // turn's own, and keeping the answer would show it twice in a conversation that has moved past it.
+  thread.messages = thread.messages.slice(0, -2);
+  // What the NEXT model is handed. `carry` is what `oneTurn` sends ahead of the question, and it is
+  // exactly the conversation before the answer nobody wanted.
+  thread.carry = [...again.said];
+  await oneTurn(entry, again.question);
+}
 
 async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   const thread = threads.get(entry.id);
@@ -788,6 +822,8 @@ function newConversation(
       providers: ready.providers,
       promptPresets: savedPrompts(config),
       modelPresets: savedModels(config),
+      // A conversation that has just opened has said nothing, so there is nothing to ask again.
+      reask: '',
       providerId: ready.providerId,
       modelId: ready.modelId,
       running: false,
@@ -883,6 +919,13 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         thread?.session.dispose();
         thread?.home.release();
       },
+      onReask: (id) => {
+        const thread = threads.get(id);
+        const entry = panels.entryOf(id);
+        if (thread !== undefined && entry !== undefined) {
+          void oneReask(entry, thread);
+        }
+      },
       onRestart: () => undefined,
       onUseLocal: () => undefined,
       onPageError: (_id, message) => {
@@ -947,6 +990,16 @@ async function openWorkspaceFile(
 }
 
 /**
+ * The name of the model that a re-ask would go to, or empty when there is nothing to re-ask.
+ *
+ * <p>The LABEL rather than the id, because it goes on a button a person reads. `reaskFrom` decides
+ * whether there is anything to re-ask at all; this only names who would take it.</p>
+ */
+function reaskLabel(thread: Thread): string {
+  return reaskFrom(thread.messages, thread.providerId) === undefined ? '' : answeredBy(thread).label;
+}
+
+/**
  * Which model a turn was answered by, as the page will caption it.
  *
  * <p>The label is the one the picker offered, so the caption reads as the name a person chose from
@@ -993,6 +1046,7 @@ function restoredPage(
       models: ready.ok ? ready.models : [],
       providers: ready.ok ? ready.providers : [],
       ...presets,
+      reask: '',
       // The row this tab was speaking to, read by `savedPick` out of the old `modelId`.
       providerId: ready.ok ? ready.providerId : restored.providerId,
       modelId: saved.modelId,

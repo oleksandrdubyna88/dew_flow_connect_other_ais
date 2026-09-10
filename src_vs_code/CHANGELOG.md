@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+**Ask the other model the same thing.** Switch the model after an answer you did not like, and the
+Send button becomes *Re-ask · <that model>* — press it, or press Enter on an empty box, and the
+question goes to the new model with the conversation behind it and without the answer you rejected.
+
 **Your prompts and your models, saved by name.** The single prompt in the sidebar has become a list
 you build: give each one a name, tick the one to use when a capture sends by itself, and they appear
 as buttons above the composer — models in their vendor's colour, prompts in another. **ConnectOtherAIs:

@@ -289,6 +289,7 @@ function bundledChatPage(): { bundle: string; html: string } {
         { id: 'antigravity', label: 'Gemini', caption: 'local', models: [{ id: 'g', label: 'G' }] },
       ],
       providerId: 'antigravity',
+      reask: '',
       promptPresets: [],
       modelPresets: [],
       modelId: 'g',

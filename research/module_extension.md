@@ -29,6 +29,32 @@ local model` the page would otherwise still show the remote one as selected whil
 somewhere else), a pushed state that has not changed is not sent at all, a `pick` naming a model the
 conversation was never offered is refused at the host boundary rather than trusted, and the
 composer takes focus back when a turn ends — without which every follow-up costs a mouse click.
+### An empty box asks the other model the same thing (2026-09-10)
+
+Entry 24, in the operator's words: *"maybe I don't like gemini's answer and want to switch to Fable.
+If I switch the model and press Enter with an empty box — take the previous context (except the last
+answer) and feed it to the new model."*
+
+**Except the last answer**, and the reason is sound: an answer somebody rejected, handed to the next
+model, is a model being asked to agree with it. The QUESTION is kept and re-sent verbatim — it is
+what they want answered again — and everything before it stays, because that is the conversation the
+answer was given in. Both the answer and its question leave the transcript: the question comes back
+as this turn's own, and keeping the answer would show it twice in a conversation that has moved past
+it.
+
+**On offer only when the model has CHANGED since that answer.** Pressing Enter on an empty box with
+the same model chosen does what it has always done, which is nothing.
+
+**The gesture is invisible, so the button says it.** `send()` has always refused an empty box, which
+is what made the gesture free to take — and a feature whose only trigger is pressing Enter on nothing
+is a feature nobody discovers. The Send button reads *Re-ask · <model>* whenever there is something
+to re-ask, which is both the second way in and the only way to know the first exists. Text in the box
+is a question and is never swallowed by it.
+
+**It goes through `oneTurn`, and that is the point.** A re-ask is a turn: the lock, the turn number a
+stop can name, the transcript, the model recorded on the answer and the cap on a forgetful
+conversation all happen because this is not a second path.
+
 ### The presets tab (2026-09-10)
 
 `chatPresetsPage.ts` and `chatPresetsPanel.ts` — a page module and a thin panel host, which is the
