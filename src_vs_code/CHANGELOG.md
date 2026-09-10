@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+**The chat section in the sidebar catches up with the tab.** Two of the plans behind the chat named the panel as a surface and shipped only their tab half, so the section had stood unchanged since the morning it was written while the tab gained a picker, presets and a CRUD tab of its own.
+
+*What to ask about the selection* is a **picker of your saved prompts** rather than a box holding a copy of one — the words are edited in the presets tab, and a box here was a second place for them to live and a first place for them to disagree. Under it is the prompt that will actually be sent, because a prompt nobody can see is a prompt nobody corrects, and **Edit presets…** beside it opens that tab. The command had been registered since presets shipped, named in no menu and reachable only from the command palette.
+
+*Which model answers* asks the **provider first, then which of its models** — the same two questions the chat tab asks, which is what its plan’s Definition of Done said and what its record did not mention was missing. The provider list is built from the panel’s OWN catalog: the codex and agy CLIs’ discovered models and a Team server’s allowlist are already in hand here, where the chat command has to do without them, so a row whose models are discovered offers all of them rather than only the one it is set to. A saved value naming a model the provider no longer offers is shown and marked, never silently swapped; an empty second box means whatever that reviewer row is set to, which is what every chat used before.
+
 ## Extension 0.32.3 · Server 0.18.17 — 2026-09-10
 
 > **0.32.0, 0.32.1 and 0.32.2 do not exist.** The change below landed with the manifest already at

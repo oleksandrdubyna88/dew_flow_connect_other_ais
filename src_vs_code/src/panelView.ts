@@ -7,7 +7,8 @@ import {
 import { escapeHtml } from './escapeHtml';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
-import { ChatModelList, chatModelsFrom } from './chatModels';
+import { chatProvidersFrom } from './chatModels';
+import { mainPrompt } from './chatPresets';
 import { CoaiSettings, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
@@ -257,7 +258,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
   const body = [
     `<div id="live-questions">${questionsSection(state.questions)}</div>`,
     section('reviewers', 'Reviewers', open, reviewersBody(state)),
-    section('chat', 'Chat other AIs', open, chatBody(state.chat ?? DEFAULT_CHAT, state.vendors)),
+    section('chat', 'Chat other AIs', open, chatBody(state.chat ?? DEFAULT_CHAT, state)),
     section('prompts', 'Prompts per round', open, promptsBody(state)),
     section('gate', 'The gate', open, gateBody(state.settings)),
     section('limits', 'Limits', open, limitsBody(state.settings, state.vendors.filter((v) => v.enabled && v.code).length)),
@@ -447,12 +448,17 @@ const DEFAULT_CHAT: ChatSettings = chatSettingsFrom(() => undefined);
  * the command will refuse. Selected, so what is configured is what is shown; disabled, so it cannot
  * be chosen again once it is left. Three reviewers raised this from three directions on one round.</p>
  */
-function strandedOption(model: string, models: ChatModelList): string {
-  if (model.length === 0 || models.offered.some((offered) => offered.id === model)) {
+/** One `<option>`, selected when it is the chosen one. Escaped, because every label here is data. */
+function chatOption(value: string, label: string, chosen: string): string {
+  return `    <option value="${escapeHtml(value)}"${value === chosen ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+}
+
+function strandedOption(chosen: string, offered: readonly { readonly id: string }[], reason: string): string {
+  if (chosen.length === 0 || offered.some((one) => one.id === chosen)) {
     return '';
   }
 
-  return `    <option value="${escapeHtml(model)}" selected disabled>${escapeHtml(model)} — cannot answer a chat</option>`;
+  return `    <option value="${escapeHtml(chosen)}" selected disabled>${escapeHtml(chosen)} — ${escapeHtml(reason)}</option>`;
 }
 
 /**
@@ -467,14 +473,31 @@ function strandedOption(model: string, models: ChatModelList): string {
  * tell a bug from a policy. The list comes from `chatModelsFrom`, which is the same function the
  * conversation itself picks from — one source, so the picker and the tab cannot disagree.</p>
  */
-function chatBody(chat: ChatSettings, vendors: readonly Vendor[]): string {
-  const models = chatModelsFrom(vendors);
-  const refusals = models.refused.map((row) => row.reason);
+function chatBody(chat: ChatSettings, state: PanelState): string {
+  // The panel's OWN catalog, which is the half `PLAN_provider_then_model.md` left open: three of the
+  // four model sources are FETCHED rather than read — the codex and agy CLIs' own lists and a Team
+  // server's allowlist — and all three are already in hand HERE. The chat command builds the same
+  // list with them empty, so a row whose models must be discovered offers only what it is set to.
+  // A `local` row cannot chat at all (`canChat`), so the engine that would name its models is never
+  // consulted: passing one would be passing a value nothing on this path can read.
+  const list = chatProvidersFrom(state.vendors, {
+    discoveredCodex: state.codexModels,
+    discoveredAgy: state.agyModels,
+    localEngine: undefined,
+    teamServers: state.teamServers ?? [],
+  });
+  const chosen = list.providers.find((one) => one.id === chat.model) ?? list.providers[0];
+  const ownModel = state.vendors.find((one) => one.id === chosen?.id)?.model ?? '';
+  const refusals = list.refused.map((row) => row.reason);
 
   return `<div class="field">
-  ${labelled('chatPrompt', 'What to ask about the selection', 'chatPrompt')}
-  <textarea id="chatPrompt" data-setting="chatPrompt" rows="3"
-    placeholder="${escapeHtml(DEFAULT_CHAT.prompt)}">${escapeHtml(chat.prompt)}</textarea>
+  ${labelled('chatPromptChoice', 'What to ask about the selection', 'chatPrompt')}
+  <select id="chatPromptChoice" data-setting="chatPromptChoice">
+${chatOption('', `The main one — ${mainPrompt(chat.prompts)?.name ?? chat.prompt}`, chat.promptChoice)}
+${chat.prompts.map((preset) => chatOption(preset.id, preset.name, chat.promptChoice)).join('\n')}
+  </select>
+  <div class="hint">${escapeHtml(chat.prompt)}</div>
+  <button type="button" class="run" data-command="editChatPresets">Edit presets…</button>
 </div>
 <div class="field">
   ${labelled('chatLanguage', 'Answer in', 'chatLanguage')}
@@ -495,11 +518,14 @@ ${LANGUAGES.map((language) =>
 <div class="field">
   ${labelled('chatModel', 'Which model answers', 'chatModel')}
   <select id="chatModel" data-setting="chatModel">
-    <option value=""${chat.model.length === 0 ? ' selected' : ''}>The first one that can answer</option>
-${models.offered.map((model) =>
-    `    <option value="${escapeHtml(model.id)}"${model.id === chat.model ? ' selected' : ''}>`
-    + `${escapeHtml(model.label)}</option>`).join('\n')}
-${strandedOption(chat.model, models)}
+${chatOption('', 'The first one that can answer', chat.model)}
+${list.providers.map((provider) => chatOption(provider.id, provider.label, chat.model)).join('\n')}
+${strandedOption(chat.model, list.providers, 'cannot answer a chat')}
+  </select>
+  <select id="chatModelName" data-setting="chatModelName" aria-label="Which of its models">
+${chatOption('', ownModel.length > 0 ? `${ownModel} — what this row is set to` : 'What this row is set to', chat.modelName)}
+${(chosen?.models ?? []).map((model) => chatOption(model.id, model.label, chat.modelName)).join('\n')}
+${strandedOption(chat.modelName, chosen?.models ?? [], 'this provider does not offer it')}
   </select>
 ${refusals.map((reason) => `  <div class="hint">${escapeHtml(reason)}</div>`).join('\n')}
 </div>`;
@@ -1685,6 +1711,9 @@ export const PANEL_COMMANDS = [
   // The Company/Me control on the spending section, which only an admin is shown. Without it that
   // control would be a button wired to nothing, which is the exact trap this list exists to prevent.
   'teamUsageScope',
+  // The way into the presets tab. `coai.editChatPresets` shipped registered, in no menu and named in
+  // no view, so the only way to reach the CRUD the chat section points at was the command palette.
+  'editChatPresets',
 ] as const;
 
 export type PanelCommand = (typeof PANEL_COMMANDS)[number];
@@ -1699,6 +1728,7 @@ export type PanelCommand = (typeof PANEL_COMMANDS)[number];
  */
 export const VSCODE_COMMAND_FOR = {
   installServer: 'coai.installServer',
+  editChatPresets: 'coai.editChatPresets',
 } as const satisfies Partial<Record<PanelCommand, string>>;
 
 export function isPanelCommand(value: string | undefined): value is PanelCommand {
@@ -1725,5 +1755,14 @@ export function staticKey(state: PanelState): string {
     // worked perfectly — which is exactly what happened to the local model list.
     state.teamServers,
     state.usageScope,
+    // The chat settings, and this field REVERSES a rule that was measured and asserted while the
+    // section held a textarea: a chat setting had to be unable to repaint the panel, or saving the
+    // prompt box as it was typed would have rebuilt the page under a focused control per keystroke.
+    // There is no free-text control in the section any more — the prompt is a picker — and every
+    // remaining one is a `<select>`, which posts `change` with its dropdown already closed. What the
+    // exclusion now costs is the pair: choosing a provider must re-fill the model select beside it,
+    // and choosing a preset in the other tab must reach this list, and neither can happen in a
+    // section the paint decision cannot see.
+    state.chat,
   ]);
 }

@@ -36,7 +36,23 @@ import { ChatSettings } from '../chatSettings';
  * against a fake document and the messages it posts are read.</p>
  */
 
-const chat: ChatSettings = { prompt: 'Explain', language: 'en', autoSend: 'keyboard', model: '' };
+/**
+ * <p><b>The example is historical, and the machinery is not.</b> *What to ask about the selection* is
+ * a PICKER now — step 5 of the presets plan — so the textarea this defect was found in no longer
+ * exists. The tests below keep its name because they run the page's own script against a synthetic
+ * document, and the script is generic over `[data-setting]`: the same hazard is live for every
+ * free-text control the panel still renders (`executablePath`, `credsKey`). Re-pointing the fixture
+ * at one of those would rename the case without changing a single thing it proves.</p>
+ */
+const chat: ChatSettings = {
+  prompt: 'Explain',
+  promptChoice: '',
+  prompts: [],
+  language: 'en',
+  autoSend: 'keyboard',
+  model: '',
+  modelName: '',
+};
 
 const state = (over: Partial<PanelState> = {}): PanelState => ({
   settings: DEFAULTS,
@@ -345,14 +361,28 @@ test('a focus name that is not a setting name never reaches the page', () => {
   assert.match(silly, /const focusOn = \{"id":"chatPrompt\|\|","start":0,"end":0\};/);
 });
 
-test('a chat setting cannot repaint the panel — the measurement this design rests on', () => {
-  // The draft plan said saving on `input` would repaint after every character. It cannot: the paint
-  // decision is `staticKey`, and `chat` is not one of the eleven fields it reads. Asserted so that
-  // adding `chat` to the key fails HERE, with this sentence, rather than by making the box flicker.
-  const typed: ChatSettings = { ...chat, prompt: 'поясни' };
+test('a chat setting repaints the panel now, because there is no longer a box to rebuild under', () => {
+  // THE GUARANTEE CHANGED, and the reason is that its premise did. While the section held a
+  // textarea, `chat` had to be outside `staticKey` or saving the prompt as it was typed would have
+  // rebuilt the page under a focused control per keystroke — that was measured, and this test was
+  // the tripwire on it. The prompt is a PICKER now (step 5 of the presets plan), so every control in
+  // the section is a `<select>`, which posts `change` with its dropdown already shut. And the
+  // exclusion had acquired a cost: the provider and model selects are a PAIR, so choosing a provider
+  // has to re-fill the models beside it — which a section the paint decision cannot see never does.
+  const chosen: ChatSettings = { ...chat, model: 'antigravity' };
 
-  assert.equal(staticKey(state({ chat: typed })), staticKey(state()),
-    'a chat setting now moves the repaint key, and saving as you type would rebuild the page per keystroke');
+  assert.notEqual(staticKey(state({ chat: chosen })), staticKey(state()),
+    'choosing a provider does not move the repaint key, so the model select beside it never re-fills');
+});
+
+test('the free-text hazard the old rule guarded is gone with the box, not merely overruled', () => {
+  // The rule above is only safe while the section has nothing a person types INTO. This asserts
+  // that, so re-introducing a textarea here fails with this sentence rather than by flickering.
+  const body = panelHtml(state(), 'n0nce');
+  const section = body.slice(body.indexOf('data-section="chat"'), body.indexOf('data-section="prompts"'));
+
+  assert.doesNotMatch(section, /<textarea|<input type="(text|url|number)"/,
+    'a free-text control is back in a section that now repaints on every one of its own settings');
 });
 
 test('a repaint waits for a focused control, and not forever', () => {
