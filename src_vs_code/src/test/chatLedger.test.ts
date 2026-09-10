@@ -4,11 +4,17 @@ import {
   ChildRecord,
   FORGET_AFTER_MS,
   afterSweep,
+  bootSecondsIn,
   filesToSweep,
   NEAR_ENOUGH_MS,
+  USER_HZ,
   forgotten,
   imageOf,
   killOutcome,
+  namesOf,
+  procStat,
+  startedAtMs,
+  stillOurs,
   ledgerName,
   ledgerText,
   ownerOf,
@@ -198,4 +204,88 @@ test('a ledger is removed only when everything in it was asked AND answered', ()
   assert.strictEqual(afterSweep([record], true), 'rewrite');
   assert.strictEqual(afterSweep([], false), 'rewrite');
   assert.strictEqual(afterSweep([record], false), 'rewrite');
+});
+
+/**
+ * The POSIX identity check, against lines a real kernel wrote.
+ *
+ * <p>Both fixtures were taken from a live WSL distro on 2026-09-10 rather than composed, and the
+ * second one exists because `/proc/<pid>/stat` is the file everybody parses wrongly: field 2 is the
+ * executable's name in parentheses and it may contain spaces AND brackets of its own. A process
+ * really can be called `we (are) here`, and splitting the line on whitespace then reads a different
+ * field — silently, and only for that process.</p>
+ */
+const REAL_STAT = '84361 (sleep) S 84357 84357 84357 34825 84357 4194304 129 0 0 0 0 0 0 0 20 0 1 0 430830 '
+  + '3207168 447 18446744073709551615 108365529612288 108365529626289 140731617153408 0 0 0 0 6 0 1 0 0 17 19 0 0 0 0 0';
+
+const TRICKY_STAT = '84369 (we (are) here) S 84357 84357 84357 34825 84357 4194304 133 0 0 0 0 0 0 0 20 0 1 0 430852 '
+  + '3207168 447 18446744073709551615 109356870762496 109356870776497 140728320219584 0 0 0 0 6 0 1 0 0 17 2 0 0 0 0 0';
+
+test('a real /proc stat line yields the name and the start ticks', () => {
+  assert.deepStrictEqual(procStat(REAL_STAT), { comm: 'sleep', startTicks: 430830 });
+});
+
+test('a process whose own name contains spaces and brackets is still read correctly', () => {
+  assert.deepStrictEqual(procStat(TRICKY_STAT), { comm: 'we (are) here', startTicks: 430852 });
+});
+
+test('a stat line nobody could parse says so rather than guessing a number', () => {
+  assert.deepStrictEqual(procStat(''), { comm: '', startTicks: -1 });
+  assert.deepStrictEqual(procStat('84361 (sleep'), { comm: '', startTicks: -1 });
+  assert.strictEqual(procStat('84361 (sleep) S 1 2 3').startTicks, -1, 'a truncated line produced a start time');
+});
+
+test('the boot time comes from btime and from nothing else', () => {
+  assert.strictEqual(bootSecondsIn('cpu 1 2 3\nbtime 1789025380\nprocesses 9\n'), 1789025380);
+  assert.strictEqual(bootSecondsIn('cpu 1 2 3\nprocesses 9\n'), -1, 'a file with no btime invented one');
+});
+
+test('the start time computed from a real pair lands where the process really started', () => {
+  // Taken together on the same machine in the same second: btime 1789025380, and the process was
+  // observed alive at 1789029688673. USER_HZ is 100, so 430830 ticks is 4308.3 s after boot.
+  const started = startedAtMs(procStat(REAL_STAT).startTicks, bootSecondsIn('btime 1789025380\n'));
+
+  assert.strictEqual(started, 1_789_029_688_300);
+  assert.ok(Math.abs(started - 1_789_029_688_673) < NEAR_ENOUGH_MS, 'the computed start is outside the slack');
+  assert.strictEqual(USER_HZ, 100);
+});
+
+test('a start time is unknown rather than zero when either half is missing', () => {
+  assert.strictEqual(startedAtMs(-1, 1789025380), -1);
+  assert.strictEqual(startedAtMs(430830, -1), -1);
+});
+
+test('a process answers to its comm and to the first two words of its command line, and to nothing else', () => {
+  // A native binary: argv[0] is its own path. A shebang script: the kernel runs the interpreter, so
+  // argv[0] is the interpreter and the name we recorded is at argv[1] — measured, and the reason
+  // this takes two positions rather than one.
+  assert.deepStrictEqual(namesOf('claude', ['/usr/bin/claude', '--print']), ['claude']);
+  assert.deepStrictEqual(
+    namesOf('sh', ['/bin/sh', '/mnt/c/Users/x/AppData/Roaming/npm/codex', 'exec']),
+    ['sh', 'codex'],
+  );
+  // And it stops at two: an argument that happens to be a vendor's name is an argument.
+  assert.deepStrictEqual(namesOf('python3', ['/usr/bin/python3', 'job.py', 'codex']), ['python3', 'job.py']);
+});
+
+test('a comm the kernel truncated at fifteen characters is not the only thing asked', () => {
+  // Linux caps comm at 15 characters, so a longer name never matches there — which is exactly why
+  // the command line is consulted as well.
+  assert.deepStrictEqual(
+    namesOf('a-very-long-nam', ['/opt/bin/a-very-long-named-cli']),
+    ['a-very-long-nam', 'a-very-long-named-cli'],
+  );
+});
+
+test('a process is ours only when the name AND the start time both agree', () => {
+  const record: ChildRecord = { pid: 4242, image: 'codex', startedMs: 1_789_000_000_000 };
+
+  assert.strictEqual(stillOurs(record, { names: ['sh', 'codex'], startedMs: record.startedMs + 500 }), true);
+  assert.strictEqual(stillOurs(record, { names: ['node'], startedMs: record.startedMs }), false);
+  assert.strictEqual(
+    stillOurs(record, { names: ['codex'], startedMs: record.startedMs + NEAR_ENOUGH_MS + 1 }),
+    false,
+    'a namesake started outside the slack was taken for ours',
+  );
+  assert.strictEqual(stillOurs(record, { names: ['codex'], startedMs: -1 }), false, 'an unknown start matched');
 });

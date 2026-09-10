@@ -65,12 +65,122 @@ export function imageOf(executable: string): string {
 }
 
 /**
+ * The names a Linux process can honestly answer to: its `comm`, and the first two words of its
+ * command line.
+ *
+ * <p><b>Three positions, and each of the three is there because of a measured shape.</b> On the
+ * machine this was written for, `claude` and `agy` are native ELF binaries whose `argv[0]` is their
+ * own path; `codex` and `gemini` are `#!/bin/sh` scripts, so the kernel runs the INTERPRETER and
+ * `argv[0]` is `/bin/sh` while the name we recorded sits at `argv[1]`. `comm` catches a binary whose
+ * `argv[0]` was rewritten, and it is last resort rather than first because Linux truncates it to
+ * fifteen characters.</p>
+ *
+ * <p><b>And it stops at two.</b> The first draft of this plan said "any `cmdline` entry", which two
+ * reviewers refused independently and rightly: `python job.py codex` would then answer to `codex`,
+ * and a pid the kernel had recycled onto it would be killed as ours. Only the first two positions can
+ * carry an executable's identity; everything after them is an argument.</p>
+ */
+export function namesOf(comm: string, cmdline: readonly string[]): readonly string[] {
+  const second = cmdline[1] ?? '';
+  const candidates = [
+    comm.trim().toLowerCase(),
+    imageOf(cmdline[0] ?? ''),
+    // A FLAG is never an identity. `claude --print` would otherwise answer to `--print`, which is a
+    // wider match surface for no gain — `safeImage` would refuse such a record anyway, and a rule
+    // that leans on another rule to stay safe is one nobody can read on its own. Found by the test.
+    second.startsWith('-') ? '' : imageOf(second),
+  ];
+
+  return [...new Set(candidates.filter((name) => name.length > 0))];
+}
+
+/**
+ * The clock `/proc` reports process times in.
+ *
+ * <p>100 on every architecture, and it is an ABI constant rather than the kernel's own tick rate:
+ * `sysconf(_SC_CLK_TCK)` is what a C program would call and Node exposes no equivalent, so the
+ * number is written here with its reason. `getconf CLK_TCK` on the machine this was measured on
+ * returned 100.</p>
+ */
+export const USER_HZ = 100;
+
+/** What `/proc/<pid>/stat` says, of the two things a ledger row is checked against. */
+export interface ProcStat {
+  readonly comm: string;
+  /** Field 22 — the process's start, in `USER_HZ` ticks since boot. `-1` when it could not be read. */
+  readonly startTicks: number;
+}
+
+/**
+ * `/proc/<pid>/stat`, parsed from the LAST `)` rather than by splitting on spaces.
+ *
+ * <p>Field 2 is the executable's name wrapped in parentheses, and it may contain spaces and brackets
+ * of its own — a process really can be called `(my program)`. Splitting the whole line on whitespace
+ * therefore reads a different field for such a process, which is the classic way this file is parsed
+ * wrongly. Everything after the last `)` is field 3 onwards, so field 22 is index 19 of that tail.</p>
+ */
+export function procStat(text: string): ProcStat {
+  const close = text.lastIndexOf(')');
+  const open = text.indexOf('(');
+  if (close < 0 || open < 0 || close < open) {
+    return { comm: '', startTicks: -1 };
+  }
+  const tail = text.slice(close + 1).trim().split(/\s+/);
+  const ticks = Number(tail[19]);
+
+  return {
+    comm: text.slice(open + 1, close),
+    startTicks: Number.isFinite(ticks) && ticks >= 0 ? ticks : -1,
+  };
+}
+
+/** The seconds-since-epoch this machine booted, from `/proc/stat`'s `btime`, or `-1`. */
+export function bootSecondsIn(text: string): number {
+  const found = /^btime\s+(\d+)$/m.exec(text);
+
+  return found === null ? -1 : Number(found[1]);
+}
+
+/**
+ * When a process started, in epoch milliseconds, or `-1` when either half is unknown.
+ *
+ * <p><b>Field 22 rather than the ctime of `/proc/<pid>`</b>, and the plan round's stated reason for
+ * that was measured FALSE — a ctime is not the time of the `stat` call; against a live process it
+ * gave 1789026765000 for a real start of 1789026765179. The recommendation is taken anyway for a
+ * reason the finding did not give: an inode's ctime can be touched by things that are not a process
+ * starting, while field 22 is written once at fork and never again.</p>
+ */
+export function startedAtMs(startTicks: number, bootSeconds: number): number {
+  return startTicks < 0 || bootSeconds < 0 ? -1 : (bootSeconds + startTicks / USER_HZ) * 1000;
+}
+
+/**
+ * Is the process these facts describe still the one we wrote down?
+ *
+ * <p>The POSIX half of the three-fact check the Windows script performs inline. It has to be
+ * performed inline THERE because the check runs inside a remote PowerShell; here `/proc` is read in
+ * this process, so the decision can be a pure function and a test rather than a string.</p>
+ *
+ * <p>Both facts are required and neither is sufficient. A name alone would kill a namesake started
+ * yesterday under a pid the kernel has since recycled; a start time alone would kill whatever
+ * happened to be launched in the same second.</p>
+ */
+export function stillOurs(record: ChildRecord, observed: { names: readonly string[]; startedMs: number }): boolean {
+  return observed.names.includes(record.image)
+    && Math.abs(observed.startedMs - record.startedMs) <= NEAR_ENOUGH_MS;
+}
+
+/**
  * An image name safe to put in a command.
  *
  * <p>It comes from a reviewer's `executablePath`, which is a person's own setting and therefore
  * their own text. The verify-and-kill command carries it, so a name with a quote in it would be a
  * quote in a PowerShell script. A file name has no business containing one; anything that does is
  * not compared, and its record is left alone.</p>
+ *
+ * <p>The POSIX path builds no command and so cannot be injected into, but it is filtered by the same
+ * rule anyway — `worthAsking` applies it before either path is reached, and a name this refuses is
+ * one nobody can compare with confidence on any host.</p>
  */
 export function safeImage(image: string): boolean {
   return /^[A-Za-z0-9](?:[A-Za-z0-9._+-]{0,120})$/.test(image);

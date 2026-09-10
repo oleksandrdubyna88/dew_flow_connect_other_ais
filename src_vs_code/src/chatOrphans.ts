@@ -1,24 +1,31 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { readdir, rm, stat } from 'node:fs/promises';
+import { readFile, readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   ChildRecord,
+  KillOutcome,
   afterSweep,
+  bootSecondsIn,
   filesToSweep,
   forgotten,
   imageOf,
   killOutcome,
   ledgerName,
   ledgerText,
+  namesOf,
   ownerOf,
   parseLedger,
+  procStat,
   recorded,
   settled,
+  startedAtMs,
+  stillOurs,
   tooOld,
   verifyAndKill,
   worthAsking,
 } from './chatLedger';
 import { capture } from './versionProbe';
+import { hostPlatform } from './hostSide';
 
 /**
  * The ledger's world-facing half: the files, the command, and the log line.
@@ -140,12 +147,96 @@ function ownerAlive(pid: number): boolean {
   }
 }
 
-/** One candidate: check the three facts and end its tree, inside a single command. */
-async function endIfOurs(record: ChildRecord): Promise<ReturnType<typeof killOutcome>> {
+/**
+ * What `/proc` could say about one pid.
+ *
+ * <p>`absent` and `unknown` are deliberately different answers, and collapsing them was a real
+ * defect in the first draft of this: a process that exits while its files are being read is GONE and
+ * its row can be struck out, while a read that failed for any other reason is a question nobody
+ * answered — and a row struck out on that would be an orphan nobody ever looks for again.</p>
+ */
+export type ProcEntry =
+  | { readonly kind: 'found'; readonly names: readonly string[]; readonly startedMs: number }
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'unknown' };
+
+/** The two files that identify a Linux process, plus the boot time its start is counted from. */
+async function procEntry(pid: number): Promise<ProcEntry> {
+  try {
+    const [statText, cmdline, bootText] = await Promise.all([
+      readFile(`/proc/${pid}/stat`, 'utf8'),
+      readFile(`/proc/${pid}/cmdline`, 'utf8'),
+      readFile('/proc/stat', 'utf8'),
+    ]);
+    const { comm, startTicks } = procStat(statText);
+
+    return {
+      kind: 'found',
+      // NUL-separated, and the trailing separator leaves an empty last element that is not an argument.
+      names: namesOf(comm, cmdline.split('\0').filter((part) => part.length > 0)),
+      startedMs: startedAtMs(startTicks, bootSecondsIn(bootText)),
+    };
+  } catch (reason) {
+    return (reason as NodeJS.ErrnoException).code === 'ENOENT' ? { kind: 'absent' } : { kind: 'unknown' };
+  }
+}
+
+/**
+ * One candidate on a POSIX host: check the same three facts, then end it.
+ *
+ * <p><b>Why this exists at all.</b> The Windows path asks its three facts and kills inside ONE
+ * PowerShell command, and everything that was not Windows used to answer `'unknown'` — which is the
+ * one outcome that does not settle a row. So in a WSL window a vendor CLI orphaned by a force-kill
+ * was never ended, and its record was re-asked at every activation for ever.</p>
+ *
+ * <p><b>Both sides of the world are injected</b>, so all seven branches are a test on a Windows
+ * machine with no `/proc` and no signals to send. That is the one place this deviates from the
+ * neighbouring Windows path, which is untested because a PowerShell round trip cannot be faked
+ * cheaply; there was no such excuse here.</p>
+ *
+ * <p><b>One pid, not a tree, and that is evidence rather than preference.</b> Windows needs
+ * `taskkill /t` because a vendor CLI there is a shim tree — `codex.cmd` to `cmd.exe` to `node`.
+ * `cliVersions.needsShell` gates that to `win32` and a `.cmd`/`.bat` name, so on Linux `spawn` never
+ * goes through a shell and the pid we wrote down IS the vendor process.
+ * `/proc/<pid>/task/<pid>/children` was measured to exist and answer, and is where a walk would go if
+ * a vendor is ever found to daemonise — on that evidence, not before it.</p>
+ *
+ * <p><b>The pid-reuse window is narrowed, not claimed away.</b> Nothing happens between the read and
+ * the signal — no await, no second read — and a replacement would have to carry the same executable
+ * name AND have started within ten seconds of the recorded start to be mistaken for ours. `pidfd_open`
+ * would close it properly and is not reachable from Node without a native module.</p>
+ */
+export async function endIfOursPosix(
+  record: ChildRecord,
+  observe: (pid: number) => Promise<ProcEntry> = procEntry,
+  end: (pid: number) => void = (pid) => process.kill(pid, 'SIGKILL'),
+): Promise<KillOutcome> {
+  const seen = await observe(record.pid);
+  if (seen.kind !== 'found') {
+    return seen.kind === 'absent' ? 'gone' : 'unknown';
+  }
+  if (!stillOurs(record, seen)) {
+    return 'not ours';
+  }
+
+  try {
+    end(record.pid);
+
+    return 'killed';
+  } catch (reason) {
+    // It exited between the read and the signal — a benign race, and the same answer the Windows
+    // path gives for a pid that is no longer there. Anything else, `EPERM` above all, is a process
+    // we may not touch: unknown, so the row is kept and asked about again.
+    return (reason as NodeJS.ErrnoException).code === 'ESRCH' ? 'gone' : 'unknown';
+  }
+}
+
+/** One candidate on Windows: the three facts and the tree kill, inside a single command. */
+async function endIfOursWindows(record: ChildRecord): Promise<KillOutcome> {
   const command = verifyAndKill(record);
-  if (process.platform !== 'win32' || command.length === 0) {
-    // The verify-and-kill is PowerShell, and a record whose image could not appear in a command is
-    // one this side refuses to build one for. Nothing claimed, nothing killed, the record kept.
+  if (command.length === 0) {
+    // A record whose image could not appear in a command is one this side refuses to build one for.
+    // Nothing claimed, nothing killed, the record kept.
     return 'unknown';
   }
   const ran = await capture(
@@ -156,6 +247,18 @@ async function endIfOurs(record: ChildRecord): Promise<ReturnType<typeof killOut
   );
 
   return killOutcome(ran.code, ran.output);
+}
+
+/** One candidate, asked in the way the side this host is on can answer. */
+async function endIfOurs(record: ChildRecord): Promise<KillOutcome> {
+  const here = hostPlatform();
+  if (here === 'linux') {
+    return endIfOursPosix(record);
+  }
+
+  // darwin has no `/proc` and no verified equivalent yet, so it answers exactly as it did before:
+  // nothing claimed, nothing killed, the record kept for a build that can answer.
+  return here === 'win32' ? endIfOursWindows(record) : 'unknown';
 }
 
 /** Everything in this file is older than the bound — nothing in it can be asked about ever again. */
