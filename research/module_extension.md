@@ -29,6 +29,25 @@ local model` the page would otherwise still show the remote one as selected whil
 somewhere else), a pushed state that has not changed is not sent at all, a `pick` naming a model the
 conversation was never offered is refused at the host boundary rather than trusted, and the
 composer takes focus back when a turn ends — without which every follow-up costs a mouse click.
+### Two rows of buttons above the composer (2026-09-10)
+
+The prompts a person saved and the models they saved, as buttons in the pinned footer. **Two rows
+and not one merged list**, which was the operator's decision rather than a layout preference: they
+are two kinds of decision — what shall be ASKED and what shall ANSWER — and one button that silently
+sets both is a button whose effect cannot be predicted from its name.
+
+**The colour is an EDGE, and only the model row has one of its own.** A model button wears its
+vendor's colour from `vendorPalette`, so it IS a vendor's button and keeps the rule the rounds list,
+the reviewer cards and the answer captions already hold: one vendor, one colour, everywhere. The
+prompt row takes the link colour, which is in no vendor's palette, so a prompt can never look like a
+vendor. An edge rather than a filled box, for the reason the reviewer cards gave: a wall of filled
+blocks is harder to read than the text in it.
+
+**The page names what was pressed and does nothing else.** What a prompt preset does to the composer
+and what a model preset does to the conversation are the host's to decide — it holds the lists, and a
+page acting on its own copy would be a second place for them to drift. The listener is delegated on
+the row, because a push replaces both rows whenever the saved lists change.
+
 ### Presets: the two lists a person builds (2026-09-10)
 
 `chatPresets.ts` reads `coai.chatPromptPresets` and `coai.chatModelPresets` — the first values in
