@@ -520,6 +520,16 @@
           "type": "string",
           "default": "",
           "markdownDescription": "Which configured reviewer answers a chat, by its id. Empty means the first one that can — today that is any row on the `antigravity` runtime."
+        },
+        "coai.chatPromptChoice": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Which of your saved prompts a chat opens with, by its id. Empty means the main one. The words themselves live in `coai.chatPromptPresets` and are edited in the presets tab, so this holds the CHOICE rather than a copy of it."
+        },
+        "coai.chatModelName": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Which of that provider's models answers. Empty means the model the reviewer row itself is set to, which is what every chat used before the pair existed."
         }
       }
     },

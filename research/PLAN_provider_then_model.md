@@ -6,6 +6,25 @@
 >
 > ### What shipped differently
 >
+> **The PANEL half did not ship with the rest, and nothing here said so — corrected 2026-09-10.**
+> The Definition of Done below reads "in the tab and in the panel"; the shape section says "the
+> panel's *Which model answers* becomes the same pair". PR #175 shipped `chatPickerHtml` and left
+> `panelView.ts` alone — the pure half's own commit had said the two selects belonged to other lanes,
+> and only one of those lanes ran. This record was written as though the plan were complete, which is
+> the worse half of the omission: a missing feature is found by using the product, a missing deviation
+> is found by nobody. The panel asks provider-then-model now, with `coai.chatModelName` for the second
+> half, and `openingModel` deciding what a new tab opens with.
+>
+> **`coai.chatModelName`, not the `coai.chatProvider` this plan named.** The reason is below: the
+> provider was already saved, so the half that had no home was the MODEL. `coai.chatModel` keeps
+> holding a row id — every installation's value keeps meaning what it was written to mean — and the
+> new setting names one of that row's models, with the row's own model as the fallback.
+>
+> **The panel builds its own catalog, which closes the open tail below for this surface.** The
+> discovered codex and agy lists and a Team server's allowlist are already in the panel; the chat
+> command's `chatCatalogFrom` passes them empty. The section therefore offers a discovered row all of
+> its models where the command still offers one. The tail stands for the command.
+>
 > **There is no `coai.chatProvider` setting.** The plan named one; what shipped keeps the pair on the
 > conversation and migrates the existing `coai.chatModel` — which has always held a ROW id — through
 > `legacyPick`. A second setting would have been a second thing to keep in step with the first, for a

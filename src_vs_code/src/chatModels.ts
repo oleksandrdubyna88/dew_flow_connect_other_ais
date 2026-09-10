@@ -382,3 +382,25 @@ export function legacyPick(
   // rather than "pick something". (gemini, the code round.)
   return { providerId: '', modelId: saved, candidates: offering.map((one) => one.id) };
 }
+
+/**
+ * Which model a NEW conversation opens with, given what the panel saved beside the provider.
+ *
+ * <p>`coai.chatModel` has always held a ROW and `legacyPick` reads it as one, bringing that row's
+ * own model with it. `coai.chatModelName` is the panel's second half — which of that row's models —
+ * and it is a LOOKUP with a fallback rather than a second source of truth: a name the chosen
+ * provider does not offer is not a pick at all, and the row's own model answers instead.</p>
+ *
+ * <p>The fallback is the point. `settings.json` is edited by hand and a Team server withdraws models
+ * from its allowlist without asking, so a saved name that no longer resolves is the ordinary case —
+ * and refusing to open a conversation over it would punish a person for something a server did. One
+ * step later `resolveChatPick` applies the same pair rule, where a name the person picked THIS
+ * minute is worth a refusal by name.</p>
+ */
+export function openingModel(list: ChatProviderList, saved: LegacyPick, named: string): string {
+  const provider = list.providers.find((one) => one.id === saved.providerId);
+
+  return named.length > 0 && (provider?.models.some((model) => model.id === named) ?? false)
+    ? named
+    : saved.modelId;
+}

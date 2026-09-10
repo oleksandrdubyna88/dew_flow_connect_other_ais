@@ -1320,6 +1320,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // and its own failure. The button's job is only to reach it.
         await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.installServer);
         break;
+      case 'editChatPresets':
+        // The same shape, and for the same reason: the tab is opened by a registered command that
+        // owns its own panel. Without this the section could name the presets it picks from and
+        // offer no way to reach them — which is the state it shipped in.
+        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.editChatPresets);
+        break;
       case 'addTeamServer':
         await this.addTeamServer();
         break;

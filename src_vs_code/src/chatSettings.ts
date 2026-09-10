@@ -1,4 +1,5 @@
 import { DEFAULT_CHAT_PROMPT } from './chatPrompt';
+import { PromptPreset, chatPromptPresetsFrom, mainPrompt } from './chatPresets';
 import { LANGUAGES, LanguageCode } from './settingsShape';
 
 /**
@@ -33,11 +34,29 @@ export const DEFAULT_AUTO_SEND: ChatAutoSend = 'keyboard';
 export interface ChatSettings {
   /** The instruction the captured passage travels with. Never empty — falls back to `Explain`. */
   readonly prompt: string;
+  /**
+   * WHICH saved prompt {@link prompt} came from — the preset id the panel's picker holds.
+   *
+   * <p>An id rather than the words themselves, and that is the whole reason this setting exists: the
+   * text is edited in the presets tab, so a sidebar holding a COPY of it would go stale the first
+   * time somebody rewrote the prompt they had chosen. Empty means the main one.</p>
+   */
+  readonly promptChoice: string;
+  /** The saved prompts, carrying the legacy migration — what the picker offers, by name. */
+  readonly prompts: readonly PromptPreset[];
   /** The language answers are asked in. Its own setting, NOT `coai.helpLanguage` — see below. */
   readonly language: LanguageCode;
   readonly autoSend: ChatAutoSend;
-  /** Which configured model answers. Empty means "the first one offered". */
+  /**
+   * Which configured row answers — the PROVIDER half of the pair. Empty means "the first offered".
+   *
+   * <p>The name predates the pair and is kept because the VALUE never changed meaning: it has always
+   * held a vendor row id, which is what `legacyPick` reads it as. Renaming the setting would have
+   * been a migration of every installation for a word.</p>
+   */
   readonly model: string;
+  /** Which of that row's models. Empty means the model the row itself is configured to. */
+  readonly modelName: string;
 }
 
 /**
@@ -62,11 +81,24 @@ function text(value: unknown, fallback: string): string {
 export function chatSettingsFrom(read: (key: string) => unknown): ChatSettings {
   const language = read('chatLanguage');
   const autoSend = read('chatAutoSend');
+  // The list carries its own migration: somebody who has been editing `coai.chatPrompt` since the
+  // chat shipped owns exactly one prompt, and it is theirs. Read through the same function the
+  // presets tab and the chat command read it through — a second reader here would be a second place
+  // to forget the second argument, and forgetting it silently sends `Explain` instead of their words.
+  const prompts = chatPromptPresetsFrom(read('chatPromptPresets'), text(read('chatPrompt'), ''));
+  const choice = text(read('chatPromptChoice'), '');
+  // A choice can name a prompt that was deleted in the other tab — the ordinary case, not an exotic
+  // one, because the list is edited somewhere else. The main one answers then, never nothing: an
+  // empty question is one that still gets asked, and billed.
+  const chosen = prompts.find((preset) => preset.id === choice) ?? mainPrompt(prompts);
 
   return {
     // A blank prompt box is a cleared field, not a request for an empty question. `chatPrompt.ts`
     // makes the same decision at the other end; both are cheap and neither is the only guard.
-    prompt: text(read('chatPrompt'), DEFAULT_CHAT_PROMPT),
+    prompt: chosen?.text ?? DEFAULT_CHAT_PROMPT,
+    promptChoice: choice,
+    prompts,
+    modelName: text(read('chatModelName'), ''),
     // English by default, and NOT `coai.helpLanguage`: that one is set to English on the owner's
     // machine, so borrowing it would have delivered English explanations — exactly what the feature
     // exists to avoid. One setting cannot answer two questions that disagree.

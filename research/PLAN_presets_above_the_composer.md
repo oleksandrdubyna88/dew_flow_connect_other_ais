@@ -6,12 +6,21 @@
 >
 > ### What shipped differently
 >
-> **The sidebar box was not turned into a picker.** The plan's step 5 said *What to ask about the
-> selection* would become a dropdown of preset names plus a link into the tab. It was left as it is:
-> the buttons above the composer and the tab both reached the person first, and a third surface for
-> the same list is a third place to keep in step. Entry 1's withdrawal still stands — the box is not
-> being widened either — but the box itself is unchanged, and that is a deviation rather than a
-> completion.
+> **The sidebar box was not turned into a picker — CLOSED 2026-09-10, in the other direction.** The
+> plan's step 5 said *What to ask about the selection* would become a dropdown of preset names plus a
+> link into the tab. It was first left as it was, on the argument that the buttons above the composer
+> and the tab both reached the person and a third surface for the same list is a third place to keep
+> in step. **The operator read the sidebar as the feature and could not find any of it** — which is
+> the answer to that argument: the two surfaces that reached the person were both inside a tab that
+> has to be opened first, and the section that names the prompt was still offering to edit a copy of
+> one. The box is a picker now, `coai.chatPromptChoice` holds the CHOICE rather than the words, and
+> **Edit presets…** beside it opens the tab. Entry 1's withdrawal still stands: a picker does not need
+> 35 % more width.
+>
+> The third-place worry was real and is answered by the storage rather than by the omission — the
+> sidebar holds an id, so there is only ever one copy of the words. The related defect it hid: the
+> `coai.editChatPresets` command shipped registered, in no menu and named in no view, so the tab this
+> plan built was reachable only from the command palette.
 >
 > **The migration reads the old prompt on every read, not once.** The plan said "on first read";
 > what shipped is *only when there are no presets at all*, which is the same thing where it matters

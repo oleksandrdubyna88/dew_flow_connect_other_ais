@@ -5,6 +5,7 @@ import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS, Vendor } from '../vendors';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { CHAT_AUTO_SEND, ChatSettings, chatSettingsFrom } from '../chatSettings';
+import { PromptPreset } from '../chatPresets';
 import { escapeHtml } from '../escapeHtml';
 
 /**
@@ -21,7 +22,19 @@ import { escapeHtml } from '../escapeHtml';
  * `data-setting` is one generic route that `settingWrite.test.ts` already covers.</p>
  */
 
-const chat: ChatSettings = { prompt: 'Explain', language: 'en', autoSend: 'keyboard', model: '' };
+const chat: ChatSettings = {
+  prompt: 'Explain',
+  promptChoice: '',
+  prompts: [],
+  language: 'en',
+  autoSend: 'keyboard',
+  model: '',
+  modelName: '',
+};
+
+function preset(id: string, name: string): PromptPreset {
+  return { id, name, text: `${name} — the words that are actually sent`, main: id === 'p1' };
+}
 
 function vendor(over: Partial<Vendor> = {}): Vendor {
   return {
@@ -69,21 +82,48 @@ function chatSection(html: string): string {
   return html.slice(start, end);
 }
 
-test('the prompt is a MULTILINE box, because the prompt is not always one word', () => {
-  // The default is one word — `Explain` — precisely so that nobody has to maintain it. What is
-  // asked for is the room to write a paragraph when the one word is not enough.
-  const body = chatSection(panelHtml(state(), 'n0nce'));
+test('what to ask is CHOSEN from the saved prompts, not typed into a box that holds one', () => {
+  // Step 5 of the presets plan, which shipped without this half: the CRUD lives in the tab, so the
+  // sidebar's job shrank to picking one — and a box that edits a copy of a preset is a second place
+  // for the same words to live, which is how the two of them start disagreeing.
+  const body = chatSection(panelHtml(state({
+    chat: { ...chat, prompts: [preset('p1', 'Explain'), preset('p2', 'What would you answer?')] },
+  }), 'n0nce'));
 
-  assert.match(body, /<textarea[^>]*data-setting="chatPrompt"/, 'the prompt is not a textarea');
-  assert.ok(body.includes('>Explain</textarea>'), 'the box does not hold the prompt it will send');
+  assert.doesNotMatch(body, /<textarea[^>]*data-setting="chatPrompt"/, 'the box is still there beside the picker');
+  assert.match(body, /<select[^>]*data-setting="chatPromptChoice"/, 'there is no prompt picker');
+  assert.ok(body.includes('>What would you answer?</option>'), 'a saved prompt is not on offer by name');
 });
 
-test('a prompt somebody typed comes back, escaped rather than executed', () => {
+test('the picker names the prompts, and the hint shows the words that will actually be sent', () => {
+  // "A prompt nobody can see is a prompt nobody corrects" is this section's own reason for existing.
+  // The names are what a person chooses between; the TEXT is what is billed, so it stays visible.
   const body = chatSection(panelHtml(state({
-    chat: { ...chat, prompt: 'Explain this <b>simply</b> & in short' },
+    chat: { ...chat, prompt: 'Explain this <b>simply</b> & in short', prompts: [preset('p1', 'Short')] },
   }), 'n0nce'));
 
   assert.ok(body.includes('Explain this &lt;b&gt;simply&lt;/b&gt; &amp; in short'), 'the prompt reached the page raw');
+});
+
+test('the chosen prompt is the selected option, and the main one is what an empty choice means', () => {
+  const chosen = chatSection(panelHtml(state({
+    chat: { ...chat, promptChoice: 'p2', prompts: [preset('p1', 'A'), preset('p2', 'B')] },
+  }), 'n0nce'));
+  assert.match(chosen, /<option value="p2" selected>/, 'the saved choice is not the selected one');
+
+  const unchosen = chatSection(panelHtml(state({
+    chat: { ...chat, prompts: [preset('p1', 'A')] },
+  }), 'n0nce'));
+  assert.match(unchosen, /<option value=""[^>]*selected>[^<]*main/i, 'an unset choice looks like a broken control');
+});
+
+test('the section opens the tab where prompts and models are actually edited', () => {
+  // The CRUD tab shipped with no way into it but the command palette — `coai.editChatPresets` was
+  // registered, absent from every menu, and named in no view. A command nobody can reach is a
+  // feature nobody has.
+  const body = chatSection(panelHtml(state(), 'n0nce'));
+
+  assert.match(body, /data-command="editChatPresets"/, 'there is no way into the presets tab');
 });
 
 test('the answer language is its own control, and not the language of these pages', () => {
@@ -123,6 +163,43 @@ test('an unset model reads as the first one offered, not as an empty box', () =>
   assert.match(body, /<option value=""[^>]*selected>[^<]*first/i, 'an empty setting looks like a broken control');
 });
 
+test('the panel asks for a PROVIDER and then one of its models, as the tab already does', () => {
+  // The DoD of `PLAN_provider_then_model.md` says "in the tab and in the panel". The tab got the
+  // pair; the panel kept the flat list of rows, and the plan recorded no deviation saying so.
+  const body = chatSection(panelHtml(state({
+    vendors: [vendor(), vendor({ id: 'second', model: 'gemini-3.7-pro' })],
+    chat: { ...chat, model: 'second' },
+  }), 'n0nce'));
+
+  assert.match(body, /<select[^>]*data-setting="chatModel"/, 'there is no provider select');
+  assert.match(body, /<select[^>]*data-setting="chatModelName"/, 'there is no model select beside it');
+  assert.match(body, /<option value="second" selected>/, 'the chosen provider is not the selected one');
+});
+
+test('the model select offers the models of the CHOSEN provider, and nobody else\'s', () => {
+  // The pair is checked as a pair everywhere else in this feature — `resolveChatPick` refuses a
+  // model the provider does not offer — so a picker that offered every provider's models would be
+  // offering combinations the command will then refuse by name.
+  const body = chatSection(panelHtml(state({
+    vendors: [
+      vendor({ id: 'agy-row', runtime: 'antigravity', model: 'gemini-3.7-flash-high' }),
+      vendor({ id: 'claude-row', runtime: 'claude', model: 'claude-opus-5' }),
+    ],
+    chat: { ...chat, model: 'claude-row' },
+  }), 'n0nce'));
+  const models = body.slice(body.indexOf('data-setting="chatModelName"'));
+
+  assert.ok(models.includes('claude-opus-5'), 'the chosen provider\'s own model is not offered');
+  assert.ok(!models.includes('gemini-3.7-flash-high'), 'another provider\'s model is offered under this one');
+});
+
+test('an unset model name reads as the row\'s own model, not as an empty box', () => {
+  const body = chatSection(panelHtml(state({ vendors: [vendor()] }), 'n0nce'));
+  const models = body.slice(body.indexOf('data-setting="chatModelName"'));
+
+  assert.match(models, /<option value=""[^>]*selected>/, 'an unset model name looks like a broken control');
+});
+
 test('a reviewer the chat cannot speak to is named in the section, not silently absent', () => {
   // The same rule the command follows: a person who configured `codex` and finds it missing from a
   // picker cannot tell a bug from a policy.
@@ -139,7 +216,7 @@ test('a panel with no chat settings at all still renders the section, on the def
   // Team servers beside it — the alternative was sixteen whole-file CRLF diffs nobody can review.
   const body = chatSection(panelHtml(state({ chat: undefined }), 'n0nce'));
 
-  assert.ok(body.includes('>Explain</textarea>'), 'the default prompt is not what an absent setting shows');
+  assert.ok(body.includes('<div class="hint">Explain</div>'), 'the default prompt is not what an absent setting shows');
 });
 
 test('a model the settings NAME and which cannot answer is shown as chosen, and as unable', () => {
@@ -154,7 +231,11 @@ test('a model the settings NAME and which cannot answer is shown as chosen, and 
 
   assert.match(body, /<option value="my-local"[^>]*selected[^>]*disabled|<option value="my-local"[^>]*disabled[^>]*selected/,
     'the configured model is not shown as the chosen one');
-  assert.ok(!/<option value=""[^>]*selected/.test(body), 'the panel claims no model is chosen while one is');
+  // Scoped to the PROVIDER select: the prompt picker and the model select each carry an empty
+  // option of their own now, and both are legitimately selected here.
+  const providers = body.slice(body.indexOf('data-setting="chatModel"'), body.indexOf('data-setting="chatModelName"'));
+
+  assert.ok(!/<option value=""[^>]*selected/.test(providers), 'the panel claims no model is chosen while one is');
 });
 
 test('the panel and the command read the same settings through the same reader', () => {
@@ -173,7 +254,7 @@ test('the panel and the command read the same settings through the same reader',
     chat: asCommandReadsIt,
   }), 'n0nce'));
 
-  assert.ok(body.includes(`>${escapeHtml(asCommandReadsIt.prompt)}</textarea>`), 'the box shows a different prompt');
+  assert.ok(body.includes(`<div class="hint">${escapeHtml(asCommandReadsIt.prompt)}</div>`), 'the section shows a different prompt');
   assert.ok(body.includes(`<option value="${asCommandReadsIt.language}" selected>`), 'a different language is selected');
   assert.ok(body.includes(`<option value="${asCommandReadsIt.autoSend}" selected>`), 'a different send rule is selected');
   assert.ok(body.includes(`<option value="${asCommandReadsIt.model}" selected>`), 'a different model is selected');

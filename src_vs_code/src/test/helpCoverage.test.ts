@@ -62,6 +62,8 @@ const SELF_EVIDENT: Record<string, string> = {
 
 const SETTING_ALIAS: Record<string, string> = {
   'coai.chatPrompt': 'the prompt the passage travels with',
+  'coai.chatPromptChoice': 'which of your saved prompts a chat opens with',
+  'coai.chatModelName': 'which of its models answers',
   'coai.chatPromptPresets': 'your saved prompts, each with a name',
   'coai.chatModelPresets': 'your saved models, each with a name',
   'coai.chatLanguage': 'the language the other ai answers in',

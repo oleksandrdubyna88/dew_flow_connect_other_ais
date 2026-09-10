@@ -768,6 +768,52 @@ flowchart LR
 Two functions are read by both halves, and that is the whole architecture of this section: what the
 panel shows and what the conversation uses cannot disagree, because neither has a reader of its own.
 
+### The section became a MENU, and the two halves that were owed it (2026-09-10)
+
+The section above stood unchanged from the morning it was written while the chat tab gained a
+two-step picker, two rows of presets and a CRUD tab. Two plans had named the panel as a surface and
+shipped only their tab half — `PLAN_provider_then_model.md` (whose Definition of Done says "in the
+tab and in the panel") and step 5 of `PLAN_presets_above_the_composer.md`. Both halves are here now.
+
+**The prompt is a picker, and it holds an ID.** *What to ask about the selection* offers the saved
+prompts by name; `coai.chatPromptChoice` records WHICH, never the words. That is the whole reason it
+is an id: the text is edited in the presets tab, so a sidebar holding a copy would go stale the first
+time somebody rewrote the prompt they had chosen. `chatSettingsFrom` resolves the choice to the text,
+falling back to `mainPrompt` — so a preset deleted in the other tab is the ordinary case rather than
+an exotic one, and the resolved prompt is shown under the picker because a prompt nobody can see is a
+prompt nobody corrects. Both surfaces still read one reader, which is what keeps them from
+disagreeing.
+
+**`mainPrompt` stopped being dead code.** It shipped exported and unit-tested with no production
+caller: the opening turn read `settings.prompt` — the single legacy string — so the *main* tick in
+the presets tab governed nothing. It is the fallback of the resolution above now.
+
+**The model control is the pair.** A provider select and a model select, the second filled from the
+first, with `coai.chatModelName` holding which of that row’s models and empty meaning the model the
+row itself is set to. `openingModel(list, saved, named)` decides what a NEW tab opens with: a lookup
+with a fallback, because `settings.json` is hand-edited and a Team server withdraws models from its
+allowlist without asking, so a stale name opens a conversation rather than a refusal. One step later
+`resolveChatPick` applies the same pair rule to a choice made THIS minute, where a refusal by name is
+the right answer.
+
+**The panel builds its own catalog, and it is richer than the command’s.** `chatCatalogFrom` in
+`chatCommand.ts` passes the discovered lists empty — the fetches live in the panel — so the command
+offers a discovered row only the model it is configured to. `chatBody` passes `state.codexModels`,
+`state.agyModels` and `state.teamServers`, which is the panel half of that plan’s open tail. The tail
+stands for the command. A `local` row cannot chat at all (`canChat`), so no local engine is passed:
+it would be a value nothing on this path can read.
+
+**`chat` joined `staticKey`, reversing a measured rule.** While the section held a textarea, a chat
+setting had to be unable to repaint the panel or saving the prompt as it was typed would rebuild the
+page under a focused control per keystroke — measured, and guarded by a test. Every control in the
+section is a `<select>` now, which posts `change` with its dropdown already shut, and the exclusion
+had acquired a cost: a pair whose first half cannot re-fill its second. The test changed its
+guarantee and gained a sibling asserting no free-text control returns to the section.
+
+**`coai.editChatPresets` reached a menu.** It shipped registered, in no `contributes.menus` entry and
+named in no view, so the tab it opens was reachable only from the command palette. The section has an
+**Edit presets…** button, routed like *Install the MCP server…* through `VSCODE_COMMAND_FOR`.
+
 ### A provider is a ROW, and the pair is checked as a pair (2026-09-09)
 
 `chatProvidersFrom(vendors, catalog)` sits beside `chatModelsFrom` and answers a different question:

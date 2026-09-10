@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ChatCatalog, chatProvidersFrom, legacyPick, resolveChatPick } from '../chatModels';
+import { ChatCatalog, chatProvidersFrom, legacyPick, openingModel, resolveChatPick } from '../chatModels';
 import { Vendor } from '../vendors';
 import { TeamServerState } from '../teamServerView';
 import { requestBody } from '../remoteAsk';
@@ -354,4 +354,45 @@ test('a legacy value nobody offers strands with no candidates to suggest', () =>
     legacyPick(list, vendors, 'a-model-that-went-away'),
     { providerId: '', modelId: 'a-model-that-went-away', candidates: [] },
   );
+});
+
+/**
+ * Which model a NEW tab opens with, when the panel has named one beside the provider.
+ *
+ * <p>The tab has held a pair since PR #175; the panel held only the row, so `coai.chatModelName` is
+ * the second half of the panel's own choice. It is a lookup with a fallback rather than a second
+ * source of truth: a name the chosen provider does not offer is not a pick, and the row's own model
+ * answers instead — the same rule `resolveChatPick` applies one step later, applied here so a stale
+ * settings value opens a working conversation rather than a refusal.</p>
+ */
+test('a model named beside the provider is what a new tab opens with', () => {
+  const vendors = [vendor({ id: 'codex-paid', runtime: 'codex', model: 'gpt-5.2' })];
+  const list = chatProvidersFrom(vendors, CATALOG);
+  const saved = legacyPick(list, vendors, 'codex-paid');
+
+  assert.strictEqual(openingModel(list, saved, 'gpt-5.2-mini'), 'gpt-5.2-mini');
+});
+
+test('a named model the provider does not offer falls back to the row’s own, not to a refusal', () => {
+  // `settings.json` is edited by hand and a Team server withdraws models; either way the value can
+  // name something this provider has never offered. The conversation still opens.
+  const vendors = [vendor({ id: 'codex-paid', runtime: 'codex', model: 'gpt-5.2' })];
+  const list = chatProvidersFrom(vendors, CATALOG);
+  const saved = legacyPick(list, vendors, 'codex-paid');
+
+  assert.strictEqual(openingModel(list, saved, 'sonnet'), 'gpt-5.2');
+  assert.strictEqual(openingModel(list, saved, ''), 'gpt-5.2');
+});
+
+test('a name cannot reach a provider other than the one that was chosen', () => {
+  // The pair is checked as a pair everywhere else in this feature, and `vendor-routing.md` forbids a
+  // Claude model going through `agy` by name. A name offered by SOMEBODY is not a name offered here.
+  const vendors = [
+    vendor({ id: 'agy-row', runtime: 'antigravity', model: 'gemini-3.7-flash-high' }),
+    vendor({ id: 'claude-row', runtime: 'claude', model: 'sonnet' }),
+  ];
+  const list = chatProvidersFrom(vendors, CATALOG);
+  const saved = legacyPick(list, vendors, 'agy-row');
+
+  assert.strictEqual(openingModel(list, saved, 'sonnet'), 'gemini-3.7-flash-high');
 });

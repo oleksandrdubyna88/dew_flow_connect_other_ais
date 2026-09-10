@@ -17,7 +17,59 @@ const reading = (values: Record<string, unknown>) => (key: string) => values[key
 test('an untouched installation asks for an explanation in English, and waits on the menu path', () => {
   const settings = chatSettingsFrom(reading({}));
 
-  assert.deepStrictEqual(settings, { prompt: 'Explain', language: 'en', autoSend: 'keyboard', model: '' });
+  assert.deepStrictEqual(settings, {
+    prompt: 'Explain',
+    promptChoice: '',
+    prompts: [],
+    language: 'en',
+    autoSend: 'keyboard',
+    model: '',
+    modelName: '',
+  });
+});
+
+test('the prompt that is sent is the one CHOSEN in the panel, by id', () => {
+  // The sidebar picks a preset; the words are the preset's, read here so that both surfaces — the
+  // panel and the chat command — resolve the same choice through the same reader.
+  const settings = chatSettingsFrom(reading({
+    chatPromptChoice: 'p2',
+    chatPromptPresets: [
+      { id: 'p1', name: 'A', text: 'Explain it simply', main: true },
+      { id: 'p2', name: 'B', text: 'Say what worries the author', main: false },
+    ],
+  }));
+
+  assert.strictEqual(settings.prompt, 'Say what worries the author');
+  assert.strictEqual(settings.promptChoice, 'p2');
+});
+
+test('a choice naming a prompt that was deleted falls back to the main one, never to silence', () => {
+  // The list is edited in another tab, so a saved id going stale is the ordinary case rather than
+  // an exotic one — and an empty question is one that gets asked and billed.
+  const settings = chatSettingsFrom(reading({
+    chatPromptChoice: 'gone',
+    chatPromptPresets: [
+      { id: 'p1', name: 'A', text: 'the first', main: false },
+      { id: 'p2', name: 'B', text: 'the ticked one', main: true },
+    ],
+  }));
+
+  assert.strictEqual(settings.prompt, 'the ticked one');
+});
+
+test('the prompt somebody has been editing since before the presets is still what is sent', () => {
+  // The migration lives in `chatPromptPresetsFrom`; this asserts the reader carries it, because a
+  // reader that forgot the second argument would silently send `Explain` instead of their words.
+  const settings = chatSettingsFrom(reading({ chatPrompt: 'поясни' }));
+
+  assert.strictEqual(settings.prompt, 'поясни');
+  assert.strictEqual(settings.prompts.length, 1, 'the legacy prompt is not offered as a preset');
+});
+
+test('a model name is kept beside the provider, and an absent one means the row’s own model', () => {
+  assert.strictEqual(chatSettingsFrom(reading({ chatModel: 'gemini', chatModelName: 'gemini-3.8-pro' })).modelName, 'gemini-3.8-pro');
+  assert.strictEqual(chatSettingsFrom(reading({ chatModel: 'gemini' })).modelName, '');
+  assert.strictEqual(chatSettingsFrom(reading({ chatModelName: 42 })).modelName, '');
 });
 
 test('a prompt somebody wrote is used exactly as written', () => {

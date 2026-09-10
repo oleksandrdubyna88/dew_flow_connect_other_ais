@@ -29,6 +29,7 @@ import {
   isRemote,
   legacyPick,
   memoryOf,
+  openingModel,
   resolveChatPick,
 } from './chatModels';
 import { remoteIsFull } from './remoteAsk';
@@ -1391,7 +1392,12 @@ export async function chatWithOtherAi(
   const config = vscode.workspace.getConfiguration('coai');
   const settings = chatSettingsFrom((key) => config.get(key));
   const opening = savedPick(config, settings.model);
-  const ready = readyToChat(config, opening.providerId, opening.modelId);
+  // The panel names a provider AND, since the pair reached it, one of that provider's models. A name
+  // it does not offer is not a pick — the row's own model answers — so a value gone stale in
+  // `settings.json` or withdrawn by a Team server opens a conversation rather than a refusal.
+  const vendors = vendorsFrom(sideRead(config)('vendors'));
+  const model = openingModel(chatProvidersFrom(vendors, chatCatalogFrom(config)), opening, settings.modelName);
+  const ready = readyToChat(config, opening.providerId, model);
   if (!ready.ok) {
     void vscode.window.showWarningMessage(ready.refusal);
 
