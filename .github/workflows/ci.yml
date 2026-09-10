@@ -97,6 +97,11 @@ jobs:
       - name: Pin check
         run: node .agents/conventions/tools/pin-check.mjs
 
+      # The Claude host adapter, which nothing else can notice going wrong: a session that never
+      # received the rules behaves exactly like one that received them and chose badly.
+      - name: Adapter check
+        run: node .agents/conventions/tools/adapter-check.mjs .
+
       # This product's own gate rule is the shared one now, and this repository is where the text
       # comes from — so a copy here would be the source disagreeing with itself.
       - name: Gate snippet

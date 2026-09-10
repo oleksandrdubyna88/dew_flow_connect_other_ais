@@ -60,11 +60,9 @@ node .agents/conventions/tools/pin-check.mjs
   entry, read once at startup via `creds config <key>`.
 - **Logging** per `.agents/conventions/common/logging-serilog.md`: coloured ANSI console (stderr in
   stdio mode) + one file per run under `logs/{yyyy-MM-dd}/`, everything UTC.
-- `.claude/settings.json` was a byte-identical copy of the family reference
-  (`.agents/conventions/settings/settings.json`). It now carries ONE addition on top of it: a
-  `SessionStart` hook running `.claude/hooks/load-instructions.mjs`. Everything else stays
-  byte-identical, and the addition is temporary — it is being promoted into the family
-  reference, and when the pin carrying it lands here the copy goes back to being byte-identical.
+- `.claude/settings.json` and `.claude/hooks/load-instructions.mjs` are byte-identical copies of
+  the family reference (`.agents/conventions/settings/`) — never edit either independently.
+  `adapter-check.mjs` fails CI when a copy drifts, is unwired or is missing.
 - **The Claude host adapter loads instructions through a hook, and that is not a preference.**
   `validateInstructions` in `.agents/conventions/tools/lib/rule-cli.mjs` refuses a `CLAUDE.md`
   that is anything but `@AGENTS.md` and refuses a non-empty `.claude/rules` — the two doors

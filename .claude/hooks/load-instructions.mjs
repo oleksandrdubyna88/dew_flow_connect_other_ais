@@ -1,42 +1,60 @@
 #!/usr/bin/env node
 /**
- * Put this repository's instructions into a Claude Code session at its start.
+ * The Claude host adapter: put a repository's instructions into a session at its start.
  *
- * <p><b>Why this exists.</b> The shared layout is one source for two hosts, and it is enforced:
- * `CLAUDE.md` may contain only `@AGENTS.md`, and `.claude/rules` must be empty
- * (`tools/lib/rule-cli.mjs`, `validateInstructions`). Those are the two doors Claude Code loads
- * project instructions through on its own, so closing them left a session holding 561 bytes — an
- * instruction to go and read the rules — where it used to hold the rules themselves.</p>
+ * <p>Copied verbatim into each consumer as `.claude/hooks/load-instructions.mjs` and wired by
+ * `settings/settings.json`. `tools/adapter-check.mjs` fails when a copy has drifted from this file,
+ * for the same reason `pin-check.mjs` exists: a reference nothing compares is a reference that
+ * quietly stops being one.</p>
  *
- * <p>That difference is not stylistic. The old arrangement was enforced by the HOST: every session
- * had the rules whether or not the model thought to fetch them. The new one is enforced by the
- * model's own diligence, and the two rules that suffer most from being optional are exactly this
- * project's own — `vendor-routing`, whose violation is invisible in the output and has already cost
- * three cells of a measurement, and `review-gate`, the contract for calling this product's gate.</p>
+ * <p><b>Why a hook and not the obvious thing.</b> `ENTRY.md` is one loading procedure for two hosts,
+ * and `tools/lib/rule-cli.mjs` enforces the single source by refusing a `CLAUDE.md` that is anything
+ * but `@AGENTS.md` and refusing a non-empty `.claude/rules`. Those two are precisely the doors
+ * Claude Code loads project instructions through on its own, with no imports and no procedure. Shut
+ * them and a session starts holding an instruction to go and read the rules rather than the rules —
+ * measured in `dew_flow_connect_other_ais`, 561 bytes where ~10.5 KB used to arrive by itself.</p>
  *
- * <p>So this restores the guarantee WITHOUT touching either enforced door. It runs the canonical
- * resolver — the same one Codex is told to run, at the same pin — and prints what it emits.
- * `SessionStart` output becomes session context, so the always-core arrives before the first
- * decision rather than after somebody remembers to ask for it.</p>
+ * <p>That is a change of KIND, not of size: enforcement moved from the host to the model's own
+ * diligence, and `ENTRY.md` step 8 requires the procedure again after every compaction. Codex is
+ * unaffected — it was always going to follow AGENTS' imperative instructions. This restores for
+ * Claude what Claude used to get for free, without weakening the single-source rule by one byte.</p>
  *
- * <p><b>What it deliberately does NOT do.</b> It does not replace the procedure in
- * `.agents/conventions/ENTRY.md`. `--task inspect` yields the rules that apply to every task; the
- * ones that depend on WHICH files are being changed still need `explain`/`read` for the real task,
- * and the notice below says so. A hook cannot know at session start what the session will touch.</p>
+ * <p><b>What it deliberately does NOT do.</b> It does not replace the procedure. `--task inspect`
+ * selects what applies to EVERY task; anything chosen by which files are being changed still needs
+ * `explain`/`read` for the real task, and the notice below says so — a session start cannot know
+ * what the session will touch.</p>
  *
- * <p>It never fails the session. A missing submodule or resolver is reported as INCOMPLETE, in the
- * words ENTRY.md uses, with the two commands that fix it — because a hook that exits non-zero on a
- * fresh clone teaches people to delete the hook.</p>
+ * <p>It never fails a session. A missing submodule or resolver is reported as INCOMPLETE, in
+ * `ENTRY.md`'s own words, with the commands that fix it, and the exit code stays 0: a hook that
+ * fails on a fresh clone is a hook somebody deletes, and then nobody notices the rules are gone.</p>
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** The repository root, resolved the way ENTRY.md step 1 resolves it. */
+/** The repository root, resolved the way `ENTRY.md` step 1 resolves it. */
 function repoRoot() {
   return execFileSync('git', ['rev-parse', '--show-toplevel'], {
     encoding: 'utf8', timeout: 30_000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'],
   }).trim();
+}
+
+/**
+ * The resolver, in a consumer or in the conventions repository itself.
+ *
+ * <p>`ENTRY.md` step 3 draws exactly this distinction, and the self-hosted case is not hypothetical:
+ * this repository runs the hook on itself, which is the only test of the mechanism that cannot pass
+ * while the mechanism is broken.</p>
+ */
+function resolverIn(root) {
+  const mounted = path.join(root, '.agents/conventions/tools/rules.mjs');
+  const selfHosted = path.join(root, 'tools/rules.mjs');
+
+  if (fs.existsSync(mounted)) {
+    return mounted;
+  }
+
+  return fs.existsSync(selfHosted) && fs.existsSync(path.join(root, 'ENTRY.md')) ? selfHosted : '';
 }
 
 function incomplete(reason) {
@@ -53,13 +71,13 @@ function incomplete(reason) {
 
 try {
   const root = repoRoot();
-  const resolver = path.join(root, '.agents/conventions/tools/rules.mjs');
-  if (!fs.existsSync(resolver)) {
-    incomplete(`No resolver at ${resolver} — the conventions submodule is not checked out.`);
+  const resolver = resolverIn(root);
+  if (resolver === '') {
+    incomplete(`No resolver under ${root} — the conventions submodule is not checked out.`);
     process.exit(0);
   }
 
-  // `inspect` is the neutral task: what comes back is what applies to EVERY task, which is the only
+  // `inspect` is the neutral task: what comes back is what applies to every task, which is the only
   // selection a session start can honestly make.
   const emitted = execFileSync(process.execPath, [resolver, 'read', '--repo', root, '--task', 'inspect'], {
     encoding: 'utf8', timeout: 120_000, maxBuffer: 8 * 1024 * 1024, windowsHide: true,
@@ -69,9 +87,9 @@ try {
   process.stdout.write(
     'Project instructions for this repository, loaded at session start by '
     + '.claude/hooks/load-instructions.mjs from the pinned canonical source.\n\n'
-    + 'These are the rules that apply to EVERY task. Rules that depend on which files you change are\n'
-    + 'not here: before editing, follow .agents/conventions/ENTRY.md and run\n'
-    + '  node .agents/conventions/tools/rules.mjs explain --repo <root> --task <task> --file <path>\n'
+    + 'These are the rules that apply to EVERY task. Rules selected by which files you change are\n'
+    + 'not here: before editing, follow the entry procedure and run\n'
+    + '  node <resolver> explain --repo <root> --task <task> --file <path>\n'
     + 'then read what it selects. Re-run it after a compaction or when the scope changes.\n\n'
     + emitted,
   );
