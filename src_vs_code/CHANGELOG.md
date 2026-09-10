@@ -1,10 +1,29 @@
 # Changelog
 
-## Unreleased
+## Extension 0.32.3 · Server 0.18.17 — 2026-09-10
 
-**Shared instructions work with Claude Code and Codex.** The panel recognizes the neutral
-rules layout and still warns about an older local snippet. Distributed gate text is built
-from the pinned canonical source; an interrupted generation recovers on the next build.
+> **0.32.0, 0.32.1 and 0.32.2 do not exist.** The change below landed with the manifest already at
+> 0.32.3, and the number is left as it is rather than rewritten after the fact — a version that was
+> in `main` for a day is not a number to reuse. Nothing is missing between 0.31.22 and this.
+
+**Shared instructions work with Claude Code and Codex.** The panel recognizes the neutral rules
+layout and still warns about an older local snippet. Distributed gate text is built from the pinned
+canonical source; an interrupted generation recovers on the next build.
+
+**The gate reads the neutral layout too, which is the half of that change the notes above did not
+mention.** `coai-mcp` sampled a repository's rules from `.claude/rules` and `.cursor/rules` only, so
+a repository that had moved to the shared layout looked to a code round like a repository with no
+written rules — and a round with nothing to judge against correctly drops its *Conventions*
+reviewers. It now also reads `.agents/rules` and the canonical `common`, `csharp`, `rust` and
+`typescript` folders under `.agents/conventions`, and counts `.agents/PROJECT.md` alongside
+`CLAUDE.md`, `AGENTS.md`, `GEMINI.md` and the Copilot instructions. A mount that carries research and
+project text as well is not treated as a rules folder wholesale: only the canonical rule directories
+are sampled, and *this mount is empty* is now decided by whether any rule file was actually found
+under it rather than by whether the directory has bytes in it.
+
+**Every build regenerates the distributed gate text.** `prepare-gate` runs before compiling, before
+the typecheck, before the bundle and at the head of `npm test`, so the snippet the panel hands out
+cannot drift from the pinned canonical source between one build and the next.
 
 ## Extension 0.31.22 · Server 0.18.16 — 2026-09-10
 
