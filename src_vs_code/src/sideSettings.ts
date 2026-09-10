@@ -49,9 +49,19 @@ export async function writeOverlay(
  * the expensive one — it is what the GATE reads, so a shared read there runs somebody's reviewers on
  * another side's CLI paths.</p>
  *
- * <p>The side is never worked out here and never defaulted. Callers pass
- * `thisSide(context.globalStorageUri)`, which is the one derivation, so a caller cannot quietly read
- * a different side's settings while still satisfying the type.</p>
+ * <p>The side is never worked out here and never defaulted. There is exactly one caller —
+ * `sideConfig.readerFor`, which derives the side from the extension context — and
+ * `chatWiring.test.ts` fails if a second one appears.</p>
+ *
+ * <p><b>`perSide` is a boolean parameter that selects behaviour, and SonarCloud is right that this is
+ * usually a smell (S2301). It is kept, and this is the reason.</b> The alternative it asks for —
+ * two functions, or a `Side | undefined` where absence means sharing — pushes the branch back out to
+ * the caller, which is the ONE thing this function exists to prevent: a read that decides for itself
+ * is a setting that silently stays shared, which is the defect this whole file was written after. The
+ * nullable variant would also put an optional into business logic, which `CLAUDE.md` forbids outside
+ * a named list this is not on. The value is not a call-site literal either; it is
+ * `coai.perSideSettings`, read fresh, and a switch a person can flip is exactly what a parameter is
+ * for.</p>
  */
 export function sideConfigReader(
   shared: ConfigReader,
