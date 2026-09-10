@@ -183,6 +183,13 @@ public sealed class EndToEndTests : IAsyncLifetime
         // from a token total in the ledger.
         lines().Should().ContainMatch("context for review: diff * bytes over * file(s), * elided; plan * bytes; rules * bytes");
 
+        // And WHICH commit it is a diff of. Asserted here rather than only on `ContextAssembler`,
+        // because the value crossing that seam is exactly what could go on being logged as the ref
+        // the caller named while the diff was taken against something else — which is the state
+        // three rounds were reviewed in before anybody noticed. (codex, the plan round.)
+        lines().Should().ContainMatch("diffed against the merge base * of main and *",
+            "a round that does not name what it compared against is a round nobody can re-check");
+
         // What each reviewer RECEIVED. The two are the same number only while nothing between them
         // is broken, and that is precisely what could not be established.
         lines().Should().ContainMatch("*opening: 6 reviewer(s)*bytes]*");

@@ -38,7 +38,7 @@ sequenceDiagram
 | `WorktreeManager`, `WorktreeLease` | `Worktrees/WorktreeManager.cs` | one detached tree per round, `coai-wt-` prefix under OUR storage; prune-on-open; disposal = finally; never touches a human's worktree |
 | `SubmodulePopulator` | `Worktrees/SubmodulePopulator.cs` | fills the round tree's submodules from the PARENT checkout, not the remote — git populates none in a linked worktree, and in this family the project's rules ARE one; offline, pinned, never fatal, and refused when the source is reached through a reparse point |
 | `GitModules`, `SubmoduleMount` | `Git/GitModules.cs` | `.gitmodules` as (name, path); a file inside the repository under review, so absolute/traversing paths and names that could spell another config key drop the mount |
-| `DiffExclusions`, `ContextAssembler` | `Context/ContextAssembler.cs` | numstat → per-file diffs with `:(exclude,glob)` pathspecs; binary sizes via `cat-file -s` |
+| `DiffExclusions`, `ContextAssembler`, `CollectedDiff`, `DiffBase` | `Context/ContextAssembler.cs` | numstat → per-file diffs with `:(exclude,glob)` pathspecs; binary sizes via `cat-file -s`; every one of the three taken against the MERGE BASE, which the result names |
 | `IReviewerRuntime`: `CodexRuntime`, `DeepseekRuntime`, `GeminiRuntime`, `ClaudeRuntime`, `AntigravityRuntime`, `CustomCodexRuntime` | `Reviewers/ReviewerRuntime.cs`, `ClaudeRuntime.cs`, `CustomRuntime.cs` | THE vendor adapter: `Build` (argv, pure) + `ReadAnswer` + `ReadUsage`, the last two with working defaults. Flags verified against codex 0.147.0 / gemini 0.55.1 / claude 2.1.197 / agy 1.1.22; keys ride env, never argv; DeepSeek = Codex config-shifted |
 | `ReviewerRuntimeSelector` | same | unknown provider refuses naming the catalog |
 | `ReviewerOutcome` (closed), `ReviewerExecutor`, `RateLimit`, `ReviewerLaunch` | `Reviewers/ReviewerExecutor.cs` | one launch + one repair **inside ONE deadline** (2026-09-08: the repair used to carry a whole second budget, so a reviewer could take twice its setting — measured at 668.8 s against ten minutes, reporting `ok`); SIX named outcomes incl. NotStarted; `Ok` carries the run's `Usage`, both launches counted when repaired. **`LaunchAsync` is the public half**: launch → classify → the vendor's RAW answer + usage, with the parse left to the caller |
@@ -139,6 +139,42 @@ sequenceDiagram
 - **The fake CLI** (`src_mcp/tests_fakecli`) is the whole vendor surface in tests: emit / emit-to /
   stderr-exit / sleep / busy (start/end ticks for overlap measurement) / flip (first-launch
   failure), with launch counting. CI never touches a vendor.
+
+## What a code round is a diff OF (2026-09-10)
+
+The merge base of the branch and the base ref — not the tip of the base ref. `ContextAssembler`
+resolves it once with `git merge-base` and uses it for all three git calls, and `CollectedDiff` carries
+it out so the round can say which commit it compared against.
+
+**Why, measured.** On 2026-09-08 a code round produced three Blocking findings from two different
+vendors saying the branch had deleted `chatPrompt.ts`, `processLauncher.ts` and `sessionKey.ts` and
+reverted the extension a version. None of it was true: the branch had been cut from `origin/main`, and
+while the work was in progress another session merged its own pull request. `A..B` diffs two
+ENDPOINTS, so the commits the base has and the branch does not arrive INVERTED — as deletions the
+branch performed. On that branch at that moment, `origin/main..HEAD` was 17 files and 1616 deletions
+where `origin/main...HEAD` was 9 files and 12. It happened three times before it was fixed, and it
+gets likelier the busier the repository is: several agents work here at once, so a base that moves
+during a review is the normal case rather than the exception. A reviewer cannot tell a phantom
+deletion from a real one — the diff says the line was removed — and whether the change matches its
+SCOPE is the one question this gate exists to ask.
+
+**Why an explicit merge base rather than `A...B`.** The three-dot form is the same diff, but it leaves
+the resolved commit inside git where nothing can name it, and there is no three-dot form of
+`cat-file -s`, which is how a BINARY's old side is sized — that third call site would have gone on
+reading a blob from somebody else's commit. One resolution answers all three and gives the round its
+audit line.
+
+**What happens when there is no merge base.** The two-dot form, as before, and a sentence saying so:
+a review taken against the wrong base is worth more than no review, provided nobody has to guess which
+one they are reading. Two cases, deliberately told apart — histories that genuinely share no ancestor,
+and a checkout that is SHALLOW, where an ancestor exists but has not been fetched. The second is a
+clone somebody can deepen; the first is a fact about the commits. `git merge-base` cannot distinguish
+them, so `rev-parse --is-shallow-repository` is asked on the failing path only.
+
+**The resolved commit is named to the reviewer too**, in the diff's own header. Two reviewers of the
+plan asked for it independently and the reason is theirs: a reviewer that checks the branch against
+the tip of `main` sees a diff that does not match, and that discrepancy is indistinguishable from the
+phantom deletions this change exists to stop.
 
 ## Two delivery rules the first real run wrote
 
