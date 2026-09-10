@@ -46,7 +46,9 @@ import { chatProcessFor } from './chatProcess';
 import { launch } from './processLauncher';
 import { resolvedExecutable } from './versionProbe';
 import { CARRY_BUDGET, REMOTE_CARRY_BUDGET, carriedTurn, openingTurn } from './chatPrompt';
-import { LanguageCode } from './settingsShape';
+import { ConfigReader, LanguageCode } from './settingsShape';
+import { sideConfigReader } from './sideSettings';
+import { thisSide } from './installer';
 import { sourceSession, TabSnapshot } from './sessionKey';
 import { triggerPlan } from './chatTrigger';
 import { Vendor, vendorsFrom } from './vendors';
@@ -170,6 +172,52 @@ let memory: ChatTabMemory | undefined;
 
 export function rememberChatsIn(store: ChatTabMemory): void {
   memory = store;
+}
+
+/**
+ * This extension host, so the chat can read the settings of the side it is actually on.
+ *
+ * <p>The same bind-once shape as `rememberChatsIn` above and as `chatOrphans.openLedger`, and for the
+ * same reason: an extension host has ONE context for its whole life, and threading it from `activate`
+ * through the command, the conversation, the picker and the model switch would put a parameter on six
+ * signatures to carry a value that never changes.</p>
+ *
+ * <p>A worry raised on the plan round — that this could go stale across a workspace switch — does not
+ * arise: `ExtensionContext` is made once per extension host, and a different workspace is a different
+ * host. What CAN change between two invocations is the settings themselves, which is why the reader
+ * below is built per call rather than kept here.</p>
+ */
+let hostContext: vscode.ExtensionContext | undefined;
+
+/** Bind the host whose settings this chat reads. Called once, from `activate`. */
+export function chatReadsThisSide(context: vscode.ExtensionContext): void {
+  hostContext = context;
+}
+
+/**
+ * How this command reads a `coai.*` setting: this side's own value first, the shared one otherwise.
+ *
+ * <p>It matters for `vendors` above all, because that row carries `executablePath`. With *Separate
+ * settings for each side* on, the shared list is another side's — and on a machine where a bare
+ * `codex` in WSL resolves through the interop PATH into the Windows npm directory, reading it here
+ * launched a Windows shim from Linux.</p>
+ *
+ * <p>Falls back to the shared reader when nothing has been bound, which is only the case before
+ * `activate` has run. A chat that reads shared settings is the old behaviour; a chat that throws is
+ * a new defect.</p>
+ */
+function sideRead(config: vscode.WorkspaceConfiguration): ConfigReader {
+  const shared: ConfigReader = (section) => config.get(section);
+  if (hostContext === undefined) {
+    return shared;
+  }
+
+  return sideConfigReader(
+    shared,
+    config.get<boolean>('perSideSettings') === true,
+    hostContext.globalState,
+    thisSide(hostContext.globalStorageUri),
+  );
 }
 
 /** The tabs, narrowed to what `sessionKey` judges on. */
@@ -656,7 +704,7 @@ function savedModels(config: vscode.WorkspaceConfiguration): readonly ModelPrese
  * place so the two callers cannot drift.</p>
  */
 function savedPick(config: vscode.WorkspaceConfiguration, saved: string): LegacyPick {
-  const vendors = vendorsFrom(config.get('vendors'));
+  const vendors = vendorsFrom(sideRead(config)('vendors'));
 
   return legacyPick(chatProvidersFrom(vendors, chatCatalogFrom(config)), vendors, saved);
 }
@@ -678,7 +726,7 @@ function readyToChat(
   askedProvider: string,
   askedModel: string,
 ): Ready {
-  const vendors = vendorsFrom(config.get('vendors'));
+  const vendors = vendorsFrom(sideRead(config)('vendors'));
   const list = chatProvidersFrom(vendors, chatCatalogFrom(config));
   const pick = resolveChatPick(vendors, list, askedProvider, askedModel);
   if (!pick.ok) {
@@ -812,7 +860,7 @@ async function cliFor(vendor: Vendor): Promise<{ resolved: string; refusal: stri
 
 /** The vendor row behind a model id, read fresh — the person may have edited settings since. */
 function vendorFor(modelId: string): Vendor | undefined {
-  return vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors')).find((row) => row.id === modelId);
+  return vendorsFrom(sideRead(vscode.workspace.getConfiguration('coai'))('vendors')).find((row) => row.id === modelId);
 }
 
 /**

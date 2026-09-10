@@ -29,7 +29,7 @@ import {
   versionSourceFor,
 } from './cliVersions';
 import { askVersion, capture } from './versionProbe';
-import { readOverlay, seedIfEmpty, writeOverlay } from './sideSettings';
+import { seedIfEmpty, sideConfigReader, writeOverlay } from './sideSettings';
 import { hostPlatform } from './hostSide';
 import { thisSide } from './installer';
 import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
@@ -51,7 +51,6 @@ import {
 import {
   ConfigReader,
   OVERLAID_SETTINGS,
-  overlaidReader,
   roleRecordUpdate,
   SettingMessage,
   settingsFrom,
@@ -1193,13 +1192,19 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * <p>One accessor, because a read that goes around it is a setting that silently stays shared —
    * and the person who set a different proxy on one side would find out when a review ran against
    * the wrong company's server.</p>
+   *
+   * <p>The rule was right and the ACCESSOR was private, which is not the same thing: the chat and the
+   * settings file handed to `coai-mcp` went around it because they could not reach it. The decision
+   * now lives in `sideSettings.sideConfigReader`, where all three call it, and this method is the
+   * panel's way in rather than the only implementation.</p>
    */
   private read(config: vscode.WorkspaceConfiguration): ConfigReader {
-    const shared: ConfigReader = (section) => config.get(section);
-
-    return this.perSide(config)
-      ? overlaidReader(shared, readOverlay(this.context.globalState, thisSide(this.context.globalStorageUri)))
-      : shared;
+    return sideConfigReader(
+      (section) => config.get(section),
+      this.perSide(config),
+      this.context.globalState,
+      thisSide(this.context.globalStorageUri),
+    );
   }
 
   /**

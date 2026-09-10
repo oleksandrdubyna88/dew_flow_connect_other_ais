@@ -1,4 +1,4 @@
-import { ConfigReader, seedOverlay, SettingsOverlay } from './settingsShape';
+import { ConfigReader, overlaidReader, seedOverlay, SettingsOverlay } from './settingsShape';
 import { overlayKey, Side } from './coaiInstall';
 
 /**
@@ -37,6 +37,29 @@ export async function writeOverlay(
   value: unknown,
 ): Promise<void> {
   await store.update(overlayKey(side), { ...readOverlay(store, side), [section]: value });
+}
+
+/**
+ * How ANY caller reads a `coai.*` setting: this side's own value first, the shared one otherwise.
+ *
+ * <p>This decision is not new — the panel has computed it correctly since the switch shipped, and its
+ * own doc already said why there must be only one of it: <i>"a read that goes around it is a setting
+ * that silently stays shared"</i>. It said that about a PRIVATE method, so three reads went around it
+ * anyway: the chat's two vendor lookups, and the settings file handed to `coai-mcp`. That last one is
+ * the expensive one — it is what the GATE reads, so a shared read there runs somebody's reviewers on
+ * another side's CLI paths.</p>
+ *
+ * <p>The side is never worked out here and never defaulted. Callers pass
+ * `thisSide(context.globalStorageUri)`, which is the one derivation, so a caller cannot quietly read
+ * a different side's settings while still satisfying the type.</p>
+ */
+export function sideConfigReader(
+  shared: ConfigReader,
+  perSide: boolean,
+  store: KeyValueStore,
+  side: Side,
+): ConfigReader {
+  return perSide ? overlaidReader(shared, readOverlay(store, side)) : shared;
 }
 
 /**

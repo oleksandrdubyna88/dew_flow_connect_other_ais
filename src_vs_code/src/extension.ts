@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { openChatPresets } from './chatPresetsPanel';
 import { ChatPanels } from './chatPanels';
-import { chatWithOtherAi, rememberChatsIn, restoreConversation } from './chatCommand';
+import { chatReadsThisSide, chatWithOtherAi, rememberChatsIn, restoreConversation } from './chatCommand';
 import { ChatTabMemory } from './chatTabs';
 import { openLedger, reconcile } from './chatOrphans';
 import { coaiDataDir } from './dataDir';
@@ -12,7 +12,7 @@ import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { clientTargetsLine, CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
-import { installLatest, latestServerVersion, serverExists, serverOnThisSide, serverPath } from './installer';
+import { installLatest, latestServerVersion, serverExists, serverOnThisSide, serverPath, thisSide } from './installer';
 import { EscalationWatcher } from './escalationWatcher';
 import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
@@ -23,7 +23,8 @@ import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
 import { ExistingFile, ServerSettingsSync } from './serverSettingsSync';
 import { LOCK_STALE_AFTER_MS, lockIsStale } from './settingsLock';
-import { settingsFrom } from './settingsShape';
+import { ConfigReader, settingsFrom } from './settingsShape';
+import { sideConfigReader } from './sideSettings';
 import { vendorsFrom } from './vendors';
 
 /**
@@ -109,7 +110,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // Team-server reviewer on 2026-09-07 by rewriting a runtime it did not know. An older build now
   // stands down and says so, once.
   const settingsSync = new ServerSettingsSync(
-    readCoaiConfiguration,
+    () => readCoaiConfiguration(context),
     (json) => writeSettingsFile(json),
     extensionVersion(context),
     readSettingsFile,
@@ -126,6 +127,9 @@ export function activate(context: vscode.ExtensionContext): void {
   // one window's conversations to another is the namesake defect wearing a different hat.
   const chatTabMemory = new ChatTabMemory(context.workspaceState);
   rememberChatsIn(chatTabMemory);
+  // The side whose settings this chat reads. Bound here, beside the other two bind-once handles, so
+  // a WSL window launches the CLI that distro has rather than the one the shared settings name.
+  chatReadsThisSide(context);
   // A record is kept when a tab CLOSES as well as when it is reloaded, because a disposal cannot tell
   // the two apart — VS Code disposes every panel on reload too, and deleting on disposal would erase
   // the transcript at exactly the moment it is needed. A closed tab is simply never restored: VS Code
@@ -258,12 +262,28 @@ function mirrorSettings(settingsSync: ServerSettingsSync, isTheRetry = false): v
   });
 }
 
-/** The `coai.*` settings as the sync wants them: one read, both halves, no VS Code type leaving. */
-function readCoaiConfiguration() {
-  const config = vscode.workspace.getConfiguration('coai');
+/**
+ * The `coai.*` settings as the sync wants them: one read, both halves, no VS Code type leaving.
+ *
+ * <p><b>Read as THIS SIDE has them.</b> The file this feeds is what `coai-mcp` reads, so it decides
+ * which binaries the GATE's reviewers are launched from — and it used to be filled from the shared
+ * configuration alone. With *Separate settings for each side* on, that ran a WSL window's rounds off
+ * the vendor rows of another side: the widest blast radius of the same bypass the chat had, because
+ * a review is what the product is for. The reader is the one in `sideSettings`, the same one the
+ * panel and the chat go through.</p>
+ */
+function readCoaiConfiguration(context: vscode.ExtensionContext) {
+  const shared = vscode.workspace.getConfiguration('coai');
+  const config: ConfigReader = sideConfigReader(
+    (section: string) => shared.get(section),
+    shared.get<boolean>('perSideSettings') === true,
+    context.globalState,
+    thisSide(context.globalStorageUri),
+  );
+
   return {
-    settings: settingsFrom((section) => config.get(section)),
-    vendors: vendorsFrom(config.get('vendors')),
+    settings: settingsFrom(config),
+    vendors: vendorsFrom(config('vendors')),
   };
 }
 
