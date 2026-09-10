@@ -461,10 +461,22 @@ public static class ReviewerSummaryFactory
     /// round; the one where it is not is a repository with no written rules, whose Conventions
     /// reviewers are dropped correctly and used to be mentioned only in the server's own log.
     /// </param>
+    /// <summary>A round that skipped no role, which is every plan round and most code rounds.</summary>
+    /// <remarks>
+    /// An overload rather than a defaulted parameter, because C# cannot default one to `[]` and this
+    /// repository's rule is that an absent value is an EMPTY value and never a null. `excluded`
+    /// keeps its own null default: it predates the rule and widening it belongs to a change about
+    /// exclusions, not to one about skipped roles.
+    /// </remarks>
     public static ReviewerSummary From(
         IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results,
-        IReadOnlyList<string>? excluded = null,
-        IReadOnlyList<SkippedRole>? notAsked = null) =>
+        IReadOnlyList<string>? excluded = null) =>
+        From(results, excluded, []);
+
+    public static ReviewerSummary From(
+        IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results,
+        IReadOnlyList<string>? excluded,
+        IReadOnlyList<SkippedRole> notAsked) =>
         new(
             results.Count,
             results.Count(r => r.Outcome is ReviewerOutcome.Ok),
@@ -472,7 +484,7 @@ public static class ReviewerSummaryFactory
                 .Where(r => r.Outcome is not ReviewerOutcome.Ok)
                 .Select(r => $"{r.Invocation.Provider}/{r.Invocation.Role}: {Describe(r.Outcome)}")],
             [.. excluded ?? []],
-            [.. notAsked ?? []]);
+            [.. notAsked]);
 
     public static string Describe(ReviewerOutcome outcome) => outcome switch
     {
