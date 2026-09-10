@@ -29,6 +29,36 @@ local model` the page would otherwise still show the remote one as selected whil
 somewhere else), a pushed state that has not changed is not sent at all, a `pick` naming a model the
 conversation was never offered is refused at the host boundary rather than trusted, and the
 composer takes focus back when a turn ends — without which every follow-up costs a mouse click.
+### Presets: the two lists a person builds (2026-09-10)
+
+`chatPresets.ts` reads `coai.chatPromptPresets` and `coai.chatModelPresets` — the first values in
+this extension that a person COMPOSES rather than picks from a catalog this product shipped.
+`prompts.ts` is a list we wrote and they override; this is a list they wrote, and it is the only
+place where losing a value means losing their words.
+
+**So a bad row is dropped and the rest survives.** Refusing the whole list because one entry was
+mistyped would take away every prompt somebody saved for the sake of the one they got wrong — and
+`settings.json` is a file people edit by hand. Nothing here throws.
+
+**The migration is the part that must not be got wrong.** `coai.chatPrompt` is a single string a
+person has been editing since the chat shipped. It becomes their first preset, named after its own
+first words so they recognise it as the thing they wrote, ticked as the main one — and **only when
+they have no presets at all**: somebody with a list has already moved, and re-adding the old string
+on every read would resurrect a prompt they deleted. The setting stays declared for one release,
+saying in the manifest that it is superseded and read only by that migration.
+
+**Exactly one prompt is the main one** — the one a trigger that sends by itself uses — and the first
+claim wins. A list with none ticked has its first entry standing in: while there is any prompt at
+all there must be one to send, or the keybinding path has nothing to say.
+
+**Ids are made where they are missing.** A person editing settings by hand will not write one, and
+two presets sharing an id makes a click ambiguous — the buttons name what they chose and the host
+looks it up.
+
+A name is cut at sixty characters and a prompt is never cut: one has a width to respect, the other
+has meaning to keep. Both lists keep the chat settings' two standing decisions — not overlaid
+per-side, and not mirrored to the server.
+
 ### The picker asks for a provider, then for a model (2026-09-10)
 
 It used to be one flat list of the configured reviewer ROWS, each labelled with the single model it

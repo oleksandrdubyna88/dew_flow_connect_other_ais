@@ -446,7 +446,36 @@
           "type": "string",
           "default": "Explain",
           "editPresentation": "multilineText",
-          "markdownDescription": "What a captured passage is sent WITH. One word by default, so it never has to be rewritten; a longer instruction is often better (\"explain it to somebody who knows the language but not this codebase, and say what the author is actually worried about\"). The language of the answer is a separate setting — `#coai.chatLanguage#` — so changing it does not mean rewriting this."
+          "markdownDescription": "**Replaced by `#coai.chatPromptPresets#`.** What a captured passage used to be sent with. It is read once, to carry what you had written into your first named preset, and nothing reads it after that — so edit the presets instead. It stays here for one release so that upgrade cannot lose the prompt you wrote."
+        },
+        "coai.chatPromptPresets": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "Your saved prompts, each with a name. One is the MAIN one — the one used when a capture sends by itself (see `#coai.chatAutoSend#`). Edit them in **ConnectOtherAIs: Edit chat presets**, which is easier than editing this. A row needs a `name` and a `text`; anything else in it is ignored, and a row missing either is dropped rather than taking the list with it.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "text": { "type": "string" },
+              "main": { "type": "boolean" }
+            }
+          }
+        },
+        "coai.chatModelPresets": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "Your saved models, each with a name and optionally a prompt the composer opens with. `provider` is the reviewer ROW that answers — the same identity the picker stores — and `model` is which of its models, or empty for whatever that row is set to. Edit them in **ConnectOtherAIs: Edit chat presets**.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "provider": { "type": "string" },
+              "model": { "type": "string" },
+              "startingPrompt": { "type": "string" }
+            }
+          }
         },
         "coai.chatLanguage": {
           "type": "string",

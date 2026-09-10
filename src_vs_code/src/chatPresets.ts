@@ -1,0 +1,171 @@
+/**
+ * The two lists a person builds: named prompts, and named models.
+ *
+ * <p>Pure, over whatever `settings.json` actually holds — no `vscode` handle, so every rule below is
+ * a unit test rather than a claim. That matters more here than in most settings modules for a reason
+ * this feature is the first to meet: a preset is something a person COMPOSES, not something they
+ * pick from a catalog this product shipped. `prompts.ts` is a list we wrote and they override;
+ * this is a list they wrote, and it is the only place in the extension where losing a value means
+ * losing their words.</p>
+ *
+ * <p><b>So a bad row is dropped and the rest survives.</b> Refusing the whole list because one entry
+ * was mistyped would take away every prompt somebody had saved for the sake of the one they got
+ * wrong — and `settings.json` is a file people edit by hand, so a mistyped entry is not an exotic
+ * case. Nothing here throws.</p>
+ *
+ * <p><b>These are person-level settings and do not cross to the server</b>, the same two decisions
+ * `chatSettings.ts` records for the four it owns: they are absent from `envBlock` and from the
+ * settings mirrored into `coai-mcp`, and they are not in `OVERLAID_SETTINGS`. A prompt library is
+ * exactly the kind of thing that would otherwise start travelling.</p>
+ */
+
+/** How much of a name fits on a button in a row of buttons, before the row stops being a row. */
+const NAME_LIMIT = 60;
+
+export interface PromptPreset {
+  readonly id: string;
+  readonly name: string;
+  readonly text: string;
+  /** The one a trigger that sends BY ITSELF uses. Exactly one list-wide; the first claim wins. */
+  readonly main: boolean;
+}
+
+export interface ModelPreset {
+  readonly id: string;
+  readonly name: string;
+  /** The vendor ROW that answers — the identity a saved choice stores, as everywhere else here. */
+  readonly provider: string;
+  /** Which of that row's models, or empty for whatever the row is set to. */
+  readonly model: string;
+  /** What the composer opens with when this preset is chosen. Optional, and usually absent. */
+  readonly startingPrompt?: string | undefined;
+}
+
+/** A string from a file a person edits: trimmed, and empty for anything that is not one. */
+function text(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/** A record, or nothing — `settings.json` can hold a string, a number or a null in an array. */
+function record(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+/**
+ * An id for every preset, unique across the list.
+ *
+ * <p>A person editing `settings.json` by hand will not write one, and two presets sharing an id
+ * makes a click ambiguous — the buttons name the preset they chose, and the host looks it up. So a
+ * missing or repeated id is replaced by a positional one, which is stable for as long as the list
+ * is not reordered and is regenerated the moment it is.</p>
+ */
+function withId(candidate: string, index: number, taken: Set<string>): string {
+  const id = candidate.length > 0 && !taken.has(candidate) ? candidate : `preset-${index + 1}`;
+  taken.add(id);
+
+  return id;
+}
+
+/**
+ * The prompt presets, and the migration of the single prompt that came before them.
+ *
+ * @param saved what `coai.chatPromptPresets` holds
+ * @param legacy what `coai.chatPrompt` holds — a single string a person has been editing since the
+ *   chat shipped. It becomes their first preset, ticked as the main one, **only when they have no
+ *   presets at all**: somebody who has a list has already moved, and re-adding the old string on
+ *   every read would resurrect a prompt they deleted.
+ */
+export function chatPromptPresetsFrom(saved: unknown, legacy = ''): readonly PromptPreset[] {
+  const rows = Array.isArray(saved) ? saved : [];
+  const taken = new Set<string>();
+  const presets = rows.flatMap((row, index): PromptPreset[] => {
+    const one = record(row);
+    if (one === undefined) {
+      return [];
+    }
+    const name = text(one['name']).slice(0, NAME_LIMIT);
+    // The TEXT is not truncated: a name has a width to respect and a prompt has meaning to keep.
+    const body = typeof one['text'] === 'string' ? one['text'].trim() : '';
+
+    return name.length === 0 || body.length === 0
+      ? []
+      : [{ id: withId(text(one['id']), index, taken), name, text: body, main: one['main'] === true }];
+  });
+
+  if (presets.length === 0) {
+    const carried = legacy.trim();
+
+    return carried.length === 0
+      ? []
+      : [{ id: 'preset-1', name: nameFor(carried), text: carried, main: true }];
+  }
+
+  return onlyOneMain(presets);
+}
+
+/**
+ * A name for the migrated prompt, since the setting it came from never had one.
+ *
+ * <p>Its own first words, so a person recognises it on a button as the thing they wrote — a generic
+ * label would make their own prompt look like something this product put there.</p>
+ */
+function nameFor(prompt: string): string {
+  const firstLine = prompt.split('\n')[0] ?? prompt;
+
+  return firstLine.length <= NAME_LIMIT ? firstLine : `${firstLine.slice(0, NAME_LIMIT - 1)}…`;
+}
+
+/** Exactly one main prompt, and the first claim wins — two would make the choice arbitrary. */
+function onlyOneMain(presets: readonly PromptPreset[]): readonly PromptPreset[] {
+  const first = presets.findIndex((preset) => preset.main);
+
+  return presets.map((preset, index) => ({ ...preset, main: index === first }));
+}
+
+/**
+ * Which prompt a trigger that sends by itself uses.
+ *
+ * <p>The ticked one, or the FIRST when nothing is ticked: while there is any prompt at all there
+ * must be one to send, or the keybinding path has nothing to say. Nothing at all when the list is
+ * empty, which the caller handles rather than this inventing a prompt nobody wrote.</p>
+ */
+export function mainPrompt(presets: readonly PromptPreset[]): PromptPreset | undefined {
+  return presets.find((preset) => preset.main) ?? presets[0];
+}
+
+/** The model presets. A row without a PROVIDER is not one: the provider is what answers. */
+export function chatModelPresetsFrom(saved: unknown): readonly ModelPreset[] {
+  const rows = Array.isArray(saved) ? saved : [];
+  const taken = new Set<string>();
+
+  return rows.flatMap((row, index): ModelPreset[] => {
+    const one = record(row);
+    if (one === undefined) {
+      return [];
+    }
+    const name = text(one['name']).slice(0, NAME_LIMIT);
+    const provider = text(one['provider']);
+    if (name.length === 0 || provider.length === 0) {
+      return [];
+    }
+    const starting = typeof one['startingPrompt'] === 'string' ? one['startingPrompt'].trim() : '';
+
+    return [{
+      id: withId(text(one['id']), index, taken),
+      name,
+      provider,
+      model: text(one['model']),
+      ...(starting.length > 0 ? { startingPrompt: starting } : {}),
+    }];
+  });
+}
+
+/** The preset a button named, or nothing — a click naming an id that is gone chooses nothing. */
+export function presetById<T extends { readonly id: string }>(
+  presets: readonly T[],
+  id: string,
+): T | undefined {
+  return id.length === 0 ? undefined : presets.find((preset) => preset.id === id);
+}
