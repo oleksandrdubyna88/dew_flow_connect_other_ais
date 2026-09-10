@@ -46,12 +46,18 @@ import { ChatTurnRecord, chatUsageLine, parseChatUsage } from './chatUsage';
  *   <li>1000 a day, which nobody types, is 94 MB a year.</li>
  * </ul>
  *
- * <p><b>Nothing retires it, and that is the decision rather than the omission.</b> The file IS the
- * history: `conversationTotal` sums it, and deleting old lines would silently change what a past
- * conversation is recorded to have cost — a ledger that quietly forgets is worse than one that is
- * large. At the sizes above it is not large. What DID need fixing is the cost of holding it: the log
- * page used to re-read and re-parse the whole file every five seconds, so `PanelProvider` now caches
- * the parse and re-reads only when the file's size or mtime moves.</p>
+ * <p><b>Nothing retires it, and the operator ruled that on 2026-09-10 — asked with these numbers in
+ * front of them, the answer was "keep it for ever".</b> The file IS the history: `conversationTotal`
+ * sums it, and deleting old lines would silently change what a past conversation is recorded to have
+ * cost. A ledger that quietly forgets is worse than one that is large, and at the sizes above it is
+ * not large. The two alternatives were put and refused: trimming by age or count bounds the file but
+ * answers "what did I spend last year" WRONGLY rather than not at all, and rolling trimmed lines up
+ * into a summary per conversation keeps the truth at the price of a second record type. If a bound is
+ * ever wanted, the roll-up is the only version of it that does not lie.</p>
+ *
+ * <p>What DID need fixing is the cost of holding it: the log page used to re-read and re-parse the
+ * whole file every five seconds, so `PanelProvider` now caches the parse and re-reads only when the
+ * file's size or mtime moves.</p>
  *
  * <p>It is a plain file in the person's own data directory, named in the help; deleting it is theirs
  * to do, and costs them only the history.</p>

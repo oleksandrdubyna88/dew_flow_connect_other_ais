@@ -84,11 +84,9 @@ test('a cumulative total that goes BACKWARDS is a fresh baseline, not a free tur
     { tokensIn: 50, tokensOut: 10 },
     'a restarted thread’s turn was recorded as free',
   );
-  // And money follows the tokens, by the same rule.
-  assert.strictEqual(
-    turnCost(true, { tokensIn: 50, tokensOut: 10, costUsd: 0.2 }, { costUsd: 5 }),
-    0.2,
-  );
+  // Money does NOT follow the tokens any more: a cumulative vendor's bill is refused rather than
+  // differenced, so a restart is not a special case there — see the test that says so.
+  assert.strictEqual(turnCost(true, { tokensIn: 50, tokensOut: 10, costUsd: 0.2 }), null);
 });
 
 test('a negative number of tokens is still not a thing that can be true', () => {
@@ -213,22 +211,29 @@ test('the record takes usage that is ALREADY per-turn, and does not difference a
   assert.ok(!Object.keys(built).includes('runtime'), 'the runtime has no business in the file');
 });
 
-test('money is differenced by the same rule as tokens, so one cannot drift from the other', () => {
-  // Dead code today — the one cumulative vendor reports no money at all — and written anyway.
-  // Leaving money un-differenced beside tokens that are is a trap for whoever adds the next
-  // cumulative vendor: the tokens would be right and the bill would grow with the conversation.
-  assert.strictEqual(turnCost(true, { tokensIn: 0, tokensOut: 0, costUsd: 1.5 }, { costUsd: 1.2 }), 0.3);
-  assert.strictEqual(turnCost(false, { tokensIn: 0, tokensOut: 0, costUsd: 1.5 }, { costUsd: 1.2 }), 1.5);
+test('a CUMULATIVE vendor reports no per-turn bill, so none is recorded', () => {
+  // The operator ruled on 2026-09-10: the money-differencing arithmetic was dead code and goes. What
+  // replaces it is not a clamp but a REFUSAL, because the two are not the same when the case finally
+  // arrives. A running total is not what one turn cost, so recording it as one would over-report
+  // every turn but the first, increasingly, exactly as the token bug did before the gate caught it.
+  // `null` says "nobody told us what this turn cost", which is true, and the log page then prices the
+  // row from the public list by the model that answered and marks it with a tilde.
   assert.strictEqual(
-    turnCost(true, { tokensIn: 0, tokensOut: 0, costUsd: null }, { costUsd: 1.2 }),
+    turnCost(true, { tokensIn: 0, tokensOut: 0, costUsd: 1.5 }),
     null,
-    'a vendor that billed nothing must not be handed the previous turn’s bill',
+    'a running total was recorded as this turn’s bill',
   );
-  assert.strictEqual(
-    turnCost(true, { tokensIn: 0, tokensOut: 0, costUsd: 0.4 }, { costUsd: null }),
-    0.4,
-    'nothing to difference against is the first turn, not a free one',
-  );
+  // The vendor that DOES bill per turn is untouched, to the cent it actually charged.
+  assert.strictEqual(turnCost(false, { tokensIn: 0, tokensOut: 0, costUsd: 0.107958 }), 0.107958);
+  assert.strictEqual(turnCost(false, { tokensIn: 0, tokensOut: 0, costUsd: null }), null);
+  // And nonsense is not a debit.
+  assert.strictEqual(turnCost(false, { tokensIn: 0, tokensOut: 0, costUsd: -3 }), 0);
+});
+
+test('the OLD money-differencing rule is gone, and nothing calls it with a previous turn', () => {
+  // Guards the deletion itself: `turnCost` took a third argument and subtracted with it. A signature
+  // that still accepted one would let the arithmetic creep back in unnoticed.
+  assert.strictEqual(turnCost.length, 2, 'turnCost grew back a `previous` parameter');
 });
 
 test('a turn nobody reported numbers for is STILL a record, with zeroes and its outcome', () => {
