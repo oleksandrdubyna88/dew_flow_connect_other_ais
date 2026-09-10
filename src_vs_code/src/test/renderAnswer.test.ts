@@ -255,6 +255,30 @@ test('a form, an input and a comment that tries to swallow the page are all just
     const html = renderAnswer(`${attack}\n`);
 
     assertOnlyAllowedTags(html, attack);
-    assert.match(html, /&lt;/, `this was silently dropped instead of shown: ${attack}`);
+    // The WHOLE payload, escaped — not merely a `&lt;` somewhere in the output. A renderer that kept
+    // the first angle bracket and swallowed everything after it would have passed the weaker
+    // assertion this replaces, and swallowing is the other half of what must not happen here: a
+    // model quoting a `<script>` tag inside an explanation is giving an answer, and an answer with a
+    // hole in it is a defect of its own. (CodeRabbit, on the pull request.)
+    assert.ok(
+      html.includes(escaped(attack)),
+      `this was truncated rather than shown as text: ${attack}\ngot: ${html}`,
+    );
   }
 });
+
+/**
+ * The text of an attack as it must appear once it is shown rather than run.
+ *
+ * <p>Spelled out here rather than borrowed from the renderer's own escaper: a test that escapes with
+ * the function under test agrees with it by construction, including when both are wrong. These four
+ * replacements are the HTML text-node rule, and their ORDER is load-bearing — the ampersand first, or
+ * the ampersands this function itself introduces get escaped a second time.</p>
+ */
+function escaped(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
