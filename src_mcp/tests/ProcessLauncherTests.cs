@@ -36,6 +36,23 @@ public sealed class ProcessLauncherTests
     /// </remarks>
     private static readonly TimeSpan Promptly = TimeSpan.FromSeconds(5);
 
+    /// <summary>Long enough that a child living it out is unmistakably the wrong answer.</summary>
+    private const string LivesTenSeconds = "10000";
+
+    /// <summary>The budget under test. Two orders of magnitude under the child's own lifetime.</summary>
+    private static readonly TimeSpan ShortBudget = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>Long enough that nothing in these tests can reach it, so a failure is never the clock.</summary>
+    private static readonly TimeSpan NoBudgetPressure = TimeSpan.FromMinutes(1);
+
+    private const int Ceiling = 64 * 1024;
+
+    /// <summary>Comfortably past <see cref="Ceiling"/>, so the drop is unambiguous.</summary>
+    private const string SpewsPastTheCeiling = "400000";
+
+    /// <summary>An exit code no runtime produces by accident, so seeing it back means the CHILD chose it.</summary>
+    private const string RefusesWithCode = "7";
+
     private static ProcessRequest Request(params string[] args) =>
         new(FakeCliInvocations.Exe, args, AppContext.BaseDirectory);
 
@@ -45,10 +62,10 @@ public sealed class ProcessLauncherTests
         // `sleep` does not touch stdin, so the megabyte below fills the pipe and stays there. The
         // deadline has to be able to end a launch that is stuck in the WRITE, which is the half of
         // the operation the timeout used to start after.
-        var request = Request("sleep", "10000") with
+        var request = Request("sleep", LivesTenSeconds) with
         {
             StdIn = new string('p', PastAnyPipeBuffer),
-            Timeout = TimeSpan.FromMilliseconds(300),
+            Timeout = ShortBudget,
         };
         var clock = Stopwatch.StartNew();
 
@@ -58,6 +75,7 @@ public sealed class ProcessLauncherTests
             "the launch was given 300 ms and the child ten seconds — whichever of the two runs out "
             + "first is the one that must decide");
         result.TimedOut.Should().BeTrue("the tree was killed, and the caller has to be able to tell");
+        result.Cancelled.Should().BeFalse("nobody withdrew this one; its own budget ran out");
     }
 
     [Fact]
@@ -66,8 +84,8 @@ public sealed class ProcessLauncherTests
         // The second clock. A Team-server job carries a cancellation token that a cancel or the
         // deadline sweep fires, and it must reach a launch stuck in the write — otherwise the
         // account's lock is held past the job's own budget by a review nobody is waiting for.
-        using var caller = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
-        var request = Request("sleep", "10000") with
+        using var caller = new CancellationTokenSource(ShortBudget);
+        var request = Request("sleep", LivesTenSeconds) with
         {
             StdIn = new string('p', PastAnyPipeBuffer),
             Timeout = TimeSpan.FromMinutes(5),
@@ -77,7 +95,10 @@ public sealed class ProcessLauncherTests
         var result = await new ProcessLauncher().RunAsync(request, caller.Token);
 
         clock.Elapsed.Should().BeLessThan(Promptly);
-        result.TimedOut.Should().BeTrue("the tree was killed — this launcher says so the same way for both clocks");
+        result.TimedOut.Should().BeTrue("the tree was killed, which is what this field has always said");
+        result.Cancelled.Should().BeTrue(
+            "and WHICH clock stopped it decides what happens next: a budget that ran out is a vendor "
+            + "too slow for it, a caller that cancelled is a job somebody withdrew and must not be retried");
     }
 
     [Fact]
@@ -87,11 +108,12 @@ public sealed class ProcessLauncherTests
         // launch ENDING early, and a launcher that delivered nothing at all would pass every one of
         // them. This is what fails if the write ever stops being awaited properly.
         var prompt = string.Concat(Enumerable.Range(0, PastAnyPipeBuffer / 16).Select(i => $"line {i,-9}\n"));
-        var request = Request("echo-stdin") with { StdIn = prompt, Timeout = TimeSpan.FromMinutes(1) };
+        var request = Request("echo-stdin") with { StdIn = prompt, Timeout = NoBudgetPressure };
 
         var result = await new ProcessLauncher().RunAsync(request, TestContext.Current.CancellationToken);
 
         result.TimedOut.Should().BeFalse();
+        result.Truncated.Should().BeFalse();
         result.ExitCode.Should().Be(0);
         result.StdOut.Should().Be(prompt, "every byte the caller sent, and not one the launcher added");
     }
@@ -102,15 +124,15 @@ public sealed class ProcessLauncherTests
         // A CLI that refuses before it reads — an expired sign-in, a bad flag — closes its end of
         // the pipe mid-write. That is the child's decision and its own words are what matter; the
         // write's broken pipe must not travel out of the launcher as an exception.
-        var request = Request("stderr-exit", "not signed in", "7") with
+        var request = Request("stderr-exit", "not signed in", RefusesWithCode) with
         {
             StdIn = new string('p', PastAnyPipeBuffer),
-            Timeout = TimeSpan.FromMinutes(1),
+            Timeout = NoBudgetPressure,
         };
 
         var result = await new ProcessLauncher().RunAsync(request, TestContext.Current.CancellationToken);
 
-        result.ExitCode.Should().Be(7);
+        result.ExitCode.Should().Be(int.Parse(RefusesWithCode));
         result.StdErr.Should().Contain("not signed in");
         result.TimedOut.Should().BeFalse();
     }
@@ -121,18 +143,34 @@ public sealed class ProcessLauncherTests
         // Not one newline in the whole 400 KB, which is the point. A line-based reader hands over
         // nothing until the stream closes, so a ceiling checked per line cannot fire before the
         // allocation it exists to prevent has already happened.
-        var request = Request("spew", "400000") with
+        var request = Request("spew", SpewsPastTheCeiling) with
         {
-            MaxOutputChars = 64 * 1024,
-            Timeout = TimeSpan.FromMinutes(1),
+            MaxOutputChars = Ceiling,
+            Timeout = NoBudgetPressure,
         };
 
         var result = await new ProcessLauncher().RunAsync(request, TestContext.Current.CancellationToken);
 
         result.ExitCode.Should().Be(0, "a runaway is still allowed to finish; it is its OUTPUT that is bounded");
-        result.StdOut.Length.Should().BeLessThan(64 * 1024 + 200, "the ceiling, plus the sentence that names it");
+        result.StdOut.Length.Should().BeLessThan(Ceiling + 200, "the ceiling, plus the sentence that names it");
+        result.Truncated.Should().BeTrue(
+            "a caller checking machine-readable output must be able to tell a cut answer from a bad one "
+            + "without parsing the sentence");
         result.StdOut.Should().Contain("truncated",
             "a silently cut answer is one a parser fails on for a reason nobody can find");
+        result.StdOut.Should().Contain("more were dropped",
+            "the ceiling alone cannot say whether one character was lost or two hundred megabytes");
+    }
+
+    [Fact]
+    public async Task ACeilingOfNothingIsRefusedRatherThanKeepingNothing()
+    {
+        // Zero and -1 are both ordinary spellings of "unlimited" elsewhere, and either would make
+        // every launch answer with an empty stream — a discarded vendor answer that reads exactly
+        // like a vendor that said nothing. (gemini, code round.)
+        var refused = () => Request("emit", "x") with { MaxOutputChars = 0 };
+
+        refused.Should().Throw<ArgumentOutOfRangeException>();
     }
 
     [Fact]
@@ -140,10 +178,11 @@ public sealed class ProcessLauncherTests
     {
         // The companion the ceiling needs: a bound that fires on everything is indistinguishable
         // from a bound that fires on nothing, and only one of them is caught by the test above.
-        var request = Request("emit", "a perfectly ordinary answer") with { Timeout = TimeSpan.FromMinutes(1) };
+        var request = Request("emit", "a perfectly ordinary answer") with { Timeout = NoBudgetPressure };
 
         var result = await new ProcessLauncher().RunAsync(request, TestContext.Current.CancellationToken);
 
         result.StdOut.Should().Be("a perfectly ordinary answer");
+        result.Truncated.Should().BeFalse();
     }
 }

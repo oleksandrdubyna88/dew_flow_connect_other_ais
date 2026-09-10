@@ -40,7 +40,30 @@ public sealed record ProcessRequest(
     /// cannot block on a pipe nobody is draining either. Its exit code and the head of what it said
     /// are still returned.</para>
     /// </remarks>
-    public int MaxOutputChars { get; init; } = 8 * 1024 * 1024;
+    /// <value>Must be positive: a ceiling of zero would discard every child's output.</value>
+    public int MaxOutputChars
+    {
+        get;
+        // Refused rather than clamped, and it is the one number here a caller could plausibly get
+        // wrong in the direction that destroys evidence: 0 and -1 are both common spellings of
+        // "unlimited" elsewhere, and either would silently return an empty answer for every launch.
+        // (gemini, code round.)
+        init => field = value > 0
+            ? value
+            : throw new ArgumentOutOfRangeException(
+                nameof(value), value, "a stream ceiling must be positive; zero would keep nothing at all");
+    } = 8 * 1024 * 1024;
+
+    /// <summary>
+    /// How long the streams are still read AFTER the child is gone, before what is left is dropped.
+    /// </summary>
+    /// <remarks>
+    /// A pipe stays open while any process holds its write end, and a grandchild inherits both — so a
+    /// handle that outlives the tree kill would hang the launcher rather than the process it belongs
+    /// to. In the ordinary case the streams close with the child and this costs nothing; it is a
+    /// bound on the pathological case, and the stream says so when it is what dropped the rest.
+    /// </remarks>
+    public TimeSpan DrainGrace { get; init; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
     /// A name to record this child under while it runs, or empty to track nothing.
@@ -54,7 +77,31 @@ public sealed record ProcessRequest(
 }
 
 /// <summary>What a run produced. <see cref="TimedOut"/> true means the tree was killed.</summary>
-public sealed record ProcessResult(int ExitCode, string StdOut, string StdErr, bool TimedOut);
+/// <param name="Cancelled">
+/// The tree was killed because the CALLER's token fired, not because this launch ran out of budget.
+/// </param>
+/// <remarks>
+/// <para>Both extra fields are additive and default to false, so every existing construction and
+/// every existing reader of <see cref="TimedOut"/> keeps its meaning — "the tree was killed" — and
+/// the new ones answer questions that used to need the caller's own bookkeeping.</para>
+/// <para><b>Why <see cref="Cancelled"/> is separate rather than a different value of TimedOut.</b>
+/// "We ran out of time" and "somebody stopped this" look identical from inside the wait and lead to
+/// opposite conclusions outside it: one is a vendor that is too slow for its budget and belongs in
+/// the retry ladder, the other is a job the person withdrew and must never be retried or reported as
+/// a failure of the model. Two vendors asked for the distinction independently on the code round.</para>
+/// <param name="Truncated">
+/// At least one stream was cut — by the ceiling or by the drain grace — so what is here is a head
+/// rather than the whole. A caller validating machine-readable output can tell that from a vendor
+/// that answered badly, without parsing the sentence in the text.
+/// </param>
+/// </remarks>
+public sealed record ProcessResult(
+    int ExitCode,
+    string StdOut,
+    string StdErr,
+    bool TimedOut,
+    bool Cancelled = false,
+    bool Truncated = false);
 
 /// <summary>The seam every process in this repository goes through — one launcher, injectable
 /// everywhere, so a test hands in a fake and the suite touches no vendor.</summary>
@@ -74,6 +121,17 @@ public interface IProcessLauncher
 /// </param>
 public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessLauncher
 {
+    /// <summary>
+    /// How much of a stream is taken per read.
+    /// </summary>
+    /// <remarks>
+    /// Two of these per launch, against a launch that starts an operating-system process — a cost
+    /// three orders of magnitude larger — so it is a plain array rather than a pooled one. A rented
+    /// buffer would also have to be returned around a read the drain grace is entitled to ABANDON,
+    /// which is a use-after-return rather than a saving.
+    /// </remarks>
+    private const int DrainBufferChars = 8192;
+
     private readonly IProcessTracker _tracker = tracker ?? NoProcessTracking.Instance;
 
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
@@ -169,11 +227,16 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(request.Timeout);
 
+        // A token of its own, because the drain must OUTLIVE the deadline: the output of a child
+        // that was just killed is the evidence of why it was killed, and cancelling the read with
+        // the same token would throw that away at the one moment it matters.
+        using var draining = new CancellationTokenSource();
+
         // Started before the write, because a child may answer before it has finished reading — and
         // one that fills ITS pipe while nobody drains ours is a deadlock made of two blocked writes.
         var reading = Task.WhenAll(
-            DrainAsync(process.StandardOutput, stdout),
-            DrainAsync(process.StandardError, stderr));
+            DrainAsync(process.StandardOutput, stdout, draining.Token),
+            DrainAsync(process.StandardError, stderr, draining.Token));
         var writing = WriteStdInAsync(process, request.StdIn, deadline.Token);
 
         var timedOut = false;
@@ -184,6 +247,13 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         catch (OperationCanceledException)
         {
             timedOut = true;
+            // BEFORE the kill, and this is the finding that made it explicit: a write blocked on a
+            // full pipe does not honour its token on every platform, and a descendant that survived
+            // the tree kill still holding the read end would leave that write blocked for ever —
+            // with the launcher awaiting it, and on the Team server an account locked behind it.
+            // Closing our own end fails the write at once, whoever else is holding theirs.
+            // (codex, code round.)
+            Close(process.StandardInput);
             try
             {
                 process.Kill(entireProcessTree: true);
@@ -196,10 +266,48 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
             await process.WaitForExitAsync(CancellationToken.None);
         }
 
-        await SettledAsync(writing);
-        await SettledAsync(DrainedAsync(reading));
+        // The child is gone, so the streams should end now. The grace is what bounds the case where
+        // they do not — and it CANCELS the read rather than walking away from it, so no suspended
+        // task is left to fault against a disposed process or to append to text somebody is already
+        // reading. (codex and gemini, code round, from three directions.)
+        draining.CancelAfter(request.DrainGrace);
+        await Task.WhenAll(SettledAsync(writing), SettledAsync(reading));
 
-        return new ProcessResult(process.ExitCode, stdout.ToString(), stderr.ToString(), timedOut);
+        return new ProcessResult(
+            process.ExitCode,
+            stdout.ToString(),
+            stderr.ToString(),
+            timedOut,
+            // The token's STATE, never the exception's type — the two arrive as the same
+            // OperationCanceledException and mean opposite things. A budget that ran out is a vendor
+            // too slow for it; a caller that cancelled is a job somebody withdrew, and retrying that
+            // is spending money on an answer nobody is waiting for.
+            Cancelled: timedOut && ct.IsCancellationRequested,
+            Truncated: stdout.Truncated || stderr.Truncated);
+    }
+
+    /// <summary>
+    /// Closes our end of the child's stdin, even with a write still blocked inside it.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The HANDLE, not the writer.</b> <c>StreamWriter.Close()</c> refuses outright while an
+    /// async write is in flight — <c>InvalidOperationException: The stream is currently in use by a
+    /// previous operation</c> — which is exactly and only the state this is called in. Measured on
+    /// the first run of the test that asked for it. Disposing the underlying pipe stream closes the
+    /// handle, and the blocked write then fails at once with the <c>IOException</c> that has always
+    /// meant "the child is not listening any more".</para>
+    /// <para>Every one of these is an ordinary way for it to already be gone, so none of them is an
+    /// error here: the point is that after this call nothing is holding our end open.</para>
+    /// </remarks>
+    private static void Close(StreamWriter stream)
+    {
+        try
+        {
+            stream.BaseStream.Dispose();
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException or InvalidOperationException)
+        {
+        }
     }
 
     /// <summary>Reads one stream to its end, keeping at most what <paramref name="into"/> allows.</summary>
@@ -210,29 +318,28 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
     /// ran. It also APPENDED a newline to every line, so a vendor's answer came back with a line
     /// ending it had not written; the raw reader hands over exactly what the child produced.
     /// </remarks>
-    private static async Task DrainAsync(StreamReader stream, BoundedText into)
+    /// <param name="ct">
+    /// Cancelled at the drain grace, not at the request's deadline — see the caller for why the two
+    /// are different clocks. Its cancellation is CAUGHT here, so the launch still returns everything
+    /// that did arrive and the text says the rest was dropped.
+    /// </param>
+    private static async Task DrainAsync(StreamReader stream, BoundedText into, CancellationToken ct)
     {
-        var buffer = new char[8192];
-        while (await stream.ReadAsync(buffer, CancellationToken.None) is var read && read > 0)
+        var buffer = new char[DrainBufferChars];
+        try
         {
-            into.Append(buffer, read);
+            while (await stream.ReadAsync(buffer, ct) is var read && read > 0)
+            {
+                into.Append(buffer, read);
+            }
         }
-    }
-
-    /// <summary>
-    /// Waits for both streams to end, but not for ever.
-    /// </summary>
-    /// <remarks>
-    /// A pipe stays open while ANY process holds its write end, and a grandchild inherits both. The
-    /// tree kill takes them, so this normally returns the instant the child is gone — but a handle
-    /// that outlives the kill would otherwise hang this method rather than the process it belongs
-    /// to, and a launcher that never returns is worse than a truncated stream.
-    /// </remarks>
-    private static async Task DrainedAsync(Task reading)
-    {
-        if (await Task.WhenAny(reading, Task.Delay(TimeSpan.FromSeconds(5))) == reading)
+        catch (Exception e) when (e is OperationCanceledException or ObjectDisposedException or IOException)
         {
-            await reading;
+            // Something outlived the tree kill and is still holding this pipe. What arrived is kept
+            // and the stream says it is a head rather than the whole — an abandoned reader would
+            // have said nothing at all, and would still have been suspended when the process it
+            // reads from was disposed.
+            into.CutShort();
         }
     }
 
@@ -285,14 +392,7 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         }
         finally
         {
-            try
-            {
-                process.StandardInput.Close();
-            }
-            catch (Exception e) when (e is IOException or ObjectDisposedException)
-            {
-                // The stream is already gone with the child. There is nothing left to close.
-            }
+            Close(process.StandardInput);
         }
     }
 }
@@ -308,17 +408,21 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
 internal sealed class BoundedText(int maxChars)
 {
     private readonly StringBuilder _text = new();
-    private bool _truncated;
+    private long _dropped;
+    private bool _cutShort;
 
+    /// <summary>True when what this holds is a HEAD rather than the whole stream.</summary>
+    public bool Truncated => _dropped > 0 || _cutShort;
+
+    /// <summary>Take up to the ceiling, and count the rest rather than keeping it.</summary>
+    /// <remarks>
+    /// Reading continues past the ceiling in the caller — a pipe nobody drains blocks the child that
+    /// is writing to it — so this goes on being called and goes on counting. The count is what makes
+    /// the sentence below worth reading: "cut at 8 Mi" says nothing about whether one character was
+    /// lost or two hundred megabytes.
+    /// </remarks>
     public void Append(char[] buffer, int count)
     {
-        if (_truncated)
-        {
-            // Still READ — the caller keeps draining so the child never blocks on a pipe nobody
-            // empties — and no longer kept.
-            return;
-        }
-
         var room = maxChars - _text.Length;
         if (count <= room)
         {
@@ -328,11 +432,31 @@ internal sealed class BoundedText(int maxChars)
         }
 
         _text.Append(buffer, 0, Math.Max(room, 0));
-        // Named, once, in the stream itself. A silently cut answer is one a parser fails on for a
-        // reason nobody can find; this one fails saying why.
-        _text.Append($"\n[coai: output truncated after {maxChars} characters]\n");
-        _truncated = true;
+        _dropped += count - Math.Max(room, 0);
     }
 
-    public override string ToString() => _text.ToString();
+    /// <summary>The stream was still open when the drain grace ran out.</summary>
+    /// <remarks>
+    /// A different fact from the ceiling and it deserves a different sentence: the ceiling is this
+    /// launcher's decision about a runaway, while this is something that outlived the tree kill and
+    /// is still holding the pipe. Reading them as one would send somebody to raise a limit that was
+    /// never reached.
+    /// </remarks>
+    public void CutShort() => _cutShort = true;
+
+    /// <summary>
+    /// The text, with one sentence at the end when it is not all of it.
+    /// </summary>
+    /// <remarks>
+    /// Composed HERE rather than appended when the ceiling was crossed, because the number worth
+    /// printing — how much was dropped — is not known until the stream ends. It opens with a newline
+    /// so it cannot run on from output that ended without one.
+    /// </remarks>
+    public override string ToString() => Truncated
+        ? _text.ToString() + Sentence()
+        : _text.ToString();
+
+    private string Sentence() => _dropped > 0
+        ? $"\n[coai: output truncated at {maxChars} characters; {_dropped} more were dropped]\n"
+        : "\n[coai: output truncated — the stream was still open when the drain grace ran out]\n";
 }
