@@ -267,3 +267,10 @@ resolved its legacy gitlink update by retaining the same SHA at the neutral moun
 normal packaging run passed 1,397 extension tests / 1 skip, plus all three generator cases.
 Package 0.32.3 was independently checked for all 5,934 canonical body bytes, as above;
 its immutable hashes replace the earlier uninstalled validation package in the evidence JSON.
+
+Local installation on 2026-09-10: VS Code installed extension 0.32.3; its actual installed
+bundle matches the VSIX SHA. MCP was atomically replaced with the verified Native AOT
+artifact, preserving the previous binary; SQLite already matched and was not rewritten.
+All five McpContractTests then passed with COAI_CONTRACT_EXE pointing to the installed
+globalStorage executable. Existing editor/agent processes were not restarted, so the
+manual panel scenario and an already-running host reloading remain unverified.

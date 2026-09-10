@@ -438,7 +438,14 @@
       "sqliteOpened": true,
       "stdioContractTests": 5
     },
-    "installed": false,
+    "installed": true,
+    "installedVerification": {
+      "extensionVersionAndBundleMatch": true,
+      "mcpVersionAndHashMatch": true,
+      "installedMcpStdioContractTests": 5,
+      "existingEditorHostReloaded": false,
+      "manualPanelScenarioComplete": false
+    },
     "limits": "Artifact inspection and real native SQLite/stdio only; these observations do not show an already-running editor reloaded the extension."
   }
 }

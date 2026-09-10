@@ -72,3 +72,21 @@ places a user receives it from are addressed by name rather than by host.
 independently — a release of one is not a release of the other. A checklist that assumed one version
 would check the wrong artefact half the time, which is how this item was written wrong the first time
 and caught by running it: `gh release view v0.26.1` answered *release not found*.
+
+
+## Local shared-instructions canary — 2026-09-10
+
+Partial verification: extension **0.32.3**, MCP **0.18.16-sharedrules.20260910**.
+Item 4 passes: the installed globalStorage binary reports that version and its SHA matches
+`research/shared-rules-adoption-smoke.json`. Five real stdio contract cases pass against it.
+The installed extension bundle matches the inspected VSIX, including all canonical gate-body
+bytes. Item 11's manual panel scenario and an existing editor host reloading are still open;
+no existing agent/editor process was stopped. Marketplace and Team-server items are not
+claims about this local-only installation.
+
+Rollback uses existing artifacts, not a rebuild: install
+`artifacts/shared-rules/before-install/connect-other-ais-0.31.18.vsix` with the VS Code CLI
+(`code --install-extension <that-file> --force`), and restore the preserved MCP executable
+from `artifacts/shared-rules/before-install/coai-mcp.exe` using the same atomic replacement.
+The identical SQLite library was left in place. These task artifacts are local and ignored;
+public release 0.31.18 and MCP release 0.18.15 remain the durable prior release sources.

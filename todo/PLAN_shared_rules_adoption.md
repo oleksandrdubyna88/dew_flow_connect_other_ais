@@ -1,6 +1,6 @@
 # PLAN — one canonical instruction source for Claude Code and Codex
 
-> Status: **IN PROGRESS, 2026-09-10.** Scope: neutral-layout canary and its product discovery adapters; layout, discovery and generated delivery are implemented locally. Reviewed source pin and first code-review corrections are applied; review is complete under configured good_enough policy; PR and installed-artifact verification remain open.
+> Status: **IN PROGRESS, 2026-09-10.** Scope: neutral-layout canary and its product discovery adapters; layout, discovery and generated delivery are implemented locally. Reviewed source pin and first code-review corrections are applied; review is complete under configured good_enough policy; PR completion and manual installed-host UI verification remain open. Local artifacts are installed and their bytes/protocol verified.
 
 The shared conventions repository now provides AGENTS/CLAUDE bootstraps, a metadata-driven
 resolver and a neutral mount. This repository still discovers only legacy rule folders in
