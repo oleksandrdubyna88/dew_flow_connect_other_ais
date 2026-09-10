@@ -1,6 +1,6 @@
 # PLAN — one canonical instruction source for Claude Code and Codex
 
-> Status: **IN PROGRESS, 2026-09-10.** Scope: neutral-layout canary and its product discovery adapters; layout, discovery and generated delivery are implemented locally. Source pin promotion, final verification, code review and publication remain open.
+> Status: **IN PROGRESS, 2026-09-10.** Scope: neutral-layout canary and its product discovery adapters; layout, discovery and generated delivery are implemented locally. Reviewed source pin and first code-review corrections are applied; final verification, repeat review and publication remain open.
 
 The shared conventions repository now provides AGENTS/CLAUDE bootstraps, a metadata-driven
 resolver and a neutral mount. This repository still discovers only legacy rule folders in
@@ -22,8 +22,8 @@ Finish the canary before their publication; keep the user's original checkout un
 | Rust/Creds and MCP/benchmark/rag adoption | Conventions S3/S4 | Canary accepted; pinned-by repositories last |
 
 Plan gate session `8e812028`: good_enough, all three reviewers answered; all sixteen returned
-findings received decisions. Conventions tooling is PR #17; its consumer pin is not promoted
-until that review closes. The legacy journal pin/base remain the rollback record.
+findings received decisions. Conventions tooling PR #17 merged as `895b24ce2dfcc2c09ba3af970a57e5b40f5eaf13`;
+this canary now pins that immutable source. The legacy journal pin/base remain the rollback record.
 
 ## Required outcome
 
@@ -56,7 +56,7 @@ until that review closes. The legacy journal pin/base remain the rollback record
   base/old gitlink for rollback. Use the reviewed conventions commit, not a remote-HEAD fallback.
 - First initialize that exact gitlink, run `npm ci --ignore-scripts --prefix .agents/conventions`,
   then `rules check`; CI pins Node 22. Record the immutable approved SHA in the adoption journal
-  before building. The source rollout is still closing review, so this plan does not guess its SHA.
+  before building. The reviewed source SHA is recorded above and in the adoption journal.
 - Add failing neutral-layout discovery scenarios in `src_mcp/tests/RuleFilesTests.cs`: PROJECT,
   nested local rules, shared C#/TypeScript bodies, excluded mount housekeeping, missing mount
   and local-first selection. Preserve the existing legacy cases.

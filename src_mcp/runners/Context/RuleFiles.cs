@@ -171,11 +171,12 @@ public static class RuleFiles
         }
 
         var mounts = GitModules.In(repoPath);
+        var folders = FolderFiles(repoPath, mounts);
         var kept = new List<RuleFile>();
         var omitted = new List<string>();
         var used = 0;
 
-        foreach (var relative in Candidates(repoPath, mounts, seed))
+        foreach (var relative in Candidates(folders, mounts, seed))
         {
             var full = Path.Combine(repoPath, relative.Replace('/', Path.DirectorySeparatorChar));
             if (Read(full) is not { } text)
@@ -195,7 +196,7 @@ public static class RuleFiles
             used += text.Length;
         }
 
-        return new RuleBundle(kept, omitted, used) { MissingMounts = EmptyRuleMounts(repoPath, mounts) };
+        return new RuleBundle(kept, omitted, used) { MissingMounts = EmptyRuleMounts(repoPath, mounts, folders) };
     }
 
     /// <summary>
@@ -208,14 +209,13 @@ public static class RuleFiles
     /// repository can break come first; the family's are the same in six checkouts.
     /// </remarks>
     private static IEnumerable<string> Candidates(
-        string repoPath, IReadOnlyList<SubmoduleMount> mounts, int? seed)
+        IReadOnlyList<string> folders, IReadOnlyList<SubmoduleMount> mounts, int? seed)
     {
         foreach (var file in InstructionFiles)
         {
             yield return file;
         }
 
-        var folders = FolderFiles(repoPath, mounts);
         foreach (var path in folders.Where(p => !UnderAnyMount(p, mounts)))
         {
             yield return path;
@@ -292,9 +292,10 @@ public static class RuleFiles
     /// <summary>
     /// Rule mounts this repository declares that are not actually here — the reviewer is told.
     /// </summary>
-    private static IReadOnlyList<string> EmptyRuleMounts(string repoPath, IReadOnlyList<SubmoduleMount> mounts) =>
+    private static IReadOnlyList<string> EmptyRuleMounts(
+        string repoPath, IReadOnlyList<SubmoduleMount> mounts, IReadOnlyList<string> folders) =>
         [.. mounts
-            .Where(m => IsRulesMount(m.Path) && MissingRuleMount(repoPath, m))
+            .Where(m => IsRulesMount(m.Path) && MissingRuleMount(repoPath, m, folders))
             .Select(m => m.Path)
             .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)];
 
@@ -302,9 +303,9 @@ public static class RuleFiles
         path.Equals(NeutralMount, StringComparison.OrdinalIgnoreCase) ||
         RuleFolders.Any(f => path.StartsWith(f.Dir + "/", StringComparison.OrdinalIgnoreCase));
 
-    private static bool MissingRuleMount(string repoPath, SubmoduleMount mount) =>
+    private static bool MissingRuleMount(string repoPath, SubmoduleMount mount, IReadOnlyList<string> folders) =>
         mount.Path.Equals(NeutralMount, StringComparison.OrdinalIgnoreCase)
-            ? !FolderFiles(repoPath, [mount]).Any(p => UnderAnyMount(p, [mount]))
+            ? !folders.Any(p => UnderAnyMount(p, [mount]))
             : IsEmptyDirectory(Path.Combine(repoPath, mount.Path.Replace('/', Path.DirectorySeparatorChar)));
 
     private static bool IsEmptyDirectory(string path)

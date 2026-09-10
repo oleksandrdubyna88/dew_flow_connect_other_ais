@@ -67,7 +67,9 @@ sequenceDiagram
   Project/local sources precede shared bodies under the existing whole-file budget and
   shuffle policy. A declared neutral mount without canonical rule bodies is reported in
   `MissingMounts`, even if a `.git` marker exists. Claude/Cursor legacy folders remain supported.
-  This collector samples review context; applicability belongs to the shared Node resolver.
+  The rule folders are enumerated once per collection; missing-mount detection reuses that
+  list instead of scanning the same folders again. This collector samples review context;
+  applicability belongs to the shared Node resolver.
 
 - **One worktree per round, by SHA** — six read-only reviewers share one tree; six checkouts of a
   moving branch would be six different inputs to one comparison.

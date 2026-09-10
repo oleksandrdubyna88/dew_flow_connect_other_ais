@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+**Shared instructions work with Claude Code and Codex.** The panel recognizes the neutral
+rules layout and still warns about an older local snippet. Distributed gate text is built
+from the pinned canonical source; an interrupted generation recovers on the next build.
+
 **A conversation says what it has cost.** Beside the model picker, updated as answers arrive — which
 is where you decide whether to ask again or start fresh, and that decision is the one the number is
 for: each question carries the whole conversation with it, so it is billed for the ones before it. A

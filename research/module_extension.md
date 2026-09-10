@@ -1765,14 +1765,17 @@ wins; a repository with it in two places has a problem this panel cannot fix.
 `SNIPPET_LOCATIONS` also retains legacy mounts. Root files, `.agents/PROJECT.md` and local
 rule files come before shared files, so an older applicable paste is still reported as older.
 `readSnippetStatus` is the common reader used by the panel and copy command; filesystem
-scenarios exercise that same function. Lookup remains a bounded list of named paths.
+scenarios exercise that same function. All named candidates are read concurrently, with
+priority decided by list order rather than completion time. Both local `review-gate.md` and
+`coai-review-gate.md` names are recognized; lookup remains a bounded list without a cache.
 
 `src_vs_code/scripts/prepare-gate.mjs` reads the pinned canonical gate at build time, after
 running its resolver's check. It strips only leading delivery metadata and writes one ignored
 `src/generated/gateRule.ts`. Compile, typecheck, bundle and packaging require preparation;
 previous generated output is invalidated before checking, and a missing/dirty/wrong pin fails
 explicitly. The source is capped at 256 KiB and the writer owns one output and temporary file.
-No runtime fetch or separately edited TypeScript policy body remains. The independent snippet
+A leftover temporary file from an interrupted build is removed before preparation; writing
+and renaming share a finally cleanup. No runtime fetch or separately edited TypeScript policy body remains. The independent snippet
 version/hash guard and body-identity test still fail on unintended content drift.
 
 **A number, not a hash — and both.** A hash cannot be forgotten but only answers "different", while

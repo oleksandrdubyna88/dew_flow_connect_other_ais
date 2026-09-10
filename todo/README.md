@@ -3,7 +3,7 @@
 Plans for work that is **not finished**. The thirteen at the top of the table were split out of one
 day's dictated bug list, [BUGS_2026-09-09.md](BUGS_2026-09-09.md), which maps every entry to its plan. Documentation of the system as it is lives in
 [../research/](../research/); a plan moves there (`/promote-plan`) the moment its work ships.
-Convention: `.claude/rules/shared/common/planning-docs.md`.
+Convention: `.agents/conventions/common/planning-docs.md`.
 
 ## Currently open
 

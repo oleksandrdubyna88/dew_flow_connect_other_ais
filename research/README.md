@@ -7,6 +7,7 @@ is not finished until it is.
 
 | Document | What it covers |
 |---|---|
+| [shared-rules-adoption-smoke.json](shared-rules-adoption-smoke.json) | Local canary builds, fresh WSL clone, complete source rollback and incomplete native-agent cells |
 | [shared-rules-adoption-review.json](shared-rules-adoption-review.json) | Shared-rule adoption gate findings, decisions and observed review stage |
 | [PLAN_the_tab_wears_an_icon.md](PLAN_the_tab_wears_an_icon.md) | IMPLEMENTED 2026-09-09 — the chat tab wears this product’s own green glyph, baked into a light and a dark file because workbench chrome reaches no theme; the extension URI threaded to the panel, the path in its own module so the resolution is tested rather than the source scanned |
 | [PLAN_a_conversation_survives_a_reload.md](PLAN_a_conversation_survives_a_reload.md) | IMPLEMENTED 2026-09-09 — a window reload keeps every chat tab’s transcript. The conversation carries its own id, because a title-keyed store makes two tabs called `main` overwrite each other before any collision can be detected; nothing is started until the first question, which carries the whole thread across |

@@ -41,7 +41,9 @@ function boundedSource(file) {
 /** Every build invalidates its previous output before verifying the pinned canonical source. */
 export function prepareGate(repo) {
   const output = path.join(repo, OUTPUT);
+  const temporary = output + '.tmp';
   removeOutput(output);
+  removeOutput(temporary);
   const resolver = path.join(repo, '.agents/conventions/tools/rules.mjs');
   if (!fs.existsSync(resolver)) {
     throw new Error('Missing conventions resolver. Run git submodule update --init .agents/conventions, then npm ci --ignore-scripts --prefix .agents/conventions.');
@@ -52,10 +54,11 @@ export function prepareGate(repo) {
   });
   const body = gateBody(boundedSource(path.join(repo, SOURCE)));
   fs.mkdirSync(path.dirname(output), { recursive: true });
-  const temporary = output + '.tmp';
-  fs.writeFileSync(temporary, '// Generated from pinned conventions; do not edit.\nexport const GATE_RULE = '
-    + JSON.stringify(body) + ';\n', { flag: 'wx' });
-  try { fs.renameSync(temporary, output); } finally { removeOutput(temporary); }
+  try {
+    fs.writeFileSync(temporary, '// Generated from pinned conventions; do not edit.\nexport const GATE_RULE = '
+      + JSON.stringify(body) + ';\n', { flag: 'wx' });
+    fs.renameSync(temporary, output);
+  } finally { removeOutput(temporary); }
   return body;
 }
 

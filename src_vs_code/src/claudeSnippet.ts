@@ -57,7 +57,9 @@ export const SNIPPET_LOCATIONS: readonly string[] = [
   'GEMINI.md',
   '.github/copilot-instructions.md',
   '.agents/PROJECT.md',
+  '.agents/rules/common/review-gate.md',
   '.agents/rules/common/coai-review-gate.md',
+  '.claude/rules/common/review-gate.md',
   '.claude/rules/common/coai-review-gate.md',
   '.agents/conventions/common/coai-review-gate.md',
   '.claude/rules/shared/common/coai-review-gate.md',
@@ -78,14 +80,9 @@ const MARKER = /<!-- coai-snippet v(\d+) -->/;
 
 /** The first applicable paste wins, using the same reader for the panel and copy command. */
 export async function readSnippetStatus(read: (name: string) => Promise<string>): Promise<SnippetStatus> {
-  for (const name of SNIPPET_LOCATIONS) {
-    const text = await read(name);
-    if (text.includes(SNIPPET_MARKER)) {
-      return snippetStatus(text);
-    }
-  }
+  const texts = await Promise.all(SNIPPET_LOCATIONS.map(read));
 
-  return snippetStatus(undefined);
+  return snippetStatus(texts.find(text => text.includes(SNIPPET_MARKER)));
 }
 
 /** The version out of a file the snippet was pasted into, or nothing when it carries no marker. */

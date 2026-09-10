@@ -193,3 +193,32 @@ completed with zero warnings/errors. Each configuration's MTP runners passed: MC
 The generator invalidation guard was removed temporarily: the missing-source test failed
 because the old output remained; restoring the guard made it pass. This validates the
 failure behavior, not merely that a build hook was declared.
+
+After reconciliation with main, commit `63b40fc`: both configurations built with zero
+warnings/errors and passed MCP 1141/1142 (the same platform skip), bench 113/113 and Team
+server 226/226. Extension: 1340/1341 plus three generator scenarios. A fresh WSL clone
+initialized the committed neutral pin, resolved it and read six complete TypeScript-scope
+sources from a nested directory. A separate worktree restored the complete pre-adoption
+commit and initialized its legacy mount with a clean tree. Native Claude's TypeScript cell
+exceeded the bounded trace size and remains incomplete; details and measured scope are in
+[shared-rules-adoption-smoke.json](shared-rules-adoption-smoke.json).
+
+
+The first completed code review read 14 rule files (77,577 bytes), with 15 omissions and no
+missing mount; all 12 reviewers answered. The old installed collector had shown only the
+root adapters. Review follow-ups reproduce a stale temporary file blocking the next build
+(EEXIST), an older local `review-gate.md` incorrectly hidden by the current shared body,
+and serialized candidate reads. Each regression was observed red, green with its fix, then
+red with the production behavior removed. Missing-mount detection now reuses the collected
+paths; this is an enumeration refactor verified by the existing RuleFiles suite, not a
+claimed latency measurement. Detailed decisions are in `shared-rules-adoption-review.json`.
+
+
+Review corrections on the pinned S2 source (2026-09-10): extension 1342 total / 1341 passed /
+1 skipped, plus 3 generator cases; client/server contract 3 passed; settings seam passed.
+Debug and Release MCP: 1142 total / 1141 passed / 1 Windows directory-link privilege skip; bench 113 and
+Team server 226 passed in both configurations. A Release build first found an all-zero
+intermediate core reference DLL (CS0009); rebuilding that project restored its managed
+metadata, and the solution then built with zero warnings/errors. This was a local build
+artifact failure, not a source-code fix. Package 0.32.0 contains the canonical v5 marker and
+neutral/local discovery paths; installation remains separate from this artifact observation.

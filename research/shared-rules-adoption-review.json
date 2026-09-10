@@ -327,5 +327,702 @@
   },
   "session": "8e812028",
   "stage": "plan",
-  "resolvedStage": "CodeReview"
+  "resolvedStage": "CodeReview",
+  "codeRound1": {
+    "subject": "63b40fc9a2ceb253db10bd5cc8ddab659f79e248",
+    "base": "3de5695cdb917c4eeb2fbd56587b611d161706c6",
+    "response": {
+      "verdict": "revise",
+      "gatingCount": 27,
+      "threshold": 5,
+      "reviewers": "all 12 reviewers answered",
+      "findings": [
+        {
+          "severity": "Blocking",
+          "category": "Architecture",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 49,
+          "title": "Build script synchronously executes an external resolver CLI via Node child_process, coupling compilation to conventions repo tooling and git submodules",
+          "why": "In `src_vs_code/scripts/prepare-gate.mjs`, `prepareGate` calls `execFileSync(process.execPath, [resolver, 'check', '--repo', repo])` prior to reading the markdown file. This forces every routine frontend build, compile (`precompile`), and typecheck (`pretypecheck`) across development, packaging, and CI to invoke the external `.agents/conventions/tools/rules.mjs` script via `git` and `node_modules` in the submodule. If another developer or automated system builds `src_vs_code` as an isolated package or uses a standard toolchain without full conventions dependencies installed, type checking and local compilation fail immediately. It creates a backward dependency where compiling a consumer module's TypeScript code requires running administrative repository-linting tools of a separate git repository.",
+          "fix": "Decouple rule validation from routine TypeScript compilation/typechecking by running `rules.mjs check` in a dedicated CI/pre-commit task, while `prepareGate` performs only the local string extraction from the mounted markdown file.",
+          "providers": [
+            "gemini"
+          ],
+          "role": "Architecture",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Architecture",
+          "file": "src_mcp/runners/Context/RuleFiles.cs",
+          "line": 82,
+          "title": "C# runner hardcodes language subdirectories of neutral conventions mount rather than discovering rule directories dynamically or via convention metadata",
+          "why": "In `RuleFiles.cs`, `NeutralRuleFolders` hardcodes the list `[\"common\", \"csharp\", \"rust\", \"typescript\"]`. When a future language or domain rule set (e.g. `python`, `go`, `docs`, or `sql`) is added to the shared conventions repository, `RuleFiles` will silently ignore it until a C# developer remembers to update this static array. This duplicates the layout knowledge owned by the conventions repository and causes rule coverage drift between Claude/Codex CLI discovery and the C# reviewer sampler.",
+          "fix": "Dynamically enumerate subdirectories under `.agents/conventions` that contain `.md` rule files while excluding known non-rule directories (such as `tools`, `research`, `.git`), or derive candidate paths from a manifest.",
+          "providers": [
+            "gemini"
+          ],
+          "role": "Architecture",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Architecture",
+          "file": "src_vs_code/package.json",
+          "line": 611,
+          "title": "Test script modifies testing contract by executing prepare-gate test runner before standard compile step",
+          "why": "In `src_vs_code/package.json`, `test` is changed to `node --test scripts/prepare-gate.test.mjs && npm run compile && node scripts/run-tests.mjs`. `prepare-gate.test.mjs` executes git commands, creates git submodules, and generates filesystem mutations in OS temp directories. Running this script as a prerequisite to `npm test` breaks modularity between unit/extension testing and repository-level build script verification, and prevents running tests in environments where nested git operations or symlinks (as used in `prepare-gate.test.mjs`) fail or are restricted.",
+          "fix": "Separate build script verification into a dedicated script (e.g., `npm run test:build`) integrated into the workflow rather than chaining it onto `npm test`.",
+          "providers": [
+            "gemini"
+          ],
+          "role": "Architecture",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Reliability",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 56,
+          "title": "Uncleaned temporary file from aborted run causes subsequent prepareGate runs to permanently crash with EEXIST",
+          "why": "Line 56 creates `src_vs_code/src/generated/gateRule.ts.tmp` with exclusive flag `{ flag: 'wx' }`. However, the cleanup `removeOutput(output)` at line 43 only unlinks the final target file `gateRule.ts`, not `gateRule.ts.tmp`. If the process is aborted or killed (Ctrl+C, kill signal, out of memory) between writing `temporary` at line 56 and renaming at line 58, or if `renameSync` throws an exception, `gateRule.ts.tmp` remains on disk. On all subsequent runs (local `npm run compile`, `prebundle`, CI), `prepareGate` calls `writeFileSync(temporary, ..., { flag: 'wx' })` and fails immediately with `EEXIST: file already exists`, wedging developer and CI builds until manually diagnosed and deleted.",
+          "fix": "Remove the stale temporary file before creating it by adding `removeOutput(output + '.tmp');` right alongside `removeOutput(output);` at the beginning of `prepareGate`.",
+          "providers": [
+            "gemini"
+          ],
+          "role": "SecurityReliability",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Security",
+          "file": "src_vs_code/scripts/prepare-gate.test.mjs",
+          "line": 30,
+          "title": "Submodule add in test fixture enables file:// protocol and checks out arbitrary local path without security validation",
+          "why": "In `prepare-gate.test.mjs` line 30, `git(root, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', sourceMount, '.agents/conventions')` explicitly re-enables the unsafe `file://` git submodule transport across child processes. If run in an environment or automated check where untrusted repositories, worktrees, or malicious submodules are processed, bypassing git's default file protocol protection (`protocol.file.allow=user` / `always`) exposes the runner to local file disclosure or checkout vulnerabilities (such as CVE-2022-39253).",
+          "fix": "Initialize the test fixture's submodule repository using explicit local directory clones or avoid setting protocol.file.allow=always globally for submodule operations.",
+          "providers": [
+            "gemini"
+          ],
+          "role": "SecurityReliability",
+          "isGating": true
+        },
+        {
+          "severity": "Minor",
+          "category": "Reliability",
+          "file": "src_mcp/runners/Context/RuleFiles.cs",
+          "line": 306,
+          "title": "FolderFiles directory traversal in MissingRuleMount swallows filesystem exceptions or throws unexpectedly on unreadable subdirectories",
+          "why": "In `MissingRuleMount`, `FolderFiles(repoPath, [mount])` is called directly without exception handling. In contrast to `IsEmptyDirectory` (which catches all exceptions at line 316 and treats unreadable paths as empty), if `.agents/conventions` contains restricted permissions or broken symlinks/junctions on Windows or Linux, `FolderFiles` will propagate an unhandled `UnauthorizedAccessException` or `DirectoryNotFoundException` out of `RuleFiles.Collect`, crashing the MCP server or test runner during rule context collection.",
+          "fix": "Wrap `FolderFiles(repoPath, [mount])` evaluation in `MissingRuleMount` with a try/catch block matching `IsEmptyDirectory`, or safely handle directory traversal failures.",
+          "providers": [
+            "gemini"
+          ],
+          "role": "SecurityReliability",
+          "isGating": false
+        },
+        {
+          "severity": "Minor",
+          "category": "Reliability",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 49,
+          "title": "execFileSync timeout and stdio pipes can hang or truncate output silently during rules check in environments with large rule trees",
+          "why": "In `prepareGate`, `execFileSync` runs Node with a 30-second timeout and pipe stdio (`stdio: ['ignore', 'pipe', 'pipe']`). If `rules.mjs check` outputs warnings, diagnostic traces, or runs slowly on a cold VM / busy disk, pipe buffers can fill if unconsumed or trigger an abrupt process termination (SIGTERM/TIMEOUT), throwing an unhandled error during `prepare:gate` with truncated child process stderr.",
+          "fix": "Ensure child process errors in `prepareGate` capture and rethrow `error.stderr` or `error.stdout` in the exception message for actionable diagnostic feedback.",
+          "providers": [
+            "gemini"
+          ],
+          "role": "SecurityReliability",
+          "isGating": false
+        },
+        {
+          "severity": "Major",
+          "category": "Ux",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 66,
+          "title": "prepare-gate catches child process failures but drops stdout and stderr, concealing rule check errors and recovery advice",
+          "why": "When prepareGate runs execFileSync on rules.mjs check with stdio: ['ignore', 'pipe', 'pipe'], any validation failure (such as an uncommitted change in the submodule, an incorrect commit pin, or an unexpected legacy auto-loaded rule file) writes diagnostic details and remediation steps to stderr or stdout. However, line 66 logs only error.message, which Node populates with generic text like 'Command failed: node .../rules.mjs check --repo ...'. The captured error.stderr and error.stdout are swallowed, so a developer running npm run compile or npm test sees only an unexplained command failure without the cause or the command to fix it.",
+          "fix": "In src_vs_code/scripts/prepare-gate.mjs:66, print error.stderr and error.stdout to console.error when present, or pass stdio: 'inherit' to execFileSync so diagnostic output streams directly to the terminal.",
+          "providers": [
+            "gemini"
+          ],
+          "role": "UxDxPerformance",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Performance",
+          "file": "src_vs_code/src/claudeSnippet.ts",
+          "line": 81,
+          "title": "readSnippetStatus performs an un-cached sequential waterfall of up to eight file reads on every panel repaint",
+          "why": "In snippetInWorkspace.ts:23, pastedSnippetStatus runs on every webview panel repaint and delegates to readSnippetStatus. In the neutral conventions layout, the canonical gate rule resides near the bottom of SNIPPET_LOCATIONS at index 7 (.agents/conventions/common/coai-review-gate.md). On every repaint, readSnippetStatus executes sequential await read(name) calls for all preceding files: reading CLAUDE.md, AGENTS.md, GEMINI.md, copilot-instructions.md, and PROJECT.md in full, followed by awaiting ENOENT failures on missing local rule files. As instruction files grow or when panel state updates frequently, serializing eight async disk I/O operations on the extension host event loop introduces UI lag and redundant string allocations on a hot render path.",
+          "fix": "Dispatch candidate reads concurrently using Promise.all across SNIPPET_LOCATIONS and take the first match in priority order, or cache the resolved SnippetStatus and invalidate it using a FileSystemWatcher instead of performing filesystem I/O on every repaint.",
+          "providers": [
+            "gemini"
+          ],
+          "role": "UxDxPerformance",
+          "isGating": true
+        },
+        {
+          "severity": "Minor",
+          "category": "Performance",
+          "file": "src_mcp/runners/Context/RuleFiles.cs",
+          "line": 306,
+          "title": "MissingRuleMount invokes a full workspace FolderFiles crawl across all rule directories to verify a single mount",
+          "why": "When RuleFiles.Collect checks whether .agents/conventions is populated, EmptyRuleMounts calls MissingRuleMount, which invokes FolderFiles(repoPath, [mount]). FolderFiles recursively crawls every directory configured in RuleFolders (.claude/rules, .cursor/rules, .agents/rules, and all neutral convention folders). In repositories with many local rules in .agents/rules, this traverses and allocates lists for all local and legacy files solely to evaluate .Any(p => UnderAnyMount(p, [mount])). Immediately after EmptyRuleMounts completes, Collect calls FolderFiles a second time to collect the actual rule files, repeating the entire filesystem scan.",
+          "fix": "In MissingRuleMount, check only whether the mount directory or NeutralRuleFolders contain any matching .md files directly (e.g. checking directory existence and enumerating NeutralRuleFolders) rather than invoking the global FolderFiles traversal across unrelated rule folders.",
+          "providers": [
+            "gemini"
+          ],
+          "role": "UxDxPerformance",
+          "isGating": false
+        },
+        {
+          "severity": "Major",
+          "category": "Convention",
+          "file": ".agents/PROJECT.md",
+          "line": 52,
+          "title": "Logging rule path in .agents/PROJECT.md points to legacy location",
+          "why": "The rule states: 'Logging per `.agents/conventions/common/logging-serilog.md`'. The diff updates the submodule path to `.agents/conventions` but leaves the reference in `PROJECT.md` pointing to the old `.claude/rules/shared/common/logging-serilog.md` path (line 52 of the diff, which corresponds to line 52 in the new file). This breaks the convention that all paths must be resolved from the repository root and updated to the new mount.",
+          "fix": "Update the path in the Logging bullet to `.agents/conventions/common/logging-serilog.md`.",
+          "providers": [
+            "local"
+          ],
+          "role": "Conventions",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Convention",
+          "file": "src_mcp/runners/Context/RuleFiles.cs",
+          "line": 78,
+          "title": "RuleFiles.cs comment contradicts the plan's exclusion of research",
+          "why": "The plan states: 'Only canonical rule directories belong in a consumer's review sample. This is not a selector.' and 'Mount research, tools and its own PROJECT/ENTRY are excluded.' However, the code in `RuleFiles.cs` (line 78 in the diff) defines `NeutralRuleFolders` to include `common`, `csharp`, `rust`, `typescript` but the comment says 'The mounted repository also carries research... Only canonical rule directories belong...'. The code implementation matches the exclusion, but the comment is slightly ambiguous about whether `research` is a 'canonical rule directory' or not. More critically, the plan explicitly says 'Mount research... are excluded', but the code logic `NeutralRuleFolders` only includes the four specific folders. The finding is that the comment implies research is part of the mount but excluded, which is correct, but the code doesn't explicitly list `research` as an exclusion, relying on the folder list. The real violation is in the plan's `Required outcome` #2: 'Only",
+          "fix": "Update the comment or logic to reflect that `research` is excluded from the review sample, or remove it from the exclusion list if it should be included.",
+          "providers": [
+            "local"
+          ],
+          "role": "Conventions",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Convention",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 45,
+          "title": "prepare-gate.mjs does not explicitly invalidate the generated file before checking the resolver",
+          "why": "The plan states: 'A generated file from a prior build is invalidated before preparation; compile, typecheck, bundle and packaging all require preparation.' The code in `prepare-gate.mjs` calls `removeOutput(output)` at line 45, *before* the resolver check. However, the plan also says: 'A failed prepare must leave no usable old generated source.' If the resolver check (line 50) fails, the file is already removed. But if the resolver check succeeds, the file is written. The issue is that the plan requires 'A generated file from a prior build is invalidated before preparation'. The code does this. But the plan also says 'Missing/dirty/wrong mount or malformed canonical input fails preparation explicitly.' The code throws an error if the resolver fails. The finding is that the code *does* invalidate before preparation, but the plan's requirement 'A generated file from a prior build is invalidated before preparation' is met. Wait, the plan says 'A generated file from a prior build is *not*'",
+          "fix": "Add a check to ensure the generated file is invalidated *before* the resolver check runs, or ensure the resolver check fails if the generated file exists but is stale.",
+          "providers": [
+            "local"
+          ],
+          "role": "Conventions",
+          "isGating": true
+        },
+        {
+          "severity": "Blocking",
+          "category": "Architecture",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 48,
+          "title": "Build preparation reads the canonical source before verifying the resolver exists",
+          "why": "In prepareGate(), the code calls boundedSource(path.join(repo, SOURCE)) at line 53 to read the gate rule, but the check for the resolver (line 48) happens after. If the `.agents/conventions` submodule is missing or unpopulated, boundedSource() will attempt to read a file that may not exist or be partially populated, potentially throwing a confusing 'ENOENT' error or reading stale data before the explicit 'Missing conventions resolver' error is thrown. This violates the plan's requirement that 'Missing/dirty/wrong mount... fails preparation explicitly' and makes the error message less actionable.",
+          "fix": "Move the resolver check (execFileSync) to the very beginning of prepareGate(), before the boundedSource() call, so a missing resolver fails fast without reading the potentially large source file.",
+          "providers": [
+            "local"
+          ],
+          "role": "Architecture",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Reliability",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 15,
+          "title": "Frontmatter parsing assumes source file exists and is valid before checking for delimiters",
+          "why": "The gateBody() function (line 15) immediately calls text.replaceAll() and checks for leading `---` delimiters. If the source file (line 53) is read successfully but is empty or contains only whitespace, the check `if (!text.startsWith('---\\n'))` will fail with 'unterminated leading metadata', which is misleading. A developer might think the file has content but bad formatting, when the real issue is that the file is empty or missing. This makes debugging a missing mount harder than necessary.",
+          "fix": "Add a check to ensure the source file exists and is not empty before attempting to parse frontmatter, or ensure the error message from gateBody() is specific enough to distinguish between 'missing file' and 'malformed frontmatter'.",
+          "providers": [
+            "local"
+          ],
+          "role": "Architecture",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Ux",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 15,
+          "title": "Frontmatter parsing assumes source file exists and is valid before checking for delimiters",
+          "why": "The gateBody() function (line 15) immediately calls text.replaceAll() and checks for leading `---` delimiters. If the source file (line 53) is read successfully but is empty or contains only whitespace, the check `if (!text.startsWith('---\\n'))` will fail with 'unterminated leading metadata', which is misleading. A developer might think the file has content but bad formatting, when the real issue is that the file is empty or missing. This makes debugging a missing mount harder than necessary.",
+          "fix": "Add a check to ensure the source file is not empty before attempting to parse frontmatter, or ensure the error message from gateBody() is specific enough to distinguish between 'missing file' and 'malformed frontmatter'.",
+          "providers": [
+            "local"
+          ],
+          "role": "Architecture",
+          "isGating": true
+        },
+        {
+          "severity": "Blocking",
+          "category": "Reliability",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 48,
+          "title": "prepare-gate.mjs fails silently or with a generic error if the canonical source file is missing",
+          "why": "The `prepareGate` function calls `boundedSource(path.join(repo, SOURCE))` at line 48 without first verifying that the file exists. If the `.agents/conventions` submodule is initialized but the specific file `common/coai-review-gate.md` is missing (e.g., due to a shallow clone or a partial checkout), `fs.openSync` throws an `ENOENT` error. The current error handling in the script's entry point (lines 63-68) catches the error and logs it, but if this script is called as a pre-hook in a CI pipeline where the error is not explicitly propagated or if the file is missing in a way that causes a different exception, the build might proceed with an empty or stale generated file, or fail with a generic stack trace that doesn't clearly indicate the missing source file. This leads to a VSIX containing an empty gate rule or a stale one from a previous build if the invalidation logic fails.",
+          "fix": "Add a pre-check in prepareGate() to verify the source file exists and is readable before attempting to open it, throwing a specific error if the file is missing.",
+          "providers": [
+            "local"
+          ],
+          "role": "SecurityReliability",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Reliability",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 50,
+          "title": "prepare-gate.mjs assumes the conventions resolver exists and succeeds without verifying its output",
+          "why": "The script calls `execFileSync` to run the resolver `rules.mjs check --repo .` at line 50. If the resolver script itself fails (e.g., due to a missing dependency, a wrong gitlink SHA, or a timeout), the `execFileSync` call will throw an error. However, if the resolver exits with a non-zero code but the script doesn't explicitly check `process.exitCode` or the error is swallowed by the outer try/catch in a way that doesn't halt the build, the subsequent `boundedSource` call might read a stale file or an empty file. More critically, if the resolver fails to validate the pin but the script continues, the generated output might be based on a 'dirty' or 'wrong' mount, violating the requirement that 'Missing/dirty/wrong mount... fails preparation explicitly'.",
+          "fix": "Add a check to ensure the resolver script exists and is executable before calling `execFileSync`, and verify its exit code.",
+          "providers": [
+            "local"
+          ],
+          "role": "SecurityReliability",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Reliability",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 60,
+          "title": "prepare-gate.mjs atomic write logic may leave stale generated files on failure",
+          "why": "The script uses a temporary file (`output + '.tmp'`) and renames it to the final output at line 60. If the `fs.writeFileSync` succeeds but the `fs.renameSync` fails (e.g., due to a race condition, permission issue, or disk full), the temporary file remains, and the old generated file (if it existed) is untouched. The `removeOutput(temporary)` in the `finally` block (line 62) will remove the temp file, but the old output remains. If the build process then proceeds to use the old output, it might be stale. Conversely, if the `fs.writeFileSync` fails, the temp file is removed, but the old output remains. The requirement states 'A failed prepare must leave no usable old generated source', but if the rename fails, the old source is still there and potentially usable if the build doesn't re-run preparation.",
+          "fix": "Add a check to ensure the generated file is written atomically and that the temporary file is removed even if the rename fails, or use a more robust atomic write pattern.",
+          "providers": [
+            "local"
+          ],
+          "role": "SecurityReliability",
+          "isGating": true
+        },
+        {
+          "severity": "Minor",
+          "category": "Ux",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 65,
+          "title": "Error messages in prepare-gate.mjs lack actionable recovery guidance for missing mounts",
+          "why": "When the resolver fails or the source file is missing, the error message (lines 65-67) is generic: `prepare-gate: ${error.message}`. While the `removeOutput` logic tries to clean up, the user is left with a build failure and no clear instruction on how to fix it (e.g., 'Run `git submodule update --init .agents/conventions`'). This leads to confusion and wasted time for developers who might not know the exact recovery steps, especially in a fresh clone scenario.",
+          "fix": "Enhance the error message in the `catch` block to include the specific missing file path and the exact recovery command.",
+          "providers": [
+            "local"
+          ],
+          "role": "SecurityReliability",
+          "isGating": false
+        },
+        {
+          "severity": "Minor",
+          "category": "Architecture",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 60,
+          "title": "prepare-gate.mjs does not verify the generated file content is non-empty",
+          "why": "The script writes the `body` to the output file. If `gateBody` returns an empty string (e.g., if the source file is empty or the frontmatter stripping logic fails silently), the generated file will contain `export const GATE_RULE = '';`. The build might succeed, but the extension will ship with an empty gate rule. The current logic only checks for the presence of a marker in the source, not the resulting content size.",
+          "fix": "Add a check to ensure the generated file is not empty before considering the preparation successful.",
+          "providers": [
+            "local"
+          ],
+          "role": "SecurityReliability",
+          "isGating": false
+        },
+        {
+          "severity": "Blocking",
+          "category": "Ux",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 45,
+          "title": "Build preparation crashes silently if canonical source is missing before resolver check",
+          "why": "The `prepareGate` function calls `boundedSource` on line 45 to read the canonical rule file. If the `.agents/conventions` submodule is not initialized or the file is missing, `fs.openSync` throws an error. However, the error is caught by the `try/catch` block at the bottom of the file (lines 63-68) which only logs `error.message`. If a developer runs `npm run compile` in a fresh clone where the submodule hasn't been initialized, the build fails with a generic 'ENOENT' or 'ENOENT' error, but the user sees no actionable hint that they need to run `git submodule update --init .agents/conventions` first. The error message 'Missing conventions resolver' (line 52) is only thrown if the *resolver* is missing, not the *source file*.",
+          "fix": "Add a pre-flight check for the existence of the canonical source file (`.agents/conventions/common/coai-review-gate.md`) before attempting to read it, throwing a specific error if missing.",
+          "providers": [
+            "local"
+          ],
+          "role": "UxDxPerformance",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Performance",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 32,
+          "title": "Inefficient bounded source reading loop causes unnecessary I/O overhead",
+          "why": "The `boundedSource` function (lines 30-40) reads the file in a loop using `fs.readSync` with a buffer of 256 KiB + 1. While this avoids loading the whole file into memory at once, the loop structure `for (;;) { ... fs.readSync ... }` is inefficient for a file that is likely small (under 256 KiB). It performs multiple system calls for a single file read. For a file of 100 KiB, it performs two reads; for 1 KiB, it performs one. The overhead is negligible for small files but the pattern is non-idiomatic and slightly slower than `fs.readFileSync` for files under the limit, or a single `read` call with a larger buffer. More critically, if the file is exactly 256 KiB + 1 byte, it performs two reads and then throws. The logic is correct but the implementation is suboptimal for a build step where speed matters.",
+          "fix": "Replace the manual byte-by-byte read loop with `fs.readFileSync` and a length check, or use `fs.createReadStream` with a high-water mark to avoid the overhead of repeated `fs.readSync` calls in a loop.",
+          "providers": [
+            "local"
+          ],
+          "role": "UxDxPerformance",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Reliability",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 50,
+          "title": "Missing resolver check relies on exception from execFileSync rather than explicit validation",
+          "why": "The code checks if `resolver` exists (line 49) but then immediately calls `execFileSync` (line 50). If the resolver script exists but fails to execute (e.g., due to a syntax error, missing dependencies, or a permission issue), `execFileSync` throws an error. The current error handling at the bottom of the file (lines 63-68) catches this and logs `error.message`. If the error is 'Command failed' or similar, the user might not immediately realize the *resolver* failed, rather than the *source file* being missing. The error message 'Missing conventions resolver' is only for the `fs.existsSync` check, not for the execution failure.",
+          "fix": "Add a check to ensure the `resolver` file exists before calling `execFileSync`, or wrap the `execFileSync` call in a try/catch that provides a more specific error message if the resolver fails.",
+          "providers": [
+            "local"
+          ],
+          "role": "UxDxPerformance",
+          "isGating": true
+        },
+        {
+          "severity": "Minor",
+          "category": "Ux",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 38,
+          "title": "Generic error message for file size limit violation",
+          "why": "If the canonical rule file exceeds 256 KiB, the `boundedSource` function throws `new Error(`${SOURCE}: exceeds 256 KiB`)`. This error is caught by the `try/catch` block at the bottom of the file and logged. While the message is clear, it is not distinguished from other potential errors (like permission issues or missing files) in the log output. A developer might not immediately realize the file size is the issue if they see a generic 'prepare-gate: ...' error.",
+          "fix": "Add a specific error message for the case where the `boundedSource` function throws an error due to file size exceeding 256 KiB, distinguishing it from other read errors.",
+          "providers": [
+            "local"
+          ],
+          "role": "UxDxPerformance",
+          "isGating": false
+        },
+        {
+          "severity": "Minor",
+          "category": "Architecture",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 60,
+          "title": "Potential failure if output directory is missing",
+          "why": "The code calls `fs.mkdirSync(path.dirname(output), { recursive: true })` (line 60) before writing the temporary file. However, if the parent directory of `output` (i.e., `src_vs_code/src/generated`) does not exist, `fs.mkdirSync` will create it. But if the `src_vs_code/src` directory itself is missing (e.g., due to a previous failed build or a clean checkout), `path.dirname(output)` might be `src_vs_code/src`, and `fs.mkdirSync` will create it. The code seems safe, but if the `src_vs_code` directory is missing entirely, `path.dirname(output)` would be `src_vs_code`, and `fs.mkdirSync` would create it. The logic is sound, but the error handling for a missing parent directory is implicit. If `fs.mkdirSync` fails (e.g., due to permissions), the error is caught by the `try/catch` block at the bottom, which logs `error.message`. This might not be specific enough to indicate a directory creation failure.",
+          "fix": "Add a check to ensure the `OUTPUT` directory exists before attempting to write the temporary file, or use `fs.mkdirSync` with `{ recursive: true }` before the write.",
+          "providers": [
+            "local"
+          ],
+          "role": "UxDxPerformance",
+          "isGating": false
+        },
+        {
+          "severity": "Blocking",
+          "category": "Convention",
+          "file": ".gitmodules",
+          "line": 2,
+          "title": "The submodule metadata points at `.agents/conventions` without moving the conventions gitlink there.",
+          "why": "The project rule says, \"Shared family rules are mounted at `.agents/conventions` (the `dew_flow_conventions` submodule) and apply here exactly as local rules would. Fresh clone: `git submodule update --init .agents/conventions`.\" The diff changes only the `.gitmodules` path; it does not add the corresponding `.agents/conventions` gitlink or remove the old `.claude/rules/shared` gitlink. Fresh clones therefore cannot initialize the required source, violating AGENTS.md's rule: \"If any required source or resolver is unavailable, report instruction loading as incomplete and do not change affected files until it is restored.\"",
+          "fix": "Move the existing gitlink from `.claude/rules/shared` to `.agents/conventions`, update the submodule section name consistently, and pin that path to the reviewed conventions commit.",
+          "providers": [
+            "codex"
+          ],
+          "role": "Conventions",
+          "isGating": true
+        },
+        {
+          "severity": "Blocking",
+          "category": "Architecture",
+          "file": ".gitmodules",
+          "line": 3,
+          "title": "The new conventions path has no committed gitlink at `.agents/conventions`.",
+          "why": "A fresh clone sees only the `.gitmodules` entry, so `git submodule update --init .agents/conventions` cannot materialize the pinned source; CI and `prepare-gate` then fail because the resolver and canonical rule are absent.",
+          "fix": "Add the `.agents/conventions` mode-160000 gitlink at the reviewed immutable SHA, removing the old gitlink path if present.",
+          "providers": [
+            "codex"
+          ],
+          "role": "Architecture",
+          "isGating": true
+        },
+        {
+          "severity": "Blocking",
+          "category": "Architecture",
+          "file": "AGENTS.md",
+          "line": 4,
+          "title": "The migration leaves local policy split between `.agents/rules` and the existing `.claude/rules` tree.",
+          "why": "After a future edit to `.agents/rules`, Codex follows the new source through AGENTS while Claude Code can still auto-load unchanged `.claude/rules` files; conflicting review-gate or vendor-routing rules then apply to the same checkout.",
+          "fix": "Move the local rule files to `.agents/rules`, remove their legacy `.claude/rules` copies while retaining `.claude/settings.json`, and reject legacy policy copies in the migration check.",
+          "providers": [
+            "codex"
+          ],
+          "role": "Architecture",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Architecture",
+          "file": "src_vs_code/src/claudeSnippet.ts",
+          "line": 56,
+          "title": "Panel lookup names the local gate `coai-review-gate.md` even though the documented local rule is `review-gate.md`.",
+          "why": "A stale local copy at `.agents/rules/common/review-gate.md`—the path referenced by `.agents/PROJECT.md`—is never inspected, so a current neutral shared rule can be reported as sufficient while the older local instruction remains applicable.",
+          "fix": "Use one filename consistently and include the documented `.agents/rules/common/review-gate.md` path in the shared location list (or rename the local rule and its documentation together).",
+          "providers": [
+            "codex"
+          ],
+          "role": "Architecture",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Reliability",
+          "file": ".gitmodules",
+          "line": 3,
+          "title": "The change relocates the submodule configuration without adding the gitlink at .agents/conventions",
+          "why": "A fresh clone still contains no gitlink at `.agents/conventions` (the diff has no submodule rename/add), so `git submodule update --init .agents/conventions` cannot populate the mount and the new resolver/generator checks fail before build.",
+          "fix": "Move the existing gitlink from `.claude/rules/shared` to `.agents/conventions`, update the submodule section name, and pin that gitlink to the reviewed conventions SHA.",
+          "providers": [
+            "codex"
+          ],
+          "role": "SecurityReliability",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Reliability",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 54,
+          "title": "A killed or failed preparation can leave the fixed temporary file permanently blocking future builds",
+          "why": "If the process is killed after `writeFileSync` creates `gateRule.ts.tmp` but before `renameSync`, the next preparation uses `wx` against the leftover file and fails with `EEXIST`; the generated output has already been deleted, so every subsequent compile/package attempt remains unusable until someone manually removes the ignored temporary file.",
+          "fix": "Remove the temporary path before writing and clean it in a catch/finally covering both the write and rename operations.",
+          "providers": [
+            "codex"
+          ],
+          "role": "SecurityReliability",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Performance",
+          "file": "src_mcp/runners/Context/RuleFiles.cs",
+          "line": 302,
+          "title": "Missing-mount detection scans the entire conventions checkout instead of only rule directories",
+          "why": "With `npm ci --prefix .agents/conventions` and a checkout containing roughly 100,000 dependency, research, or tool files, `FolderFiles(repoPath, [mount])` traverses the whole mount for every context collection before discarding non-rule files. Reviewer-context collection therefore scales with unrelated submodule contents and can become needlessly slow.",
+          "fix": "Check only the four canonical neutral rule directories when determining whether the mount has rule bodies; never enumerate the mount root.",
+          "providers": [
+            "codex"
+          ],
+          "role": "UxDxPerformance",
+          "isGating": true
+        },
+        {
+          "severity": "Major",
+          "category": "Ux",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 57,
+          "title": "An interrupted generation can permanently block subsequent builds on the ignored temporary file",
+          "why": "If the process is killed or disk I/O fails while writing `src/generated/gateRule.ts.tmp`, the file remains. The next compile removes only the output, then `writeFileSync(..., { flag: 'wx' })` fails with `EEXIST` before the cleanup `finally` is entered, so compile, test, and packaging remain broken until a developer manually deletes the ignored temp file.",
+          "fix": "Remove a stale temporary file before generation and put the temporary write and rename inside a `try/finally` that always removes it.",
+          "providers": [
+            "codex"
+          ],
+          "role": "UxDxPerformance",
+          "isGating": true
+        },
+        {
+          "severity": "Minor",
+          "category": "Ux",
+          "file": "src_vs_code/scripts/prepare-gate.mjs",
+          "line": 50,
+          "title": "Canonical-source validation is silent and hides the resolver's actionable failure message",
+          "why": "On a dirty or wrong-pinned mount, `npm run compile` waits inside the synchronous resolver check with both streams piped, then the CLI prints only `error.message`; the developer sees no progress during the 30-second check and no dirty-file, pin, or restore instruction from `rules.mjs`.",
+          "fix": "Show a preparation-start message and forward the resolver's captured stderr/stdout when the check fails, preserving the specific recovery command.",
+          "providers": [
+            "codex"
+          ],
+          "role": "UxDxPerformance",
+          "isGating": false
+        }
+      ],
+      "discounted": [],
+      "rejectedEntries": [],
+      "instruction": "Findings gate. Resolve every finding with accept/reject + reason, fix the accepted ones, then run this review again (1 round(s) left).",
+      "cost": {
+        "tokensIn": 816114,
+        "tokensOut": 83356
+      },
+      "commands": [
+        "Work AUTONOMOUSLY. Say that you are working autonomously, and keep saying what you are writing right now as you go. Autonomous means these orders, not a mood: (1) every bug and every problem spot gets a RED-GREEN-RED test — a failing test first, then the fix, then the test green, then a check that the test really fails without the fix; (2) the documentation is updated with every change — the README, the manifest if there is one, the module docs and every other file that describes what you changed; (3) before any release, run ALL the tests that exist, not only the ones near your change; (4) if the repository has a release or pull request process, do it — and on a pull request, wait about five minutes, then check whether automatic comments appeared, read them and fix what they name; (5) if a deploy triggers automatically, verify the result against the target environment — dev, stage or test — and read its logs for errors before calling it done; (6) re-read your own code against the repository's rules and follow them, not only the ones you remember. A question that does not block you is not asked now: write it down and put every one of them at the END of your final summary. A question that DOES block you is asked at once — but before you ask it, re-read every epic and story you have written so far and gather every other blocking question you can foresee, so the person is interrupted once with all of them rather than repeatedly with one. Where you can proceed under a stated assumption, do that instead of asking, and say what you assumed."
+      ],
+      "commandsPreamble": "COMMANDS from the operator of this gate. They come from switches a person set in the panel and they outrank your own defaults for this task. Follow them, and say in your summary which ones you applied."
+    },
+    "decisions": [
+      {
+        "finding": 0,
+        "action": "reject",
+        "reason": "The approved adoption plan outcome 4 deliberately makes pinned-source validation an unskippable build prerequisite. README and all build workflows initialize the submodule and locked dependencies. An isolated src_vs_code directory is not a supported build input; moving validation out reintroduces stale/unreviewed generated policy."
+      },
+      {
+        "finding": 1,
+        "action": "reject",
+        "reason": "The approved outcome 2 intentionally enumerates the four canonical directories and excludes mount housekeeping; this is a bounded reviewer sample, not a metadata selector. The shared resolver itself owns the same four catalog roots. No Python/Go/SQL rule directory exists in the pinned source. Arbitrary Markdown discovery would admit research/tools as policy."
+      },
+      {
+        "finding": 2,
+        "action": "reject",
+        "reason": "The build generator is production delivery code and its real Git fixture belongs in the normal suite under outcome 4 and common.testing. Git is already a documented build prerequisite. The file transport override is command-local, the source is this trusted pinned checkout, and no global setting is changed."
+      },
+      {
+        "finding": 3,
+        "action": "accept",
+        "reason": "Reproduced EEXIST with a leftover gateRule.ts.tmp. Preparation now removes its stale temporary file and covers write plus rename with finally cleanup; the real pinned Git fixture observes successful recovery."
+      },
+      {
+        "finding": 4,
+        "action": "reject",
+        "reason": "The test supplies the explicit absolute path of its own checked-out source mount, not an untrusted URL, and -c applies only to this Git invocation. No recursive submodule operation or global Git configuration is changed. This is an isolated local fixture with owned cleanup."
+      },
+      {
+        "finding": 5,
+        "action": "reject",
+        "reason": "RuleWalk already uses IgnoreInaccessible=true and skips reparse points; Enumerate catches IOException/UnauthorizedAccessException when opening roots. The claimed unguarded permission traversal is not the code present. Deferred filesystem deletion races are pre-existing in every rule scan and are outside this layout change; no new catch-and-silence is added."
+      },
+      {
+        "finding": 6,
+        "action": "reject",
+        "reason": "execFileSync drains its captured streams and enforces an explicit timeout/maxBuffer; overflow or timeout throws, never succeeds silently. Existing real dirty/wrong-pin tests match the actionable resolver diagnostics in the thrown message. No demonstrated pipe deadlock or lost diagnostic."
+      },
+      {
+        "finding": 7,
+        "action": "reject",
+        "reason": "Node execFileSync includes captured stderr in error.message here. The real resolver fixture asserts /uncommitted changes/ and /pin|gitlink|mismatch/ against that same message and passes. The CLI prints that message and exits 1; missing-resolver diagnostics already name both recovery commands."
+      },
+      {
+        "finding": 8,
+        "action": "accept",
+        "reason": "Candidate reads now start concurrently with Promise.all; selection still follows priority order. A controlled slow-root test failed before the fix and passes with an older root taking precedence over faster current shared data. No persistent cache is introduced."
+      },
+      {
+        "finding": 9,
+        "action": "accept",
+        "reason": "Reuse the one collected folder list for both candidate ordering and missing-neutral-mount detection. This removes the duplicate scan without changing sampling semantics; existing neutral/legacy and omission scenarios verify behavior."
+      },
+      {
+        "finding": 10,
+        "action": "reject",
+        "reason": "The current .agents/PROJECT.md logging bullet already names .agents/conventions/common/logging-serilog.md. The finding quotes the correct path and then claims the opposite. Opened the committed file to verify."
+      },
+      {
+        "finding": 11,
+        "action": "reject",
+        "reason": "The comment explicitly says only canonical rule directories are sampled, and the positive list excludes research. The existing neutral scenario writes research/audit.md and asserts exact candidate equality excluding it. Adding a redundant negative list would duplicate this decision."
+      },
+      {
+        "finding": 12,
+        "action": "reject",
+        "reason": "prepareGate removes output before checking even resolver existence. The finding itself acknowledges the requirement is met. Real missing/dirty/wrong-pin cases assert that previous output does not survive."
+      },
+      {
+        "finding": 13,
+        "action": "reject",
+        "reason": "Execution order is removeOutput, resolver existence, execFileSync check, then boundedSource. The finding reverses the actual order; source reading is already after validation."
+      },
+      {
+        "finding": 14,
+        "action": "reject",
+        "reason": "Empty text fails with leading metadata is required, not unterminated leading metadata. Missing files fail in resolver preflight; the body parser also requires the canonical marker and heading. The proposed empty-output failure cannot pass these guards."
+      },
+      {
+        "finding": 15,
+        "action": "reject",
+        "reason": "Duplicate of 14: the actual first guard reports leading metadata is required for empty input. Missing source and empty/malformed source already fail before generation."
+      },
+      {
+        "finding": 16,
+        "action": "reject",
+        "reason": "Resolver check precedes boundedSource, removeOutput already ran, and the CLI catch sets process.exitCode=1. npm lifecycle hooks propagate that failure. Existing missing/dirty-source tests prove stale output is removed; no silent continuation exists."
+      },
+      {
+        "finding": 17,
+        "action": "reject",
+        "reason": "execFileSync throws on nonzero exit; the CLI boundary sets exitCode=1. Resolver existence is explicitly checked. Dirty and mismatched real submodule fixtures both fail as intended; no swallowed failure or continued source read exists."
+      },
+      {
+        "finding": 18,
+        "action": "reject",
+        "reason": "Old output is removed before validation, and rename already has finally cleanup. The stated old-output survival is false. The distinct write/interruption leftover defect is accepted under 3/31/33 and fixed there."
+      },
+      {
+        "finding": 19,
+        "action": "reject",
+        "reason": "The missing-resolver error names git submodule update --init .agents/conventions and npm ci --ignore-scripts --prefix .agents/conventions. Resolver diagnostics are retained by execFileSync error.message as the actual dirty/wrong-pin assertions show."
+      },
+      {
+        "finding": 20,
+        "action": "reject",
+        "reason": "gateBody requires an anchored nonempty snippet marker plus the full heading before returning. It cannot return an empty body; the existing malformed-body test checks this guard."
+      },
+      {
+        "finding": 21,
+        "action": "reject",
+        "reason": "The claim reverses the actual order: resolver existence and resolver check precede source open. Missing mount names initialization commands and the CLI exits 1; existing failure fixture verifies the old output is gone."
+      },
+      {
+        "finding": 22,
+        "action": "reject",
+        "reason": "This is a bounded block read, not a byte-by-byte loop. It must handle short reads without allocating an unbounded file before checking its size. The finding admits negligible overhead and proposes readFileSync that removes the preallocation bound."
+      },
+      {
+        "finding": 23,
+        "action": "reject",
+        "reason": "Resolver existence is already checked immediately before execFileSync, whose failure propagates with captured stderr to the CLI error and exit 1. The proposed existence check duplicates the code present."
+      },
+      {
+        "finding": 24,
+        "action": "reject",
+        "reason": "The actual error already names the canonical source and exceeds 256 KiB. That is the requested size-specific diagnostic; the finding quotes it and asks to add it."
+      },
+      {
+        "finding": 25,
+        "action": "reject",
+        "reason": "mkdirSync(path.dirname(output), { recursive: true }) already precedes the write. The requested fix is the implementation present; permission errors propagate to a failing CLI with filesystem diagnostics."
+      },
+      {
+        "finding": 26,
+        "action": "reject",
+        "reason": "git ls-tree 63b40fc .agents/conventions shows mode 160000 at 026b20e; the legacy gitlink is absent. A real fresh clone initialized that committed neutral mount successfully. The product diff collector omits gitlink details, so absence from the supplied text is not absence from the commit. Final pin is now reviewed source 895b24c."
+      },
+      {
+        "finding": 27,
+        "action": "reject",
+        "reason": "Same verified false premise as 26: committed mode-160000 .agents/conventions exists, and fresh clone/init/check/read succeeded. Final source pin is merged PR17 SHA 895b24c."
+      },
+      {
+        "finding": 28,
+        "action": "reject",
+        "reason": "git ls-tree -r 63b40fc .claude/rules returns no files. Both local policies were moved to .agents/rules; only .claude/settings.json is retained. The resolver already rejects legacy automatic policy copies."
+      },
+      {
+        "finding": 29,
+        "action": "accept",
+        "reason": "Add both neutral and legacy local review-gate.md to the existing priority list while retaining coai-review-gate.md. A real filesystem case first misreported current over the older local body, then passed after the fix."
+      },
+      {
+        "finding": 30,
+        "action": "reject",
+        "reason": "Same verified false premise as 26/27: the committed gitlink exists, the old path is removed, and native Linux fresh-clone initialization was observed. The submodule section name may legally remain stable when path changes."
+      },
+      {
+        "finding": 31,
+        "action": "accept",
+        "reason": "Duplicate of 3: leftover temporary file reproduced EEXIST; next preparation now recovers and write/rename share cleanup."
+      },
+      {
+        "finding": 32,
+        "action": "reject",
+        "reason": "FolderFiles enumerates RuleFolders, never the neutral mount root. Its four fixed neutral directories exclude node_modules/research/tools structurally, so the claimed 100000 unrelated-file traversal is absent. The real redundant second canonical scan is fixed under 9."
+      },
+      {
+        "finding": 33,
+        "action": "accept",
+        "reason": "Duplicate of 3/31; stale temporary cleanup plus finally covering write and rename is implemented and verified by the real pinned-source fixture."
+      },
+      {
+        "finding": 34,
+        "action": "reject",
+        "reason": "Same unconfirmed diagnostic-loss premise as 7. The actual exception message retains resolver stderr; real dirty/wrong-pin assertions demonstrate it. A progress message for this synchronous build prerequisite is optional presentation and not a defect in rule delivery."
+      }
+    ],
+    "observedContext": {
+      "ruleFiles": 14,
+      "ruleBytes": 77577,
+      "omitted": 15,
+      "missingMounts": 0
+    },
+    "interruptedAttempt": "Previous installed-binary attempt exceeded the bridge deadline; no aggregate verdict/findings were recorded. This completed round used the locally tested Release binary."
+  }
 }
