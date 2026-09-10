@@ -246,6 +246,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    */
   /** The discovery payload last written, so an unchanged one is not written again. */
   private discoveryWritten = '';
+  /** Whether the failure below has already been said. Once a session, never once a render. */
+  private discoveryWarned = false;
   private editingSince = 0;
   private editingId = '';
   private editingCaret: readonly [number, number] = [0, 0];
@@ -1107,7 +1109,19 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       await this.context.globalState.update(DISCOVERY_KEY, discovered);
       this.discoveryWritten = written;
     } catch (error) {
+      // SAID once, not swallowed and not repeated. Nobody can act on the write itself, but the
+      // consequence is worth a sentence: the section goes on offering models the chat command will
+      // not find, so a conversation can open on a different model from the one on screen. Once per
+      // session, because a render happens every few seconds and a warning per render is a warning
+      // nobody reads. Retrying continues — the next render tries again. (CodeRabbit, PR #196.)
       console.error('coai: the discovered model lists could not be stored', error);
+      if (!this.discoveryWarned) {
+        this.discoveryWarned = true;
+        void vscode.window.showWarningMessage(
+          'ConnectOtherAIs could not store the discovered model lists, so a chat may open on the model'
+          + ' its reviewer row is set to rather than the one chosen in the panel.',
+        );
+      }
     }
   }
 

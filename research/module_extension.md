@@ -850,6 +850,16 @@ stored `__proto__` key cannot stop being data; and the pair is cleared BEFORE th
 written, so a host killed in between leaves a provider with no model rather than a new provider
 wearing the old one’s.
 
+**And what CodeRabbit found on the pull request.** A Team server id is a string somebody can write,
+and `catalogs` is a plain object — so `catalogs['__proto__']` answers with `Object.prototype`, an
+INHERITED value rather than a missing one, and reading a field off it threw where a lookup should
+have missed. Reproduced, then fixed with an own-property check. A catalog KEPT from a failed refresh
+now carries its `stale` mark through the store instead of being rebuilt as current; the allowlist is
+still honoured, because the person picked their model from that list while the panel was showing it
+marked — refusing it would mean the silent substitution this whole change removes. And a store that
+cannot be written says so once a session rather than once a render, because the consequence is one a
+person can act on: the section goes on offering models the command will not find.
+
 **`coai.editChatPresets` reached a menu.** It shipped registered, in no `contributes.menus` entry and
 named in no view, so the tab it opens was reachable only from the command palette. The section has an
 **Edit presets…** button, routed like *Install the MCP server…* through `VSCODE_COMMAND_FOR`.

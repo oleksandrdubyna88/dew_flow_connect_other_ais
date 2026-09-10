@@ -127,3 +127,41 @@ test('a stored key that would reach Object.prototype is not one', () => {
   assert.deepStrictEqual(Object.keys(discovery.catalogs), [], 'a prototype key was taken as a server id');
   assert.strictEqual(({} as Record<string, unknown>)['vendors'], undefined, 'Object.prototype was polluted');
 });
+
+test('a server whose id is a prototype key is answered, not thrown at', () => {
+  // CodeRabbit on PR #196, Major, and it reproduces: `Object.fromEntries` builds a normal-prototype
+  // object, so `catalogs['__proto__']` returns Object.prototype itself — an INHERITED value, not a
+  // missing one — and reading `.url.length` off it throws a TypeError that takes down the panel
+  // render and the chat command for anybody with a server configured under that id.
+  const discovery = discoveryFrom({ codex: [], agy: [], catalogs: {} });
+
+  const built = catalogUsing(discovery, [{ id: '__proto__', name: 'Odd', url: 'https://coai.example.com' }]);
+
+  assert.strictEqual(built.teamServers[0]!.catalog, undefined, 'an inherited value was read as a catalog');
+});
+
+test('a catalog kept from a FAILED refresh is not republished as current', () => {
+  // CodeRabbit on PR #196, Major: the panel keeps the previous catalog when a refresh fails and marks
+  // it `stale`. Storing it without that flag would launder it — `catalogUsing` rebuilds a state with
+  // `stale: false`, and a model the server has since withdrawn reads as offered in the command.
+  const vendors = [vendor({
+    id: 'srv1-codex', runtime: 'remote', model: 'gpt-5.2', teamServerId: 'srv1', remoteVendor: 'codex',
+  })];
+  const servers = [{ id: 'srv1', name: 'Company', url: 'https://coai.example.com' }];
+  const discovery = discoveryFrom({
+    ...DISCOVERED,
+    catalogs: { srv1: { ...DISCOVERED.catalogs.srv1, url: 'https://coai.example.com', stale: true } },
+  });
+
+  assert.strictEqual(catalogUsing(discovery, servers).teamServers[0]!.stale, true, 'the stale mark was laundered away');
+
+  // The mark TRAVELS; the allowlist is still honoured, and that half of the review is declined on
+  // purpose. The person picked their model FROM this list, in a panel that was showing it marked as
+  // stale — refusing to honour that pick means silently opening on the row's own model instead,
+  // which is the exact substitution this whole change exists to remove. Dropping stale catalogs
+  // would also change `allowedModelsFor` for the reviewer cards, which read the same three states.
+  const list = chatProvidersFrom(vendors, catalogUsing(discovery, servers));
+  const saved = legacyPick(list, vendors, 'srv1-codex');
+
+  assert.strictEqual(openingModel(list, saved, 'o5-mini'), 'o5-mini', 'a pick made from the shown list was not honoured');
+});
