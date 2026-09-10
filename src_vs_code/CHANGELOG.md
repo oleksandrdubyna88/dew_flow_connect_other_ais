@@ -109,6 +109,13 @@ with its questions and its answers, and a line saying it was closed by the reloa
 is genuinely gone, so nothing is running until you ask again — and that first question carries the
 whole conversation across to a new session, which is said out loud because it is what it costs.
 
+**The help describes the tab that shipped, in all five languages.** Everything above arrived over two
+days, and *Chat with other AI* in the help still described the tab as it was before any of it. The
+article now covers the picker, the presets, the re-ask, the picture, the running total, the rendered
+answers and the Stop — in English, Русский, Українська, Deutsch and Español, rather than in English
+with four translations quietly a version behind. The extension's README gained the section it never
+had: the chat was the one thing this extension does that the README did not mention.
+
 ## Extension 0.31.21 — 2026-09-09
 
 **A chat tab looks like a chat tab.** It wore the same generic icon as everything else in the editor,
