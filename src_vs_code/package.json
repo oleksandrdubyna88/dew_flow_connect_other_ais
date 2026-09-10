@@ -143,6 +143,11 @@
     ],
     "commands": [
       {
+        "command": "coai.editChatPresets",
+        "title": "Edit chat presets",
+        "category": "ConnectOtherAIs"
+      },
+      {
         "command": "coai.help",
         "title": "Help",
         "category": "ConnectOtherAIs",

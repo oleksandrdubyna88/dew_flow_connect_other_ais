@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**Your prompts and your models, saved by name.** The single prompt in the sidebar has become a list
+you build: give each one a name, tick the one to use when a capture sends by itself, and they appear
+as buttons above the composer — models in their vendor's colour, prompts in another. **ConnectOtherAIs:
+Edit chat presets** opens a tab with both lists and a prompt box big enough to read a prompt in;
+everything there saves as you type. Whatever you had written in the old single prompt became your
+first named preset the first time this version read it.
+
 **Choose the provider, then the model.** The list under a chat used to be your configured reviewers,
 each showing the one model it happened to be set to — so picking a different model meant leaving the
 conversation and editing a reviewer. There are two lists now: who answers, and which of their models.

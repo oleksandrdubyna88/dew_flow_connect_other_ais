@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { openChatPresets } from './chatPresetsPanel';
 import { ChatPanels } from './chatPanels';
 import { chatWithOtherAi, rememberChatsIn, restoreConversation } from './chatCommand';
 import { ChatTabMemory } from './chatTabs';
@@ -168,6 +169,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     watcher,
     vscode.window.registerWebviewViewProvider(PanelProvider.viewType, panel),
+    vscode.commands.registerCommand('coai.editChatPresets', () => { openChatPresets(); }),
     vscode.commands.registerCommand('coai.help', showHelp),
     // Chat with another vendor about a passage. Two doors reach it — this keybinding and the
     // 'Chat with other AI' item in Claude Code's own right-click menu — and the command tells them

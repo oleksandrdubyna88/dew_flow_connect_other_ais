@@ -29,6 +29,39 @@ local model` the page would otherwise still show the remote one as selected whil
 somewhere else), a pushed state that has not changed is not sent at all, a `pick` naming a model the
 conversation was never offered is refused at the host boundary rather than trusted, and the
 composer takes focus back when a turn ends — without which every follow-up costs a mouse click.
+### The presets tab (2026-09-10)
+
+`chatPresetsPage.ts` and `chatPresetsPanel.ts` — a page module and a thin panel host, which is the
+arrangement the rounds log and the help page already use rather than a third one. The command is
+`coai.editChatPresets`.
+
+**Everything on this page is text the person in front of it wrote**, which makes escaping a
+different question here from the rest of the panel: elsewhere a label comes from a catalog this
+product shipped or a server it talked to, and the worst case is somebody else's mistake. Here it is
+their own name for their own prompt, which they can paste a `<script>` into to see what happens — and
+the answer must be that they see a `<script>`.
+
+**The prompt box is large**, which was asked for in as many words. A prompt is often a paragraph and
+sometimes several, and editing one in a three-line box is reading it three lines at a time. It sizes
+itself to its content where the engine can, with the `rows` attribute as the floor for engines that
+cannot.
+
+**Saved as it is typed, and re-rendered only when the SHAPE changes.** An edit writes the setting and
+leaves the page alone: re-rendering on every keystroke would move the caret to the end of the box
+somebody is typing in the middle of, which is exactly the defect the sidebar's prompt box had.
+Adding and removing a row do re-render, because the list's shape is what changed.
+
+**A field this page does not have is not a field.** `presetEdit` checks the name against a list of
+the fields each list HAS rather than testing the object, so no key of `Object.prototype` can be one —
+`__proto__` has a test of its own.
+
+**Ticking `main` unticks the others when it is SAVED**, not when it is read. A reader that had to
+correct the file every time it read it would be hiding a file nobody could trust.
+
+**The first edit to a migrated prompt writes the prompt too.** The page shows what the migration
+produced while the setting still holds nothing, so an edit that wrote only itself would lose the
+prompt it came from.
+
 ### Two rows of buttons above the composer (2026-09-10)
 
 The prompts a person saved and the models they saved, as buttons in the pinned footer. **Two rows
