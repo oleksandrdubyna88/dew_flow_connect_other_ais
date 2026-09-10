@@ -28,6 +28,23 @@ switched away from and the one you switched to are told apart at a glance.
 question you saw was wrong the moment you sent it, and for the one that is taking far longer than it
 should. It stops the turn it is showing and no other, so a press that lands late cannot end the
 question you asked afterwards.
+
+**What a conversation cost you is written down now.** Asking another AI has always spent real
+money — a chat turn carries the whole conversation with it, so question five is billed for one
+through four — and until now nothing recorded it anywhere. Every turn is written to a ledger of its
+own: which model answered, its tokens, what it was billed, how long it took.
+
+**And the review-rounds log shows them.** The table has a new **Kind** column and a matching filter:
+*review* for a round, *conversation* for a chat turn, both priced through the same table, so the
+question “what did today cost me” has one place to be answered. A conversation leaves the
+repository, branch and stage columns empty, because a chat is not held against a branch. As
+everywhere else here, `~$0.42` is what the tokens work out to and `$0.42` is what a vendor actually
+charged.
+
+**A turn you STOPPED is in the ledger too**, and so is one that failed. Those cost money as surely
+as an answer does, and they are the ones worth finding. Where nobody told us what a turn cost, the
+row says so with a dash rather than a zero — unreported and free are different things.
+
 **Answers read like answers.** Headings were hashes, lists were dashes, code was backticks and a
 link was its own address in brackets — everything a model wrote as Markdown arrived as Markdown. It
 is rendered now: headings, numbered and bulleted lists that nest, code in a code face and in its own

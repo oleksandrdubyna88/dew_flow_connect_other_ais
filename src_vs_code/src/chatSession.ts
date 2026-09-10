@@ -1,3 +1,5 @@
+import { ReportedUsage } from './chatUsage';
+
 /**
  * What a conversation is, whichever side of the machine answers it.
  *
@@ -22,6 +24,16 @@ export type TurnResult =
      * "the model is being obtuse" and "the conversation restarted".</p>
      */
     readonly contextLost?: true;
+    /**
+     * What the vendor said this turn cost, exactly as it said it.
+     *
+     * <p>Optional because a vendor may say nothing at all, and because a turn with no numbers is
+     * still an answer — nothing here is allowed to fail for want of a token count. It is the
+     * vendor's OWN figures, un-normalised: `codex` reports a cumulative total for the thread rather
+     * than the cost of one turn, and turning that into a per-turn number is `chatUsage.turnTokens`'s
+     * job, because it needs to remember what the last turn said and a session shape does not.</p>
+     */
+    readonly usage?: ReportedUsage | undefined;
   }
   | {
     readonly ok: false;

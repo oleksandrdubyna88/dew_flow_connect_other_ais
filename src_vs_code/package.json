@@ -613,7 +613,8 @@
     "icon": "node scripts/generate-icon.mjs",
     "test:live": "npm run compile && node scripts/live-chat.mjs",
     "measure:stream": "npm run compile && node scripts/measure-stream.mjs",
-    "measure:image": "npm run compile && node scripts/measure-image.mjs"
+    "measure:image": "npm run compile && node scripts/measure-image.mjs",
+    "measure:append": "node scripts/measure-append.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",

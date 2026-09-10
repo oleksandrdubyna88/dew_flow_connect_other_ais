@@ -1,4 +1,5 @@
-import { ChatAdapter, NOTHING, parsed, text } from './chatAdapter';
+import { ReportedUsage, spent } from './chatUsage';
+import { ChatAdapter, NOTHING, parsed, text, count, inside, money } from './chatAdapter';
 
 /**
  * `claude` — a persistent pipe too, in Anthropic's own stream-json.
@@ -49,7 +50,7 @@ export const claudeAdapter: ChatAdapter = {
       return NOTHING;
     }
     if (event['subtype'] === 'success') {
-      return { kind: 'answer', text: text(event['result']).trim() };
+      return { kind: 'answer', text: text(event['result']).trim(), ...spent(usageOf(event)) };
     }
 
     // Every other `result` subtype is a way of not answering — an error, a hit limit, a refusal.
@@ -62,3 +63,33 @@ export const claudeAdapter: ChatAdapter = {
     };
   },
 };
+
+/**
+ * What a `result` event said the turn cost.
+ *
+ * <p>Measured against the real CLI rather than read out of a manual. A `result.success` carries a
+ * `usage` object and, at the TOP level, `total_cost_usd` — so `claude` is the one vendor of the
+ * three that bills a real number, and a chat turn on it is a bill rather than an estimate.</p>
+ *
+ * <p><b>The input count is the sum of three fields, and that is the plan's "not comparable" made
+ * concrete.</b> A measured turn reported `input_tokens: 2` beside `cache_read_input_tokens: 27930`
+ * and `cache_creation_input_tokens: 9294`. Recording only `input_tokens` would say a turn that cost
+ * eleven cents used two tokens. What is billed is everything the model was handed, so that is what
+ * is counted — and it is why this vendor's numbers cannot be compared with `agy`'s, which omits
+ * cache entirely.</p>
+ */
+function usageOf(event: Record<string, unknown>): ReportedUsage | undefined {
+  const usage = inside(event, 'usage');
+  if (usage === undefined) {
+    return undefined;
+  }
+
+  return {
+    tokensIn:
+      count(usage['input_tokens'])
+      + count(usage['cache_creation_input_tokens'])
+      + count(usage['cache_read_input_tokens']),
+    tokensOut: count(usage['output_tokens']),
+    costUsd: money(event['total_cost_usd']),
+  };
+}

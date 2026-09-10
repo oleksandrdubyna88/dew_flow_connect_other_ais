@@ -1,3 +1,4 @@
+import { ReportedUsage, spent } from './chatUsage';
 import { ProcessHandle, Unsubscribe } from './processLauncher';
 import { ChatAdapter } from './chatAdapter';
 import { agyAdapter } from './agyAdapter';
@@ -121,6 +122,15 @@ export class CliChatSession implements ChatSession {
    * stop can terminate the following turn because stop has no turn identity".)</p>
    */
   private endTurnAsStopped: (() => void) | undefined;
+
+  /**
+   * What the vendor last said a turn cost, when it said it on an event of its own.
+   *
+   * <p>`codex` puts the answer on one line and the numbers on the next; a `classify` that reads one
+   * line at a time cannot join them, so the join happens here. Cleared per turn, because a stale
+   * figure attached to the NEXT answer would be worse than none.</p>
+   */
+  private lastUsage: ReportedUsage | undefined;
 
   /**
    * @param start launches the vendor process — injected, so this file spawns nothing itself
@@ -343,10 +353,21 @@ export class CliChatSession implements ChatSession {
 
       return;
     }
+    if (event.kind === 'usage') {
+      // Held rather than settled: the vendors that put usage on an event of its own send it BEFORE
+      // or AFTER the answer, never as it. The answer's own numbers win when it has any.
+      this.lastUsage = event.usage;
+
+      return;
+    }
     if (event.kind === 'answer') {
       const lost = this.contextLost;
       this.contextLost = false;
-      this.settle(lost ? { ok: true, answer: event.text, contextLost: true } : { ok: true, answer: event.text });
+      const usage = event.usage ?? this.lastUsage;
+      this.lastUsage = undefined;
+      this.settle(lost
+        ? { ok: true, answer: event.text, contextLost: true, ...spent(usage) }
+        : { ok: true, answer: event.text, ...spent(usage) });
 
       return;
     }
@@ -393,6 +414,9 @@ export class CliChatSession implements ChatSession {
       let failure = '';
       let named = false;
       let done = false;
+      // Per TURN, not per session: a per-turn vendor gets a fresh process each time, so there is no
+      // earlier figure that could belong to this one.
+      let reported: ReportedUsage | undefined;
       const finish = (result: TurnResult): void => {
         if (done) {
           return;
@@ -422,6 +446,11 @@ export class CliChatSession implements ChatSession {
         if (event.kind === 'session') {
           this.sessionId = event.id;
           named = true;
+        } else if (event.kind === 'usage') {
+          // This is the shape that NEEDS it: `codex` puts the answer on `item.completed` and the
+          // numbers on `turn.completed`, which arrives afterwards — so the figure is kept until the
+          // process exits and the turn is finished.
+          reported = event.usage;
         } else if (event.kind === 'answer') {
           answer = event.text;
         } else if (event.kind === 'failure') {
@@ -440,7 +469,9 @@ export class CliChatSession implements ChatSession {
         if (answer.length > 0) {
           const lost = this.contextLost;
           this.contextLost = false;
-          finish(lost ? { ok: true, answer, contextLost: true } : { ok: true, answer });
+          finish(lost
+            ? { ok: true, answer, contextLost: true, ...spent(reported) }
+            : { ok: true, answer, ...spent(reported) });
 
           return;
         }
@@ -557,3 +588,7 @@ function message(reason: unknown): string {
 function failed(reason: unknown): TurnResult {
   return { ok: false, failure: `the turn failed unexpectedly: ${message(reason)}` };
 }
+
+// `spent` was written twice — once here for turn results and once in `chatAdapter.ts` for adapter
+// events — with the same body and the same paragraph above it. It lives in `chatUsage.ts` now, and
+// this file imports it.

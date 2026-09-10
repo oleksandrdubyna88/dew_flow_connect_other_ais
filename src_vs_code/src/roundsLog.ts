@@ -3,6 +3,7 @@ import { Escalation } from './escalations';
 import { roundKey, usageRegion } from './panelView';
 import { TeamServerState } from './teamServerView';
 import { ModelPrice } from './modelPrices';
+import { ChatTurnRecord } from './chatUsage';
 import { UsageEntry, Window, WINDOWS } from './usage';
 import { Vendor } from './vendors';
 import { MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
@@ -34,6 +35,19 @@ import { escapeHtml, jsonForScript } from './webviewHtml';
 /** One round, flattened with its session, every column derived once. */
 export interface LogRow {
   readonly key: string;
+  /**
+   * What KIND of work this row is: a review round, or one turn of a conversation.
+   *
+   * <p>The two are billed to the same accounts and paid for out of the same money, and until now only
+   * one of them was written down anywhere. They are merged into one table rather than given a tab
+   * each because the question that made this column necessary — "what did today cost me" — is not a
+   * question about review rounds; the facet is there for the times it is.</p>
+   *
+   * <p>A conversation row leaves the repository, branch and stage columns empty, because a chat is
+   * not held against a branch. That is a fact about chats, not a gap in the row: the filters offer
+   * only values that exist, so an empty one adds no option to any select.</p>
+   */
+  readonly kind: 'review' | 'conversation';
   /** ISO, or empty when the server that wrote the round did not record it. Never the epoch. */
   readonly startedUtc: string;
   readonly completedUtc: string;
@@ -127,11 +141,13 @@ export interface LogRow {
 
 /** The columns a header click can sort by. */
 export type SortKey =
-  | 'startedUtc' | 'repoName' | 'branch' | 'stage' | 'number' | 'subject' | 'status' | 'verdict'
-  | 'gating' | 'findings' | 'seconds' | 'tokensIn' | 'tokensOut' | 'costTotalUsd' | 'answered';
+  | 'startedUtc' | 'kind' | 'repoName' | 'branch' | 'stage' | 'number' | 'subject' | 'status'
+  | 'verdict' | 'gating' | 'findings' | 'seconds' | 'tokensIn' | 'tokensOut' | 'costTotalUsd'
+  | 'answered';
 
 /** The facets a select can narrow by. Empty or absent means "any". */
 export interface LogFilters {
+  readonly kind?: string;
   readonly repoPath?: string;
   readonly branch?: string;
   readonly stage?: string;
@@ -195,7 +211,130 @@ export function rowsFrom(
         rowFrom(
           session, round, nowMs, priceOf, usage,
           { byRound, counts, decidedBy: decided, colour, whole, inline })))
-    .sort((a, b) => (b.startedUtc || b.completedUtc).localeCompare(a.startedUtc || a.completedUtc));
+    .sort(newestFirst);
+}
+
+/** Newest first, by when a row began — its own function because three lists are ordered by it. */
+export function newestFirst(a: LogRow, b: LogRow): number {
+  return (b.startedUtc || b.completedUtc).localeCompare(a.startedUtc || a.completedUtc);
+}
+
+/**
+ * Two lists of rows as one table, newest first.
+ *
+ * <p>Merged in MEMORY rather than in a file, which is the whole shape of this feature: the review
+ * rounds come from the server's session files and its ledger, the conversations from the extension's
+ * own, and neither program has to know the other's format. The cost is one extra read; what it buys
+ * is that the two halves can ship on different days without a torn line between them.</p>
+ */
+export function mergedRows(reviews: readonly LogRow[], conversations: readonly LogRow[]): LogRow[] {
+  return [...reviews, ...conversations].sort(newestFirst);
+}
+
+/**
+ * Every recorded chat turn, as rows of the same table.
+ *
+ * <p>Priced through the SAME {@link PriceOfModel} the rounds use, so a conversation and a review on
+ * one model are worked out the same way and a person comparing them is comparing like with like. A
+ * vendor that billed the turn wins over the list, exactly as it does for a round — `costIsEstimate`
+ * is what says which happened.</p>
+ *
+ * <p><b>The columns a chat has nothing to put in are empty, and that is deliberate.</b> A chat has no
+ * repository, no branch, no stage, no verdict and no findings; filling them with plausible-looking
+ * text would make the table read as though a conversation were a kind of review round. The Kind
+ * column is the one that says what the row is.</p>
+ */
+export function chatRows(
+  records: readonly ChatTurnRecord[],
+  priceOf: PriceOfModel = () => undefined,
+): LogRow[] {
+  // Which turn of its own conversation each record is, so the Round column means something for a
+  // chat too. Counted over the records in time order rather than stored on them: the number is a
+  // fact about the list, and a record that never reaches the page cannot leave a gap in it.
+  const position = new Map<string, number>();
+
+  return [...records]
+    .sort((a, b) => a.utc.localeCompare(b.utc))
+    .map((record) => {
+      const turn = (position.get(record.conversation) ?? 0) + 1;
+      position.set(record.conversation, turn);
+
+      return chatRow(record, turn, priceOf);
+    })
+    .sort(newestFirst);
+}
+
+function chatRow(record: ChatTurnRecord, turn: number, priceOf: PriceOfModel): LogRow {
+  const price = priceOf(record.model, record.provider);
+  const listed = price === undefined
+    ? undefined
+    : {
+      inUsd: round4((record.tokensIn / 1_000_000) * price.inPerMillion),
+      outUsd: round4((record.tokensOut / 1_000_000) * price.outPerMillion),
+    };
+  // A turn nobody reported anything about is UNKNOWN, not free. The ledger stores tokens as numbers,
+  // so a vendor that said nothing and a turn killed before it could say anything both arrive here as
+  // zeroes — and a table that prints `0` beside `stopped` tells a person the stop cost them nothing,
+  // which is the one thing it certainly does not say. A blank does, and `LogRow` already has one.
+  const silent = record.tokensIn === 0 && record.tokensOut === 0 && record.costUsd === null;
+
+  return {
+    // The instant plus the conversation, which is unique because one conversation runs one turn at a
+    // time — the session refuses to interleave two down one pipe, and `chatCommand.ts` chains them.
+    key: `chat:${record.conversation}:${record.utc}`,
+    kind: 'conversation',
+    startedUtc: record.utc,
+    completedUtc: endOf(record),
+    repoPath: '',
+    repoName: '',
+    branch: '',
+    stage: '',
+    number: turn,
+    subject: record.title,
+    status: record.outcome === 'answered' ? 'done' : 'interrupted',
+    decided: null,
+    verdict: '',
+    gating: 0,
+    findings: null,
+    seconds: record.seconds,
+    tokensIn: silent ? null : record.tokensIn,
+    tokensOut: silent ? null : record.tokensOut,
+    costUsd: record.costUsd,
+    costInUsd: listed?.inUsd ?? null,
+    costOutUsd: listed?.outUsd ?? null,
+    // What the vendor BILLED wins over the price list, the same order of preference `costOf` uses.
+    costTotalUsd: record.costUsd ?? (listed === undefined ? null : round4(listed.inUsd + listed.outUsd)),
+    costIsEstimate: record.costUsd === null && listed !== undefined,
+    // Never partial: a chat row is one turn on one model, so there is no second reviewer that could
+    // have gone unpriced. The floor mark would be a claim about something that cannot happen here.
+    costPartial: false,
+    answered: `${record.provider}/${record.model}`,
+    vendors: [record.provider],
+    reviewers: [`${record.provider}/${record.model} · ${record.outcome}`],
+    reviewerColours: [],
+    found: [],
+    foundCount: 0,
+    // A conversation has no findings to read, which is a different thing from findings nobody wrote
+    // down — so it is `loaded` with none, and the row opens on "This round found nothing" rather
+    // than on an offer to fetch what does not exist.
+    foundState: 'loaded',
+    origin: 'session',
+    dbKey: { sessionId: '', stage: '', number: 0 },
+  };
+}
+
+/**
+ * When a turn ended, from when it began and how long it took.
+ *
+ * <p>Derived rather than recorded: two instants that must agree is two chances to disagree, and the
+ * duration is the number a person actually reads. An unreadable start yields no end at all, which
+ * the date filter treats as a row it cannot place in a bounded range — the same answer it gives a
+ * round that never recorded a start.</p>
+ */
+function endOf(record: ChatTurnRecord): string {
+  const began = Date.parse(record.utc);
+
+  return Number.isFinite(began) ? new Date(began + record.seconds * 1000).toISOString() : '';
 }
 
 /**
@@ -254,6 +393,7 @@ function rowFrom(
 
   return {
     key: roundKey({ ...round, branch: session.state.branch }),
+    kind: 'review',
     startedUtc: round.startedUtc ?? '',
     completedUtc: round.completedUtc,
     repoPath: session.state.repoPath,
@@ -577,6 +717,9 @@ export type Costed = Pick<LogRow, 'costInUsd' | 'costOutUsd' | 'costTotalUsd' | 
 
 /** Whether a row survives the selects and the search box. A blank search is no search. */
 export function rowMatches(row: LogRow, filters: LogFilters, search: string): boolean {
+  if (filters.kind && row.kind !== filters.kind) {
+    return false;
+  }
   if (filters.repoPath && row.repoPath !== filters.repoPath) {
     return false;
   }
@@ -667,6 +810,7 @@ export function usageTabHtml(
 
 const COLUMNS: ReadonlyArray<{ key: SortKey; label: string; numeric?: boolean }> = [
   { key: 'startedUtc', label: 'When' },
+  { key: 'kind', label: 'Kind' },
   { key: 'repoName', label: 'Repository' },
   { key: 'branch', label: 'Branch' },
   { key: 'stage', label: 'Stage' },
@@ -683,9 +827,10 @@ const COLUMNS: ReadonlyArray<{ key: SortKey; label: string; numeric?: boolean }>
   { key: 'answered', label: 'Reviewers' },
 ];
 
-type Facet = 'repoPath' | 'branch' | 'stage' | 'status' | 'verdict' | 'vendor';
+type Facet = 'kind' | 'repoPath' | 'branch' | 'stage' | 'status' | 'verdict' | 'vendor';
 
 const FACETS: ReadonlyArray<{ key: Facet; label: string }> = [
+  { key: 'kind', label: 'Kind' },
   { key: 'repoPath', label: 'Repository' },
   { key: 'branch', label: 'Branch' },
   { key: 'stage', label: 'Stage' },
@@ -981,6 +1126,10 @@ export function roundsLogHtml(
 
   var state = { sortKey: 'startedUtc', dir: 'desc', filters: {}, search: '', expanded: {}, page: 0 };
   var PAGE_SIZE = ${PAGE_SIZE};
+  // Derived from the column list rather than typed as a literal: an opened row's detail spans the
+  // whole table, and a hand-written colspan is a number that silently stops matching the day a
+  // column is added. Adding the Kind column is exactly that day.
+  var COLUMN_COUNT = ${COLUMNS.length};
   // What SQL counted over the WHOLE table, which is a different number from the length of what was
   // sent. The operator asked for this in as many words: «суммы - скл счиатть (сколько всего и тд.)».
   var TOTALS = ${jsonForScript(totals)};
@@ -1104,6 +1253,7 @@ export function roundsLogHtml(
       var r = shown[i];
       html += '<tr data-key="' + esc(r.key) + '">'
         + '<td>' + when(r.startedUtc || r.completedUtc) + '</td>'
+        + '<td>' + esc(r.kind) + '</td>'
         + '<td title="' + esc(r.repoPath) + '">' + esc(r.repoName) + '</td>'
         + '<td title="' + esc(r.branch) + '">' + esc(r.branch) + '</td>'
         + '<td>' + esc(r.stage) + '</td>'
@@ -1120,7 +1270,7 @@ export function roundsLogHtml(
         + '<td class="who-answered" title="' + esc(r.answered) + '">' + esc(r.answered) + '</td>'
         + '</tr>';
       if (state.expanded[r.key]) {
-        html += '<tr class="detail"><td colspan="15">' + detail(r) + '</td></tr>';
+        html += '<tr class="detail"><td colspan="' + COLUMN_COUNT + '">' + detail(r) + '</td></tr>';
       }
     }
     document.getElementById('rows').innerHTML = html;
