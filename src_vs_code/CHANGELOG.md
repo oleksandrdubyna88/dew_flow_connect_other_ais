@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+**Paste a picture into a question.** A screenshot from the clipboard goes into the composer, shows
+itself there, and travels with the next question you send. It works with the models that were
+measured to read one — if the model you have chosen cannot, the tab says so by name instead of
+quietly sending the words alone.
+
 **Ask the other model the same thing.** Switch the model after an answer you did not like, and the
 Send button becomes *Re-ask · <that model>* — press it, or press Enter on an empty box, and the
 question goes to the new model with the conversation behind it and without the answer you rejected.
