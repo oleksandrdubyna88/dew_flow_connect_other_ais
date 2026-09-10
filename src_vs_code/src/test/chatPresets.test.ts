@@ -5,6 +5,7 @@ import {
   chatPromptPresetsFrom,
   mainPrompt,
   presetById,
+  reaskFrom,
 } from '../chatPresets';
 
 /**
@@ -123,4 +124,72 @@ test('a name long enough to fill the row is cut, and the text is not', () => {
 
   assert.ok((presets[0]?.name.length ?? 0) <= 60, 'a name of any length would break the row');
   assert.strictEqual(presets[0]?.text.length, 9_000, 'the prompt itself was truncated');
+});
+
+
+/* ------------------------------------------------------------------------------------------------
+ * `reaskFrom` — the RULE behind entry 24, and the part of it worth being exact about. SonarCloud
+ * caught that it had none of its own: the tests covered the button that offers a re-ask and not the
+ * function that decides what one consists of, which is the half a person's conversation depends on.
+ * ---------------------------------------------------------------------------------------------- */
+
+const CONVERSATION = [
+  { role: 'you' as const, text: 'first question' },
+  { role: 'model' as const, text: 'first answer', model: { id: 'antigravity' } },
+  { role: 'you' as const, text: 'the question I want answered again' },
+  { role: 'model' as const, text: 'the answer I did not like', model: { id: 'antigravity' } },
+];
+
+test('a re-ask keeps the question, drops the answer, and keeps everything before them', () => {
+  const again = reaskFrom(CONVERSATION, 'claude');
+
+  assert.strictEqual(again?.question, 'the question I want answered again');
+  assert.deepStrictEqual(again?.said.map((message) => message.text), ['first question', 'first answer'],
+    'the conversation behind the question was lost, or the rejected answer came with it');
+});
+
+test('there is nothing to re-ask while the same model is chosen', () => {
+  // Pressing Enter on an empty box with the model unchanged does what it always did: nothing.
+  assert.strictEqual(reaskFrom(CONVERSATION, 'antigravity'), undefined);
+});
+
+test('there is nothing to re-ask before an answer exists', () => {
+  assert.strictEqual(reaskFrom([], 'claude'), undefined, 'an empty conversation offered a re-ask');
+  assert.strictEqual(reaskFrom([{ role: 'you', text: 'asked' }], 'claude'), undefined,
+    'a question nobody has answered yet offered a re-ask');
+  assert.strictEqual(
+    reaskFrom([{ role: 'you', text: 'asked' }, { role: 'you', text: 'asked again' }], 'claude'),
+    undefined,
+    'two questions in a row offered a re-ask');
+});
+
+test('an answer whose model was never recorded cannot be re-asked', () => {
+  // A conversation restored from before the model was recorded on each answer. There is no way to
+  // tell whether the model has changed, and guessing would re-ask something that was never asked
+  // of anybody else.
+  const older = [{ role: 'you' as const, text: 'q' }, { role: 'model' as const, text: 'a' }];
+
+  assert.strictEqual(reaskFrom(older, 'claude'), undefined);
+});
+
+test('a re-ask needs a question with words in it', () => {
+  const blank = [
+    { role: 'you' as const, text: '   ' },
+    { role: 'model' as const, text: 'an answer', model: { id: 'antigravity' } },
+  ];
+
+  assert.strictEqual(reaskFrom(blank, 'claude'), undefined, 'a re-ask of nothing was offered');
+});
+
+test('nothing is re-asked when no model is chosen at all', () => {
+  assert.strictEqual(reaskFrom(CONVERSATION, ''), undefined);
+});
+
+test('the answer before last is kept, because the conversation is not the last exchange', () => {
+  // Only ONE answer is dropped — the one being rejected. An earlier answer is part of what the next
+  // model needs to make sense of the question.
+  const again = reaskFrom(CONVERSATION, 'claude');
+
+  assert.ok(again?.said.some((message) => message.text === 'first answer'),
+    'an earlier answer was dropped along with the rejected one');
 });
