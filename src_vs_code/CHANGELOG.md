@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Extension 0.33.0 — 2026-09-10
 
 **The chat section in the sidebar catches up with the tab.** Two of the plans behind the chat named the panel as a surface and shipped only their tab half, so the section had stood unchanged since the morning it was written while the tab gained a picker, presets and a CRUD tab of its own.
 
