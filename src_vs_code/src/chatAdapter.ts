@@ -50,8 +50,20 @@ export type AdapterEvent =
    * adapter cannot attach one to the other without holding state between calls, which `classify` is
    * deliberately unable to do — it reads one line and says what that line meant.</p>
    *
-   * <p>So the session keeps the last one it saw and uses it if the answer carried none. The two
-   * vendors that DO put usage on the answer are unaffected.</p>
+   * <p><b>Which shape may send it, and when — the rule, because the loose version of this sentence
+   * was a trap.</b> A `per-turn` vendor may send it at any point up to the process exiting: that
+   * shape's turn ends at the EXIT, so a usage line printed after the answer is still read (the
+   * launcher fires its exit event on `close`, once stdout has been flushed, and replays lines held
+   * before anybody subscribed). A `persistent` vendor may send it only BEFORE the answer, because
+   * that shape's turn ends at the ANSWER — the session settles there and moves on, and a usage line
+   * printed afterwards would belong to a turn that is already over.</p>
+   *
+   * <p>Both vendors of that shape today put their numbers ON the answer event, which is the simplest
+   * way to satisfy this and the way a new persistent adapter should follow;
+   * `chatAdapters.test.ts` pins it. A future persistent CLI that insists on a trailing usage line
+   * would need the seam to gain a turn-complete event rather than an adapter to work around it —
+   * which is the shape of change this comment exists to make visible before somebody spends a day
+   * discovering it. (codex, the second code round.)</p>
    */
   | { readonly kind: 'usage'; readonly usage: ReportedUsage }
   | { readonly kind: 'failure'; readonly failure: string }

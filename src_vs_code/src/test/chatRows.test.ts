@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ChatTurnRecord } from '../chatUsage';
 import { LogRow, chatRows, mergedRows, roundsLogHtml, rowMatches } from '../roundsLog';
+import { priceOfLine } from '../usage';
 
 /**
  * Conversations in the rounds log: the same table, a Kind of their own.
@@ -269,4 +270,49 @@ test('a conversation row carries its vendor, so the Vendor facet reaches it too'
   assert.strictEqual(rowMatches(row, { vendor: 'claude' }, ''), true);
   assert.strictEqual(rowMatches(row, { vendor: 'codex' }, ''), false);
   assert.match(row.answered, /claude\/sonnet/, 'the Reviewers column names who answered');
+});
+
+test('a renamed vendor row does not erase the money from what it already answered', () => {
+  // A ledger line is permanent; a vendor row is not — its id is a person's own text, editable and
+  // deletable in the panel. Pricing only by the row meant renaming a reviewer retroactively turned
+  // the cost of every conversation it had ever answered into a dash: the tokens stayed and the money
+  // vanished, for work that really had been paid for. The MODEL is recorded on the line and cannot be
+  // edited afterwards. (codex, the second code round.)
+  const vendors = [{
+    id: 'claude', runtime: 'claude' as const, model: 'claude-sonnet-5', enabled: true,
+    plan: true, code: true, baseUrl: '', executablePath: '',
+    pricePerMillionIn: 0, pricePerMillionOut: 0,
+  }];
+  const list = (id: string) =>
+    (id === 'claude-sonnet-5' ? { inPerMillion: 3, outPerMillion: 15 } : undefined);
+
+  // While the row exists it is found by its id, as it always was.
+  assert.deepStrictEqual(priceOfLine('claude', 'claude-sonnet-5', vendors, list), { in: 3, out: 15 });
+
+  // Renamed — the ledger still names the old id, and the MODEL still prices it.
+  assert.deepStrictEqual(
+    priceOfLine('claude', 'claude-sonnet-5', [{ ...vendors[0]!, id: 'claude-work' }], list),
+    { in: 3, out: 15 },
+    'a rename erased the price of everything that row had answered',
+  );
+
+  // Removed altogether — same answer, for the same reason.
+  assert.deepStrictEqual(priceOfLine('claude', 'claude-sonnet-5', [], list), { in: 3, out: 15 });
+
+  // And a model nothing has ever heard of is still honestly unpriced.
+  assert.strictEqual(priceOfLine('claude', 'a-model-nobody-lists', [], list), undefined);
+});
+
+test('a rate the person TYPED still wins over the list, because it is about their account', () => {
+  const typed = [{
+    id: 'local', runtime: 'local' as const, model: 'qwen', enabled: true,
+    plan: true, code: true, baseUrl: '', executablePath: '',
+    pricePerMillionIn: 0.5, pricePerMillionOut: 1.5,
+  }];
+
+  assert.deepStrictEqual(
+    priceOfLine('local', 'qwen', typed, () => ({ inPerMillion: 99, outPerMillion: 99 })),
+    { in: 0.5, out: 1.5 },
+    'a typed rate is a fact about this account; a list price is a general estimate',
+  );
 });
