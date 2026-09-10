@@ -46,7 +46,14 @@ export type Platform = 'win32' | 'linux' | 'darwin';
  * nobody planned for must not be handed either.</p>
  */
 export function hostPlatform(raw: string = process.platform): Platform {
-  return raw === 'win32' ? 'win32' : raw === 'darwin' ? 'darwin' : 'linux';
+  // The nested ternary this arrived as — carried identically in both of the files it replaced — is
+  // written out, because a reader has to hold two conditions at once to see that the DEFAULT is the
+  // POSIX branch, and that is the load-bearing half. (SonarCloud, S3358.)
+  if (raw === 'win32' || raw === 'darwin') {
+    return raw;
+  }
+
+  return 'linux';
 }
 
 /** How this host can reach a live Windows session to run something only Windows can run. */
