@@ -31,7 +31,7 @@ import {
 import { askVersion, capture } from './versionProbe';
 import { seedIfEmpty, writeOverlay } from './sideSettings';
 import { readerFor } from './sideConfig';
-import { hostPlatform } from './hostSide';
+import { hostPlatform, Platform } from './hostSide';
 import { thisSide } from './installer';
 import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog, EMPTY_LOG } from './roundsDb';
@@ -110,7 +110,6 @@ import { TeamServerState, slotSentence } from './teamServerView';
 import { coaiDataDir } from './dataDir';
 import {
   executableFor,
-  Platform,
   VendorInstall,
   vendorInstall,
   vendorTerminal,

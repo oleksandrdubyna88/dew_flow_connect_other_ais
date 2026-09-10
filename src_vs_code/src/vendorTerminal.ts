@@ -1,3 +1,4 @@
+import { Platform } from './hostSide';
 import { Vendor } from './vendors';
 
 /**
@@ -171,8 +172,6 @@ export function keyVariable(id: string): string {
  * and the panel is where somebody is standing when they find that out. Hunting a vendor's docs to
  * paste one npm line is the kind of small friction that stops a reviewer being added at all.</p>
  */
-/** The operating systems the buttons can answer for — what `process.platform` reports. */
-export type Platform = 'win32' | 'linux' | 'darwin';
 
 /**
  * How to install the CLI a reviewer needs, for the operating system the panel is actually on.

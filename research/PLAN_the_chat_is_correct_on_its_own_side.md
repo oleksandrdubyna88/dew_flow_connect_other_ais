@@ -1,13 +1,36 @@
 # PLAN — the chat is correct on the side it actually runs on
 
-> Status: **plan only, nothing implemented yet, 2026-09-10.** Scope: `src_vs_code` — the
-> `Chat with other AI` command (`selectionCapture.ts`, `chatCommand.ts`), the orphan sweep
-> (`chatOrphans.ts`, `chatLedger.ts`), and the per-side settings overlay (`sideSettings.ts`,
-> `panelProvider.ts`, `extension.ts`).
+> Status: **IMPLEMENTED, 2026-09-10.** All four defects shipped: `Ctrl+Alt+A` captures from a WSL
+> window through interop, a failed capture names which of four things happened, the chat and the
+> `coai-mcp` settings file read this side's `vendors`, and the orphan sweep ends a matching child on
+> WSL and on native Linux. One verification tail is owed and is a tail rather than a gap: a press in
+> a real Remote-WSL window, which no test can answer.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [architecture.md](../research/architecture.md),
-> [PLAN_wsl_local_engine.md](../research/PLAN_wsl_local_engine.md) — whose `wslNetwork.ts` this
+> **Deviations, all of them from the two gate rounds.** The identity rule was tightened from *any
+> `cmdline` entry* to *`argv[0]` or `argv[1]`* — the loose rule would kill `python job.py codex` on a
+> recycled pid. `RunOutcome` gained a PHASE, because three reviewers separately refused a helper that
+> hung being reported as an unreachable Windows side. The start time moved from the `/proc/<pid>`
+> ctime to field 22 of `/proc/<pid>/stat`, and the reason the round GAVE for that was measured false
+> (a ctime is not the time of the `stat` call: 1789026765000 against a real start of 1789026765179) —
+> it was adopted for a different reason, that field 22 is written once at fork. A start time that
+> could not be computed now answers `unknown` rather than *not ours*, because *not ours* settles the
+> row and would strike out a process still running. The pid-reuse window was narrowed to one exact
+> tick comparison with nothing between it and the signal; it cannot be closed in Node, and that is
+> written into the code. `sideConfigReader` gained a single door — `sideConfig.readerFor` — because
+> taking a `Side` made "this side" an invariant kept by convention. `btime` is read once per host.
+> The `Platform` union moved out of `vendorTerminal.ts`, where selection capture had no business
+> depending on it.
+>
+> **What was refused, and why it is recorded.** A pre-flight resolve of `powershell.exe` (twice) — a
+> probe answers about a moment that is not the moment of use, which `wslNetwork.ts:14-20` already
+> settled for this repository. A Blocking claim that `powershell.exe` cannot run with a Linux `cwd`,
+> refuted by the measurement at the top of this plan. A tree-walk fallback for a walk this plan does
+> not implement. A `ps` subprocess as a fallback for a truncated `comm`. And five restatements of one
+> finding whose proposed fix was the code as written.
+>
+> Related docs: [module_extension.md](module_extension.md),
+> [architecture.md](architecture.md),
+> [PLAN_wsl_local_engine.md](PLAN_wsl_local_engine.md) — whose `wslNetwork.ts` this
 > plan reuses rather than re-derives.
 
 ## The symptom
