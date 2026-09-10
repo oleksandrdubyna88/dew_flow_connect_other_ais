@@ -29,6 +29,32 @@ local model` the page would otherwise still show the remote one as selected whil
 somewhere else), a pushed state that has not changed is not sent at all, a `pick` naming a model the
 conversation was never offered is refused at the host boundary rather than trusted, and the
 composer takes focus back when a turn ends — without which every follow-up costs a mouse click.
+### What the conversation has cost, where the decision is made (2026-09-10)
+
+A chat turn carries the whole conversation, so question five is billed for one through four as well
+— `chatCommand.ts` says so out loud where the carry is built. That is the number a person would use
+to decide between asking again and starting fresh, and it was invisible at exactly that moment. The
+ledger half writes every turn down; this says the running total beside the picker, which is where
+the decision is taken.
+
+**An estimate is marked as one.** The three vendors do not report comparable numbers — `claude`
+counts cache reads, `antigravity` omits cache entirely, `codex` reports a cumulative maximum
+(measured, `todo/PLAN_usage_that_compares.md`) — so only `claude` reports a bill and everything else
+is worked out. The tilde is this product's existing convention for that, and one convention for one
+thing is worth more than a prettier line.
+
+**One estimated turn makes the whole total an estimate.** A sum of a measured price and a guess is a
+guess, and showing it as a bill would make it the most confident number on the page and the least
+true.
+
+**A turn nobody priced is COUNTED, not skipped.** `codex` reports a cumulative maximum the ledger
+refuses to difference, so its turns legitimately arrive with no cost at all — and a total that
+quietly left them out would read as complete.
+
+**The count lives beside the conversation, not in the ledger.** The ledger is a file this window
+shares with every other, and a tab asking it for its own total on every push would be reading a
+growing file to answer a question it already knows.
+
 ### A picture in the question (2026-09-10)
 
 Phase 0 MEASURED the mechanism rather than assuming one: `claude` and `agy` both read a number out of

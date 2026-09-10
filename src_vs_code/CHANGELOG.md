@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**A conversation says what it has cost.** Beside the model picker, updated as answers arrive — which
+is where you decide whether to ask again or start fresh, and that decision is the one the number is
+for: each question carries the whole conversation with it, so it is billed for the ones before it. A
+figure worked out from tokens wears a tilde, because only one of the three vendors reports what it
+actually charged.
+
 **Paste a picture into a question.** A screenshot from the clipboard goes into the composer, shows
 itself there, and travels with the next question you send. It works with the models that were
 measured to read one — if the model you have chosen cannot, the tab says so by name instead of

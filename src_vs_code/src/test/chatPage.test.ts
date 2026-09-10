@@ -29,6 +29,7 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
     providers: [],
     reask: '',
     attached: '',
+    spend: '',
     promptPresets: [],
     modelPresets: [],
     providerId: 'antigravity',
@@ -1807,4 +1808,30 @@ test('an attachment that is not an image cannot be shown at all', () => {
 
     assert.doesNotMatch(html, /<img class="attached"/, `${attached} was rendered as an attachment`);
   }
+});
+
+
+test('the tab says what the conversation has cost, where the decision is made', () => {
+  // Beside the picker, which is where somebody decides whether to ask again or start fresh — and a
+  // turn carries the whole conversation, so that decision is exactly the one the number is for.
+  const html = chatPageHtml(state({ spend: '~$0.4200' }), 'n0nce');
+  const footer = html.slice(html.indexOf('<footer'), html.indexOf('</footer>'));
+
+  assert.match(footer, /id="spend"[^>]*>~\$0\.4200</, 'the running cost is not on the page');
+});
+
+test('a conversation that has cost nothing says nothing', () => {
+  const html = chatPageHtml(state(), 'n0nce');
+
+  // Empty CONTENT, not an absent element: the element is always there so a push can fill it without
+  // the page being rebuilt. `\S` was the first assertion and it matched the `<` of `</span>`.
+  assert.match(html, /id="spend"[^>]*><\/span>/, 'an empty total drew a line anyway');
+});
+
+test('the running total is updated by a push, not only at open', () => {
+  const page = runChatPage({ spend: '$0.0100' });
+
+  page.deliver({ type: 'state', spend: '$0.0200', running: false, capped: false });
+
+  assert.strictEqual(page.seen['spend'].textContent, '$0.0200', 'the total stayed at what it opened with');
 });
