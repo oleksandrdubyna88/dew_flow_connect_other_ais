@@ -2436,6 +2436,25 @@ filter offers only values that exist and filling them in would make the table re
 conversation were a kind of review round. The detail row's `colspan` became derived from the column
 list in the same change; it had been the literal `15`, which adding a column silently invalidates.
 
+**Where the vendor-shaped knowledge lives, after the gate moved it twice.** Normalising a cumulative
+reporter needs to remember what its thread last said, and that memory started on the `Thread` in
+`chatCommand.ts` — two layers above the wire protocol it is a fact about — keyed first on the vendor
+ROW's id and then on the runtime's NAME. Both were wrong, and the second reason is the instructive
+one: implementing `ChatAdapter` was still not enough to be billed correctly, because an unlisted
+runtime defaulted silently to per-turn. It is now `ChatAdapter.cumulative`, a REQUIRED boolean the
+compiler asks for, applied by `CliChatSession`, whose lifetime is exactly a vendor thread's lifetime —
+it holds the id it resumes by, and a replacement session (a model switch, a window reload) starts a
+new thread counting from zero. `TurnResult` therefore always carries the cost of ONE turn, on BOTH
+arms: a `codex` turn can be priced by the vendor and stopped a moment later, and carrying the numbers
+only on the answer recorded such a turn as free.
+
+**A ledger line outlives the vendor row that made it**, which is why `priceOfLine` exists in
+`usage.ts`. A row's id is a person's own editable text; pricing only by it meant that renaming a
+reviewer retroactively turned the cost of every round and every conversation it had ever answered into
+a dash — the tokens stayed and the money vanished. The MODEL is recorded on the line and cannot be
+edited afterwards, so it is what answers when the row is gone. A row that still exists still wins: a
+typed rate is a fact about that account, a list price is a general estimate about a model.
+
 Half of [PLAN_who_said_it_and_what_it_cost.md](../todo/PLAN_who_said_it_and_what_it_cost.md); the tab's
 own caption and running total are the other half and live in `chatPage.ts`.
 

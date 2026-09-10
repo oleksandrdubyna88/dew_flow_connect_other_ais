@@ -220,6 +220,38 @@ export function priceOf(
 }
 
 /**
+ * What one recorded line costs per million tokens: its vendor ROW's rate, or the list price of the
+ * model that actually answered it.
+ *
+ * <p>A ledger line is permanent and a vendor row is not — its id is a person's own text, editable and
+ * deletable in the panel. Pricing only by the row meant that renaming a reviewer erased the money
+ * from every round and every conversation it had ever answered: the tokens stayed and the cost became
+ * a dash, retroactively, for work that really had been paid for. The MODEL is recorded on the line
+ * and cannot be edited afterwards, so it is what answers when the row is gone. (codex, the second
+ * code round.)</p>
+ *
+ * <p>A row that still exists still wins, and that order is deliberate: a typed rate is a fact about
+ * THIS account — a flat subscription, a negotiated rate, a local engine no list has heard of — and a
+ * published list price is a general estimate about a model.</p>
+ */
+export function priceOfLine(
+  provider: string,
+  model: string,
+  vendors: readonly Vendor[],
+  listed: PriceLookup = () => undefined,
+): { readonly in: number; readonly out: number } | undefined {
+  const typed = priceOf(provider, vendors, listed);
+  if (typed !== undefined) {
+    return typed;
+  }
+  const published = listed(model);
+
+  return published === undefined
+    ? undefined
+    : { in: published.inPerMillion, out: published.outPerMillion };
+}
+
+/**
  * What a model costs per million tokens according to a public list, or nothing.
  *
  * <p>A function rather than a table so this file stays free of the fetching: the panel holds the
