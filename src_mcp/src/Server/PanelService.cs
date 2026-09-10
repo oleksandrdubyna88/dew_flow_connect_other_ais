@@ -396,9 +396,27 @@ public sealed partial class PanelService
         return RunStageAsync(repoPath, branch, scope, new StageRun(RoundMachine.BeginCodeRound, NeedsWorktree: true, IsPlanStage: false,
             async (session, workingDir, sha) =>
             {
-                var files = await _context.CollectAsync(repoPath, baseRef, sha, ct: ct);
-                var shaped = DiffShaper.Shape(files);
+                var collected = await _context.CollectAsync(repoPath, baseRef, sha, ct: ct);
+                var shaped = DiffShaper.Shape(collected.Files);
                 var bundle = new ReviewBundle(scope, branch, baseRef, sha, shaped);
+
+                // WHICH commit this round is a diff of, said out loud. Findings re-read a week later
+                // cannot be re-checked without it — and each fallback is worth its own sentence,
+                // because those are the states in which the base's own commits can still arrive as
+                // deletions the branch never made.
+                _log.Information(
+                    collected.Kind switch
+                    {
+                        DiffBase.MergeBase =>
+                            "diffed against the merge base {Against} of {BaseRef} and {Sha}",
+                        DiffBase.ShallowHistory =>
+                            "diffed against {Against} directly: {BaseRef} and {Sha} share no ancestor IN THIS CHECKOUT, "
+                            + "which is shallow — deepen it, or this diff can show the base's commits as deletions",
+                        _ =>
+                            "diffed against {Against} directly: {BaseRef} and {Sha} have no common ancestor, "
+                            + "so this diff can show the base's own commits as deletions",
+                    },
+                    collected.ComparedAgainst, baseRef, sha);
 
                 // The project's OWN written conventions, read from the worktree so they are the
                 // rules as of the commit under review rather than as of this afternoon. Without
@@ -409,7 +427,13 @@ public sealed partial class PanelService
                 var context =
                     $"## The plan this change implements\n\n{bundle.PlanText}\n\n" +
                     RulesSection(rules) +
-                    $"## The change ({bundle.Branch} over {bundle.BaseRef}, at {bundle.Sha})\n\n{bundle.Diff.Text}";
+                    // The resolved base is named to the REVIEWER as well as to the log. Two reviewers
+                    // asked for it on the plan round, and the reason is theirs: a reviewer that
+                    // checks the branch against the tip of `main` sees a diff that does not match,
+                    // and the discrepancy is indistinguishable from the phantom deletions this whole
+                    // change exists to stop.
+                    $"## The change ({bundle.Branch} over {bundle.BaseRef}, at {bundle.Sha}; "
+                    + $"compared against {collected.ComparedAgainst})\n\n{bundle.Diff.Text}";
                 _log.Information(
                     "rules for review: {Count} file(s), {Bytes} bytes, {Omitted} omitted, {Missing} mount(s) not in the tree",
                     rules.Files.Count, rules.Bytes, rules.Omitted.Count, rules.MissingMounts.Count);

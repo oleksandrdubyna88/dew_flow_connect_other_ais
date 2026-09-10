@@ -57,8 +57,19 @@ public sealed class ContextAssemblerTests : IAsyncLifetime
         result.ExitCode.Should().Be(0, $"git {string.Join(' ', args)}: {result.StdErr}");
     }
 
-    private Task<IReadOnlyList<FileDiff>> Collect() =>
-        _assembler.CollectAsync(_repo, "main", "feature", ct: TestContext.Current.CancellationToken);
+    private async Task<IReadOnlyList<FileDiff>> Collect() =>
+        (await _assembler.CollectAsync(_repo, "main", "feature", ct: TestContext.Current.CancellationToken)).Files;
+
+    /// <summary>Move `main` on, the way another session merging its own pull request does.</summary>
+    private async Task MoveTheBase()
+    {
+        await Git("checkout", "main");
+        await File.WriteAllTextAsync(Path.Combine(_repo, "somebody-elses.cs"), "merged while you worked\n");
+        await File.WriteAllBytesAsync(Path.Combine(_repo, "theirs.png"), [9, 9, 9, 0, 255, 0, 1, 2, 3]);
+        await Git("add", ".");
+        await Git("commit", "-m", "another session merged its own PR");
+        await Git("checkout", "feature");
+    }
 
     [Fact]
     public async Task LockFilesAndBuildOutput_NeverReachTheDiff()
@@ -98,5 +109,72 @@ public sealed class ContextAssemblerTests : IAsyncLifetime
 
         shaped.Text.Should().Contain("real change");
         shaped.WasElided.Should().BeFalse();
+    }
+
+    /// <remarks>
+    /// 2026-09-08, measured: a round reported three Blocking findings from two vendors saying the
+    /// branch had deleted three files and reverted a version. It had not — `main` had moved under
+    /// it, and `A..B` shows the commits the base has and the branch does not as DELETIONS the branch
+    /// performed. 17 files and 1616 deletions were sent where the branch's own change was 9 files
+    /// and 12. It has happened three times.
+    /// </remarks>
+    [Fact]
+    public async Task AChangeIsDiffedAgainstTheMergeBase_NotTheTipOfMain()
+    {
+        await MoveTheBase();
+
+        var collected = await _assembler.CollectAsync(_repo, "main", "feature", ct: TestContext.Current.CancellationToken);
+
+        collected.Files.Select(f => f.Path).Should().NotContain("somebody-elses.cs",
+            "a file another session merged into the base is not something this branch did");
+        collected.Files.Select(f => f.Path).Should().Contain("app.cs", "the branch's own change is still there");
+        collected.Kind.Should().Be(DiffBase.MergeBase);
+        collected.ComparedAgainst.Should().NotBe("main", "the round can only be re-checked if it names the commit");
+    }
+
+    [Fact]
+    public async Task ABinaryIsSizedAgainstTheMergeBase_NotTheMovedTip()
+    {
+        // `cat-file` takes a rev, not a range, so this call site cannot be fixed by three dots — it
+        // needs the resolved commit, and without it the OLD side of a binary is read from a commit
+        // somebody else made.
+        await MoveTheBase();
+
+        var collected = await _assembler.CollectAsync(_repo, "main", "feature", ct: TestContext.Current.CancellationToken);
+
+        collected.Files.Select(f => f.Path).Should().NotContain("theirs.png");
+        var mine = collected.Files.Should().ContainSingle(f => f.Path == "logo.png").Subject;
+        mine.BinaryBytes.Should().Be(7);
+    }
+
+    [Fact]
+    public async Task AReviewOfOneCommit_IsStillItsOwnDiff()
+    {
+        // The documented usage: pass the commit as the branch and its parent as the base. The parent
+        // IS the merge base, so nothing about this changes — which is the point of asserting it.
+        var collected = await _assembler.CollectAsync(_repo, "feature~1", "feature", ct: TestContext.Current.CancellationToken);
+
+        collected.Files.Select(f => f.Path).Should().Contain("app.cs");
+        collected.Kind.Should().Be(DiffBase.MergeBase);
+    }
+
+    [Fact]
+    public async Task UnrelatedHistoriesFallBackAndSaySo()
+    {
+        await Git("checkout", "--orphan", "stranger");
+        await Git("rm", "-rf", ".");
+        await File.WriteAllTextAsync(Path.Combine(_repo, "stranger.cs"), "no ancestor at all\n");
+        await Git("add", ".");
+        await Git("commit", "-m", "a history of its own");
+        await Git("checkout", "feature");
+
+        var collected = await _assembler.CollectAsync(_repo, "stranger", "feature", ct: TestContext.Current.CancellationToken);
+
+        collected.Kind.Should().Be(DiffBase.NoCommonAncestor, "the one case three dots cannot answer");
+        collected.ComparedAgainst.Should().Be("stranger", "the fallback compares against what it was given");
+        // And it is the two-dot diff, not an empty list dressed up as one: the stranger's own file is
+        // absent from `feature` and shows as a deletion, which is exactly what two dots means here.
+        var paths = collected.Files.Select(f => f.Path).ToList();
+        paths.Should().Contain("app.cs").And.Contain("stranger.cs");
     }
 }
