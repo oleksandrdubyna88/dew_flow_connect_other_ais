@@ -60,5 +60,17 @@ node .agents/conventions/tools/pin-check.mjs
   entry, read once at startup via `creds config <key>`.
 - **Logging** per `.agents/conventions/common/logging-serilog.md`: coloured ANSI console (stderr in
   stdio mode) + one file per run under `logs/{yyyy-MM-dd}/`, everything UTC.
-- `.claude/settings.json` is a byte-identical copy of the family reference
-  (`.agents/conventions/settings/settings.json`) — never edit it independently.
+- `.claude/settings.json` was a byte-identical copy of the family reference
+  (`.agents/conventions/settings/settings.json`). It now carries ONE addition on top of it: a
+  `SessionStart` hook running `.claude/hooks/load-instructions.mjs`. Everything else stays
+  byte-identical, and the addition is temporary — it is being promoted into the family
+  reference, and when the pin carrying it lands here the copy goes back to being byte-identical.
+- **The Claude host adapter loads instructions through a hook, and that is not a preference.**
+  `validateInstructions` in `.agents/conventions/tools/lib/rule-cli.mjs` refuses a `CLAUDE.md`
+  that is anything but `@AGENTS.md` and refuses a non-empty `.claude/rules` — the two doors
+  Claude Code loads project instructions through on its own. Closing them is what makes one
+  source for two hosts true, and it also left a session holding 561 bytes telling it to go and
+  read the rules. The hook runs the same canonical resolver Codex is told to run, at the same
+  pin, and prints what applies to every task. Restoring instructions the obvious way instead —
+  imports in `CLAUDE.md`, or files under `.claude/rules` — makes `rules check` report
+  INCOMPLETE, which by ENTRY.md blocks edits. `claudeAdapter.test.mjs` guards both halves.

@@ -8,5 +8,17 @@
       "Bash",
       "PowerShell"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/load-instructions.mjs"
+          }
+        ]
+      }
+    ]
   }
 }

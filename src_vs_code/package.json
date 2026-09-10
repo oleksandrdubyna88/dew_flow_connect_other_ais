@@ -608,7 +608,7 @@
     "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true })\"",
     "compile": "npm run clean && tsc -p ./",
     "typecheck": "tsc -p ./ --noEmit",
-    "test": "node --test src/test/prepareGate.test.mjs && npm run compile && node scripts/run-tests.mjs",
+    "test": "node --test src/test/prepareGate.test.mjs src/test/claudeAdapter.test.mjs && npm run compile && node scripts/run-tests.mjs",
     "test:contract": "npm run compile && node scripts/run-contract.mjs",
     "test:seam": "npm run compile && node scripts/run-seam.mjs",
     "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
