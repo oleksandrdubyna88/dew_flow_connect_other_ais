@@ -70,6 +70,34 @@ get the original text with the reason — never an error in its place.
 
 ---
 
+## Ask a second model about a passage
+
+The gates read a plan and a diff. **Chat with other AI** does the same thing at the scale of a
+paragraph: select a dense passage in your assistant's answer, press `Ctrl+Alt+A`, and a tab opens
+where another vendor's model explains it — in your language, in a conversation you can carry on. The
+right-click menu carries the same item for where a keybinding cannot reach.
+
+The tab is a conversation, not a viewer:
+
+- **A provider, then one of its models.** A model list belongs to a provider. Switching
+  mid-conversation is expected — the whole thread goes across — so every answer is captioned with
+  the model that gave it, in that model's colour.
+- **Named prompts and named models**, two rows of buttons above the box, edited in a tab of their
+  own (**Edit chat presets**) that saves as you type.
+- **An empty box with a different model chosen re-asks**: the same question goes to the other model,
+  carrying the conversation minus the answer you did not want.
+- **Paste a screenshot** and it goes with the next question. A provider that cannot take one is
+  refused by name rather than dropping it silently.
+- **What the conversation has cost**, beside the picker, where the decision to ask again is taken.
+- Answers are rendered — headings, lists, tables, code — with blue links that open a file in the
+  editor or a URL in your browser, a **Copy** that gives you the Markdown, and a **Stop** that ends
+  the turn it was drawn for and never the next one.
+
+Reloading the window keeps what was said: every open chat tab comes back with its questions and
+answers, and a line saying the reload closed the conversation.
+
+---
+
 ## Getting started
 
 1. **Install the server.** The `⋯` menu in the panel → *Install the MCP server…*. It downloads the
