@@ -24,7 +24,8 @@ import { LogRow, PAGE_SIZE, roundsLogHtml } from '../roundsLog';
  */
 function row(over: Partial<LogRow> = {}): LogRow {
   return {
-    key: 'k1', startedUtc: '2026-09-05T07:41:00.000Z', completedUtc: '2026-09-05T07:43:10.000Z',
+    key: 'k1', kind: 'review',
+    startedUtc: '2026-09-05T07:41:00.000Z', completedUtc: '2026-09-05T07:43:10.000Z',
     repoPath: 'D:/repo', repoName: 'repo', branch: 'main', stage: 'code review', number: 1,
     subject: 'SCOPE — the thing', status: 'done', decided: null, verdict: 'proceed', gating: 1,
     findings: 1, seconds: 130, tokensIn: null, tokensOut: null, costUsd: null, costInUsd: null,

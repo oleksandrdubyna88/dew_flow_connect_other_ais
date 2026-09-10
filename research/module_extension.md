@@ -2392,6 +2392,53 @@ records and for the same reason: the branch that reads `ready` is load-bearing, 
 importing `vscode` no test in this suite could reach it. Design record:
 [PLAN_the_log_loses_its_first_push.md](PLAN_the_log_loses_its_first_push.md).
 
+**A conversation costs money too, and now it is written down (2026-09-10).** Until this change the
+extension READ a usage ledger and wrote none: `usage.jsonl` is the server's, one line per reviewer per
+round, and a chat turn — which carries the whole conversation, so question five is billed for one
+through four — left no trace anywhere. `chatUsage.ts` is the record and the rules, `chatUsageFile.ts`
+is the file, and the rounds log grew a **Kind** column so the two kinds of spending sit in one table.
+
+Four decisions define it.
+
+**It is a second FILE, not a second kind of line in the server's.** Both reviewers on the plan round
+objected to writing chat rows into `usage.jsonl`, and the reason that survived is that its two writers
+release on different days: a format shared by two programs that ship separately is a contract nobody
+wrote down. So the extension appends to `chat-usage.jsonl` beside it and `extension.ts` MERGES the two
+into one table in memory (`mergedRows`), which costs one read and lets either half move alone. Their
+second reason — that concurrent appenders tear each other's lines — was measured and did not hold:
+`npm run measure:append` forks real processes writing records of awkward sizes to one file, and eight
+processes × 1000 records (116 MB, 60 KB lines among them) produced 8000 whole records of 8000 and
+nothing torn. `appendFile` opens with `'a'`, which is `O_APPEND` / `FILE_APPEND_DATA`, and that is what
+those are documented to guarantee.
+
+**A cumulative vendor is differenced, and the rule is keyed on the RUNTIME.** `codex` reports a running
+total for the thread rather than the cost of one turn, so `turnTokens` subtracts what it last said —
+without which turn one at 1000 and turn two at 1200 would have been recorded as 2200, and every
+conversation on that vendor over-billed increasingly the longer it ran (the gate caught the plan doing
+exactly that). The key is the runtime and not the vendor row's id, because a row id is a person's own
+editable text: two Codex accounts as `codex-work` and `codex-home` would otherwise have been
+differenced by neither. `turnCost` applies the same rule to money — dead code today, since the one
+cumulative vendor prices nothing, and written so that the tokens and the bill cannot drift apart the
+day it does.
+
+**Every turn is recorded, not every ANSWER.** The write sits before the branch in `oneTurn`, so a turn
+that was stopped or that fell over is written down with its outcome — those are the ones somebody
+hunting for waste is looking for, and the plan recorded only successes until the gate said so. A turn
+nobody reported numbers for is stored as zeroes with `costUsd: null`, and the log page turns a wholly
+silent turn into a dash rather than a `0`: free and unreported are different facts, and only one of
+them is good news.
+
+**Conversations are priced by the same table the rounds are.** `chatRows` takes the same
+`PanelProvider.modelPrice`, marks a total worked out from a public list with the tilde the page already
+uses, and lets a vendor that actually billed the turn win over the list. The columns a chat has no
+answer for — repository, branch, stage, verdict, findings — stay EMPTY rather than plausible, because a
+filter offers only values that exist and filling them in would make the table read as though a
+conversation were a kind of review round. The detail row's `colspan` became derived from the column
+list in the same change; it had been the literal `15`, which adding a column silently invalidates.
+
+Half of [PLAN_who_said_it_and_what_it_cost.md](../todo/PLAN_who_said_it_and_what_it_cost.md); the tab's
+own caption and running total are the other half and live in `chatPage.ts`.
+
 **The sidebar shows what is running, and nothing else (2026-09-05).** *Recent rounds* became
 *Active rounds*. A round in flight is shown whole — its reviewers, their durations, what each has found
 so far — because that is what somebody is waiting on; a finished round is not in the sidebar at all. The

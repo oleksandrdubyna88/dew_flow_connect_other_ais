@@ -146,10 +146,17 @@ test('codex: the thread id, the answer and a failure each come from their own ev
     codexAdapter.classify('{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"BANANA"}}'),
     { kind: 'answer', text: 'BANANA' },
   );
+  // The usage block is READ now rather than ignored, and the guarantee this line was written for —
+  // that it is never mistaken for an answer — is stronger for it: it has a kind of its own.
+  assert.deepStrictEqual(
+    codexAdapter.classify('{"type":"turn.completed","usage":{"input_tokens":15466,"output_tokens":6}}'),
+    { kind: 'usage', usage: { tokensIn: 15466, tokensOut: 6, costUsd: null } },
+    'the usage block was not read, or was read as an answer',
+  );
   assert.strictEqual(
-    codexAdapter.classify('{"type":"turn.completed","usage":{"input_tokens":15466,"output_tokens":6}}').kind,
+    codexAdapter.classify('{"type":"turn.completed"}').kind,
     'nothing',
-    'the usage block was read as an answer',
+    'a turn that ended without numbers is not a usage event',
   );
   assert.strictEqual(codexAdapter.classify('{"type":"turn.failed","message":"the model gave up"}').kind, 'failure');
 });

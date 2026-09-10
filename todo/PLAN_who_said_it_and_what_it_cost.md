@@ -1,9 +1,37 @@
 # PLAN — who said it, and what it cost
 
-> Status: **plan only, nothing implemented yet.** Kind: **feature** (accepted 2026-09-09, twice
-> widened). Scope: `ChatMessage` (`chatPage.ts:30-34`), the chat ledger (`chatLedger.ts`, `usage.ts`),
-> the tab's caption and a running total, and the rounds log (`roundsLog.ts`, `roundsDbRead.ts`).
+> Status: **half implemented, 2026-09-10 — the LEDGER AND LOG half shipped; the TAB half has not.**
+> Kind: **feature** (accepted 2026-09-09, twice widened). Scope: `ChatMessage` (`chatPage.ts:30-34`),
+> the chat ledger (`chatUsage.ts`, `chatUsageFile.ts`, `usage.ts`), the tab's caption and a running
+> total, and the rounds log (`roundsLog.ts`, `roundsDbRead.ts`).
 > Origin: [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entries 17 and 22.
+>
+> **Shipped** (`feat/who-said-it-and-what-it-cost-ledger`): every chat turn is written to a ledger
+> with the model that answered, its tokens, its money and its outcome; the rounds log has a **Kind**
+> column, a Kind facet, and conversation rows priced through the same `modelPrice` the rounds use.
+>
+> **Not shipped, and still open work:** `ChatMessage.model` and `.cost`, the caption in its vendor
+> colour, and the running total in the picker row — all four live in `chatPage.ts`, which this half
+> deliberately did not touch (see *Parallelism* at the foot of this file). This plan stays in `todo/`
+> for them.
+>
+> **Deviations from the plan as written**, which is the part worth reading:
+>
+> 1. **The ledger is a FILE of its own, not a `kind: chat` line in `usage.jsonl`.** *The shape* below
+>    says the latter; both gate reviewers objected independently and the reason that survived is that
+>    `usage.jsonl` has two writers who release on different days. The log page merges the two in
+>    memory instead (`mergedRows`). Their other reason — that concurrent appenders tear lines — was
+>    measured (`npm run measure:append`) and did not hold: 8000 whole records of 8000 across eight
+>    processes, nothing torn.
+> 2. **`chatLedger.ts` was the wrong file.** The scope line named it; it is the orphan-process ledger
+>    (`{ pid, image, startedMs }`, crash safety) and holds no money. `chatUsage.ts` is new.
+> 3. **The cumulative rule is keyed on the RUNTIME, not the vendor row.** A row id is a person's own
+>    editable text; two Codex accounts as two rows would have been differenced by neither.
+> 4. **Every turn is recorded, not every answer** — a gate finding. A stopped or failed turn cost
+>    money and is written down with its outcome; a turn nobody reported numbers for reads as unknown
+>    rather than as free.
+> 5. **The record carries the conversation's TITLE.** Not in the plan, and without it the log's *What*
+>    column reads as a UUID for every conversation row.
 >
 > Companion: [PLAN_the_log_names_the_model.md](PLAN_the_log_names_the_model.md) — the same defect
 > on the review side (steps 2 and 3 open there). One decision, two surfaces; build them together

@@ -1,4 +1,4 @@
-import { ChatAdapter, NOTHING, parsed, text } from './chatAdapter';
+import { ChatAdapter, NOTHING, parsed, text, count, inside } from './chatAdapter';
 
 /**
  * `codex` — no pipe at all: a process per turn, resuming a session the vendor stores itself.
@@ -73,6 +73,36 @@ export const codexAdapter: ChatAdapter = {
       return text(item['type']) === 'agent_message'
         ? { kind: 'answer', text: text(item['text']).trim() }
         : NOTHING;
+    }
+    // The answer is an `item.completed` and the numbers are on `turn.completed`, a separate line
+    // arriving after it — which is why the seam has a `usage` event at all. The file's own header
+    // comment has said since it was written that a usage block is printed after the answer and that
+    // this branch did not exist; it does now.
+    //
+    // `input_tokens` and `output_tokens` are ATTESTED — `chatAdapters.test.ts` has carried a real
+    // captured block since this adapter was written, which is where those two names come from.
+    // `cached_input_tokens` is not: it is the plausible third field and has not been seen. Adding it
+    // to the input count is safe either way, because `count` reads a field that is not there as
+    // zero — the risk is under-counting a cached turn, never inventing tokens.
+    //
+    // The re-probe that would settle it is `npm run measure:stream -- codex`, which prints the usage
+    // keys of whatever really arrives. It could not be run today: the account hit its usage limit
+    // during the session that measured the other two vendors.
+    if (kind === 'turn.completed') {
+      const usage = inside(event, 'usage');
+
+      return usage === undefined
+        ? NOTHING
+        : {
+          kind: 'usage',
+          usage: {
+            // CUMULATIVE for the thread, not the cost of this turn — `chatUsage.turnTokens`
+            // differences it. An adapter reports what its vendor said.
+            tokensIn: count(usage['input_tokens']) + count(usage['cached_input_tokens']),
+            tokensOut: count(usage['output_tokens']),
+            costUsd: null,
+          },
+        };
     }
     if (kind === 'turn.failed' || kind === 'error') {
       const said = text(event['message']) || text(event['error']);
