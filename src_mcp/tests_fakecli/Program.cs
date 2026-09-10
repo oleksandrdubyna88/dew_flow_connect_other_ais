@@ -160,6 +160,17 @@ switch (args0)
 
         return 0;
 
+    // Every environment variable NAME this child was started with, one per line. The only way to ask
+    // what a launch actually handed a process: a dictionary asserted in-process is a test of the
+    // dictionary, and what is being measured here is what crossed the process boundary.
+    case ["env-names"]:
+        foreach (var name in Environment.GetEnvironmentVariables().Keys.Cast<string>().Order(StringComparer.Ordinal))
+        {
+            Console.Out.WriteLine(name);
+        }
+
+        return 0;
+
     // <n> characters to stdout with NO newline among them, then exit. A line-based reader cannot see
     // this arriving at all — it delivers nothing until the stream closes, by which time the whole
     // runaway has been buffered, which is why the output ceiling could not stay on lines.

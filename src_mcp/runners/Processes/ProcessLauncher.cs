@@ -74,6 +74,27 @@ public sealed record ProcessRequest(
     /// the reviewers: minutes long, expensive, and the ones that get orphaned.
     /// </remarks>
     public string TrackAs { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Whether the child starts with this process's whole environment, or with only the names in
+    /// <see cref="ProcessEnvironment.Passthrough"/>. <see cref="Environment"/> is applied on top
+    /// either way, last, exactly as it always was.
+    /// </summary>
+    /// <remarks>
+    /// <para>The default is the whole environment, and that is not a compromise: the local
+    /// <c>coai-mcp</c> runs the developer's own CLIs in the developer's own environment, which is
+    /// where their sign-ins, proxies and PATH live. Nothing that already calls this launcher
+    /// changes.</para>
+    /// <para>False is for a launch that was handed everything it needs on the request — the Team
+    /// server's reviewers, whose prompt already carries the diff and whose working directory is an
+    /// empty temporary directory. There the inherited environment is the server's own configuration
+    /// (<c>/etc/coai-server.env</c>, whatever it holds this month), in the environment of a process
+    /// running an employee's arbitrary prompt whose answer is returned to that employee verbatim.
+    /// ADDING the request's variables to the parent's was finding 1 of the product audit of
+    /// 2026-09-09; starting from the allowlist instead is the fix, and it is an allowlist rather
+    /// than a list of names to strip because the thing being kept out is not a known name.</para>
+    /// </remarks>
+    public bool InheritsEnvironment { get; init; } = true;
 }
 
 /// <summary>What a run produced. <see cref="TimedOut"/> true means the tree was killed.</summary>
@@ -165,10 +186,7 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
             info.ArgumentList.Add(argument);
         }
 
-        foreach (var (name, value) in request.Environment)
-        {
-            info.Environment[name] = value;
-        }
+        ApplyEnvironment(info.Environment, request);
 
         using var process = new Process { StartInfo = info };
         var stdout = new BoundedText(request.MaxOutputChars);
@@ -196,6 +214,47 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
             {
                 _tracker.Forget(process.Id);
             }
+        }
+    }
+
+    /// <summary>
+    /// The child's environment: the parent's whole one, or the allowlist alone — and then the
+    /// request's own names on top, last, either way.
+    /// </summary>
+    /// <remarks>
+    /// The order is the contract. A caller that hands over <c>HOME</c> or a sign-in token on the
+    /// request gets it in the child whichever mode it chose, and a caller that hands over nothing
+    /// gets exactly the mode it named. <see cref="ProcessStartInfo.Environment"/> arrives already
+    /// filled from this process, which is what a confined launch has to undo before it adds
+    /// anything — clearing it AFTER the request's names were applied would drop those too.
+    /// </remarks>
+    private static void ApplyEnvironment(IDictionary<string, string?> environment, ProcessRequest request)
+    {
+        if (!request.InheritsEnvironment)
+        {
+            Confine(environment);
+        }
+
+        foreach (var (name, value) in request.Environment)
+        {
+            environment[name] = value;
+        }
+    }
+
+    /// <summary>Keeps only the names in <see cref="ProcessEnvironment.Passthrough"/>.</summary>
+    /// <remarks>
+    /// Read into a copy before the clear, because the dictionary being pruned is the one being read.
+    /// The comparison is the dictionary's own — .NET builds it case-insensitive on Windows and
+    /// case-sensitive elsewhere, the same rule <see cref="ProcessEnvironment.NameComparer"/> follows,
+    /// so a Windows <c>Path</c> matches the list's <c>PATH</c> and a Linux <c>path</c> does not.
+    /// </remarks>
+    private static void Confine(IDictionary<string, string?> environment)
+    {
+        var kept = environment.Where(entry => ProcessEnvironment.Passthrough.Contains(entry.Key)).ToArray();
+        environment.Clear();
+        foreach (var (name, value) in kept)
+        {
+            environment[name] = value;
         }
     }
 

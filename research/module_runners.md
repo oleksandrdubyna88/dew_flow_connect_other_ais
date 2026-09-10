@@ -39,13 +39,14 @@ sequenceDiagram
 
 | Type | File | Role |
 |---|---|---|
-| `IProcessLauncher` / `ProcessLauncher` | `Processes/ProcessLauncher.cs` | the ONE process seam; one deadline over the write, the read and the wait, and it kills the entire tree; `StdIn` carries every long or multi-line input, BOM-less UTF-8, and a child that exits before reading is not an exception; each stream is kept up to `MaxOutputChars` and says so when it is cut |
+| `IProcessLauncher` / `ProcessLauncher` | `Processes/ProcessLauncher.cs` | the ONE process seam; one deadline over the write, the read and the wait, and it kills the entire tree; `StdIn` carries every long or multi-line input, BOM-less UTF-8, and a child that exits before reading is not an exception; each stream is kept up to `MaxOutputChars` and says so when it is cut; a request with `InheritsEnvironment = false` starts the child from `ProcessEnvironment.Passthrough` instead of this process's whole environment, the request's own names on top either way |
+| `ProcessEnvironment` | `Processes/ProcessEnvironment.cs` | the allowlist a confined launch starts from — an allowlist because what is being kept out is not a known name; compared the platform's way (`Path` is `PATH` on Windows and is not on Linux); `HOME` is on it for a measured reason, below |
 | `ExecutableResolver` | `Processes/ExecutableResolver.cs` | npm Windows shims: the PATHEXT resolution `Process.Start` does not do |
 | `WorktreeManager`, `WorktreeLease` | `Worktrees/WorktreeManager.cs` | one detached tree per round, `coai-wt-` prefix under OUR storage; prune-on-open; disposal = finally; never touches a human's worktree |
 | `SubmodulePopulator` | `Worktrees/SubmodulePopulator.cs` | fills the round tree's submodules from the PARENT checkout, not the remote — git populates none in a linked worktree, and in this family the project's rules ARE one; offline, pinned, never fatal, and refused when the source is reached through a reparse point |
 | `GitModules`, `SubmoduleMount` | `Git/GitModules.cs` | `.gitmodules` as (name, path); a file inside the repository under review, so absolute/traversing paths and names that could spell another config key drop the mount |
 | `DiffExclusions`, `ContextAssembler`, `CollectedDiff`, `DiffBase` | `Context/ContextAssembler.cs` | numstat → per-file diffs with `:(exclude,glob)` pathspecs; binary sizes via `cat-file -s`; every one of the three taken against the MERGE BASE, which the result names |
-| `IReviewerRuntime`: `CodexRuntime`, `DeepseekRuntime`, `GeminiRuntime`, `ClaudeRuntime`, `AntigravityRuntime`, `CustomCodexRuntime` | `Reviewers/ReviewerRuntime.cs`, `ClaudeRuntime.cs`, `CustomRuntime.cs` | THE vendor adapter: `Build` (argv, pure) + `ReadAnswer` + `ReadUsage`, the last two with working defaults. Flags verified against codex 0.147.0 / gemini 0.55.1 / claude 2.1.197 / agy 1.1.22; keys ride env, never argv; DeepSeek = Codex config-shifted |
+| `IReviewerRuntime`: `CodexRuntime`, `DeepseekRuntime`, `GeminiRuntime`, `ClaudeRuntime`, `AntigravityRuntime`, `CustomCodexRuntime` | `Reviewers/ReviewerRuntime.cs`, `ClaudeRuntime.cs`, `CustomRuntime.cs` | THE vendor adapter: `Build` (argv, pure) + `ReadAnswer` + `ReadUsage`, the last two with working defaults. Flags verified against codex 0.147.0 / gemini 0.55.1 / claude 2.1.197 / agy 1.1.22; keys ride env, never argv; DeepSeek = Codex config-shifted. `ReviewerSettings.Confined` ("handed everything in its prompt, may reach nothing else") makes `ClaudeRuntime` extend `--disallowedTools` to every tool that reaches past the prompt — flag re-read on claude 2.1.258; codex and antigravity take no new flag, their sandboxes are already the strongest each offers |
 | `ReviewerRuntimeSelector` | same | unknown provider refuses naming the catalog |
 | `ReviewerOutcome` (closed), `ReviewerExecutor`, `RateLimit`, `ReviewerLaunch` | `Reviewers/ReviewerExecutor.cs` | one launch + one repair **inside ONE deadline** (2026-09-08: the repair used to carry a whole second budget, so a reviewer could take twice its setting — measured at 668.8 s against ten minutes, reporting `ok`); SIX named outcomes incl. NotStarted; `Ok` carries the run's `Usage`, both launches counted when repaired. **`LaunchAsync` is the public half**: launch → classify → the vendor's RAW answer + usage, with the parse left to the caller |
 | `Usage`, `UsageParser` | `core/Findings/UsageParser.cs` | schema-less scan over any vendor envelope; MAX per key name then sum per category, so a streamed cumulative total is never summed with itself; money only when the vendor priced the run |
@@ -277,6 +278,79 @@ mutating its own builder. That rule governs data containers crossing layers; app
 single-owner accumulator it would mean copying up to 16 MiB per 8 KiB chunk.
 
 The whole `src_mcp` suite — 1148 tests — passed unedited across this change.
+
+## The launcher's two environments, and why `HOME` is in the short one (2026-09-10)
+
+Finding 1 of the product audit of 2026-09-09, and the half of it that costs nothing to close
+([PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md](../todo/PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md)).
+A job on the Team server is one authorised employee's arbitrary prompt, run through a third-party
+agentic CLI on a box that holds every shared vendor account, as root. The job needs nothing but that
+prompt — the diff was shaped on the client and is inside the prompt text, and the working directory
+is an empty temporary one — yet the launch ADDED the request's variables to the server's own
+inherited environment, so whatever `/etc/coai-server.env` held was in every reviewer's process, and
+for claude the reviewer kept `Read`, `Glob`, `Grep` and `Bash`, which reach the other slots' sign-ins
+on the same disk. The finding text goes back to the employee who wrote the prompt, verbatim.
+
+**`ProcessRequest.InheritsEnvironment`, default `true`.** The launcher is the one process seam both
+binaries share, and its default did not move: the local `coai-mcp` runs the developer's own CLIs in
+the developer's own environment — sign-ins, proxies, PATH — and that is correct there. When a caller
+sets it `false`, `ProcessLauncher` clears the environment .NET pre-filled from this process and copies
+back only the names in `ProcessEnvironment.Passthrough`; the request's own `Environment` is applied on
+top, last, exactly as before, so a caller that hands over `HOME` or a token on the request gets it in
+the child whichever mode it chose. It is an allowlist rather than a list of names to strip because the
+thing being kept out is not a known name — it is whatever the server's configuration file holds this
+month.
+
+The list, and why each name is on it: `PATH` (the CLI is found through it and starts its own children
+through it); `LANG`, `LC_ALL`, `LC_CTYPE`, `TERM`, `TZ`, `NO_COLOR` (encoding and colour); `TMPDIR`,
+`TMP`, `TEMP`; the six proxy spellings, `SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS` (a box
+behind a corporate proxy reaches its vendor through them, and a reviewer that cannot reach its vendor
+is a review that never happens); `XDG_RUNTIME_DIR`. On Windows also `SystemRoot`, `SystemDrive`,
+`windir`, `ComSpec`, `PATHEXT` (every vendor CLI is an npm `.cmd` shim there), the profile and program
+directories, `NUMBER_OF_PROCESSORS` and `PROCESSOR_ARCHITECTURE`. Names are compared the way the
+platform compares them — case-insensitive on Windows, where `Path` and `PATH` are one variable, and
+case-sensitive everywhere else, where a `path` must not pass for the one the CLI is found through.
+
+**Why `HOME` is in it.** It was not, in the first draft: the list carried the Windows profile names
+and none of the Unix ones, and the gate's plan round returned that as Blocking (gemini — the best
+finding of the round). Every vendor CLI here is a Node program, and a Node runtime with no `HOME`
+fails in initialisation, before it reads a prompt, so a confined launch on Linux would have started
+every reviewer into an immediate failure. On the Team server it would have been masked, because
+`SlotEnvironment.For` sets `HOME` per slot on the request and the request's variables are applied
+last — which is exactly why it deserved to be caught in a plan rather than in a deployment: the
+masking is a property of one caller, and the launcher's contract is for all of them. `HOME`, `USER`,
+`LOGNAME` and `SHELL` are on the list for every non-Windows platform.
+
+**`ReviewerSettings.Confined`, default `false`** — "this reviewer was handed everything in its prompt
+and may reach nothing else". `ClaudeRuntime.Build` reads it and extends the `--disallowedTools` it
+already sends (`Edit`, `Write`, `NotebookEdit`) with `Bash`, `Read`, `Glob`, `Grep`, `WebFetch`,
+`WebSearch`, `Task` and `Agent`. The flag was read off the installed CLI's `--help` before the names
+were written — `--disallowedTools, --disallowed-tools <tools...>`, on claude 2.1.34 when this story
+was briefed and on 2.1.258 where it was implemented, the same line — and both sub-agent names are
+listed because the tool has carried both, and an unknown name in that list is inert. This is what is
+SENT: whether `claude -p --permission-mode plan` would execute `Bash` in a non-interactive run at all
+was not measured, and the denial costs nothing either way. The box runs the CLI it has installed, not
+this one, so whether that binary accepts this argv is observable only there; the plan's deviation
+section hands that check to `POST_DEPLOY.md`. Codex and antigravity take no new flag: `-s read-only`
+and `--mode plan` are already the strongest sandboxes those CLIs offer, and what they leave open —
+reads — is the operating system's to bound (`PLAN_team_server_unprivileged.md`).
+
+**What is observed, and by what.** `ProcessLauncherTests` launches the REAL `FakeCli` with its
+`env-names` verb, which prints every variable name the child was actually started with — a dictionary
+asserted in-process would have been a test of the dictionary. A canary set in the test process is
+absent from a confined child while `PATH`, the handed-over variable and (off Windows) `HOME` are
+present; the positive companion shows an unconfined child still inheriting the canary, because a
+launcher that passed nothing at all would pass the negative test. `ClaudeRuntimeTests` asserts the
+argv both ways — the confined list, and that an unconfined reviewer's list is still exactly the three
+write tools, since the local code round reads its worktree. Watched fail first: the confined child
+printed the canary, and the confined adapter sent only the three write names. The class joined the
+`fakecli-env` collection in the same change: the fake reads its verb only while `FAKECLI_MODE` is
+unset, and a test whose whole evidence is the child's output prints nothing when it loses that race.
+
+**What this does not yet do.** Nothing on the Team server sets either flag: `ReviewLauncher.RunAsync`
+flipping `Confined` and `InheritsEnvironment` is story 2.2 of the same plan, a separate change to
+`src_server`. Until it lands the server's reviewers run exactly as before; the launcher offers the
+mode and the adapter honours it.
 
 ## External dependencies
 

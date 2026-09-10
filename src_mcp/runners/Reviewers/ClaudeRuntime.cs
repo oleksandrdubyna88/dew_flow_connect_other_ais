@@ -16,14 +16,49 @@ namespace CoaiMcp.Runners.Reviewers;
 /// <para>Flags verified against the installed CLI before being written here: `-p` prints and
 /// exits, `--output-format json` wraps the answer in an envelope, and `--permission-mode plan` is
 /// the read-only mode. `--disallowedTools` names the write tools anyway: a reviewer that can edit
-/// the tree it is reviewing is a different program.</para>
+/// the tree it is reviewing is a different program. For a CONFINED reviewer
+/// (<see cref="ReviewerSettings.Confined"/>) the same flag also names every tool that reaches past
+/// the prompt — see <see cref="ReachTools"/> for what was verified and what was not.</para>
 /// <para>`json` rather than `text` because this is the ONE vendor that prices its own run: the
 /// envelope carries `usage` and `total_cost_usd`, measured against the installed CLI. The answer
 /// then lives in `result`, which is what <see cref="ReadAnswer"/> is for.</para>
 /// </remarks>
 public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
 {
+    /// <summary>The tools no reviewer ever gets: the ones that change the tree it is reviewing.</summary>
+    private static readonly string[] WriteTools = ["Edit", "Write", "NotebookEdit"];
+
+    /// <summary>
+    /// What a confined reviewer loses on top of <see cref="WriteTools"/>: everything that reaches
+    /// past its prompt — the filesystem, a shell, the web, and a sub-agent that would have all three.
+    /// </summary>
+    /// <remarks>
+    /// <para>The flag was verified against the installed CLI's <c>--help</c> before these names were
+    /// written: <c>--disallowedTools, --disallowed-tools &lt;tools...&gt;</c>, read on
+    /// <b>claude CLI 2.1.258</b>, 2026-09-10. (An earlier draft of this comment also named 2.1.34;
+    /// that number came from a brief written from memory rather than from a <c>--version</c>, and it
+    /// is removed rather than kept beside the measured one — a version nobody read is not evidence.)
+    /// The tool names are the ones the CLI's own permission prompts use.
+    /// The Team server runs the CLI it has installed, not this one, which is why the plan's deviation
+    /// section hands the check that the installed binary accepts this argv to <c>POST_DEPLOY.md</c>:
+    /// a flag the CLI does not know is a launch that fails, and that is observable only there.</para>
+    /// <para><c>Task</c> and <c>Agent</c> are BOTH listed because the sub-agent tool has carried both
+    /// names across CLI versions, and a name in this list the CLI does not know is inert — so listing
+    /// the one it does not use costs nothing, and omitting the one it does would leave a reviewer a
+    /// way to <c>Read</c> through a child it may not <c>Read</c> with itself.</para>
+    /// <para>This is a request to the CLI, not an observed effect. Whether
+    /// <c>claude -p --permission-mode plan</c> would have executed <c>Bash</c> in a non-interactive
+    /// run at all was NOT measured (the audit of 2026-09-09 said so, and this does not claim
+    /// otherwise). The denial costs nothing either way, which is why it does not wait for the
+    /// measurement; what is asserted in the tests is what is sent.</para>
+    /// </remarks>
+    private static readonly string[] ReachTools =
+        ["Bash", "Read", "Glob", "Grep", "WebFetch", "WebSearch", "Task", "Agent"];
+
     public string Provider => id;
+
+    private static string[] DisallowedTools(ReviewerSettings settings) =>
+        settings.Confined ? [.. WriteTools, .. ReachTools] : WriteTools;
 
     public ReviewerInvocation Build(
         ReviewRole role,
@@ -39,7 +74,7 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
                 "-p",
                 "--output-format", "json",
                 "--permission-mode", "plan",
-                "--disallowedTools", "Edit", "Write", "NotebookEdit",
+                "--disallowedTools", .. DisallowedTools(settings),
                 "--add-dir", worktreePath,
                 .. settings.Model.Length > 0 ? (string[])["--model", settings.Model] : [],
             ],
