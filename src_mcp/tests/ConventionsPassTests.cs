@@ -184,7 +184,7 @@ public sealed class ConventionsPassTests
     {
         var summary = ReviewerSummary.AllAnswered(3) with
         {
-            NotAsked = [new SkippedRole("Conventions", "this repository has no written rules for it to judge against")],
+            NotAsked = [new SkippedRole("Conventions", "this repository has no written rules to judge against")],
         };
 
         summary.Sentence.Should().Contain("Conventions")
@@ -199,7 +199,7 @@ public sealed class ConventionsPassTests
         // in the same words, a correct round reads as a degraded one.
         var summary = ReviewerSummary.AllAnswered(3) with
         {
-            NotAsked = [new SkippedRole("Conventions", "this repository has no written rules for it to judge against")],
+            NotAsked = [new SkippedRole("Conventions", "this repository has no written rules to judge against")],
         };
 
         summary.Sentence.Should().StartWith("all 3 reviewers answered");
@@ -214,7 +214,7 @@ public sealed class ConventionsPassTests
         // sentence of every ordinary one.
         ReviewerSummary.AllAnswered(4).Sentence.Should().Be("all 4 reviewers answered");
         new ReviewerSummary(4, 3, ["codex/Architecture: timeout"]).Sentence
-            .Should().Be("4 reviewers answered; failed: codex/Architecture: timeout".Replace("4 reviewers", "3 of 4 reviewers"));
+            .Should().Be("3 of 4 reviewers answered; failed: codex/Architecture: timeout");
     }
 
     [Fact]
@@ -225,13 +225,34 @@ public sealed class ConventionsPassTests
         var summary = new ReviewerSummary(4, 2, ["codex/Architecture: timeout"], ["gemini/Conventions: no key"])
         {
             EndedByDeadline = TimeSpan.FromMinutes(10),
-            NotAsked = [new SkippedRole("Conventions", "this repository has no written rules for it to judge against")],
+            NotAsked = [new SkippedRole("Conventions", "this repository has no written rules to judge against")],
         };
 
         summary.Sentence.Should().Be(
             "2 of 4 reviewers answered; failed: codex/Architecture: timeout; "
             + "the round reached its 10 minute limit and the reviewers still running were cancelled; "
             + "1 enabled reviewer could not run: gemini/Conventions: no key; "
-            + "Conventions was not asked: this repository has no written rules for it to judge against");
+            + "Conventions was not asked: this repository has no written rules to judge against");
+    }
+
+    [Fact]
+    public void EveryOmittedRole_CarriesTheReasonItsOwnRuleGaveIt()
+    {
+        // The code round's finding, and the trap it names: mapping the DIFFERENCE onto one reason
+        // works while there is one rule, and tells the caller the wrong thing with complete
+        // confidence the day there are two. The pairing lives beside the rule that produces it.
+        IReadOnlyList<ReviewRole> scheduled =
+            [ReviewRole.Conventions, ReviewRole.Architecture, ReviewRole.SecurityReliability];
+
+        PanelService.RolesNotAsked(scheduled, hasRules: true).Should().BeEmpty();
+
+        var skipped = PanelService.RolesNotAsked(scheduled, hasRules: false);
+        skipped.Should().ContainSingle();
+        skipped[0].Role.Should().Be(nameof(ReviewRole.Conventions));
+        skipped[0].Reason.Should().Be(PanelService.NoWrittenRules);
+        // Derived from the filter, never written out beside it: what is not asked and what ran are
+        // the same decision read twice.
+        skipped.Select(s => s.Role).Should()
+            .NotIntersectWith(PanelService.RolesWithRulesInMind(scheduled, hasRules: false).Select(r => r.ToString()));
     }
 }
