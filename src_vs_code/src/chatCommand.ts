@@ -10,7 +10,18 @@ import { ChatSession } from './chatSession';
 import { AnsweredBy, ChatMessage, ChatModelChoice } from './chatPage';
 import { CliChatSession, REAL_TIMERS } from './cliChatSession';
 import { DEFAULT_BUDGETS } from './chatSession';
-import { ChatMemory, chatChoice, chatModelsFrom, isRemote, memoryOf } from './chatModels';
+import {
+  ChatCatalog,
+  ChatMemory,
+  LegacyPick,
+  ChatProvider,
+  chatModelsFrom,
+  chatProvidersFrom,
+  isRemote,
+  legacyPick,
+  memoryOf,
+  resolveChatPick,
+} from './chatModels';
 import { remoteIsFull } from './remoteAsk';
 import { remoteChatFor } from './chatRemote';
 import { TeamServer, rowBelongsTo, teamServersFrom } from './teamServers';
@@ -60,6 +71,10 @@ interface Thread extends ChatMemory {
   home: ChatHome;
   readonly passage: string;
   readonly models: readonly ChatModelChoice[];
+  /** Every row that can answer, each with its own models. Replaced whenever a pick resolves. */
+  providers: readonly ChatProvider[];
+  /** The row that answers, and which of its models — empty for whatever the row is set to. */
+  providerId: string;
   modelId: string;
   /** Whether a turn is in flight. Only so a switch can say out loud that it is waiting for one. */
   running: boolean;
@@ -197,6 +212,8 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
     capped: thread.forgetful && remoteIsFull(thread.asked),
     failure,
     models: thread.models,
+    providers: thread.providers,
+    providerId: thread.providerId,
     modelId: thread.modelId,
     queued,
     // The turn a stop would name. Zero while nothing runs, which is also what the page renders no
@@ -276,7 +293,7 @@ async function reopened(thread: Thread): Promise<string> {
     return '';
   }
   const config = vscode.workspace.getConfiguration('coai');
-  const ready = readyToChat(config, thread.modelId);
+  const ready = readyToChat(config, thread.providerId, thread.modelId);
   if (!ready.ok) {
     return ready.refusal;
   }
@@ -294,6 +311,8 @@ async function reopened(thread: Thread): Promise<string> {
   thread.home.release();
   thread.session = opened.session;
   thread.home = opened.home;
+  thread.providers = ready.providers;
+  thread.providerId = ready.providerId;
   thread.modelId = ready.modelId;
   // The WHOLE memory object, not one field of it: a switch that set `forgetful` and forgot `asked`
   // is a defect this file has already had once, and the type is what stops it happening twice.
@@ -425,30 +444,92 @@ type Ready =
     readonly ok: true;
     readonly vendor: Vendor;
     readonly models: readonly ChatModelChoice[];
+    /** Every row that can answer, each with its own models — what the picker offers. */
+    readonly providers: readonly ChatProvider[];
+    /** The row that answers. */
+    readonly providerId: string;
+    /** Which of that row's models, or empty for whatever the row is set to. */
     readonly modelId: string;
   }
   | { readonly ok: false; readonly refusal: string };
 
-function readyToChat(config: vscode.WorkspaceConfiguration, asked: string): Ready {
+/**
+ * What each row may be pointed at.
+ *
+ * <p><b>Discovery is not here, and that is the honest limit of this step.</b> Three of the four
+ * sources are FETCHED rather than read: a local engine's models and the codex and agy CLIs' own
+ * lists are discovered by asking the machine, and a Team server's allowlist is fetched from the
+ * server. All three live in the panel, which has already done that work and holds the answers; the
+ * chat command has no such state and starting subprocesses or HTTP calls to open a tab would trade
+ * the operator's complaint for a slower one.</p>
+ *
+ * <p>So a row whose list must be fetched offers the model it is CONFIGURED to and nothing else —
+ * exactly what the flat list offered before, which makes this strictly not worse. What gains a real
+ * choice today is the one source that needs no fetching: Claude's curated three. Handing the panel's
+ * discovered lists to this function is the plan's open tail, and it is written down as one.</p>
+ */
+function chatCatalogFrom(config: vscode.WorkspaceConfiguration): ChatCatalog {
+  return {
+    discoveredCodex: [],
+    discoveredAgy: [],
+    localEngine: undefined,
+    // The servers, with no catalog: what a server ALLOWS is fetched from it, and the fetch lives in
+    // the panel. A row without one keeps the model it is set to rather than being offered nothing.
+    teamServers: teamServersFrom(config.get('teamServers'))
+      .map((server) => ({ server, email: '', problem: '', stale: false })),
+  };
+}
+
+/**
+ * A value saved before the pair existed, read as the pair it always was.
+ *
+ * <p>`coai.chatModel` and a restored tab's `modelId` have always held a ROW id — both predate the
+ * two-step choice — so passing either as a MODEL would look for a model of that name and find
+ * nothing. `legacyPick` is the pure half's function for exactly this, and it is called through one
+ * place so the two callers cannot drift.</p>
+ */
+function savedPick(config: vscode.WorkspaceConfiguration, saved: string): LegacyPick {
   const vendors = vendorsFrom(config.get('vendors'));
-  const models = chatModelsFrom(vendors);
-  // A model the person NAMED and which cannot answer is refused by that name — never quietly
-  // replaced by another vendor's, which is somebody else's model, billed, in a voice nobody chose.
-  const choice = chatChoice(models, asked);
-  if (choice.refusal.length > 0) {
-    return { ok: false, refusal: choice.refusal };
+
+  return legacyPick(chatProvidersFrom(vendors, chatCatalogFrom(config)), vendors, saved);
+}
+
+/**
+ * The row that will answer, and which of its models.
+ *
+ * <p>A PROVIDER is a vendor row, not a runtime, and that was settled by measurement rather than by
+ * preference: three vendors' reviewers independently overturned the plan's recommendation on the
+ * pure half's round. The row carries the runtime, the executable, the base URL, the price and — for
+ * a Team server — the server and the vendor name on it, so it is the identity a saved choice stores
+ * and the identity resolution looks up.</p>
+ *
+ * <p>A row the person NAMED and which cannot answer is refused BY NAME — never quietly replaced by
+ * another vendor's, which is somebody else's model, billed, in a voice nobody chose.</p>
+ */
+function readyToChat(
+  config: vscode.WorkspaceConfiguration,
+  askedProvider: string,
+  askedModel: string,
+): Ready {
+  const vendors = vendorsFrom(config.get('vendors'));
+  const list = chatProvidersFrom(vendors, chatCatalogFrom(config));
+  const pick = resolveChatPick(vendors, list, askedProvider, askedModel);
+  if (!pick.ok) {
+    return { ok: false, refusal: pick.refusal };
   }
 
-  const vendor = vendors.find((row) => row.id === choice.modelId);
-  if (vendor === undefined) {
-    return { ok: false, refusal: `The model ${choice.modelId} is no longer configured.` };
-  }
-
-  const refusal = chatRuntimeRefusal(vendor);
+  const refusal = chatRuntimeRefusal(pick.row);
 
   return refusal.length > 0
     ? { ok: false, refusal }
-    : { ok: true, vendor, models: models.offered, modelId: choice.modelId };
+    : {
+      ok: true,
+      vendor: pick.row,
+      models: chatModelsFrom(vendors).offered,
+      providers: list.providers,
+      providerId: pick.row.id,
+      modelId: pick.model,
+    };
 }
 
 /** The clipboard, as `selectionCapture` wants it. VS Code answers a Thenable, not a Promise. */
@@ -679,6 +760,8 @@ function newConversation(
       passage: state.passage,
       messages: [],
       models: ready.models,
+      providers: ready.providers,
+      providerId: ready.providerId,
       modelId: ready.modelId,
       running: false,
       capped: false,
@@ -699,6 +782,8 @@ function newConversation(
     home: first.home,
     passage: state.passage,
     models: ready.models,
+    providers: ready.providers,
+    providerId: ready.providerId,
     modelId: ready.modelId,
     running: false,
     // Counted from 1 by the first turn, so 0 is "this conversation has not asked anything yet" and
@@ -865,7 +950,8 @@ export function restoreConversation(
   extensionUri: vscode.Uri,
 ): void {
   const config = vscode.workspace.getConfiguration('coai');
-  const ready = readyToChat(config, saved.modelId);
+  const restored = savedPick(config, saved.modelId);
+  const ready = readyToChat(config, restored.providerId, restored.modelId);
   // A dead session, and the page can never reach it: `reopened` replaces it before the first turn is
   // sent. It answers rather than throws, because a `ChatSession` that rejects is a contract this
   // codebase does not have — every failure here is a sentence.
@@ -881,6 +967,9 @@ export function restoreConversation(
       passage: saved.passage,
       messages: saved.messages,
       models: ready.ok ? ready.models : [],
+      providers: ready.ok ? ready.providers : [],
+      // The row this tab was speaking to, read by `savedPick` out of the old `modelId`.
+      providerId: ready.ok ? ready.providerId : restored.providerId,
       modelId: saved.modelId,
       running: false,
       capped: false,
@@ -900,6 +989,8 @@ export function restoreConversation(
     home: { dir: '', release: () => undefined },
     passage: saved.passage,
     models: ready.ok ? ready.models : [],
+    providers: ready.ok ? ready.providers : [],
+    providerId: ready.ok ? ready.providerId : restored.providerId,
     modelId: saved.modelId,
     running: false,
     turn: 0,
@@ -936,7 +1027,8 @@ export async function chatWithOtherAi(
 ): Promise<void> {
   const config = vscode.workspace.getConfiguration('coai');
   const settings = chatSettingsFrom((key) => config.get(key));
-  const ready = readyToChat(config, settings.model);
+  const opening = savedPick(config, settings.model);
+  const ready = readyToChat(config, opening.providerId, opening.modelId);
   if (!ready.ok) {
     void vscode.window.showWarningMessage(ready.refusal);
 

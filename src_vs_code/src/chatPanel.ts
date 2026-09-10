@@ -12,6 +12,7 @@ import {
   chatPickerHtml,
   chatStatusHtml,
 } from './chatPage';
+import { ChatProvider } from './chatModels';
 import { chatTabIcon } from './chatIcon';
 import { escapeHtml } from './webviewHtml';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
@@ -90,6 +91,9 @@ export interface ChatPushState {
   readonly capped: boolean;
   readonly failure: string;
   readonly models: readonly ChatModelChoice[];
+  /** Every row that can answer, each with its own models — what the picker offers. */
+  readonly providers: readonly ChatProvider[];
+  readonly providerId: string;
   readonly modelId: string;
   /**
    * How many turns are ahead of this one on a Team server, or 0 for none and for a local model.
@@ -303,7 +307,7 @@ export function pushChatState(entry: ChatEntry, state: ChatPushState): boolean {
     thinkingHtml: chatStatusHtml(state.running, state.queued, state.turn),
     cappedHtml: chatCappedHtml(state.capped),
     failureHtml: state.failure.length === 0 ? '' : `<div class="failure">${escapeHtml(state.failure)}</div>`,
-    pickerHtml: chatPickerHtml(state.models, state.modelId),
+    pickerHtml: chatPickerHtml({ providers: state.providers, refused: [] }, state.providerId, state.modelId),
     modelId: state.modelId,
   };
 

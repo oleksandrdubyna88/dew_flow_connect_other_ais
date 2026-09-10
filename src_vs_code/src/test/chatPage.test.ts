@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { ChatProvider } from '../chatModels';
 import { ChatModelChoice, ChatPageState, FOLLOW_SLACK_PX, chatCappedHtml, chatMessagesHtml, chatPageHtml, chatPickerHtml, chatStatusHtml, shouldFollow } from '../chatPage';
 
 /**
@@ -25,6 +26,8 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
     passage: 'The reviewers are read-only.',
     messages: [],
     models: MODELS,
+    providers: [],
+    providerId: 'antigravity',
     modelId: 'antigravity',
     running: false,
     capped: false,
@@ -100,20 +103,48 @@ test('a failure is shown in words rather than left to be guessed', () => {
   assert.ok(html.includes('agy exited before answering'));
 });
 
-test('the picker is hidden when there is only one model to pick', () => {
-  assert.strictEqual(chatPickerHtml([MODELS[0]!], 'antigravity'), '');
-  assert.strictEqual(chatPickerHtml([], ''), '');
+test('a lone provider is still SHOWN, and nothing at all is hidden', () => {
+  // The flat list hid itself when it had one entry, and that made sense while an entry was a whole
+  // configured row: there was nothing to choose. With two steps there always is — the row still has
+  // models — and hiding the row would leave a person unable to see what will answer, which is the
+  // complaint the two steps exist for.
+  const one = chatPickerHtml(
+    { providers: [{ id: 'a', label: 'a', caption: 'local', models: [{ id: 'm', label: 'M' }] }], refused: [] },
+    'a',
+    'm',
+  );
+
+  assert.match(one, /<select id="provider"/, 'a single provider was hidden along with its models');
+  assert.strictEqual(chatPickerHtml({ providers: [], refused: [] }, '', ''), '',
+    'a page with nothing configured drew a picker of nothing');
 });
 
-test('the picker offers every model and marks the chosen one', () => {
-  const picker = chatPickerHtml(MODELS, 'remsoftdev-codex');
+test('the picker offers every provider and marks the chosen one', () => {
+  const picker = chatPickerHtml(
+    {
+      providers: [
+        { id: 'antigravity', label: 'Gemini 3.8 Flash', caption: 'local', models: [{ id: 'g', label: 'G' }] },
+        { id: 'remsoftdev-codex', label: 'GPT (team)', caption: 'team server · no memory', models: [{ id: 'p', label: 'P' }] },
+      ],
+      refused: [],
+    },
+    'remsoftdev-codex',
+    'p',
+  );
 
   assert.ok(picker.includes('Gemini 3.8 Flash'));
-  assert.ok(/value="remsoftdev-codex" selected/.test(picker), 'the chosen model is not selected');
+  assert.ok(/value="remsoftdev-codex" selected/.test(picker), 'the chosen provider is not selected');
 });
 
 test('a remote model says what it cannot do, where the choice is made', () => {
-  const picker = chatPickerHtml(MODELS, 'remsoftdev-codex');
+  const picker = chatPickerHtml(
+    {
+      providers: [{ id: 'remsoftdev-codex', label: 'GPT (team)', caption: 'team server · no memory', models: [{ id: 'p', label: 'P' }] }],
+      refused: [],
+    },
+    'remsoftdev-codex',
+    'p',
+  );
 
   // The panel must not know which kind it holds; the person must, because the difference shows up
   // in latency and in cost.
@@ -1462,4 +1493,93 @@ test('a model label that is markup is escaped like everything else', () => {
 
   assert.doesNotMatch(html, /<img/i, 'a model label reached the page as markup');
   assert.match(html, /&lt;img/, 'the label was dropped rather than shown');
+});
+
+
+/* ------------------------------------------------------------------------------------------------
+ * Entry 21: the picker was one flat list of configured ROWS, each labelled with the one model it
+ * happened to be set to — so choosing a different model meant leaving the tab and reconfiguring a
+ * reviewer. Two steps: the provider, then its models.
+ * ---------------------------------------------------------------------------------------------- */
+
+const PROVIDERS: readonly ChatProvider[] = [
+  {
+    id: 'antigravity',
+    label: 'antigravity · gemini-3.8-flash',
+    caption: 'local · antigravity · keeps the conversation',
+    models: [{ id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' }, { id: 'gemini-3.8-pro', label: 'Gemini 3.8 Pro' }],
+  },
+  {
+    id: 'remsoftdev-codex',
+    label: 'remsoftdev-codex · gpt-5.6',
+    caption: 'team server · no memory',
+    models: [{ id: 'gpt-5.6', label: 'GPT-5.6' }],
+  },
+];
+
+test('the picker asks for a provider and then for one of its models', () => {
+  const html = chatPickerHtml({ providers: PROVIDERS, refused: [] }, 'antigravity', 'gemini-3.8-pro');
+
+  assert.match(html, /<select id="provider"/, 'there is no provider to choose');
+  assert.match(html, /<select id="model"/, 'there is no model to choose');
+  // The chosen provider's models, and only those: a list holding another row's models is a list
+  // somebody can pick a combination from that has no adapter.
+  assert.match(html, /<option value="gemini-3\.8-pro" selected>/, 'the chosen model is not marked');
+  assert.doesNotMatch(html, /value="gpt-5\.6"/, 'another provider\'s models are on offer');
+});
+
+test('changing the provider offers that provider\'s models, not the last one\'s', () => {
+  const html = chatPickerHtml({ providers: PROVIDERS, refused: [] }, 'remsoftdev-codex', 'gpt-5.6');
+
+  assert.match(html, /value="gpt-5\.6"/);
+  assert.doesNotMatch(html, /value="gemini-3\.8-flash"/, 'the previous provider\'s models stayed');
+});
+
+test('a provider with one model still shows the model it will use', () => {
+  // Hiding a list of one would leave a person unable to see WHAT will answer — which is the whole
+  // complaint the two steps exist for.
+  const html = chatPickerHtml({ providers: PROVIDERS, refused: [] }, 'remsoftdev-codex', 'gpt-5.6');
+
+  assert.match(html, /<select id="model"[^>]*>[\s\S]*?GPT-5\.6/, 'a single model was hidden');
+});
+
+test('a row that cannot answer is named, not quietly dropped', () => {
+  const html = chatPickerHtml(
+    { providers: PROVIDERS, refused: [{ id: 'ollama', reason: 'the chat cannot speak to local yet' }] },
+    'antigravity',
+    'gemini-3.8-flash',
+  );
+
+  assert.match(html, /the chat cannot speak to local yet/, 'a configured row vanished with no reason given');
+});
+
+test('picking either half posts both halves, so the host never has to guess', () => {
+  const page = runChatPage({ providers: [...PROVIDERS], providerId: 'antigravity', modelId: 'gemini-3.8-flash' });
+
+  // Changing the PROVIDER carries no model: which of the new row's models answers is the host's to
+  // decide, because it holds the catalog, and sending the old one would name a model belonging to
+  // somebody else.
+  page.seen['provider'].value = 'remsoftdev-codex';
+  page.fire('provider', 'change');
+  // Then a model — of the provider that is now chosen, which is the only kind the page can offer.
+  page.seen['model'].value = 'gpt-5.6';
+  page.fire('model', 'change');
+
+  assert.deepStrictEqual(page.posted.filter((message) => message['command'] === 'pick'), [
+    { type: 'command', command: 'pick', provider: 'remsoftdev-codex', model: '' },
+    { type: 'command', command: 'pick', provider: 'remsoftdev-codex', model: 'gpt-5.6' },
+  ]);
+});
+
+test('a provider label that is markup is escaped', () => {
+  const html = chatPickerHtml(
+    {
+      providers: [{ id: 'x', label: '<img src=x onerror=alert(1)>', caption: '<b>c</b>', models: [{ id: 'm', label: '<i>m</i>' }] }],
+      refused: [],
+    },
+    'x',
+    'm',
+  );
+
+  assert.doesNotMatch(html, /<img|<b>|<i>/, 'a catalog label reached the page as markup');
 });

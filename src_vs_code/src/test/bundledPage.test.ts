@@ -285,7 +285,11 @@ function bundledChatPage(): { bundle: string; html: string } {
         { id: 'antigravity', label: 'Gemini', caption: 'local' },
         { id: 'remsoftdev-codex', label: 'GPT (team)', caption: 'remote · no memory' },
       ],
-      modelId: 'antigravity',
+      providers: [
+        { id: 'antigravity', label: 'Gemini', caption: 'local', models: [{ id: 'g', label: 'G' }] },
+      ],
+      providerId: 'antigravity',
+      modelId: 'g',
       running: false,
       failure: '',
       draft: '',
