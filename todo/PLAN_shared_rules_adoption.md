@@ -1,6 +1,6 @@
 # PLAN — one canonical instruction source for Claude Code and Codex
 
-> Status: **IN PROGRESS, 2026-09-10.** Scope: neutral-layout canary and its product discovery adapters; layout, discovery and generated delivery are implemented locally. Reviewed source pin and first code-review corrections are applied; final verification, repeat review and publication remain open.
+> Status: **IN PROGRESS, 2026-09-10.** Scope: neutral-layout canary and its product discovery adapters; layout, discovery and generated delivery are implemented locally. Reviewed source pin and first code-review corrections are applied; review is complete under configured good_enough policy; PR and installed-artifact verification remain open.
 
 The shared conventions repository now provides AGENTS/CLAUDE bootstraps, a metadata-driven
 resolver and a neutral mount. This repository still discovers only legacy rule folders in
@@ -106,3 +106,12 @@ in their existing plans.
 - [ ] Native-agent evidence names actual reads, missing cells and limits; no general obedience claim.
 - [ ] Fresh clone and disposable rollback work; settings and unrelated working files remain intact.
 - [ ] Review gate and PR feedback resolved, canary merged, installed artifact checked, docs current.
+
+
+Code gate session `8e812028` is Done. Round 1: all 12 answered, six accepted entries
+(four distinct changes, including repeated temporary-file findings), all 35 decided.
+Round 2: all three Architecture reviewers answered, configured `good_enough`; all eleven
+findings were repeats of fixed or verified-incorrect claims and received explicit reasons.
+The complete audit lives in coai; the repository keeps the decisions and input commits.
+Native S2 Claude follow-up hit the fixed 256 KiB event cap and is incomplete; Codex default
+CLI quota remains incomplete. These do not become successful native compatibility cells.

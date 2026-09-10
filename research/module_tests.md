@@ -229,3 +229,12 @@ After reconciling main through 897c7fa, the extension suite reports 1349 total /
 exposed a fixture error: a POSIX node_modules symlink is not ignored by the source's
 node_modules/ directory pattern and made a clean fixture look dirty. The fixture now copies
 the two locked packages into a real directory; pin validation remains unchanged.
+
+
+The final local artifact is extension 0.32.1 (0.32.0 was an uninstalled validation package
+before the last main reconciliation). Its packaging suite reports 1348 passed / 1 skipped.
+The Windows Native AOT MCP artifact is 0.18.16-sharedrules.20260910: it opened a real SQLite
+database and passed all five stdio contract cases through COAI_CONTRACT_EXE. The first
+publish failed because vswhere.exe was missing from PATH; the already-installed Visual
+Studio Installer directory was added only to the publishing process's environment. No SDK
+installation, persistent host setting, or Team-server deployment was performed.
