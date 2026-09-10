@@ -101,7 +101,7 @@ Either way: **no autolinking of bare URLs** (the family has shipped that defect 
   The webview loads nothing itself: `localResourceRoots: []` (`chatPanel.ts:99`) stays.
 - **Sides and colours.** `.msg.you` right-aligned (caption too) in one fixed non-vendor colour;
   `.msg.model` left, its EDGE in the answering model's vendor colour — the current tab model's
-  until [PLAN_who_said_it_and_what_it_cost.md](../todo/PLAN_who_said_it_and_what_it_cost.md) puts a model
+  until [PLAN_who_said_it_and_what_it_cost.md](PLAN_who_said_it_and_what_it_cost.md) puts a model
   on every message, then per message. Both keep a max width so a long line does not span the tab.
 - **The end of an answer.** A rule after every `model` message — `<hr class="end">` styled from the
   palette. The operator asked for a row of asterisks; a rendered rule is what a row of asterisks

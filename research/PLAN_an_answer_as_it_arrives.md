@@ -29,7 +29,7 @@
 >    two-of-three. The harness below re-runs in minutes and answers that question exactly.
 > 2. **The Team server gains a partial on the wire.** It is deployed by hand and shipped separately;
 >    an image is already waiting on the same seam
->    ([../todo/PLAN_a_picture_in_the_question.md](../todo/PLAN_a_picture_in_the_question.md)).
+>    ([../todo/PLAN_a_picture_in_the_question.md](PLAN_a_picture_in_the_question.md)).
 > 3. **Answers get much longer.** The window scales with length — 44 % on a long turn is a different
 >    proposition from 4 %, and a product whose turns are routinely long is a different product.
 >
@@ -181,7 +181,7 @@ up starts from numbers rather than from a guess.
 ### What Phase 0 also recorded for a companion plan
 
 The harness reports where each vendor puts its token counts, because it was reading the same streams
-and [PLAN_who_said_it_and_what_it_cost.md](../todo/PLAN_who_said_it_and_what_it_cost.md) needs exactly that:
+and [PLAN_who_said_it_and_what_it_cost.md](PLAN_who_said_it_and_what_it_cost.md) needs exactly that:
 
 | vendor | usage arrives on | when |
 |---|---|---|
@@ -199,7 +199,7 @@ Six constraints the plan round put on this half before it is written. They are r
 than solved now, because Phase 1 is not being built:
 
 1. **The seam signature is no longer free.** `stop()` landed on `ChatSession` first
-   ([PLAN_a_turn_nobody_can_stop.md](../todo/PLAN_a_turn_nobody_can_stop.md)), and a third POSITIONAL
+   ([PLAN_a_turn_nobody_can_stop.md](PLAN_a_turn_nobody_can_stop.md)), and a third POSITIONAL
    callback after `onWaiting` is the shape most likely to be got wrong by a caller. Decide between an
    options object and a positional argument **before** the first line, and say which. (codex.)
 2. **A partial belongs to a TURN, not to a session.** The stop work already learned this the hard
@@ -214,7 +214,7 @@ than solved now, because Phase 1 is not being built:
    asked for an incremental markdown renderer instead; that was declined as a much larger machine
    whose only job is to make that flicker acceptable, and because the container's reserved geometry
    belongs to the renderer plan
-   ([PLAN_an_answer_reads_like_a_document.md](../research/PLAN_an_answer_reads_like_a_document.md)), not to two
+   ([PLAN_an_answer_reads_like_a_document.md](PLAN_an_answer_reads_like_a_document.md)), not to two
    designs at once. (gemini, rejected with reasons.)
 6. **A failure is not evidence of absence** — if a re-measurement is ever run, a hung or rate-limited
    CLI must be reported as FAILED, never as "does not stream". The harness already enforces this.
@@ -224,7 +224,7 @@ than solved now, because Phase 1 is not being built:
   display only).
 - The adapter parses the partial event and calls `onPartial(textSoFar)`.
 - The page appends into a live `model` message under the entry-23 scroll rule (follow only if at
-  the bottom); the Stop button ([PLAN_a_turn_nobody_can_stop.md](../todo/PLAN_a_turn_nobody_can_stop.md))
+  the bottom); the Stop button ([PLAN_a_turn_nobody_can_stop.md](PLAN_a_turn_nobody_can_stop.md))
   stays available throughout; markdown is re-rendered on the final text only, partials show as
   plain text (a half-open fence must not flicker the layout).
 - Where Phase 0 said no, the adapter simply never calls `onPartial` — no branch in the page.
@@ -307,6 +307,6 @@ only when the whole ritual has run — not when the code works.
 ## Parallelism
 
 **Phase 0 has no conflicts at all** — a script and a table — and can run in any lane at any time.
-Phase 1 conflicts with [PLAN_a_turn_nobody_can_stop.md](../todo/PLAN_a_turn_nobody_can_stop.md) on `send`'s
+Phase 1 conflicts with [PLAN_a_turn_nobody_can_stop.md](PLAN_a_turn_nobody_can_stop.md) on `send`'s
 signature (stop goes first) and with the chat-page lane on the message region (queues behind
-[PLAN_an_answer_reads_like_a_document.md](../research/PLAN_an_answer_reads_like_a_document.md)).
+[PLAN_an_answer_reads_like_a_document.md](PLAN_an_answer_reads_like_a_document.md)).

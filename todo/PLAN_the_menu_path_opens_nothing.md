@@ -117,5 +117,5 @@ only when the whole ritual has run — not when the code works.
 ## Parallelism
 
 Owns `chatCommand.ts` (trigger branch) and `chatTrigger.ts`. **Does not touch `chatPage.ts`.**
-Runs beside the chat-page lane. Conflicts with [PLAN_a_turn_nobody_can_stop.md](PLAN_a_turn_nobody_can_stop.md)
+Runs beside the chat-page lane. Conflicts with [PLAN_a_turn_nobody_can_stop.md](../research/PLAN_a_turn_nobody_can_stop.md)
 on `chatCommand.ts` only if step 1 finds a defect — sequence them.

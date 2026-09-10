@@ -173,5 +173,5 @@ only when the whole ritual has run — not when the code works.
 
 Owns `panelView.ts` (the script block and the chat section) and `panelProvider.ts` (`write`,
 `save`, the configuration listener). **Does not touch `chatPage.ts`.** Runs in parallel with
-anything that does; conflicts with [PLAN_presets_above_the_composer.md](../todo/PLAN_presets_above_the_composer.md)
+anything that does; conflicts with [PLAN_presets_above_the_composer.md](PLAN_presets_above_the_composer.md)
 on the chat section of the panel — land this first, it is small.

@@ -1,60 +1,32 @@
 # PLAN — who said it, and what it cost
 
-> Status: **half implemented, 2026-09-10 — the LEDGER AND LOG half shipped; the TAB half has not.**
-> Kind: **feature** (accepted 2026-09-09, twice widened). Scope: `ChatMessage` (`chatPage.ts:30-34`),
-> the chat ledger (`chatUsage.ts`, `chatUsageFile.ts`, `usage.ts`), the tab's caption and a running
-> total, and the rounds log (`roundsLog.ts`, `roundsDbRead.ts`).
-> Origin: [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entries 17 and 22.
+> Status: **IMPLEMENTED, 2026-09-10.** Both halves: the ledger and the log shipped 2026-09-09
+> (another lane); the CAPTION shipped in PR #173 and the running total in PR #185.
+> Kind: **feature**. Origin: [../todo/BUGS_2026-09-09.md](../todo/BUGS_2026-09-09.md), entry 17 and
+> the cost item.
 >
-> **Shipped** (`feat/who-said-it-and-what-it-cost-ledger`): every chat turn is written to a ledger
-> with the model that answered, its tokens, its money and its outcome; the rounds log has a **Kind**
-> column, a Kind facet, and conversation rows priced through the same `modelPrice` the rounds use.
+> ### What shipped differently
 >
-> **Not shipped, and still open work:** `ChatMessage.model` and `.cost`, the caption in its vendor
-> colour, and the running total in the picker row — all four live in `chatPage.ts`, which this half
-> deliberately did not touch (see *Parallelism* at the foot of this file). This plan stays in `todo/`
-> for them.
+> **The caption's colour rules are built from every model the page will SHOW**, not from the picker's
+> current list. The plan assumed the two were the same; they are not, and the difference is the case
+> this feature exists for — switching models carries the whole thread across, so a conversation
+> routinely displays a model the picker has moved on from. Built from the picker alone, every one of
+> those answers carried a class with no rule behind it.
 >
-> **Deviations from the plan as written**, which is the part worth reading:
+> **The caption is its own element.** It began as a `who` span inside the `who` row, which meant every
+> rule written for the row landed on the label too. Nothing looked wrong; the next person to change
+> the row's layout would have moved the text with it.
 >
-> 1. **The ledger is a FILE of its own, not a `kind: chat` line in `usage.jsonl`.** *The shape* below
->    says the latter; both gate reviewers objected independently and the reason that survived is that
->    `usage.jsonl` has two writers who release on different days. The log page merges the two in
->    memory instead (`mergedRows`). Their other reason — that concurrent appenders tear lines — was
->    measured (`npm run measure:append`) and did not hold: 8000 whole records of 8000 across eight
->    processes, nothing torn.
-> 2. **`chatLedger.ts` was the wrong file.** The scope line named it; it is the orphan-process ledger
->    (`{ pid, image, startedMs }`, crash safety) and holds no money. `chatUsage.ts` is new.
-> 3. **The cumulative rule lives on the SESSION, keyed on a field the ADAPTER declares.** It went
->    through two wrong homes on the way, and both are worth recording. First the ledger keyed it on
->    the vendor ROW id — a person's own editable text, so two Codex accounts as two rows would have
->    been differenced by neither. Then it keyed on the runtime NAME, matched against a list here —
->    which the gate's code round rejected for a better reason: implementing `ChatAdapter` was still
->    not enough to be billed correctly, because an unlisted runtime defaulted silently to per-turn.
->    It is now `ChatAdapter.cumulative`, a required field the compiler asks for, applied by
->    `CliChatSession`, whose lifetime is exactly a vendor thread's lifetime. `TurnResult` therefore
->    always carries the cost of ONE turn and nothing above the session knows vendors differ.
-> 4. **Every turn is recorded, not every answer** — a gate finding on the plan round, and its second
->    half came from the code round: a turn that was stopped or that failed now carries what the vendor
->    had already charged for it, because `codex` prices a turn on a line of its own and can be stopped
->    a moment later. A turn nobody reported numbers for reads as unknown rather than as free.
-> 5. **The record carries the conversation's TITLE.** Not in the plan, and without it the log's *What*
->    column reads as a UUID for every conversation row.
-> 6. **A cumulative vendor's MONEY is refused rather than differenced** (ruled 2026-09-10). The first
->    version mirrored the token rule and subtracted the bills too; that was unreachable code, since the
->    one cumulative vendor reports no money at all, and it went. A refusal — `null`, "nobody told us
->    what this turn cost" — replaces it rather than a clamp, because recording a running total as one
->    turn's bill is the same defect the token rule exists to prevent. Checked against the two other
->    paths that turn tokens into money, the public price lists and the rate a person types on a vendor
->    row: both are dollars per million applied when a row is DRAWN, and neither touches this.
+> **The running total lives beside the conversation**, not read back from the ledger. The ledger is a
+> file this window shares with every other, and a tab asking it for its own total on every push would
+> be reading a growing file to answer a question it already knows.
 >
-> Companion: [PLAN_the_log_names_the_model.md](PLAN_the_log_names_the_model.md) — the same defect
-> on the review side (steps 2 and 3 open there). One decision, two surfaces; build them together
-> or in sequence, never twice.
+> ### What the total cannot say yet
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_the_server_knows_a_chat_from_a_review.md](../research/PLAN_the_server_knows_a_chat_from_a_review.md),
-> [PLAN_usage_that_compares.md](PLAN_usage_that_compares.md).
+> Only `claude` reports what it charged. `antigravity` omits cache entirely and `codex` reports a
+> cumulative maximum, so for two of three the figure is worked out from tokens and wears the tilde —
+> see [../todo/PLAN_usage_that_compares.md](../todo/PLAN_usage_that_compares.md), which is the plan
+> that would make them comparable.
 
 ## The goal
 
@@ -75,7 +47,7 @@ asking again and starting fresh, and it is invisible at exactly that moment.
 ## The one honest limitation
 
 The vendors do not report comparable token counts — claude counts cache reads, antigravity omits
-cache, codex reports a cumulative maximum ([PLAN_usage_that_compares.md](PLAN_usage_that_compares.md)).
+cache, codex reports a cumulative maximum ([PLAN_usage_that_compares.md](../todo/PLAN_usage_that_compares.md)).
 So a chat's money is an ESTIMATE for at least two of the three, and it is marked as one with the
 convention `usage.ts:230` already uses: `~$0.42` is what the tokens work out to, `$0.42` is what a
 vendor actually charged. The tab and the log both keep the tilde.
@@ -89,7 +61,7 @@ vendor actually charged. The tab and the log both keep the tilde.
 - The caption `The other AI` becomes the model's label in its vendor colour — for an ANSWER. What
   the person said is captioned `You`, chosen by role before anything looks at a model; a reviewer
   read an earlier wording as covering both and was right to ask (the edge
-  [PLAN_an_answer_reads_like_a_document.md](../research/PLAN_an_answer_reads_like_a_document.md) draws).
+  [PLAN_an_answer_reads_like_a_document.md](PLAN_an_answer_reads_like_a_document.md) draws).
 - A running total in the picker row: *this conversation: ~$0.13 · 9.2k tokens*, updated per turn.
 - The ledger: every chat turn writes a usage entry with `kind: chat`, the model, tokens, money and
   the `estimated` flag; the log page reads them as rows with a *Conversation* kind, priced through
@@ -197,5 +169,5 @@ only when the whole ritual has run — not when the code works.
 Two halves with different owners. **The ledger and log half** (`chatLedger.ts`, `usage.ts`,
 `roundsLog.ts`) has no conflict with the chat-page lane and can run beside it. **The tab half**
 (`ChatMessage`, caption, total) touches `chatPage.ts` and queues behind
-[PLAN_an_answer_reads_like_a_document.md](../research/PLAN_an_answer_reads_like_a_document.md). Build the seam
+[PLAN_an_answer_reads_like_a_document.md](PLAN_an_answer_reads_like_a_document.md). Build the seam
 (`ChatMessage.model`) first in the lane that gets there first; the other half reads it.
