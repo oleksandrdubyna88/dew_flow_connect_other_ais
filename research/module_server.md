@@ -418,6 +418,41 @@ first is an EXECUTION rule only: `providers` and the panel's badge report every 
 whatever stage is running, so a credential defect on a code-only vendor is visible during a plan
 round, on its card.
 
+### A role nobody asked for is a third thing again (2026-09-10)
+
+There are now three ways a round can be smaller than the roster suggests, and each says so in its own
+words because each has a different cure.
+
+| | decided | reads as | cure |
+|---|---|---|---|
+| `Failures` | after the launch | a problem with the run | look at the vendor |
+| `Excluded` | before the roster, from `CanRun` | a problem with the configuration | fix the credential or the runtime |
+| `NotAsked` | before the roster, from the REPOSITORY | **not a problem at all** | write some rules, or nothing |
+
+A code round in a repository with no written rules drops its **Conventions** reviewers — correctly,
+because a conventions pass with nothing to judge against would invent a standard. Until 2026-09-10
+the only place that was said was the server's own log, so the AI that called the gate was handed a
+thinner round and no sentence explaining it. Three roles instead of four reads as a failure, or is
+not noticed at all.
+
+`ReviewerSummary.NotAsked` carries `SkippedRole(Role, Reason)` — STRUCTURED, not a finished clause,
+so a caller parsing the summary gets a role it can name and the punctuation is decided once, beside
+the clauses it sits next to. `Sentence` appends it LAST of the three additions, and the order carries
+meaning: a deadline explains the failures, the failures explain the count, and what was never asked
+for is last because it is the only one of the three that is not a problem. Its verb is its own — *was
+not asked*, never *could not run*.
+
+The list is DERIVED from the difference between the scheduled roles and the ones that survived the
+filter, so the sentence a caller reads and the roles a round actually ran cannot disagree; and the
+reason is one `const` that both the log line and the clause are built from, so one decision cannot
+come to be described in two ways. `StageRun.MakeWork` returns `RoundWork(Reviewers, NotAsked)` rather
+than a bare list, because the decision is made where the roles are chosen and the sentence is written
+where the round ends, and nothing carried the fact across that gap before.
+
+The end-to-end fixture is exactly this case — a repository with no rule files — so the journey is
+asserted where it actually happens, including on a round that ALSO failed: a failure must not swallow
+the skip, which is the one path an implementation written for the happy case would have lost.
+
 `RunStageAsync` gained an explicit `isPlanStage` rather than deriving it from `needsWorktree`. That
 derivation happens to be right today, and this file already records what deriving the stage cost
 twice — `planPrompts is { Count: > 0 }` is empty on an ordinary plan round, and reading the roles

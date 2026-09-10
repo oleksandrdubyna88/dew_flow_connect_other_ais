@@ -343,13 +343,15 @@ public sealed partial class PanelService
                     "context for review: plan {PlanBytes} bytes; no diff and no rules at this stage",
                     System.Text.Encoding.UTF8.GetByteCount(planText));
 
-                return Task.FromResult<IReadOnlyList<ReviewerWork>>(
+                // A plan round skips no role: it has one, and there is nothing for a rule file to
+                // decide about it.
+                return Task.FromResult(RoundWork.Of(
                     BuildWork([ReviewRole.PlanCritique], workingDir, $"## The plan under review\n\n{planText}",
                         session.State.RoundsRunThisStage + 1,
                         isPlanStage: true,
                         seed: StableSeed(session.State.SessionId, session.State.RoundsRunThisStage + 1),
                         planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session) : null,
-                        deal: _settings.DealPlanLenses));
+                        deal: _settings.DealPlanLenses)));
             }),
             ct);
 
@@ -474,17 +476,26 @@ public sealed partial class PanelService
                     .ToList();
 
                 var roles = RolesWithRulesInMind(scheduled, rules.HasRules);
-                if (roles.Count != scheduled.Count)
+                // DERIVED from the two lists rather than written down beside the filter: the skipped
+                // roles are the difference by construction, so the sentence a caller reads and the
+                // roles a round actually ran cannot disagree — which is what the plan round asked
+                // for, twice. `Where` rather than `Except`, to keep the scheduled order.
+                var notAsked = scheduled
+                    .Where(r => !roles.Contains(r))
+                    .Select(r => new SkippedRole(r.ToString(), NoWrittenRules))
+                    .ToList();
+                if (notAsked.Count > 0)
                 {
                     _log.Warning(
-                        "round {Round}: the Conventions reviewers are skipped — this repository has no "
-                        + "written rules for them to judge against ({Sources})",
-                        round, string.Join(", ", RuleFiles.SourceNames));
+                        "round {Round}: the Conventions reviewers are skipped — {Reason} ({Sources})",
+                        round, NoWrittenRules, string.Join(", ", RuleFiles.SourceNames));
                 }
                 _log.Information("round {Round} runs {Count} role(s): {Roles}", round, roles.Count, string.Join(", ", roles));
-                return BuildWork(roles, workingDir, context, round, isPlanStage: false,
-                    seed: StableSeed(session.State.SessionId, round),
-                    deal: _settings.DealCodeLenses);
+                return new RoundWork(
+                    BuildWork(roles, workingDir, context, round, isPlanStage: false,
+                        seed: StableSeed(session.State.SessionId, round),
+                        deal: _settings.DealCodeLenses),
+                    notAsked);
             }),
             ct);
     }
@@ -620,7 +631,8 @@ public sealed partial class PanelService
                 : null;
             using var scratch = stage.NeedsWorktree ? null : new ScratchDirectory();
             var workingDir = lease?.Path ?? scratch!.Path;
-            var work = await stage.MakeWork(session, workingDir, sha);
+            var built = await stage.MakeWork(session, workingDir, sha);
+            var work = built.Reviewers;
 
             // A stage nobody serves is a REFUSAL, not an empty round. With no reviewer the round
             // runs nothing, merges nothing, and passes the gate — reporting `proceed` having
@@ -672,7 +684,7 @@ public sealed partial class PanelService
             // the caller's own token did not. Inferring it from cancelled reviewers would have called
             // it a deadline the moment a PERSON cancelled a round, which is a different sentence and
             // a wrong one.
-            var summary = ReviewerSummaryFactory.From(results, excluded) with
+            var summary = ReviewerSummaryFactory.From(results, excluded, built.NotAsked) with
             {
                 // Read from the TIMER, and only when the caller did not also cancel. A person who
                 // cancels at the moment the deadline strikes is reported as a person: the round was
@@ -1172,6 +1184,15 @@ public sealed partial class PanelService
     /// session, a checkout and a git repository. A function is the answer to both.</para>
     /// <para>Derived rather than removed, so nothing observes a list changing under it.</para>
     /// </remarks>
+    /// <summary>Why the Conventions reviewers are dropped, in the one place both readers of it look.</summary>
+    /// <remarks>
+    /// The server's own log line and the sentence the calling AI receives are built from THIS string,
+    /// so the two cannot come to describe one decision in two ways — which the plan round asked for
+    /// after noticing they were about to be written twice.
+    /// </remarks>
+    internal const string NoWrittenRules =
+        "this repository has no written rules for them to judge against";
+
     internal static IReadOnlyList<ReviewRole> RolesWithRulesInMind(
         IReadOnlyList<ReviewRole> scheduled,
         bool hasRules) =>
@@ -1634,8 +1655,22 @@ public sealed partial class PanelService
 /// { Count: &gt; 0 }</c> is empty on an ordinary plan round, and reading the ROLES works only because
 /// no code round happens to carry <c>PlanCritique</c>.</para>
 /// </remarks>
+/// <summary>What a round will run, and any role it decided not to ask for.</summary>
+/// <remarks>
+/// The two travel together because the decision is made where the roles are chosen and the sentence
+/// is written where the round ends, and nothing carried the fact across the gap before — which is
+/// how a dropped role reached the server's log and never the caller.
+/// </remarks>
+internal sealed record RoundWork(
+    IReadOnlyList<ReviewerWork> Reviewers,
+    IReadOnlyList<SkippedRole> NotAsked)
+{
+    /// <summary>A round that skipped nothing, which is every plan round and most code rounds.</summary>
+    public static RoundWork Of(IReadOnlyList<ReviewerWork> reviewers) => new(reviewers, []);
+}
+
 internal sealed record StageRun(
     Func<SessionState, Transition> Begin,
     bool NeedsWorktree,
     bool IsPlanStage,
-    Func<PersistedSession, string, string, Task<IReadOnlyList<ReviewerWork>>> MakeWork);
+    Func<PersistedSession, string, string, Task<RoundWork>> MakeWork);
