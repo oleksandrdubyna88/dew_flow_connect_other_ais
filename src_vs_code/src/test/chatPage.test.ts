@@ -27,6 +27,7 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
     messages: [],
     models: MODELS,
     providers: [],
+    reask: '',
     promptPresets: [],
     modelPresets: [],
     providerId: 'antigravity',
@@ -1658,4 +1659,73 @@ test('a click on the row itself does nothing', () => {
   page.fire('presets', 'click', { target: { closest: () => null } });
 
   assert.deepStrictEqual(page.posted.filter((message) => String(message['command']).startsWith('use')), []);
+});
+
+
+/* ------------------------------------------------------------------------------------------------
+ * Entry 24: "maybe I don't like gemini's answer and want to switch to Fable. If I switch the model
+ * and press Enter with an empty box — take the previous context (except the last answer) and feed it
+ * to the new model." An empty box has always been refused, so the gesture was free to take; what it
+ * needed was a way to be discovered.
+ * ---------------------------------------------------------------------------------------------- */
+
+test('when a re-ask is on offer the button says so, and names who would answer', () => {
+  const html = chatPageHtml(state({ reask: 'Claude Opus' }), 'n0nce');
+  const button = html.slice(html.indexOf('id="send"'), html.indexOf('</button>', html.indexOf('id="send"')));
+
+  assert.match(button, /Re-ask · Claude Opus/, 'the only way in is a gesture nobody can see');
+});
+
+test('with nothing to re-ask the button is a Send button', () => {
+  const html = chatPageHtml(state(), 'n0nce');
+  const button = html.slice(html.indexOf('id="send"'), html.indexOf('</button>', html.indexOf('id="send"')));
+
+  assert.match(button, />Send$/, 'the button is not a plain Send button');
+  assert.doesNotMatch(button, /Re-ask/);
+});
+
+test('an empty box re-asks when there is something to re-ask, and does nothing when there is not', () => {
+  const offered = runChatPage({ reask: 'Claude Opus' });
+  offered.seen['say'].value = '';
+  offered.fire('send', 'click');
+
+  assert.deepStrictEqual(offered.posted.filter((message) => message['command'] === 'reask'),
+    [{ type: 'command', command: 'reask' }]);
+  assert.deepStrictEqual(offered.posted.filter((message) => message['command'] === 'send'), [],
+    'an empty box sent an empty question');
+
+  const plain = runChatPage();
+  plain.seen['say'].value = '';
+  plain.fire('send', 'click');
+  assert.deepStrictEqual(plain.posted.filter((message) => message['command'] === 'reask'), [],
+    'a page with nothing to re-ask re-asked anyway');
+});
+
+test('a box with something in it sends it, re-ask or no re-ask', () => {
+  // The re-ask is what an EMPTY box means. Text in the box is a question, and it must not be
+  // swallowed by a gesture that happens to be available.
+  const page = runChatPage({ reask: 'Claude Opus' });
+  page.seen['say'].value = 'a different question';
+  page.fire('send', 'click');
+
+  assert.deepStrictEqual(page.posted.filter((message) => message['command'] === 'send'),
+    [{ type: 'command', command: 'send', text: 'a different question' }]);
+  assert.deepStrictEqual(page.posted.filter((message) => message['command'] === 'reask'), []);
+});
+
+test('a re-ask locks the composer like any other turn', () => {
+  const page = runChatPage({ reask: 'Claude Opus' });
+  page.seen['say'].value = '';
+  page.fire('send', 'click');
+  page.fire('send', 'click');
+
+  assert.strictEqual(page.seen['say'].disabled, true, 'the composer stayed open during a re-ask');
+  assert.strictEqual(page.posted.filter((message) => message['command'] === 'reask').length, 1,
+    'a second press re-asked a second time');
+});
+
+test('a model label in the button is escaped like everything else', () => {
+  const html = chatPageHtml(state({ reask: '<img src=x onerror=alert(1)>' }), 'n0nce');
+
+  assert.doesNotMatch(html, /<img/i, 'a model label reached the page as markup');
 });

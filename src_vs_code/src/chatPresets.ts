@@ -162,6 +162,44 @@ export function chatModelPresetsFrom(saved: unknown): readonly ModelPreset[] {
   });
 }
 
+/**
+ * What a re-ask would consist of, or nothing when there is nothing to re-ask.
+ *
+ * <p>Entry 24 of the operator's list: *"maybe I don't like gemini's answer and want to switch to
+ * Fable. If I switch the model and press Enter with an empty box — take the previous context (except
+ * the last answer) and feed it to the new model."*</p>
+ *
+ * <p><b>Except the last answer</b>, and the reason is sound: an answer somebody rejected, handed to
+ * the next model, is a model being asked to agree with it. The QUESTION is kept — it is what they
+ * want answered again — and everything before it stays, because that is the conversation the answer
+ * was given in.</p>
+ *
+ * <p>On offer only when the model has CHANGED since that answer. Pressing Enter on an empty box with
+ * the same model chosen is the gesture doing nothing, which is what it has always done.</p>
+ */
+export function reaskFrom(
+  messages: readonly { readonly role: 'you' | 'model'; readonly text: string; readonly model?: { readonly id: string } | undefined }[],
+  chosen: string,
+): { readonly said: readonly { readonly role: 'you' | 'model'; readonly text: string }[]; readonly question: string } | undefined {
+  const last = messages.length - 1;
+  if (last < 1 || messages[last]?.role !== 'model' || chosen.length === 0) {
+    return undefined;
+  }
+  const answered = messages[last]?.model?.id ?? '';
+  if (answered.length === 0 || answered === chosen) {
+    return undefined;
+  }
+  const question = messages[last - 1];
+  if (question?.role !== 'you' || question.text.trim().length === 0) {
+    return undefined;
+  }
+
+  return {
+    said: messages.slice(0, last - 1).map((message) => ({ role: message.role, text: message.text })),
+    question: question.text,
+  };
+}
+
 /** The preset a button named, or nothing — a click naming an id that is gone chooses nothing. */
 export function presetById<T extends { readonly id: string }>(
   presets: readonly T[],
