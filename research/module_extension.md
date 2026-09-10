@@ -502,6 +502,110 @@ sat beside it. The fallback now requires the label to name exactly one panel.
 tested: closing one tab disposes ONE session, its own. A vendor process that outlives its tab is an
 authenticated child nobody can see and nobody will stop; one that dies with a stranger’s tab loses a
 conversation somebody is still reading.
+### Which side this host is on, and what it can reach (2026-09-10)
+
+`process.platform` answers a question nobody in here was actually asking. It describes the EXTENSION
+HOST, and in a VS Code window attached to WSL that is `linux` whatever the badge on the taskbar says.
+The sentence was written twice in prose — `panelProvider.ts` and `vendorTerminal.ts` — and the
+narrowing it implies was written three times in code: twice identically (`versionProbe.current`,
+`panelProvider.platform`) and once, in `selectionCapture.ts`, as `platform !== 'win32'`, which is the
+same fact asked wrongly.
+
+`hostSide.ts` is the one place now. `hostPlatform()` narrows; `WindowsReach` says what can be reached
+from here, and it is **three-valued rather than a boolean because the person sees the difference**:
+`direct` (this host IS Windows), `interop` (a WSL host, with a live Windows session one hop away) and
+`none` (darwin, or a Linux box that is not WSL). "There is no Windows side here", "the Windows side
+could not be reached" and "PowerShell would not run" send somebody to three different places.
+
+**Nothing in it probes anything.** `classifyWindowsReach` is pure and `windowsReach` composes it with
+the `runningUnderWsl()` that `wslNetwork.ts` already owns. Whether interop then WORKS — it can be
+switched off in `/etc/wsl.conf`, and a docker-desktop distro has no `/mnt/c` — is answered by
+attempting it. A pre-flight resolve of `powershell.exe` was asked for on the plan round and refused
+for the reason `wslNetwork.ts` already records from three of its own reviewers: a probe answers about
+a moment that is not the moment of use, and here it would also duplicate the launch's own PATH
+search. `wslNetwork.ts`'s `interop()` is untouched — not moved, not wrapped, not merged — so the
+standing objection in `processLauncher.ts`'s header is answered by not doing the thing it warns about.
+
+The identity question — WHICH side's settings and storage are mine — stays where it was, in
+`Side`/`sideKey` and `thisSide`. Both are called "side" in English and they are not the same question.
+
+**`Ctrl+Alt+A` in a WSL window.** Measured on the operator's machine before any of this was designed:
+the WSL extension host carries `WSL_INTEROP` and 33 Windows `PATH` entries including
+`WindowsPowerShell/v1.0`, `execvp` from exactly that environment resolves `powershell.exe`, and the
+whole helper runs in **1.07 s** (1080/1059/1069) from `cwd=/tmp` against the 6 s cap — where `/mnt/c`
+takes 1.4–1.9 s. So `pressCopy`, its `cwd` and the *Copying the selection…* label are all unchanged,
+and the comments now say that is deliberate rather than leaving the next reader to wonder.
+
+**The second half was the sentence.** `ran()` resolved `void`, so four different endings arrived
+identically and every one of them told the person to select the text first — including the ones where
+the helper never started. It carries a `RunPhase` now (`ran` | `neverStarted` | `timedOut` | `failed`)
+and `refusalFor` turns it into four sentences, with what the system itself said in brackets. The
+clipboard is still asked FIRST and the phase only ever explains a failure: a helper that copied the
+passage and then exited badly has still copied the passage.
+
+### The three reads that went around the one accessor (2026-09-10)
+
+*Settings a side keeps to itself* says every read goes through one accessor. It was `private` to
+`PanelProvider`, so three readers went around it: two vendor lookups in `chatCommand.ts` and
+`readCoaiConfiguration` in `extension.ts`. `vendors` is in `OVERLAID_SETTINGS` and its rows carry
+`executablePath`, so with the switch on, a WSL window launched whatever CLI the SHARED settings named
+— and on the machine this was found on, a bare `codex` in WSL resolves through the interop PATH into
+`/mnt/c/Users/…/AppData/Roaming/npm`, a `#!/bin/sh` shim in the Windows npm directory. The trap the
+0.17.0 release already documented, reached from a different direction.
+
+`extension.ts` was the wider half: that file feeds `coai-mcp`'s own settings, so it decides which
+binaries the GATE launches its reviewers from. A review running off another side's rows is the
+product's own job done wrong.
+
+The decision now lives in `sideSettings.sideConfigReader`, beside the overlay it reads, and all three
+callers go through it. The side is never defaulted — every caller passes
+`thisSide(context.globalStorageUri)` — and `chatCommand` binds the context once from `activate`, the
+idiom `chatOrphans.openLedger` and `rememberChatsIn` already use. `chatAutoSend`, `language`,
+`uiScale` and `teamServers` are deliberately NOT overlaid and are still read from the shared
+configuration.
+
+Two guards keep it: the reader's own tests give the shared list and the overlay DIFFERENT rows, so a
+reader that ignores the overlay fails on the value rather than on the shape; and a source-level check
+in `chatWiring.test.ts` fails on any direct `.get('vendors')` in either file, because both import
+`vscode` and cannot be exercised otherwise.
+
+### The orphan sweep on a side that is not Windows (2026-09-10)
+
+*What a force-killed editor leaves behind* built the ledger and then asked PowerShell about every
+candidate. Everything that was not Windows answered `'unknown'` — the one outcome that does NOT
+settle a row — so in a WSL window the orphan was never ended and the record was re-asked at every
+activation, for ever.
+
+`endIfOursPosix` asks the same three facts from `/proc` and sends one signal. Both sides of the world
+are injected, so all ten branches are tests on a Windows machine with no `/proc`; the Windows path has
+the excuse that a PowerShell round trip cannot be faked cheaply, and this one did not.
+
+Three details are measured rather than reasoned, and each replaced a plausible wrong answer:
+
+- **The start time is field 22 of `/proc/<pid>/stat` plus `btime`**, not the ctime of `/proc/<pid>`.
+  The plan round's stated reason for that was refuted — a ctime is not the time of the `stat` call;
+  against a live process it gave `1789026765000` for a real start of `1789026765179`. The
+  recommendation was taken anyway for a reason the finding did not give: field 22 is written once at
+  fork, while an inode's ctime can be touched by other things. `USER_HZ` is 100 by the procfs ABI.
+- **The identity is `comm`, `argv[0]` or `argv[1]`** — and not *any* `cmdline` entry, which is what
+  the plan started with and what two reviewers refused independently. `codex` and `gemini` in WSL are
+  `#!/bin/sh` shims, so the kernel runs the interpreter and the recorded name sits at `argv[1]`; the
+  looser rule would have killed `python job.py codex` on a recycled pid. A flag is never an identity,
+  which a test found while it was being written.
+- **The stat line is parsed from the LAST `)`.** Field 2 is the process's own name in parentheses and
+  may contain spaces and brackets — the fixture for that is a real process named `we (are) here`.
+
+A single-pid kill, not a tree: `needsShell` gates the shim case to `win32`, so on Linux `spawn` never
+goes through a shell and the recorded pid IS the vendor process. `/proc/<pid>/task/<pid>/children` was
+measured to exist and answer, and is where a walk would go if a vendor is ever found to daemonise —
+on that evidence, not before it. The pid-reuse window between the read and the signal is real, has
+nothing between its two halves, and is bounded by the same name-and-start-time pair the Windows path
+trusts; `pidfd_open` would close it and is not reachable from Node without a native module.
+
+`'unknown'` still means *keep the row and ask again*, and `ENOENT` is now `absent` rather than
+`unknown` — a process that exits mid-read is gone, and collapsing the two is how a row becomes
+immortal. `EPERM` stays `unknown`; only `ESRCH` is death.
+
 ### The two doors into a chat, and why they behave differently (2026-09-08)
 
 `coai.chatWithOtherAi` is reachable two ways, and they are not the same door. From the KEYBINDING
@@ -592,7 +696,9 @@ somebody's behalf:
   old direction had the launch layer importing a constant out of a module that imports the page.
 
 And the keybinding now says it is working: `withProgress` puts *Copying the selection…* in the status
-bar for the ~1.7 s PowerShell takes, because a shortcut that appears to do nothing gets pressed again,
+bar for the ~1.7 s PowerShell takes (~1 s through WSL interop — see *Which side this host is on*,
+which is also where the four sentences a failed capture can produce are described), because a
+shortcut that appears to do nothing gets pressed again,
 which is how one question becomes two.
 ### The four settings, and where they are edited (2026-09-09)
 
@@ -1055,8 +1161,11 @@ reuses the identity `installedKey` already folds from `remoteName` + distro-or-h
 — two distros mount the same `/home/<user>/.vscode-server/…`, so the storage path alone would merge
 two companies' settings.
 
-Every read goes through one accessor (`PanelProvider.read`) and every write through one funnel
-(`save`), because a read that goes around them is a setting that silently stays shared. Turning the
+Every read goes through one accessor (`sideSettings.sideConfigReader`) and every write through one
+funnel (`save`), because a read that goes around them is a setting that silently stays shared.
+**That rule was written here and then broken three times, because the accessor was PRIVATE to
+`PanelProvider` and the three other readers could not reach it** — see *The three reads that went
+around the one accessor* below. Turning the
 switch on seeds this side from what it reads today, so nothing changes until something is edited, and
 the seed is idempotent so switching off and on again keeps what a side had. `uiScale` and
 `helpLanguage` stay shared deliberately: a text size belongs to the person, not to the company.
