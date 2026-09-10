@@ -93,7 +93,7 @@ test('the snippet text and its version number move together', () => {
  */
 test('the mounted shared rule body is byte-identical to what the menu hands out', () => {
   const mounted = mountedRuleFile();
-  assert.notEqual(mounted, '', 'run git submodule update --init .agents/conventions');
+  assert.ok(fs.existsSync(mounted), 'run git submodule update --init .agents/conventions');
   const source = fs.readFileSync(mounted, 'utf8').replace(/\r\n/g, '\n');
   assert.match(source, /^---\n/, 'the neutral canonical rule carries delivery metadata');
 
@@ -127,17 +127,9 @@ function ruleBody(text: string): string {
   return end === -1 ? text : text.slice(end + '\n---\n'.length);
 }
 
-/** The rules mount, found by walking up from this file rather than by trusting a cwd. */
+/** Source and compiled tests both live three directories below this checkout's root. */
 function mountedRuleFile(): string {
-  const relative = path.join('.agents', 'conventions', 'common', 'coai-review-gate.md');
-  for (let dir = __dirname, seen = ''; dir !== seen; seen = dir, dir = path.dirname(dir)) {
-    const candidate = path.join(dir, relative);
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  return '';
+  return path.resolve(__dirname, '../../..', '.agents/conventions/common/coai-review-gate.md');
 }
 
 test('the instruction files are searched BEFORE the mounted rule', () => {

@@ -99,11 +99,11 @@ in their existing plans.
 
 ## Definition of Done
 
-- [ ] Neutral root/local/shared sources resolve with one clean pinned conventions checkout.
-- [ ] Reviewer and panel discovery scenarios pass for neutral and legacy consumers.
-- [ ] No manually maintained gate body remains in the extension; packaged bytes match canonical input.
-- [ ] Builds, MTP executables, extension tests/package and family checks were observed.
-- [ ] Native-agent evidence names actual reads, missing cells and limits; no general obedience claim.
+- [x] Neutral root/local/shared sources resolve with one clean pinned conventions checkout.
+- [x] Reviewer and panel discovery scenarios pass for neutral and legacy consumers.
+- [x] No manually maintained gate body remains in the extension; packaged bytes match canonical input.
+- [x] Builds, MTP executables, extension tests/package and family checks were observed.
+- [x] Native-agent evidence names actual reads, missing cells and limits; no general obedience claim.
 - [ ] Fresh clone and disposable rollback work; settings and unrelated working files remain intact.
 - [ ] Review gate and PR feedback resolved, canary merged, installed artifact checked, docs current.
 

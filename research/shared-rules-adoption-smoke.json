@@ -42,7 +42,7 @@
     }
   },
   "nativeClaudeTypeScript": {
-    "assessment": "Incomplete: trace exceeded the fixed 256-KiB limit. No completed body or behavior claim can be made for this cell. Git and inspected content remained unchanged. The report predates the merge commit and names its staged pin explicitly.",
+    "assessment": "Incomplete: the process exceeded the fixed 256-KiB combined stdout/stderr capture limit. traceBytes records stdout only (261859 bytes); overflow is the supervisor result. Separate stderr bytes were not retained, so their exact count is not claimed. No completed body or behavior claim can be made for this cell. Git and inspected content remained unchanged. The report predates the merge commit and names its staged pin explicitly.",
     "report": {
       "status": "incomplete",
       "agent": "claude",
@@ -423,11 +423,13 @@
   },
   "localArtifacts": {
     "extension": {
-      "version": "0.32.1",
-      "vsixSha256": "a23dc9aba7b1974c7636c9f74cc816ee81eefd9e589201fe10e049e4b8d9aa8d",
+      "version": "0.32.2",
+      "vsixSha256": "8ce4353b70c7b4f41dd5dda13bef22f086009aa525fc57af8df1237028797cbc",
       "bundleSha256": "dbb949cf434c1ff7685ef52e5965bc044867053b3a7f3e2c5cf4b86de73d8da3",
-      "bytes": 303871,
-      "markerAndNeutralPaths": true
+      "bytes": 303879,
+      "markerAndNeutralPaths": true,
+      "canonicalBodyByteIdentical": true,
+      "canonicalBodyBytes": 5934
     },
     "mcp": {
       "version": "0.18.16-sharedrules.20260910",

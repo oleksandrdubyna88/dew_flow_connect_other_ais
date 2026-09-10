@@ -5,7 +5,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { gateBody, prepareGate, OUTPUT } from './prepare-gate.mjs';
+import { gateBody, prepareGate, OUTPUT } from '../../scripts/prepare-gate.mjs';
 
 test('only leading metadata is removed and a later delimiter remains in the gate body', () => {
   const body = '<!-- coai-snippet v5 -->\n## Multi-model review gate (ConnectOtherAIs)\n\nFirst.\n---\nSecond.\n';
@@ -18,7 +18,7 @@ test('only leading metadata is removed and a later delimiter remains in the gate
 test('the real pinned resolver rejects a dirty or wrong mount and leaves no stale build policy', t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-pinned-gate-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+  const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
   const sourceMount = path.join(sourceRoot, '.agents/conventions');
   const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], {
     encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024, windowsHide: true,

@@ -21,6 +21,10 @@ test('neutral shared rules are discovered and older project/local copies take pr
       throw error;
     }
   };
+  const legacy = '.claude/rules/shared/common/coai-review-gate.md';
+  await write(legacy, claudeSnippet());
+  assert.equal((await readSnippetStatus(read)).kind, 'current', 'a legacy-only shared mount remains discoverable');
+  await fs.unlink(path.join(root, legacy));
   await write('.agents/conventions/common/coai-review-gate.md', claudeSnippet());
   assert.equal((await readSnippetStatus(read)).kind, 'current');
   const older = claudeSnippet().replace(`coai-snippet v${SNIPPET_VERSION}`, 'coai-snippet v1');

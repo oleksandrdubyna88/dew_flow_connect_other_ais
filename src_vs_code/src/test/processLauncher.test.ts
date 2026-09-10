@@ -81,12 +81,16 @@ test('a child answers what is written to its stdin, line by line', async () => {
       + ' for (const p of parts) process.stdout.write("echo:" + p + "\\n"); });',
   ]);
   const lines: string[] = [];
-  child.onLine((line) => lines.push(line));
+  const completion = ended(child, 'the echo child');
+  child.onLine((line) => { lines.push(line); child.kill(); });
 
   assert.strictEqual(child.writeLine('hello'), true, 'the pipe refused a write to a live child');
-  await new Promise((r) => setTimeout(r, 300));
-  child.kill();
-  await ended(child, 'the echo child');
+  // Wait for the real reply before killing; a fixed sleep can kill a child before startup.
+  try {
+    await completion;
+  } finally {
+    child.kill();
+  }
 
   assert.deepStrictEqual(lines, ['echo:hello']);
 });

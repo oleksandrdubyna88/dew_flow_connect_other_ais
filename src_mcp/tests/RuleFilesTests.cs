@@ -46,6 +46,7 @@ public sealed class RuleFilesTests : IDisposable
         Write(".agents/conventions/common/security.md", "Shared security");
         Write(".agents/conventions/csharp/doctrine.md", "C# constraints");
         Write(".agents/conventions/typescript/doctrine.md", "TypeScript constraints");
+        Write(".agents/conventions/rust/doctrine.md", "Rust constraints");
         Write(".agents/conventions/research/audit.md", "Historical audit");
         Write(".agents/conventions/.agents/PROJECT.md", "Conventions source obligations");
         Write(".agents/conventions/ENTRY.md", "Source loading procedure");
@@ -55,7 +56,7 @@ public sealed class RuleFilesTests : IDisposable
         bundle.Files.Select(file => file.Path).Should().BeEquivalentTo([
             ".agents/PROJECT.md", ".agents/rules/nested/local.md",
             ".agents/conventions/common/security.md", ".agents/conventions/csharp/doctrine.md",
-            ".agents/conventions/typescript/doctrine.md",
+            ".agents/conventions/typescript/doctrine.md", ".agents/conventions/rust/doctrine.md",
         ]);
         bundle.Files.Take(2).Select(file => file.Path).Should().Equal([
             ".agents/PROJECT.md", ".agents/rules/nested/local.md",

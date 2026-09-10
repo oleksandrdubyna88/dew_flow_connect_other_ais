@@ -14,12 +14,12 @@ Shared-rule adoption adds real filesystem scenarios: `RuleFilesTests` exercises 
 PROJECT/local/shared discovery, ordering and missing mount bodies while retaining legacy cases.
 `snippetDiscovery.test.ts` calls the same reader the panel uses, against temporary files:
 a neutral shared rule is current, and older root/project/local copies take priority.
-`scripts/prepare-gate.test.mjs` checks frontmatter boundaries and a real Git submodule's
+`src/test/prepareGate.test.mjs` checks frontmatter boundaries and a real Git submodule's
 clean/dirty/wrong-pin transitions. A failed build preparation leaves no old generated policy.
 These run through `npm test`; no paid model calls occur in that suite. The independent
 version/hash test remains, and compares generated delivery with the canonical rule body.
 
-Observed locally on 2026-09-10: neutral C# scenarios first failed with zero discovered files
+Historical local run on 2026-09-10 at `906ab9c`: neutral C# scenarios first failed with zero discovered files
 and no missing mount; all 22 RuleFiles cases then passed. Panel discovery first returned
 absent and passed after the location update. Extension suite: 1313 tests, 1312 passed and
 one skipped, plus all three build-preparation scenarios. These are local adoption results;
@@ -231,10 +231,33 @@ node_modules/ directory pattern and made a clean fixture look dirty. The fixture
 the two locked packages into a real directory; pin validation remains unchanged.
 
 
-The final local artifact is extension 0.32.1 (0.32.0 was an uninstalled validation package
+The pre-PR-feedback local artifact was extension 0.32.1 (0.32.0 was an uninstalled validation package
 before the last main reconciliation). Its packaging suite reports 1348 passed / 1 skipped.
 The Windows Native AOT MCP artifact is 0.18.16-sharedrules.20260910: it opened a real SQLite
 database and passed all five stdio contract cases through COAI_CONTRACT_EXE. The first
 publish failed because vswhere.exe was missing from PATH; the already-installed Visual
 Studio Installer directory was added only to the publishing process's environment. No SDK
 installation, persistent host setting, or Team-server deployment was performed.
+
+
+PR #192 follow-up (2026-09-10): the discovery fixture includes Rust and a legacy-only
+shared mount. Generator scenarios live under `src/test/prepareGate.test.mjs` and still run
+through npm test. The canonical-body comparison uses this checkout's fixed test layout,
+so it cannot borrow a parent repository's mount when its own is missing.
+The full suite exposed an unrelated timing assumption: the stdin echo test killed its real
+child after 300 ms, before a response arrived (`[]` instead of `echo:hello`). It now waits
+for an actual reply before killing the child, with the existing ten-second completion
+ceiling and cleanup. All 18 process-launcher scenarios then passed.
+
+Local package 0.32.2 contains exactly the 5,934 UTF-8 bytes of the canonical gate body.
+Verification read `extension/dist/extension.js` from the VSIX, decoded its single gate
+literal with the installed TypeScript scanner (`typescript/unstable/ast/scanner`), and
+compared it to the pinned rule after LF normalization and frontmatter removal. Package
+hashes are in `shared-rules-adoption-smoke.json`; no model-behavior claim follows from this.
+The subsequent echo-test correction changes test source only, which is excluded from the
+VSIX; the already-built package's runtime bundle is unchanged.
+
+After the echo synchronization correction, the full normal npm test run reports
+1,349 total / 1,348 passed / 1 skipped, plus all three generator scenarios. The updated
+Release RuleFiles executable reports 22 passed. Family pin, lifecycle and checklist-shape
+checks pass. These are local checks; PR CI and installed-host behavior are separate.

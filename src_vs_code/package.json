@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "Your AI writes the code; other vendors' models review it — the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.32.1",
+  "version": "0.32.2",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -608,7 +608,7 @@
     "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true })\"",
     "compile": "npm run clean && tsc -p ./",
     "typecheck": "tsc -p ./ --noEmit",
-    "test": "node --test scripts/prepare-gate.test.mjs && npm run compile && node scripts/run-tests.mjs",
+    "test": "node --test src/test/prepareGate.test.mjs && npm run compile && node scripts/run-tests.mjs",
     "test:contract": "npm run compile && node scripts/run-contract.mjs",
     "test:seam": "npm run compile && node scripts/run-seam.mjs",
     "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",

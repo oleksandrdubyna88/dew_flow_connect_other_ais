@@ -937,6 +937,8 @@
     "verdict": "good_enough",
     "reviewers": "all 3 reviewers answered",
     "gatingCountBeforeDecisions": 9,
+    "discountedFindingIndices": [2, 5],
+    "gatingCountExplanation": "The recorded gate count already discounts findings 2 and 5 as previously rejected repeats. Eleven non-minor findings minus these two discounts gives nine, before the decisions in this round.",
     "findings": [
       {
         "finding": 0,
