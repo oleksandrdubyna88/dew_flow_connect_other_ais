@@ -81,7 +81,11 @@ For a shebang script the kernel runs the interpreter, so `argv[0]` is `/bin/sh` 
 is `/bin/dash`. A verifier that compares the recorded image against `argv[0]` — or against `comm`
 alone, which Linux also truncates to 15 characters — answers *"not ours"* for `codex` and `gemini`
 and keeps their rows for ever: the same orphan that is never cleaned up, reached by a different
-route. **The rule is therefore: `comm` OR the basename of ANY `cmdline` entry.**
+route. **The rule is therefore: `comm`, or the basename of `argv[0]` or `argv[1]`** — the binary and,
+for a shebang, the script the interpreter was handed. It is deliberately NOT "any `cmdline` entry":
+two reviewers refused that independently and they were right, because `python job.py codex` would
+then be killed as a `codex` whose pid had been reused. The two argument positions are the only two
+that can carry an executable's identity, and the measured shapes both land in them.
 
 That table is also the evidence for B. On this very machine a bare `codex` in WSL resolves through
 the interop PATH into the Windows npm directory — which is exactly the trap
@@ -136,9 +140,12 @@ that refactor is answered by not doing it.
 indistinguishable from a selection that was empty:
 
 ```ts
+/** WHERE it stopped, not only that it did — the plan round's first accepted finding. */
+export type RunPhase = 'ran' | 'neverStarted' | 'timedOut' | 'failed';
+
 export interface RunOutcome {
-  readonly ok: boolean;
-  /** Empty when ok. Why the HELPER could not finish — never why nothing was selected. */
+  readonly phase: RunPhase;
+  /** Empty when it ran. Why the HELPER could not finish — never why nothing was selected. */
   readonly refusal: string;
 }
 export function ran(child: ProcessHandle, after: …, capMs = 6000): Promise<RunOutcome>;
@@ -150,14 +157,25 @@ export async function captureSelection(
 ): Promise<Capture>;
 ```
 
-Four outcomes, four sentences:
+Five outcomes, five sentences — and the phase is what keeps each one honest. The gate's plan round
+raised the same objection three times from three reviewers: a PowerShell that started and then hung
+must never be reported as a Windows side that could not be reached, because the two send the person
+to two different places.
 
 | Situation | What is said |
 |---|---|
 | `kind === 'none'` | today's wording, unchanged — it is still true on darwin and native Linux |
-| the helper never ran, `kind === 'interop'` | *the Windows side of this machine could not be reached through interop (…)* — deliberately the same phrasing already shipped at `panelProvider.ts:1206-1209`, not a fourth wording for one fact |
-| the helper never ran, `kind === 'direct'` | *copying the selection failed (…)* — a case that existed before and could not be observed |
+| `neverStarted`, `kind === 'interop'` | *the Windows side of this machine could not be reached (…)* — deliberately the phrasing already shipped at `panelProvider.ts:1206-1209`, with the spawn's own reason (`ENOENT` and the rest) carried in the brackets, so a missing executable and a disabled interop are both named by what the system said rather than by a guess |
+| `neverStarted`, `kind === 'direct'` | *the copy helper could not be started (…)* — a case that existed before and could not be observed |
+| `timedOut` | *the copy helper did not finish in time* — never blamed on reachability; the helper was reached |
+| `failed` | *the copy helper failed (…)* — it ran and ended badly, which is a PowerShell problem, not a hop problem |
 | the helper ran, the clipboard landed nothing | today's *nothing was copied — select the text first*, which is now only said when it is true |
+
+**No pre-flight probe.** A reviewer asked for `powershell.exe` to be resolved before it is launched.
+Refused, and for the reason this repository already recorded at `wslNetwork.ts:14-20` when three
+reviewers removed a Windows-side probe: a probe answers about a moment that is not the moment of use,
+duplicates the launch's own PATH search, and can be stale a millisecond later. Attempting IS the
+check; the phase and the reason are what make the answer honest.
 
 The clipboard contract does not change: borrow, unique marker, restore only under `shouldRestore`,
 never write over something that could not be read. A helper that never ran gives the borrow straight
@@ -183,6 +201,15 @@ export function sideConfigReader(
 invocation (fresh, because the person may have edited settings or the switch since), replacing the
 three `vendors` reads at `:492`, `:514`, `:648`. `extension.ts`'s `readCoaiConfiguration` captures the
 `context` it already has and builds the same reader.
+
+**One derivation of "which side", named once.** A reviewer's point that the structural guards would
+stay green while a caller passed a default or stale side is correct, so the side is not a parameter
+each caller works out for itself: `sideConfigReader` is only ever handed
+`thisSide(context.globalStorageUri)`, and the behavioural test gives the shared configuration and the
+overlay DIFFERENT vendor rows so a reader taking the wrong one fails on the value rather than on its
+shape. (The same reviewer's other worry — a context going stale across a workspace switch — does not
+arise: `ExtensionContext` is made once per extension host and a different workspace is a different
+host, which is why `chatOrphans.ts:71-76` already binds `globalStorageUri` once from `activate`.)
 
 **What is deliberately NOT changed:** the reads of `chatAutoSend`, `language` and `teamServers`
 (`chatCommand.ts:274`, `:478`, `:614`, `:1029`). Those keys are not in `OVERLAID_SETTINGS` and
@@ -212,10 +239,32 @@ export async function endIfOursPosix(
 ): Promise<KillOutcome>;
 ```
 
-`procEntry` reads `/proc/<pid>/comm`, `/proc/<pid>/cmdline` and the ctime of `/proc/<pid>`, and
-derives the image by the **measured** rule above: `comm`, or the basename of any `cmdline` entry.
-`endIfOurs` becomes a three-way dispatch on `hostPlatform()` — `win32` unchanged, `linux` new,
-`darwin` explicitly `'unknown'` exactly as today.
+`procEntry` reads `/proc/<pid>/stat` and `/proc/<pid>/cmdline`, and derives the image by the rule
+above: `comm`, or the basename of `argv[0]` or `argv[1]`. `endIfOurs` becomes a three-way dispatch on
+`hostPlatform()` — `win32` unchanged, `linux` new, `darwin` explicitly `'unknown'` exactly as today.
+
+**The start time comes from `/proc/<pid>/stat` field 22, not from the directory's ctime.** The plan
+round's stated reason for this was measured false — ctime is not "the time of the `stat` call": against
+a live process it gave `1789026765000` for a real start of `1789026765179`. The recommendation is
+taken anyway, because it is the better source for a reason the finding did not give: the ctime of an
+inode can be touched by things that are not the process starting, while field 22 is written once at
+fork and never again. It is read as ticks since boot and added to `btime` from `/proc/stat`;
+`USER_HZ` is 100 by the procfs ABI on every architecture, and `getconf CLK_TCK` on this machine
+returned 100. Field 2 of that file is the comm in parentheses and CAN contain spaces and brackets, so
+it is parsed from the LAST `)` — which also hands us `comm` from the same read.
+
+**`ENOENT` is `'absent'`, and only another error is `'unknown'`.** A process that exits while we are
+reading its files must settle as `gone` rather than sit in the ledger being retried; collapsing every
+failure into `'unknown'`, as the first draft did, is how a row becomes immortal.
+
+**The pid-reuse window is real, named, and narrowed rather than claimed away.** Windows performs its
+three-fact check and its `taskkill` inside one PowerShell command; POSIX cannot, so between `observe`
+and `kill` the pid could in principle be recycled. It is narrowed by doing nothing whatsoever between
+the two — no await, no second read — and it is bounded by the same three facts the Windows path
+trusts: the replacement would have to carry the same executable name AND have started within ten
+seconds of the recorded start. `pidfd_open` would close it properly and is not reachable from Node
+without a native module, which is a larger change than this defect justifies; if that ever becomes
+cheap, this is where it goes.
 
 **A single-pid kill, not a tree, and the reason is evidence rather than preference.** Windows needs
 `taskkill /t` because a Windows vendor CLI is a shim tree (`codex.cmd` → `cmd.exe` → `node`).
@@ -260,11 +309,15 @@ message that names the real symptom.
 - *a WSL window captures the selection exactly as a Windows one does*
 - *when the Windows side cannot be reached through interop, the refusal says so — not that nothing was copied*
 - *a direct Windows host whose helper itself fails also says so, not that nothing was copied*
-- *ran resolves ok on a clean exit, and not-ok with a reason on an error or on the cap*
+- *a helper that started and then hung is never reported as a Windows side that could not be reached*
+- *a helper that ran and ended badly is a PowerShell problem, and the sentence says so*
+- *ran names the phase it stopped in: ran, neverStarted, timedOut, failed*
 
-**`sideSettings.test.ts`** (extended)
+**`sideSettings.test.ts`** (extended — the shared value and the overlay carry DIFFERENT vendor rows,
+so a reader that takes the wrong one fails on the value and not merely on the shape)
 - *a side with its own overlay reads its own vendors, not the shared list*
 - *the switch off reads the shared vendors even when this side has an overlay recorded*
+- *a side whose overlay has no entry for a setting still reads the shared one*
 
 **`chatWiring.test.ts`** (extended — structural, the technique the file already uses for `argvFor`)
 - *the chat reads vendors only through the per-side reader, never straight off the shared configuration*
@@ -283,9 +336,40 @@ message that names the real symptom.
 - *a kill that races the process's own exit is reported gone, not unknown*
 - *a kill we are not allowed to make keeps the row*
 - *a shebang CLI whose argv[0] is the interpreter is still recognised by its own name*
+- *a stranger that merely mentions a vendor's name in its arguments is never ours*
+- *a /proc entry that has vanished settles the row rather than keeping it for ever*
 
-The last one is the measurement above turned into a regression: it fails against any implementation
-that reads `argv[0]` or `comm` alone.
+The last three are the two measurements and the plan round's sharpest finding turned into
+regressions. The shebang one fails against any implementation that reads `argv[0]` or `comm` alone;
+the stranger one fails against the looser "any cmdline entry" rule this plan started with; the
+vanished one fails against a `procEntry` that collapses `ENOENT` into `unknown`.
+
+## What the gate's plan round changed
+
+All three reviewers answered; 15 findings, 12 gating, verdict `good_enough` with the round budget
+spent. Six were taken and five refused; the rest were the same objection arriving three times.
+
+**Taken.** The identity rule was tightened from *any `cmdline` entry* to *`argv[0]` or `argv[1]`* —
+codex and gemini raised it independently and they are right: the loose rule would kill
+`python job.py codex` on a reused pid. `RunOutcome` gained a PHASE, because three reviewers
+separately objected that a helper which started and then hung must not be reported as an unreachable
+Windows side. `procEntry` now settles `ENOENT` as `absent` instead of `unknown`, so a process that
+exits mid-read cannot make its row immortal. The start time moved from the `/proc/<pid>` ctime to
+field 22 of `/proc/<pid>/stat`. The side derivation is named once and its test now uses different
+values on the two sides. And the pid-reuse window is written down rather than argued away.
+
+**Refused, with the reason recorded on the round.** A fallback for a `/proc/<pid>/task/<pid>/children`
+walk this plan does not implement. A pre-flight resolve of `powershell.exe`, which is the probe
+`wslNetwork.ts:14-20` already refused for this class of question. A `ps` subprocess as a fallback for
+a truncated `comm`, which would be a third spawn site for something `/proc` answers. A claim that a
+stale `ExtensionContext` can survive a workspace switch, which VS Code's lifecycle does not allow.
+And a Blocking claim that `powershell.exe` cannot run with a Linux `cwd` — refuted by the measurement
+that opens this plan, and by the fact that the helper is handed no path at all.
+
+**One accepted finding had a false reason.** The recommendation to read field 22 was taken, but its
+stated ground — that a `/proc/<pid>` ctime is the time of the `stat` call — is measured false. It is
+recorded here because a plan that adopts a fix while silently accepting a wrong explanation for it
+teaches the wrong thing to the next reader.
 
 ## Definition of Done
 
