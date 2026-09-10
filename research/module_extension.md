@@ -667,6 +667,12 @@ beside `RemoteProvenance`, which was already declared there.
 > in `panelView.ts`, both owned by other lanes; the `coai.chatProvider` setting ships with the UI
 > that reads it, since a setting drags a manifest entry, a help article and four translations behind
 > it. What exists is the pure half: the providers, the resolution, and the legacy rule.
+>
+> **It shipped without that setting (2026-09-10).** The pair rides on the CONVERSATION, and the
+> existing `coai.chatModel` — which has always held a row id — is migrated through `legacyPick`. A
+> second setting would have been a second thing to keep in step with the first, for a value already
+> saved. The sentence about what a setting drags behind it still stands, and the audit below is what
+> happened when nothing enforced it.
 
 **One reader, both sides.** The section renders `chatSettingsFrom(...)` and the command calls
 `chatSettingsFrom(...)` — the same function over the same per-side config reader. That is why these
@@ -2632,3 +2638,38 @@ Two places say it now, and they answer different questions:
 The finder that answers "what is in this workspace" moved out of `PanelProvider` into
 `snippetInWorkspace.ts`, because the copy command needed the same answer and two readers of the same
 four files would drift the moment somebody added a fifth.
+
+
+### A help article can rot without anything going red (2026-09-10)
+
+The note above says a setting drags a manifest entry, a help article and four translations behind
+it. That is true and it is the convention; it is also, as of this audit, unenforced.
+
+Seven things shipped into the chat tab over 2026-09-09 and 2026-09-10 — the provider-then-model
+picker, the named presets and their tab, the re-ask, the pasted picture, the running cost, `Stop`,
+and rendered answers with bounded links. The `chat-with-other-ai` article described **none** of
+them, in English or in any of the four translations, and the suite was green throughout.
+
+Green for a structural reason rather than an oversight. `bodyFor` distinguishes exactly two
+outcomes: a translation that is present, and one that is missing (English, `fallback: true`, a
+visible note). There is no third. And `helpCoverage.test.ts` aims at the two questions a stale
+translation answers correctly:
+
+| check | what a stale translation does |
+|---|---|
+| every command is described in the help | passes — it reads the ENGLISH corpus |
+| every article exists in every language the switch offers | passes — it compares KEYS |
+| a translation is a translation, not the English text pasted across | passes **emphatically** — the further behind it is, the less it resembles the English |
+
+So the suite rewarded the failure, and four languages confidently described a tab that no longer
+existed.
+
+Two things came out of it. The article is level in all five languages, with every claim read from
+the code rather than from the plans that described it — which is where the two sentences about a
+link's real limits came from, since `isConfinedRelativePath` plus `openWorkspaceFile`'s
+separator boundary refuse a path that leaves the workspace and `wasWritten` refuses an address a
+model merely mentioned. And the mechanism is written down as
+[PLAN_a_stale_translation_is_invisible.md](../todo/PLAN_a_stale_translation_is_invisible.md): a
+digest of the English body stamped beside each translation, a third outcome on `bodyFor`, a note on
+the page, and a test that goes red on the commit that makes a translation stale rather than on an
+audit a day later.
