@@ -423,10 +423,10 @@
   },
   "localArtifacts": {
     "extension": {
-      "version": "0.32.2",
-      "vsixSha256": "8ce4353b70c7b4f41dd5dda13bef22f086009aa525fc57af8df1237028797cbc",
-      "bundleSha256": "dbb949cf434c1ff7685ef52e5965bc044867053b3a7f3e2c5cf4b86de73d8da3",
-      "bytes": 303879,
+      "version": "0.32.3",
+      "vsixSha256": "613f08d113a9db711aa90a23a706bef4ab23d5e7533bcb6d0dca711aba430864",
+      "bundleSha256": "8cb761a4a1096a2f901639b1f8814a4bed2054fbacb0f17244b438b20e153a1f",
+      "bytes": 306056,
       "markerAndNeutralPaths": true,
       "canonicalBodyByteIdentical": true,
       "canonicalBodyBytes": 5934

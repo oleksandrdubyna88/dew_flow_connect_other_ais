@@ -29,7 +29,9 @@ import {
   versionSourceFor,
 } from './cliVersions';
 import { askVersion, capture } from './versionProbe';
-import { readOverlay, seedIfEmpty, writeOverlay } from './sideSettings';
+import { seedIfEmpty, writeOverlay } from './sideSettings';
+import { readerFor } from './sideConfig';
+import { hostPlatform, Platform } from './hostSide';
 import { thisSide } from './installer';
 import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog, EMPTY_LOG } from './roundsDb';
@@ -50,7 +52,6 @@ import {
 import {
   ConfigReader,
   OVERLAID_SETTINGS,
-  overlaidReader,
   roleRecordUpdate,
   SettingMessage,
   settingsFrom,
@@ -109,7 +110,6 @@ import { TeamServerState, slotSentence } from './teamServerView';
 import { coaiDataDir } from './dataDir';
 import {
   executableFor,
-  Platform,
   VendorInstall,
   vendorInstall,
   vendorTerminal,
@@ -871,7 +871,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   }
 
   private async oneCliStatus(vendor: Vendor): Promise<CliStatus> {
-    const source = versionSourceFor(vendor.runtime, platform(), process.arch === 'arm64' ? 'arm64' : 'x64');
+    const source = versionSourceFor(vendor.runtime, hostPlatform(), process.arch === 'arm64' ? 'arm64' : 'x64');
 
     const [installed, latest] = await Promise.all([
       this.installedCliVersion(vendor),
@@ -897,7 +897,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // On Windows the answer is usually `codex.cmd`, so the candidates are tried in order and the
     // first that ANSWERS wins. A name that does not exist fails immediately with ENOENT, so this
     // costs nothing when the first one is right.
-    for (const candidate of versionProbeCandidates(executable, platform())) {
+    for (const candidate of versionProbeCandidates(executable, hostPlatform())) {
       const version = await askVersion(candidate);
       if (version.length > 0) {
         return version;
@@ -971,10 +971,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    // `process.platform` is the extension HOST's platform, which is the one that matters: in a
-    // VS Code window connected to WSL it is 'linux', whatever the machine's badge says, and the
-    // terminal this opens runs there too.
-    const install = commandFor(vendor, platform());
+    // The extension HOST's platform, which is the one that matters here: the terminal this opens
+    // runs on this side, so a WSL window wants the linux instructions. `hostSide.ts` is where that
+    // doctrine and its narrowing now live, in one place — this used to be one of three copies.
+    const install = commandFor(vendor, hostPlatform());
     if (install.command.length === 0) {
       const open = 'Open the instructions';
       const choice = await vscode.window.showInformationMessage(install.note, open);
@@ -1192,13 +1192,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * <p>One accessor, because a read that goes around it is a setting that silently stays shared —
    * and the person who set a different proxy on one side would find out when a review ran against
    * the wrong company's server.</p>
+   *
+   * <p>The rule was right and the ACCESSOR was private, which is not the same thing: the chat and the
+   * settings file handed to `coai-mcp` went around it because they could not reach it. The decision
+   * now lives in `sideSettings.sideConfigReader`, where all three call it, and this method is the
+   * panel's way in rather than the only implementation.</p>
    */
   private read(config: vscode.WorkspaceConfiguration): ConfigReader {
-    const shared: ConfigReader = (section) => config.get(section);
-
-    return this.perSide(config)
-      ? overlaidReader(shared, readOverlay(this.context.globalState, thisSide(this.context.globalStorageUri)))
-      : shared;
+    return readerFor(this.context, config);
   }
 
   /**
@@ -2203,7 +2204,3 @@ function nonce(): string {
   return Array.from({ length: 32 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
 }
 
-/** The extension host's platform, narrowed to the three the buttons can answer for. */
-function platform(): Platform {
-  return process.platform === 'win32' ? 'win32' : process.platform === 'darwin' ? 'darwin' : 'linux';
-}

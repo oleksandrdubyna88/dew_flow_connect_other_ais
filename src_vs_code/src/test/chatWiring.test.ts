@@ -172,3 +172,88 @@ test('a stopped turn is written into the transcript before the conversation is c
     'the carry is taken BEFORE the stop is recorded, so it carries the dangling question',
   );
 });
+
+/**
+ * The third thing no unit test can see: a read that goes AROUND the one accessor.
+ *
+ * <p>`panelProvider` has said since the per-side switch shipped that "a read that goes around it is
+ * a setting that silently stays shared" — and its accessor was private, so three reads went around
+ * it. Both files below import `vscode` and cannot be exercised here, which is exactly the shape the
+ * `argvFor` guard above was written for: the fact is in the source, so the source is what is
+ * checked.</p>
+ *
+ * <p>It matters most for `vendors`, because that row carries `executablePath`. On a machine with the
+ * switch on, a shared read hands a WSL window the Windows npm shim.</p>
+ */
+const DIRECT_VENDORS = /\.get(?:<[^>]*>)?\(\s*'vendors'\s*\)/g;
+
+test('the chat reads vendors only through the per-side reader, never straight off the shared configuration', () => {
+  const text = read(join('src', 'chatCommand.ts'));
+
+  assert.deepStrictEqual(
+    [...text.matchAll(DIRECT_VENDORS)].map((hit) => hit[0]),
+    [],
+    'a direct read of vendors bypasses this side’s overlay — go through the per-side reader',
+  );
+  assert.match(
+    text,
+    /readerFor\(/,
+    'nothing in the chat builds a per-side reader, so every setting it reads is the shared one',
+  );
+});
+
+test('the side is bound before any command can be invoked', () => {
+  // `sideRead` falls back to the shared configuration while nothing is bound, which is exactly the
+  // behaviour this branch removed. Four reviewers named that window in one round. It is closed by
+  // ORDERING — the binding is the first statement of `activate` — and this is what keeps it closed.
+  const text = read(join('src', 'extension.ts'));
+  const bound = text.indexOf('chatReadsThisSide(context)');
+  const firstCommand = text.indexOf('registerCommand(');
+
+  assert.ok(bound > 0, 'nothing binds this side, so every chat reads the shared settings');
+  assert.ok(
+    firstCommand > bound,
+    'a command is registered before the side is bound — an invocation in that window reads shared settings',
+  );
+});
+
+test('the per-side reader is built in exactly one place', () => {
+  // `sideConfigReader` takes any Side at all. One construction, which derives the side from the
+  // context, is what makes "this side" an invariant instead of a habit each caller has to keep.
+  const callers = readdirSync(join(ROOT, 'src'))
+    .filter((name) => name.endsWith('.ts'))
+    .filter((name) => /(?<!function )sideConfigReader\(/.test(read(join('src', name))));
+
+  assert.deepStrictEqual(
+    callers,
+    ['sideConfig.ts'],
+    'the per-side reader is assembled somewhere other than sideConfig.ts, so a caller can pass its own Side',
+  );
+});
+
+test('the orphan sweep asks this side rather than giving up because it is not Windows', () => {
+  // A vendor CLI orphaned by a force-kill is a signed-in process with nobody to stop it. The sweep
+  // answered 'unknown' for every non-Windows host, and 'unknown' is the one outcome that does NOT
+  // settle a row — so under WSL the record was kept and re-asked at every activation, for ever.
+  const text = read(join('src', 'chatOrphans.ts'));
+
+  assert.doesNotMatch(
+    text,
+    /process\.platform !== 'win32'/,
+    'the sweep still refuses every host that is not Windows, so a WSL orphan is never ended',
+  );
+  assert.match(text, /endIfOursPosix/, 'nothing asks /proc, so there is no answer for a Linux child');
+});
+
+test('the server settings file is fed this side’s settings, not only the shared ones', () => {
+  // The same bypass with a wider blast radius: this file is what coai-mcp reads, so a shared read
+  // here runs the GATE's reviewers off another side's vendor list, not only the chat.
+  const text = read(join('src', 'extension.ts'));
+
+  assert.deepStrictEqual(
+    [...text.matchAll(DIRECT_VENDORS)].map((hit) => hit[0]),
+    [],
+    'the server is handed the shared vendors, whatever this side has configured',
+  );
+  assert.match(text, /readerFor\(/, 'nothing here builds a per-side reader');
+});

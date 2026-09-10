@@ -261,3 +261,9 @@ After the echo synchronization correction, the full normal npm test run reports
 1,349 total / 1,348 passed / 1 skipped, plus all three generator scenarios. The updated
 Release RuleFiles executable reports 22 passed. Family pin, lifecycle and checklist-shape
 checks pass. These are local checks; PR CI and installed-host behavior are separate.
+
+Final main reconciliation through `dea70a1` preserved its Windows/WSL chat changes and
+resolved its legacy gitlink update by retaining the same SHA at the neutral mount. The
+normal packaging run passed 1,397 extension tests / 1 skip, plus all three generator cases.
+Package 0.32.3 was independently checked for all 5,934 canonical body bytes, as above;
+its immutable hashes replace the earlier uninstalled validation package in the evidence JSON.

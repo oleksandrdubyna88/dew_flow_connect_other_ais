@@ -1,24 +1,31 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { readdir, rm, stat } from 'node:fs/promises';
+import { readFile, readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   ChildRecord,
+  KillOutcome,
   afterSweep,
+  bootSecondsIn,
   filesToSweep,
   forgotten,
   imageOf,
   killOutcome,
   ledgerName,
   ledgerText,
+  namesOf,
   ownerOf,
   parseLedger,
+  procStat,
   recorded,
   settled,
+  startedAtMs,
+  stillOurs,
   tooOld,
   verifyAndKill,
   worthAsking,
 } from './chatLedger';
 import { capture } from './versionProbe';
+import { hostPlatform } from './hostSide';
 
 /**
  * The ledger's world-facing half: the files, the command, and the log line.
@@ -140,12 +147,169 @@ function ownerAlive(pid: number): boolean {
   }
 }
 
-/** One candidate: check the three facts and end its tree, inside a single command. */
-async function endIfOurs(record: ChildRecord): Promise<ReturnType<typeof killOutcome>> {
+/**
+ * What `/proc` could say about one pid.
+ *
+ * <p>`absent` and `unknown` are deliberately different answers, and collapsing them was a real
+ * defect in the first draft of this: a process that exits while its files are being read is GONE and
+ * its row can be struck out, while a read that failed for any other reason is a question nobody
+ * answered — and a row struck out on that would be an orphan nobody ever looks for again.</p>
+ */
+export type ProcEntry =
+  | {
+    readonly kind: 'found';
+    readonly names: readonly string[];
+    /** Epoch milliseconds, or `-1` when either half of the sum could not be read. */
+    readonly startedMs: number;
+    /** The kernel's own field 22, kept unconverted so it can be compared EXACTLY. See `endVerified`. */
+    readonly startTicks: number;
+  }
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'unknown' };
+
+/**
+ * When this machine booted, read ONCE.
+ *
+ * <p>`btime` is host-wide and cannot change while this process lives, and the sweep asks about every
+ * candidate — so reading and regex-parsing `/proc/stat` per row was one redundant file read per
+ * orphan at activation. Two reviewers found it independently. A read that fails leaves the cache
+ * unset rather than poisoning it with a `-1` nothing could recover from.</p>
+ */
+let bootSeconds = -1;
+
+async function bootOnce(): Promise<number> {
+  if (bootSeconds < 0) {
+    bootSeconds = bootSecondsIn(await readFile('/proc/stat', 'utf8').catch(() => ''));
+  }
+
+  return bootSeconds;
+}
+
+/** The two files that identify a Linux process, against the boot time its start is counted from. */
+async function procEntry(pid: number): Promise<ProcEntry> {
+  try {
+    const [statText, cmdline] = await Promise.all([
+      readFile(`/proc/${pid}/stat`, 'utf8'),
+      readFile(`/proc/${pid}/cmdline`, 'utf8'),
+    ]);
+    const { comm, startTicks } = procStat(statText);
+
+    return {
+      kind: 'found',
+      // NUL-separated, and the trailing separator leaves an empty last element that is not an argument.
+      names: namesOf(comm, cmdline.split('\0').filter((part) => part.length > 0)),
+      startedMs: startedAtMs(startTicks, await bootOnce()),
+      startTicks,
+    };
+  } catch (reason) {
+    return (reason as NodeJS.ErrnoException).code === 'ENOENT' ? { kind: 'absent' } : { kind: 'unknown' };
+  }
+}
+
+/**
+ * The kernel's own start ticks for a pid — the cheapest identifying read there is, and the LAST
+ * thing done before a signal.
+ *
+ * <p>It exists to narrow the pid-reuse window, which two reviewers filed as Blocking. The window
+ * cannot be closed in Node — `pidfd_open` is the only thing that closes it and needs a native module
+ * — but it can be made small and exact: the identity read that used to precede a kill was two files
+ * and two parses, and this is one small file compared byte-for-byte. `-1` for every failure, which
+ * never equals a real tick count, so a process that vanished in that window is not killed.</p>
+ */
+async function startTicksOf(pid: number): Promise<number> {
+  try {
+    return procStat(await readFile(`/proc/${pid}/stat`, 'utf8')).startTicks;
+  } catch {
+    return -1;
+  }
+}
+
+/**
+ * One candidate on a POSIX host: check the same three facts, then end it.
+ *
+ * <p><b>Why this exists at all.</b> The Windows path asks its three facts and kills inside ONE
+ * PowerShell command, and everything that was not Windows used to answer `'unknown'` — which is the
+ * one outcome that does not settle a row. So in a WSL window a vendor CLI orphaned by a force-kill
+ * was never ended, and its record was re-asked at every activation for ever.</p>
+ *
+ * <p><b>Both sides of the world are injected</b>, so all seven branches are a test on a Windows
+ * machine with no `/proc` and no signals to send. That is the one place this deviates from the
+ * neighbouring Windows path, which is untested because a PowerShell round trip cannot be faked
+ * cheaply; there was no such excuse here.</p>
+ *
+ * <p><b>One pid, not a tree, and that is evidence rather than preference.</b> Windows needs
+ * `taskkill /t` because a vendor CLI there is a shim tree — `codex.cmd` to `cmd.exe` to `node`.
+ * `cliVersions.needsShell` gates that to `win32` and a `.cmd`/`.bat` name, so on Linux `spawn` never
+ * goes through a shell and the pid we wrote down IS the vendor process.
+ * `/proc/<pid>/task/<pid>/children` was measured to exist and answer, and is where a walk would go if
+ * a vendor is ever found to daemonise — on that evidence, not before it.</p>
+ *
+ * <p><b>The pid-reuse window is narrowed, not claimed away.</b> Nothing happens between the read and
+ * the signal — no await, no second read — and a replacement would have to carry the same executable
+ * name AND have started within ten seconds of the recorded start to be mistaken for ours. `pidfd_open`
+ * would close it properly and is not reachable from Node without a native module.</p>
+ */
+export async function endIfOursPosix(
+  record: ChildRecord,
+  observe: (pid: number) => Promise<ProcEntry> = procEntry,
+  end: (pid: number) => void = (pid) => process.kill(pid, 'SIGKILL'),
+  ticks: (pid: number) => Promise<number> = startTicksOf,
+): Promise<KillOutcome> {
+  const seen = await observe(record.pid);
+  if (seen.kind !== 'found') {
+    return seen.kind === 'absent' ? 'gone' : 'unknown';
+  }
+  // A start time nobody could COMPUTE is not evidence that this is a stranger. Reading it as one
+  // answers 'not ours', which SETTLES the row — so a permission failure or an unparsable `/proc`
+  // would strike out the record of a process that is still running, which is the outcome this whole
+  // sweep exists to prevent. Unknown keeps it and asks again. (gemini, the code round.)
+  if (seen.startedMs < 0) {
+    return 'unknown';
+  }
+  if (!stillOurs(record, seen)) {
+    return 'not ours';
+  }
+
+  return endVerified(record.pid, seen.startTicks, end, ticks);
+}
+
+/**
+ * Re-read the one identifying number, then signal — with nothing between the two.
+ *
+ * <p>This is what is left of the pid-reuse race after it was narrowed as far as Node allows. The
+ * comparison is the kernel's own tick count and is EXACT, where `stillOurs` necessarily works to a
+ * ten-second tolerance (the ledger records `Date.now()` at spawn, and `btime` is whole seconds).
+ * A recycled pid would have to be re-created between this read and the next statement AND land on
+ * the identical start tick to survive it.</p>
+ */
+async function endVerified(
+  pid: number,
+  startTicks: number,
+  end: (pid: number) => void,
+  ticks: (pid: number) => Promise<number>,
+): Promise<KillOutcome> {
+  if (await ticks(pid) !== startTicks) {
+    return 'not ours';
+  }
+
+  try {
+    end(pid);
+
+    return 'killed';
+  } catch (reason) {
+    // It exited between the read and the signal — a benign race, and the same answer the Windows
+    // path gives for a pid that is no longer there. Anything else, `EPERM` above all, is a process
+    // we may not touch: unknown, so the row is kept and asked about again.
+    return (reason as NodeJS.ErrnoException).code === 'ESRCH' ? 'gone' : 'unknown';
+  }
+}
+
+/** One candidate on Windows: the three facts and the tree kill, inside a single command. */
+async function endIfOursWindows(record: ChildRecord): Promise<KillOutcome> {
   const command = verifyAndKill(record);
-  if (process.platform !== 'win32' || command.length === 0) {
-    // The verify-and-kill is PowerShell, and a record whose image could not appear in a command is
-    // one this side refuses to build one for. Nothing claimed, nothing killed, the record kept.
+  if (command.length === 0) {
+    // A record whose image could not appear in a command is one this side refuses to build one for.
+    // Nothing claimed, nothing killed, the record kept.
     return 'unknown';
   }
   const ran = await capture(
@@ -156,6 +320,18 @@ async function endIfOurs(record: ChildRecord): Promise<ReturnType<typeof killOut
   );
 
   return killOutcome(ran.code, ran.output);
+}
+
+/** One candidate, asked in the way the side this host is on can answer. */
+async function endIfOurs(record: ChildRecord): Promise<KillOutcome> {
+  const here = hostPlatform();
+  if (here === 'linux') {
+    return endIfOursPosix(record);
+  }
+
+  // darwin has no `/proc` and no verified equivalent yet, so it answers exactly as it did before:
+  // nothing claimed, nothing killed, the record kept for a build that can answer.
+  return here === 'win32' ? endIfOursWindows(record) : 'unknown';
 }
 
 /** Everything in this file is older than the bound — nothing in it can be asked about ever again. */

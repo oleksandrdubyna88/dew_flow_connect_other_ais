@@ -40,13 +40,15 @@ import { ChatOutcome, ReportedUsage, chatTurnRecord } from './chatUsage';
 import { recordChatTurn } from './chatUsageFile';
 import { chatSettingsFrom } from './chatSettings';
 import { chatUiScale, createChatPanel, pushChatDraft, pushChatState } from './chatPanel';
-import { captureSelection, COPY_SCRIPT, argvFor, ran } from './selectionCapture';
+import { captureSelection, COPY_SCRIPT, RunOutcome, argvFor, ran } from './selectionCapture';
+import { windowsReach } from './hostSide';
 import { ChatHome, adapterFor, chatHome, chatRuntimeRefusal, defaultExecutableFor } from './cliChatLaunch';
 import { chatProcessFor } from './chatProcess';
 import { launch } from './processLauncher';
 import { resolvedExecutable } from './versionProbe';
 import { CARRY_BUDGET, REMOTE_CARRY_BUDGET, carriedTurn, openingTurn } from './chatPrompt';
-import { LanguageCode } from './settingsShape';
+import { ConfigReader, LanguageCode } from './settingsShape';
+import { readerFor } from './sideConfig';
 import { sourceSession, TabSnapshot } from './sessionKey';
 import { triggerPlan } from './chatTrigger';
 import { Vendor, vendorsFrom } from './vendors';
@@ -172,6 +174,49 @@ export function rememberChatsIn(store: ChatTabMemory): void {
   memory = store;
 }
 
+/**
+ * This extension host, so the chat can read the settings of the side it is actually on.
+ *
+ * <p>The same bind-once shape as `rememberChatsIn` above and as `chatOrphans.openLedger`, and for the
+ * same reason: an extension host has ONE context for its whole life, and threading it from `activate`
+ * through the command, the conversation, the picker and the model switch would put a parameter on six
+ * signatures to carry a value that never changes.</p>
+ *
+ * <p>A worry raised on the plan round — that this could go stale across a workspace switch — does not
+ * arise: `ExtensionContext` is made once per extension host, and a different workspace is a different
+ * host. What CAN change between two invocations is the settings themselves, which is why the reader
+ * below is built per call rather than kept here.</p>
+ */
+let hostContext: vscode.ExtensionContext | undefined;
+
+/** Bind the host whose settings this chat reads. Called once, from `activate`. */
+export function chatReadsThisSide(context: vscode.ExtensionContext): void {
+  hostContext = context;
+}
+
+/**
+ * How this command reads a `coai.*` setting: this side's own value first, the shared one otherwise.
+ *
+ * <p>It matters for `vendors` above all, because that row carries `executablePath`. With *Separate
+ * settings for each side* on, the shared list is another side's — and on a machine where a bare
+ * `codex` in WSL resolves through the interop PATH into the Windows npm directory, reading it here
+ * launched a Windows shim from Linux.</p>
+ *
+ * <p>Falls back to the shared reader when nothing has been bound, which is only the case before
+ * `activate` has run. A chat that reads shared settings is the old behaviour; a chat that throws is
+ * a new defect.</p>
+ */
+function sideRead(config: vscode.WorkspaceConfiguration): ConfigReader {
+  const host = hostContext;
+
+  // Unreachable once `activate` has run, and `chatReadsThisSide` is called at the TOP of it —
+  // before any command is registered, so nothing can be invoked while this is undefined. It stays
+  // because a chat that reads the shared settings is the old behaviour, and a chat that throws on a
+  // keypress is a new defect. `chatWiring.test.ts` pins the ordering. (codex, local and gemini, the
+  // code round, four findings.)
+  return host === undefined ? (section) => config.get(section) : readerFor(host, config);
+}
+
 /** The tabs, narrowed to what `sessionKey` judges on. */
 function snapshots(): { active: TabSnapshot | undefined; all: TabSnapshot[] } {
   const all: TabSnapshot[] = [];
@@ -201,8 +246,22 @@ function emptyTempDir(): ChatHome {
   );
 }
 
-/** Run the copy helper, and resolve when it has finished however it finished. */
-function pressCopy(): Promise<void> {
+/**
+ * Run the copy helper, and say how it finished.
+ *
+ * <p><b>The same launch on both sides of the machine, and that is measured rather than hoped.</b> In
+ * a Remote-WSL window this is a Linux process starting a Windows one: `spawn` resolves a bare name
+ * through the PATH, WSL's interop puts the Windows directories on it, and binfmt hands the PE over.
+ * The extension host's own environment was inspected on the operator's machine — 33 Windows entries
+ * including `WindowsPowerShell/v1.0`, `WSL_INTEROP` set — and the whole helper ran in 1.07 s against
+ * the 6 s cap.</p>
+ *
+ * <p>`os.tmpdir()` is `/tmp` there, and it is the FASTER of the two candidates: 1.07 s against 1.4–1.9 s
+ * from `/mnt/c`. So this line is unchanged, deliberately — a reviewer reading it should not take it
+ * for an oversight. It matters not at all to the script, which is handed no path: `COPY_SCRIPT`
+ * travels base64-encoded, opens nothing and takes no argument.</p>
+ */
+function pressCopy(): Promise<RunOutcome> {
   const child = launch('powershell.exe', argvFor(COPY_SCRIPT), { cwd: os.tmpdir() });
 
   return ran(child, (ms, run) => {
@@ -656,7 +715,7 @@ function savedModels(config: vscode.WorkspaceConfiguration): readonly ModelPrese
  * place so the two callers cannot drift.</p>
  */
 function savedPick(config: vscode.WorkspaceConfiguration, saved: string): LegacyPick {
-  const vendors = vendorsFrom(config.get('vendors'));
+  const vendors = vendorsFrom(sideRead(config)('vendors'));
 
   return legacyPick(chatProvidersFrom(vendors, chatCatalogFrom(config)), vendors, saved);
 }
@@ -678,7 +737,7 @@ function readyToChat(
   askedProvider: string,
   askedModel: string,
 ): Ready {
-  const vendors = vendorsFrom(config.get('vendors'));
+  const vendors = vendorsFrom(sideRead(config)('vendors'));
   const list = chatProvidersFrom(vendors, chatCatalogFrom(config));
   const pick = resolveChatPick(vendors, list, askedProvider, askedModel);
   if (!pick.ok) {
@@ -714,17 +773,21 @@ const hostClipboard = {
  * tab appears there is nothing at all to see. A person who presses a shortcut and watches nothing
  * happen presses it again, which is how one question becomes two. The menu path is instant and says
  * nothing.</p>
+ *
+ * <p>The reach is asked once, here, and handed down: `captureSelection` is pure enough to be tested
+ * against every side of the machine precisely because it does not go looking for one. Through interop
+ * the round trip is ~1 s rather than the ~1.7 s this label was written for, so the label and the cap
+ * both stand as they are.</p>
  */
-function passageFor(path: 'menu' | 'keyboard'): Promise<{ text: string; failure: string }> {
+async function passageFor(path: 'menu' | 'keyboard'): Promise<{ text: string; failure: string }> {
   if (path === 'menu') {
     return hostClipboard.read().then((text) => ({ text, failure: '' }));
   }
+  const reach = await windowsReach();
 
-  return Promise.resolve(
-    vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Window, title: 'Copying the selection…' },
-      () => captureSelection(pressCopy, hostClipboard),
-    ),
+  return vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Window, title: 'Copying the selection…' },
+    () => captureSelection(pressCopy, hostClipboard, reach),
   );
 }
 
@@ -812,7 +875,7 @@ async function cliFor(vendor: Vendor): Promise<{ resolved: string; refusal: stri
 
 /** The vendor row behind a model id, read fresh — the person may have edited settings since. */
 function vendorFor(modelId: string): Vendor | undefined {
-  return vendorsFrom(vscode.workspace.getConfiguration('coai').get('vendors')).find((row) => row.id === modelId);
+  return vendorsFrom(sideRead(vscode.workspace.getConfiguration('coai'))('vendors')).find((row) => row.id === modelId);
 }
 
 /**

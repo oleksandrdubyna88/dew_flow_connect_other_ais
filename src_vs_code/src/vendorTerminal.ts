@@ -1,3 +1,4 @@
+import { Platform } from './hostSide';
 import { Vendor } from './vendors';
 
 /**
@@ -171,15 +172,14 @@ export function keyVariable(id: string): string {
  * and the panel is where somebody is standing when they find that out. Hunting a vendor's docs to
  * paste one npm line is the kind of small friction that stops a reviewer being added at all.</p>
  */
-/** The operating systems the buttons can answer for — what `process.platform` reports. */
-export type Platform = 'win32' | 'linux' | 'darwin';
 
 /**
  * How to install the CLI a reviewer needs, for the operating system the panel is actually on.
  *
  * <p>The platform is an argument rather than a lookup so this stays pure — and because it is the
  * fact that changes everything: in a VS Code window connected to WSL the extension host IS linux,
- * whatever the machine's badge says, and the answers must be the linux ones.</p>
+ * whatever the machine's badge says, and the answers must be the linux ones. What the host can
+ * REACH from there is a second question, and `hostSide.ts` is where both now live.</p>
  */
 export interface VendorInstall {
   /** The install command for this platform, or empty when the vendor publishes none for it. */

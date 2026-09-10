@@ -1,6 +1,19 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CLIPBOARD_SENTINEL, COPY_SCRIPT, Clipboard, argvFor, captureSelection, markerFor, shouldRestore } from '../selectionCapture';
+import {
+  CLIPBOARD_SENTINEL,
+  COPY_SCRIPT,
+  Clipboard,
+  RunOutcome,
+  argvFor,
+  captureSelection,
+  markerFor,
+  outcomeOfExit,
+  ran,
+  refusalFor,
+  shouldRestore,
+} from '../selectionCapture';
+import { WindowsReach } from '../hostSide';
 
 /**
  * Borrowing the clipboard to copy somebody else's selection.
@@ -27,6 +40,23 @@ function fakeClipboard(initial: string): Clipboard & { held(): string; writes():
     writes: () => writes,
   };
 }
+
+/**
+ * The three sides a capture can be attempted from, named rather than spelled at every call.
+ *
+ * <p>They replace the `platform` string this function used to take, and the replacement is the point:
+ * `'linux'` was two different situations wearing one word — a WSL window with a Windows session one
+ * hop away, and a Linux box with none — and the old signature could not tell them apart.</p>
+ */
+const DIRECT: WindowsReach = { kind: 'direct' };
+const INTEROP: WindowsReach = { kind: 'interop' };
+const NONE: WindowsReach = { kind: 'none' };
+
+/** A helper that started, ran and exited cleanly — whatever it did or did not put on the clipboard. */
+const RAN: RunOutcome = { phase: 'ran', refusal: '' };
+
+/** The commonest fake: the helper ran and copied nothing. */
+const copied = async (): Promise<RunOutcome> => RAN;
 
 test('the helper releases every modifier before it presses anything', () => {
   // A keybinding leaves Ctrl and Alt physically down. A synthetic Ctrl+C on top of a held Alt is
@@ -80,9 +110,11 @@ test('a captured selection comes back, and the clipboard is put where it was', (
     const capture = await captureSelection(
       async () => {
         await clipboard.write('the selected passage');
+
+        return RAN;
       },
       clipboard,
-      'win32',
+      DIRECT,
     );
 
     assert.deepStrictEqual(capture, { text: 'the selected passage', failure: '' });
@@ -104,7 +136,7 @@ test('a clipboard somebody else wrote to during the window is left alone', async
     write: clipboard.write,
   };
 
-  const capture = await captureSelection(async () => undefined, watching, 'win32');
+  const capture = await captureSelection(copied, watching, DIRECT);
 
   assert.strictEqual(capture.text, 'the selected passage');
   assert.deepStrictEqual(
@@ -117,7 +149,7 @@ test('a clipboard somebody else wrote to during the window is left alone', async
 test('a copy that landed nothing says so, and still gives the clipboard back', async () => {
   const clipboard = fakeClipboard('untouched');
 
-  const capture = await captureSelection(async () => undefined, clipboard, 'win32');
+  const capture = await captureSelection(copied, clipboard, DIRECT);
 
   assert.strictEqual(capture.text, '');
   assert.match(capture.failure, /nothing was copied/);
@@ -127,7 +159,7 @@ test('a copy that landed nothing says so, and still gives the clipboard back', a
 test('somewhere that is not Windows refuses in words, and names the way through', async () => {
   const clipboard = fakeClipboard('untouched');
 
-  const capture = await captureSelection(async () => undefined, clipboard, 'darwin');
+  const capture = await captureSelection(copied, clipboard, NONE);
 
   assert.strictEqual(capture.text, '');
   assert.match(capture.failure, /right-click menu/, 'the refusal does not say what to do instead');
@@ -141,7 +173,7 @@ test('a clipboard we could not read as text is never written to', async () => {
   // nothing to give back, the empty clipboard is its own sentinel and we touch nothing.
   const clipboard = fakeClipboard('');
 
-  const capture = await captureSelection(async () => undefined, clipboard, 'win32');
+  const capture = await captureSelection(copied, clipboard, DIRECT);
 
   assert.strictEqual(capture.text, '');
   assert.match(capture.failure, /nothing was copied/);
@@ -154,9 +186,11 @@ test('a copy onto an unreadable clipboard is kept, not replaced by the emptiness
   const capture = await captureSelection(
     async () => {
       await clipboard.write('the selected passage');
+
+      return RAN;
     },
     clipboard,
-    'win32',
+    DIRECT,
   );
 
   assert.strictEqual(capture.text, 'the selected passage');
@@ -172,13 +206,209 @@ test('a passage that happens to BE the marker is still a passage', async () => {
   const capture = await captureSelection(
     async () => {
       await clipboard.write(CLIPBOARD_SENTINEL);
+
+      return RAN;
     },
     clipboard,
-    'win32',
+    DIRECT,
   );
 
   assert.strictEqual(capture.text, CLIPBOARD_SENTINEL);
   assert.strictEqual(capture.failure, '');
+});
+
+test('a WSL window captures the selection exactly as a Windows one does', async () => {
+  // The defect this branch exists for. The extension host is linux in a Remote-WSL window, but the
+  // editor window is a Windows one and the helper is one interop hop away — measured on the
+  // operator's machine at 1.07 s, against a 6 s cap.
+  const clipboard = fakeClipboard('what the person had copied');
+
+  const capture = await captureSelection(
+    async () => {
+      await clipboard.write('the selected passage');
+
+      return RAN;
+    },
+    clipboard,
+    INTEROP,
+  );
+
+  assert.deepStrictEqual(capture, { text: 'the selected passage', failure: '' });
+});
+
+test('when the Windows side cannot be reached through interop, the refusal says so — not that nothing was copied', async () => {
+  // The lie this change removes. The helper never started — interop switched off in /etc/wsl.conf,
+  // a docker-desktop distro with no /mnt/c, a PATH without System32 — and the person was told to
+  // select some text, which they had already done.
+  const clipboard = fakeClipboard('what the person had copied');
+
+  const capture = await captureSelection(
+    async () => ({ phase: 'neverStarted', refusal: 'spawn powershell.exe ENOENT' }),
+    clipboard,
+    INTEROP,
+  );
+
+  assert.strictEqual(capture.text, '');
+  assert.match(capture.failure, /could not be reached/);
+  assert.match(capture.failure, /ENOENT/, 'what the system actually said was thrown away');
+  assert.doesNotMatch(capture.failure, /select the text first/);
+  assert.strictEqual(clipboard.held(), 'what the person had copied', 'a helper that never ran kept the borrow');
+});
+
+test('a direct Windows host whose helper itself fails also says so, not that nothing was copied', async () => {
+  const clipboard = fakeClipboard('what the person had copied');
+
+  const capture = await captureSelection(
+    async () => ({ phase: 'neverStarted', refusal: 'spawn powershell.exe EACCES' }),
+    clipboard,
+    DIRECT,
+  );
+
+  assert.match(capture.failure, /could not be started/);
+  assert.doesNotMatch(capture.failure, /interop|Windows side/, 'a Windows host was told about a hop it does not make');
+});
+
+test('a helper that started and then hung is never reported as a Windows side that could not be reached', async () => {
+  // Three reviewers raised this from three directions on the plan round. A machine under load and a
+  // machine with interop switched off need two different things done about them.
+  const clipboard = fakeClipboard('what the person had copied');
+
+  const capture = await captureSelection(
+    async () => ({ phase: 'timedOut', refusal: 'it was still running after 6000 ms' }),
+    clipboard,
+    INTEROP,
+  );
+
+  assert.match(capture.failure, /did not finish in time/);
+  assert.doesNotMatch(capture.failure, /could not be reached/, 'a slow machine was reported as an unreachable one');
+});
+
+test('a helper that copied the passage and then exited badly is still a capture', async () => {
+  // The phase explains a failure; it never overrules the evidence. Refusing a passage the person can
+  // see was copied, on the strength of an exit code, would throw away work that plainly happened.
+  const clipboard = fakeClipboard('what the person had copied');
+
+  const capture = await captureSelection(
+    async () => {
+      await clipboard.write('the selected passage');
+
+      return { phase: 'failed', refusal: 'it exited 1' };
+    },
+    clipboard,
+    DIRECT,
+  );
+
+  assert.strictEqual(capture.text, 'the selected passage');
+  assert.strictEqual(capture.failure, '');
+});
+
+test('every refusal but one names the way through, and only the true one mentions the selection', () => {
+  const ranCleanly = refusalFor(INTEROP, RAN);
+
+  assert.match(ranCleanly, /select the text first/, 'the one case where the selection IS the problem');
+  for (const outcome of [
+    { phase: 'neverStarted', refusal: 'ENOENT' },
+    { phase: 'timedOut', refusal: 'still running' },
+    { phase: 'failed', refusal: 'exited 1' },
+  ] as const) {
+    const said = refusalFor(INTEROP, outcome);
+
+    assert.match(said, /right-click menu/, `${outcome.phase} does not say what to do instead`);
+    assert.doesNotMatch(said, /select the text first/, `${outcome.phase} blames the person's selection`);
+  }
+});
+
+test('an exit code is a phase, and a bad one keeps what the helper said', () => {
+  assert.deepStrictEqual(outcomeOfExit(0, 'ignored, because it worked'), { phase: 'ran', refusal: '' });
+
+  const failed = outcomeOfExit(1, '  Add-Type : cannot compile  ');
+  assert.strictEqual(failed.phase, 'failed');
+  assert.strictEqual(failed.refusal, 'it exited 1: Add-Type : cannot compile');
+
+  // Nothing on stderr is not the same as an empty reason with a dangling colon.
+  assert.strictEqual(outcomeOfExit(2, '   ').refusal, 'it exited 2');
+});
+
+test('a very long stderr tail is cut to something a notification can hold', () => {
+  const said = outcomeOfExit(1, 'x'.repeat(5000)).refusal;
+
+  assert.ok(said.length < 260, `a notification was handed ${said.length} characters`);
+  assert.match(said, /^it exited 1: x+$/);
+});
+
+/** A process handle that does nothing until a test makes it do something. */
+function fakeChild(): {
+  handle: Parameters<typeof ran>[0];
+  exit(code: number): void;
+  fail(reason: string): void;
+  killed(): boolean;
+} {
+  let onExit: (code: number) => void = () => undefined;
+  let onError: (reason: string) => void = () => undefined;
+  let wasKilled = false;
+
+  return {
+    handle: {
+      pid: 1,
+      writeLine: () => true,
+      writeAndEnd: () => true,
+      onStdout: () => () => undefined,
+      onLine: () => () => undefined,
+      onExit: (listener) => {
+        onExit = listener;
+      },
+      onError: (listener) => {
+        onError = listener;
+      },
+      stderrTail: () => 'the helper said this',
+      kill: () => {
+        wasKilled = true;
+      },
+    },
+    exit: (code) => onExit(code),
+    fail: (reason) => onError(reason),
+    killed: () => wasKilled,
+  };
+}
+
+test('ran names the phase it stopped in, and settles exactly once', async () => {
+  const clean = fakeChild();
+  const cleanly = ran(clean.handle, () => () => undefined);
+  clean.exit(0);
+  assert.deepStrictEqual(await cleanly, { phase: 'ran', refusal: '' });
+
+  const broken = fakeChild();
+  const badly = ran(broken.handle, () => () => undefined);
+  broken.exit(1);
+  const failed = await badly;
+  assert.strictEqual(failed.phase, 'failed');
+  assert.match(failed.refusal, /exited 1: the helper said this/, 'what the child said was dropped');
+
+  const absent = fakeChild();
+  const never = ran(absent.handle, () => () => undefined);
+  absent.fail('spawn powershell.exe ENOENT');
+  assert.deepStrictEqual(await never, { phase: 'neverStarted', refusal: 'spawn powershell.exe ENOENT' });
+});
+
+test('ran kills a helper that outlives the cap, and calls it a timeout rather than a failure', async () => {
+  const hung = fakeChild();
+  let fire: () => void = () => undefined;
+
+  const outcome = ran(hung.handle, (_ms, run) => {
+    fire = run;
+
+    return () => undefined;
+  }, 6000);
+  fire();
+  const said = await outcome;
+
+  assert.strictEqual(said.phase, 'timedOut');
+  assert.match(said.refusal, /6000 ms/);
+  assert.match(said.refusal, /the helper said this/, 'what the helper printed before it hung was dropped');
+  assert.ok(hung.killed(), 'a helper past its cap was left running');
+  // The exit that follows the kill must not overwrite the answer already given.
+  hung.exit(0);
+  assert.strictEqual((await outcome).phase, 'timedOut');
 });
 
 test('two captures never borrow under the same marker', () => {

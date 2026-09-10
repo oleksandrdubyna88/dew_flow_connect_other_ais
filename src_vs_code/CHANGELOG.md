@@ -28,6 +28,29 @@ Edit chat presets** opens a tab with both lists and a prompt box big enough to r
 everything there saves as you type. Whatever you had written in the old single prompt became your
 first named preset the first time this version read it.
 
+**`Ctrl+Alt+A` works in a WSL window.** It used to answer *copying the selection needs Windows* —
+which was not true of the machine it said it on. The editor window is a Windows one; only the
+extension lives inside the distro, and the helper that presses `Ctrl+C` for you is one hop away. It
+is asked for now, and the round trip takes about a second. On macOS and on a Linux box that is not
+WSL the keybinding still says so and points you at the right-click menu, which works everywhere.
+
+**And when a copy does fail, the message says what actually happened.** Every failure used to read
+*nothing was copied — select the text first*, including the ones where the helper never started or
+never finished. A helper that could not be reached, one that was still running when we gave up, and
+one that ended badly each say so in their own words now, with what the system itself said. The old
+sentence is kept for the one case where it is true: the helper ran, and the selection was empty.
+
+**With *Separate settings for each side* on, a chat uses the CLI that side has.** It was reading the
+shared list, so a WSL window could launch a Windows shim — and on a machine where `codex` in WSL
+resolves into the Windows npm folder, that is not a hypothetical. The same was true of the settings
+file the review server reads, which decides what your *reviewers* are launched from.
+
+**A vendor CLI left behind by a force-kill is cleaned up under WSL and on Linux.** The sweep that
+runs at start-up only knew how to ask Windows; anywhere else it gave up and kept the record, so a
+signed-in CLI could go on running with nobody to stop it and the same row was retried every time.
+It asks this side now, re-checks that the process really is the one it wrote down, and leaves
+anything it cannot prove alone.
+
 **Choose the provider, then the model.** The list under a chat used to be your configured reviewers,
 each showing the one model it happened to be set to — so picking a different model meant leaving the
 conversation and editing a reviewer. There are two lists now: who answers, and which of their models.

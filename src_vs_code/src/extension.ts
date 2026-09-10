@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { openChatPresets } from './chatPresetsPanel';
 import { ChatPanels } from './chatPanels';
-import { chatWithOtherAi, rememberChatsIn, restoreConversation } from './chatCommand';
+import { chatReadsThisSide, chatWithOtherAi, rememberChatsIn, restoreConversation } from './chatCommand';
 import { ChatTabMemory } from './chatTabs';
 import { openLedger, reconcile } from './chatOrphans';
 import { coaiDataDir } from './dataDir';
@@ -23,7 +23,8 @@ import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
 import { ExistingFile, ServerSettingsSync } from './serverSettingsSync';
 import { LOCK_STALE_AFTER_MS, lockIsStale } from './settingsLock';
-import { settingsFrom } from './settingsShape';
+import { ConfigReader, settingsFrom } from './settingsShape';
+import { readerFor } from './sideConfig';
 import { vendorsFrom } from './vendors';
 
 /**
@@ -37,6 +38,12 @@ import { vendorsFrom } from './vendors';
  * there is still nothing listening on a socket.</p>
  */
 export function activate(context: vscode.ExtensionContext): void {
+  // FIRST, before anything is constructed and long before a command can be invoked: the side whose
+  // settings the chat reads. Its reader falls back to the shared configuration while unbound, which
+  // is the behaviour this branch exists to end — so the window in which that fallback could be
+  // reached is closed by ordering rather than argued about. Four reviewers raised it in one round,
+  // and `chatWiring.test.ts` now fails if this line ever drifts below a `registerCommand`.
+  chatReadsThisSide(context);
   const watcher = new EscalationWatcher(dataDir());
   // Declared before the panel so the hooks can reach it; assigned right after.
   let roundsLog: RoundsLogPanel;
@@ -109,7 +116,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // Team-server reviewer on 2026-09-07 by rewriting a runtime it did not know. An older build now
   // stands down and says so, once.
   const settingsSync = new ServerSettingsSync(
-    readCoaiConfiguration,
+    () => readCoaiConfiguration(context),
     (json) => writeSettingsFile(json),
     extensionVersion(context),
     readSettingsFile,
@@ -258,12 +265,22 @@ function mirrorSettings(settingsSync: ServerSettingsSync, isTheRetry = false): v
   });
 }
 
-/** The `coai.*` settings as the sync wants them: one read, both halves, no VS Code type leaving. */
-function readCoaiConfiguration() {
-  const config = vscode.workspace.getConfiguration('coai');
+/**
+ * The `coai.*` settings as the sync wants them: one read, both halves, no VS Code type leaving.
+ *
+ * <p><b>Read as THIS SIDE has them.</b> The file this feeds is what `coai-mcp` reads, so it decides
+ * which binaries the GATE's reviewers are launched from — and it used to be filled from the shared
+ * configuration alone. With *Separate settings for each side* on, that ran a WSL window's rounds off
+ * the vendor rows of another side: the widest blast radius of the same bypass the chat had, because
+ * a review is what the product is for. The reader is the one in `sideSettings`, the same one the
+ * panel and the chat go through.</p>
+ */
+function readCoaiConfiguration(context: vscode.ExtensionContext) {
+  const config: ConfigReader = readerFor(context, vscode.workspace.getConfiguration('coai'));
+
   return {
-    settings: settingsFrom((section) => config.get(section)),
-    vendors: vendorsFrom(config.get('vendors')),
+    settings: settingsFrom(config),
+    vendors: vendorsFrom(config('vendors')),
   };
 }
 
