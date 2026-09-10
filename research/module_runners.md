@@ -241,11 +241,42 @@ one a parser fails on for a reason nobody can find.
 Two things came free with the raw reader, and one of them is a defect nobody had reported. The line
 reader `AppendLine`d every line, so **every vendor answer this product has ever read came back with a
 line ending the vendor did not write** — invisible to JSON parsing, which is why it survived. And the
-drain has a five-second grace after the child is gone: a pipe stays open while any process holds its
-write end, a grandchild inherits both, and a handle that outlived the tree kill would hang the
-launcher rather than the process it belongs to.
+drain has a grace (`ProcessRequest.DrainGrace`, five seconds) after the child is gone: a pipe stays
+open while any process holds its write end, a grandchild inherits both, and a handle that outlived the
+tree kill would hang the launcher rather than the process it belongs to.
 
-The whole `src_mcp` suite — 1147 tests — passed unedited across this change.
+### What the code round added
+
+Twelve reviewers of twelve answered; thirty-five findings, and these are the ones that changed the code.
+
+- **The grace CANCELS the drain rather than walking away from it.** Abandoning a suspended read leaves
+  a task that faults against the disposed process later, and one that can still be appending to text
+  the caller is already reading. It is a token now, caught inside `DrainAsync`, and the stream says
+  which of the two things cut it — the ceiling, or a handle nobody could close.
+- **Our end of stdin is closed on the cancellation path, before the kill.** A write blocked on a full
+  pipe does not honour its token on every platform, and a descendant that survives the tree kill still
+  holding the read end would leave that write blocked for ever, with the launcher awaiting it. And the
+  close has to be of the HANDLE: `StreamWriter.Close()` refuses outright while an async write is in
+  flight (`InvalidOperationException: The stream is currently in use`), which is the only state it is
+  ever called in — measured on the first run of the test that asked for it.
+- **`ProcessResult` gained `Cancelled` and `Truncated`.** A budget that ran out and a caller that
+  withdrew arrive as the same `OperationCanceledException` and mean opposite things: one is a vendor
+  too slow for its budget and belongs in the retry ladder, the other is a job nobody is waiting for and
+  must never be retried. The token's STATE decides, never the exception's type. `Truncated` lets a
+  caller tell a cut answer from a bad one without parsing an English sentence.
+- **The truncation sentence carries the count.** "Cut at 8 Mi characters" says nothing about whether
+  one character was lost or two hundred megabytes; it is composed when the stream ends, which is the
+  first moment that number exists.
+- **A ceiling of zero is refused rather than obeyed.** `0` and `-1` are both ordinary spellings of
+  "unlimited" elsewhere, and either would have made every launch answer with an empty stream — which
+  reads exactly like a vendor that said nothing.
+
+Three findings were rejected with reasons, and one is worth recording because it was confidently wrong
+in a way a reader might repeat: a Blocking finding said the immutability rule forbids `BoundedText`
+mutating its own builder. That rule governs data containers crossing layers; applied to a private
+single-owner accumulator it would mean copying up to 16 MiB per 8 KiB chunk.
+
+The whole `src_mcp` suite — 1148 tests — passed unedited across this change.
 
 ## External dependencies
 
