@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { agyAdapter } from '../agyAdapter';
+import { claudeAdapter } from '../claudeAdapter';
+import { codexAdapter } from '../codexAdapter';
 import {
   ChatTurnRecord,
   chatTurnRecord,
@@ -7,7 +10,6 @@ import {
   conversationTotal,
   parseChatUsage,
   parseChatUsageLine,
-  reportsCumulative,
   spent,
   turnCost,
   turnTokens,
@@ -45,7 +47,7 @@ function record(over: Partial<ChatTurnRecord> = {}): ChatTurnRecord {
 
 test('a vendor that reports per-turn numbers is recorded as it reported', () => {
   assert.deepStrictEqual(
-    turnTokens('claude', { tokensIn: 1000, tokensOut: 200, costUsd: null }, { tokensIn: 900, tokensOut: 100 }),
+    turnTokens(false, { tokensIn: 1000, tokensOut: 200, costUsd: null }, { tokensIn: 900, tokensOut: 100 }),
     { tokensIn: 1000, tokensOut: 200 },
     'a per-turn reporter must not be differenced against anything',
   );
@@ -58,7 +60,7 @@ test('a vendor that reports a CUMULATIVE total is differenced against what it la
   // down as 2200, and every conversation on that vendor would have been over-billed in the log,
   // increasingly, the longer it ran. (gemini, the plan round, Blocking.)
   assert.deepStrictEqual(
-    turnTokens('codex', { tokensIn: 1200, tokensOut: 300, costUsd: null }, { tokensIn: 1000, tokensOut: 200 }),
+    turnTokens(true, { tokensIn: 1200, tokensOut: 300, costUsd: null }, { tokensIn: 1000, tokensOut: 200 }),
     { tokensIn: 200, tokensOut: 100 },
     'the second turn cost the DIFFERENCE, not the running total',
   );
@@ -66,24 +68,46 @@ test('a vendor that reports a CUMULATIVE total is differenced against what it la
 
 test('the first turn of a cumulative vendor has nothing to difference against', () => {
   assert.deepStrictEqual(
-    turnTokens('codex', { tokensIn: 1000, tokensOut: 200, costUsd: null }, undefined),
+    turnTokens(true, { tokensIn: 1000, tokensOut: 200, costUsd: null }, undefined),
     { tokensIn: 1000, tokensOut: 200 },
   );
 });
 
-test('a cumulative total that goes BACKWARDS starts again rather than going negative', () => {
-  // A new thread, a resumed conversation whose earlier turns this process never saw, or a vendor that
-  // changed its mind. A negative number of tokens is not a thing that can be true.
+test('a cumulative total that goes BACKWARDS is a fresh baseline, not a free turn', () => {
+  // A vendor thread that restarted, compacted its context or evicted a cache reports a number below
+  // the last one. This used to clamp the difference to zero — and a zero says the turn was free,
+  // which it was not: it cost exactly what the new count says. The function's own comment already
+  // said "treated as a fresh start"; the code returned a zero, and the comment was right.
+  // (gemini, the code round.)
   assert.deepStrictEqual(
-    turnTokens('codex', { tokensIn: 50, tokensOut: 10, costUsd: null }, { tokensIn: 1000, tokensOut: 200 }),
+    turnTokens(true, { tokensIn: 50, tokensOut: 10, costUsd: null }, { tokensIn: 1000, tokensOut: 200 }),
+    { tokensIn: 50, tokensOut: 10 },
+    'a restarted thread’s turn was recorded as free',
+  );
+  // And money follows the tokens, by the same rule.
+  assert.strictEqual(
+    turnCost(true, { tokensIn: 50, tokensOut: 10, costUsd: 0.2 }, { costUsd: 5 }),
+    0.2,
+  );
+});
+
+test('a negative number of tokens is still not a thing that can be true', () => {
+  // The clamp that survives: a vendor reporting a negative count is reporting nonsense, and nonsense
+  // must not reach a ledger as a debit.
+  assert.deepStrictEqual(
+    turnTokens(false, { tokensIn: -5, tokensOut: -1, costUsd: null }, undefined),
     { tokensIn: 0, tokensOut: 0 },
   );
 });
 
-test('which vendors report cumulatively is something a caller can ask', () => {
-  assert.strictEqual(reportsCumulative('codex'), true);
-  assert.strictEqual(reportsCumulative('claude'), false);
-  assert.strictEqual(reportsCumulative('antigravity'), false);
+test('which vendors report cumulatively is declared by the ADAPTER, so it cannot be forgotten', () => {
+  // It was a list of runtime NAMES in this module, and a gate reviewer named the flaw: implementing
+  // `ChatAdapter` was then not enough to be billed correctly, because an unlisted runtime defaulted
+  // silently to per-turn and its conversations would inflate with nothing saying so. A required field
+  // on the interface cannot be forgotten — the compiler asks. (gemini, the code round.)
+  assert.strictEqual(codexAdapter.cumulative, true);
+  assert.strictEqual(claudeAdapter.cumulative, false);
+  assert.strictEqual(agyAdapter.cumulative, false);
 });
 
 test('a record survives a round trip through the file', () => {
@@ -168,51 +192,40 @@ test('a turn that was STOPPED is still recorded, because it still cost tokens', 
   assert.strictEqual(parseChatUsage(chatUsageLine(stopped))[0]?.outcome, 'stopped');
 });
 
-test('what makes numbers cumulative is the RUNTIME, never the vendor row a person named', () => {
-  // The defect this test exists for: the rule was first keyed on the ledger's `provider`, which is a
-  // vendor ROW id — a person's own text, editable in the panel. Somebody running two Codex accounts
-  // as `codex-work` and `codex-home` would have had neither of them differenced, and both
-  // conversations would have been over-billed in the log, increasingly, the longer they ran. That is
-  // the exact defect `turnTokens` was written to prevent, reintroduced through its key.
-  assert.deepStrictEqual(
-    turnTokens('codex', { tokensIn: 1200, tokensOut: 300, costUsd: null }, { tokensIn: 1000, tokensOut: 200 }),
-    { tokensIn: 200, tokensOut: 100 },
-    'the runtime is what the rule is keyed on',
-  );
-  assert.strictEqual(reportsCumulative('codex-work'), false, 'a ROW id is not a runtime and must not match');
-
-  // And the whole way through, which is what a caller actually depends on: a record built for a row
-  // called `codex-work` running the `codex` runtime is differenced.
+test('the record takes usage that is ALREADY per-turn, and does not difference anything itself', () => {
+  // The rule moved to the SESSION, which is the only thing whose life is exactly a vendor thread's
+  // life. Before that it lived here and needed a `runtime` and a `previous` handed in from the
+  // command that orchestrates the page — the wire protocol's idiosyncrasy leaking two layers up.
+  // (gemini, the code round.)
   const built = chatTurnRecord({
     utc: '2026-09-09T20:00:00.000Z',
     provider: 'codex-work',
-    runtime: 'codex',
     model: 'gpt-5',
     conversation: 'tab-1',
     title: 'PLAN_x.md',
     seconds: 9,
     outcome: 'answered',
-    reported: { tokensIn: 1200, tokensOut: 300, costUsd: null },
-    previous: { tokensIn: 1000, tokensOut: 200, costUsd: null },
+    usage: { tokensIn: 200, tokensOut: 100, costUsd: null },
   });
 
-  assert.strictEqual(built.tokensIn, 200, 'a renamed Codex row was not differenced');
-  assert.strictEqual(built.provider, 'codex-work', 'the row is still what the ledger is priced by');
+  assert.strictEqual(built.tokensIn, 200);
+  assert.strictEqual(built.provider, 'codex-work', 'the row is what the ledger is priced by');
+  assert.ok(!Object.keys(built).includes('runtime'), 'the runtime has no business in the file');
 });
 
 test('money is differenced by the same rule as tokens, so one cannot drift from the other', () => {
-  // Dead code today — the one cumulative vendor reports no money at all — and written anyway. Leaving
-  // money un-differenced beside tokens that are is a trap for whoever adds the next cumulative vendor:
-  // the tokens would be right and the bill would grow with the length of the conversation.
-  assert.strictEqual(turnCost('codex', { tokensIn: 0, tokensOut: 0, costUsd: 1.5 }, { costUsd: 1.2 }), 0.3);
-  assert.strictEqual(turnCost('claude', { tokensIn: 0, tokensOut: 0, costUsd: 1.5 }, { costUsd: 1.2 }), 1.5);
+  // Dead code today — the one cumulative vendor reports no money at all — and written anyway.
+  // Leaving money un-differenced beside tokens that are is a trap for whoever adds the next
+  // cumulative vendor: the tokens would be right and the bill would grow with the conversation.
+  assert.strictEqual(turnCost(true, { tokensIn: 0, tokensOut: 0, costUsd: 1.5 }, { costUsd: 1.2 }), 0.3);
+  assert.strictEqual(turnCost(false, { tokensIn: 0, tokensOut: 0, costUsd: 1.5 }, { costUsd: 1.2 }), 1.5);
   assert.strictEqual(
-    turnCost('codex', { tokensIn: 0, tokensOut: 0, costUsd: null }, { costUsd: 1.2 }),
+    turnCost(true, { tokensIn: 0, tokensOut: 0, costUsd: null }, { costUsd: 1.2 }),
     null,
-    'a vendor that billed nothing must not be handed the previous turn\u2019s bill',
+    'a vendor that billed nothing must not be handed the previous turn’s bill',
   );
   assert.strictEqual(
-    turnCost('codex', { tokensIn: 0, tokensOut: 0, costUsd: 0.4 }, { costUsd: null }),
+    turnCost(true, { tokensIn: 0, tokensOut: 0, costUsd: 0.4 }, { costUsd: null }),
     0.4,
     'nothing to difference against is the first turn, not a free one',
   );
@@ -220,24 +233,20 @@ test('money is differenced by the same rule as tokens, so one cannot drift from 
 
 test('a turn nobody reported numbers for is STILL a record, with zeroes and its outcome', () => {
   // The accounting hole the gate raised against the plan: it recorded answers, so a turn that was
-  // stopped or that fell over left no line at all — and those are exactly the ones somebody hunting
-  // for waste is looking for. Zeroes here are not a claim that it was free; `costUsd: null` says
-  // nobody told us, and the log page turns a wholly silent turn into a dash rather than a `0`.
-  const built = chatTurnRecord({
-    utc: '2026-09-09T20:00:00.000Z',
-    provider: 'claude',
-    runtime: 'claude',
-    model: 'sonnet',
-    conversation: 'tab-1',
-    title: 'PLAN_x.md',
-    seconds: 3,
-    outcome: 'stopped',
-    reported: undefined,
-    previous: undefined,
-  });
-
+  // stopped or that fell over left no line at all — and those are exactly the ones somebody
+  // hunting for waste is looking for. Zeroes here are not a claim that it was free; `costUsd: null`
+  // says nobody told us, and the log page turns a wholly silent turn into a dash rather than a `0`.
   assert.deepStrictEqual(
-    built,
+    chatTurnRecord({
+      utc: '2026-09-09T20:00:00.000Z',
+      provider: 'claude',
+      model: 'sonnet',
+      conversation: 'tab-1',
+      title: 'PLAN_x.md',
+      seconds: 3,
+      outcome: 'stopped',
+      usage: undefined,
+    }),
     {
       utc: '2026-09-09T20:00:00.000Z',
       provider: 'claude',
@@ -254,25 +263,6 @@ test('a turn nobody reported numbers for is STILL a record, with zeroes and its 
   );
 });
 
-test('the runtime is not written to disk, because it answers no question the log page asks', () => {
-  // By the time a record exists the differencing has already happened. A field carried into the file
-  // and never read is a field that will be trusted one day by somebody who should not have.
-  const built = chatTurnRecord({
-    utc: '2026-09-09T20:00:00.000Z',
-    provider: 'codex-work',
-    runtime: 'codex',
-    model: 'gpt-5',
-    conversation: 'tab-1',
-    title: 'PLAN_x.md',
-    seconds: 1,
-    outcome: 'answered',
-    reported: { tokensIn: 10, tokensOut: 2, costUsd: null },
-    previous: undefined,
-  });
-
-  assert.ok(!Object.keys(built).includes('runtime'), 'the runtime leaked into the ledger');
-});
-
 test('a turn nobody reported numbers for gets NO usage key at all, not an undefined one', () => {
   // `exactOptionalPropertyTypes` makes the difference visible: writing the key with an undefined
   // value puts the KEY there, and every test that compares a whole event or result would then see a
@@ -283,4 +273,16 @@ test('a turn nobody reported numbers for gets NO usage key at all, not an undefi
     spent({ tokensIn: 1, tokensOut: 2, costUsd: null }),
     { usage: { tokensIn: 1, tokensOut: 2, costUsd: null } },
   );
+});
+
+test('a running total is money, not float noise', () => {
+  // $0.10 + $0.20 arrives as 0.30000000000000004, and a total shown to a person must not read that
+  // way. `turnCost` already rounded its own subtraction; this is the other end of the same rule.
+  // (gemini, the code round.)
+  const total = conversationTotal(
+    [record({ costUsd: 0.1 }), record({ costUsd: 0.2 })],
+    'tab-1',
+  );
+
+  assert.strictEqual(total.costUsd, 0.3);
 });

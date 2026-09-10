@@ -1,4 +1,4 @@
-import { ReportedUsage, spent } from './chatUsage';
+import { ReportedUsage, turnCost, turnTokens } from './chatUsage';
 import { ProcessHandle, Unsubscribe } from './processLauncher';
 import { ChatAdapter } from './chatAdapter';
 import { agyAdapter } from './agyAdapter';
@@ -130,7 +130,29 @@ export class CliChatSession implements ChatSession {
    * line at a time cannot join them, so the join happens here. Cleared per turn, because a stale
    * figure attached to the NEXT answer would be worse than none.</p>
    */
+  /**
+   * What the vendor has said about the turn now in flight, RAW, before any differencing.
+   *
+   * <p>Set by a `usage` event, which the vendors that have one send BEFORE or AFTER the answer and
+   * never as it. Read once, by `settle`, so that every way a turn can end carries what the vendor
+   * managed to report — including a stop and a failure, which are the turns most worth accounting
+   * for and which used to carry nothing. (codex and gemini, the code round, four findings.)</p>
+   */
   private lastUsage: ReportedUsage | undefined;
+
+  /**
+   * The RUNNING TOTAL this vendor thread last reported, for the vendors that count that way.
+   *
+   * <p>It lives on the SESSION because a session's life is exactly a vendor thread's life: the id it
+   * resumes by is `this.sessionId`, it is minted by the first turn and dies with this object, and a
+   * replacement session — a model switch, a window reload — starts a new thread whose count starts
+   * again. Keeping the baseline anywhere else means keeping two things in step that nothing forces
+   * to agree, which is what a reviewer objected to: the rule reached out of the adapter layer and
+   * into the command that orchestrates the page. (gemini, the code round.)</p>
+   *
+   * <p>So a `TurnResult` always carries the cost of ONE turn, whatever its vendor counts in.</p>
+   */
+  private threadTotals: ReportedUsage | undefined;
 
   /**
    * @param start launches the vendor process — injected, so this file spawns nothing itself
@@ -363,11 +385,11 @@ export class CliChatSession implements ChatSession {
     if (event.kind === 'answer') {
       const lost = this.contextLost;
       this.contextLost = false;
-      const usage = event.usage ?? this.lastUsage;
-      this.lastUsage = undefined;
+      // The answer's own numbers win over a held `usage` event; `settle` differences whichever it is.
+      this.lastUsage = event.usage ?? this.lastUsage;
       this.settle(lost
-        ? { ok: true, answer: event.text, contextLost: true, ...spent(usage) }
-        : { ok: true, answer: event.text, ...spent(usage) });
+        ? { ok: true, answer: event.text, contextLost: true }
+        : { ok: true, answer: event.text });
 
       return;
     }
@@ -427,7 +449,10 @@ export class CliChatSession implements ChatSession {
         this.endTurnAsStopped = undefined;
         cancelBudget();
         this.killChild();
-        resolve(result);
+        // Whatever the vendor managed to report reaches EVERY ending, not only the answered one: a
+        // codex turn emits `turn.completed` and can then be stopped, and the turn it priced really
+        // was paid for. (codex and gemini, the code round.)
+        resolve(withUsage(result, this.perTurnUsage(reported)));
       };
       const cancelBudget = this.timers.after(this.budgets.turnMs, () => {
         finish({ ok: false, failure: 'the model did not answer in time' });
@@ -469,9 +494,7 @@ export class CliChatSession implements ChatSession {
         if (answer.length > 0) {
           const lost = this.contextLost;
           this.contextLost = false;
-          finish(lost
-            ? { ok: true, answer, contextLost: true, ...spent(reported) }
-            : { ok: true, answer, ...spent(reported) });
+          finish(lost ? { ok: true, answer, contextLost: true } : { ok: true, answer });
 
           return;
         }
@@ -535,7 +558,30 @@ export class CliChatSession implements ChatSession {
     }
     this.pending = undefined;
     pending.cancelBudget();
-    pending.settle(result);
+    pending.settle(withUsage(result, this.perTurnUsage()));
+  }
+
+  /**
+   * What the turn now ending cost, from what the vendor reported and what the thread reported before.
+   *
+   * <p>Called exactly once per turn — from `settle` for a persistent vendor and from `finish` for a
+   * per-turn one — because it MOVES the baseline as well as reading it. Calling it twice for one turn
+   * would difference a turn against itself and report the second half as free.</p>
+   */
+  private perTurnUsage(raw: ReportedUsage | undefined = this.lastUsage): ReportedUsage | undefined {
+    this.lastUsage = undefined;
+    if (raw === undefined) {
+      return undefined;
+    }
+    const cumulative = this.adapter.cumulative;
+    const tokens = turnTokens(cumulative, raw, this.threadTotals);
+    const costUsd = turnCost(cumulative, raw, this.threadTotals);
+    // The RAW figures, never the differenced ones: the next turn subtracts from what the vendor last
+    // SAID, and subtracting from an already-differenced number would make every turn but the first
+    // the difference of two differences.
+    this.threadTotals = raw;
+
+    return { tokensIn: tokens.tokensIn, tokensOut: tokens.tokensOut, costUsd };
   }
 
   /**
@@ -589,6 +635,21 @@ function failed(reason: unknown): TurnResult {
   return { ok: false, failure: `the turn failed unexpectedly: ${message(reason)}` };
 }
 
-// `spent` was written twice — once here for turn results and once in `chatAdapter.ts` for adapter
-// events — with the same body and the same paragraph above it. It lives in `chatUsage.ts` now, and
-// this file imports it.
+/**
+ * A result with the turn's usage on it, or exactly the result it was given.
+ *
+ * <p>A spread rather than `usage: maybeUndefined`, and the difference is visible from outside: with
+ * `exactOptionalPropertyTypes`, writing the key with an undefined value puts the KEY there, and every
+ * test that compares a whole result would then see a shape it did not have before. A turn nobody
+ * reported numbers for must look exactly as it always did.</p>
+ *
+ * <p>It branches on `ok` rather than spreading the union, because the two arms are different types
+ * and a spread of the union widens both.</p>
+ */
+function withUsage(result: TurnResult, usage: ReportedUsage | undefined): TurnResult {
+  if (usage === undefined) {
+    return result;
+  }
+
+  return result.ok ? { ...result, usage } : { ...result, usage };
+}

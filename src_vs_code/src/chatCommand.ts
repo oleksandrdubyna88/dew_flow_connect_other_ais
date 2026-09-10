@@ -119,19 +119,6 @@ interface Thread extends ChatMemory {
    */
   turns: Promise<unknown>;
   /**
-   * What this conversation's vendor last reported, RAW, for the cumulative reporters.
-   *
-   * <p>`codex` counts up across a thread rather than pricing one turn, so the ledger has to subtract
-   * what it said last time — which means somebody has to keep it, and the session cannot: a session
-   * answers one turn and has no opinion about the one before it.</p>
-   *
-   * <p><b>Cleared whenever the session is replaced</b>, by a model switch or by a reload opening a
-   * conversation that had none. The replacement is a NEW vendor thread whose count starts again, and
-   * subtracting the old thread's total from it would report the first turn after a switch as free.
-   * Undefined means "no previous", which is exactly what a fresh thread has.</p>
-   */
-  lastReported?: ReportedUsage | undefined;
-  /**
    * This conversation's id in the store, so what it is holding can be written down as it changes.
    *
    * <p>Not the entry's identity object — that one dies with the window. This is the string the page
@@ -339,7 +326,6 @@ async function reopened(thread: Thread): Promise<string> {
   thread.providers = ready.providers;
   thread.providerId = ready.providerId;
   thread.modelId = ready.modelId;
-  thread.lastReported = undefined;
   // The WHOLE memory object, not one field of it: a switch that set `forgetful` and forgot `asked`
   // is a defect this file has already had once, and the type is what stops it happening twice.
   Object.assign(thread, memoryOf(ready.vendor));
@@ -448,7 +434,9 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
     seconds: Math.round((Date.now() - askedMs) / 1000),
     vendor: answering,
     outcome: outcomeOf(result),
-    reported: result.ok ? result.usage : undefined,
+    // BOTH arms. A turn that was stopped or that fell over can still have been priced by its vendor
+    // — `codex` sends its numbers on a line of their own — and those are the turns worth finding.
+    usage: result.usage,
   });
   if (!result.ok) {
     // A STOPPED turn is written down before anything is carried, and the order is the whole finding.
@@ -526,7 +514,7 @@ function ledger(
     readonly seconds: number;
     readonly vendor: Vendor | undefined;
     readonly outcome: ChatOutcome;
-    readonly reported: ReportedUsage | undefined;
+    readonly usage: ReportedUsage | undefined;
   },
 ): void {
   if (turn.vendor === undefined) {
@@ -535,24 +523,15 @@ function ledger(
   void recordChatTurn(coaiDataDir(), chatTurnRecord({
     utc: turn.utc,
     provider: turn.vendor.id,
-    // The RUNTIME decides whether the numbers are cumulative, and it is not the row's id: two Codex
-    // accounts as two rows would otherwise be differenced by neither. See `chatUsage.ts`.
-    runtime: turn.vendor.runtime,
     model: turn.vendor.model,
     conversation: thread.saveId,
     title: thread.title,
     seconds: turn.seconds,
     outcome: turn.outcome,
-    reported: turn.reported,
-    previous: thread.lastReported,
+    // Already the cost of ONE turn: the session differenced it, because a session's life is exactly
+    // its vendor thread's life and nothing else here can say that. See `cliChatSession.perTurnUsage`.
+    usage: turn.usage,
   }));
-  // The RAW figures, not the differenced ones — the next turn subtracts from what the vendor last
-  // SAID, and subtracting from an already-differenced number would report every turn but the first
-  // as the difference of two differences. Kept only when the vendor reported something: a turn that
-  // said nothing is not evidence that the count went back to zero.
-  if (turn.reported !== undefined) {
-    thread.lastReported = turn.reported;
-  }
 }
 
 /**
@@ -863,7 +842,6 @@ async function switchNow(entry: ChatEntry, modelId: string): Promise<void> {
   thread.session = replacement.session;
   thread.home = replacement.home;
   thread.modelId = modelId;
-  thread.lastReported = undefined;
   // The memory rules move WITH the model. Left behind, they described the one just thrown away:
   // switching to a Team server kept `forgetful` false, so the server — which remembers nothing —
   // was asked turn two with no transcript behind it and the three-turn cap never applied; switching

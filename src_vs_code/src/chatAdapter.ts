@@ -77,6 +77,23 @@ export interface ChatAdapter {
    */
   readonly announces: boolean;
   /**
+   * Whether this vendor's token counts are a RUNNING TOTAL for the thread rather than one turn's.
+   *
+   * <p>`codex` counts up: turn one reports 1000, turn two reports 1200, and 1200 is not what turn two
+   * cost. Recording what it says would over-bill every conversation on that vendor increasingly, the
+   * longer it ran. The session subtracts what the thread last reported — see `normalised` in
+   * `cliChatSession.ts` — so a `TurnResult` always carries the cost of ONE turn whatever the vendor
+   * counts in.</p>
+   *
+   * <p><b>It lives on the adapter because it is a fact about the wire protocol</b>, and the adapter is
+   * where this codebase keeps those. It was first a list of runtime NAMES in `chatUsage.ts`, and a
+   * gate reviewer named the flaw: implementing `ChatAdapter` was then not enough to be billed
+   * correctly, because an unlisted runtime silently defaulted to per-turn and its conversations would
+   * inflate without anything saying so. A required field on the interface cannot be forgotten — the
+   * compiler asks.</p>
+   */
+  readonly cumulative: boolean;
+  /**
    * The command line for a process that will answer turns.
    *
    * @param resume the session to continue, for a `per-turn` vendor's second and later turns. Empty

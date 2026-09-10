@@ -30,6 +30,8 @@ export const CLAUDE_ARGS: readonly string[] = [
 
 export const claudeAdapter: ChatAdapter = {
   shape: 'persistent',
+  // Per-turn: each `result` prices the turn it ends, `total_cost_usd` included.
+  cumulative: false,
   announces: false,
   argv: () => CLAUDE_ARGS,
   // The block shape, not a bare string: the content of a user message is a list of typed blocks,

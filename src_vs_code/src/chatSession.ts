@@ -65,6 +65,18 @@ export type TurnResult =
      * tie every caller to its wording and to its translations.</p>
      */
     readonly stopped?: true;
+    /**
+     * What this turn cost, on the arm where there is no answer to show for it.
+     *
+     * <p>It is on BOTH arms because a turn that produced nothing was still paid for: `codex` emits
+     * its usage on a line of its own, so a turn can be priced by the vendor and then stopped, or
+     * fail, a moment later. Carrying the numbers only on the answer recorded such a turn as zero
+     * tokens at no cost — and those are precisely the turns somebody hunting for waste is looking
+     * for. Four reviewers across both remote vendors raised it on the code round.</p>
+     *
+     * <p>Per-turn and normalised, exactly like the other arm's.</p>
+     */
+    readonly usage?: ReportedUsage | undefined;
   };
 
 export interface ChatSession {

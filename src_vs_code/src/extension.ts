@@ -19,6 +19,7 @@ import { showHelp } from './helpPanel';
 import { parseSession, SessionFile } from './rounds';
 import { blindSpotsHtml, chatRows, LogRow, mergedRows, rowsFrom } from './roundsLog';
 import { DbLog } from './roundsDb';
+import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
 import { ExistingFile, ServerSettingsSync } from './serverSettingsSync';
 import { LOCK_STALE_AFTER_MS, lockIsStale } from './settingsLock';
@@ -219,8 +220,13 @@ export function activate(context: vscode.ExtensionContext): void {
   void offerUpdate(context);
 }
 
-export function deactivate(): void {
-  // The watcher is a subscription; VS Code disposes it. No server, no port, nothing else to stop.
+export function deactivate(): Promise<void> {
+  // The watcher is a subscription; VS Code disposes it. No server, no port — but the chat ledger's
+  // writes are deliberately NOT awaited by the turn that made them (a person's answer must not wait
+  // on a disk), so a host closed the instant a turn ends could take the record with it. VS Code
+  // awaits what this returns, which is the one moment the queue can be drained for free.
+  // (codex and the local reviewer, the code round.)
+  return flushChatUsage();
 }
 
 /**
