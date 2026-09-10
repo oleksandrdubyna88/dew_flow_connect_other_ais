@@ -74,8 +74,9 @@ get the original text with the reason — never an error in its place.
 
 The gates read a plan and a diff. **Chat with other AI** does the same thing at the scale of a
 paragraph: select a dense passage in your assistant's answer, press `Ctrl+Alt+A`, and a tab opens
-where another vendor's model explains it — in your language, in a conversation you can carry on. The
-right-click menu carries the same item for where a keybinding cannot reach.
+where another vendor's model explains it — in the answer language you chose, English by default, in
+a conversation you can carry on. The right-click menu carries the same item for where a keybinding
+cannot reach.
 
 The tab is a conversation, not a viewer:
 
@@ -89,12 +90,16 @@ The tab is a conversation, not a viewer:
 - **Paste a screenshot** and it goes with the next question. A provider that cannot take one is
   refused by name rather than dropping it silently.
 - **What the conversation has cost**, beside the picker, where the decision to ask again is taken.
-- Answers are rendered — headings, lists, tables, code — with blue links that open a file in the
-  editor or a URL in your browser, a **Copy** that gives you the Markdown, and a **Stop** that ends
-  the turn it was drawn for and never the next one.
+- Answers are rendered — headings, lists, tables, code — with blue links whose reach is bounded: a
+  path inside the workspace opens in the editor, an `http(s)` address in your browser, and anything
+  else stays text. A **Copy** gives you the Markdown, and a **Stop** ends the turn it was drawn for
+  and never the next one.
 
 Reloading the window keeps what was said: every open chat tab comes back with its questions and
 answers, and a line saying the reload closed the conversation.
+
+The full description lives in the help — `⋯` → **Help** → *Chat with other AI*, in any of the five
+languages. This section is the overview; that article is the one kept in step with the code.
 
 ---
 
