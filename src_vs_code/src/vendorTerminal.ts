@@ -179,7 +179,8 @@ export type Platform = 'win32' | 'linux' | 'darwin';
  *
  * <p>The platform is an argument rather than a lookup so this stays pure — and because it is the
  * fact that changes everything: in a VS Code window connected to WSL the extension host IS linux,
- * whatever the machine's badge says, and the answers must be the linux ones.</p>
+ * whatever the machine's badge says, and the answers must be the linux ones. What the host can
+ * REACH from there is a second question, and `hostSide.ts` is where both now live.</p>
  */
 export interface VendorInstall {
   /** The install command for this platform, or empty when the vendor publishes none for it. */

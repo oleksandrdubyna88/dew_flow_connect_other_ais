@@ -30,6 +30,7 @@ import {
 } from './cliVersions';
 import { askVersion, capture } from './versionProbe';
 import { readOverlay, seedIfEmpty, writeOverlay } from './sideSettings';
+import { hostPlatform } from './hostSide';
 import { thisSide } from './installer';
 import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog, EMPTY_LOG } from './roundsDb';
@@ -871,7 +872,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   }
 
   private async oneCliStatus(vendor: Vendor): Promise<CliStatus> {
-    const source = versionSourceFor(vendor.runtime, platform(), process.arch === 'arm64' ? 'arm64' : 'x64');
+    const source = versionSourceFor(vendor.runtime, hostPlatform(), process.arch === 'arm64' ? 'arm64' : 'x64');
 
     const [installed, latest] = await Promise.all([
       this.installedCliVersion(vendor),
@@ -897,7 +898,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // On Windows the answer is usually `codex.cmd`, so the candidates are tried in order and the
     // first that ANSWERS wins. A name that does not exist fails immediately with ENOENT, so this
     // costs nothing when the first one is right.
-    for (const candidate of versionProbeCandidates(executable, platform())) {
+    for (const candidate of versionProbeCandidates(executable, hostPlatform())) {
       const version = await askVersion(candidate);
       if (version.length > 0) {
         return version;
@@ -971,10 +972,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    // `process.platform` is the extension HOST's platform, which is the one that matters: in a
-    // VS Code window connected to WSL it is 'linux', whatever the machine's badge says, and the
-    // terminal this opens runs there too.
-    const install = commandFor(vendor, platform());
+    // The extension HOST's platform, which is the one that matters here: the terminal this opens
+    // runs on this side, so a WSL window wants the linux instructions. `hostSide.ts` is where that
+    // doctrine and its narrowing now live, in one place — this used to be one of three copies.
+    const install = commandFor(vendor, hostPlatform());
     if (install.command.length === 0) {
       const open = 'Open the instructions';
       const choice = await vscode.window.showInformationMessage(install.note, open);
@@ -2203,7 +2204,3 @@ function nonce(): string {
   return Array.from({ length: 32 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
 }
 
-/** The extension host's platform, narrowed to the three the buttons can answer for. */
-function platform(): Platform {
-  return process.platform === 'win32' ? 'win32' : process.platform === 'darwin' ? 'darwin' : 'linux';
-}
