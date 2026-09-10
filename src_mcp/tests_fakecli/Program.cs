@@ -147,6 +147,32 @@ switch (args0)
         Thread.Sleep(int.Parse(ms));
         return 0;
 
+    // Reads all of stdin and writes it back, byte for byte. The POSITIVE companion to `sleep`: one
+    // proves a child that never reads is still killed on time, this one proves the launcher still
+    // delivers every byte to a child that does. Raw streams on both sides, because a decoder in the
+    // middle would make it a test of the decoder.
+    case ["echo-stdin"]:
+        using (var stdin = Console.OpenStandardInput())
+        using (var stdout = Console.OpenStandardOutput())
+        {
+            stdin.CopyTo(stdout);
+        }
+
+        return 0;
+
+    // <n> characters to stdout with NO newline among them, then exit. A line-based reader cannot see
+    // this arriving at all — it delivers nothing until the stream closes, by which time the whole
+    // runaway has been buffered, which is why the output ceiling could not stay on lines.
+    case ["spew", var count]:
+        var chunk = new string('x', 4096);
+        for (var written = 0; written < int.Parse(count); written += chunk.Length)
+        {
+            Console.Out.Write(chunk);
+        }
+
+        Console.Out.Flush();
+        return 0;
+
     case ["busy", var dir, var ms]:
         var id = Guid.NewGuid().ToString("N");
         File.WriteAllText(Path.Combine(dir, $"{id}.start"), DateTime.UtcNow.Ticks.ToString());
