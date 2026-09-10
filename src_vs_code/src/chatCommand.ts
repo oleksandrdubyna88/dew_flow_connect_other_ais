@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 import { isInside } from './chatMessages';
 import { imageFileName, imageRefusal, imageTurn, pastedImage } from './chatImage';
+import { TurnSpend, spendLabel, spendSoFar } from './chatSpend';
 import {
   ModelPreset,
   PromptPreset,
@@ -83,6 +84,15 @@ interface Thread extends ChatMemory {
   readonly models: readonly ChatModelChoice[];
   /** Every row that can answer, each with its own models. Replaced whenever a pick resolves. */
   providers: readonly ChatProvider[];
+  /**
+   * What each finished turn cost, in the order they finished.
+   *
+   * <p>Kept beside the conversation rather than read back from the ledger: the ledger is a file this
+   * window shares with every other, and a tab asking it for its own total on every push would be
+   * reading a growing file to answer a question it already knows. The ledger is the record; this is
+   * the running count.</p>
+   */
+  spend: TurnSpend[];
   /** The picture waiting to go with the next question, as the page shows it. */
   attached: string;
   /** Where that picture IS — the file a vendor process will open. Empty when there is none. */
@@ -237,6 +247,7 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
     // to re-ask something that is still being answered is offering a question nobody asked yet.
     reask: running || thread === undefined ? '' : reaskLabel(thread),
     attached: thread?.attached ?? '',
+    spend: spendLabel(spendSoFar(thread?.spend ?? [])),
   });
   // The one place the transcript reaches a page is the one place it is written down — but only when
   // there is something new to write. `show` runs on every state push: a turn starting, a queue
@@ -541,6 +552,17 @@ function ledger(
   if (turn.vendor === undefined) {
     return;
   }
+  // The same number the ledger writes down, counted as it goes. `chatUsage` decides what a turn
+  // cost; this only adds them up, so the line in the tab and the line in the log cannot disagree.
+  thread.spend = [
+    ...thread.spend,
+    {
+      costUsd: turn.usage?.costUsd ?? null,
+      // What a vendor CHARGED is a bill; what this product worked out from tokens is not, and the
+      // three vendors do not even count tokens the same way. Only claude reports its own cost.
+      estimated: turn.vendor.id !== 'claude',
+    },
+  ];
   void recordChatTurn(coaiDataDir(), chatTurnRecord({
     utc: turn.utc,
     provider: turn.vendor.id,
@@ -915,6 +937,7 @@ function newConversation(
       // A conversation that has just opened has said nothing, so there is nothing to ask again.
       reask: '',
       attached: '',
+      spend: '',
       providerId: ready.providerId,
       modelId: ready.modelId,
       running: false,
@@ -939,6 +962,7 @@ function newConversation(
     providers: ready.providers,
     attached: '',
     attachedPath: '',
+    spend: [],
     providerId: ready.providerId,
     modelId: ready.modelId,
     running: false,
@@ -1218,6 +1242,7 @@ function restoredPage(
       ...presets,
       reask: '',
       attached: '',
+      spend: '',
       // The row this tab was speaking to, read by `savedPick` out of the old `modelId`.
       providerId: ready.ok ? ready.providerId : restored.providerId,
       modelId: saved.modelId,
@@ -1264,6 +1289,7 @@ export function restoreConversation(
     providers: ready.ok ? ready.providers : [],
     attached: '',
     attachedPath: '',
+    spend: [],
     providerId: ready.ok ? ready.providerId : restored.providerId,
     modelId: saved.modelId,
     running: false,

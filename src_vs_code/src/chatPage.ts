@@ -108,6 +108,14 @@ export interface ChatPageState {
    * loads nothing from disk. The HOST holds the real file; this is only what a person sees.</p>
    */
   readonly attached: string;
+  /**
+   * What this conversation has cost so far, as a line, or empty when it has cost nothing.
+   *
+   * <p>A line rather than a number, because what it says varies: a bill, an estimate wearing the
+   * tilde, or a count of turns nobody priced. The HOST composes it — `chatSpend.ts` holds the rule
+   * — and the page shows what it was handed.</p>
+   */
+  readonly spend: string;
   /** The prompts a person saved, as buttons above the composer. */
   readonly promptPresets: readonly PromptPreset[];
   /** The models a person saved, likewise. */
@@ -421,6 +429,7 @@ function chatStyle(
   .picker select { max-width: 45%; }
   .refused { font-size: .85em; opacity: .75; margin: 0 0 8px; }
   .caption { font-size: .85em; opacity: .7; }
+  .spend { font-size: .85em; opacity: .7; margin-left: auto; padding-left: 8px; white-space: nowrap; }
   /* The 30 % lives HERE and only here, so the CSS path and the JavaScript fallback below cannot
      disagree about where the ceiling is: the fallback sets a height and this caps it. field-sizing
      is Chromium-only, which is not a limitation in a page that renders nowhere but VS Code's own
@@ -499,6 +508,7 @@ function chatBody(state: ChatPageState, regions: Regions): string {
 <button type="button" id="jump" class="jump" hidden>Jump to newest ↓</button>
 ${chatPresetRowsHtml(state.promptPresets, state.modelPresets)}
 <div id="pickerBox">${chatPickerHtml({ providers: state.providers, refused: [] }, state.providerId, state.modelId)}</div>
+<span id="spend" class="spend" title="What this conversation has cost so far. A turn carries the whole conversation, so each question is billed for the ones before it.">${escapeHtml(state.spend)}</span>
 ${attachedHtml(state.attached)}
 <div class="compose">
 <textarea id="say" rows="3" placeholder="Ask about the text above…"${locked ? ' disabled' : ''}>${escapeHtml(state.draft)}</textarea>
@@ -1012,6 +1022,10 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     // it while a turn is still in flight. (local, the second code round.)
     // Who a re-ask would go to, which is also the button's caption: the gesture is an empty box and
     // Enter, and a feature whose only trigger is pressing Enter on nothing is one nobody discovers.
+    if (typeof data.spend === 'string') {
+      const total = document.getElementById('spend');
+      if (total) { total.textContent = data.spend; }
+    }
     if (typeof data.reask === 'string') {
       canReask = data.reask.length > 0;
       const reaskButton = document.getElementById('send');

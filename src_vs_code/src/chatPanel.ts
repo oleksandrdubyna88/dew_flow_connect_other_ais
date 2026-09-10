@@ -102,6 +102,8 @@ export interface ChatPushState {
   readonly reask: string;
   /** The picture waiting to go with the next question, as a data URL, or empty. */
   readonly attached: string;
+  /** What this conversation has cost so far, as a line, or empty. */
+  readonly spend: string;
   readonly providerId: string;
   readonly modelId: string;
   /**
