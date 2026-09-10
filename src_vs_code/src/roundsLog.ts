@@ -216,7 +216,13 @@ export function rowsFrom(
 
 /** Newest first, by when a row began — its own function because three lists are ordered by it. */
 export function newestFirst(a: LogRow, b: LogRow): number {
-  return (b.startedUtc || b.completedUtc).localeCompare(a.startedUtc || a.completedUtc);
+  // Plain comparison, not `localeCompare`: these are ISO-8601 instants of one shape, so they order
+  // lexicographically by construction, and full internationalisation collation over thousands of
+  // rows on every five-second tick buys nothing for it. (gemini, the code round.)
+  const mine = b.startedUtc || b.completedUtc;
+  const theirs = a.startedUtc || a.completedUtc;
+
+  return mine < theirs ? -1 : (mine > theirs ? 1 : 0);
 }
 
 /**
@@ -254,7 +260,7 @@ export function chatRows(
   const position = new Map<string, number>();
 
   return [...records]
-    .sort((a, b) => a.utc.localeCompare(b.utc))
+    .sort((a, b) => (a.utc < b.utc ? -1 : (a.utc > b.utc ? 1 : 0)))
     .map((record) => {
       const turn = (position.get(record.conversation) ?? 0) + 1;
       position.set(record.conversation, turn);

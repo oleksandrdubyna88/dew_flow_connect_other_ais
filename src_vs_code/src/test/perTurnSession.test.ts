@@ -141,6 +141,9 @@ function perTurnLauncher(): { start: (resume: string) => ProcessHandle; turns: F
 const started = (id: string): string => JSON.stringify({ type: 'thread.started', thread_id: id });
 const answered = (said: string): string =>
   JSON.stringify({ type: 'item.completed', item: { id: 'item_0', type: 'agent_message', text: said } });
+/** A real `turn.completed` block, whose counts are CUMULATIVE for the thread. */
+const spent = (tokensIn: number, tokensOut: number): string =>
+  JSON.stringify({ type: 'turn.completed', usage: { input_tokens: tokensIn, output_tokens: tokensOut } });
 
 test('the first turn opens a thread and the second RESUMES the one it was told', async () => {
   const launcher = perTurnLauncher();
@@ -283,6 +286,7 @@ test('two questions asked at once are still two turns, one after the other', asy
 const SILENT_UNTIL_ASKED: ChatAdapter = {
   shape: 'persistent',
   announces: false,
+  cumulative: false,
   argv: () => [],
   encode: (turn) => turn,
   classify: (line) => (line.length > 0 ? { kind: 'answer', text: line } : { kind: 'nothing' }),
@@ -437,4 +441,114 @@ test('stopping a per-turn turn keeps the thread, so the next question resumes th
   launcher.turns[2]!.say(answered('there it is different'));
   launcher.turns[2]!.exit();
   assert.deepStrictEqual(await third, { ok: true, answer: 'there it is different' });
+});
+
+
+test('a cumulative vendor is differenced BY THE SESSION, so a result is always one turn’s cost', async () => {
+  // `codex` counts up across the thread: 1000, then 1200. Recording what it says would bill the
+  // second turn for the first as well, and every conversation on that vendor would inflate the
+  // longer it ran. The baseline lives HERE because a session’s life is exactly the vendor
+  // thread’s life — it is minted with the id this session resumes by and dies with it.
+  // (gemini, the code round: the rule used to reach out of the adapter layer into the command that
+  // orchestrates the page.)
+  const launcher = perTurnLauncher();
+  const session = new CliChatSession(launcher.start, BUDGETS, NEVER, codexAdapter);
+
+  const first = session.send('what does this mean?');
+  await flush();
+  launcher.turns[0]!.say(started('01a0851c-488c-7be0-9e51-e35c5fb2ce5c'));
+  launcher.turns[0]!.say(answered('it means this'));
+  launcher.turns[0]!.say(spent(1000, 200));
+  launcher.turns[0]!.exit();
+  assert.deepStrictEqual(
+    await first,
+    { ok: true, answer: 'it means this', usage: { tokensIn: 1000, tokensOut: 200, costUsd: null } },
+  );
+
+  const second = session.send('and in the north?');
+  await flush();
+  launcher.turns[1]!.say(answered('there it is different'));
+  launcher.turns[1]!.say(spent(1200, 300));
+  launcher.turns[1]!.exit();
+  assert.deepStrictEqual(
+    await second,
+    { ok: true, answer: 'there it is different', usage: { tokensIn: 200, tokensOut: 100, costUsd: null } },
+    'the second turn was billed for the first as well',
+  );
+});
+
+test('a STOPPED turn carries what the vendor had already charged for it', async () => {
+  // The accounting hole four reviewers across both remote vendors raised on the code round: `codex`
+  // emits its usage on a line of its own, so a turn can be priced and then stopped a moment later.
+  // Carrying the numbers only on the answer recorded such a turn as zero tokens at no cost — and
+  // a stopped turn is precisely the one somebody hunting for waste is looking for.
+  const launcher = perTurnLauncher();
+  const session = new CliChatSession(launcher.start, BUDGETS, NEVER, codexAdapter);
+
+  const stopped = session.send('what does this mean?');
+  await flush();
+  launcher.turns[0]!.say(started('01a0851c-488c-7be0-9e51-e35c5fb2ce5c'));
+  launcher.turns[0]!.say(spent(800, 40));
+  session.stop();
+
+  const result = await stopped;
+  assert.strictEqual(result.ok, false, 'a stopped turn is not an answer');
+  assert.deepStrictEqual(
+    result.ok === false ? result.usage : undefined,
+    { tokensIn: 800, tokensOut: 40, costUsd: null },
+    'the tokens the vendor had already charged for were thrown away',
+  );
+});
+
+test('a turn stopped after a priced one is differenced against it, not against nothing', async () => {
+  // The compounding half of the same defect: if a stopped turn moved no baseline, the NEXT turn
+  // would be differenced against the turn before the stop and would absorb the stopped turn’s
+  // tokens on top of its own. Because the stop settles through the same funnel as an answer, the
+  // baseline moves and each turn is billed once. (gemini, the code round.)
+  const launcher = perTurnLauncher();
+  const session = new CliChatSession(launcher.start, BUDGETS, NEVER, codexAdapter);
+
+  const first = session.send('one');
+  await flush();
+  launcher.turns[0]!.say(started('01a0851c-488c-7be0-9e51-e35c5fb2ce5c'));
+  launcher.turns[0]!.say(answered('first'));
+  launcher.turns[0]!.say(spent(1000, 100));
+  launcher.turns[0]!.exit();
+  await first;
+
+  const stopped = session.send('two');
+  await flush();
+  launcher.turns[1]!.say(spent(1500, 150));
+  session.stop();
+  const second = await stopped;
+  assert.deepStrictEqual(
+    second.ok === false ? second.usage : undefined,
+    { tokensIn: 500, tokensOut: 50, costUsd: null },
+  );
+
+  const third = session.send('three');
+  await flush();
+  launcher.turns[2]!.say(answered('third'));
+  launcher.turns[2]!.say(spent(1800, 180));
+  launcher.turns[2]!.exit();
+  assert.deepStrictEqual(
+    await third,
+    { ok: true, answer: 'third', usage: { tokensIn: 300, tokensOut: 30, costUsd: null } },
+    'the turn after a stop absorbed the stopped turn’s tokens',
+  );
+});
+
+test('a turn nobody priced carries NO usage key, so an old result looks exactly as it did', async () => {
+  const launcher = perTurnLauncher();
+  const session = new CliChatSession(launcher.start, BUDGETS, NEVER, codexAdapter);
+
+  const only = session.send('what does this mean?');
+  await flush();
+  launcher.turns[0]!.say(started('01a0851c-488c-7be0-9e51-e35c5fb2ce5c'));
+  launcher.turns[0]!.say(answered('it means this'));
+  launcher.turns[0]!.exit();
+
+  const result = await only;
+  assert.deepStrictEqual(result, { ok: true, answer: 'it means this' });
+  assert.ok(!Object.keys(result).includes('usage'), 'an unpriced turn grew a key it never had');
 });

@@ -18,8 +18,9 @@ import {
 import { parseSession, SessionFile } from './rounds';
 import { PriceOfModel, usageTabHtml } from './roundsLog';
 import { parseUsage, priceOf, UsageEntry, Window } from './usage';
+import { stat } from 'node:fs/promises';
 import { ChatTurnRecord } from './chatUsage';
-import { readChatUsage } from './chatUsageFile';
+import { chatUsagePath, readChatUsage } from './chatUsageFile';
 import {
   CliStatus,
   latestCliVersion,
@@ -406,8 +407,40 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * <p>Whole, like {@link usageLines} and for the same reason: forgetting a vendor's spending is a
    * decision about the spending VIEW, not a reason to empty a row that really did cost money.</p>
    */
+  /**
+   * The parsed ledger, and what the file looked like when it was parsed.
+   *
+   * <p>An empty stamp is "not known", which never matches and therefore never serves a stale answer.
+   * The records are held rather than the text: parsing is the expensive half.</p>
+   */
+  private chatLedger: { stamp: string; records: readonly ChatTurnRecord[] } = { stamp: '', records: [] };
+
   async chatLines(): Promise<readonly ChatTurnRecord[]> {
-    return readChatUsage(this.dataDir.fsPath);
+    const path = chatUsagePath(this.dataDir.fsPath);
+    // The log page ticks every five seconds while it is open, and it used to re-read and re-parse the
+    // WHOLE ledger on each one — thousands of allocations on the extension host's main thread for a
+    // file that had not changed. `stat` is one syscall; a parse of a year's records is not. The size
+    // AND the mtime together, because an append-only file always grows but a file replaced by hand
+    // may not. (gemini and codex, the code round, independently.)
+    const stamp = await this.ledgerStamp(path);
+    if (stamp !== '' && stamp === this.chatLedger.stamp) {
+      return this.chatLedger.records;
+    }
+    const records = await readChatUsage(this.dataDir.fsPath);
+    this.chatLedger = { stamp, records };
+
+    return records;
+  }
+
+  /** The file's identity as a string, or empty when it cannot be stat-ed — which never caches. */
+  private async ledgerStamp(path: string): Promise<string> {
+    try {
+      const found = await stat(path);
+
+      return `${found.size}:${found.mtimeMs}`;
+    } catch {
+      return '';
+    }
   }
 
   /** The spending window the page shows. Today by default — since midnight, by the operator's ruling. */

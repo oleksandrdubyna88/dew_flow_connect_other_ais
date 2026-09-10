@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ChatTurnRecord } from '../chatUsage';
-import { CHAT_USAGE_FILE, chatUsagePath, readChatUsage, recordChatTurn } from '../chatUsageFile';
+import { CHAT_USAGE_FILE, chatUsagePath, flushChatUsage, readChatUsage, recordChatTurn } from '../chatUsageFile';
 
 /**
  * The chat ledger's file, against a real directory.
@@ -157,4 +157,49 @@ test('the ledger is NOT the server\u2019s usage.jsonl', () => {
   assert.strictEqual(CHAT_USAGE_FILE, 'chat-usage.jsonl');
   assert.notStrictEqual(CHAT_USAGE_FILE, 'usage.jsonl');
   assert.strictEqual(chatUsagePath('D:/data'), join('D:/data', 'chat-usage.jsonl'));
+});
+
+
+test('a flush waits for every queued write, so a closing window does not drop the last turn', async () => {
+  // The turn path deliberately does NOT wait for the disk — a person's answer must not — which
+  // means a host closed the instant a turn ends can take the record with it. `deactivate` returns
+  // this, and VS Code awaits what `deactivate` returns. (codex and the local reviewer, the code
+  // round.)
+  const dir = home();
+  try {
+    for (let n = 1; n <= 5; n += 1) {
+      void recordChatTurn(dir, record({ utc: `2026-09-10T20:00:0${n}.000Z`, tokensIn: n }));
+    }
+    await flushChatUsage();
+
+    assert.deepStrictEqual(
+      (await readChatUsage(dir)).map((row) => row.tokensIn),
+      [1, 2, 3, 4, 5],
+      'a write that had been queued was still in flight after the flush',
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a write that failed does not stall the writes queued behind it', async () => {
+  // The queue is one chain, so a rejection on it would poison every later turn. The catch is INSIDE
+  // the link, which is what keeps the chain resolving. (the local reviewer, the code round — it
+  // asked for the guarantee the code already had, and this is what says so.)
+  const dir = home();
+  try {
+    const blocked = join(dir, 'blocked');
+    writeFileSync(blocked, 'a file where a directory should be');
+
+    void recordChatTurn(join(blocked, 'inside'), record({ tokensIn: 111 }));
+    await recordChatTurn(dir, record({ tokensIn: 222 }));
+
+    assert.deepStrictEqual(
+      (await readChatUsage(dir)).map((row) => row.tokensIn),
+      [222],
+      'a turn behind a failed write was lost',
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
