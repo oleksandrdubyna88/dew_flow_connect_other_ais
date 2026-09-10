@@ -209,3 +209,46 @@ test('codex: argv refuses a resume id it would not have accepted, without asking
     ['exec', 'resume', '01a0851c-488c-7be0-9e51-e35c5fb2ce5c', ...CODEX_ARGS],
   );
 });
+
+
+test('a PERSISTENT vendor puts its numbers ON the answer, because its turn ends there', () => {
+  // The rule, pinned. A persistent turn settles at the ANSWER — the session resolves and moves on
+  // — so a usage line printed afterwards would belong to a turn that is already over and its
+  // tokens would be lost. A per-turn vendor is the other way round: that shape's turn ends at the
+  // process EXIT, so `codex` may send its usage on a line of its own. This test is what stops a new
+  // persistent adapter being written to the looser rule the seam's comment used to state.
+  // (codex, the second code round.)
+  const claude = claudeAdapter.classify(JSON.stringify({
+    type: 'result',
+    subtype: 'success',
+    result: 'the answer',
+    total_cost_usd: 0.107958,
+    usage: { input_tokens: 1200, output_tokens: 300 },
+  }));
+  assert.strictEqual(claude.kind, 'answer');
+  assert.deepStrictEqual(
+    (claude as { usage?: unknown }).usage,
+    { tokensIn: 1200, tokensOut: 300, costUsd: 0.107958 },
+    'claude must price its turn on the answer event itself',
+  );
+
+  const agy = agyAdapter.classify(JSON.stringify({
+    event: 'result',
+    result: {
+      status: 'SUCCESS',
+      response: 'the answer',
+      usage: { input_tokens: 900, output_tokens: 120 },
+    },
+  }));
+  assert.strictEqual(agy.kind, 'answer');
+  assert.deepStrictEqual(
+    (agy as { usage?: unknown }).usage,
+    { tokensIn: 900, tokensOut: 120, costUsd: null },
+    'agy must price its turn on the answer event itself',
+  );
+
+  // And neither of them is a cumulative reporter, so the session differences nothing for them.
+  assert.strictEqual(claudeAdapter.cumulative, false);
+  assert.strictEqual(agyAdapter.cumulative, false);
+  assert.strictEqual(codexAdapter.cumulative, true, 'the per-turn vendor is the cumulative one');
+});

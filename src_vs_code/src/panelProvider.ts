@@ -17,7 +17,7 @@ import {
 } from './panelView';
 import { parseSession, SessionFile } from './rounds';
 import { PriceOfModel, usageTabHtml } from './roundsLog';
-import { parseUsage, priceOf, UsageEntry, Window } from './usage';
+import { parseUsage, priceOfLine, UsageEntry, Window } from './usage';
 import { stat } from 'node:fs/promises';
 import { ChatTurnRecord } from './chatUsage';
 import { chatUsagePath, readChatUsage } from './chatUsageFile';
@@ -327,8 +327,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     return (model, provider) => {
       const key = provider + '|' + model;
       if (!seen.has(key)) {
-        const typed = priceOf(provider, vendors, (id) => published(id, open, lite));
-        seen.set(key, typed === undefined ? undefined : { inPerMillion: typed.in, outPerMillion: typed.out });
+        // The row's typed rate, or the list price of the model that ANSWERED when the row is gone.
+        // The rule and the reason are in `priceOfLine`; it is pure and tested there rather than
+        // written out here, where nothing could reach it. (codex, the second code round.)
+        const rate = priceOfLine(provider, model, vendors, (id) => published(id, open, lite));
+        seen.set(key, rate === undefined ? undefined : { inPerMillion: rate.in, outPerMillion: rate.out });
       }
 
       return seen.get(key);
