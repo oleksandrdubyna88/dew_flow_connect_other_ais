@@ -92,7 +92,9 @@ test('the hook emits every always-rule, from the pinned canonical source', (t) =
       `${id} did not reach the session`,
     );
   }
-  assert.match(emitted, /rules\.mjs explain/,
+  // The reference hook words this generically — it runs in the conventions repository too, where the
+  // resolver is not under .agents/conventions — so the stable part is the verb and its arguments.
+  assert.match(emitted, /explain --repo <root> --task <task>/,
     'the hook must still send the reader to explain/read for the rules its neutral task cannot select');
 });
 
