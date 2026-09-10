@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+**A conversation says what it has cost.** Beside the model picker, updated as answers arrive — which
+is where you decide whether to ask again or start fresh, and that decision is the one the number is
+for: each question carries the whole conversation with it, so it is billed for the ones before it. A
+figure worked out from tokens wears a tilde, because only one of the three vendors reports what it
+actually charged.
+
+**Paste a picture into a question.** A screenshot from the clipboard goes into the composer, shows
+itself there, and travels with the next question you send. It works with the models that were
+measured to read one — if the model you have chosen cannot, the tab says so by name instead of
+quietly sending the words alone.
+
+**Ask the other model the same thing.** Switch the model after an answer you did not like, and the
+Send button becomes *Re-ask · <that model>* — press it, or press Enter on an empty box, and the
+question goes to the new model with the conversation behind it and without the answer you rejected.
+
 **Your prompts and your models, saved by name.** The single prompt in the sidebar has become a list
 you build: give each one a name, tick the one to use when a capture sends by itself, and they appear
 as buttons above the composer — models in their vendor's colour, prompts in another. **ConnectOtherAIs:

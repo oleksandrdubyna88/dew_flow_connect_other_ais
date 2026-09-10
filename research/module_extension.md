@@ -29,6 +29,91 @@ local model` the page would otherwise still show the remote one as selected whil
 somewhere else), a pushed state that has not changed is not sent at all, a `pick` naming a model the
 conversation was never offered is refused at the host boundary rather than trusted, and the
 composer takes focus back when a turn ends — without which every follow-up costs a mouse click.
+### What the conversation has cost, where the decision is made (2026-09-10)
+
+A chat turn carries the whole conversation, so question five is billed for one through four as well
+— `chatCommand.ts` says so out loud where the carry is built. That is the number a person would use
+to decide between asking again and starting fresh, and it was invisible at exactly that moment. The
+ledger half writes every turn down; this says the running total beside the picker, which is where
+the decision is taken.
+
+**An estimate is marked as one.** The three vendors do not report comparable numbers — `claude`
+counts cache reads, `antigravity` omits cache entirely, `codex` reports a cumulative maximum
+(measured, `todo/PLAN_usage_that_compares.md`) — so only `claude` reports a bill and everything else
+is worked out. The tilde is this product's existing convention for that, and one convention for one
+thing is worth more than a prettier line.
+
+**One estimated turn makes the whole total an estimate.** A sum of a measured price and a guess is a
+guess, and showing it as a bill would make it the most confident number on the page and the least
+true.
+
+**A turn nobody priced is COUNTED, not skipped.** `codex` reports a cumulative maximum the ledger
+refuses to difference, so its turns legitimately arrive with no cost at all — and a total that
+quietly left them out would read as complete.
+
+**The count lives beside the conversation, not in the ledger.** The ledger is a file this window
+shares with every other, and a tab asking it for its own total on every push would be reading a
+growing file to answer a question it already knows.
+
+### A picture in the question (2026-09-10)
+
+Phase 0 MEASURED the mechanism rather than assuming one: `claude` and `agy` both read a number out of
+a real PNG when the file's PATH was named in the prompt. **The vendor process opens the file itself**,
+which makes the file's name, its location and its lifetime part of the contract with the model rather
+than an implementation detail.
+
+**The page reads the bytes and writes nothing.** Only the page has a clipboard event; only the host
+has a disk. The page posts a data URL and the host writes the file the vendor will open.
+
+**`img-src data:` and nothing wider.** The CSP is `default-src 'none'`, which blocks images too, so a
+thumbnail of what was just pasted needs that one addition: no remote host, no `file:`, and
+`localResourceRoots` stays empty. `attachedHtml` also refuses to render a `src` that is not one of the
+four image types — the value comes from the host, so it is not arbitrary, but a page that renders a
+`src` it has not looked at is a page that would render `javascript:` the day something else fills
+that field.
+
+**SVG is refused although it is an image.** It is markup with script in it, and the one thing this
+feature does is hand a file to a process that will open it.
+
+**Refused BY NAME where the provider cannot take one**, which is the rule the picker already keeps.
+`codex` is refused as UNTESTED rather than as incapable — its account hit a usage limit during phase
+0, and that is a different sentence from a measured no. A Team server is refused because an image is
+a wire-format change on a server deployed by hand.
+
+**The file is named here, from what the image IS**, never from anything the page said: a name from
+the page would be a path fragment chosen by whatever wrote into the clipboard. One directory per
+conversation, which is what makes forgetting them possible.
+
+**A picture goes with the question it was pasted for and no other.** The turn names the file, the
+vendor opens it, and the attachment is spent — keeping it would send the same screenshot with every
+question after it.
+
+### An empty box asks the other model the same thing (2026-09-10)
+
+Entry 24, in the operator's words: *"maybe I don't like gemini's answer and want to switch to Fable.
+If I switch the model and press Enter with an empty box — take the previous context (except the last
+answer) and feed it to the new model."*
+
+**Except the last answer**, and the reason is sound: an answer somebody rejected, handed to the next
+model, is a model being asked to agree with it. The QUESTION is kept and re-sent verbatim — it is
+what they want answered again — and everything before it stays, because that is the conversation the
+answer was given in. Both the answer and its question leave the transcript: the question comes back
+as this turn's own, and keeping the answer would show it twice in a conversation that has moved past
+it.
+
+**On offer only when the model has CHANGED since that answer.** Pressing Enter on an empty box with
+the same model chosen does what it has always done, which is nothing.
+
+**The gesture is invisible, so the button says it.** `send()` has always refused an empty box, which
+is what made the gesture free to take — and a feature whose only trigger is pressing Enter on nothing
+is a feature nobody discovers. The Send button reads *Re-ask · <model>* whenever there is something
+to re-ask, which is both the second way in and the only way to know the first exists. Text in the box
+is a question and is never swallowed by it.
+
+**It goes through `oneTurn`, and that is the point.** A re-ask is a turn: the lock, the turn number a
+stop can name, the transcript, the model recorded on the answer and the cap on a forgetful
+conversation all happen because this is not a second path.
+
 ### The presets tab (2026-09-10)
 
 `chatPresetsPage.ts` and `chatPresetsPanel.ts` — a page module and a thin panel host, which is the
@@ -2417,9 +2502,19 @@ without which turn one at 1000 and turn two at 1200 would have been recorded as 
 conversation on that vendor over-billed increasingly the longer it ran (the gate caught the plan doing
 exactly that). The key is the runtime and not the vendor row's id, because a row id is a person's own
 editable text: two Codex accounts as `codex-work` and `codex-home` would otherwise have been
-differenced by neither. `turnCost` applies the same rule to money — dead code today, since the one
-cumulative vendor prices nothing, and written so that the tokens and the bill cannot drift apart the
-day it does.
+differenced by neither.
+
+**Money is REFUSED for such a vendor rather than differenced (2026-09-10).** `turnCost` mirrored
+`turnTokens` and subtracted the bills too, which was unreachable code — the one cumulative vendor
+reports `costUsd: null` — and the operator ruled the arithmetic out. What stands in its place is not a
+clamp but a refusal: a cumulative vendor's per-turn money is `null`, because a running total is not
+what one turn cost and recording it as one would over-report every turn but the first, which is
+exactly the token defect the gate caught before this shipped. `null` means "nobody told us", and the
+log page then prices the row from the public list by the model that answered and marks it with the
+tilde. The deletion was checked against the two other things here that turn tokens into money — the
+public price lists, and the rate a person types on a vendor row — and neither goes through `turnCost`:
+both are dollars per million tokens applied when a row is DRAWN, while `turnCost` is only ever about a
+figure a vendor put on the wire itself.
 
 **Every turn is recorded, not every ANSWER.** The write sits before the branch in `oneTurn`, so a turn
 that was stopped or that fell over is written down with its outcome — those are the ones somebody

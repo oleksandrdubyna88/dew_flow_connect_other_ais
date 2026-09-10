@@ -60,6 +60,11 @@ export interface ChatPanelHooks {
   readonly onClosed: (id: object) => void;
   /** Start again with the same passage. */
   readonly onRestart: (id: object) => void;
+  /** Ask the model that is chosen NOW the question the last answer was given to. */
+  readonly onReask: (id: object) => void;
+  /** A picture was pasted into the composer, or taken off it again. */
+  readonly onAttach: (id: object, dataUrl: string) => void;
+  readonly onUnattach: (id: object) => void;
   /** Move the thread to a model that keeps a conversation. */
   readonly onUseLocal: (id: object) => void;
   /** The page trapped an error, or the host failed to handle one of its messages. */
@@ -93,6 +98,12 @@ export interface ChatPushState {
   readonly models: readonly ChatModelChoice[];
   /** Every row that can answer, each with its own models — what the picker offers. */
   readonly providers: readonly ChatProvider[];
+  /** Who would answer a re-ask, or empty when there is nothing to re-ask. */
+  readonly reask: string;
+  /** The picture waiting to go with the next question, as a data URL, or empty. */
+  readonly attached: string;
+  /** What this conversation has cost so far, as a line, or empty. */
+  readonly spend: string;
   readonly providerId: string;
   readonly modelId: string;
   /**
@@ -252,6 +263,18 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
       return;
     case 'copyAnswer':
       hooks.onCopyAnswer(id, command.index);
+
+      return;
+    case 'reask':
+      hooks.onReask(id);
+
+      return;
+    case 'attach':
+      hooks.onAttach(id, command.dataUrl);
+
+      return;
+    case 'unattach':
+      hooks.onUnattach(id);
 
       return;
     case 'restart':

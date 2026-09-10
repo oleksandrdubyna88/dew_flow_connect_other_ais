@@ -98,11 +98,34 @@ test('the mounted shared rule body is byte-identical to what the menu hands out'
   assert.match(source, /^---\n/, 'the neutral canonical rule carries delivery metadata');
 
   assert.equal(
-    source.replace(/^---\n[\s\S]*?\n---\n/, ''),
+    ruleBody(source),
     claudeSnippet(),
     `${mounted} differs from the generated delivery. Run npm run prepare:gate; edit the canonical source only.`,
   );
 });
+
+/**
+ * A shared rule file without its loader frontmatter.
+ *
+ * <p>Since the conventions repository started sharing one rule catalog between Claude Code and
+ * Codex (2026-09-10), every rule file opens with a YAML block naming its id, when it loads and
+ * which tasks it belongs to. That block is the CATALOG's, not the rule's: it tells a runtime
+ * whether to load the file, and it means nothing in the `CLAUDE.md` a person pastes this text
+ * into.</p>
+ *
+ * <p>So the comparison is against the BODY. The guarantee is unchanged — the words six
+ * repositories obey must be the words this button hands out — and the frontmatter is allowed to
+ * move on its own, which is the only way the two halves can ship at different times without one of
+ * them being wrong.</p>
+ */
+function ruleBody(text: string): string {
+  if (!text.startsWith('---\n')) {
+    return text;
+  }
+  const end = text.indexOf('\n---\n', 3);
+
+  return end === -1 ? text : text.slice(end + '\n---\n'.length);
+}
 
 /** The rules mount, found by walking up from this file rather than by trusting a cwd. */
 function mountedRuleFile(): string {

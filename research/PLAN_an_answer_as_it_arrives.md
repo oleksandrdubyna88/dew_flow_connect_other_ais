@@ -1,21 +1,45 @@
 # PLAN — an answer as it arrives
 
-> Status: **PHASE 0 IS DONE (measured 2026-09-09) — Phase 1 is not built, and the measurement says
-> only one of three vendors could use it.** `agy` streams real deltas on `step_update`; `claude` and
-> `codex` emit nothing before their final answer. The window scales with answer length — 4 % of a
-> short turn, 44 % of a long one — and the plan's premise that eight silent seconds were recoverable
-> is REFUTED: most of that silence is the model thinking, before any vendor has a token to give.
-> Phase 1 stays unbuilt on that evidence; the table and the harness are below and committed.
-> Kind: **feature**
-> (accepted 2026-09-09: *"если можно стримить — стримь; если нет — и так пойдёт"*). Scope: the
-> session seam and its four implementations — `src_vs_code/src/chatSession.ts`,
-> `claudeAdapter.ts`, `codexAdapter.ts`, `agyAdapter.ts`, `cliChatSession.ts`,
-> `remoteChatSession.ts` — and the page's message region. Origin:
-> [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entry 19.
+> Status: **PHASE 0 IMPLEMENTED 2026-09-09 (the measurement and its harness). PHASE 1 IS OUT OF
+> SCOPE by the operator's decision, 2026-09-10.** Kind: **feature**.
+> Origin: [../todo/BUGS_2026-09-09.md](../todo/BUGS_2026-09-09.md), entry 19.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_three_chat_adapters.md](../research/PLAN_three_chat_adapters.md),
-> [PLAN_the_server_knows_a_chat_from_a_review.md](../research/PLAN_the_server_knows_a_chat_from_a_review.md).
+> ### What was measured, and what it decided
+>
+> `agy` streams real deltas on `step_update`. `claude` and `codex` emit nothing before their final
+> answer. The Team server cannot stream at all — a job is polled, and the wire has no place for a
+> partial.
+>
+> **The plan's own premise was REFUTED by its measurement**, which is the most valuable line here:
+> it assumed the eight silent seconds of a 9.4-second turn were seconds a stream could fill. Most of
+> that silence is the model THINKING, before any vendor has a token to give — the window a stream
+> could actually fill is 4 % of a short turn and 44 % of a long one, and only for one vendor of
+> three.
+>
+> **The operator's condition was conditional from the start** — accepted on 2026-09-09 as *"если
+> можно стримить — стримь; если нет, и так пойдёт"* — and on 2026-09-10, with the measurement in
+> front of them, they took it out of scope: *"стриминг — пока убираем из скоупа"*.
+>
+> ### What would re-open it
+>
+> One of three things, and none of them is an opinion:
+>
+> 1. **A second vendor starts streaming.** `claude` or `codex` emitting partial output in the
+>    non-interactive mode this product runs them in changes the ratio from one-of-three to
+>    two-of-three. The harness below re-runs in minutes and answers that question exactly.
+> 2. **The Team server gains a partial on the wire.** It is deployed by hand and shipped separately;
+>    an image is already waiting on the same seam
+>    ([../todo/PLAN_a_picture_in_the_question.md](../todo/PLAN_a_picture_in_the_question.md)).
+> 3. **Answers get much longer.** The window scales with length — 44 % on a long turn is a different
+>    proposition from 4 %, and a product whose turns are routinely long is a different product.
+>
+> ### The one thing that outlived the decision
+>
+> `todo/PLAN_an_answer_as_it_arrives.md` carried a Definition-of-Done item, added on 2026-09-09 from
+> the composer plan's round: **a streamed answer must go through `scheduleFollow()`** rather than a
+> `scrollTop` of its own, because the height keeps growing after the follow has run and a reader who
+> WAS at the bottom would be left short of it. That requirement is preserved here, and it is the
+> first thing to read if this is ever built.
 
 ## The goal — and the condition
 
@@ -157,7 +181,7 @@ up starts from numbers rather than from a guess.
 ### What Phase 0 also recorded for a companion plan
 
 The harness reports where each vendor puts its token counts, because it was reading the same streams
-and [PLAN_who_said_it_and_what_it_cost.md](PLAN_who_said_it_and_what_it_cost.md) needs exactly that:
+and [PLAN_who_said_it_and_what_it_cost.md](../todo/PLAN_who_said_it_and_what_it_cost.md) needs exactly that:
 
 | vendor | usage arrives on | when |
 |---|---|---|
@@ -175,7 +199,7 @@ Six constraints the plan round put on this half before it is written. They are r
 than solved now, because Phase 1 is not being built:
 
 1. **The seam signature is no longer free.** `stop()` landed on `ChatSession` first
-   ([PLAN_a_turn_nobody_can_stop.md](PLAN_a_turn_nobody_can_stop.md)), and a third POSITIONAL
+   ([PLAN_a_turn_nobody_can_stop.md](../todo/PLAN_a_turn_nobody_can_stop.md)), and a third POSITIONAL
    callback after `onWaiting` is the shape most likely to be got wrong by a caller. Decide between an
    options object and a positional argument **before** the first line, and say which. (codex.)
 2. **A partial belongs to a TURN, not to a session.** The stop work already learned this the hard
@@ -200,7 +224,7 @@ than solved now, because Phase 1 is not being built:
   display only).
 - The adapter parses the partial event and calls `onPartial(textSoFar)`.
 - The page appends into a live `model` message under the entry-23 scroll rule (follow only if at
-  the bottom); the Stop button ([PLAN_a_turn_nobody_can_stop.md](PLAN_a_turn_nobody_can_stop.md))
+  the bottom); the Stop button ([PLAN_a_turn_nobody_can_stop.md](../todo/PLAN_a_turn_nobody_can_stop.md))
   stays available throughout; markdown is re-rendered on the final text only, partials show as
   plain text (a half-open fence must not flicker the layout).
 - Where Phase 0 said no, the adapter simply never calls `onPartial` — no branch in the page.
@@ -283,6 +307,6 @@ only when the whole ritual has run — not when the code works.
 ## Parallelism
 
 **Phase 0 has no conflicts at all** — a script and a table — and can run in any lane at any time.
-Phase 1 conflicts with [PLAN_a_turn_nobody_can_stop.md](PLAN_a_turn_nobody_can_stop.md) on `send`'s
+Phase 1 conflicts with [PLAN_a_turn_nobody_can_stop.md](../todo/PLAN_a_turn_nobody_can_stop.md) on `send`'s
 signature (stop goes first) and with the chat-page lane on the message region (queues behind
 [PLAN_an_answer_reads_like_a_document.md](../research/PLAN_an_answer_reads_like_a_document.md)).

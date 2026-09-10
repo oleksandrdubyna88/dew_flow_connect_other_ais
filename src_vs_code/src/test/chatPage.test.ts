@@ -27,6 +27,9 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
     messages: [],
     models: MODELS,
     providers: [],
+    reask: '',
+    attached: '',
+    spend: '',
     promptPresets: [],
     modelPresets: [],
     providerId: 'antigravity',
@@ -449,6 +452,16 @@ function runChatPage(over: RunOptions = {}): RunningPage {
   };
   // Captured so a test can say "the composer changed height", which is the event story 4 reacts to.
   let observed: (() => void) | undefined;
+  // What a browser gives the page for reading a pasted file. Node has none, and the page correctly
+  // refuses without one — so a harness without it tests the refusal rather than the paste.
+  class FakeFileReader {
+    public result = '';
+    public onload: (() => void) | undefined;
+    readAsDataURL(): void {
+      this.result = 'data:image/png;base64,iVBORw0KGgo=';
+      this.onload?.();
+    }
+  }
   class FakeResizeObserver {
     constructor(callback: () => void) { observed = callback; }
     observe() { /* the page observes one element */ }
@@ -456,7 +469,7 @@ function runChatPage(over: RunOptions = {}): RunningPage {
   }
 
 
-  new Function('document', 'window', 'acquireVsCodeApi', 'requestAnimationFrame', 'ResizeObserver', body)(
+  new Function('document', 'window', 'acquireVsCodeApi', 'requestAnimationFrame', 'ResizeObserver', 'FileReader', body)(
     document_,
     window_,
     // `setState` as well as `postMessage`: the page tells VS Code which conversation it is the
@@ -464,6 +477,7 @@ function runChatPage(over: RunOptions = {}): RunningPage {
     () => ({ postMessage: (message: Record<string, unknown>) => posted.push(message), setState: () => undefined }),
     (fn: () => void) => { pending.push(fn); },
     withoutResizeObserver === true ? undefined : FakeResizeObserver,
+    FakeFileReader,
   );
 
   const region = () => {
@@ -1658,4 +1672,166 @@ test('a click on the row itself does nothing', () => {
   page.fire('presets', 'click', { target: { closest: () => null } });
 
   assert.deepStrictEqual(page.posted.filter((message) => String(message['command']).startsWith('use')), []);
+});
+
+
+/* ------------------------------------------------------------------------------------------------
+ * Entry 24: "maybe I don't like gemini's answer and want to switch to Fable. If I switch the model
+ * and press Enter with an empty box — take the previous context (except the last answer) and feed it
+ * to the new model." An empty box has always been refused, so the gesture was free to take; what it
+ * needed was a way to be discovered.
+ * ---------------------------------------------------------------------------------------------- */
+
+test('when a re-ask is on offer the button says so, and names who would answer', () => {
+  const html = chatPageHtml(state({ reask: 'Claude Opus' }), 'n0nce');
+  const button = html.slice(html.indexOf('id="send"'), html.indexOf('</button>', html.indexOf('id="send"')));
+
+  assert.match(button, /Re-ask · Claude Opus/, 'the only way in is a gesture nobody can see');
+});
+
+test('with nothing to re-ask the button is a Send button', () => {
+  const html = chatPageHtml(state(), 'n0nce');
+  const button = html.slice(html.indexOf('id="send"'), html.indexOf('</button>', html.indexOf('id="send"')));
+
+  assert.match(button, />Send$/, 'the button is not a plain Send button');
+  assert.doesNotMatch(button, /Re-ask/);
+});
+
+test('an empty box re-asks when there is something to re-ask, and does nothing when there is not', () => {
+  const offered = runChatPage({ reask: 'Claude Opus' });
+  offered.seen['say'].value = '';
+  offered.fire('send', 'click');
+
+  assert.deepStrictEqual(offered.posted.filter((message) => message['command'] === 'reask'),
+    [{ type: 'command', command: 'reask' }]);
+  assert.deepStrictEqual(offered.posted.filter((message) => message['command'] === 'send'), [],
+    'an empty box sent an empty question');
+
+  const plain = runChatPage();
+  plain.seen['say'].value = '';
+  plain.fire('send', 'click');
+  assert.deepStrictEqual(plain.posted.filter((message) => message['command'] === 'reask'), [],
+    'a page with nothing to re-ask re-asked anyway');
+});
+
+test('a box with something in it sends it, re-ask or no re-ask', () => {
+  // The re-ask is what an EMPTY box means. Text in the box is a question, and it must not be
+  // swallowed by a gesture that happens to be available.
+  const page = runChatPage({ reask: 'Claude Opus' });
+  page.seen['say'].value = 'a different question';
+  page.fire('send', 'click');
+
+  assert.deepStrictEqual(page.posted.filter((message) => message['command'] === 'send'),
+    [{ type: 'command', command: 'send', text: 'a different question' }]);
+  assert.deepStrictEqual(page.posted.filter((message) => message['command'] === 'reask'), []);
+});
+
+test('a re-ask locks the composer like any other turn', () => {
+  const page = runChatPage({ reask: 'Claude Opus' });
+  page.seen['say'].value = '';
+  page.fire('send', 'click');
+  page.fire('send', 'click');
+
+  assert.strictEqual(page.seen['say'].disabled, true, 'the composer stayed open during a re-ask');
+  assert.strictEqual(page.posted.filter((message) => message['command'] === 'reask').length, 1,
+    'a second press re-asked a second time');
+});
+
+test('a model label in the button is escaped like everything else', () => {
+  const html = chatPageHtml(state({ reask: '<img src=x onerror=alert(1)>' }), 'n0nce');
+
+  assert.doesNotMatch(html, /<img/i, 'a model label reached the page as markup');
+});
+
+
+/* ------------------------------------------------------------------------------------------------
+ * Entry 13: paste a picture into the composer. Phase 0 measured that the mechanism is a file PATH
+ * named in the prompt, which the vendor process opens itself.
+ * ---------------------------------------------------------------------------------------------- */
+
+test('the page may show an image and may load nothing else', () => {
+  // The CSP is `default-src 'none'`, which blocks images too. A thumbnail of what was just pasted
+  // needs `img-src data:` and NOTHING wider: no remote host, no file:, and the page still loads
+  // nothing from disk because `localResourceRoots` is empty.
+  const html = chatPageHtml(state(), 'n0nce');
+  const csp = html.slice(html.indexOf('Content-Security-Policy'), html.indexOf('>', html.indexOf('Content-Security-Policy')));
+
+  assert.match(csp, /img-src data:/, 'a pasted image cannot be shown at all');
+  assert.doesNotMatch(csp, /img-src[^;]*https?:/, 'the page may load an image from the network');
+  assert.doesNotMatch(csp, /img-src[^;]*file:/, 'the page may load an image from the filesystem');
+});
+
+test('a pasted image is offered to the host, and anything else pastes as text', () => {
+  const page = runChatPage();
+
+  page.fire('say', 'paste', {
+    clipboardData: {
+      items: [{ kind: 'file', type: 'image/png', getAsFile: () => ({ name: 'x.png' }) }],
+    },
+  });
+
+  assert.deepStrictEqual(page.posted.filter((message) => message['command'] === 'attach'),
+    [{ type: 'command', command: 'attach', data: 'data:image/png;base64,iVBORw0KGgo=' }],
+    'a pasted picture was not offered to the host');
+
+  const text = runChatPage();
+  text.fire('say', 'paste', { clipboardData: { items: [{ kind: 'string', type: 'text/plain' }] } });
+  assert.deepStrictEqual(text.posted.filter((message) => message['command'] === 'attach'), [],
+    'pasted text was treated as a picture');
+});
+
+test('an attached picture is shown, and can be taken off again', () => {
+  const html = chatPageHtml(state({ attached: 'data:image/png;base64,iVBORw0KGgo=' }), 'n0nce');
+
+  assert.match(html, /<img class="attached" src="data:image\/png;base64,/, 'the attachment is not shown');
+  assert.match(html, /id="unattach"/, 'an attachment cannot be taken off');
+
+  const none = chatPageHtml(state(), 'n0nce');
+  assert.doesNotMatch(none, /class="attached"/, 'an empty attachment drew a box anyway');
+});
+
+test('taking the picture off names it to the host', () => {
+  const page = runChatPage({ attached: 'data:image/png;base64,iVBORw0KGgo=' });
+
+  page.fire('unattach', 'click');
+
+  assert.deepStrictEqual(page.posted.filter((message) => message['command'] === 'unattach'),
+    [{ type: 'command', command: 'unattach' }]);
+});
+
+test('an attachment that is not an image cannot be shown at all', () => {
+  // The state comes from the host, which built it from what the page sent — but a page rendering a
+  // src it has not looked at is a page that would render `javascript:` if the host ever handed it
+  // one. The check is here as well because this is where it becomes an attribute.
+  for (const attached of ['javascript:alert(1)', 'https://example.com/a.png', 'data:text/html;base64,PHA+']) {
+    const html = chatPageHtml(state({ attached }), 'n0nce');
+
+    assert.doesNotMatch(html, /<img class="attached"/, `${attached} was rendered as an attachment`);
+  }
+});
+
+
+test('the tab says what the conversation has cost, where the decision is made', () => {
+  // Beside the picker, which is where somebody decides whether to ask again or start fresh — and a
+  // turn carries the whole conversation, so that decision is exactly the one the number is for.
+  const html = chatPageHtml(state({ spend: '~$0.4200' }), 'n0nce');
+  const footer = html.slice(html.indexOf('<footer'), html.indexOf('</footer>'));
+
+  assert.match(footer, /id="spend"[^>]*>~\$0\.4200</, 'the running cost is not on the page');
+});
+
+test('a conversation that has cost nothing says nothing', () => {
+  const html = chatPageHtml(state(), 'n0nce');
+
+  // Empty CONTENT, not an absent element: the element is always there so a push can fill it without
+  // the page being rebuilt. `\S` was the first assertion and it matched the `<` of `</span>`.
+  assert.match(html, /id="spend"[^>]*><\/span>/, 'an empty total drew a line anyway');
+});
+
+test('the running total is updated by a push, not only at open', () => {
+  const page = runChatPage({ spend: '$0.0100' });
+
+  page.deliver({ type: 'state', spend: '$0.0200', running: false, capped: false });
+
+  assert.strictEqual(page.seen['spend'].textContent, '$0.0200', 'the total stayed at what it opened with');
 });

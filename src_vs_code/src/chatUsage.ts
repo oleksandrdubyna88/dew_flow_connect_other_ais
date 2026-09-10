@@ -113,38 +113,33 @@ function wentBackwards(
 }
 
 /**
- * What THIS turn was billed, by the same rule and for the same reason as {@link turnTokens}.
+ * What THIS turn was billed, as its vendor billed it — or nothing, when nobody can say.
  *
- * <p>Differenced separately from the tokens because the two can be missing independently — a vendor
- * can report tokens and no money, which two of the three do.</p>
+ * <p><b>The money used to be DIFFERENCED here, mirroring {@link turnTokens}, and the operator ruled
+ * that arithmetic out on 2026-09-10 as dead code.</b> It was: the only cumulative vendor reports
+ * `costUsd: null`, so the subtraction was unreachable, and no vendor anywhere has been observed
+ * billing a running total. Checked before deleting it, because two other things in this product turn
+ * tokens into money and neither goes through here — the public price lists and the rate a person
+ * types on a vendor row are both <i>dollars per million tokens</i>, applied when a row is DRAWN.
+ * This function is only ever about a figure a vendor put on the wire itself.</p>
  *
- * <p><b>This is dead code today and is written anyway.</b> The one cumulative vendor reports
- * `costUsd: null`, so nothing reaches the second branch. Leaving money un-differenced beside tokens
- * that are would be a trap set for whoever adds the next cumulative vendor, or for the day `codex`
- * starts pricing its own turns: the tokens would be right, the money would grow with the length of
- * the conversation, and nothing would say which of the two numbers to believe.</p>
+ * <p><b>What replaces it is a refusal, not a clamp, and the difference matters the day the case
+ * arrives.</b> A cumulative vendor's money is `null`: a running total is not what one turn cost, so
+ * recording it as one would over-report every turn but the first, increasingly, which is precisely
+ * the token defect the gate caught before this shipped. `null` says "nobody told us what this turn
+ * cost" — which is true — and the log page then prices the row from the public list by the model that
+ * answered and marks it with the tilde it already uses for an estimate. Today this changes nothing,
+ * because the one cumulative vendor reports no money at all.</p>
  */
-export function turnCost(
-  cumulative: boolean,
-  reported: ReportedUsage,
-  previous: { readonly costUsd: number | null } | undefined,
-): number | null {
-  if (reported.costUsd === null) {
+export function turnCost(cumulative: boolean, reported: ReportedUsage): number | null {
+  if (reported.costUsd === null || cumulative) {
     return null;
   }
-  if (!cumulative || previous === undefined || previous.costUsd === null
-    || reported.costUsd < previous.costUsd) {
-    // Passed through UNTOUCHED, deliberately. This is what a vendor said it charged — `claude` bills
-    // figures like 0.107958 — and rounding somebody else's invoice to make it prettier is not this
-    // module's business.
-    return Math.max(0, reported.costUsd);
-  }
 
-  // The subtraction is OURS, and so is the float noise it makes: $1.50 less $1.20 is $0.30 and
-  // arrives as 0.30000000000000004. Cleaned up here, at four decimals, which is the precision the
-  // rest of this product already counts money in — a round is fractions of a cent and two decimals
-  // would read as free.
-  return round4(reported.costUsd - previous.costUsd);
+  // Passed through UNTOUCHED otherwise. This is what a vendor said it charged — `claude` bills figures
+  // like 0.107958 — and rounding somebody else's invoice to make it prettier is not this module's
+  // business. The clamp is only against nonsense: a negative bill is not a credit.
+  return Math.max(0, reported.costUsd);
 }
 
 /** Four decimals, the precision this product counts money in. Cents would read a real cost as free. */

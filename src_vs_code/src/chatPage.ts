@@ -4,6 +4,7 @@ import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl'
 import { vendorPalette } from './vendorColour';
 import { ChatProvider, ChatProviderList } from './chatModels';
 import { ModelPreset, PromptPreset } from './chatPresets';
+import { pastedImage } from './chatImage';
 
 /**
  * The conversation tab: the passage that started it, what has been said, and a box to say more.
@@ -89,6 +90,32 @@ export interface ChatPageState {
   readonly models: readonly ChatModelChoice[];
   /** Every provider this conversation may put a question to, each with its own models. */
   readonly providers: readonly ChatProvider[];
+  /**
+   * Who would answer a re-ask, or empty when there is nothing to re-ask.
+   *
+   * <p>The gesture is an EMPTY box and Enter — free to take, because an empty box has always been
+   * refused — and a feature whose only trigger is pressing Enter on nothing is a feature nobody
+   * discovers. So the Send button reads *Re-ask · <model>* whenever this is set, which is both the
+   * second way in and the only way to know the first exists.</p>
+   *
+   * <p>The HOST decides: it knows which model gave the last answer and which one is chosen now.</p>
+   */
+  readonly reask: string;
+  /**
+   * The picture waiting to go with the next question, as a data URL — or empty when there is none.
+   *
+   * <p>A data URL because the page cannot read a file: `localResourceRoots` is empty and the CSP
+   * loads nothing from disk. The HOST holds the real file; this is only what a person sees.</p>
+   */
+  readonly attached: string;
+  /**
+   * What this conversation has cost so far, as a line, or empty when it has cost nothing.
+   *
+   * <p>A line rather than a number, because what it says varies: a bill, an estimate wearing the
+   * tilde, or a count of turns nobody priced. The HOST composes it — `chatSpend.ts` holds the rule
+   * — and the page shows what it was handed.</p>
+   */
+  readonly spend: string;
   /** The prompts a person saved, as buttons above the composer. */
   readonly promptPresets: readonly PromptPreset[];
   /** The models a person saved, likewise. */
@@ -256,6 +283,23 @@ export function chatPresetRowsHtml(
   return `<div id="presets">${modelRow}${promptRow}</div>`;
 }
 
+/**
+ * The picture waiting to go with the next question.
+ *
+ * <p>Rendered only when it really is an image this page may show. The host built this value from
+ * what the page sent it, so it is not arbitrary — but a page that renders a `src` it has not looked
+ * at is a page that would render `javascript:` the day something else fills that field, and the
+ * check costs one call.</p>
+ */
+function attachedHtml(attached: string): string {
+  if (pastedImage(attached) === undefined) {
+    return '';
+  }
+
+  return `<div class="attachment"><img class="attached" src="${escapeHtml(attached)}" alt="the picture that will go with the next question">`
+    + '<button type="button" id="unattach" title="Take the picture off">Remove</button></div>';
+}
+
 /** What a capped conversation offers instead of a composer nobody can use. */
 export function chatCappedHtml(capped: boolean): string {
   if (!capped) {
@@ -324,6 +368,9 @@ function chatStyle(
   .jump { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); font: inherit; color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: none; border-radius: 12px; padding: 4px 12px; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
   .jump:hover { background: var(--vscode-button-hoverBackground); }
   .compose { display: flex; gap: 8px; align-items: flex-end; }
+  .attachment { display: flex; gap: 8px; align-items: center; margin: 0 0 6px; }
+  .attached { max-height: 84px; max-width: 40%; border: 1px solid var(--vscode-panel-border); border-radius: 4px; }
+  #unattach { font: inherit; font-size: .9em; color: var(--vscode-foreground); background: none; border: 1px solid var(--vscode-panel-border); border-radius: 3px; padding: 2px 8px; cursor: pointer; }
   header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
   h1 { font-size: 1.2em; margin: 0; }
   .passage { border-left: 3px solid var(--vscode-panel-border); padding: 6px 0 6px 12px; margin: 0 0 16px; white-space: pre-wrap; opacity: .85; }
@@ -382,6 +429,7 @@ function chatStyle(
   .picker select { max-width: 45%; }
   .refused { font-size: .85em; opacity: .75; margin: 0 0 8px; }
   .caption { font-size: .85em; opacity: .7; }
+  .spend { font-size: .85em; opacity: .7; margin-left: auto; padding-left: 8px; white-space: nowrap; }
   /* The 30 % lives HERE and only here, so the CSS path and the JavaScript fallback below cannot
      disagree about where the ceiling is: the fallback sets a height and this caps it. field-sizing
      is Chromium-only, which is not a limitation in a page that renders nowhere but VS Code's own
@@ -460,9 +508,11 @@ function chatBody(state: ChatPageState, regions: Regions): string {
 <button type="button" id="jump" class="jump" hidden>Jump to newest ↓</button>
 ${chatPresetRowsHtml(state.promptPresets, state.modelPresets)}
 <div id="pickerBox">${chatPickerHtml({ providers: state.providers, refused: [] }, state.providerId, state.modelId)}</div>
+<span id="spend" class="spend" title="What this conversation has cost so far. A turn carries the whole conversation, so each question is billed for the ones before it.">${escapeHtml(state.spend)}</span>
+${attachedHtml(state.attached)}
 <div class="compose">
 <textarea id="say" rows="3" placeholder="Ask about the text above…"${locked ? ' disabled' : ''}>${escapeHtml(state.draft)}</textarea>
-<button type="button" id="send"${locked ? ' disabled' : ''}>Send</button>
+<button type="button" id="send"${locked ? ' disabled' : ''}>${state.reask.length > 0 ? `Re-ask · ${escapeHtml(state.reask)}` : 'Send'}</button>
 </div>
 <div class="hint">Enter sends · Shift+Enter for a new line</div>
 </footer>`;
@@ -639,11 +689,24 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       }
     });
   }
+  // Set by the host with every state, and read by send() below: an empty box means "ask the other
+  // model the same thing" only while there IS another model to ask.
+  var canReask = ${jsonForScript(state.reask.length > 0)};
   function send() {
     const box = document.getElementById('say');
     if (!box || box.disabled) { return; }
     const text = box.value.trim();
-    if (text.length === 0) { return; }
+    if (text.length === 0) {
+      // The whole of entry 24. Text in the box is a question and must never be swallowed by this;
+      // an empty box was refused before this existed and is refused still when there is nothing to
+      // re-ask, so nothing that used to work has changed meaning.
+      if (canReask) {
+        vscode.postMessage({ type: 'command', command: 'reask' });
+        lock(true);
+      }
+
+      return;
+    }
     box.value = '';
     vscode.postMessage({ type: 'command', command: 'send', text: text });
     fitComposer();
@@ -670,6 +733,33 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send(); }
     });
     say.addEventListener('input', fitComposer);
+    // A picture from the clipboard. The page reads the bytes because only the page has a clipboard
+    // event; it writes nothing to disk, because it cannot - the HOST holds the file, which is what
+    // the vendor process will open. Anything that is not an image pastes as the text it is.
+    say.addEventListener('paste', function (event) {
+      const items = event.clipboardData && event.clipboardData.items;
+      if (!items) { return; }
+      for (let index = 0; index < items.length; index += 1) {
+        const item = items[index];
+        if (!item || item.kind !== 'file' || typeof item.type !== 'string' || item.type.indexOf('image/') !== 0) {
+          continue;
+        }
+        const file = typeof item.getAsFile === 'function' ? item.getAsFile() : null;
+        if (!file) { continue; }
+        event.preventDefault();
+        if (typeof FileReader !== 'function') {
+          vscode.postMessage({ type: 'command', command: 'pageError', message: 'this editor cannot read a pasted picture' });
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = function () {
+          vscode.postMessage({ type: 'command', command: 'attach', data: String(reader.result || '') });
+        };
+        reader.readAsDataURL(file);
+
+        return;
+      }
+    });
   }
   // The second caller of the ONE send. Attached here rather than as an onclick attribute: the page's
   // CSP is script-src 'nonce-...', so an inline handler is not merely untidy, it is a dead button.
@@ -827,6 +917,12 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       }
     });
   }
+  const unattach = document.getElementById('unattach');
+  if (unattach) {
+    unattach.addEventListener('click', function () {
+      vscode.postMessage({ type: 'command', command: 'unattach' });
+    });
+  }
   const jump = document.getElementById('jump');
   if (jump) {
     jump.addEventListener('click', function () {
@@ -924,6 +1020,17 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     // Only a real boolean moves the lock. A state that says nothing about running - a partial push,
     // or a null across the bridge - must leave the composer as it is rather than quietly unlocking
     // it while a turn is still in flight. (local, the second code round.)
+    // Who a re-ask would go to, which is also the button's caption: the gesture is an empty box and
+    // Enter, and a feature whose only trigger is pressing Enter on nothing is one nobody discovers.
+    if (typeof data.spend === 'string') {
+      const total = document.getElementById('spend');
+      if (total) { total.textContent = data.spend; }
+    }
+    if (typeof data.reask === 'string') {
+      canReask = data.reask.length > 0;
+      const reaskButton = document.getElementById('send');
+      if (reaskButton) { reaskButton.textContent = canReask ? 'Re-ask · ' + data.reask : 'Send'; }
+    }
     // A stop is about the turn in flight. When nothing is in flight it is about nothing — and
     // holding on to the number would disable the same-numbered turn of the NEXT conversation, since
     // restarting keeps this page and begins counting again. (gemini and local, the code round, from
@@ -960,7 +1067,7 @@ export function chatPageHtml(state: ChatPageState, nonce: string): string {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(state.title)}</title>
 <style>
