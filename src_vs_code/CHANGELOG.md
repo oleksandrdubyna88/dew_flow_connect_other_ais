@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**Choose the provider, then the model.** The list under a chat used to be your configured reviewers,
+each showing the one model it happened to be set to — so picking a different model meant leaving the
+conversation and editing a reviewer. There are two lists now: who answers, and which of their models.
+Claude offers its three; a row whose model list has to be fetched still shows the one it is set to,
+which is what the old list showed anyway.
+
 **Every answer says which model gave it**, in that model's own colour — the same colour it has in the
 rounds list and on its reviewer card. Switching models mid-conversation has always carried the
 thread across, so a tab could hold answers from two of them looking identical; now the one you

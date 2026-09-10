@@ -29,6 +29,45 @@ local model` the page would otherwise still show the remote one as selected whil
 somewhere else), a pushed state that has not changed is not sent at all, a `pick` naming a model the
 conversation was never offered is refused at the host boundary rather than trusted, and the
 composer takes focus back when a turn ends — without which every follow-up costs a mouse click.
+### The picker asks for a provider, then for a model (2026-09-10)
+
+It used to be one flat list of the configured reviewer ROWS, each labelled with the single model it
+happened to be set to — so `gemini · gemini-3.8-flash` was a row rather than a choice, and picking a
+different model meant leaving the conversation and reconfiguring a reviewer. The operator's words
+were that it read as an arbitrary handful.
+
+**A provider is a vendor ROW, not a runtime**, and that was settled by measurement rather than by
+preference: three vendors' reviewers independently overturned the plan's recommendation on the pure
+half's round. The row carries the runtime, the executable, the base URL, the price and — for a Team
+server — the server and the vendor name on it, so it is the identity a saved choice stores and the
+identity resolution looks up.
+
+**The model list is the chosen provider's and nobody else's.** A list holding another row's models is
+a list somebody can pick a combination from that has no adapter — a Claude model through `agy`, which
+`vendor-routing.md` forbids.
+
+**Either half posts BOTH.** A message carrying only what changed would leave the host pairing it with
+whatever it last heard, and the two can disagree, because the model list belongs to a provider.
+Changing the provider carries no model: which of the new row's models answers is the host's to decide
+— it holds the catalog — and sending the old one would name a model that belongs to somebody else.
+
+**A lone provider is still shown.** The flat list hid itself when it had one entry, which made sense
+while an entry was a whole row: there was nothing to choose. With two steps there always is, and
+hiding it would leave a person unable to see what will answer.
+
+**What is saved was always a row id.** `coai.chatModel` and a restored tab's `modelId` both predate
+the pair, so `savedPick` reads them through `legacyPick` rather than as model names — one function,
+two callers, so they cannot drift.
+
+**The open tail is discovery.** Three of the four model sources are FETCHED rather than read: a local
+engine's list and the codex and agy CLIs' own lists are discovered by asking the machine, and a Team
+server's allowlist is fetched from the server. All three live in the panel, which has already done
+that work; the chat command has none of it, and starting subprocesses or HTTP calls to open a tab
+would trade the operator's complaint for a slower one. So a row whose list must be fetched offers the
+model it is configured to and nothing else — exactly what the flat list offered, which makes this
+strictly not worse — and what gains a real choice today is Claude's curated three. Handing the
+panel's discovered lists across is the next step.
+
 ### Every answer says which model gave it (2026-09-09)
 
 Every answer was captioned `The other AI`, while switching the model mid-conversation is a shipped

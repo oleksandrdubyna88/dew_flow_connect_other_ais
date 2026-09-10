@@ -2,6 +2,7 @@ import { escapeHtml, jsonForScript } from './webviewHtml';
 import { renderAnswer } from './renderAnswer';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
 import { vendorPalette } from './vendorColour';
+import { ChatProvider, ChatProviderList } from './chatModels';
 
 /**
  * The conversation tab: the passage that started it, what has been said, and a box to say more.
@@ -85,6 +86,11 @@ export interface ChatPageState {
   readonly passage: string;
   readonly messages: readonly ChatMessage[];
   readonly models: readonly ChatModelChoice[];
+  /** Every provider this conversation may put a question to, each with its own models. */
+  readonly providers: readonly ChatProvider[];
+  /** The vendor ROW that answers — the identity a saved choice stores. */
+  readonly providerId: string;
+  /** Which of that row's models. Empty means "whatever the row is set to". */
   readonly modelId: string;
   /**
    * Which turn is in flight, counted from 1 — and 0 when the page cannot say.
@@ -159,21 +165,49 @@ export function chatMessagesHtml(messages: readonly ChatMessage[]): string {
 }
 
 /** The picker, or nothing at all when there is only one model to pick. */
-export function chatPickerHtml(models: readonly ChatModelChoice[], chosen: string): string {
-  if (models.length < 2) {
+/** One `<option>`, with everything in it escaped — labels come from a Team server's catalog. */
+function option(id: string, label: string, chosen: string): string {
+  return `<option value="${escapeHtml(id)}"${id === chosen ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+}
+
+/**
+ * Two steps: WHICH PROVIDER, and then which of its models.
+ *
+ * <p>It used to be one flat list of the configured reviewer ROWS, each labelled with the single
+ * model it happened to be set to — so `gemini · gemini-3.8-flash` was a row, not a choice, and
+ * picking a different model meant leaving the conversation and reconfiguring a reviewer. The
+ * operator's words for it were that the list read as an arbitrary handful.</p>
+ *
+ * <p><b>A provider is a vendor ROW, not a runtime</b>, and that was settled by measurement rather
+ * than by preference: three vendors' reviewers independently overturned the plan's recommendation on
+ * the pure half's round. The row is the identity a saved choice stores and the identity resolution
+ * looks up, because the row carries the runtime, the executable, the base URL, the price and — for a
+ * Team server — the server and the vendor name on it.</p>
+ *
+ * <p><b>The model list is the CHOSEN provider's and nobody else's.</b> A list holding another row's
+ * models is a list somebody can pick a combination from that has no adapter — a Claude model through
+ * `agy`, which `vendor-routing.md` forbids.</p>
+ *
+ * <p>A provider with ONE model still shows it. Hiding a list of one would leave a person unable to
+ * see what will answer, which is the complaint the two steps exist for.</p>
+ */
+export function chatPickerHtml(list: ChatProviderList, providerId: string, modelId: string): string {
+  if (list.providers.length === 0 && list.refused.length === 0) {
     return '';
   }
-  const options = models
-    .map(
-      (model) =>
-        `<option value="${escapeHtml(model.id)}"${model.id === chosen ? ' selected' : ''}>`
-        + `${escapeHtml(model.label)}</option>`,
-    )
+  const chosen = list.providers.find((provider) => provider.id === providerId) ?? list.providers[0];
+  const providers = list.providers.map((provider) => option(provider.id, provider.label, chosen?.id ?? '')).join('');
+  const models = (chosen?.models ?? []).map((model) => option(model.id, model.label, modelId)).join('');
+  // Refused rows are SHOWN. A person who configured a reviewer and finds the picker silently missing
+  // it has no way to tell a bug from a policy — the rule the flat list already followed.
+  const refused = list.refused
+    .map((row) => `<div class="refused">${escapeHtml(row.reason)}</div>`)
     .join('');
-  const caption = models.find((model) => model.id === chosen)?.caption ?? '';
 
-  return `<div class="picker"><select id="model" aria-label="Which model answers">${options}</select>`
-    + `<span class="caption" id="caption">${escapeHtml(caption)}</span></div>`;
+  return `<div class="picker">`
+    + `<select id="provider" aria-label="Which provider answers">${providers}</select>`
+    + `<select id="model" aria-label="Which model answers">${models}</select>`
+    + `<span class="caption" id="caption">${escapeHtml(chosen?.caption ?? '')}</span></div>${refused}`;
 }
 
 /** What a capped conversation offers instead of a composer nobody can use. */
@@ -290,7 +324,9 @@ function chatStyle(
   .failure { border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border)); border-radius: 4px; padding: 8px 10px; margin: 0 0 12px; }
   .capped { border: 1px solid var(--vscode-panel-border); border-radius: 4px; padding: 10px 12px; margin: 0 0 10px; }
   .capped p { margin: 0 0 8px; }
-  .picker { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; }
+  .picker { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; flex-wrap: wrap; }
+  .picker select { max-width: 45%; }
+  .refused { font-size: .85em; opacity: .75; margin: 0 0 8px; }
   .caption { font-size: .85em; opacity: .7; }
   /* The 30 % lives HERE and only here, so the CSS path and the JavaScript fallback below cannot
      disagree about where the ceiling is: the fallback sets a height and this caps it. field-sizing
@@ -368,7 +404,7 @@ function chatBody(state: ChatPageState, regions: Regions): string {
 </main>
 <footer id="composer">
 <button type="button" id="jump" class="jump" hidden>Jump to newest ↓</button>
-<div id="pickerBox">${chatPickerHtml(state.models, state.modelId)}</div>
+<div id="pickerBox">${chatPickerHtml({ providers: state.providers, refused: [] }, state.providerId, state.modelId)}</div>
 <div class="compose">
 <textarea id="say" rows="3" placeholder="Ask about the text above…"${locked ? ' disabled' : ''}>${escapeHtml(state.draft)}</textarea>
 <button type="button" id="send"${locked ? ' disabled' : ''}>Send</button>
@@ -587,13 +623,25 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     sendButton.addEventListener('click', function () { send(); });
   }
   function wirePicker() {
+    const provider = document.getElementById('provider');
     const model = document.getElementById('model');
-    if (!model) { return; }
-    model.addEventListener('change', function () {
+    // BOTH halves, whichever one moved. A message carrying only what changed would leave the host
+    // pairing it with whatever it last heard, and the two can disagree — the model list belongs to a
+    // provider, so changing the provider invalidates the model that was showing.
+    function pick(providerId, modelId) {
       const caption = document.getElementById('caption');
-      if (caption) { caption.textContent = captions[model.value] || ''; }
-      vscode.postMessage({ type: 'command', command: 'pick', id: model.value });
-    });
+      if (caption) { caption.textContent = captions[providerId] || ''; }
+      vscode.postMessage({ type: 'command', command: 'pick', provider: providerId, model: modelId });
+    }
+    if (provider) {
+      // A provider changed: the model is not carried across. Which of the new row's models answers is
+      // the host's to decide - it holds the catalog - and sending the old one would name a model that
+      // belongs to somebody else.
+      provider.addEventListener('change', function () { pick(provider.value, ''); });
+    }
+    if (model) {
+      model.addEventListener('change', function () { pick(provider ? provider.value : '', model.value); });
+    }
   }
   function wireCapped() {
     const restart = document.getElementById('restart');
