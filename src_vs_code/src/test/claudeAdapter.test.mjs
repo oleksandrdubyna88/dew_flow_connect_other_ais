@@ -36,13 +36,18 @@ const ALWAYS = [
 
 test('the session-start hook is wired, and points at a file that exists', () => {
   const settings = JSON.parse(fs.readFileSync(path.join(root, '.claude/settings.json'), 'utf8'));
+  // Command AND args, because the wiring is in exec form: the command is `node` and the script is
+  // an argument, addressed through ${CLAUDE_PROJECT_DIR}. A relative path was the first version and
+  // CodeRabbit was right about it — a session started outside the project root would have failed to
+  // find the file, and the hook's own careful degradation cannot run when node cannot load it.
   const commands = (settings.hooks?.SessionStart ?? [])
     .flatMap((entry) => entry.hooks ?? [])
-    .map((hook) => hook.command ?? '');
+    .map((hook) => [hook.command ?? '', ...(hook.args ?? [])].join(' '));
 
   assert.ok(
-    commands.some((command) => command.includes(HOOK)),
-    `no SessionStart hook runs ${HOOK} — a Claude session would start with 561 bytes of instructions`,
+    commands.some((command) => command.includes(`\${CLAUDE_PROJECT_DIR}/${HOOK}`)),
+    `no SessionStart hook runs ${HOOK} by an absolute path — a session started outside the project `
+      + 'root would not find it, and one started inside would get 561 bytes of instructions',
   );
   assert.ok(fs.existsSync(path.join(root, HOOK)), `${HOOK} is wired but missing`);
 });
