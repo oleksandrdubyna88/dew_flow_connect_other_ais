@@ -433,7 +433,17 @@ public sealed partial class PanelService
                     // and the discrepancy is indistinguishable from the phantom deletions this whole
                     // change exists to stop.
                     $"## The change ({bundle.Branch} over {bundle.BaseRef}, at {bundle.Sha}; "
-                    + $"compared against {collected.ComparedAgainst})\n\n{bundle.Diff.Text}";
+                    + $"compared against {collected.ComparedAgainst})\n\n"
+                    // And when there is no common ancestor, the reviewer is TOLD, not left to
+                    // discover it: this is the one state in which a deletion in the diff below may
+                    // be somebody else's commit rather than anything this branch did, and a reviewer
+                    // reading it cannot tell the two apart on its own.
+                    + (collected.Kind == DiffBase.MergeBase
+                        ? string.Empty
+                        : "> The base and this branch share no common ancestor that could be found, so what follows "
+                          + "compares the two tips. Deletions in it may be commits the base has and this branch "
+                          + "never removed — weigh them accordingly.\n\n")
+                    + bundle.Diff.Text;
                 _log.Information(
                     "rules for review: {Count} file(s), {Bytes} bytes, {Omitted} omitted, {Missing} mount(s) not in the tree",
                     rules.Files.Count, rules.Bytes, rules.Omitted.Count, rules.MissingMounts.Count);

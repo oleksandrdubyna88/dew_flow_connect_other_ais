@@ -77,7 +77,7 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
         // and two vendors independently filed it as Blocking. Resolved once, and used for all three
         // git calls below — `cat-file` takes a rev rather than a range, so a three-dot form could not
         // have reached it.
-        var (against, kind) = await BaseFor(repoPath, baseRef, sha, ct);
+        var (against, kind) = await ComparisonBase(repoPath, baseRef, sha, ct);
 
         // --numstat: "added deleted path", binaries as "- - path". One call decides binary-ness
         // and file order; each text file then rides its own diff so elision stays whole-file.
@@ -107,13 +107,29 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
         return new CollectedDiff(files, against, kind);
     }
 
-    /// <summary>The commit to compare against, and what kind of answer it is.</summary>
+    /// <summary>An object id and nothing else — never a ref, never anything git could read as a flag.</summary>
     /// <remarks>
-    /// A failure here is never fatal: a review that cannot be taken against the right base is worth
-    /// more than no review, so the two-dot form remains as the fallback — named, so the round says
-    /// which one it used rather than leaving somebody to wonder at the deletions.
+    /// Every value that reaches a `{x}..{sha}` range or a `{x}:{path}` argument passes through here.
+    /// A revision beginning with `-` is a command-line OPTION to git, not a revision, and
+    /// `--output=…` is one that writes a file. The values are hex ids by construction — `merge-base`
+    /// and `rev-parse` both answer with one — so this asserts what is already true rather than
+    /// repairing anything, which is the only kind of check worth having on a path like this.
     /// </remarks>
-    private async Task<(string Against, DiffBase Kind)> BaseFor(
+    private static bool IsCommit(string? value) =>
+        value is { Length: >= 7 and <= 64 } && value.All(Uri.IsHexDigit);
+
+    /// <summary>The COMMIT to compare against, and what kind of answer it is.</summary>
+    /// <remarks>
+    /// <para>A failure here is never fatal: a review taken against the wrong base is worth more than
+    /// no review, so the two-dot form remains as the fallback — named, so the round says which one it
+    /// used rather than leaving somebody to wonder at the deletions.</para>
+    /// <para>But the fallback resolves the ref to a commit before using it, and that is not tidiness.
+    /// `origin/main` is read three times — the numstat, each file's diff, and a binary's old side —
+    /// and another session advancing it between two of them produces a review of two different
+    /// snapshots, which nobody could reproduce afterwards from a log naming only the ref. Pinning it
+    /// is the same lesson as the one this whole change is about. (codex, the code round, three times.)</para>
+    /// </remarks>
+    private async Task<(string Against, DiffBase Kind)> ComparisonBase(
         string repoPath, string baseRef, string sha, CancellationToken ct)
     {
         var found = await launcher.RunAsync(
@@ -126,9 +142,9 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
                 .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .FirstOrDefault()
             : null;
-        if (!string.IsNullOrEmpty(first))
+        if (IsCommit(first))
         {
-            return (first, DiffBase.MergeBase);
+            return (first!, DiffBase.MergeBase);
         }
 
         // A truncated checkout looks exactly like unrelated history from here, and the two want
@@ -138,8 +154,18 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
             new ProcessRequest("git", ["rev-parse", "--is-shallow-repository"], repoPath), ct);
         var truncated = shallow.ExitCode == 0
             && shallow.StdOut.Trim().Equals("true", StringComparison.OrdinalIgnoreCase);
+        var kind = truncated ? DiffBase.ShallowHistory : DiffBase.NoCommonAncestor;
 
-        return (baseRef, truncated ? DiffBase.ShallowHistory : DiffBase.NoCommonAncestor);
+        var pinned = await launcher.RunAsync(
+            new ProcessRequest("git", ["rev-parse", $"{baseRef}^{{commit}}"], repoPath), ct);
+        var commit = pinned.ExitCode == 0 ? pinned.StdOut.Trim() : string.Empty;
+
+        return IsCommit(commit)
+            ? (commit, kind)
+            // Nothing names a commit here, so there is nothing to diff and nothing to pin. Refused
+            // rather than handed to git: a "ref" that begins with a dash is an option, and this is
+            // the one place a caller's own string would have reached a command line.
+            : throw new ContextException("rev-parse", $"{baseRef} names no commit in this repository");
     }
 
     private async Task<long> BlobSize(string repoPath, string sha, string baseRef, string path, CancellationToken ct)

@@ -19,7 +19,13 @@ sequenceDiagram
   participant E as ReviewerExecutor
   participant V as vendor CLI
   S->>W: ResolveShaAsync(branch) → AddAsync(sha) [one lease per ROUND]
-  S->>C: CollectAsync(base, sha) — numstat, per-file diffs, exclusions
+  S->>C: CollectAsync(base, sha)
+  C->>C: merge-base(base, sha) → the COMMIT this round is a diff of
+  alt no common ancestor found
+    C->>C: is-shallow-repository? — a truncated clone, or genuinely unrelated
+    C->>C: rev-parse the base to a commit — pinned, so three git calls read ONE snapshot
+  end
+  C-->>S: CollectedDiff(files, comparedAgainst, kind) — numstat, per-file diffs, exclusions
   S->>B: RunAllAsync(work[], executor)
   B->>E: per job, under global(3) + per-provider(2) semaphores
   E->>V: launch (read-only, ephemeral); timeout kills the TREE
