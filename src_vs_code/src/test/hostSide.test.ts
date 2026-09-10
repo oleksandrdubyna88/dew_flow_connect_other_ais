@@ -53,6 +53,28 @@ test('windowsReach never asks whether it is WSL when the host is already Windows
   assert.strictEqual(asked, 0, 'a Windows host paid for a /proc read that cannot change its answer');
 });
 
+test('a mac never pays for a file read that cannot change its answer either', async () => {
+  let asked = 0;
+  const reach = await windowsReach('darwin', async () => {
+    asked += 1;
+
+    return true;
+  });
+
+  assert.deepStrictEqual(reach, { kind: 'none' });
+  assert.strictEqual(asked, 0, 'darwin read /proc/version, which it does not have, to learn nothing');
+});
+
+test('a host that cannot say whether it is WSL refuses in words rather than throwing', async () => {
+  // The command handler awaits this with no catch of its own: a rejection here would take the
+  // keybinding down with nothing on screen. Not knowing is `none`, which names the menu instead.
+  const reach = await windowsReach('linux', async () => {
+    throw new Error('EACCES: permission denied, open /proc/version');
+  });
+
+  assert.deepStrictEqual(reach, { kind: 'none' });
+});
+
 test('windowsReach asks once on Linux, and carries the answer through', async () => {
   let asked = 0;
   const underWsl = async (): Promise<boolean> => {

@@ -19,8 +19,14 @@ import { ChildRecord } from '../chatLedger';
 
 const RECORD: ChildRecord = { pid: 4242, image: 'codex', startedMs: 1_789_000_000_000 };
 
-const found = (names: readonly string[], startedMs = RECORD.startedMs): ProcEntry =>
-  ({ kind: 'found', names, startedMs });
+/** The kernel's own field 22 for the fixture, as the pre-signal re-read would return it. */
+const TICKS = 430830;
+
+const found = (names: readonly string[], startedMs = RECORD.startedMs, startTicks = TICKS): ProcEntry =>
+  ({ kind: 'found', names, startedMs, startTicks });
+
+/** The re-read immediately before the signal, agreeing by default. */
+const sameProcess = async (): Promise<number> => TICKS;
 
 /** A `process.kill` that refuses the way the operating system would. */
 function refuses(code: string): (pid: number) => void {
@@ -36,7 +42,7 @@ test('a Linux child that still matches is ended', async () => {
 
   const outcome = await endIfOursPosix(RECORD, async () => found(['codex']), (pid) => {
     killed.push(pid);
-  });
+  }, sameProcess);
 
   assert.strictEqual(outcome, 'killed');
   assert.deepStrictEqual(killed, [4242]);
@@ -50,7 +56,7 @@ test('a shebang CLI whose argv[0] is the interpreter is still recognised by its 
 
   const outcome = await endIfOursPosix(RECORD, async () => found(['sh', 'sh', 'codex']), (pid) => {
     killed.push(pid);
-  });
+  }, sameProcess);
 
   assert.strictEqual(outcome, 'killed');
   assert.deepStrictEqual(killed, [4242]);
@@ -92,13 +98,40 @@ test('a namesake started at another time is not ours, however well the name matc
   assert.deepStrictEqual(killed, [], 'a pid the kernel had recycled onto a namesake was killed');
 });
 
-test('a start time nobody could read is not treated as a match', async () => {
-  // `startedAtMs` answers -1 when either half is missing, and -1 must never fall inside the slack.
+test('a start time nobody could read keeps the row rather than striking it out', async () => {
+  // The sharpest finding of the code round. `startedAtMs` answers -1 when either half is missing —
+  // an unparsable /proc, a permission — and reading that as "not ours" SETTLES the record, which
+  // would leave a running orphan with nothing to find it by ever again. Unknown asks again.
   const killed: number[] = [];
 
   const outcome = await endIfOursPosix(RECORD, async () => found(['codex'], -1), (pid) => {
     killed.push(pid);
-  });
+  }, sameProcess);
+
+  assert.strictEqual(outcome, 'unknown');
+  assert.deepStrictEqual(killed, []);
+});
+
+test('a pid re-created between the check and the signal is not killed', async () => {
+  // What is left of the pid-reuse race after it was narrowed as far as Node allows: the identity is
+  // re-read immediately before the signal, and the comparison is the kernel's own tick count rather
+  // than the ten-second tolerance `stillOurs` has to work to.
+  const killed: number[] = [];
+
+  const outcome = await endIfOursPosix(RECORD, async () => found(['codex']), (pid) => {
+    killed.push(pid);
+  }, async () => TICKS + 1);
+
+  assert.strictEqual(outcome, 'not ours');
+  assert.deepStrictEqual(killed, [], 'a process the kernel had put on that pid since was killed');
+});
+
+test('a process that vanishes between the check and the signal is not killed either', async () => {
+  const killed: number[] = [];
+
+  const outcome = await endIfOursPosix(RECORD, async () => found(['codex']), (pid) => {
+    killed.push(pid);
+  }, async () => -1);
 
   assert.strictEqual(outcome, 'not ours');
   assert.deepStrictEqual(killed, []);
@@ -122,7 +155,7 @@ test('a Linux child /proc could not be asked about is kept and retried, never as
 });
 
 test('a kill that races the process’s own exit is reported gone, not unknown', async () => {
-  const outcome = await endIfOursPosix(RECORD, async () => found(['codex']), refuses('ESRCH'));
+  const outcome = await endIfOursPosix(RECORD, async () => found(['codex']), refuses('ESRCH'), sameProcess);
 
   assert.strictEqual(outcome, 'gone');
 });
@@ -130,7 +163,7 @@ test('a kill that races the process’s own exit is reported gone, not unknown',
 test('a kill we are not allowed to make keeps the row', async () => {
   // EPERM is a process that EXISTS and will not be touched by us. Striking the row out here is how
   // a running orphan becomes one nobody ever looks for again.
-  const outcome = await endIfOursPosix(RECORD, async () => found(['codex']), refuses('EPERM'));
+  const outcome = await endIfOursPosix(RECORD, async () => found(['codex']), refuses('EPERM'), sameProcess);
 
   assert.strictEqual(outcome, 'unknown');
 });

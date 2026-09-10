@@ -541,7 +541,16 @@ identically and every one of them told the person to select the text first — i
 the helper never started. It carries a `RunPhase` now (`ran` | `neverStarted` | `timedOut` | `failed`)
 and `refusalFor` turns it into four sentences, with what the system itself said in brackets. The
 clipboard is still asked FIRST and the phase only ever explains a failure: a helper that copied the
-passage and then exited badly has still copied the passage.
+passage and then exited badly has still copied the passage. Each of the three failing phases carries
+what the SYSTEM said — the spawn's `ENOENT`, the exit code with the tail of stderr, the cap it passed
+with anything printed on the way to hanging — because a sentence somebody cannot act on is only
+marginally better than the wrong one. `outcomeOfExit` is exported and tested on its own: which phase
+an ending belongs to is a decision, not plumbing.
+
+`windowsReach` asks the WSL question only where it can change the answer, which is `linux` and
+nowhere else — a Windows host and a mac both used to pay a `/proc/version` read on the keypress path
+to learn nothing — and it never rejects: not knowing is `none`, which refuses in words, where an
+unhandled rejection would have taken the keybinding down with nothing on screen.
 
 ### The three reads that went around the one accessor (2026-09-10)
 
@@ -557,10 +566,20 @@ passage and then exited badly has still copied the passage.
 binaries the GATE launches its reviewers from. A review running off another side's rows is the
 product's own job done wrong.
 
-The decision now lives in `sideSettings.sideConfigReader`, beside the overlay it reads, and all three
-callers go through it. The side is never defaulted — every caller passes
-`thisSide(context.globalStorageUri)` — and `chatCommand` binds the context once from `activate`, the
-idiom `chatOrphans.openLedger` and `rememberChatsIn` already use. `chatAutoSend`, `language`,
+The decision now lives in `sideSettings.sideConfigReader`, beside the overlay it reads. It takes any
+`Side` at all, though — so the code round asked what stops a caller handing it a cached or unrelated
+one, and the answer was "convention", which is not an answer. There is one door now:
+`sideConfig.readerFor(context, config)` derives the side from the context itself, nobody outside it
+passes a `Side`, and a test fails if the reader is assembled anywhere else. It is four lines in a
+file of its own because `sideSettings.ts` must stay free of `vscode` to be testable while
+`vscode.env.remoteName` is the only thing that can say which side is running.
+
+`chatCommand` binds the context once from `activate`, the idiom `chatOrphans.openLedger` and
+`rememberChatsIn` already use — and the binding is now the FIRST statement of `activate`, before
+anything is constructed and long before a command can be invoked. Four reviewers in one round named
+the same window: while nothing is bound the reader falls back to the shared configuration, which is
+the behaviour being removed. The fallback stays (a chat that throws on a keypress is a new defect)
+and the window is closed by ordering, which `chatWiring.test.ts` pins. `chatAutoSend`, `language`,
 `uiScale` and `teamServers` are deliberately NOT overlaid and are still read from the shared
 configuration.
 
@@ -604,7 +623,23 @@ trusts; `pidfd_open` would close it and is not reachable from Node without a nat
 
 `'unknown'` still means *keep the row and ask again*, and `ENOENT` is now `absent` rather than
 `unknown` — a process that exits mid-read is gone, and collapsing the two is how a row becomes
-immortal. `EPERM` stays `unknown`; only `ESRCH` is death.
+immortal. `EPERM` stays `unknown`; only `ESRCH` is death. The code round found one more of the same
+shape: a start time that could not be COMPUTED was reading as *not ours*, which SETTLES a row — so an
+unparsable `/proc` or a permission would have struck out the record of a process still running. It is
+`unknown` now.
+
+**The pid-reuse window, narrowed to what Node allows.** Two reviewers filed it as Blocking, and they
+are right that it cannot be closed here: `pidfd_open` is the only thing that closes it and needs a
+native module. What it can be is small and exact. The identity read that preceded the signal used to
+be two files and two parses; now the last thing before `process.kill` is one small read of
+`/proc/<pid>/stat` compared against the kernel's own field-22 tick count, byte for byte — where
+`stillOurs` necessarily works to a ten-second tolerance, because the ledger records `Date.now()` at
+spawn and `btime` is whole seconds. A recycled pid would have to be created between that read and the
+next statement AND land on the identical start tick.
+
+**`btime` is read once.** It is host-wide and cannot change while the extension host lives, and the
+sweep asks about every candidate — so parsing `/proc/stat` per row was one redundant file read per
+orphan at activation. Two reviewers found that independently too.
 
 ### The two doors into a chat, and why they behave differently (2026-09-08)
 

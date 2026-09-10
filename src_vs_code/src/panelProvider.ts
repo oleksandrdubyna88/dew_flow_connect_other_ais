@@ -29,7 +29,8 @@ import {
   versionSourceFor,
 } from './cliVersions';
 import { askVersion, capture } from './versionProbe';
-import { seedIfEmpty, sideConfigReader, writeOverlay } from './sideSettings';
+import { seedIfEmpty, writeOverlay } from './sideSettings';
+import { readerFor } from './sideConfig';
 import { hostPlatform } from './hostSide';
 import { thisSide } from './installer';
 import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
@@ -1199,12 +1200,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * panel's way in rather than the only implementation.</p>
    */
   private read(config: vscode.WorkspaceConfiguration): ConfigReader {
-    return sideConfigReader(
-      (section) => config.get(section),
-      this.perSide(config),
-      this.context.globalState,
-      thisSide(this.context.globalStorageUri),
-    );
+    return readerFor(this.context, config);
   }
 
   /**

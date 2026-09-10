@@ -197,8 +197,37 @@ test('the chat reads vendors only through the per-side reader, never straight of
   );
   assert.match(
     text,
-    /sideConfigReader/,
+    /readerFor\(/,
     'nothing in the chat builds a per-side reader, so every setting it reads is the shared one',
+  );
+});
+
+test('the side is bound before any command can be invoked', () => {
+  // `sideRead` falls back to the shared configuration while nothing is bound, which is exactly the
+  // behaviour this branch removed. Four reviewers named that window in one round. It is closed by
+  // ORDERING — the binding is the first statement of `activate` — and this is what keeps it closed.
+  const text = read(join('src', 'extension.ts'));
+  const bound = text.indexOf('chatReadsThisSide(context)');
+  const firstCommand = text.indexOf('registerCommand(');
+
+  assert.ok(bound > 0, 'nothing binds this side, so every chat reads the shared settings');
+  assert.ok(
+    firstCommand > bound,
+    'a command is registered before the side is bound — an invocation in that window reads shared settings',
+  );
+});
+
+test('the per-side reader is built in exactly one place', () => {
+  // `sideConfigReader` takes any Side at all. One construction, which derives the side from the
+  // context, is what makes "this side" an invariant instead of a habit each caller has to keep.
+  const callers = readdirSync(join(ROOT, 'src'))
+    .filter((name) => name.endsWith('.ts'))
+    .filter((name) => /(?<!function )sideConfigReader\(/.test(read(join('src', name))));
+
+  assert.deepStrictEqual(
+    callers,
+    ['sideConfig.ts'],
+    'the per-side reader is assembled somewhere other than sideConfig.ts, so a caller can pass its own Side',
   );
 });
 
@@ -226,5 +255,5 @@ test('the server settings file is fed this side’s settings, not only the share
     [],
     'the server is handed the shared vendors, whatever this side has configured',
   );
-  assert.match(text, /sideConfigReader/, 'nothing here builds a per-side reader');
+  assert.match(text, /readerFor\(/, 'nothing here builds a per-side reader');
 });

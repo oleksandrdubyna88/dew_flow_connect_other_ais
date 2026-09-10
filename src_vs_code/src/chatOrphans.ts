@@ -156,17 +156,41 @@ function ownerAlive(pid: number): boolean {
  * answered — and a row struck out on that would be an orphan nobody ever looks for again.</p>
  */
 export type ProcEntry =
-  | { readonly kind: 'found'; readonly names: readonly string[]; readonly startedMs: number }
+  | {
+    readonly kind: 'found';
+    readonly names: readonly string[];
+    /** Epoch milliseconds, or `-1` when either half of the sum could not be read. */
+    readonly startedMs: number;
+    /** The kernel's own field 22, kept unconverted so it can be compared EXACTLY. See `endVerified`. */
+    readonly startTicks: number;
+  }
   | { readonly kind: 'absent' }
   | { readonly kind: 'unknown' };
 
-/** The two files that identify a Linux process, plus the boot time its start is counted from. */
+/**
+ * When this machine booted, read ONCE.
+ *
+ * <p>`btime` is host-wide and cannot change while this process lives, and the sweep asks about every
+ * candidate — so reading and regex-parsing `/proc/stat` per row was one redundant file read per
+ * orphan at activation. Two reviewers found it independently. A read that fails leaves the cache
+ * unset rather than poisoning it with a `-1` nothing could recover from.</p>
+ */
+let bootSeconds = -1;
+
+async function bootOnce(): Promise<number> {
+  if (bootSeconds < 0) {
+    bootSeconds = bootSecondsIn(await readFile('/proc/stat', 'utf8').catch(() => ''));
+  }
+
+  return bootSeconds;
+}
+
+/** The two files that identify a Linux process, against the boot time its start is counted from. */
 async function procEntry(pid: number): Promise<ProcEntry> {
   try {
-    const [statText, cmdline, bootText] = await Promise.all([
+    const [statText, cmdline] = await Promise.all([
       readFile(`/proc/${pid}/stat`, 'utf8'),
       readFile(`/proc/${pid}/cmdline`, 'utf8'),
-      readFile('/proc/stat', 'utf8'),
     ]);
     const { comm, startTicks } = procStat(statText);
 
@@ -174,10 +198,29 @@ async function procEntry(pid: number): Promise<ProcEntry> {
       kind: 'found',
       // NUL-separated, and the trailing separator leaves an empty last element that is not an argument.
       names: namesOf(comm, cmdline.split('\0').filter((part) => part.length > 0)),
-      startedMs: startedAtMs(startTicks, bootSecondsIn(bootText)),
+      startedMs: startedAtMs(startTicks, await bootOnce()),
+      startTicks,
     };
   } catch (reason) {
     return (reason as NodeJS.ErrnoException).code === 'ENOENT' ? { kind: 'absent' } : { kind: 'unknown' };
+  }
+}
+
+/**
+ * The kernel's own start ticks for a pid — the cheapest identifying read there is, and the LAST
+ * thing done before a signal.
+ *
+ * <p>It exists to narrow the pid-reuse window, which two reviewers filed as Blocking. The window
+ * cannot be closed in Node — `pidfd_open` is the only thing that closes it and needs a native module
+ * — but it can be made small and exact: the identity read that used to precede a kill was two files
+ * and two parses, and this is one small file compared byte-for-byte. `-1` for every failure, which
+ * never equals a real tick count, so a process that vanished in that window is not killed.</p>
+ */
+async function startTicksOf(pid: number): Promise<number> {
+  try {
+    return procStat(await readFile(`/proc/${pid}/stat`, 'utf8')).startTicks;
+  } catch {
+    return -1;
   }
 }
 
@@ -210,17 +253,47 @@ export async function endIfOursPosix(
   record: ChildRecord,
   observe: (pid: number) => Promise<ProcEntry> = procEntry,
   end: (pid: number) => void = (pid) => process.kill(pid, 'SIGKILL'),
+  ticks: (pid: number) => Promise<number> = startTicksOf,
 ): Promise<KillOutcome> {
   const seen = await observe(record.pid);
   if (seen.kind !== 'found') {
     return seen.kind === 'absent' ? 'gone' : 'unknown';
   }
+  // A start time nobody could COMPUTE is not evidence that this is a stranger. Reading it as one
+  // answers 'not ours', which SETTLES the row — so a permission failure or an unparsable `/proc`
+  // would strike out the record of a process that is still running, which is the outcome this whole
+  // sweep exists to prevent. Unknown keeps it and asks again. (gemini, the code round.)
+  if (seen.startedMs < 0) {
+    return 'unknown';
+  }
   if (!stillOurs(record, seen)) {
     return 'not ours';
   }
 
+  return endVerified(record.pid, seen.startTicks, end, ticks);
+}
+
+/**
+ * Re-read the one identifying number, then signal — with nothing between the two.
+ *
+ * <p>This is what is left of the pid-reuse race after it was narrowed as far as Node allows. The
+ * comparison is the kernel's own tick count and is EXACT, where `stillOurs` necessarily works to a
+ * ten-second tolerance (the ledger records `Date.now()` at spawn, and `btime` is whole seconds).
+ * A recycled pid would have to be re-created between this read and the next statement AND land on
+ * the identical start tick to survive it.</p>
+ */
+async function endVerified(
+  pid: number,
+  startTicks: number,
+  end: (pid: number) => void,
+  ticks: (pid: number) => Promise<number>,
+): Promise<KillOutcome> {
+  if (await ticks(pid) !== startTicks) {
+    return 'not ours';
+  }
+
   try {
-    end(record.pid);
+    end(pid);
 
     return 'killed';
   } catch (reason) {
