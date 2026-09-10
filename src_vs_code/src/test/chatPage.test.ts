@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ChatProvider } from '../chatModels';
-import { ChatModelChoice, ChatPageState, FOLLOW_SLACK_PX, chatCappedHtml, chatMessagesHtml, chatPageHtml, chatPickerHtml, chatStatusHtml, shouldFollow } from '../chatPage';
+import { ChatModelChoice, ChatPageState, FOLLOW_SLACK_PX, chatCappedHtml, chatMessagesHtml, chatPresetRowsHtml, chatPageHtml, chatPickerHtml, chatStatusHtml, shouldFollow } from '../chatPage';
 
 /**
  * The page, as a string.
@@ -27,6 +27,8 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
     messages: [],
     models: MODELS,
     providers: [],
+    promptPresets: [],
+    modelPresets: [],
     providerId: 'antigravity',
     modelId: 'antigravity',
     running: false,
@@ -1582,4 +1584,78 @@ test('a provider label that is markup is escaped', () => {
   );
 
   assert.doesNotMatch(html, /<img|<b>|<i>/, 'a catalog label reached the page as markup');
+});
+
+
+/* ------------------------------------------------------------------------------------------------
+ * Entries 12 and 21b: two rows of buttons above the composer — the prompts a person saved, and the
+ * models they saved. TWO rows and not one merged list, decided 2026-09-09: they are two kinds of
+ * decision, what shall be ASKED and what shall ANSWER, and one button that sets both silently is a
+ * button whose effect cannot be predicted from its name.
+ * ---------------------------------------------------------------------------------------------- */
+
+const PROMPT_PRESETS = [
+  { id: 'p1', name: 'Explain', text: 'Explain this', main: true },
+  { id: 'p2', name: 'What would you answer?', text: 'What would you answer?', main: false },
+];
+
+const MODEL_PRESETS = [
+  { id: 'm1', name: 'Fast', provider: 'antigravity', model: 'gemini-3.8-flash' },
+  { id: 'm2', name: 'Deep', provider: 'claude', model: 'opus', startingPrompt: 'Think hard' },
+];
+
+test('both rows are there, each button naming its preset', () => {
+  const html = chatPresetRowsHtml(PROMPT_PRESETS, MODEL_PRESETS);
+
+  assert.match(html, /<button type="button" class="preset prompt" data-prompt-preset="p1">Explain<\/button>/);
+  assert.match(html, /<button type="button" class="preset model" data-model-preset="m2"[^>]*>Deep<\/button>/);
+  // Two rows, not one: the model row and the prompt row are separate elements.
+  assert.strictEqual((html.match(/class="presets/g) ?? []).length, 2, 'the two kinds share one row');
+});
+
+test('a model button wears its own vendor colour and a prompt button does not', () => {
+  // One vendor, one colour, everywhere — the rule the rounds list, the reviewer cards and the
+  // answer captions already keep. A prompt is not a vendor and must not be able to look like one.
+  const html = chatPresetRowsHtml(PROMPT_PRESETS, MODEL_PRESETS);
+  const model = html.slice(html.indexOf('data-model-preset="m1"'));
+  const prompt = html.slice(html.indexOf('data-prompt-preset="p1"'));
+
+  assert.match(model, /style="border-left-color: var\(--vscode-coai-vendorColour/, 'a model button has no vendor colour');
+  assert.doesNotMatch(prompt.slice(0, 120), /vendorColour/, 'a prompt button was given a vendor colour');
+});
+
+test('neither row appears when there is nothing saved in it', () => {
+  assert.strictEqual(chatPresetRowsHtml([], []), '', 'an empty pair of rows took up space anyway');
+  const onlyPrompts = chatPresetRowsHtml(PROMPT_PRESETS, []);
+  assert.match(onlyPrompts, /data-prompt-preset/);
+  assert.doesNotMatch(onlyPrompts, /data-model-preset/, 'an empty model row was drawn');
+});
+
+test('a preset name that is markup is escaped', () => {
+  const html = chatPresetRowsHtml(
+    [{ id: 'p', name: '<img src=x onerror=alert(1)>', text: 't', main: true }],
+    [],
+  );
+
+  assert.doesNotMatch(html, /<img/i, 'a name a person typed reached the page as markup');
+});
+
+test('pressing a preset names it to the host and nothing else', () => {
+  const page = runChatPage({ promptPresets: PROMPT_PRESETS, modelPresets: MODEL_PRESETS });
+
+  page.fire('presets', 'click', { target: { closest: () => ({ dataset: { promptPreset: 'p2' } }) } });
+  page.fire('presets', 'click', { target: { closest: () => ({ dataset: { modelPreset: 'm2' } }) } });
+
+  assert.deepStrictEqual(page.posted.filter((message) => String(message['command']).startsWith('use')), [
+    { type: 'command', command: 'usePromptPreset', id: 'p2' },
+    { type: 'command', command: 'useModelPreset', id: 'm2' },
+  ]);
+});
+
+test('a click on the row itself does nothing', () => {
+  const page = runChatPage({ promptPresets: PROMPT_PRESETS, modelPresets: MODEL_PRESETS });
+
+  page.fire('presets', 'click', { target: { closest: () => null } });
+
+  assert.deepStrictEqual(page.posted.filter((message) => String(message['command']).startsWith('use')), []);
 });

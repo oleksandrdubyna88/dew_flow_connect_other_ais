@@ -3,6 +3,7 @@ import { renderAnswer } from './renderAnswer';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
 import { vendorPalette } from './vendorColour';
 import { ChatProvider, ChatProviderList } from './chatModels';
+import { ModelPreset, PromptPreset } from './chatPresets';
 
 /**
  * The conversation tab: the passage that started it, what has been said, and a box to say more.
@@ -88,6 +89,10 @@ export interface ChatPageState {
   readonly models: readonly ChatModelChoice[];
   /** Every provider this conversation may put a question to, each with its own models. */
   readonly providers: readonly ChatProvider[];
+  /** The prompts a person saved, as buttons above the composer. */
+  readonly promptPresets: readonly PromptPreset[];
+  /** The models a person saved, likewise. */
+  readonly modelPresets: readonly ModelPreset[];
   /** The vendor ROW that answers — the identity a saved choice stores. */
   readonly providerId: string;
   /** Which of that row's models. Empty means "whatever the row is set to". */
@@ -210,6 +215,47 @@ export function chatPickerHtml(list: ChatProviderList, providerId: string, model
     + `<span class="caption" id="caption">${escapeHtml(chosen?.caption ?? '')}</span></div>${refused}`;
 }
 
+/**
+ * The two rows of buttons above the composer: what to ASK, and what shall ANSWER.
+ *
+ * <p><b>Two rows and not one merged list</b>, and that was the operator's decision rather than a
+ * layout preference: they are two kinds of decision, and one button that silently sets both is a
+ * button whose effect cannot be predicted from its name. A preset that named a model AND a prompt
+ * would be a third thing to explain.</p>
+ *
+ * <p><b>The colour is an EDGE, and only the model row has one of its own.</b> A model button wears
+ * its vendor's colour from `vendorPalette` — one vendor, one colour, everywhere, which is the rule
+ * the rounds list, the reviewer cards and the answer captions already keep — so a model button IS a
+ * vendor's button. The prompt row takes the link colour, which is in no vendor's palette, because a
+ * prompt must never be able to look like a vendor. An edge rather than a filled box, for the reason
+ * the reviewer cards already gave: a wall of filled blocks is harder to read than the text in it.</p>
+ */
+export function chatPresetRowsHtml(
+  prompts: readonly PromptPreset[],
+  models: readonly ModelPreset[],
+): string {
+  if (prompts.length === 0 && models.length === 0) {
+    return '';
+  }
+  const colour = vendorPalette(models.map((preset) => preset.provider));
+  const promptRow = prompts.length === 0
+    ? ''
+    : `<div class="presets prompts">${prompts
+      .map((preset) =>
+        `<button type="button" class="preset prompt" data-prompt-preset="${escapeHtml(preset.id)}">`
+        + `${escapeHtml(preset.name)}</button>`)
+      .join('')}</div>`;
+  const modelRow = models.length === 0
+    ? ''
+    : `<div class="presets models">${models
+      .map((preset) =>
+        `<button type="button" class="preset model" data-model-preset="${escapeHtml(preset.id)}"`
+        + ` style="border-left-color: ${colour(preset.provider)}">${escapeHtml(preset.name)}</button>`)
+      .join('')}</div>`;
+
+  return `<div id="presets">${modelRow}${promptRow}</div>`;
+}
+
 /** What a capped conversation offers instead of a composer nobody can use. */
 export function chatCappedHtml(capped: boolean): string {
   if (!capped) {
@@ -324,6 +370,14 @@ function chatStyle(
   .failure { border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border)); border-radius: 4px; padding: 8px 10px; margin: 0 0 12px; }
   .capped { border: 1px solid var(--vscode-panel-border); border-radius: 4px; padding: 10px 12px; margin: 0 0 10px; }
   .capped p { margin: 0 0 8px; }
+  #presets { display: flex; flex-direction: column; gap: 4px; margin: 0 0 8px; }
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; }
+  /* The EDGE is the colour and the background is the theme's own: unobtrusive is the edge, legible
+     is the label in the ordinary foreground. A filled box per button would be a wall. */
+  .preset { font: inherit; font-size: .9em; color: var(--vscode-foreground); background: var(--vscode-button-secondaryBackground, transparent); border: 1px solid var(--vscode-panel-border); border-left-width: 3px; border-radius: 3px; padding: 2px 8px; cursor: pointer; max-width: 18rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .preset:hover { background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground)); }
+  /* Not in the palette, deliberately: a prompt must never be able to look like a vendor. */
+  .preset.prompt { border-left-color: var(--vscode-textLink-foreground); }
   .picker { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; flex-wrap: wrap; }
   .picker select { max-width: 45%; }
   .refused { font-size: .85em; opacity: .75; margin: 0 0 8px; }
@@ -404,6 +458,7 @@ function chatBody(state: ChatPageState, regions: Regions): string {
 </main>
 <footer id="composer">
 <button type="button" id="jump" class="jump" hidden>Jump to newest ↓</button>
+${chatPresetRowsHtml(state.promptPresets, state.modelPresets)}
 <div id="pickerBox">${chatPickerHtml({ providers: state.providers, refused: [] }, state.providerId, state.modelId)}</div>
 <div class="compose">
 <textarea id="say" rows="3" placeholder="Ask about the text above…"${locked ? ' disabled' : ''}>${escapeHtml(state.draft)}</textarea>
@@ -751,6 +806,24 @@ function chatScript(state: ChatPageState, regions: Regions): string {
         });
       } else if (typeof acted.dataset.copy === 'string') {
         vscode.postMessage({ type: 'command', command: 'copyAnswer', index: Number(acted.dataset.copy) });
+      }
+    });
+  }
+  // Delegated on the row, because a push replaces both rows whenever the saved lists change.
+  const presetRows = document.getElementById('presets');
+  if (presetRows) {
+    presetRows.addEventListener('click', function (event) {
+      const target = event.target;
+      if (!target || typeof target.closest !== 'function') { return; }
+      const pressed = target.closest('[data-prompt-preset], [data-model-preset]');
+      if (!pressed || !pressed.dataset) { return; }
+      // The page NAMES what was chosen and does nothing else. What a prompt preset does to the
+      // composer, and what a model preset does to the conversation, are the host's to decide - it
+      // holds the lists, and a page acting on its own copy would be a second place they can drift.
+      if (typeof pressed.dataset.promptPreset === 'string') {
+        vscode.postMessage({ type: 'command', command: 'usePromptPreset', id: pressed.dataset.promptPreset });
+      } else if (typeof pressed.dataset.modelPreset === 'string') {
+        vscode.postMessage({ type: 'command', command: 'useModelPreset', id: pressed.dataset.modelPreset });
       }
     });
   }

@@ -4,10 +4,11 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 import { isInside } from './chatMessages';
+import { ModelPreset, PromptPreset, chatModelPresetsFrom, chatPromptPresetsFrom } from './chatPresets';
 import { ChatTabMemory, SavedTab, reloadedNote } from './chatTabs';
 import { ChatEntry, ChatPanels } from './chatPanels';
 import { ChatSession } from './chatSession';
-import { AnsweredBy, ChatMessage, ChatModelChoice } from './chatPage';
+import { AnsweredBy, ChatMessage, ChatModelChoice, ChatPageState } from './chatPage';
 import { CliChatSession, REAL_TIMERS } from './cliChatSession';
 import { DEFAULT_BUDGETS } from './chatSession';
 import {
@@ -481,6 +482,26 @@ function chatCatalogFrom(config: vscode.WorkspaceConfiguration): ChatCatalog {
 }
 
 /**
+ * The saved prompts, carrying the migration with them.
+ *
+ * <p>One reader, because two call sites reading the same settings is two places to forget the second
+ * argument — and the second argument IS the migration: without it a person's own prompt, the one
+ * they have been editing since the chat shipped, simply does not appear.</p>
+ */
+function savedPrompts(config: vscode.WorkspaceConfiguration): readonly PromptPreset[] {
+  const legacy = config.get('chatPrompt');
+
+  return chatPromptPresetsFrom(
+    config.get('chatPromptPresets'),
+    typeof legacy === 'string' ? legacy : '',
+  );
+}
+
+function savedModels(config: vscode.WorkspaceConfiguration): readonly ModelPreset[] {
+  return chatModelPresetsFrom(config.get('chatModelPresets'));
+}
+
+/**
  * A value saved before the pair existed, read as the pair it always was.
  *
  * <p>`coai.chatModel` and a restored tab's `modelId` have always held a ROW id — both predate the
@@ -749,6 +770,10 @@ function newConversation(
 ): ChatEntry {
   const first = started(ready.vendor, resolved, remote);
   const session = first.session;
+  // The saved lists, read here rather than passed in: every other setting this function needs it
+  // reads for itself, and threading two more parameters through for one render is a seam nobody
+  // gains from.
+  const config = vscode.workspace.getConfiguration('coai');
   // Minted here, once, and never seen by anybody: it goes into the page, comes back from the page
   // after a reload, and names this conversation in the store. A title could not — two Claude Code
   // sessions can share one, which is the defect `chatPanels.ts` was keyed by identity to avoid.
@@ -761,6 +786,8 @@ function newConversation(
       messages: [],
       models: ready.models,
       providers: ready.providers,
+      promptPresets: savedPrompts(config),
+      modelPresets: savedModels(config),
       providerId: ready.providerId,
       modelId: ready.modelId,
       running: false,
@@ -943,31 +970,29 @@ function answeredBy(thread: Thread): AnsweredBy {
  * one, so the icon, the message wiring, the zoom hook and the disposal are the same code and cannot
  * drift apart.</p>
  */
-export function restoreConversation(
-  panels: ChatPanels,
-  panel: vscode.WebviewPanel,
+/**
+ * The page a restored conversation opens with.
+ *
+ * <p>Its own function because `restoreConversation` had grown long enough that the guard watching it
+ * — `the first question after a restore carries the whole transcript`, which reads the first 2500
+ * characters for the carry — was measuring distance rather than ordering. Shortening a comment to
+ * stay inside a window is how a guard stops being about what it guards; taking twenty lines out of
+ * the middle is how it goes on being about it.</p>
+ */
+function restoredPage(
   saved: SavedTab,
-  extensionUri: vscode.Uri,
-): void {
-  const config = vscode.workspace.getConfiguration('coai');
-  const restored = savedPick(config, saved.modelId);
-  const ready = readyToChat(config, restored.providerId, restored.modelId);
-  // A dead session, and the page can never reach it: `reopened` replaces it before the first turn is
-  // sent. It answers rather than throws, because a `ChatSession` that rejects is a contract this
-  // codebase does not have — every failure here is a sentence.
-  const closed: ChatSession = {
-    send: () => Promise.resolve({ ok: false, failure: reloadedNote(saved.modelId) }),
-    stop: () => undefined,
-    dispose: () => undefined,
-  };
-  const entry = createChatPanel(
-    {
+  ready: Ready,
+  restored: LegacyPick,
+  presets: { readonly promptPresets: readonly PromptPreset[]; readonly modelPresets: readonly ModelPreset[] },
+): ChatPageState {
+  return {
       id: saved.id,
       title: saved.title,
       passage: saved.passage,
       messages: saved.messages,
       models: ready.ok ? ready.models : [],
       providers: ready.ok ? ready.providers : [],
+      ...presets,
       // The row this tab was speaking to, read by `savedPick` out of the old `modelId`.
       providerId: ready.ok ? ready.providerId : restored.providerId,
       modelId: saved.modelId,
@@ -978,7 +1003,29 @@ export function restoreConversation(
       failure: ready.ok ? reloadedNote(saved.modelId) : ready.refusal,
       draft: '',
       uiScale: chatUiScale(),
-    },
+    };
+}
+
+export function restoreConversation(
+  panels: ChatPanels,
+  panel: vscode.WebviewPanel,
+  saved: SavedTab,
+  extensionUri: vscode.Uri,
+): void {
+  const config = vscode.workspace.getConfiguration('coai');
+  const restored = savedPick(config, saved.modelId);
+  const presets = { promptPresets: savedPrompts(config), modelPresets: savedModels(config) };
+  const ready = readyToChat(config, restored.providerId, restored.modelId);
+  // A dead session, and the page can never reach it: `reopened` replaces it before the first turn is
+  // sent. It answers rather than throws, because a `ChatSession` that rejects is a contract this
+  // codebase does not have — every failure here is a sentence.
+  const closed: ChatSession = {
+    send: () => Promise.resolve({ ok: false, failure: reloadedNote(saved.modelId) }),
+    stop: () => undefined,
+    dispose: () => undefined,
+  };
+  const entry = createChatPanel(
+    restoredPage(saved, ready, restored, presets),
     closed,
     conversationHooks(panels),
     extensionUri,
