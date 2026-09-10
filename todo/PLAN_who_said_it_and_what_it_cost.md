@@ -25,11 +25,19 @@
 >    processes, nothing torn.
 > 2. **`chatLedger.ts` was the wrong file.** The scope line named it; it is the orphan-process ledger
 >    (`{ pid, image, startedMs }`, crash safety) and holds no money. `chatUsage.ts` is new.
-> 3. **The cumulative rule is keyed on the RUNTIME, not the vendor row.** A row id is a person's own
->    editable text; two Codex accounts as two rows would have been differenced by neither.
-> 4. **Every turn is recorded, not every answer** — a gate finding. A stopped or failed turn cost
->    money and is written down with its outcome; a turn nobody reported numbers for reads as unknown
->    rather than as free.
+> 3. **The cumulative rule lives on the SESSION, keyed on a field the ADAPTER declares.** It went
+>    through two wrong homes on the way, and both are worth recording. First the ledger keyed it on
+>    the vendor ROW id — a person's own editable text, so two Codex accounts as two rows would have
+>    been differenced by neither. Then it keyed on the runtime NAME, matched against a list here —
+>    which the gate's code round rejected for a better reason: implementing `ChatAdapter` was still
+>    not enough to be billed correctly, because an unlisted runtime defaulted silently to per-turn.
+>    It is now `ChatAdapter.cumulative`, a required field the compiler asks for, applied by
+>    `CliChatSession`, whose lifetime is exactly a vendor thread's lifetime. `TurnResult` therefore
+>    always carries the cost of ONE turn and nothing above the session knows vendors differ.
+> 4. **Every turn is recorded, not every answer** — a gate finding on the plan round, and its second
+>    half came from the code round: a turn that was stopped or that failed now carries what the vendor
+>    had already charged for it, because `codex` prices a turn on a line of its own and can be stopped
+>    a moment later. A turn nobody reported numbers for reads as unknown rather than as free.
 > 5. **The record carries the conversation's TITLE.** Not in the plan, and without it the log's *What*
 >    column reads as a UUID for every conversation row.
 >
