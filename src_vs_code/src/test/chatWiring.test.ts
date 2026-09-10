@@ -202,6 +202,20 @@ test('the chat reads vendors only through the per-side reader, never straight of
   );
 });
 
+test('the orphan sweep asks this side rather than giving up because it is not Windows', () => {
+  // A vendor CLI orphaned by a force-kill is a signed-in process with nobody to stop it. The sweep
+  // answered 'unknown' for every non-Windows host, and 'unknown' is the one outcome that does NOT
+  // settle a row — so under WSL the record was kept and re-asked at every activation, for ever.
+  const text = read(join('src', 'chatOrphans.ts'));
+
+  assert.doesNotMatch(
+    text,
+    /process\.platform !== 'win32'/,
+    'the sweep still refuses every host that is not Windows, so a WSL orphan is never ended',
+  );
+  assert.match(text, /endIfOursPosix/, 'nothing asks /proc, so there is no answer for a Linux child');
+});
+
 test('the server settings file is fed this side’s settings, not only the shared ones', () => {
   // The same bypass with a wider blast radius: this file is what coai-mcp reads, so a shared read
   // here runs the GATE's reviewers off another side's vendor list, not only the chat.
