@@ -2556,7 +2556,7 @@ a dash — the tokens stayed and the money vanished. The MODEL is recorded on th
 edited afterwards, so it is what answers when the row is gone. A row that still exists still wins: a
 typed rate is a fact about that account, a list price is a general estimate about a model.
 
-Half of [PLAN_who_said_it_and_what_it_cost.md](../todo/PLAN_who_said_it_and_what_it_cost.md); the tab's
+Half of [PLAN_who_said_it_and_what_it_cost.md](PLAN_who_said_it_and_what_it_cost.md); the tab's
 own caption and running total are the other half and live in `chatPage.ts`.
 
 **The sidebar shows what is running, and nothing else (2026-09-05).** *Recent rounds* became

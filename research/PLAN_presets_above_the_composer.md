@@ -1,18 +1,35 @@
 # PLAN — presets above the composer: named prompts, named models, and a re-ask
 
-> Status: **plan only, nothing implemented yet.** Kind: **feature** (the largest in the batch).
-> Scope: two new settings, a new command and page (`chatPresetsPage.ts` + `chatPresetsPanel.ts`),
-> the chat tab's picker row (`chatPage.ts`), the panel's chat section (`panelView.ts`), and one new
-> branch in `chatCommand.ts`'s send path. Origin: [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entries
+> Status: **IMPLEMENTED, 2026-09-10** (PRs #177, #180, #181). All four stories. Kind: **feature** —
+> the largest in the batch. Origin: [../todo/BUGS_2026-09-09.md](../todo/BUGS_2026-09-09.md), entries
 > 12, 21b and 24; entry 1 was withdrawn in favour of this plan.
 >
-> Depends on: [PLAN_provider_then_model.md](PLAN_provider_then_model.md) (a model preset is a
-> provider+model pair) and [PLAN_the_composer_stays_put.md](../research/PLAN_the_composer_stays_put.md) (the
-> Send button carries the re-ask caption).
+> ### What shipped differently
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_chat_with_other_ais.md](../research/PLAN_chat_with_other_ais.md),
-> [PLAN_rounds_log_view.md](../research/PLAN_rounds_log_view.md) (the page-plus-panel pattern).
+> **The sidebar box was not turned into a picker.** The plan's step 5 said *What to ask about the
+> selection* would become a dropdown of preset names plus a link into the tab. It was left as it is:
+> the buttons above the composer and the tab both reached the person first, and a third surface for
+> the same list is a third place to keep in step. Entry 1's withdrawal still stands — the box is not
+> being widened either — but the box itself is unchanged, and that is a deviation rather than a
+> completion.
+>
+> **The migration reads the old prompt on every read, not once.** The plan said "on first read";
+> what shipped is *only when there are no presets at all*, which is the same thing where it matters
+> and stronger where it does not: somebody who deletes every preset gets their original prompt back
+> rather than an empty list, and somebody who has any list is never given it again.
+>
+> **A structural guard from another branch shaped the code twice.** `the first question after a
+> restore carries the whole transcript` reads the first 2500 characters of `restoreConversation`, and
+> this plan's fields pushed the carry past it — twice. The second time, trimming a comment would have
+> made the guard about distance rather than about ordering, so the page-state construction became its
+> own function instead.
+>
+> ### The open tail
+>
+> The re-ask is offered whenever the model differs from the one that gave the last answer. It does
+> not distinguish *the person switched deliberately* from *the model was switched for them* — the
+> "continue with a local model" path after a cap is the case — and that is worth a look if anyone
+> reports being offered a re-ask they did not ask for.
 
 ## The goal, in the operator's order
 
@@ -158,4 +175,4 @@ only when the whole ritual has run — not when the code works.
 **Last in the chat-page lane** — depends on the composer plan and the provider plan. Its pure half
 (`chatPresets.ts`, migration, tests) and the CRUD tab (new files) have no conflicts and can be built
 ahead; its `panelView.ts` half conflicts with
-[PLAN_the_prompt_box_forgets.md](../research/PLAN_the_prompt_box_forgets.md) — that one lands first.
+[PLAN_the_prompt_box_forgets.md](PLAN_the_prompt_box_forgets.md) — that one lands first.
