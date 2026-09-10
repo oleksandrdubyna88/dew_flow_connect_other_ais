@@ -12,7 +12,7 @@ import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { clientTargetsLine, CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
-import { installLatest, latestServerVersion, serverExists, serverOnThisSide, serverPath, thisSide } from './installer';
+import { installLatest, latestServerVersion, serverExists, serverOnThisSide, serverPath } from './installer';
 import { EscalationWatcher } from './escalationWatcher';
 import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
@@ -24,7 +24,7 @@ import { RoundsLogPanel } from './roundsLogPanel';
 import { ExistingFile, ServerSettingsSync } from './serverSettingsSync';
 import { LOCK_STALE_AFTER_MS, lockIsStale } from './settingsLock';
 import { ConfigReader, settingsFrom } from './settingsShape';
-import { sideConfigReader } from './sideSettings';
+import { readerFor } from './sideConfig';
 import { vendorsFrom } from './vendors';
 
 /**
@@ -38,6 +38,12 @@ import { vendorsFrom } from './vendors';
  * there is still nothing listening on a socket.</p>
  */
 export function activate(context: vscode.ExtensionContext): void {
+  // FIRST, before anything is constructed and long before a command can be invoked: the side whose
+  // settings the chat reads. Its reader falls back to the shared configuration while unbound, which
+  // is the behaviour this branch exists to end — so the window in which that fallback could be
+  // reached is closed by ordering rather than argued about. Four reviewers raised it in one round,
+  // and `chatWiring.test.ts` now fails if this line ever drifts below a `registerCommand`.
+  chatReadsThisSide(context);
   const watcher = new EscalationWatcher(dataDir());
   // Declared before the panel so the hooks can reach it; assigned right after.
   let roundsLog: RoundsLogPanel;
@@ -127,9 +133,6 @@ export function activate(context: vscode.ExtensionContext): void {
   // one window's conversations to another is the namesake defect wearing a different hat.
   const chatTabMemory = new ChatTabMemory(context.workspaceState);
   rememberChatsIn(chatTabMemory);
-  // The side whose settings this chat reads. Bound here, beside the other two bind-once handles, so
-  // a WSL window launches the CLI that distro has rather than the one the shared settings name.
-  chatReadsThisSide(context);
   // A record is kept when a tab CLOSES as well as when it is reloaded, because a disposal cannot tell
   // the two apart — VS Code disposes every panel on reload too, and deleting on disposal would erase
   // the transcript at exactly the moment it is needed. A closed tab is simply never restored: VS Code
@@ -273,13 +276,7 @@ function mirrorSettings(settingsSync: ServerSettingsSync, isTheRetry = false): v
  * panel and the chat go through.</p>
  */
 function readCoaiConfiguration(context: vscode.ExtensionContext) {
-  const shared = vscode.workspace.getConfiguration('coai');
-  const config: ConfigReader = sideConfigReader(
-    (section: string) => shared.get(section),
-    shared.get<boolean>('perSideSettings') === true,
-    context.globalState,
-    thisSide(context.globalStorageUri),
-  );
+  const config: ConfigReader = readerFor(context, vscode.workspace.getConfiguration('coai'));
 
   return {
     settings: settingsFrom(config),

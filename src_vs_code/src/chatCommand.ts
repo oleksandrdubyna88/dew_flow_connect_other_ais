@@ -48,8 +48,7 @@ import { launch } from './processLauncher';
 import { resolvedExecutable } from './versionProbe';
 import { CARRY_BUDGET, REMOTE_CARRY_BUDGET, carriedTurn, openingTurn } from './chatPrompt';
 import { ConfigReader, LanguageCode } from './settingsShape';
-import { sideConfigReader } from './sideSettings';
-import { thisSide } from './installer';
+import { readerFor } from './sideConfig';
 import { sourceSession, TabSnapshot } from './sessionKey';
 import { triggerPlan } from './chatTrigger';
 import { Vendor, vendorsFrom } from './vendors';
@@ -208,17 +207,14 @@ export function chatReadsThisSide(context: vscode.ExtensionContext): void {
  * a new defect.</p>
  */
 function sideRead(config: vscode.WorkspaceConfiguration): ConfigReader {
-  const shared: ConfigReader = (section) => config.get(section);
-  if (hostContext === undefined) {
-    return shared;
-  }
+  const host = hostContext;
 
-  return sideConfigReader(
-    shared,
-    config.get<boolean>('perSideSettings') === true,
-    hostContext.globalState,
-    thisSide(hostContext.globalStorageUri),
-  );
+  // Unreachable once `activate` has run, and `chatReadsThisSide` is called at the TOP of it —
+  // before any command is registered, so nothing can be invoked while this is undefined. It stays
+  // because a chat that reads the shared settings is the old behaviour, and a chat that throws on a
+  // keypress is a new defect. `chatWiring.test.ts` pins the ordering. (codex, local and gemini, the
+  // code round, four findings.)
+  return host === undefined ? (section) => config.get(section) : readerFor(host, config);
 }
 
 /** The tabs, narrowed to what `sessionKey` judges on. */

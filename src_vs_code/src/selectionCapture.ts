@@ -167,7 +167,10 @@ const THE_WAY_THROUGH = ' — copy it yourself, then use “Chat with other AI�
 export function refusalFor(reach: WindowsReach, outcome: RunOutcome): string {
   const said: Record<RunPhase, string> = {
     ran: 'nothing was copied — select the text first, or copy it yourself and use the right-click menu',
-    timedOut: `the copy helper did not finish in time${THE_WAY_THROUGH}`,
+    // The bracket carries the cap it passed and whatever the helper had printed before it hung — a
+    // PowerShell that warned about something on its way to hanging said the useful half there, and
+    // dropping it left a sentence that could not be acted on. (local and gemini, the code round.)
+    timedOut: `the copy helper did not finish in time (${outcome.refusal})${THE_WAY_THROUGH}`,
     neverStarted: reach.kind === 'interop'
       ? `the Windows side of this machine could not be reached (${outcome.refusal})${THE_WAY_THROUGH}`
       : `the copy helper could not be started (${outcome.refusal})${THE_WAY_THROUGH}`,
@@ -277,9 +280,9 @@ export function ran(
     };
     const cancel = after(capMs, () => {
       child.kill();
-      finish({ phase: 'timedOut', refusal: `it was still running after ${capMs} ms` });
+      finish({ phase: 'timedOut', refusal: `it was still running after ${capMs} ms${detail(child.stderrTail())}` });
     });
-    child.onExit((code) => finish(exited(code, child.stderrTail())));
+    child.onExit((code) => finish(outcomeOfExit(code, child.stderrTail())));
     // A missing binary does NOT throw synchronously on Windows and does not on Linux either: it
     // arrives here, and it is the ordinary shape of both "no powershell.exe on this PATH" and
     // "interop is switched off". Its own words are worth more than any guess between them.
@@ -287,8 +290,14 @@ export function ran(
   });
 }
 
-/** A clean exit ran; anything else failed, carrying what the child said about it. */
-function exited(code: number, tail: string): RunOutcome {
+/**
+ * A clean exit ran; anything else failed, carrying what the child said about it.
+ *
+ * <p>Exported because it is a DECISION and not plumbing — which of the four phases an ending belongs
+ * to, and what the sentence for it says. Reached through `ran` it could only be exercised by driving
+ * a fake process; on its own it is two lines of test. (codex, the code round.)</p>
+ */
+export function outcomeOfExit(code: number, tail: string): RunOutcome {
   return code === 0
     ? { phase: 'ran', refusal: '' }
     : { phase: 'failed', refusal: `it exited ${code}${detail(tail)}` };

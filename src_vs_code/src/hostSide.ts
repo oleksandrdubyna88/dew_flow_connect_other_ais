@@ -71,9 +71,16 @@ export function classifyWindowsReach(platform: Platform, isWslHost: boolean): Wi
 /**
  * {@link classifyWindowsReach}, asking the two cheap facts itself. Both injected, for the tests.
  *
- * <p>The WSL question is asked only where it can change the answer. A Windows host is `direct`
- * whatever `/proc/version` would have said, and reading a file to learn nothing is a cost paid on
- * every keypress of the one platform that never needed it.</p>
+ * <p>The WSL question is asked only where it can CHANGE the answer, which is `linux` and nowhere
+ * else. A Windows host is `direct` whatever `/proc/version` would have said, and a mac has no
+ * Windows side either way — both used to pay a file read that could not alter the outcome, on the
+ * keypress path. (codex, the code round.)</p>
+ *
+ * <p>And it never rejects. `runningUnderWsl` already answers `false` for every failure, but this
+ * function takes an injected predicate and is awaited by a command handler with no catch of its own —
+ * an unhandled rejection there would take down the keybinding with nothing on screen saying why.
+ * Not knowing whether this is WSL is `none`, which is the safe answer: it refuses in words and names
+ * the menu. (gemini, the code round.)</p>
  */
 export async function windowsReach(
   platform: string = process.platform,
@@ -81,5 +88,16 @@ export async function windowsReach(
 ): Promise<WindowsReach> {
   const here = hostPlatform(platform);
 
-  return here === 'win32' ? { kind: 'direct' } : classifyWindowsReach(here, await underWsl());
+  return here === 'linux'
+    ? classifyWindowsReach(here, await answered(underWsl))
+    : classifyWindowsReach(here, false);
+}
+
+/** The WSL question, with every way of not answering it collapsed into `false`. */
+async function answered(underWsl: () => Promise<boolean>): Promise<boolean> {
+  try {
+    return await underWsl();
+  } catch {
+    return false;
+  }
 }

@@ -8,6 +8,7 @@ import {
   argvFor,
   captureSelection,
   markerFor,
+  outcomeOfExit,
   ran,
   refusalFor,
   shouldRestore,
@@ -317,6 +318,24 @@ test('every refusal but one names the way through, and only the true one mention
   }
 });
 
+test('an exit code is a phase, and a bad one keeps what the helper said', () => {
+  assert.deepStrictEqual(outcomeOfExit(0, 'ignored, because it worked'), { phase: 'ran', refusal: '' });
+
+  const failed = outcomeOfExit(1, '  Add-Type : cannot compile  ');
+  assert.strictEqual(failed.phase, 'failed');
+  assert.strictEqual(failed.refusal, 'it exited 1: Add-Type : cannot compile');
+
+  // Nothing on stderr is not the same as an empty reason with a dangling colon.
+  assert.strictEqual(outcomeOfExit(2, '   ').refusal, 'it exited 2');
+});
+
+test('a very long stderr tail is cut to something a notification can hold', () => {
+  const said = outcomeOfExit(1, 'x'.repeat(5000)).refusal;
+
+  assert.ok(said.length < 260, `a notification was handed ${said.length} characters`);
+  assert.match(said, /^it exited 1: x+$/);
+});
+
 /** A process handle that does nothing until a test makes it do something. */
 function fakeChild(): {
   handle: Parameters<typeof ran>[0];
@@ -385,6 +404,7 @@ test('ran kills a helper that outlives the cap, and calls it a timeout rather th
 
   assert.strictEqual(said.phase, 'timedOut');
   assert.match(said.refusal, /6000 ms/);
+  assert.match(said.refusal, /the helper said this/, 'what the helper printed before it hung was dropped');
   assert.ok(hung.killed(), 'a helper past its cap was left running');
   // The exit that follows the kill must not overwrite the answer already given.
   hung.exit(0);
