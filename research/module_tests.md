@@ -222,3 +222,10 @@ intermediate core reference DLL (CS0009); rebuilding that project restored its m
 metadata, and the solution then built with zero warnings/errors. This was a local build
 artifact failure, not a source-code fix. Package 0.32.0 contains the canonical v5 marker and
 neutral/local discovery paths; installation remains separate from this artifact observation.
+
+
+After reconciling main through 897c7fa, the extension suite reports 1349 total / 1348 passed /
+1 skipped. Windows and WSL each pass all three generator scenarios. The WSL run first
+exposed a fixture error: a POSIX node_modules symlink is not ignored by the source's
+node_modules/ directory pattern and made a clean fixture look dirty. The fixture now copies
+the two locked packages into a real directory; pin validation remains unchanged.

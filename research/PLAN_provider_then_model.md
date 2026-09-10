@@ -1,25 +1,30 @@
 # PLAN — pick the provider, then the model
 
-> Status: **the PURE half is implemented (2026-09-09, branch `feat/provider-then-model-pure`); the
-> two SELECTS and the `coai.chatProvider` setting are not built.** `chatProvidersFrom`,
-> `resolveChatPick` and `legacyPick` exist and are tested, and `allowedModelsFor` moved out of
-> `panelView.ts` into `models.ts` so a pure module no longer has to import a webview renderer to ask
-> what a Team server allows.
+> Status: **IMPLEMENTED, 2026-09-10.** The pure half shipped 2026-09-09 (another lane, PR #162); the
+> two selects, the wiring and the host resolution shipped in PR #175. Kind: **feature**.
+> Origin: [../todo/BUGS_2026-09-09.md](../todo/BUGS_2026-09-09.md), entry 21.
 >
-> **The plan's own recommendation was OVERTURNED by its gate, and this is the record of it.** It said
-> a provider is a runtime, resolved to "the first enabled row of that runtime". Three vendors'
-> reviewers rejected that independently — two rows on one runtime are two backends, and picking the
-> first is a coin toss that bills the wrong one — and a fourth extended it to Team servers, where one
-> server hosts several vendor rows. **A provider is a ROW.** Resolution is a lookup, not a search.
+> ### What shipped differently
 >
-> Kind: **feature**. Scope: the chat model picker —
-> `src_vs_code/src/chatModels.ts`, `chatPage.ts` (`chatPickerHtml`), the panel's *Which model
-> answers* control (`panelView.ts`), `chatSettings.ts`, and the resolution of a choice to a vendor
-> row in `chatCommand.ts`. Origin: [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entry 21.
+> **There is no `coai.chatProvider` setting.** The plan named one; what shipped keeps the pair on the
+> conversation and migrates the existing `coai.chatModel` — which has always held a ROW id — through
+> `legacyPick`. A second setting would have been a second thing to keep in step with the first, for a
+> value that is already saved.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_three_chat_adapters.md](../research/PLAN_three_chat_adapters.md),
-> [PLAN_team_server_reviewer_never_called.md](../research/PLAN_team_server_reviewer_never_called.md).
+> **A provider is a vendor ROW, not a runtime**, and that was the pure half's round rather than this
+> plan's: three vendors' reviewers independently overturned the recommendation written here.
+>
+> **A lone provider is still shown.** The flat list hid itself at one entry, and one old test changed
+> its GUARANTEE rather than its shape — with two steps there is always something to choose.
+>
+> ### The open tail
+>
+> **Discovery.** Three of the four model sources are FETCHED rather than read — a local engine's list,
+> the codex and agy CLIs' own lists, and a Team server's allowlist — and all three live in the panel,
+> which has already done that work. The chat command has none of it, so a row whose list must be
+> fetched offers the model it is configured to and nothing else, which is exactly what the flat list
+> offered. Handing the panel's discovered lists across is the next step, and it is the only thing
+> between this and a real choice for every row.
 
 ## The goal
 
@@ -142,7 +147,7 @@ only when the whole ritual has run — not when the code works.
 ## Parallelism
 
 Owns `chatModels.ts`, the two settings, and `chatPickerHtml` in `chatPage.ts`. Queues behind
-[PLAN_the_composer_stays_put.md](../research/PLAN_the_composer_stays_put.md) in the chat-page lane;
+[PLAN_the_composer_stays_put.md](PLAN_the_composer_stays_put.md) in the chat-page lane;
 **[PLAN_presets_above_the_composer.md](PLAN_presets_above_the_composer.md) depends on this one** —
 its model presets are pairs. The pure half (`chatProvidersFrom`, resolution, tests) has no
 conflicts and can be written ahead of the lane.

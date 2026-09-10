@@ -97,7 +97,7 @@ failed turn renders under the same rule as an answer. One rule, not one per outc
   constant.
 - **A Send button at the right-hand end of the composer.** It obeys the same lock as the textarea
   (`locked = state.running || state.capped`, `chatPage.ts:172`) and calls the one `send()`
-  (`chatPage.ts:200-207`) — never a second path. Later, [PLAN_presets_above_the_composer.md](../todo/PLAN_presets_above_the_composer.md)
+  (`chatPage.ts:200-207`) — never a second path. Later, [PLAN_presets_above_the_composer.md](PLAN_presets_above_the_composer.md)
   gives this button a second caption; build it as a button, not an icon, so a caption fits.
 - The scroll rule as a **pure function** — `shouldFollow(scrollTop, clientHeight, scrollHeight,
   slack)` — in the page script, with its source embedded in the test the way `roundsLog.ts` embeds
@@ -268,7 +268,7 @@ only when the whole ritual has run — not when the code works.
 
 **Owns `chatPage.ts` — the whole file.** Nothing else that touches `chatPage.ts` may run beside it:
 [PLAN_an_answer_reads_like_a_document.md](PLAN_an_answer_reads_like_a_document.md),
-[PLAN_a_turn_nobody_can_stop.md](../todo/PLAN_a_turn_nobody_can_stop.md),
-[PLAN_provider_then_model.md](../todo/PLAN_provider_then_model.md) and
-[PLAN_presets_above_the_composer.md](../todo/PLAN_presets_above_the_composer.md) all queue behind it. It is
+[PLAN_a_turn_nobody_can_stop.md](PLAN_a_turn_nobody_can_stop.md),
+[PLAN_provider_then_model.md](PLAN_provider_then_model.md) and
+[PLAN_presets_above_the_composer.md](PLAN_presets_above_the_composer.md) all queue behind it. It is
 the skeleton they build on, so it goes FIRST in the chat-page lane.

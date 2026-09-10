@@ -1,18 +1,24 @@
 # PLAN — a turn nobody can stop
 
-> Status: **the SEAM half is implemented (2026-09-09, branch `fix/a-turn-nobody-can-stop-seam`); the
-> PAGE half — the Stop button in `chatStatusHtml` — is not yet built.** `ChatSession.stop()` exists on
-> the seam and in both implementations, the three session shapes behave as this plan describes, and
-> `chatCommand.ts` routes a `stop` message to the right thread and refuses one naming a turn that is
-> no longer running. What remains is the button that posts it, which belongs to the chat-page lane
-> because that lane owns `chatPage.ts`. Kind: **bug** (accepted 2026-09-09). Scope: the
-> chat session seam and the page — `src_vs_code/src/chatSession.ts`, `cliChatSession.ts`,
-> `remoteChatSession.ts`, `chatCommand.ts`, `chatPage.ts` (the thinking line only). Origin:
-> [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entry 15.
+> Status: **IMPLEMENTED, 2026-09-10.** The seam shipped 2026-09-09 (another lane); the PAGE half —
+> the control, the turn number in its markup and the delegated listener — shipped in PR #170.
+> Kind: **bug**. Origin: [../todo/BUGS_2026-09-09.md](../todo/BUGS_2026-09-09.md), entry 15.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_three_chat_adapters.md](../research/PLAN_three_chat_adapters.md),
-> [PLAN_the_server_knows_a_chat_from_a_review.md](../research/PLAN_the_server_knows_a_chat_from_a_review.md).
+> ### What shipped differently
+>
+> **The page carries the turn number in the control's own markup**, which the plan did not specify.
+> It follows from the seam's refusal to accept a stop that names no turn: a control on screen can
+> then only ever name the turn it was drawn for, and nothing in the script remembers one across a
+> push.
+>
+> **Two things the code round added.** A push that redraws the thinking line must not hand back a
+> control the person already pressed — a Team server pushes its queue position while a turn waits, so
+> this is the ordinary case rather than a corner. And the memory of that press is cleared when the
+> turn ends, because restarting keeps the same page and counts turns again: a stale seven would have
+> disabled the seventh question of the next conversation.
+>
+> **The control says *Stopping…*.** Killing a vendor process takes a moment, and a dimmed control
+> still reading *Stop* cannot be told from one that did nothing.
 
 ## The symptom
 
@@ -118,7 +124,7 @@ only when the whole ritual has run — not when the code works.
 
 Owns the session files (`chatSession.ts`, `cliChatSession.ts`, `remoteChatSession.ts`) and the
 `stop` route in `chatCommand.ts`; **touches `chatPage.ts` in one function (`chatStatusHtml`)**, so
-it queues behind [PLAN_the_composer_stays_put.md](../research/PLAN_the_composer_stays_put.md) in the chat-page
+it queues behind [PLAN_the_composer_stays_put.md](PLAN_the_composer_stays_put.md) in the chat-page
 lane — or lands its seam half first and its page half after. Conflicts with
-[PLAN_an_answer_as_it_arrives.md](../research/PLAN_an_answer_as_it_arrives.md) on `send`'s signature: this one
+[PLAN_an_answer_as_it_arrives.md](PLAN_an_answer_as_it_arrives.md) on `send`'s signature: this one
 goes first, streaming extends it.

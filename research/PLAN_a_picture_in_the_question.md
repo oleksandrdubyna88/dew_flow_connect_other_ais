@@ -1,18 +1,33 @@
 # PLAN — a picture in the question
 
-> Status: **PHASE 0 IS DONE (measured 2026-09-09) — Phase 1 is not built, and the measurement says
-> it is worth building.** `claude` and `agy` both read a number out of a real PNG and said it back;
-> `codex` is untested rather than refused (its account hit a usage limit mid-probe) and must be
-> re-run before it is refused by name anywhere. **The mechanism is a file PATH named in the prompt**
-> — the one vector that works for both vendors that answered — which means the vendor process opens
-> the file itself, and the temp file's location and lifetime are part of the contract rather than an
-> implementation detail. Kind: **feature**.
-> Scope: the page's paste handling and CSP (`chatPage.ts:287`), a host handler in `chatCommand.ts`,
-> a temp-file discipline beside `chatOrphans.ts`, and the session seam plus adapters. Origin:
-> [BUGS_2026-09-09.md](BUGS_2026-09-09.md), entry 13.
+> Status: **IMPLEMENTED, 2026-09-10.** Phase 0 measured 2026-09-09 (another lane); phase 1 — the
+> paste, the CSP, the file and the refusals — shipped in PR #183. Kind: **feature**.
+> Origin: [../todo/BUGS_2026-09-09.md](../todo/BUGS_2026-09-09.md), entry 13.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_three_chat_adapters.md](../research/PLAN_three_chat_adapters.md).
+> ### What the measurement decided, and what shipped differently
+>
+> **The mechanism is a file PATH named in the prompt** — measured, not assumed — so the vendor process
+> opens the file itself and the file's name, location and lifetime are a contract with the model
+> rather than an implementation detail.
+>
+> **SVG is refused although it is an image.** The plan said "no `<img>` at all" about rendering; this
+> is the other half of the same care: an SVG is markup with script in it, and the one thing this
+> feature does is hand a file to a process that will open it.
+>
+> **`codex` is refused as UNTESTED, not as incapable.** Its account hit a usage limit mid-probe, and
+> that is a different sentence from a measured no. The refusal says so.
+>
+> ### The open tail
+>
+> 1. **`codex` stays refused as UNTESTED, and the probe is NOT being re-run.** The operator decided
+>    that on 2026-09-10, asked directly. So this is not an open task: the refusal a person reads —
+>    *"whether codex can read a picture has not been measured — its account hit a usage limit during
+>    the measurement, which is not the same as a no"* — is the shipped answer, not a placeholder for
+>    one. It says untested rather than incapable because that is what is known, and it points at the
+>    two providers that were measured. What would re-open it is somebody wanting codex to carry a
+>    picture, not tidiness.
+> 2. **The Team server has no place for an image on the wire.** It is deployed by hand and shipped
+>    separately, so the client can send one long before the server can take one.
 
 ## The goal
 

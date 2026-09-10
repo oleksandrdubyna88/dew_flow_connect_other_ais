@@ -29,7 +29,8 @@ test('the real pinned resolver rejects a dirty or wrong mount and leaves no stal
   git(root, 'init', '-q');
   git(root, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', sourceMount, '.agents/conventions');
   const mount = path.join(root, '.agents/conventions');
-  fs.symlinkSync(path.join(sourceMount, 'node_modules'), path.join(mount, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
+  // Keep a real ignored directory: Git's node_modules/ pattern does not ignore a POSIX symlink.
+  fs.cpSync(path.join(sourceMount, 'node_modules'), path.join(mount, 'node_modules'), { recursive: true });
   fs.copyFileSync(path.join(sourceRoot, 'AGENTS.md'), path.join(root, 'AGENTS.md'));
   fs.writeFileSync(path.join(root, 'CLAUDE.md'), '@AGENTS.md\n');
   fs.writeFileSync(path.join(root, '.agents/PROJECT.md'), '# Fixture project\n');
