@@ -29,6 +29,39 @@ local model` the page would otherwise still show the remote one as selected whil
 somewhere else), a pushed state that has not changed is not sent at all, a `pick` naming a model the
 conversation was never offered is refused at the host boundary rather than trusted, and the
 composer takes focus back when a turn ends — without which every follow-up costs a mouse click.
+### A picture in the question (2026-09-10)
+
+Phase 0 MEASURED the mechanism rather than assuming one: `claude` and `agy` both read a number out of
+a real PNG when the file's PATH was named in the prompt. **The vendor process opens the file itself**,
+which makes the file's name, its location and its lifetime part of the contract with the model rather
+than an implementation detail.
+
+**The page reads the bytes and writes nothing.** Only the page has a clipboard event; only the host
+has a disk. The page posts a data URL and the host writes the file the vendor will open.
+
+**`img-src data:` and nothing wider.** The CSP is `default-src 'none'`, which blocks images too, so a
+thumbnail of what was just pasted needs that one addition: no remote host, no `file:`, and
+`localResourceRoots` stays empty. `attachedHtml` also refuses to render a `src` that is not one of the
+four image types — the value comes from the host, so it is not arbitrary, but a page that renders a
+`src` it has not looked at is a page that would render `javascript:` the day something else fills
+that field.
+
+**SVG is refused although it is an image.** It is markup with script in it, and the one thing this
+feature does is hand a file to a process that will open it.
+
+**Refused BY NAME where the provider cannot take one**, which is the rule the picker already keeps.
+`codex` is refused as UNTESTED rather than as incapable — its account hit a usage limit during phase
+0, and that is a different sentence from a measured no. A Team server is refused because an image is
+a wire-format change on a server deployed by hand.
+
+**The file is named here, from what the image IS**, never from anything the page said: a name from
+the page would be a path fragment chosen by whatever wrote into the clipboard. One directory per
+conversation, which is what makes forgetting them possible.
+
+**A picture goes with the question it was pasted for and no other.** The turn names the file, the
+vendor opens it, and the attachment is spent — keeping it would send the same screenshot with every
+question after it.
+
 ### An empty box asks the other model the same thing (2026-09-10)
 
 Entry 24, in the operator's words: *"maybe I don't like gemini's answer and want to switch to Fable.
