@@ -61,6 +61,14 @@ sequenceDiagram
 
 ## The decisions a reader needs
 
+- **Neutral shared instructions are part of the review sample.** `RuleFiles` includes
+  `.agents/PROJECT.md`, nested `.agents/rules` and the common/C#/Rust/TypeScript directories
+  of `.agents/conventions`. Mount research, tools and its own PROJECT/ENTRY are excluded.
+  Project/local sources precede shared bodies under the existing whole-file budget and
+  shuffle policy. A declared neutral mount without canonical rule bodies is reported in
+  `MissingMounts`, even if a `.git` marker exists. Claude/Cursor legacy folders remain supported.
+  This collector samples review context; applicability belongs to the shared Node resolver.
+
 - **One worktree per round, by SHA** — six read-only reviewers share one tree; six checkouts of a
   moving branch would be six different inputs to one comparison.
 - **A worktree's submodules come from the parent checkout, never from their remote.** `git worktree

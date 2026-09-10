@@ -470,7 +470,7 @@ reviewers' job — refusing it at the gate does their work for them and takes aw
 would have explained why.
 
 The rule this implements, including how to review an EXISTING commit (scope from the intent, commit
-as `branch`, its parent as `baseRef`): [.claude/rules/common/review-gate.md](../.claude/rules/common/review-gate.md).
+as `branch`, its parent as `baseRef`): [.claude/rules/common/review-gate.md](../.agents/rules/common/review-gate.md).
 
 ### The gate is split per stage, and code round 1 judges the written rules (2026-09-01)
 

@@ -1,6 +1,6 @@
 # Post-deploy checks — ConnectOtherAIs
 
-Per [`.claude/rules/shared/common/post-deploy-checks.md`](.claude/rules/shared/common/post-deploy-checks.md).
+Per [`.agents/conventions/common/post-deploy-checks.md`](.agents/conventions/common/post-deploy-checks.md).
 
 **This repository has no HTTP surface**, so it has no `http/` suite: the MCP server speaks JSON-RPC
 over stdio and the extension speaks to it as a subprocess. Neither is a request that can be written
@@ -51,7 +51,7 @@ mornings. Read the step's own elapsed time against the JOB's history before acti
 ## Why item 1 is first
 
 Because a partial publish is the worst of the three sibling failures
-[`development-workflow.md`](.claude/rules/shared/common/development-workflow.md) records: every signal
+[`development-workflow.md`](.agents/conventions/common/development-workflow.md) records: every signal
 is green **and** the artefact exists, so there is nothing to notice. The other two — an artefact never
 rebuilt, an artefact never deployed — at least leave something behind that looks wrong.
 
@@ -61,7 +61,7 @@ rebuilt, an artefact never deployed — at least leave something behind that loo
 gh auth status                                   # item 1 reads the release through gh
 export MCP_VERSION=0.15.0                        # the binary's own tag: mcp-v<version>
 export SERVER_VERSION=0.5.5                      # the Team server's own tag: server-v<version>
-node .claude/rules/shared/tools/post-deploy-check.mjs --target 0.29.3
+node .agents/conventions/tools/post-deploy-check.mjs --target 0.29.3
 ```
 
 `TARGET` here is a **version**, not a URL: what is being checked is what a user receives, and both

@@ -24,7 +24,16 @@ jobs:
       # Only the rules submodule — never `submodules: recursive`, which would drag whatever
       # code submodules appear later into a markdown walk (conventions ROLLOUT.md).
       - name: Conventions submodule
-        run: git submodule update --init --depth 1 .claude/rules/shared
+        run: git submodule update --init --depth 1 .agents/conventions
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+
+      - name: Shared instruction dependencies and pin verification
+        run: |
+          npm ci --ignore-scripts --prefix .agents/conventions
+          node .agents/conventions/tools/rules.mjs check --repo .
 
       - uses: actions/setup-dotnet@v6
         with:
@@ -35,7 +44,7 @@ jobs:
 
       # xUnit v3 on Microsoft Testing Platform: the test project builds into a self-contained
       # runner executable. `dotnet test` has no VSTest host here and would abort — never use it
-      # (.claude/rules/shared/common/testing.md). No `.exe` suffix on Linux.
+      # (.agents/conventions/common/testing.md). No `.exe` suffix on Linux.
       - name: Test
         run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests
 
@@ -63,14 +72,6 @@ jobs:
       # a throwaway data directory. Building `src_server/Dockerfile` instead would be the same test
       # for minutes more: it publishes Native AOT (clang, a full link) on every pull request. The
       # container is still the better LOCAL story, and the script takes COAI_CONTRACT_URL for it.
-      # Pinned to a SHA, unlike the two `actions/setup-node@v7` lines that predate this one: a
-      # mutable tag can change what runs, this step runs immediately before `npm ci`, and both
-      # zizmor and SonarCloud's new-code security rating call an unpinned action out. Pinning the
-      # older two is somebody's separate change, not this one's.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
-        with:
-          node-version: 22
-
       # `--ignore-scripts`: this step needs `tsc` and `node` and nothing else, so no dependency's
       # postinstall has any business running here — and a lifecycle script is where a compromised
       # package gets its code executed. (The extension job's own `npm ci` keeps them, because
@@ -91,15 +92,15 @@ jobs:
         run: npm run test:seam
 
       - name: Plan lifecycle
-        run: node .claude/rules/shared/tools/plan-lifecycle.mjs
+        run: node .agents/conventions/tools/plan-lifecycle.mjs
 
       - name: Pin check
-        run: node .claude/rules/shared/tools/pin-check.mjs
+        run: node .agents/conventions/tools/pin-check.mjs
 
       # This product's own gate rule is the shared one now, and this repository is where the text
       # comes from — so a copy here would be the source disagreeing with itself.
       - name: Gate snippet
-        run: node .claude/rules/shared/tools/gate-snippet-check.mjs
+        run: node .agents/conventions/tools/gate-snippet-check.mjs
 
       # A workflow file that does not PARSE fails at startup, in zero seconds, with no job, no log
       # and no annotation — and the run that discovers it is the release you just tagged. Measured
@@ -136,11 +137,16 @@ jobs:
       # skip in CI is how a changed snippet merges behind a green tick. One submodule, depth 1: the
       # job needs a markdown file, not a history.
       - name: Conventions submodule
-        run: git submodule update --init --depth 1 .claude/rules/shared
+        run: git submodule update --init --depth 1 .agents/conventions
 
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+
+      - name: Shared instruction dependencies and pin verification
+        run: |
+          npm ci --ignore-scripts --prefix .agents/conventions
+          node .agents/conventions/tools/rules.mjs check --repo .
 
       # `npm ci` needs the lockfile to match; the extension has zero runtime dependencies,
       # so this installs only the build/test toolchain.

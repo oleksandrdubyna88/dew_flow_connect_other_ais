@@ -222,7 +222,7 @@ Run: `cd src_vs_code && npm test` (tests 1–6), `node -e` parse of both workflo
 - [ ] Tests 1–7 above are written, watched fail, and pass.
 - [ ] `deploy/README.md` documents the workflow beside the manual steps it does not replace.
 - [ ] Promoted to `research/` when it ships, per
-      [planning-docs.md](../.claude/rules/shared/common/planning-docs.md).
+      [planning-docs.md](../.agents/conventions/common/planning-docs.md).
 
 ## What this plan does NOT do
 

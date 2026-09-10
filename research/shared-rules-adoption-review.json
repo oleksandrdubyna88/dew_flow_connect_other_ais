@@ -1,0 +1,331 @@
+{
+  "decisions": [
+    {
+      "finding": 0,
+      "action": "accept",
+      "reason": "Make initialization, locked dependency installation and resolver check the first build prerequisites explicitly."
+    },
+    {
+      "finding": 1,
+      "action": "accept",
+      "reason": "Specify leading frontmatter boundaries and LF normalization; body delimiters remain unchanged. There is one Node extraction step, no C# parser."
+    },
+    {
+      "finding": 2,
+      "action": "reject",
+      "reason": "Failing on a missing/dirty/wrong source is deliberate and required. No fallback is allowed. Added actionable source/restore diagnostics rather than substituting stale policy."
+    },
+    {
+      "finding": 3,
+      "action": "reject",
+      "reason": "The upstream resolver already caps every source at 256 KiB. Matching that limit is the existing contract; crossing it must fail visibly, not silently expand the budget."
+    },
+    {
+      "finding": 4,
+      "action": "reject",
+      "reason": "The plan explicitly requires missing/dirty/wrong/malformed input to fail preparation and compares packaged content. Empty success contradicts these stated requirements; initialization ordering is clarified separately."
+    },
+    {
+      "finding": 5,
+      "action": "reject",
+      "reason": "Rollback is disposable and restores a full commit, not a partial .agents checkout. Clarified that product adapters and CI are included."
+    },
+    {
+      "finding": 6,
+      "action": "reject",
+      "reason": "Removing the manual body, making preparation mandatory, verifying pin cleanliness and checking artifact content are already explicit. The stale generated-file refinement is accepted under finding 13."
+    },
+    {
+      "finding": 7,
+      "action": "reject",
+      "reason": "The build-order test list explicitly includes local-first selection in RuleFilesTests. This requirement is already a named scenario."
+    },
+    {
+      "finding": 8,
+      "action": "reject",
+      "reason": "The existing SNIPPET_BODY_SHA is computed from content, not a path or timestamp. Keeping that independent version/hash contract is already required."
+    },
+    {
+      "finding": 9,
+      "action": "reject",
+      "reason": "Model smoke is read-only and occurs after Git initialization. Quota cannot interrupt submodule initialization in this workflow; incomplete runs do not become acceptance."
+    },
+    {
+      "finding": 10,
+      "action": "accept",
+      "reason": "Record the reviewed immutable source SHA in the adoption journal before building; it cannot be preselected while the source review is still closing."
+    },
+    {
+      "finding": 11,
+      "action": "accept",
+      "reason": "Name an explicit legacy-copy refusal scenario through rules check in addition to the required one-source layout."
+    },
+    {
+      "finding": 12,
+      "action": "accept",
+      "reason": "Name stale root/local plus current neutral shared rule as an acceptance scenario; the stale applicable copy must remain visible."
+    },
+    {
+      "finding": 13,
+      "action": "accept",
+      "reason": "Invalidate prior generated output before preparation and wire compile/typecheck/bundle/package through preparation; verify a failed prepare cannot reuse it."
+    },
+    {
+      "finding": 14,
+      "action": "reject",
+      "reason": "CI already pins Node 22 and npm ci uses the committed lockfile. Canonical LF-normalized body identity is the claimed reproducibility, not bit-identical VSIX archives across arbitrary toolchains. Make the Node prerequisite explicit."
+    },
+    {
+      "finding": 15,
+      "action": "accept",
+      "reason": "Missing native cells block declaring the complete compatibility rollout done. Record completed deterministic build/discovery separately; no quota-limited run is a behavioral pass."
+    }
+  ],
+  "result": {
+    "verdict": "good_enough",
+    "gatingCount": 14,
+    "threshold": 6,
+    "reviewers": "all 3 reviewers answered",
+    "findings": [
+      {
+        "severity": "Blocking",
+        "category": "Reliability",
+        "file": "",
+        "line": 0,
+        "title": "Build order and verification: Build preparation consumes conventions gitlink before CI/setup steps initialize it",
+        "why": "In 'Build order and verification', step 3 executes build hooks to compile and bundle the VSIX and run solution builds asserting the presence of canonical generated sources. However, gitlink mount initialization and locked Node dependency setup are only scheduled in step 5 ('CI, fresh clone and developer instructions initialize the mount...'). In a fresh clone or CI pipeline without pre-existing submodules, running step 3 first will crash during build preparation due to missing files in `.agents/conventions`.",
+        "fix": "Move mount submodule initialization and node dependency lock installation to the very first step in the build and verification sequence before running build generators or compilation.",
+        "providers": [
+          "gemini"
+        ],
+        "role": "PlanCritique",
+        "isGating": true
+      },
+      {
+        "severity": "Major",
+        "category": "Reliability",
+        "file": "",
+        "line": 0,
+        "title": "Required outcome: Stripping frontmatter without an explicit schema contract can break hash/identity verification or corrupt prompt bodies",
+        "why": "Outcome 4 mandates asserting canonical body identity after 'stripping only delivery frontmatter'. If the conventions upstream rule body contains internal frontmatter delimiters (e.g., `---` within code snippets or examples) or if different parser regexes (Node vs C#) disagree on delimiter handling, the extracted string hash diverges between consumers, causing build assertions or snippet comparisons to fail falsely on valid rules.",
+        "fix": "Define an explicit boundary specification (e.g., strictly leading YAML frontmatter delimited by opening `^---\\r?\\n` and next `^---\\r?\\n`) and specify shared fixture tests across both TypeScript and C# readers to verify identical parsed output.",
+        "providers": [
+          "gemini"
+        ],
+        "role": "PlanCritique",
+        "isGating": true
+      },
+      {
+        "severity": "Major",
+        "category": "Ux",
+        "file": "",
+        "line": 0,
+        "title": "Required outcome: Lack of fallback or actionable diagnostic when neutral mount is missing or dirty halts normal local development",
+        "why": "Outcome 4 specifies that a 'Missing/dirty/wrong mount or malformed canonical input fails preparation explicitly' and outcome 1 specifies 'Restore no legacy auto-loaded policy copy'. When a developer pulls changes, switches branches, or develops in an uninitialized tree, the build immediately aborts with no automated fallback or corrective guidance, leaving local extension builds completely inoperable.",
+        "fix": "Add an explicit diagnostic error message to the pre-build generator that identifies the missing/dirty mount state and outputs the exact recovery command (e.g., `git submodule update --init --recursive .agents/conventions`).",
+        "providers": [
+          "gemini"
+        ],
+        "role": "PlanCritique",
+        "isGating": true
+      },
+      {
+        "severity": "Minor",
+        "category": "Architecture",
+        "file": "",
+        "line": 0,
+        "title": "Bounds and recovery: Fixed 256 KiB generator limit lacks handling for upstream rule expansion",
+        "why": "The build generator enforces a hard cap at 256 KiB. If the canonical gate rule in conventions grows past 256 KiB (e.g. through additional compliance checklists or embedded policy updates), builds will abruptly fail without an upstream alerting or budgeting mechanism.",
+        "fix": "Add an upstream pre-commit/CI check in the conventions repo asserting the canonical gate body remains safely below the 256 KiB consumer limit.",
+        "providers": [
+          "gemini"
+        ],
+        "role": "PlanCritique",
+        "isGating": false
+      },
+      {
+        "severity": "Blocking",
+        "category": "Reliability",
+        "file": "",
+        "line": 0,
+        "title": "Build assumes canonical input exists without pre-flight verification",
+        "why": "The plan states 'Missing/dirty/wrong mount or malformed canonical input fails preparation explicitly' but relies on the build hook to generate the body. If the `.agents/conventions` gitlink is broken, the commit is shallow, or the source file is deleted before the build hook runs, the build process will likely fail silently or generate an empty artifact. A developer running a fresh clone or a CI pipeline with a stale cache will produce a VSIX that contains an empty or stale gate body, causing the extension to report 'missing' rules to the user while the build passed.",
+        "fix": "Add a pre-build verification step that explicitly checks for the existence and byte-identity of the canonical rule file before the build hook executes, failing the build with a specific error code if the file is missing or malformed.",
+        "providers": [
+          "local"
+        ],
+        "role": "PlanCritique",
+        "isGating": true
+      },
+      {
+        "severity": "Blocking",
+        "category": "Architecture",
+        "file": "",
+        "line": 0,
+        "title": "Irreversible state mutation in 'fresh clone' workflow",
+        "why": "The plan requires 'Fresh clone/init/check/read and a disposable rollback restore the previous mount/adapters together.' However, the build order implies that the 'neutral-layout discovery scenarios' are added to `src_mcp/tests` and the `SNIPPET_LOCATIONS` are extended. If a developer runs the build, then the test suite, and then attempts to 'rollback' to the previous state for a new feature, the manual edits to `src_mcp/tests` and `SNIPPET_LOCATIONS` (which are code changes, not just mount changes) may not be reverted by a simple git checkout of the `.agents` directory. This leaves the repository in a hybrid state where the code expects the new neutral layout but the mount is old, causing test failures that look like environment issues.",
+        "fix": "Explicitly define the 'rollback' mechanism in the build script to restore the previous `.agents` state and clean up any generated artifacts before the build completes, ensuring the 'fresh clone' requirement is met.",
+        "providers": [
+          "local"
+        ],
+        "role": "PlanCritique",
+        "isGating": true
+      },
+      {
+        "severity": "Major",
+        "category": "Reliability",
+        "file": "",
+        "line": 0,
+        "title": "Manual copy of gate body creates silent drift between source and artifact",
+        "why": "The plan states 'Remove its manually maintained body from TypeScript' but the current state has a manual copy at `claudeSnippet.ts:169`. If the developer removes the text but forgets to update the build hook to inject the canonical body, or if the build hook fails silently, the extension will ship with an empty string or a stale string in the compiled output. A user pasting a rule will see a blank gate or an outdated rule, and because the 'manual copy' is gone, there is no fallback to verify what was intended. The 'assert canonical body identity after stripping only delivery frontmatter' happens at build time, but if the build succeeds with a 'dirty' mount, the assertion might pass on the wrong data.",
+        "fix": "Replace the 'manual copy' of the gate body in `claudeSnippet.ts:169` with a compile-time injection or a strict assertion that fails if the file is not empty, rather than just 'removing' it.",
+        "providers": [
+          "local"
+        ],
+        "role": "PlanCritique",
+        "isGating": true
+      },
+      {
+        "severity": "Major",
+        "category": "Ux",
+        "file": "",
+        "line": 0,
+        "title": "Local-first ordering contract not verified against new neutral mount",
+        "why": "The plan states 'Local-first ordering, whole-file selection, shuffle and explicit omissions remain the existing review-context contract.' However, the C# collector is being modified to 'see the neutral PROJECT/local/shared rule bodies.' If the new neutral mount is added to the discovery list before the local rules in the priority queue, or if the 'neutral mount' logic overrides the 'local-first' flag, the reviewer will see shared rules before local rules. A user typing a specific local rule that should be prioritized will instead see a generic shared rule, breaking the 'local-first' expectation and causing confusion about why their specific context isn't being used.",
+        "fix": "Add a specific step to verify that the 'local-first ordering' contract is preserved in the C# collector after the neutral mount is introduced, specifically testing the interaction between local rules and the new neutral mount.",
+        "providers": [
+          "local"
+        ],
+        "role": "PlanCritique",
+        "isGating": true
+      },
+      {
+        "severity": "Major",
+        "category": "Architecture",
+        "file": "",
+        "line": 0,
+        "title": "Version/hash contract relies on file path rather than content integrity",
+        "why": "The plan states 'Keep the version/hash contract and assert canonical body identity after stripping only delivery frontmatter.' If the 'version/hash' is derived from the file path or a static timestamp rather than a content hash of the canonical rule, a developer could accidentally modify the canonical rule file (e.g., adding a comment) without changing the 'version' number. The build would then proceed, but the 'assert canonical body identity' check might pass if it only checks the path. This leads to a situation where the extension ships with a rule body that differs from the 'pinned' version, causing the 'missing neutral mounts' detection to fail because the content doesn't match the expected hash.",
+        "fix": "Define a clear 'version/hash contract' for the generated file that includes a checksum of the *content* of the canonical rule, not just the file path, and fail the build if the hash changes between the 'prepare' and 'bundle' steps.",
+        "providers": [
+          "local"
+        ],
+        "role": "PlanCritique",
+        "isGating": true
+      },
+      {
+        "severity": "Minor",
+        "category": "Reliability",
+        "file": "",
+        "line": 0,
+        "title": "Quota-limited CLI failure path not tested in rollback scenario",
+        "why": "The plan mentions 'A quota-limited CLI stays incomplete' and 'Fresh clone/init/check/read and a disposable rollback restore the previous mount/adapters together.' If the CLI hits a quota limit during the 'fresh clone' phase, the script might exit early, leaving the `.agents` directory in a half-initialized state (e.g., the gitlink is set but the content is missing). The 'disposable rollback' might then fail to restore the previous state because the 'previous state' was never fully established. This results in a broken environment where the user has to manually clean up the `.agents` directory, violating the 'fresh clone' promise.",
+        "fix": "Add a specific test case for 'quota-limited CLI' that simulates a network timeout or rate limit during the 'fresh clone' phase to ensure the 'disposable rollback' works correctly.",
+        "providers": [
+          "local"
+        ],
+        "role": "PlanCritique",
+        "isGating": false
+      },
+      {
+        "severity": "Major",
+        "category": "Architecture",
+        "file": "",
+        "line": 0,
+        "title": "The reviewed conventions commit is not identified by an immutable commit ID.",
+        "why": "If main moves or a developer initializes the submodule from a different local or remote HEAD, the build can pass while `.agents/conventions` points at a different rule body than the reviewed source, violating the pinned-source requirement.",
+        "fix": "Record the exact conventions commit SHA in the plan or change metadata and make initialization/verification fail unless the gitlink matches it.",
+        "providers": [
+          "codex"
+        ],
+        "role": "PlanCritique",
+        "isGating": true
+      },
+      {
+        "severity": "Major",
+        "category": "Reliability",
+        "file": "",
+        "line": 0,
+        "title": "The plan does not verify that stale legacy auto-loaded policy copies are absent.",
+        "why": "A checkout containing an old root or legacy rules copy can load both that stale policy and the new neutral mount; conflicting instructions may then be applied even though neutral discovery tests pass.",
+        "fix": "Add an explicit migration assertion that enumerates and rejects every legacy auto-loaded policy location, and include the result in the native read trace.",
+        "providers": [
+          "codex"
+        ],
+        "role": "PlanCritique",
+        "isGating": true
+      },
+      {
+        "severity": "Major",
+        "category": "Reliability",
+        "file": "",
+        "line": 0,
+        "title": "The panel’s required stale-snippet behavior has no named acceptance scenario.",
+        "why": "With a current neutral gate and an older pasted gate in a legacy root or local location, an implementation could stop at the current shared rule and report success, silently leaving the stale snippet undetected.",
+        "fix": "Add a fixture containing both versions and assert that the older pasted snippet is reported before the shared rule is considered sufficient.",
+        "providers": [
+          "codex"
+        ],
+        "role": "PlanCritique",
+        "isGating": true
+      },
+      {
+        "severity": "Major",
+        "category": "Reliability",
+        "file": "",
+        "line": 0,
+        "title": "A prior ignored generated gate file can survive a failed or bypassed preparation step.",
+        "why": "After building from commit A, changing the mount to commit B and invoking a test or packaging entry point that does not run preparation can compile and ship A’s ignored generated source; a preparation failure can likewise leave A available for a later package command.",
+        "fix": "Make generation a mandatory dependency of every compile, test, and package entry point, remove the old generated file before validation, and test packaging with a stale file present and canonical input unavailable.",
+        "providers": [
+          "codex"
+        ],
+        "role": "PlanCritique",
+        "isGating": true
+      },
+      {
+        "severity": "Major",
+        "category": "Reliability",
+        "file": "",
+        "line": 0,
+        "title": "Fresh-clone reproducibility assumes a Node runtime and package manager that the plan never pins.",
+        "why": "A developer on a different Node or npm/pnpm version can resolve the lockfile differently or fail in the generator, so the canonical gate bytes and VSIX result are not reproducible despite the stated locked dependencies.",
+        "fix": "Specify and enforce the Node and package-manager versions, use the corresponding frozen-lockfile install in CI and setup instructions, and verify the same versions in the build preflight.",
+        "providers": [
+          "codex"
+        ],
+        "role": "PlanCritique",
+        "isGating": true
+      },
+      {
+        "severity": "Major",
+        "category": "Reliability",
+        "file": "",
+        "line": 0,
+        "title": "The native evidence requirement has no completion gate for a quota-limited or interrupted CLI.",
+        "why": "If the CLI times out after the root read or returns quota-limited output, the plan records incomplete evidence but does not state whether publication must stop; the canary can therefore be merged without the required nested-read evidence.",
+        "fix": "Define the required root/nested read matrix and make missing or partial evidence block the Definition of Done and publication, with an explicit retry or waiver path.",
+        "providers": [
+          "codex"
+        ],
+        "role": "PlanCritique",
+        "isGating": true
+      }
+    ],
+    "discounted": [],
+    "rejectedEntries": [],
+    "instruction": "Rounds exhausted; policy says good enough. READ the open findings and apply the ones that are true and useful — that is the point of this setting, and it is what makes it different from continue_anyway. Reject the rest with reasons via resolve, say in your summary what you took and what you declined, then proceed.",
+    "cost": {
+      "tokensIn": 51680,
+      "tokensOut": 10338
+    },
+    "commands": [
+      "This plan is a PIECE of a split that is already under way, so do NOT split it again: build it as one unit, review its diff through this gate, fix, document, test and commit. If it is genuinely too big for one unit, say so in your summary and say what you would have cut it into — but do not start a second round of splitting on your own.",
+      "Work AUTONOMOUSLY. Say that you are working autonomously, and keep saying what you are writing right now as you go. Autonomous means these orders, not a mood: (1) every bug and every problem spot gets a RED-GREEN-RED test — a failing test first, then the fix, then the test green, then a check that the test really fails without the fix; (2) the documentation is updated with every change — the README, the manifest if there is one, the module docs and every other file that describes what you changed; (3) before any release, run ALL the tests that exist, not only the ones near your change; (4) if the repository has a release or pull request process, do it — and on a pull request, wait about five minutes, then check whether automatic comments appeared, read them and fix what they name; (5) if a deploy triggers automatically, verify the result against the target environment — dev, stage or test — and read its logs for errors before calling it done; (6) re-read your own code against the repository's rules and follow them, not only the ones you remember. A question that does not block you is not asked now: write it down and put every one of them at the END of your final summary. A question that DOES block you is asked at once — but before you ask it, re-read every epic and story you have written so far and gather every other blocking question you can foresee, so the person is interrupted once with all of them rather than repeatedly with one. Where you can proceed under a stated assumption, do that instead of asking, and say what you assumed."
+    ],
+    "commandsPreamble": "COMMANDS from the operator of this gate. They come from switches a person set in the panel and they outrank your own defaults for this task. Follow them, and say in your summary which ones you applied."
+  },
+  "session": "8e812028",
+  "stage": "plan",
+  "resolvedStage": "CodeReview"
+}

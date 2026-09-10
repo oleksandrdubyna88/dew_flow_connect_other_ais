@@ -20,7 +20,7 @@
 >
 > Related docs: [module_server.md](module_server.md), [module_runners.md](module_runners.md),
 > [module_extension.md](module_extension.md),
-> [review-gate.md](../.claude/rules/common/review-gate.md),
+> [review-gate.md](../.agents/rules/common/review-gate.md),
 > [RESULTS_conventions_prompt.md](RESULTS_conventions_prompt.md).
 >
 > **Deviations from the plan, and its open tail:**
@@ -189,4 +189,4 @@ difference smaller than the model's own spread is not reported as a result. Writ
       from the CredsForDevs palette.
 - [ ] Every rule above has a test that was watched fail first.
 - [ ] `research/module_*.md` updated; this plan promoted per
-      [planning-docs](../.claude/rules/shared/common/planning-docs.md).
+      [planning-docs](../.agents/conventions/common/planning-docs.md).

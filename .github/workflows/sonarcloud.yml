@@ -32,7 +32,14 @@ jobs:
       # rule with the snippet the menu hands out — so it needs the rule on disk for the same reason
       # the CI job does. It fails rather than skips without it, deliberately.
       - name: Conventions submodule
-        run: git submodule update --init --depth 1 .claude/rules/shared
+        run: git submodule update --init --depth 1 .agents/conventions
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+      - name: Shared instruction dependencies and pin verification
+        run: |
+          npm ci --ignore-scripts --prefix .agents/conventions
+          node .agents/conventions/tools/rules.mjs check --repo .
       - uses: actions/setup-java@v6
         with:
           distribution: zulu

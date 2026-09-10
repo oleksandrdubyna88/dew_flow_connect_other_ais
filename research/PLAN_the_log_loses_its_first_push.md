@@ -100,7 +100,7 @@ constructed in this suite otherwise.
 - [x] `research/module_extension.md` records the handshake and why a blind `postMessage` after
       `webview.html = …` is not safe, with a sequence diagram of the flow it changes.
 - [x] The plan completion check from
-      [planning-docs.md](../.claude/rules/shared/common/planning-docs.md) was run: this plan's status
+      [planning-docs.md](../.agents/conventions/common/planning-docs.md) was run: this plan's status
       line was re-read against the shipped code, and the plan promoted in the same task.
 
 ## What shipped differently

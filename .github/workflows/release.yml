@@ -375,13 +375,19 @@ jobs:
       # the first tag after that test landed could not be built (extension-v0.29.13, 2026-09-05).
       - name: Conventions submodule
         working-directory: .
-        run: git submodule update --init --depth 1 .claude/rules/shared
+        run: git submodule update --init --depth 1 .agents/conventions
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: src_vs_code/package-lock.json
+
+      - name: Shared instruction dependencies and pin verification
+        working-directory: .
+        run: |
+          npm ci --ignore-scripts --prefix .agents/conventions
+          node .agents/conventions/tools/rules.mjs check --repo .
 
       - run: npm ci
 

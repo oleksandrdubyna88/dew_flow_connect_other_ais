@@ -156,3 +156,21 @@ token accounting? → [ARCHITECTURE.md](ARCHITECTURE.md).**
 ## License
 
 MIT.
+
+## Developing with shared instructions
+
+Initialize the committed rules version before building:
+
+```sh
+git submodule update --init .agents/conventions
+npm ci --ignore-scripts --prefix .agents/conventions
+node .agents/conventions/tools/rules.mjs check --repo .
+npm ci --prefix src_vs_code
+npm test --prefix src_vs_code
+```
+
+Node 22 is used in CI. Claude Code and Codex enter through AGENTS and the shared ENTRY;
+project policy is in `.agents/PROJECT.md` and local rules in `.agents/rules`. Edit shared
+policy in the conventions repository, then review and pin its commit here. The extension
+prepares its gate text from that canonical source before compile/typecheck/bundle; missing,
+dirty or mismatched sources stop the build. Generated delivery is ignored and never edited.

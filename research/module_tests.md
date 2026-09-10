@@ -5,10 +5,25 @@
 > look. Enforced in part by `ScenarioCoverageTests` (`src_mcp/tests/ScenarioCoverageTests.cs`), which
 > derives the flow list from the tool registry rather than from this document.
 >
-> [testing.md](../.claude/rules/shared/common/testing.md) governs how a test is written and believed;
+> [testing.md](../.agents/conventions/common/testing.md) governs how a test is written and believed;
 > this describes what exists.
 
 ## Where the harness is
+
+Shared-rule adoption adds real filesystem scenarios: `RuleFilesTests` exercises neutral
+PROJECT/local/shared discovery, ordering and missing mount bodies while retaining legacy cases.
+`snippetDiscovery.test.ts` calls the same reader the panel uses, against temporary files:
+a neutral shared rule is current, and older root/project/local copies take priority.
+`scripts/prepare-gate.test.mjs` checks frontmatter boundaries and a real Git submodule's
+clean/dirty/wrong-pin transitions. A failed build preparation leaves no old generated policy.
+These run through `npm test`; no paid model calls occur in that suite. The independent
+version/hash test remains, and compares generated delivery with the canonical rule body.
+
+Observed locally on 2026-09-10: neutral C# scenarios first failed with zero discovered files
+and no missing mount; all 22 RuleFiles cases then passed. Panel discovery first returned
+absent and passed after the location update. Extension suite: 1313 tests, 1312 passed and
+one skipped, plus all three build-preparation scenarios. These are local adoption results;
+native Codex acceptance and consumer publication remain open in the adoption plan.
 
 Three suites, all in the repository, all in the language of the half they drive.
 
@@ -171,3 +186,10 @@ The most valuable section, and the first one people drop.
   1000 records, 116 MB including 60 KB lines: **8000 whole records of 8000, zero torn**, on
   Windows 11 / NTFS / node 22, 2026-09-10; four × 500 was clean first. It exits non-zero if the file
   ever tears, so the claim can be re-checked on another filesystem rather than believed.
+
+Adoption build checks, before reconciliation with main: Debug and Release solution builds
+completed with zero warnings/errors. Each configuration's MTP runners passed: MCP 1136/1137
+(one explicit Windows directory-link privilege skip), bench 113/113, Team server 226/226.
+The generator invalidation guard was removed temporarily: the missing-source test failed
+because the old output remained; restoring the guard made it pass. This validates the
+failure behavior, not merely that a build hook was declared.

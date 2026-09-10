@@ -72,11 +72,19 @@ public static class RuleFiles
 {
     /// <summary>The files a CLI is told to read. Order is priority under the budget.</summary>
     public static readonly string[] InstructionFiles =
-        ["CLAUDE.md", "AGENTS.md", "GEMINI.md", ".github/copilot-instructions.md"];
+        ["CLAUDE.md", "AGENTS.md", "GEMINI.md", ".github/copilot-instructions.md", ".agents/PROJECT.md"];
+
+    private const string NeutralMount = ".agents/conventions";
+
+    // The mounted repository also carries research and its own project instructions. Only
+    // canonical rule directories belong in a consumer's review sample. This is not a selector.
+    private static readonly (string Dir, string Pattern)[] NeutralRuleFolders =
+        [.. new[] { "common", "csharp", "rust", "typescript" }.Select(dir => ($"{NeutralMount}/{dir}", "*.md"))];
 
     /// <summary>Where conventions live once there are too many for one page.</summary>
     private static readonly (string Dir, string Pattern)[] RuleFolders =
-        [(".claude/rules", "*.md"), (".cursor/rules", "*.mdc"), (".cursor/rules", "*.md")];
+        [(".claude/rules", "*.md"), (".cursor/rules", "*.mdc"), (".cursor/rules", "*.md"),
+            (".agents/rules", "*.md"), .. NeutralRuleFolders];
 
     /// <summary>
     /// Every place this looks, as a person would read them out — for the messages that name them.
@@ -286,12 +294,18 @@ public static class RuleFiles
     /// </summary>
     private static IReadOnlyList<string> EmptyRuleMounts(string repoPath, IReadOnlyList<SubmoduleMount> mounts) =>
         [.. mounts
-            .Where(m => IsRulesMount(m.Path) && IsEmptyDirectory(Path.Combine(repoPath, m.Path.Replace('/', Path.DirectorySeparatorChar))))
+            .Where(m => IsRulesMount(m.Path) && MissingRuleMount(repoPath, m))
             .Select(m => m.Path)
             .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)];
 
     private static bool IsRulesMount(string path) =>
+        path.Equals(NeutralMount, StringComparison.OrdinalIgnoreCase) ||
         RuleFolders.Any(f => path.StartsWith(f.Dir + "/", StringComparison.OrdinalIgnoreCase));
+
+    private static bool MissingRuleMount(string repoPath, SubmoduleMount mount) =>
+        mount.Path.Equals(NeutralMount, StringComparison.OrdinalIgnoreCase)
+            ? !FolderFiles(repoPath, [mount]).Any(p => UnderAnyMount(p, [mount]))
+            : IsEmptyDirectory(Path.Combine(repoPath, mount.Path.Replace('/', Path.DirectorySeparatorChar)));
 
     private static bool IsEmptyDirectory(string path)
     {

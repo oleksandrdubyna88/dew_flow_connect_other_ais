@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { SNIPPET_LOCATIONS, SNIPPET_MARKER, SnippetStatus, snippetStatus } from './claudeSnippet';
+import { readSnippetStatus, SnippetStatus, snippetStatus } from './claudeSnippet';
 
 /**
  * Which generation of the snippet this workspace is carrying, if any.
@@ -10,7 +10,7 @@ import { SNIPPET_LOCATIONS, SNIPPET_MARKER, SnippetStatus, snippetStatus } from 
  * took — and two readers of the same four files would drift the moment somebody added a fifth.</p>
  *
  * <p><b>Since the block became a shared rule</b> (`dew_flow_conventions/common/coai-review-gate.md`,
- * mounted at `.claude/rules/shared`), a repository in that family keeps NO copy of its own and the
+ * mounted at `.agents/conventions`, with legacy mounts still supported), a repository in that family keeps NO copy of its own and the
  * four instruction files are empty of it — so the mounted rule is read too, and such a repository
  * reports `current` instead of the `absent` it would have reported before.</p>
  */
@@ -20,19 +20,7 @@ export async function pastedSnippetStatus(): Promise<SnippetStatus> {
     return snippetStatus(undefined);
   }
 
-  for (const name of SNIPPET_LOCATIONS) {
-    const text = await readIfPresent(vscode.Uri.joinPath(root, name));
-    // The FIRST location that carries it wins, and the instruction files are first on that list on
-    // purpose: a paste in CLAUDE.md is what the AI here actually READS, so a stale one has to be
-    // the sentence this reports. Answering with the mounted rule's version instead would put a
-    // green light over text three revisions old that is still being obeyed. The duplicate itself
-    // is somebody else's job — `gate-snippet-check.mjs` fails the build over it.
-    if (text.includes(SNIPPET_MARKER)) {
-      return snippetStatus(text);
-    }
-  }
-
-  return snippetStatus(undefined);
+  return readSnippetStatus(name => readIfPresent(vscode.Uri.joinPath(root, name)));
 }
 
 async function readIfPresent(uri: vscode.Uri): Promise<string> {
