@@ -1,3 +1,5 @@
+import { ReportedUsage } from './chatUsage';
+
 /**
  * The seam between the conversation's LIFECYCLE and one vendor's wire protocol.
  *
@@ -27,7 +29,31 @@ export type AdapterEvent =
   | { readonly kind: 'ready' }
   /** The conversation's id in the vendor's own store, for resuming it. Per-turn vendors only. */
   | { readonly kind: 'session'; readonly id: string }
-  | { readonly kind: 'answer'; readonly text: string }
+  /**
+   * The answer, and what the vendor said it cost.
+   *
+   * <p>`usage` is optional because a vendor may say nothing, and because it is only ever read for a
+   * ledger line — a turn whose numbers are missing is still an answer. What each vendor reports and
+   * where was MEASURED rather than read out of a manual
+   * (`research/PLAN_an_answer_as_it_arrives.md`), and the three differ enough that the numbers are
+   * not comparable: `claude` bills a real `total_cost_usd` and counts cache reads, `agy` reports
+   * tokens and no money at all, and `codex` reports a CUMULATIVE total for the thread rather than
+   * the cost of one turn. Normalising that is `chatUsage.turnTokens`'s job, not an adapter's — an
+   * adapter reports what its vendor said.</p>
+   */
+  | { readonly kind: 'answer'; readonly text: string; readonly usage?: ReportedUsage | undefined }
+  /**
+   * What the turn cost, arriving on an event of its own.
+   *
+   * <p>It exists because `codex` does not put its numbers on the answer: the answer is an
+   * `item.completed` and the usage is on `turn.completed`, a separate line arriving afterwards. An
+   * adapter cannot attach one to the other without holding state between calls, which `classify` is
+   * deliberately unable to do — it reads one line and says what that line meant.</p>
+   *
+   * <p>So the session keeps the last one it saw and uses it if the answer carried none. The two
+   * vendors that DO put usage on the answer are unaffected.</p>
+   */
+  | { readonly kind: 'usage'; readonly usage: ReportedUsage }
   | { readonly kind: 'failure'; readonly failure: string }
   | { readonly kind: 'nothing' };
 
@@ -91,3 +117,26 @@ export function parsed(line: string): Record<string, unknown> | undefined {
 export function text(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
+
+/** A field, when it is a finite non-negative number. Vendors omit, misspell and stringify these. */
+export function count(value: unknown): number {
+  const asNumber = typeof value === 'number' ? value : Number(text(value));
+
+  return Number.isFinite(asNumber) && asNumber > 0 ? asNumber : 0;
+}
+
+/** A money field, kept as `null` when the vendor said nothing — a zero would claim the turn was free. */
+export function money(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/** The nested object at `key`, or nothing. Every vendor buries its usage one level down. */
+export function inside(event: Record<string, unknown>, key: string): Record<string, unknown> | undefined {
+  const value = event[key];
+
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined;
+}
+
+// `spent` used to be here as well as in `cliChatSession.ts`, with the same body and two copies of
+// the same paragraph explaining it. It lives in `chatUsage.ts` now, beside the type it is about, and
+// both adapters import it from there — see the note on it.

@@ -18,6 +18,8 @@ import {
 import { parseSession, SessionFile } from './rounds';
 import { PriceOfModel, usageTabHtml } from './roundsLog';
 import { parseUsage, priceOf, UsageEntry, Window } from './usage';
+import { ChatTurnRecord } from './chatUsage';
+import { readChatUsage } from './chatUsageFile';
 import {
   CliStatus,
   latestCliVersion,
@@ -391,6 +393,21 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    */
   async usageLines(): Promise<readonly UsageEntry[]> {
     return this.readUsage();
+  }
+
+  /**
+   * The chat ledger — what conversations cost, as opposed to review rounds.
+   *
+   * <p>A second file and a second read, because the two ledgers have two different writers: the
+   * server appends to `usage.jsonl` while it runs a round, and the extension appends to
+   * `chat-usage.jsonl` when a turn ends. They are merged into one table on the page rather than into
+   * one file on disk, so neither half has to know the other's format or ship on the other's day.</p>
+   *
+   * <p>Whole, like {@link usageLines} and for the same reason: forgetting a vendor's spending is a
+   * decision about the spending VIEW, not a reason to empty a row that really did cost money.</p>
+   */
+  async chatLines(): Promise<readonly ChatTurnRecord[]> {
+    return readChatUsage(this.dataDir.fsPath);
   }
 
   /** The spending window the page shows. Today by default — since midnight, by the operator's ruling. */

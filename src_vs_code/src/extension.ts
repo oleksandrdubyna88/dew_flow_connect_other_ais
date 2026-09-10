@@ -17,7 +17,8 @@ import { EscalationWatcher } from './escalationWatcher';
 import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
 import { parseSession, SessionFile } from './rounds';
-import { blindSpotsHtml, rowsFrom } from './roundsLog';
+import { blindSpotsHtml, chatRows, LogRow, mergedRows, rowsFrom } from './roundsLog';
+import { DbLog } from './roundsDb';
 import { RoundsLogPanel } from './roundsLogPanel';
 import { ExistingFile, ServerSettingsSync } from './serverSettingsSync';
 import { LOCK_STALE_AFTER_MS, lockIsStale } from './settingsLock';
@@ -575,9 +576,7 @@ async function showRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher, pa
   // opened a log should not wait on a process to see it: the findings arrive in the next push, a
   // moment later. Raised by the gate as blocking the panel on an unannounced read.
   log.show(
-    rowsFrom(
-      await readSessions(), Date.now(), await panel.modelPrice(), await panel.usageLines(), undefined,
-      panel.vendorIds()),
+    await logRows(panel, undefined),
     watcher.openQuestions,
     await panel.usageTab());
   await refreshRoundsLog(log, watcher, panel, true);
@@ -590,14 +589,35 @@ async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher,
   }
   const fresh = await panel.roundsLog();
   log.update(
-    rowsFrom(
-      await readSessions(), Date.now(), await panel.modelPrice(), await panel.usageLines(), fresh,
-      panel.vendorIds()),
+    await logRows(panel, fresh),
     watcher.openQuestions,
     await panel.usageTab(),
     force,
     blindSpotsHtml(fresh),
     fresh.totals);
+}
+
+/**
+ * Every row the log shows: the review rounds and the conversations, in one table, newest first.
+ *
+ * <p>One function because there are two call sites — the first paint and every tick after it — and
+ * they must not drift. The first paint used to pass `undefined` for the database and the tick a real
+ * one, and that difference is the whole of what varies between them; everything else being written
+ * out twice is how a column ends up on one of the two.</p>
+ *
+ * <p><b>The same {@link PanelProvider.modelPrice} prices both halves.</b> A conversation and a review
+ * round on one model are then worked out by one rule, which is the point of merging them into one
+ * table at all: the answer to "what did today cost" is a sum, and a sum of two differently-derived
+ * numbers is not one.</p>
+ */
+async function logRows(panel: PanelProvider, database: DbLog | undefined): Promise<LogRow[]> {
+  const priceOf = await panel.modelPrice();
+
+  return mergedRows(
+    rowsFrom(
+      await readSessions(), Date.now(), priceOf, await panel.usageLines(), database, panel.vendorIds()),
+    chatRows(await panel.chatLines(), priceOf),
+  );
 }
 
 /** The server's own session files: its data dir, or `COAI_DATA_DIR` when the person set one. */

@@ -255,7 +255,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       setup:
         "Nothing to set up. The server writes a round to disk the moment it starts and updates it as each reviewer moves, so the picture survives a reload, a restarted extension and a killed server.",
       usage:
-        "There is nothing to click: a running round is already open, and when it finishes it leaves the sidebar. Everything that has ever run — finished, interrupted, every reviewer and every number — is in **Show review rounds** (the ⋯ menu on the panel's title).",
+        "There is nothing to click: a running round is already open, and when it finishes it leaves the sidebar. Everything that has ever run — finished, interrupted, every reviewer and every number — is in **Show review rounds** (the ⋯ menu on the panel's title).\n\nThat log holds your CONVERSATIONS as well as your rounds. Its **Kind** column says which a row is — *review* or *conversation* — and the filter beside it narrows to one or shows both, because “what did today cost me” is rarely a question about only one of them. A conversation leaves the repository, branch and stage columns empty: a chat is not held against a branch.",
       whatCanGoWrong:
         "A round abandoned by a crashed server is swept to *interrupted* on the next start and disappears from here; it is still in the log. If the section reads *Nothing is running* while your assistant says it is reviewing, the server it talks to is writing somewhere else — a `COAI_DATA_DIR` in its config that this window does not share.",
     },
@@ -265,7 +265,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'What each AI has used: tokens, money and time',
       whatItIs:
-        'A bar per vendor over a day, a week, a month or a year: tokens in and out, **money**, how many runs, how many failed, total and average time — and one line at the bottom totalling every vendor.',
+        'A bar per vendor over a day, a week, a month or a year: tokens in and out, **money**, how many runs, how many failed, total and average time — and one line at the bottom totalling every vendor. Chat turns are counted too, in a ledger of their own, and appear as *conversation* rows in the rounds log.',
       why:
         'A review panel spends real money on every round, and the question "what has this cost me this month" cannot be answered from a session file — sessions are rewritten as rounds advance and hold one branch each.',
       setup:
