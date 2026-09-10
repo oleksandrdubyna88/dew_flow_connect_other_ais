@@ -436,3 +436,36 @@ test('the hold is not renewed by moving between controls, and disposal forgets i
   assert.match(source, /const seen = this\.queued;[\s\S]{0,200}if \(seen !== this\.queued\)|if \(seen === this\.queued\)/,
     'render awaits one snapshot of the queue, so a write appended while it waited is read too late');
 });
+
+test('a chosen dropdown RELEASES the repaint it is holding, so its neighbour can re-fill', () => {
+  // The plan gate (gemini, Major, twice from two vendors): the hold is 30 seconds and `focusin` on
+  // ANY [data-setting] control starts it — a `<select>` included. So choosing a provider saved the
+  // setting and then sat on the repaint until focus left the dropdown or half a minute passed, while
+  // the model select beside it kept the previous provider's models. The hold exists to protect text
+  // that lives only in the DOM; a dropdown has none — its value is already saved when `change` fires.
+  const picker = languagePicker();
+  const page = run([picker]);
+
+  page.fire(0, 'focusin');
+  picker.value = 'ru';
+  page.fire(0, 'change');
+
+  const released = focusMessages(page).filter((message) => message.editing === false);
+
+  assert.equal(released.length, 1, 'choosing in a dropdown did not release the repaint hold');
+  assert.equal(released[0]!.id, 'chatLanguage||');
+});
+
+test('a textarea keeps its hold through a change, because its words are still being written', () => {
+  // The other half of the same rule, asserted so the fix cannot be widened into the case it was
+  // written to protect: a textarea fires `change` at BLUR, and `focusout` releases it there already.
+  const box = promptBox();
+  const page = run([box]);
+
+  page.fire(0, 'focusin');
+  box.value = 'поясни';
+  page.fire(0, 'change');
+
+  assert.deepEqual(focusMessages(page).filter((message) => message.editing === false), [],
+    'a textarea released its hold on change, before the blur that flushes it');
+});

@@ -333,7 +333,18 @@ ${body}
   };
 
   for (const el of document.querySelectorAll('[data-setting]')) {
-    el.addEventListener('change', () => { forget(); save(el); });
+    el.addEventListener('change', () => {
+      forget();
+      save(el);
+      // A chosen dropdown RELEASES the repaint it was holding. The hold is half a minute and
+      // \`focusin\` on any control starts it, a \`<select>\` included — so choosing a provider saved
+      // the setting and then sat on the paint until focus left the dropdown, while the model select
+      // beside it still listed the previous provider's models. The hold protects text that lives
+      // only in the DOM; a dropdown has none, because its value is saved by the line above.
+      if (el.tagName !== 'TEXTAREA') {
+        reportFocus(el, false);
+      }
+    });
     if (el.tagName === 'TEXTAREA') {
       el.addEventListener('input', () => {
         waiting = el;
@@ -495,6 +506,7 @@ function chatBody(chat: ChatSettings, state: PanelState): string {
   <select id="chatPromptChoice" data-setting="chatPromptChoice">
 ${chatOption('', `The main one — ${mainPrompt(chat.prompts)?.name ?? chat.prompt}`, chat.promptChoice)}
 ${chat.prompts.map((preset) => chatOption(preset.id, preset.name, chat.promptChoice)).join('\n')}
+${strandedOption(chat.promptChoice, chat.prompts, 'deleted — the main one is being sent')}
   </select>
   <div class="hint">${escapeHtml(chat.prompt)}</div>
   <button type="button" class="run" data-command="editChatPresets">Edit presets…</button>

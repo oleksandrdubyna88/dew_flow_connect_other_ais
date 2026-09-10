@@ -111,6 +111,22 @@ export function chatSettingsFrom(read: (key: string) => unknown): ChatSettings {
 }
 
 /**
+ * The settings a write to `key` invalidates, and which must be cleared with it.
+ *
+ * <p>One case, and it is the pair: `coai.chatModelName` names one of `coai.chatModel`'s models, so
+ * choosing a different provider leaves it holding the PREVIOUS provider's model. Left alone, the
+ * panel strands that value in its select while `openingModel` quietly opens the conversation on the
+ * row's own model — the section describing a state that is not the one the chat is in. Raised on the
+ * plan round by gemini as Blocking, and by codex from the other end.</p>
+ *
+ * <p>A pure rule rather than an `if` in the write path, because that is where it would be forgotten
+ * the day a third setting joins the pair.</p>
+ */
+export function clearedByWriting(key: string): readonly string[] {
+  return key === 'chatModel' ? ['chatModelName'] : [];
+}
+
+/**
  * Whether this trigger sends by itself.
  *
  * <p>Its own function because it is the one decision in this module that spends money, and a caller
