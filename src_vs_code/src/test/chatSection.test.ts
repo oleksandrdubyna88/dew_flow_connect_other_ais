@@ -259,3 +259,19 @@ test('the panel and the command read the same settings through the same reader',
   assert.ok(body.includes(`<option value="${asCommandReadsIt.autoSend}" selected>`), 'a different send rule is selected');
   assert.ok(body.includes(`<option value="${asCommandReadsIt.model}" selected>`), 'a different model is selected');
 });
+
+test('a choice naming a prompt that was deleted is SHOWN as chosen, and as gone', () => {
+  // The plan gate, from two vendors independently (local: Blocking, codex: Major): without this the
+  // browser falls back to the first option, the section reads "The main one" while the setting still
+  // holds a dead id, and the person sends words they did not choose without being told. The model
+  // select has had exactly this option since three reviewers asked for it on one round; the prompt
+  // picker shipped without it.
+  const body = chatSection(panelHtml(state({
+    chat: { ...chat, promptChoice: 'deleted-one', prompts: [preset('p1', 'A')] },
+  }), 'n0nce'));
+  const picker = body.slice(body.indexOf('data-setting="chatPromptChoice"'), body.indexOf('</select>'));
+
+  assert.match(picker, /<option value="deleted-one"[^>]*selected[^>]*disabled|<option value="deleted-one"[^>]*disabled[^>]*selected/,
+    'a deleted prompt is not shown as the chosen one');
+  assert.ok(!/<option value=""[^>]*selected/.test(picker), 'the picker claims the main one is chosen while a dead id is saved');
+});

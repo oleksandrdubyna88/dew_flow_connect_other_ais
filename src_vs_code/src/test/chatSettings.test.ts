@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CHAT_AUTO_SEND, DEFAULT_AUTO_SEND, chatSettingsFrom, sendsImmediately } from '../chatSettings';
+import { CHAT_AUTO_SEND, DEFAULT_AUTO_SEND, chatSettingsFrom, clearedByWriting, sendsImmediately } from '../chatSettings';
 import { fromMenuArgs, triggerPlan } from '../chatTrigger';
 
 /**
@@ -138,4 +138,13 @@ test('the plan puts the door and the setting together', () => {
   assert.deepStrictEqual(triggerPlan([{ webview: 'x' }], 'keyboard'), { path: 'menu', send: false });
   assert.deepStrictEqual(triggerPlan([{ webview: 'x' }], 'always'), { path: 'menu', send: true });
   assert.deepStrictEqual(triggerPlan([], 'never'), { path: 'keyboard', send: false });
+});
+
+test('choosing a provider clears the model named under the one before it', () => {
+  // The plan gate (gemini, Blocking): switching provider leaves `coai.chatModelName` holding the
+  // PREVIOUS provider's model, so the panel shows a stranded value while `openingModel` quietly
+  // opens on the row's own — the section describing a state that is not the one the chat is in.
+  assert.deepStrictEqual(clearedByWriting('chatModel'), ['chatModelName']);
+  assert.deepStrictEqual(clearedByWriting('chatModelName'), []);
+  assert.deepStrictEqual(clearedByWriting('chatLanguage'), []);
 });

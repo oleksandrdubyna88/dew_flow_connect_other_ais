@@ -799,8 +799,9 @@ the right answer.
 **The panel builds its own catalog, and it is richer than the command’s.** `chatCatalogFrom` in
 `chatCommand.ts` passes the discovered lists empty — the fetches live in the panel — so the command
 offers a discovered row only the model it is configured to. `chatBody` passes `state.codexModels`,
-`state.agyModels` and `state.teamServers`, which is the panel half of that plan’s open tail. The tail
-stands for the command. A `local` row cannot chat at all (`canChat`), so no local engine is passed:
+`state.agyModels` and `state.teamServers`, which is the panel half of that plan’s open tail. The
+COMMAND half is below — it was closed in the same change, because the picker turned the tail into a
+defect. A `local` row cannot chat at all (`canChat`), so no local engine is passed:
 it would be a value nothing on this path can read.
 
 **`chat` joined `staticKey`, reversing a measured rule.** While the section held a textarea, a chat
@@ -809,6 +810,26 @@ page under a focused control per keystroke — measured, and guarded by a test. 
 section is a `<select>` now, which posts `change` with its dropdown already shut, and the exclusion
 had acquired a cost: a pair whose first half cannot re-fill its second. The test changed its
 guarantee and gained a sibling asserting no free-text control returns to the section.
+
+**The panel HANDS its discoveries to the command — `chatDiscovery.ts`.** The plan gate’s own Blocking
+finding, and it is the tail above turned into a defect by the picker: `chatCatalogFrom` passed every
+discovered list empty, so a model the sidebar offered from `agy models` resolved to nothing in the
+command and the conversation opened on the row’s own model instead. The panel writes
+`{codex, agy, catalogs}` into `globalState` under `DISCOVERY_KEY` on every render; `chatCatalogFrom`
+reads it back through `discoveryFrom` — validated, because the store outlives the version that wrote
+it — and `catalogUsing` attaches each Team server’s last catalog to the row it belongs to. Nothing is
+fetched in the command: a tab must not wait on three probes to open. Proved with teeth — the fix
+removed, the test goes red with the operator’s own symptom, `gemini-3.7-flash-high` sent where
+`gemini-3.8-flash-low` was chosen.
+
+**Three smaller rules from the same round.** `clearedByWriting` makes a write to `chatModel` clear
+`chatModelName`, so the pair can never describe a provider-and-model nobody chose. The prompt picker
+renders a deleted choice through the same `strandedOption` the model select uses, saying what is
+being sent instead. And a `<select>` RELEASES the repaint hold when it is chosen — that one mattered
+more than it reads: the hold is `REPAINT_HOLD_MS` = 30 s and `focusin` on any `[data-setting]`
+control starts it, a dropdown included, so without it choosing a provider sat on the paint until
+focus left the control and the model select beside it kept the previous provider’s models for half a
+minute.
 
 **`coai.editChatPresets` reached a menu.** It shipped registered, in no `contributes.menus` entry and
 named in no view, so the tab it opens was reachable only from the command palette. The section has an

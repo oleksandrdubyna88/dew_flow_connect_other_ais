@@ -39,6 +39,7 @@ import { readToken } from './teamServerAuth';
 import { coaiDataDir } from './dataDir';
 import { ChatOutcome, ReportedUsage, chatTurnRecord } from './chatUsage';
 import { recordChatTurn } from './chatUsageFile';
+import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './chatDiscovery';
 import { chatSettingsFrom } from './chatSettings';
 import { chatUiScale, createChatPanel, pushChatDraft, pushChatState } from './chatPanel';
 import { captureSelection, COPY_SCRIPT, RunOutcome, argvFor, ran } from './selectionCapture';
@@ -675,16 +676,23 @@ type Ready =
  * choice today is the one source that needs no fetching: Claude's curated three. Handing the panel's
  * discovered lists to this function is the plan's open tail, and it is written down as one.</p>
  */
+/**
+ * What a row can be pointed at, with the panel's discoveries in it.
+ *
+ * <p>This used to pass every discovered list EMPTY, with a comment saying the fetches live in the
+ * panel — true, and harmless while the panel offered a flat list of rows. The moment the panel
+ * offered a two-step picker over those discoveries it became a defect: somebody picks a model that
+ * exists only in what `agy models` answered, and this catalog has never heard of it, so the
+ * conversation opens on the row's own model instead. The panel leaves what it found in
+ * `DISCOVERY_KEY`; this reads it back. Nothing is fetched here — a command must not wait on three
+ * probes to open a tab.</p>
+ */
 function chatCatalogFrom(config: vscode.WorkspaceConfiguration): ChatCatalog {
-  return {
-    discoveredCodex: [],
-    discoveredAgy: [],
-    localEngine: undefined,
-    // The servers, with no catalog: what a server ALLOWS is fetched from it, and the fetch lives in
-    // the panel. A row without one keeps the model it is set to rather than being offered nothing.
-    teamServers: teamServersFrom(config.get('teamServers'))
-      .map((server) => ({ server, email: '', problem: '', stale: false })),
-  };
+  const discovery = hostContext === undefined
+    ? EMPTY_DISCOVERY
+    : discoveryFrom(hostContext.globalState.get(DISCOVERY_KEY));
+
+  return catalogUsing(discovery, teamServersFrom(config.get('teamServers')));
 }
 
 /**

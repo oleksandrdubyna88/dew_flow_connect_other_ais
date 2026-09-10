@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
-import { chatSettingsFrom } from './chatSettings';
+import { DISCOVERY_KEY } from './chatDiscovery';
+import { chatSettingsFrom, clearedByWriting } from './chatSettings';
 import { ViewHandle, isDisposedRejection } from './viewHandle';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { discoverEngine, LocalEngine, openAiBaseOf, probeEngine } from './localEngines';
@@ -597,6 +598,20 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         : undefined,
     };
 
+    // What this panel DISCOVERED, left where the chat command can read it. Three of the four model
+    // sources are fetched — the codex and agy CLIs' own lists and a Team server's allowlist — and
+    // every fetch happens here. The command cannot repeat them to open a tab, so without this it
+    // builds its catalog empty and a model chosen in the section above resolves to nothing, opening
+    // the conversation on the row's own model instead. Written on every render, so it is as fresh as
+    // the panel is.
+    await this.context.globalState.update(DISCOVERY_KEY, {
+      codex: state.codexModels,
+      agy: state.agyModels,
+      catalogs: Object.fromEntries(
+        state.teamServers.flatMap((one) => (one.catalog === undefined ? [] : [[one.server.id, one.catalog]])),
+      ),
+    });
+
     // Two update paths, and which one runs is the whole fix for the pickers.
     //
     // Assigning `webview.html` RELOADS the webview, and a reload closes any open dropdown. The
@@ -1116,6 +1131,13 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       }
       case 'plain':
         await this.save(config, write.key, write.value);
+        // A setting that INVALIDATES another is cleared with it. One case today, and it is the chat
+        // pair: `chatModelName` names one of `chatModel`'s models, so choosing a different provider
+        // leaves it holding the previous one's — a value the panel would strand in its select while
+        // the conversation quietly opened on the row's own model instead.
+        for (const stale of clearedByWriting(write.key)) {
+          await this.save(config, stale, '');
+        }
         // Turning the per-side switch ON seeds this side with what it reads today, so nothing
         // changes until something is edited. An empty overlay looks identical - until the first
         // shared edit on another side silently changes this one, which is the surprise this feature
