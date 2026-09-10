@@ -497,7 +497,13 @@ function chatBody(chat: ChatSettings, state: PanelState): string {
     localEngine: undefined,
     teamServers: state.teamServers ?? [],
   });
-  const chosen = list.providers.find((one) => one.id === chat.model) ?? list.providers[0];
+  // The provider that ANSWERS: the saved row, or — only when nothing is saved — the first that can.
+  // A saved row that no longer resolves must NOT fall through to `providers[0]`: the select above
+  // strands it while this one fills with an unrelated provider's models, and the two controls then
+  // describe a pair nobody chose and offer it as valid. (codex and local, the code round.)
+  const chosen = chat.model.length === 0
+    ? list.providers[0]
+    : list.providers.find((one) => one.id === chat.model);
   const ownModel = state.vendors.find((one) => one.id === chosen?.id)?.model ?? '';
   const refusals = list.refused.map((row) => row.reason);
 

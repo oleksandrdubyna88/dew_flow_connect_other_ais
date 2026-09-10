@@ -240,6 +240,23 @@ export interface ChatCatalog {
   readonly teamServers: readonly TeamServerState[];
 }
 
+/**
+ * Whether a model may be POINTED AT through this runtime — `vendor-routing.md`, which is MANDATORY.
+ *
+ * <p>Antigravity's subscription bundles Gemini, Claude and GPT-OSS behind one CLI, so
+ * `claude-sonnet-4-6` and `claude-opus-4-6-thinking` are selectable there and must not be selected
+ * there: the same models sit on an unlimited Claude subscription while every antigravity call is
+ * drawn against a quota that is neither unlimited nor cheap. The model-comparison campaign of
+ * 2026-09-01 ran both through `agy`, exhausted the account in fifty runs, and lost three cells of
+ * the measurement — and nothing in the output said which CLI had answered.</p>
+ *
+ * <p>Applied to the CHAT's list only, and to local runtimes only: a Team server's allowlist is that
+ * server's own routing decision, made on the other side of the seam by the vendor rows it hosts.</p>
+ */
+function routableOn(runtime: string, modelId: string): boolean {
+  return !(modelId.toLowerCase().startsWith('claude') && (runtime === 'antigravity' || runtime === 'codex'));
+}
+
 /** The providers a chat may be sent to, and the reason for every configured row that is not one. */
 export function chatProvidersFrom(
   vendors: readonly Vendor[],
@@ -257,7 +274,7 @@ export function chatProvidersFrom(
       catalog.localEngine,
       catalog.discoveredAgy,
       allowedModelsFor(vendor, catalog.teamServers).models,
-    ),
+    ).filter((model) => routableOn(vendor.runtime, model.id)),
   }));
   const refused = enabled.filter((vendor) => !canChat(vendor)).map((vendor): RefusedModel => ({
     id: vendor.id,
@@ -356,7 +373,17 @@ export function legacyPick(
   saved: string,
 ): LegacyPick {
   if (saved.length === 0) {
-    return { providerId: '', modelId: '', candidates: [] };
+    // The FIRST provider that can answer, which is what the panel's own empty option says it is.
+    // This used to answer `{ providerId: '', … }` under a test titled "so the first provider can
+    // answer as it always did" — and nothing downstream made that true: `resolveChatPick` finds no
+    // provider with an empty id and refuses. `coai.chatModel` is empty by DEFAULT, so a fresh
+    // installation pressing the keybinding was told `" is not a model this conversation can be sent
+    // to any more"` — a sentence with a leading space and no name in it. Found by the code round.
+    const first = list.providers[0];
+
+    return first === undefined
+      ? { providerId: '', modelId: '', candidates: [] }
+      : { providerId: first.id, modelId: vendors.find((one) => one.id === first.id)?.model ?? '', candidates: [] };
   }
   // A ROW first, and the precedence is not arbitrary: every legacy value IS a row id, because that
   // is the only thing the old picker ever offered (`chatModelsFrom` mapped each row to one entry

@@ -275,3 +275,20 @@ test('a choice naming a prompt that was deleted is SHOWN as chosen, and as gone'
     'a deleted prompt is not shown as the chosen one');
   assert.ok(!/<option value=""[^>]*selected/.test(picker), 'the picker claims the main one is chosen while a dead id is saved');
 });
+
+test('a provider that no longer exists does not borrow the first one’s models', () => {
+  // The code round, from codex and from local independently: `chosen` fell back to
+  // `list.providers[0]`, so the provider select marked the saved row as stranded while the model
+  // select beside it filled with an UNRELATED provider's models — the two controls describing a pair
+  // nobody ever chose, and offering it as if it were valid.
+  const body = chatSection(panelHtml(state({
+    vendors: [vendor({ id: 'still-here' })],
+    chat: { ...chat, model: 'removed-row', modelName: 'gemini-3.7-flash-high' },
+  }), 'n0nce'));
+  const models = body.slice(body.indexOf('data-setting="chatModelName"'));
+
+  assert.match(models, /<option value="gemini-3.7-flash-high"[^>]*disabled/,
+    'the saved model is offered as valid under a provider that is gone');
+  assert.ok(!/<option value="gemini-3.7-flash-medium"/.test(models),
+    'another provider’s models fill the select of a provider that does not resolve');
+});

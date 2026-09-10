@@ -2,7 +2,7 @@ import { Catalog } from './teamServerApi';
 import { ChatCatalog } from './chatModels';
 import { ModelChoice } from './models';
 import { TeamServerState } from './teamServerView';
-import { TeamServer } from './teamServers';
+import { TeamServer, canonicalTeamServerUrl } from './teamServers';
 
 /**
  * What the PANEL discovered, kept where the surface that cannot discover it can read it.
@@ -31,9 +31,20 @@ export interface Discovery {
   readonly codex: readonly ModelChoice[];
   /** What `agy models` listed on this machine. */
   readonly agy: readonly ModelChoice[];
-  /** The last catalog each Team server answered with, by server id. */
-  readonly catalogs: Readonly<Record<string, Catalog>>;
+  /** The last catalog each Team server answered with, by server id, WITH the address it came from. */
+  readonly catalogs: Readonly<Record<string, StoredCatalog>>;
 }
+
+/**
+ * A cached catalog, and the endpoint it was fetched from.
+ *
+ * <p>The address is stored because a server ID alone does not identify a catalog over time: a URL
+ * that was corrected, or an ID reused in another workspace, would otherwise hand this window an
+ * allowlist fetched from somewhere else — and a model withdrawn there would read as offered here.
+ * An ABSENT address means a build that predates this field wrote the entry, and is trusted; only a
+ * PRESENT one that disagrees is refused. (codex, the code round.)</p>
+ */
+export type StoredCatalog = Catalog & { readonly url: string };
 
 export const EMPTY_DISCOVERY: Discovery = { codex: [], agy: [], catalogs: {} };
 
@@ -65,7 +76,7 @@ function choices(value: unknown): readonly ModelChoice[] {
 }
 
 /** One Team server's catalog, shaped enough for `allowedModelsFor` to read its allowlist. */
-function catalog(value: unknown): Catalog | undefined {
+function catalog(value: unknown): StoredCatalog | undefined {
   const one = record(value);
   if (one === undefined) {
     return undefined;
@@ -87,6 +98,7 @@ function catalog(value: unknown): Catalog | undefined {
     isAdmin: one['isAdmin'] === true,
     error: text(one['error']),
     vendors,
+    url: text(one['url']),
   };
 }
 
@@ -96,13 +108,15 @@ export function discoveryFrom(saved: unknown): Discovery {
   if (one === undefined) {
     return EMPTY_DISCOVERY;
   }
-  const catalogs: Record<string, Catalog> = {};
-  for (const [id, value] of Object.entries(record(one['catalogs']) ?? {})) {
-    const parsed = catalog(value);
-    if (parsed !== undefined) {
-      catalogs[id] = parsed;
-    }
-  }
+  // Built in one expression rather than assigned into: `catalogs[id] = …` on a plain object is both
+  // the mutation the style rule forbids and the way a stored `__proto__` key stops being data.
+  const catalogs = Object.fromEntries(
+    Object.entries(record(one['catalogs']) ?? {}).flatMap(([id, value]): [string, StoredCatalog][] => {
+      const parsed = catalog(value);
+
+      return parsed === undefined ? [] : [[id, parsed]];
+    }),
+  );
 
   return { codex: choices(one['codex']), agy: choices(one['agy']), catalogs };
 }
@@ -115,6 +129,23 @@ export function discoveryFrom(saved: unknown): Discovery {
  * allowlist lives. `localEngine` stays absent on purpose: a `local` row cannot chat at all
  * (`canChat`), so it would be a value nothing on this path can read.</p>
  */
+/**
+ * The cached catalog, but only if it belongs to the address this server is configured at.
+ *
+ * <p>An entry with no address predates the field and is trusted — refusing it would drop every
+ * allowlist on the update that added the check, for a case that has not happened. Compared
+ * canonically, because the row stores one spelling and the server entry holds whatever was typed.</p>
+ */
+function fetchedFrom(cached: StoredCatalog | undefined, url: string): Catalog | undefined {
+  if (cached === undefined) {
+    return undefined;
+  }
+
+  return cached.url.length === 0 || canonicalTeamServerUrl(cached.url) === canonicalTeamServerUrl(url)
+    ? cached
+    : undefined;
+}
+
 export function catalogUsing(discovery: Discovery, servers: readonly TeamServer[]): ChatCatalog {
   return {
     discoveredCodex: discovery.codex,
@@ -125,7 +156,7 @@ export function catalogUsing(discovery: Discovery, servers: readonly TeamServer[
       email: '',
       problem: '',
       stale: false,
-      catalog: discovery.catalogs[server.id],
+      catalog: fetchedFrom(discovery.catalogs[server.id], server.url),
     })),
   };
 }

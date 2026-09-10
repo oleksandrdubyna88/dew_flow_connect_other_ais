@@ -104,3 +104,26 @@ test('a half-valid entry is dropped, and the rest of the list survives it', () =
 
   assert.deepStrictEqual(discovery.codex, [{ id: 'gpt-5.2', label: 'gpt-5.2' }]);
 });
+
+test('a cached catalog is ignored when the server it was fetched from is not the one configured now', () => {
+  // The code round (codex, Major): a catalog is keyed by server ID alone, so a server whose URL was
+  // corrected — or an ID reused in another workspace — hands the command an allowlist fetched from a
+  // different endpoint, and a model withdrawn there reads as offered here.
+  const vendors = [vendor({
+    id: 'srv1-codex', runtime: 'remote', model: 'gpt-5.2', teamServerId: 'srv1', remoteVendor: 'codex',
+  })];
+  const discovery = discoveryFrom({ ...DISCOVERED, catalogs: { srv1: { ...DISCOVERED.catalogs.srv1, url: 'https://old.example.com' } } });
+  const list = chatProvidersFrom(vendors, catalogUsing(discovery, [{ id: 'srv1', name: 'Company', url: 'https://coai.example.com' }]));
+  const saved = legacyPick(list, vendors, 'srv1-codex');
+
+  assert.strictEqual(openingModel(list, saved, 'o5-mini'), 'gpt-5.2', 'a catalog from another address was trusted');
+});
+
+test('a stored key that would reach Object.prototype is not one', () => {
+  // `globalState` is JSON a previous build wrote, and `catalogs[id] = …` on a plain object is how a
+  // `__proto__` key stops being data. (gemini, the code round.)
+  const discovery = discoveryFrom({ codex: [], agy: [], catalogs: { __proto__: { vendors: [] } } });
+
+  assert.deepStrictEqual(Object.keys(discovery.catalogs), [], 'a prototype key was taken as a server id');
+  assert.strictEqual(({} as Record<string, unknown>)['vendors'], undefined, 'Object.prototype was polluted');
+});

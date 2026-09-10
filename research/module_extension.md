@@ -831,6 +831,25 @@ control starts it, a dropdown included, so without it choosing a provider sat on
 focus left the control and the model select beside it kept the previous provider’s models for half a
 minute.
 
+**What the CODE round found — eight taken of twenty-three.** Two were defects the picker exposed
+rather than created. `legacyPick(’’)` answered "no provider", under a test whose own title said the
+first one would answer — nothing downstream made that true, and `coai.chatModel` is empty by
+DEFAULT, so a fresh installation was refused with a sentence carrying a leading space and no name.
+And `chatProvidersFrom` offered every model `modelsFor` returned, which for an `antigravity` row
+includes `claude-sonnet-4-6` and `claude-opus-4-6-thinking` — exactly what `vendor-routing.md`
+forbids by name, and what cost three cells of the 2026-09-01 campaign. `routableOn` filters the
+CHAT’s list (local runtimes only; a Team server’s allowlist is that server’s own routing decision),
+so `resolveChatPick` refuses the combination one step later on its own membership rule.
+
+The other six: an unresolved provider no longer falls through to `providers[0]` and lends its models
+to a pair nobody chose; the discovery snapshot carries the ENDPOINT each catalog came from and a
+cached one is ignored when the configured address disagrees (an absent address predates the field
+and is trusted); the snapshot is written only when it CHANGED, and never takes the render down with
+it; `discoveryFrom` builds its map in one expression, which is both the style rule and the reason a
+stored `__proto__` key cannot stop being data; and the pair is cleared BEFORE the provider is
+written, so a host killed in between leaves a provider with no model rather than a new provider
+wearing the old one’s.
+
 **`coai.editChatPresets` reached a menu.** It shipped registered, in no `contributes.menus` entry and
 named in no view, so the tab it opens was reachable only from the command palette. The section has an
 **Edit presets…** button, routed like *Install the MCP server…* through `VSCODE_COMMAND_FOR`.
