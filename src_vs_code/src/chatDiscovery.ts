@@ -44,7 +44,18 @@ export interface Discovery {
  * An ABSENT address means a build that predates this field wrote the entry, and is trusted; only a
  * PRESENT one that disagrees is refused. (codex, the code round.)</p>
  */
-export type StoredCatalog = Catalog & { readonly url: string };
+export type StoredCatalog = Catalog & {
+  readonly url: string;
+  /**
+   * Whether this catalog was KEPT from a refresh that failed.
+   *
+   * <p>The panel holds the previous answer when a server cannot be reached and marks it, so the
+   * section can say so. Storing it without the mark would launder it: the command would rebuild a
+   * state claiming it was current, and a model the server has since withdrawn would read as offered.
+   * (CodeRabbit, PR #196.)</p>
+   */
+  readonly stale: boolean;
+};
 
 export const EMPTY_DISCOVERY: Discovery = { codex: [], agy: [], catalogs: {} };
 
@@ -99,6 +110,7 @@ function catalog(value: unknown): StoredCatalog | undefined {
     error: text(one['error']),
     vendors,
     url: text(one['url']),
+    stale: one['stale'] === true,
   };
 }
 
@@ -155,8 +167,15 @@ export function catalogUsing(discovery: Discovery, servers: readonly TeamServer[
       server,
       email: '',
       problem: '',
-      stale: false,
-      catalog: fetchedFrom(discovery.catalogs[server.id], server.url),
+      // `hasOwnProperty`, because a server id is a string somebody can write and `catalogs` is a
+      // plain object: `catalogs['__proto__']` answers with Object.prototype — an INHERITED value,
+      // not a missing one — and reading a field off it throws where a lookup should have missed.
+      catalog: fetchedFrom(
+        Object.prototype.hasOwnProperty.call(discovery.catalogs, server.id) ? discovery.catalogs[server.id] : undefined,
+        server.url,
+      ),
+      stale: discovery.catalogs[server.id]?.stale === true
+        && Object.prototype.hasOwnProperty.call(discovery.catalogs, server.id),
     })),
   };
 }
