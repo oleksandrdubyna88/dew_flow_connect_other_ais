@@ -1,4 +1,4 @@
-import { Platform } from './vendorTerminal';
+import { Platform } from './hostSide';
 
 /**
  * Which version of a reviewer's CLI is installed, which one the vendor publishes, and therefore

@@ -1,5 +1,5 @@
 import { needsShell } from './cliVersions';
-import { Platform } from './vendorTerminal';
+import { Platform } from './hostSide';
 import { ChatAdapter } from './chatAdapter';
 import { agyAdapter } from './agyAdapter';
 import { claudeAdapter } from './claudeAdapter';

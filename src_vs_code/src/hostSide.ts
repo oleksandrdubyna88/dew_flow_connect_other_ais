@@ -1,4 +1,3 @@
-import { Platform } from './vendorTerminal';
 import { runningUnderWsl } from './wslNetwork';
 
 /**
@@ -28,6 +27,16 @@ import { runningUnderWsl } from './wslNetwork';
  * one type because both are called "side" in English, which is a worse abstraction than the
  * scattering this file removes.</p>
  */
+
+/**
+ * The operating systems this extension answers for — what `process.platform` reports, narrowed.
+ *
+ * <p>It lived in `vendorTerminal.ts`, next to the install commands that were its first consumer, and
+ * the code round asked why selection capture and orphan cleanup should depend on the vendor-install
+ * module for a type neither of them has anything to do with. They should not: the union is a fact
+ * about the HOST, so it belongs beside the two functions that answer host questions.</p>
+ */
+export type Platform = 'win32' | 'linux' | 'darwin';
 
 /**
  * This extension host's own operating system.

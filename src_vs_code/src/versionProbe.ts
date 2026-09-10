@@ -1,9 +1,8 @@
 import { access } from 'node:fs/promises';
 import { delimiter, isAbsolute, join } from 'node:path';
 import { needsShell, parseCliVersion, shimCommandLine, unquoted, versionProbeCandidates } from './cliVersions';
-import { hostPlatform } from './hostSide';
+import { hostPlatform, Platform } from './hostSide';
 import { launch } from './processLauncher';
-import { Platform } from './vendorTerminal';
 
 /**
  * Asking a binary what version it is, for anything on this machine that answers `--version`.
