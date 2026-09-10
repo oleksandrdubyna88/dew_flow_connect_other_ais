@@ -15,7 +15,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/load-instructions.mjs"
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/load-instructions.mjs"]
           }
         ]
       }
