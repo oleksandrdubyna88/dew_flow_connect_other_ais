@@ -88,3 +88,7 @@ deploy/backup/
 # Phase-0 measurement transcripts: raw output from real signed-in vendor CLIs.
 # The TABLE belongs in the plan; the raw text does not belong in git.
 src_vs_code/measurements/
+
+# Generated delivery from the pinned canonical rule, rebuilt before compile/package.
+src_vs_code/src/generated/gateRule.ts
+src_vs_code/src/generated/gateRule.ts.tmp

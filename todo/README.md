@@ -3,12 +3,13 @@
 Plans for work that is **not finished**. The thirteen at the top of the table were split out of one
 day's dictated bug list, [BUGS_2026-09-09.md](BUGS_2026-09-09.md), which maps every entry to its plan. Documentation of the system as it is lives in
 [../research/](../research/); a plan moves there (`/promote-plan`) the moment its work ships.
-Convention: `.claude/rules/shared/common/planning-docs.md`.
+Convention: `.agents/conventions/common/planning-docs.md`.
 
 ## Currently open
 
 | Plan | What it is for |
 |---|---|
+| [PLAN_shared_rules_adoption.md](PLAN_shared_rules_adoption.md) | Neutral Claude/Codex instruction canary, reviewer/panel discovery and canonical gate text in the extension build. |
 | [PLAN_the_menu_path_opens_nothing.md](PLAN_the_menu_path_opens_nothing.md) | **Bug, unconfirmed — the code half of the triage is done and clears this product.** Right-click opens the Output console instead of a chat tab; the keybinding opens one. The screenshot's console belongs to a probe extension this repository does not contain, sitting one menu line below ours — This extension creates no output channel at all, and every early return of the menu path raises a notification, so it can produce a tab or a refusal but never a console. What is left is one press with the probe disabled. |
 | [PLAN_a_stale_translation_is_invisible.md](PLAN_a_stale_translation_is_invisible.md) | The help marks a translation that is MISSING and says nothing about one that is BEHIND — `bodyFor` compares keys, never text. Found by the audit of 2026-09-10: five shipped features, four languages describing the tab as it was before any of them, and no note anywhere. A digest of the English body recorded beside each translation, a third outcome on `bodyFor`, and a test that goes red on the commit that makes a translation stale rather than on an audit a day later. |
 | [PLAN_the_log_searches_the_findings.md](PLAN_the_log_searches_the_findings.md) | `findings_fts` has been in the schema since 2026-09-05 and nothing queries it: the search box filters the rows already on screen, so a phrase from a finding's *why* finds nothing. Extracted from the local-db reader plan when it was promoted. |

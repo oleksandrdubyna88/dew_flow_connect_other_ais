@@ -1,3 +1,8 @@
+---
+id: "local.common.review-gate"
+load: conditional
+tasks: ["inspect","audit","plan","implement","docs","policy","test","git","pr","release","deploy","dependencies","http","gpu","benchmark","logging","storage","ui"]
+---
 # Code review through the gate — scope first, diff second (MANDATORY)
 
 > This rule governs how the `coai` review gate is CALLED, in this repository and in every repository

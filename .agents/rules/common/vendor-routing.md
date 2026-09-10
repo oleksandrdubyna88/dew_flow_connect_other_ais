@@ -1,3 +1,8 @@
+---
+id: "local.common.vendor-routing"
+load: conditional
+tasks: ["inspect","audit","plan","implement","docs","policy","test","git","pr","release","deploy","dependencies","http","gpu","benchmark","logging","storage","ui"]
+---
 # Vendor routing — a model runs on its OWN vendor's CLI (MANDATORY)
 
 > Every model this product can review with is reachable through more than one CLI, and the choice is

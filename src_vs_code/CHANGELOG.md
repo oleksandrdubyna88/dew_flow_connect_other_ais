@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+**Shared instructions work with Claude Code and Codex.** The panel recognizes the neutral
+rules layout and still warns about an older local snippet. Distributed gate text is built
+from the pinned canonical source; an interrupted generation recovers on the next build.
+
 ## Extension 0.31.22 · Server 0.18.16 — 2026-09-10
 
 > This one carries **0.31.19, 0.31.20 and 0.31.21 as well**. Those three were written down and

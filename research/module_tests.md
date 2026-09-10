@@ -5,10 +5,25 @@
 > look. Enforced in part by `ScenarioCoverageTests` (`src_mcp/tests/ScenarioCoverageTests.cs`), which
 > derives the flow list from the tool registry rather than from this document.
 >
-> [testing.md](../.claude/rules/shared/common/testing.md) governs how a test is written and believed;
+> [testing.md](../.agents/conventions/common/testing.md) governs how a test is written and believed;
 > this describes what exists.
 
 ## Where the harness is
+
+Shared-rule adoption adds real filesystem scenarios: `RuleFilesTests` exercises neutral
+PROJECT/local/shared discovery, ordering and missing mount bodies while retaining legacy cases.
+`snippetDiscovery.test.ts` calls the same reader the panel uses, against temporary files:
+a neutral shared rule is current, and older root/project/local copies take priority.
+`src/test/prepareGate.test.mjs` checks frontmatter boundaries and a real Git submodule's
+clean/dirty/wrong-pin transitions. A failed build preparation leaves no old generated policy.
+These run through `npm test`; no paid model calls occur in that suite. The independent
+version/hash test remains, and compares generated delivery with the canonical rule body.
+
+Historical local run on 2026-09-10 at `906ab9c`: neutral C# scenarios first failed with zero discovered files
+and no missing mount; all 22 RuleFiles cases then passed. Panel discovery first returned
+absent and passed after the location update. Extension suite: 1313 tests, 1312 passed and
+one skipped, plus all three build-preparation scenarios. These are local adoption results;
+native Codex acceptance and consumer publication remain open in the adoption plan.
 
 Three suites, all in the repository, all in the language of the half they drive.
 
@@ -171,3 +186,91 @@ The most valuable section, and the first one people drop.
   1000 records, 116 MB including 60 KB lines: **8000 whole records of 8000, zero torn**, on
   Windows 11 / NTFS / node 22, 2026-09-10; four × 500 was clean first. It exits non-zero if the file
   ever tears, so the claim can be re-checked on another filesystem rather than believed.
+
+Adoption build checks, before reconciliation with main: Debug and Release solution builds
+completed with zero warnings/errors. Each configuration's MTP runners passed: MCP 1136/1137
+(one explicit Windows directory-link privilege skip), bench 113/113, Team server 226/226.
+The generator invalidation guard was removed temporarily: the missing-source test failed
+because the old output remained; restoring the guard made it pass. This validates the
+failure behavior, not merely that a build hook was declared.
+
+After reconciliation with main, commit `63b40fc`: both configurations built with zero
+warnings/errors and passed MCP 1141/1142 (the same platform skip), bench 113/113 and Team
+server 226/226. Extension: 1340/1341 plus three generator scenarios. A fresh WSL clone
+initialized the committed neutral pin, resolved it and read six complete TypeScript-scope
+sources from a nested directory. A separate worktree restored the complete pre-adoption
+commit and initialized its legacy mount with a clean tree. Native Claude's TypeScript cell
+exceeded the bounded trace size and remains incomplete; details and measured scope are in
+[shared-rules-adoption-smoke.json](shared-rules-adoption-smoke.json).
+
+
+The first completed code review read 14 rule files (77,577 bytes), with 15 omissions and no
+missing mount; all 12 reviewers answered. The old installed collector had shown only the
+root adapters. Review follow-ups reproduce a stale temporary file blocking the next build
+(EEXIST), an older local `review-gate.md` incorrectly hidden by the current shared body,
+and serialized candidate reads. Each regression was observed red, green with its fix, then
+red with the production behavior removed. Missing-mount detection now reuses the collected
+paths; this is an enumeration refactor verified by the existing RuleFiles suite, not a
+claimed latency measurement. Detailed decisions are in `shared-rules-adoption-review.json`.
+
+
+Review corrections on the pinned S2 source (2026-09-10): extension 1342 total / 1341 passed /
+1 skipped, plus 3 generator cases; client/server contract 3 passed; settings seam passed.
+Debug and Release MCP: 1142 total / 1141 passed / 1 Windows directory-link privilege skip; bench 113 and
+Team server 226 passed in both configurations. A Release build first found an all-zero
+intermediate core reference DLL (CS0009); rebuilding that project restored its managed
+metadata, and the solution then built with zero warnings/errors. This was a local build
+artifact failure, not a source-code fix. Package 0.32.0 contains the canonical v5 marker and
+neutral/local discovery paths; installation remains separate from this artifact observation.
+
+
+After reconciling main through 897c7fa, the extension suite reports 1349 total / 1348 passed /
+1 skipped. Windows and WSL each pass all three generator scenarios. The WSL run first
+exposed a fixture error: a POSIX node_modules symlink is not ignored by the source's
+node_modules/ directory pattern and made a clean fixture look dirty. The fixture now copies
+the two locked packages into a real directory; pin validation remains unchanged.
+
+
+The pre-PR-feedback local artifact was extension 0.32.1 (0.32.0 was an uninstalled validation package
+before the last main reconciliation). Its packaging suite reports 1348 passed / 1 skipped.
+The Windows Native AOT MCP artifact is 0.18.16-sharedrules.20260910: it opened a real SQLite
+database and passed all five stdio contract cases through COAI_CONTRACT_EXE. The first
+publish failed because vswhere.exe was missing from PATH; the already-installed Visual
+Studio Installer directory was added only to the publishing process's environment. No SDK
+installation, persistent host setting, or Team-server deployment was performed.
+
+
+PR #192 follow-up (2026-09-10): the discovery fixture includes Rust and a legacy-only
+shared mount. Generator scenarios live under `src/test/prepareGate.test.mjs` and still run
+through npm test. The canonical-body comparison uses this checkout's fixed test layout,
+so it cannot borrow a parent repository's mount when its own is missing.
+The full suite exposed an unrelated timing assumption: the stdin echo test killed its real
+child after 300 ms, before a response arrived (`[]` instead of `echo:hello`). It now waits
+for an actual reply before killing the child, with the existing ten-second completion
+ceiling and cleanup. All 18 process-launcher scenarios then passed.
+
+Local package 0.32.2 contains exactly the 5,934 UTF-8 bytes of the canonical gate body.
+Verification read `extension/dist/extension.js` from the VSIX, decoded its single gate
+literal with the installed TypeScript scanner (`typescript/unstable/ast/scanner`), and
+compared it to the pinned rule after LF normalization and frontmatter removal. Package
+hashes are in `shared-rules-adoption-smoke.json`; no model-behavior claim follows from this.
+The subsequent echo-test correction changes test source only, which is excluded from the
+VSIX; the already-built package's runtime bundle is unchanged.
+
+After the echo synchronization correction, the full normal npm test run reports
+1,349 total / 1,348 passed / 1 skipped, plus all three generator scenarios. The updated
+Release RuleFiles executable reports 22 passed. Family pin, lifecycle and checklist-shape
+checks pass. These are local checks; PR CI and installed-host behavior are separate.
+
+Final main reconciliation through `dea70a1` preserved its Windows/WSL chat changes and
+resolved its legacy gitlink update by retaining the same SHA at the neutral mount. The
+normal packaging run passed 1,397 extension tests / 1 skip, plus all three generator cases.
+Package 0.32.3 was independently checked for all 5,934 canonical body bytes, as above;
+its immutable hashes replace the earlier uninstalled validation package in the evidence JSON.
+
+Local installation on 2026-09-10: VS Code installed extension 0.32.3; its actual installed
+bundle matches the VSIX SHA. MCP was atomically replaced with the verified Native AOT
+artifact, preserving the previous binary; SQLite already matched and was not rewritten.
+All five McpContractTests then passed with COAI_CONTRACT_EXE pointing to the installed
+globalStorage executable. Existing editor/agent processes were not restarted, so the
+manual panel scenario and an already-running host reloading remain unverified.

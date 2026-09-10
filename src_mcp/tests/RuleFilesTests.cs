@@ -38,6 +38,45 @@ public sealed class RuleFilesTests : IDisposable
     private static string Filler(string marker, int bytes) => marker + new string('x', bytes);
 
     [Fact]
+    public void NeutralRulesIncludeProjectAndLocalPolicy_BeforeSharedBodies_WithoutMountHousekeeping()
+    {
+        Write(".gitmodules", "[submodule \"conventions\"]\n path = .agents/conventions\n url = https://example.invalid/rules\n");
+        Write(".agents/PROJECT.md", "Project obligations");
+        Write(".agents/rules/nested/local.md", "Local obligations");
+        Write(".agents/conventions/common/security.md", "Shared security");
+        Write(".agents/conventions/csharp/doctrine.md", "C# constraints");
+        Write(".agents/conventions/typescript/doctrine.md", "TypeScript constraints");
+        Write(".agents/conventions/rust/doctrine.md", "Rust constraints");
+        Write(".agents/conventions/research/audit.md", "Historical audit");
+        Write(".agents/conventions/.agents/PROJECT.md", "Conventions source obligations");
+        Write(".agents/conventions/ENTRY.md", "Source loading procedure");
+
+        var bundle = RuleFiles.Collect(_repo, seed: 1);
+
+        bundle.Files.Select(file => file.Path).Should().BeEquivalentTo([
+            ".agents/PROJECT.md", ".agents/rules/nested/local.md",
+            ".agents/conventions/common/security.md", ".agents/conventions/csharp/doctrine.md",
+            ".agents/conventions/typescript/doctrine.md", ".agents/conventions/rust/doctrine.md",
+        ]);
+        bundle.Files.Take(2).Select(file => file.Path).Should().Equal([
+            ".agents/PROJECT.md", ".agents/rules/nested/local.md",
+        ]);
+        bundle.MissingMounts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ADeclaredNeutralMountWithoutRuleBodies_IsReportedAsMissing()
+    {
+        Write(".gitmodules", "[submodule \"conventions\"]\n path = .agents/conventions\n url = https://example.invalid/rules\n");
+        Write(".agents/conventions/.git", "gitdir: unpopulated\n");
+
+        var bundle = RuleFiles.Collect(_repo);
+
+        bundle.MissingMounts.Should().Equal([".agents/conventions"]);
+        bundle.Render().Should().Contain("NOT in the tree");
+    }
+
+    [Fact]
     public void TheFourInstructionFilesTheMajorClisRead_AreAllFound()
     {
         Write("CLAUDE.md", "claude rules");

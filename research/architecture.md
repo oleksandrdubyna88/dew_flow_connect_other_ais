@@ -23,7 +23,7 @@ C4Container
     Container(mcp, "coai-mcp", "C# Native AOT, stdio", "Round state machine, CLI fan-out, finding normalisation, verdict")
     Container(srv, "coai-server", "C# Native AOT, HTTPS", "The Team server: company sign-in, sessions, the vendor allowlist, the account slots and the review queue on one VM")
   }
-  System_Ext(main, "Main AI (Claude Code)", "Writes the plan and the code")
+  System_Ext(main, "Main AI (Claude Code or Codex)", "Writes the plan and the code")
   System_Ext(codex, "codex exec", "Reviewer CLI")
   System_Ext(gem, "agy (Antigravity)", "Reviewer CLI")
   System_Ext(creds, "CredsForDevs", "config entry holding vendor keys")
@@ -212,8 +212,12 @@ CLIs and re-signing every slot as a service account.
   `src_vs_code/`; central package versions; net10.0; `TreatWarningsAsErrors`.
 - **Tests are MTP executables** (xUnit v3); `dotnet test` aborts here by design of the toolchain.
 - **Logging** per the shared Serilog rule; stdio hosts log console to stderr.
-- **Conventions** are the `dew_flow_conventions` submodule at `.claude/rules/shared`;
+- **Conventions** are the `dew_flow_conventions` submodule at `.agents/conventions`;
   `.claude/settings.json` is a byte-identical copy of its reference.
+  AGENTS directs both agents to the shared ENTRY and `.agents/PROJECT.md`; CLAUDE imports
+  only AGENTS. Local rules live in `.agents/rules`. The extension generates its distributable
+  gate body from this pinned source before building, and reviewers sample its canonical rule
+  directories. The shared resolver owns applicability; the reviewer sample is not a second selector.
 
 ## Additions after the first real runs (2026-08-31 → 09-01)
 

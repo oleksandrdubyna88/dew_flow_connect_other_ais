@@ -1,0 +1,451 @@
+{
+  "date": "2026-09-10",
+  "subject": "63b40fc9a2ceb253db10bd5cc8ddab659f79e248",
+  "conventionsPin": "026b20e4f933d318adbaedba755b4ecf0801683a",
+  "scope": "Local canary before conventions S2 pin promotion; no installed artifact or complete Codex compatibility is claimed.",
+  "builds": {
+    "Debug": "0 warnings, 0 errors",
+    "Release": "0 warnings, 0 errors"
+  },
+  "testsPerConfiguration": {
+    "mcp": {
+      "passed": 1141,
+      "skipped": 1,
+      "reason": "Windows directory-link privilege"
+    },
+    "bench": {
+      "passed": 113
+    },
+    "teamServer": {
+      "passed": 226
+    }
+  },
+  "extension": {
+    "passed": 1340,
+    "skipped": 1,
+    "buildPreparationScenariosPassed": 3
+  },
+  "wsl": {
+    "root": "/tmp/shared-rules-coai-check",
+    "freshClone": "initialized the committed neutral submodule from its recorded remote URL; npm ci --ignore-scripts succeeded; resolver check resolved the committed pin",
+    "nestedRead": {
+      "cwd": "src_vs_code/src",
+      "task": "inspect",
+      "file": "src_vs_code/src/Example.ts",
+      "bytes": 30063,
+      "completeRuleBodies": 6
+    },
+    "rollback": {
+      "root": "/tmp/shared-rules-coai-rollback",
+      "commit": "3de5695cdb917c4eeb2fbd56587b611d161706c6",
+      "result": "Clean complete pre-adoption tree with legacy mount initialized, original adapters/product/CI restored, no PROJECT or gate generator. This verifies Git rollback and source restoration, not an installed binary rollback."
+    }
+  },
+  "nativeClaudeTypeScript": {
+    "assessment": "Incomplete: the process exceeded the fixed 256-KiB combined stdout/stderr capture limit. traceBytes records stdout only (261859 bytes); overflow is the supervisor result. Separate stderr bytes were not retained, so their exact count is not claimed. No completed body or behavior claim can be made for this cell. Git and inspected content remained unchanged. The report predates the merge commit and names its staged pin explicitly.",
+    "report": {
+      "status": "incomplete",
+      "agent": "claude",
+      "platform": "win32",
+      "started": "2026-09-10T09:52:42.841Z",
+      "pid": 39712,
+      "version": {
+        "mode": "pinned submodule",
+        "actual": "026b20e4f933d318adbaedba755b4ecf0801683a",
+        "indexPin": "026b20e4f933d318adbaedba755b4ecf0801683a",
+        "headPin": "d66ab1ecbe8edc89c17d039ed613ecb4bfbd7589",
+        "staged": true
+      },
+      "scope": [
+        "src_vs_code/src/Example.ts"
+      ],
+      "cwd": ".",
+      "report": "D:\\rsd\\dew_flow_connect_other_ais\\.git\\worktrees\\coai\\rules-smoke\\latest-claude.json",
+      "promptHash": "a8653f3a906a67e6c10aae87b35fbe9e3aeab97069def8b68a7b9689352a0018",
+      "unchangedScope": "Git HEAD/index/status plus instruction, selected rule, requested file and host-setting content; other file content is not hashed",
+      "unchanged": true,
+      "exitCode": -1,
+      "timedOut": false,
+      "overflow": true,
+      "cancelled": false,
+      "spawnFailed": false,
+      "parseFailed": true,
+      "traceBytes": 261859,
+      "traceHash": "2b2f20e8fc94c5a57ed02e4661af1d6101d9869e650559efeddc32e0e2d8280f"
+    }
+  },
+  "nativeCodex": "Previously observed subscription usage limit; no retry, account change or installation in this verification.",
+  "earlierNativeClaudeCSharp": "Conventions research/shared-rules-smoke-s2.json records the separate successful six-source C# cell and manual answer assessment at its own pin and working-tree state.",
+  "nativeClaudeWslTypeScript": {
+    "assessment": "The CLI completed and the final answer selects TypeScript and describes its script-escaping rule, but full canonical bodies were not verified in the captured resolver result. Remains incomplete despite the assistant claiming complete reads. No trace overflow or inspected-state change was observed.",
+    "report": {
+      "status": "incomplete",
+      "agent": "claude",
+      "platform": "linux",
+      "started": "2026-09-10T10:03:31.037Z",
+      "pid": 170839,
+      "version": {
+        "mode": "pinned submodule",
+        "actual": "026b20e4f933d318adbaedba755b4ecf0801683a",
+        "indexPin": "026b20e4f933d318adbaedba755b4ecf0801683a",
+        "headPin": "026b20e4f933d318adbaedba755b4ecf0801683a",
+        "staged": false
+      },
+      "scope": [
+        "src_vs_code/src/Example.ts"
+      ],
+      "cwd": "src_vs_code/src",
+      "report": "/tmp/shared-rules-coai-check/.git/worktrees/shared-rules-coai-native/rules-smoke/latest-claude.json",
+      "promptHash": "74b42fa225708be2f2edfbef7b9565277f6872da5c6d127f17d358cddb3ec521",
+      "unchangedScope": "Git HEAD/index/status plus instruction, selected rule, requested file and host-setting content; other file content is not hashed",
+      "unchanged": true,
+      "exitCode": 0,
+      "timedOut": false,
+      "overflow": false,
+      "cancelled": false,
+      "spawnFailed": false,
+      "parseFailed": false,
+      "completed": true,
+      "reads": [
+        {
+          "id": "common.coding-style",
+          "hash": "0ba570017a0414b2e46ec95307dbbc2703671293fd69ab7982a92964cf215ae7",
+          "complete": false
+        },
+        {
+          "id": "common.knowledge-base",
+          "hash": "44712b79711c35be53ac5b7af8f14f4a2768434bb9f31779e5e20dccdab5ff68",
+          "complete": false
+        },
+        {
+          "id": "common.security",
+          "hash": "d560615d5234e51715204c6ef20eb7cb8a9700aa1fc6658b7f7931bc4bf66543",
+          "complete": false
+        },
+        {
+          "id": "local.common.review-gate",
+          "hash": "5a8567d94f0b2090c8e4b0946b195cf4ebb0795bedbc747966519f539591adc7",
+          "complete": false
+        },
+        {
+          "id": "local.common.vendor-routing",
+          "hash": "c3d885655ab354725129b9a9f3a034e05a362db0168bca82fb740b6ccce9e486",
+          "complete": false
+        },
+        {
+          "id": "typescript.doctrine",
+          "hash": "e36b5996468c3e0a48b908438635f7ab579f2fa6d9a8f7702574eb07f2c40f09",
+          "complete": false
+        }
+      ],
+      "sourceCalls": [
+        {
+          "command": "node \"/tmp/shared-rules-coai-native/.agents/conventions/tools/rules.mjs\" check --repo \"/tmp/shared-rules-coai-native\"",
+          "accepted": false
+        },
+        {
+          "command": "node \"/tmp/shared-rules-coai-native/.agents/conventions/tools/rules.mjs\" explain --repo \"/tmp/shared-rules-coai-native\" --task inspect --file \"src_vs_code/src/Example.ts\"",
+          "accepted": false
+        },
+        {
+          "command": "node \"/tmp/shared-rules-coai-native/.agents/conventions/tools/rules.mjs\" read --repo \"/tmp/shared-rules-coai-native\" --task inspect --file \"src_vs_code/src/Example.ts\"",
+          "accepted": true
+        }
+      ],
+      "models": [
+        "claude-opus-4-8"
+      ],
+      "final": "Instruction loading complete and verified — `status: resolved`, pinned submodule `026b20e` clean (index = head), all six rules read in full with matching BEGIN/END boundaries and hashes, `remaining: []`.\n\n## Rules governing a new `src_vs_code/src/Example.ts` (task: `inspect`)\n\n| # | Rule id | sha256 (short) | Why selected |\n|---|---|---|---|\n| 1 | `common.coding-style` | `0ba57001` | always |\n| 2 | `common.knowledge-base` | `44712b79` | always |\n| 3 | `common.security` | `d5606152` | always |\n| 4 | `local.common.review-gate` | `5a8567d9` | task:inspect |\n| 5 | `local.common.vendor-routing` | `c3d88565` | task:inspect |\n| 6 | `typescript.doctrine` | `e36b5996` | path `**/*.ts` |\n\nOnly **one language applies** to this file — TypeScript. C#/Rust doctrines did not select (path mismatch), and no other task-specific rules apply because the scope is read-only `inspect`.\n\n### One concrete constraint per applicable rule\n\n- **TypeScript (`typescript.doctrine`)** — Never interpolate into a `<script>` element with `${JSON.stringify(…)}` inside a template literal: an HTML parser ends the script at the first `</script>` inside any string, so use the repository's own escaper (`jsonForScript`), never a hand-rolled `.replace()`. Enforced by `scriptInterpolation.test.ts`.\n\nThe common/local rules that also bind this file each contribute a concrete constraint:\n\n- **`common.coding-style`** — Immutability is critical: return new objects, never mutate in place; files stay 200–400 lines (800 max).\n- **`common.knowledge-base`** — After any code change, update the matching `research/module_*.md` (and `architecture.md` for cross-module changes) in the same task.\n- **`common.security`** — No hardcoded secrets; put a protective measure on the single road in (not per call site) and enumerate sites mechanically, not from memory.\n- **`local.common.review-gate`** — A `review_code` round must carry the scope plus the diff; the server refuses a bare diff.\n- **`local.common.vendor-routing`** — A Claude model runs through the `claude` CLI, never `agy` or `codex`.\n\nNote: these are advisory instructions; runtime permissions enforce access separately. No files were changed, no reviewers/credentials touched, and nothing outside this repository was read.",
+      "finalTruncated": false,
+      "allSourcesRead": false,
+      "traceBytes": 255339,
+      "traceHash": "fedaf17f6e1ab28885fda49a489e0a296cd59ae7fc50412622b308afc605e7b7"
+    }
+  },
+  "interruptedCodeReview": {
+    "status": {
+      "sessionId": "8e812028",
+      "stage": "CodeReview",
+      "roundsRunThisStage": 0,
+      "awaitingResolve": false,
+      "planProceeded": true,
+      "threshold": 5,
+      "maxRounds": 2,
+      "rounds": [
+        {
+          "stage": "PlanReview",
+          "number": 1,
+          "verdict": "good_enough",
+          "gatingCount": 14,
+          "reviewers": "all 3 reviewers answered",
+          "completedUtc": "2026-09-10T09:16:18.9685365Z",
+          "status": "done",
+          "startedUtc": "2026-09-10T09:13:42.9764606Z",
+          "runnerPid": 16396,
+          "reviewerStates": [
+            {
+              "provider": "codex",
+              "role": "PlanCritique",
+              "status": "done",
+              "findings": 6,
+              "note": "",
+              "seconds": 155.9,
+              "model": ""
+            },
+            {
+              "provider": "gemini",
+              "role": "PlanCritique",
+              "status": "done",
+              "findings": 4,
+              "note": "",
+              "seconds": 10.2,
+              "model": ""
+            },
+            {
+              "provider": "local",
+              "role": "PlanCritique",
+              "status": "done",
+              "findings": 6,
+              "note": "",
+              "seconds": 31,
+              "model": "Qwen3.5-35B-A3B-Q5_vk128:latest"
+            }
+          ],
+          "subject": "PLAN — one canonical instruction source for Claude Code and…",
+          "tokensIn": 51680,
+          "tokensOut": 10338
+        },
+        {
+          "stage": "CodeReview",
+          "number": 1,
+          "verdict": "interrupted",
+          "gatingCount": 0,
+          "reviewers": "10 of 12 answered, 1 running, 1 failed",
+          "completedUtc": "2026-09-10T10:09:36.4809932Z",
+          "status": "interrupted",
+          "startedUtc": "2026-09-10T10:01:49.2337929Z",
+          "runnerPid": 38848,
+          "reviewerStates": [
+            {
+              "provider": "codex",
+              "role": "Architecture",
+              "status": "done",
+              "findings": 1,
+              "note": "",
+              "seconds": 104.3,
+              "model": ""
+            },
+            {
+              "provider": "codex",
+              "role": "Conventions",
+              "status": "done",
+              "findings": 2,
+              "note": "",
+              "seconds": 123.5,
+              "model": ""
+            },
+            {
+              "provider": "codex",
+              "role": "SecurityReliability",
+              "status": "failed",
+              "findings": 0,
+              "note": "exit 1: 2026-09-10T10:04:09.486303Z  WARN codex_core::shell_snapshot: Failed to create shell snapshot for powershell: Shell snapshot not supported yet for PowerShell",
+              "seconds": 3.3,
+              "model": ""
+            },
+            {
+              "provider": "codex",
+              "role": "UxDxPerformance",
+              "status": "done",
+              "findings": 3,
+              "note": "",
+              "seconds": 141.9,
+              "model": ""
+            },
+            {
+              "provider": "gemini",
+              "role": "Architecture",
+              "status": "done",
+              "findings": 4,
+              "note": "",
+              "seconds": 35,
+              "model": ""
+            },
+            {
+              "provider": "gemini",
+              "role": "Conventions",
+              "status": "done",
+              "findings": 0,
+              "note": "",
+              "seconds": 14.6,
+              "model": ""
+            },
+            {
+              "provider": "gemini",
+              "role": "SecurityReliability",
+              "status": "done",
+              "findings": 5,
+              "note": "",
+              "seconds": 20.9,
+              "model": ""
+            },
+            {
+              "provider": "gemini",
+              "role": "UxDxPerformance",
+              "status": "done",
+              "findings": 3,
+              "note": "",
+              "seconds": 9.6,
+              "model": ""
+            },
+            {
+              "provider": "local",
+              "role": "Architecture",
+              "status": "done",
+              "findings": 5,
+              "note": "",
+              "seconds": 133.1,
+              "model": "Qwen3.5-35B-A3B-Q5_vk128:latest"
+            },
+            {
+              "provider": "local",
+              "role": "Conventions",
+              "status": "done",
+              "findings": 10,
+              "note": "",
+              "seconds": 151.6,
+              "model": "Qwen3.5-35B-A3B-Q5_vk128:latest"
+            },
+            {
+              "provider": "local",
+              "role": "SecurityReliability",
+              "status": "done",
+              "findings": 5,
+              "note": "",
+              "seconds": 133.7,
+              "model": "Qwen3.5-35B-A3B-Q5_vk128:latest"
+            },
+            {
+              "provider": "local",
+              "role": "UxDxPerformance",
+              "status": "running",
+              "findings": 0,
+              "note": "",
+              "seconds": 0,
+              "model": "Qwen3.5-35B-A3B-Q5_vk128:latest"
+            }
+          ],
+          "subject": "PLAN — one canonical instruction source for Claude Code and…",
+          "tokensIn": 0,
+          "tokensOut": 0
+        }
+      ],
+      "humanDecision": "",
+      "humanAnswer": ""
+    },
+    "cause": "The bridge deadline was eight minutes, shorter than the serialized local-reviewer queue. The installed gate log recorded a five-minute per-reviewer budget and 10 of 12 answers. This attempt has no completed verdict and its findings query exited 69 (not recorded).",
+    "recovery": "The verified clean owned round worktree was removed after its owning process exited. The bridge now allows a bounded 25 minutes for code rounds (four serialized reviewers at five minutes plus overhead). A fresh round uses the tested Release binary so it can collect neutral rules; no provider/account settings were changed."
+  },
+  "reviewedS2Followup": {
+    "subject": "5ad3b4b649830330fce19072bd84014aa04c62af",
+    "conventionsPin": "895b24ce2dfcc2c09ba3af970a57e5b40f5eaf13",
+    "nativeClaude": {
+      "status": "incomplete",
+      "agent": "claude",
+      "platform": "win32",
+      "started": "2026-09-10T10:37:49.139Z",
+      "pid": 39812,
+      "version": {
+        "mode": "pinned submodule",
+        "actual": "895b24ce2dfcc2c09ba3af970a57e5b40f5eaf13",
+        "indexPin": "895b24ce2dfcc2c09ba3af970a57e5b40f5eaf13",
+        "headPin": "895b24ce2dfcc2c09ba3af970a57e5b40f5eaf13",
+        "staged": false
+      },
+      "scope": [
+        "src_mcp/src/Example.cs"
+      ],
+      "cwd": "src_mcp/src",
+      "report": "D:\\rsd\\dew_flow_connect_other_ais\\.git\\worktrees\\coai-native-s2\\rules-smoke\\latest-claude.json",
+      "promptHash": "925d537a22bafcbbbcadb453b8d018cd656f99333e964d594bb7f14d57b24e52",
+      "unchangedScope": "Git HEAD/index/status plus instruction, selected rule, requested file and host-setting content; other file content is not hashed",
+      "unchanged": true,
+      "exitCode": -1,
+      "timedOut": false,
+      "overflow": true,
+      "cancelled": false,
+      "spawnFailed": false,
+      "parseFailed": true,
+      "parseError": "SyntaxError: native event stream could not be decoded",
+      "completed": false,
+      "allSourcesRead": false,
+      "final": "",
+      "finalTruncated": false,
+      "sourceCalls": [],
+      "models": [],
+      "reads": [
+        {
+          "id": "common.coding-style",
+          "hash": "0ba570017a0414b2e46ec95307dbbc2703671293fd69ab7982a92964cf215ae7",
+          "complete": false
+        },
+        {
+          "id": "common.knowledge-base",
+          "hash": "44712b79711c35be53ac5b7af8f14f4a2768434bb9f31779e5e20dccdab5ff68",
+          "complete": false
+        },
+        {
+          "id": "common.security",
+          "hash": "d560615d5234e51715204c6ef20eb7cb8a9700aa1fc6658b7f7931bc4bf66543",
+          "complete": false
+        },
+        {
+          "id": "csharp.doctrine",
+          "hash": "d91d0dd2e3225534a57df285314720f8c394bc4e3d85ba10998b8990303bdff9",
+          "complete": false
+        },
+        {
+          "id": "local.common.review-gate",
+          "hash": "5a8567d94f0b2090c8e4b0946b195cf4ebb0795bedbc747966519f539591adc7",
+          "complete": false
+        },
+        {
+          "id": "local.common.vendor-routing",
+          "hash": "c3d885655ab354725129b9a9f3a034e05a362db0168bca82fb740b6ccce9e486",
+          "complete": false
+        }
+      ],
+      "traceBytes": 262144,
+      "traceHash": "34439834a01ae4069de0ba0b731d562b6a0edee624425dcf8deebb86a45653c7"
+    },
+    "assessment": "Incomplete: native Claude exceeded the unchanged 256 KiB event budget. No complete source-read or behavioral acceptance claim for this run. Codex remains incomplete due to its default-account quota; it was not retried or rerouted.",
+    "deterministicWsl": "A native Linux clone initialized the committed S2 gitlink; check resolved and nested C# scope read returned six complete BEGIN/END bodies (28828 UTF-8 bytes). These are resolver observations, not model behavior."
+  },
+  "localArtifacts": {
+    "extension": {
+      "version": "0.32.3",
+      "vsixSha256": "613f08d113a9db711aa90a23a706bef4ab23d5e7533bcb6d0dca711aba430864",
+      "bundleSha256": "8cb761a4a1096a2f901639b1f8814a4bed2054fbacb0f17244b438b20e153a1f",
+      "bytes": 306056,
+      "markerAndNeutralPaths": true,
+      "canonicalBodyByteIdentical": true,
+      "canonicalBodyBytes": 5934
+    },
+    "mcp": {
+      "version": "0.18.16-sharedrules.20260910",
+      "sha256": "798d8fd46da3e2a7258865dbc83367be1a936a29791d98cb13706e78480049a8",
+      "runtime": "win-x64 Native AOT",
+      "sqliteOpened": true,
+      "stdioContractTests": 5
+    },
+    "installed": true,
+    "installedVerification": {
+      "extensionVersionAndBundleMatch": true,
+      "mcpVersionAndHashMatch": true,
+      "installedMcpStdioContractTests": 5,
+      "existingEditorHostReloaded": false,
+      "manualPanelScenarioComplete": false
+    },
+    "limits": "Artifact inspection and real native SQLite/stdio only; these observations do not show an already-running editor reloaded the extension."
+  }
+}

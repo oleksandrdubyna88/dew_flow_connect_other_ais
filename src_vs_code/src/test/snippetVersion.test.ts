@@ -87,37 +87,20 @@ test('the snippet text and its version number move together', () => {
 });
 
 /**
- * The block is now a SHARED RULE, and a rule file is a second copy of this text.
- *
- * <p>`dew_flow_conventions/common/coai-review-gate.md` is what six repositories actually load, via
- * the submodule they already mount — so if it and this function ever disagree, the family is
- * obeying one text while the ⋯ menu hands out another. That is the same defect the version number
- * exists to catch, one level out, and it gets the same treatment: a test that fails until both move
- * together.</p>
- *
- * <p>This repository mounts that submodule too, which is the only reason the comparison can be made
- * here at all. Absent submodule: a SKIP locally (a fresh clone without `--recurse-submodules` is a
- * setup state, not a defect) and a FAILURE under CI, where the workflow initialises it and an
- * unchecked drift would merge behind a green tick.</p>
+ * The canonical body is delivered from the pinned neutral mount during build preparation.
+ * Missing sources fail before compile; this check independently compares the generated body
+ * and the pinned source, while the version/hash guard above stays independent of generation.
  */
-test('the mounted shared rule is byte-identical to what the menu hands out', (t) => {
+test('the mounted shared rule body is byte-identical to what the menu hands out', () => {
   const mounted = mountedRuleFile();
-  if (mounted === '') {
-    const message = 'the conventions submodule is not checked out — run '
-      + 'git submodule update --init .claude/rules/shared';
-    if (process.env.CI !== undefined) {
-      assert.fail(`${message} (CI must not skip this: it is the only check that the rule matches the snippet)`);
-    }
-    t.skip(message);
-
-    return;
-  }
+  assert.ok(fs.existsSync(mounted), 'run git submodule update --init .agents/conventions');
+  const source = fs.readFileSync(mounted, 'utf8').replace(/\r\n/g, '\n');
+  assert.match(source, /^---\n/, 'the neutral canonical rule carries delivery metadata');
 
   assert.equal(
-    ruleBody(fs.readFileSync(mounted, 'utf8').replace(/\r\n/g, '\n')),
+    ruleBody(source),
     claudeSnippet(),
-    `${mounted} has drifted from claudeSnippet(). Regenerate it from the snippet — six repositories `
-      + 'load that file, and the one they load is the one being obeyed.',
+    `${mounted} differs from the generated delivery. Run npm run prepare:gate; edit the canonical source only.`,
   );
 });
 
@@ -144,17 +127,9 @@ function ruleBody(text: string): string {
   return end === -1 ? text : text.slice(end + '\n---\n'.length);
 }
 
-/** The rules mount, found by walking up from this file rather than by trusting a cwd. */
+/** Source and compiled tests both live three directories below this checkout's root. */
 function mountedRuleFile(): string {
-  const relative = path.join('.claude', 'rules', 'shared', 'common', 'coai-review-gate.md');
-  for (let dir = __dirname, seen = ''; dir !== seen; seen = dir, dir = path.dirname(dir)) {
-    const candidate = path.join(dir, relative);
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  return '';
+  return path.resolve(__dirname, '../../..', '.agents/conventions/common/coai-review-gate.md');
 }
 
 test('the instruction files are searched BEFORE the mounted rule', () => {

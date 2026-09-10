@@ -7,7 +7,7 @@
 > Scope of this change: `src_mcp/runners/Worktrees/` (the populator and the manager),
 > `src_mcp/runners/Git/GitModules.cs`, `src_mcp/runners/Context/RuleFiles.cs`, and their tests.
 >
-> Related docs: [review-gate.md](../.claude/rules/common/review-gate.md),
+> Related docs: [review-gate.md](../.agents/rules/common/review-gate.md),
 > [architecture.md](architecture.md),
 > [module_extension.md](module_extension.md).
 >

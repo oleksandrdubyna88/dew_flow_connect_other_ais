@@ -1,6 +1,6 @@
 # Post-deploy checks — ConnectOtherAIs
 
-Per [`.claude/rules/shared/common/post-deploy-checks.md`](.claude/rules/shared/common/post-deploy-checks.md).
+Per [`.agents/conventions/common/post-deploy-checks.md`](.agents/conventions/common/post-deploy-checks.md).
 
 **This repository has no HTTP surface**, so it has no `http/` suite: the MCP server speaks JSON-RPC
 over stdio and the extension speaks to it as a subprocess. Neither is a request that can be written
@@ -47,11 +47,12 @@ mornings. Read the step's own elapsed time against the JOB's history before acti
 | 4 | The extension spawns a **stale** `coai-mcp` — the binary beside a fresh extension is the one that was published last, not the one that was just built | Check the packaged binary's version against the release you just made, from inside the installed extension folder rather than from the repository | manual |
 | 9 | A Team server release ships **five of six platforms**, exactly as item 1 describes for the MCP binary — and the one that goes missing is the one the live host installs, so the next deploy stops at its preflight with nothing to download. Applies from `server-v0.5.5`, the first tag that publishes binaries at all | `node -e "const{execFileSync}=require('child_process');const v=process.env.SERVER_VERSION;const a=JSON.parse(execFileSync('gh',['release','view','server-v'+v,'--json','assets'],{encoding:'utf8'})).assets.map(x=>x.name);const rids=['linux-x64','linux-arm64','win-x64','win-arm64','osx-x64','osx-arm64'];const missing=rids.filter(r=>!a.includes('coai-server-'+v+'-'+r+(r.startsWith('win-')?'.zip':'.tar.gz')));console.log(missing.length?'missing: '+missing.join(', '):'all six RIDs present');process.exitCode=+(missing.length?1:0)"` | auto |
 | 10 | The deploy workflow reports success and the box serves **the version it served before** — the swap silently did not happen, and the number everyone quotes comes from a binary nobody can trace. This is the failure this whole line exists for: 0.5.5 was on the internet, built by hand, from a commit no tag names | `curl -fsS https://coai.remsoft.dev/api/health` must report `SERVER_VERSION`, and `systemd-release.sh --list` on the host must show `bin` pointing at a `releases/<that version>-<stamp>` directory | auto |
+| 11 | The installed extension reports the gate missing, or the installed MCP reviews only bootstrap text, after the repository moved to shared instructions | Open a neutral-layout checkout with the installed extension: its snippet must be current, and an older local copy must be reported as older. Run a code review using the installed MCP; its log must name canonical rule files and explicit omissions or missing mounts. Check the installed artifact, not the source build | manual |
 
 ## Why item 1 is first
 
 Because a partial publish is the worst of the three sibling failures
-[`development-workflow.md`](.claude/rules/shared/common/development-workflow.md) records: every signal
+[`development-workflow.md`](.agents/conventions/common/development-workflow.md) records: every signal
 is green **and** the artefact exists, so there is nothing to notice. The other two — an artefact never
 rebuilt, an artefact never deployed — at least leave something behind that looks wrong.
 
@@ -61,7 +62,7 @@ rebuilt, an artefact never deployed — at least leave something behind that loo
 gh auth status                                   # item 1 reads the release through gh
 export MCP_VERSION=0.15.0                        # the binary's own tag: mcp-v<version>
 export SERVER_VERSION=0.5.5                      # the Team server's own tag: server-v<version>
-node .claude/rules/shared/tools/post-deploy-check.mjs --target 0.29.3
+node .agents/conventions/tools/post-deploy-check.mjs --target 0.29.3
 ```
 
 `TARGET` here is a **version**, not a URL: what is being checked is what a user receives, and both
@@ -71,3 +72,21 @@ places a user receives it from are addressed by name rather than by host.
 independently — a release of one is not a release of the other. A checklist that assumed one version
 would check the wrong artefact half the time, which is how this item was written wrong the first time
 and caught by running it: `gh release view v0.26.1` answered *release not found*.
+
+
+## Local shared-instructions canary — 2026-09-10
+
+Partial verification: extension **0.32.3**, MCP **0.18.16-sharedrules.20260910**.
+Item 4 passes: the installed globalStorage binary reports that version and its SHA matches
+`research/shared-rules-adoption-smoke.json`. Five real stdio contract cases pass against it.
+The installed extension bundle matches the inspected VSIX, including all canonical gate-body
+bytes. Item 11's manual panel scenario and an existing editor host reloading are still open;
+no existing agent/editor process was stopped. Marketplace and Team-server items are not
+claims about this local-only installation.
+
+Rollback uses existing artifacts, not a rebuild: install
+`artifacts/shared-rules/before-install/connect-other-ais-0.31.18.vsix` with the VS Code CLI
+(`code --install-extension <that-file> --force`), and restore the preserved MCP executable
+from `artifacts/shared-rules/before-install/coai-mcp.exe` using the same atomic replacement.
+The identical SQLite library was left in place. These task artifacts are local and ignored;
+public release 0.31.18 and MCP release 0.18.15 remain the durable prior release sources.

@@ -1,3 +1,5 @@
+import { GATE_RULE } from './generated/gateRule';
+
 /**
  * The instruction text a person pastes into a target repository's CLAUDE.md, teaching that
  * repo's main AI when to call the `coai` tools.
@@ -45,19 +47,22 @@ export const SNIPPET_BODY_SHA = '4e951347aa178972';
  * old that is the sentence the panel must say — reporting the mounted rule's version instead would
  * be a green light over the stale text still being obeyed.</p>
  *
- * <p>The last two are the shared rule this family now keeps in `dew_flow_conventions`, mounted at
- * `.claude/rules/shared`, plus the same file kept locally by a repository that has no submodule.
- * Named paths rather than a walk: this runs on every panel repaint, and the file NAME is the
- * convention. A repository that files it somewhere else reports `absent`, which is honest — the
- * panel cannot claim to know about a copy it was never told to look for.</p>
+ * <p>Root/project and local policy precede the shared rule, so an older applicable paste
+ * cannot be hidden by a current mount. Neutral and legacy shared locations are supported.
+ * Named paths keep repaint work bounded; copies elsewhere remain outside this lookup.</p>
  */
 export const SNIPPET_LOCATIONS: readonly string[] = [
   'CLAUDE.md',
   'AGENTS.md',
   'GEMINI.md',
   '.github/copilot-instructions.md',
-  '.claude/rules/shared/common/coai-review-gate.md',
+  '.agents/PROJECT.md',
+  '.agents/rules/common/review-gate.md',
+  '.agents/rules/common/coai-review-gate.md',
+  '.claude/rules/common/review-gate.md',
   '.claude/rules/common/coai-review-gate.md',
+  '.agents/conventions/common/coai-review-gate.md',
+  '.claude/rules/shared/common/coai-review-gate.md',
 ];
 
 /** The sentence a copy is recognised by, wherever it sits. */
@@ -72,6 +77,13 @@ export type SnippetStatus =
   | { readonly kind: 'absent'; readonly current: number };
 
 const MARKER = /<!-- coai-snippet v(\d+) -->/;
+
+/** The first applicable paste wins, using the same reader for the panel and copy command. */
+export async function readSnippetStatus(read: (name: string) => Promise<string>): Promise<SnippetStatus> {
+  const texts = await Promise.all(SNIPPET_LOCATIONS.map(read));
+
+  return snippetStatus(texts.find(text => text.includes(SNIPPET_MARKER)));
+}
 
 /** The version out of a file the snippet was pasted into, or nothing when it carries no marker. */
 export function snippetVersionIn(text: string): number | undefined {
@@ -159,90 +171,5 @@ export function copiedMessage(status: SnippetStatus): string {
 }
 
 export function claudeSnippet(): string {
-  return `<!-- coai-snippet v${SNIPPET_VERSION} -->
-## Multi-model review gate (ConnectOtherAIs)
-
-This repository is reviewed by OTHER vendors' models before and after implementation, through the
-\`coai\` MCP server.
-
-**This is IN ADDITION to your own review, never instead of it.** If your workflow ends a task by
-launching your own reviewers — the way \`feature-dev\`'s quality phase launches three in parallel —
-run them exactly as you would have. Start them and this gate AT THE SAME TIME: a code round is
-minutes of somebody else's CLI, and there is nothing to wait for. They are not substitutes for each
-other and that is the entire point: your reviewers read the whole change with this repository in
-context, and this gate asks a different vendor's model the questions your own model is worst placed
-to answer. Dropping either half saves time by discarding the half you did not measure. The tools are \`mcp__coai__providers\`, \`mcp__coai__open\`,
-\`mcp__coai__review_plan\`, \`mcp__coai__review_code\`, \`mcp__coai__resolve\`,
-\`mcp__coai__status\` and \`mcp__coai__ask_human\`.
-
-**A round's reply can carry COMMANDS, and they outrank your own defaults.** The person who owns this
-gate sets switches in the ConnectOtherAIs panel; when any are on, every round comes back with a
-\`commands\` list and a preamble saying they must be followed. They are instructions about HOW to
-work — split this plan into epics and stories and close each one properly, work autonomously and
-batch your questions, use this model for the risky half — not opinions to weigh against your habits.
-Follow them, and say in your summary which ones you applied. An empty list means the operator has set
-nothing, which is the default.
-
-**The order is a contract, and the server enforces it — \`review_code\` REFUSES until a plan round
-has reached \`proceed\`.**
-
-1. **Before implementing anything non-trivial**, call \`open\` for the repository you are working in:
-   \`repoPath\` is that checkout's own path (\`git rev-parse --show-toplevel\`), \`branch\` is
-   \`git branch --show-current\`. Never a path from this file — read them from the checkout you are in.
-2. Call \`review_plan\` with your plan document verbatim as \`planText\`. You get merged findings,
-   a gating count against the threshold, and a verdict.
-3. Call \`resolve\` with a decision for EVERY finding — \`accept\` or \`reject\`, and a rejection
-   needs a reason. A reasoned rejection is discounted in later rounds unless a reviewer raises it
-   again with a genuinely new argument, so disagreeing honestly is cheap and disagreeing silently
-   is impossible.
-
-   **Reject in round 1, not only when the rounds run out.** A finding that is wrong, outside this
-   task's scope, or already covered gets its reasoned rejection the FIRST time it appears. Accepting
-   everything to be agreeable is what stops the loop converging: each accepted finding rewrites the
-   plan, and the next round is handed fresh text with new things to find in it, so the count never
-   falls. Rejecting early is not a way to move faster — it is the only way the round after this one
-   is about the same document.
-4. Verdict \`revise\` → fix the accepted findings, run \`review_plan\` again. Verdict \`proceed\`
-   → implement.
-5. **When the branch is written**, call \`review_code\` with the same \`planText\` and the
-   \`baseRef\` you branched from. Three independent reviewers per vendor read the diff. Same
-   \`resolve\` duty, same loop.
-
-   **A code round is never given a bare diff.** \`planText\` is the SCOPE — what this change was
-   supposed to achieve — and the server refuses a code round without one. A reviewer holding only a
-   diff can judge whether the code is defensible; it cannot judge whether the code is what was
-   ASKED for, and those come apart constantly: a change can be well written, well tested, and solve
-   the wrong problem. Only the second question catches that.
-
-   So the scope must say the symptom or goal, what must be true when it is done, and the
-   constraints — not a commit subject. Reviewing an EXISTING commit works the same way: state what
-   that commit was supposed to do as the scope, pass the commit as \`branch\` and its parent as
-   \`baseRef\`. The plan you passed at step 2 is kept with the session and reused automatically,
-   so in the normal flow this costs you nothing.
-
-6. Verdict \`call_human\` → surface the open findings to the person and stop.
-   **Do not proceed on your own judgement.** Verdict \`escalated\` → apply the named step and run
-   a fresh round.
-
-   **The server will not take another round until a person answers, and this is enforced.** After
-   \`call_human\`, \`review_plan\` and \`review_code\` REFUSE — running the review again is not one
-   of your options, and neither is resolving your way past it: recording decisions no longer
-   reopens the gate. Call \`ask_human\`. Their answer decides: *keep going* and *stop and act on the
-   findings* each grant a fresh set of rounds, *stop and talk to me* advances nothing, and if they
-   would rather ship with the findings open they say so and you pass
-   \`humanDecision: "proceed"\` to \`resolve\`.
-
-   This is enforced because it was not, and the cost is measured: on a three-round budget a stage
-   reached round TEN, every round after the third a full panel of reviewers. The AI running it
-   judged rounds 1–3 to have found real defects, 4–9 to have chased "progressively narrower crash
-   windows", and round 10 to have INTRODUCED a bug. A gate that asks for a person and then lets you
-   carry on is not a gate.
-
-   "Stop" here means stop SHIPPING over open findings — it does not end the task. Your own review,
-   your summary, and anything else your workflow does still run: this gate decides whether the
-   change may proceed, not what else you owe the person.
-
-Report the verdicts and the reviewer counts in your summary. A round that ran with four of six
-reviewers says so — pass that on rather than implying a full panel agreed.
-`;
+  return GATE_RULE;
 }
