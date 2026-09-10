@@ -4,6 +4,7 @@ import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl'
 import { vendorPalette } from './vendorColour';
 import { ChatProvider, ChatProviderList } from './chatModels';
 import { ModelPreset, PromptPreset } from './chatPresets';
+import { pastedImage } from './chatImage';
 
 /**
  * The conversation tab: the passage that started it, what has been said, and a box to say more.
@@ -100,6 +101,13 @@ export interface ChatPageState {
    * <p>The HOST decides: it knows which model gave the last answer and which one is chosen now.</p>
    */
   readonly reask: string;
+  /**
+   * The picture waiting to go with the next question, as a data URL — or empty when there is none.
+   *
+   * <p>A data URL because the page cannot read a file: `localResourceRoots` is empty and the CSP
+   * loads nothing from disk. The HOST holds the real file; this is only what a person sees.</p>
+   */
+  readonly attached: string;
   /** The prompts a person saved, as buttons above the composer. */
   readonly promptPresets: readonly PromptPreset[];
   /** The models a person saved, likewise. */
@@ -267,6 +275,23 @@ export function chatPresetRowsHtml(
   return `<div id="presets">${modelRow}${promptRow}</div>`;
 }
 
+/**
+ * The picture waiting to go with the next question.
+ *
+ * <p>Rendered only when it really is an image this page may show. The host built this value from
+ * what the page sent it, so it is not arbitrary — but a page that renders a `src` it has not looked
+ * at is a page that would render `javascript:` the day something else fills that field, and the
+ * check costs one call.</p>
+ */
+function attachedHtml(attached: string): string {
+  if (pastedImage(attached) === undefined) {
+    return '';
+  }
+
+  return `<div class="attachment"><img class="attached" src="${escapeHtml(attached)}" alt="the picture that will go with the next question">`
+    + '<button type="button" id="unattach" title="Take the picture off">Remove</button></div>';
+}
+
 /** What a capped conversation offers instead of a composer nobody can use. */
 export function chatCappedHtml(capped: boolean): string {
   if (!capped) {
@@ -335,6 +360,9 @@ function chatStyle(
   .jump { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); font: inherit; color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: none; border-radius: 12px; padding: 4px 12px; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
   .jump:hover { background: var(--vscode-button-hoverBackground); }
   .compose { display: flex; gap: 8px; align-items: flex-end; }
+  .attachment { display: flex; gap: 8px; align-items: center; margin: 0 0 6px; }
+  .attached { max-height: 84px; max-width: 40%; border: 1px solid var(--vscode-panel-border); border-radius: 4px; }
+  #unattach { font: inherit; font-size: .9em; color: var(--vscode-foreground); background: none; border: 1px solid var(--vscode-panel-border); border-radius: 3px; padding: 2px 8px; cursor: pointer; }
   header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
   h1 { font-size: 1.2em; margin: 0; }
   .passage { border-left: 3px solid var(--vscode-panel-border); padding: 6px 0 6px 12px; margin: 0 0 16px; white-space: pre-wrap; opacity: .85; }
@@ -471,6 +499,7 @@ function chatBody(state: ChatPageState, regions: Regions): string {
 <button type="button" id="jump" class="jump" hidden>Jump to newest ↓</button>
 ${chatPresetRowsHtml(state.promptPresets, state.modelPresets)}
 <div id="pickerBox">${chatPickerHtml({ providers: state.providers, refused: [] }, state.providerId, state.modelId)}</div>
+${attachedHtml(state.attached)}
 <div class="compose">
 <textarea id="say" rows="3" placeholder="Ask about the text above…"${locked ? ' disabled' : ''}>${escapeHtml(state.draft)}</textarea>
 <button type="button" id="send"${locked ? ' disabled' : ''}>${state.reask.length > 0 ? `Re-ask · ${escapeHtml(state.reask)}` : 'Send'}</button>
@@ -694,6 +723,33 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send(); }
     });
     say.addEventListener('input', fitComposer);
+    // A picture from the clipboard. The page reads the bytes because only the page has a clipboard
+    // event; it writes nothing to disk, because it cannot - the HOST holds the file, which is what
+    // the vendor process will open. Anything that is not an image pastes as the text it is.
+    say.addEventListener('paste', function (event) {
+      const items = event.clipboardData && event.clipboardData.items;
+      if (!items) { return; }
+      for (let index = 0; index < items.length; index += 1) {
+        const item = items[index];
+        if (!item || item.kind !== 'file' || typeof item.type !== 'string' || item.type.indexOf('image/') !== 0) {
+          continue;
+        }
+        const file = typeof item.getAsFile === 'function' ? item.getAsFile() : null;
+        if (!file) { continue; }
+        event.preventDefault();
+        if (typeof FileReader !== 'function') {
+          vscode.postMessage({ type: 'command', command: 'pageError', message: 'this editor cannot read a pasted picture' });
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = function () {
+          vscode.postMessage({ type: 'command', command: 'attach', data: String(reader.result || '') });
+        };
+        reader.readAsDataURL(file);
+
+        return;
+      }
+    });
   }
   // The second caller of the ONE send. Attached here rather than as an onclick attribute: the page's
   // CSP is script-src 'nonce-...', so an inline handler is not merely untidy, it is a dead button.
@@ -851,6 +907,12 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       }
     });
   }
+  const unattach = document.getElementById('unattach');
+  if (unattach) {
+    unattach.addEventListener('click', function () {
+      vscode.postMessage({ type: 'command', command: 'unattach' });
+    });
+  }
   const jump = document.getElementById('jump');
   if (jump) {
     jump.addEventListener('click', function () {
@@ -991,7 +1053,7 @@ export function chatPageHtml(state: ChatPageState, nonce: string): string {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(state.title)}</title>
 <style>

@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 import { isInside } from './chatMessages';
+import { imageFileName, imageRefusal, imageTurn, pastedImage } from './chatImage';
 import {
   ModelPreset,
   PromptPreset,
@@ -82,6 +83,10 @@ interface Thread extends ChatMemory {
   readonly models: readonly ChatModelChoice[];
   /** Every row that can answer, each with its own models. Replaced whenever a pick resolves. */
   providers: readonly ChatProvider[];
+  /** The picture waiting to go with the next question, as the page shows it. */
+  attached: string;
+  /** Where that picture IS — the file a vendor process will open. Empty when there is none. */
+  attachedPath: string;
   /** The row that answers, and which of its models — empty for whatever the row is set to. */
   providerId: string;
   modelId: string;
@@ -231,6 +236,7 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
     // Who would answer a re-ask. Empty while a turn runs: the button is locked anyway, and offering
     // to re-ask something that is still being answered is offering a question nobody asked yet.
     reask: running || thread === undefined ? '' : reaskLabel(thread),
+    attached: thread?.attached ?? '',
   });
   // The one place the transcript reaches a page is the one place it is written down — but only when
   // there is something new to write. `show` runs on every state push: a turn starting, a queue
@@ -407,7 +413,11 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   // Named, because a budget is the kind of thing that must be readable at a glance: a server takes
   // less than a pipe, and which one this conversation is is the whole difference.
   const budget = thread.forgetful ? REMOTE_CARRY_BUDGET : CARRY_BUDGET;
-  const sent = carrying.length > 0 ? carriedTurn(carrying, text, chatLanguage(), budget) : text;
+  // A picture goes with the question it was pasted for, and with that one only: the file is named
+  // in the turn, the vendor process opens it, and the attachment is spent. Keeping it would send the
+  // same screenshot with every question after it.
+  const asked = thread.attachedPath.length > 0 ? imageTurn(text, thread.attachedPath) : text;
+  const sent = carrying.length > 0 ? carriedTurn(carrying, asked, chatLanguage(), budget) : asked;
 
   // When the person asked, which ROW heard it, and which of that row's models — all taken BEFORE the
   // turn, because the ledger must name what actually answered rather than what is configured by the
@@ -904,6 +914,7 @@ function newConversation(
       modelPresets: savedModels(config),
       // A conversation that has just opened has said nothing, so there is nothing to ask again.
       reask: '',
+      attached: '',
       providerId: ready.providerId,
       modelId: ready.modelId,
       running: false,
@@ -926,6 +937,8 @@ function newConversation(
     passage: state.passage,
     models: ready.models,
     providers: ready.providers,
+    attached: '',
+    attachedPath: '',
     providerId: ready.providerId,
     modelId: ready.modelId,
     running: false,
@@ -999,6 +1012,21 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         thread?.session.dispose();
         thread?.home.release();
       },
+      onAttach: (id, dataUrl) => {
+        const thread = threads.get(id);
+        const entry = panels.entryOf(id);
+        if (thread !== undefined && entry !== undefined) {
+          void attachPicture(entry, thread, dataUrl);
+        }
+      },
+      onUnattach: (id) => {
+        const thread = threads.get(id);
+        const entry = panels.entryOf(id);
+        if (thread !== undefined && entry !== undefined) {
+          forgetPicture(thread);
+          show(entry, false, '');
+        }
+      },
       onReask: (id) => {
         const thread = threads.get(id);
         const entry = panels.entryOf(id);
@@ -1070,6 +1098,68 @@ async function openWorkspaceFile(
 }
 
 /**
+ * Where a conversation's pictures live: one directory per conversation, under the extension's own.
+ *
+ * <p>The vendor process OPENS these files — that is the mechanism phase 0 measured — so they are
+ * real files with a real path, and their lifetime is a contract rather than a detail. One directory
+ * per conversation is what makes forgetting them possible: the tab closing removes it whole, the
+ * way `chatOrphans.ts` ends the processes.</p>
+ */
+function pictureDir(id: string): string {
+  return path.join(coaiDataDir(), 'pictures', id.replace(/[^\w-]/g, ''));
+}
+
+/** Take the picture off, and take the FILE with it — a file nobody will open is a file left behind. */
+function forgetPicture(thread: Thread): void {
+  if (thread.attachedPath.length > 0) {
+    try {
+      fs.rmSync(thread.attachedPath, { force: true });
+    } catch {
+      // A file that cannot be removed is not worth a sentence to the person: it is in a temp
+      // directory the tab's own close sweeps, and saying so would explain nothing they can act on.
+    }
+  }
+  thread.attached = '';
+  thread.attachedPath = '';
+}
+
+/**
+ * Keep a pasted picture, or say why it cannot be kept.
+ *
+ * <p>Refused BY NAME where the chosen provider cannot take one. The worst outcome this feature has
+ * is a picture that silently does not arrive: somebody pastes a screenshot, asks about it, and is
+ * answered about the text alone with nothing anywhere saying the image was dropped.</p>
+ */
+async function attachPicture(entry: ChatEntry, thread: Thread, dataUrl: string): Promise<void> {
+  const refusal = imageRefusal(thread.providerId);
+  if (refusal.length > 0) {
+    show(entry, thread.running, refusal);
+
+    return;
+  }
+  const picture = pastedImage(dataUrl);
+  if (picture === undefined) {
+    show(entry, thread.running, 'That is not a picture this can send — PNG, JPEG, WebP and GIF only.');
+
+    return;
+  }
+  forgetPicture(thread);
+  const dir = pictureDir(entry.id.toString());
+  try {
+    await fs.promises.mkdir(dir, { recursive: true });
+    const file = path.join(dir, imageFileName(picture.type, thread.turn + 1));
+    await fs.promises.writeFile(file, Buffer.from(picture.base64, 'base64'));
+    thread.attached = dataUrl;
+    thread.attachedPath = file;
+  } catch {
+    show(entry, thread.running, 'The picture could not be written to disk, so nothing was attached.');
+
+    return;
+  }
+  show(entry, thread.running, '');
+}
+
+/**
  * The name of the model that a re-ask would go to, or empty when there is nothing to re-ask.
  *
  * <p>The LABEL rather than the id, because it goes on a button a person reads. `reaskFrom` decides
@@ -1127,6 +1217,7 @@ function restoredPage(
       providers: ready.ok ? ready.providers : [],
       ...presets,
       reask: '',
+      attached: '',
       // The row this tab was speaking to, read by `savedPick` out of the old `modelId`.
       providerId: ready.ok ? ready.providerId : restored.providerId,
       modelId: saved.modelId,
@@ -1171,6 +1262,8 @@ export function restoreConversation(
     passage: saved.passage,
     models: ready.ok ? ready.models : [],
     providers: ready.ok ? ready.providers : [],
+    attached: '',
+    attachedPath: '',
     providerId: ready.ok ? ready.providerId : restored.providerId,
     modelId: saved.modelId,
     running: false,

@@ -31,6 +31,7 @@ export interface PageMessage {
   readonly file?: unknown;
   readonly line?: unknown;
   readonly index?: unknown;
+  readonly data?: unknown;
 }
 
 export type ChatCommand =
@@ -60,6 +61,9 @@ export type ChatCommand =
    * rendering of.
    */
   | { readonly kind: 'reask' }
+  /** A picture pasted into the composer, as the data URL the page read out of the clipboard. */
+  | { readonly kind: 'attach'; readonly dataUrl: string }
+  | { readonly kind: 'unattach' }
   | { readonly kind: 'restart' }
   | { readonly kind: 'useLocal' }
   | { readonly kind: 'pageError'; readonly message: string }
@@ -235,6 +239,13 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
     }
     case 'reask':
       return { kind: 'reask' };
+    case 'attach': {
+      const data = text(message.data);
+
+      return data.length === 0 ? IGNORE : { kind: 'attach', dataUrl: data };
+    }
+    case 'unattach':
+      return { kind: 'unattach' };
     case 'restart':
       return { kind: 'restart' };
     case 'useLocal':

@@ -28,6 +28,7 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
     models: MODELS,
     providers: [],
     reask: '',
+    attached: '',
     promptPresets: [],
     modelPresets: [],
     providerId: 'antigravity',
@@ -450,6 +451,16 @@ function runChatPage(over: RunOptions = {}): RunningPage {
   };
   // Captured so a test can say "the composer changed height", which is the event story 4 reacts to.
   let observed: (() => void) | undefined;
+  // What a browser gives the page for reading a pasted file. Node has none, and the page correctly
+  // refuses without one — so a harness without it tests the refusal rather than the paste.
+  class FakeFileReader {
+    public result = '';
+    public onload: (() => void) | undefined;
+    readAsDataURL(): void {
+      this.result = 'data:image/png;base64,iVBORw0KGgo=';
+      this.onload?.();
+    }
+  }
   class FakeResizeObserver {
     constructor(callback: () => void) { observed = callback; }
     observe() { /* the page observes one element */ }
@@ -457,7 +468,7 @@ function runChatPage(over: RunOptions = {}): RunningPage {
   }
 
 
-  new Function('document', 'window', 'acquireVsCodeApi', 'requestAnimationFrame', 'ResizeObserver', body)(
+  new Function('document', 'window', 'acquireVsCodeApi', 'requestAnimationFrame', 'ResizeObserver', 'FileReader', body)(
     document_,
     window_,
     // `setState` as well as `postMessage`: the page tells VS Code which conversation it is the
@@ -465,6 +476,7 @@ function runChatPage(over: RunOptions = {}): RunningPage {
     () => ({ postMessage: (message: Record<string, unknown>) => posted.push(message), setState: () => undefined }),
     (fn: () => void) => { pending.push(fn); },
     withoutResizeObserver === true ? undefined : FakeResizeObserver,
+    FakeFileReader,
   );
 
   const region = () => {
@@ -1728,4 +1740,71 @@ test('a model label in the button is escaped like everything else', () => {
   const html = chatPageHtml(state({ reask: '<img src=x onerror=alert(1)>' }), 'n0nce');
 
   assert.doesNotMatch(html, /<img/i, 'a model label reached the page as markup');
+});
+
+
+/* ------------------------------------------------------------------------------------------------
+ * Entry 13: paste a picture into the composer. Phase 0 measured that the mechanism is a file PATH
+ * named in the prompt, which the vendor process opens itself.
+ * ---------------------------------------------------------------------------------------------- */
+
+test('the page may show an image and may load nothing else', () => {
+  // The CSP is `default-src 'none'`, which blocks images too. A thumbnail of what was just pasted
+  // needs `img-src data:` and NOTHING wider: no remote host, no file:, and the page still loads
+  // nothing from disk because `localResourceRoots` is empty.
+  const html = chatPageHtml(state(), 'n0nce');
+  const csp = html.slice(html.indexOf('Content-Security-Policy'), html.indexOf('>', html.indexOf('Content-Security-Policy')));
+
+  assert.match(csp, /img-src data:/, 'a pasted image cannot be shown at all');
+  assert.doesNotMatch(csp, /img-src[^;]*https?:/, 'the page may load an image from the network');
+  assert.doesNotMatch(csp, /img-src[^;]*file:/, 'the page may load an image from the filesystem');
+});
+
+test('a pasted image is offered to the host, and anything else pastes as text', () => {
+  const page = runChatPage();
+
+  page.fire('say', 'paste', {
+    clipboardData: {
+      items: [{ kind: 'file', type: 'image/png', getAsFile: () => ({ name: 'x.png' }) }],
+    },
+  });
+
+  assert.deepStrictEqual(page.posted.filter((message) => message['command'] === 'attach'),
+    [{ type: 'command', command: 'attach', data: 'data:image/png;base64,iVBORw0KGgo=' }],
+    'a pasted picture was not offered to the host');
+
+  const text = runChatPage();
+  text.fire('say', 'paste', { clipboardData: { items: [{ kind: 'string', type: 'text/plain' }] } });
+  assert.deepStrictEqual(text.posted.filter((message) => message['command'] === 'attach'), [],
+    'pasted text was treated as a picture');
+});
+
+test('an attached picture is shown, and can be taken off again', () => {
+  const html = chatPageHtml(state({ attached: 'data:image/png;base64,iVBORw0KGgo=' }), 'n0nce');
+
+  assert.match(html, /<img class="attached" src="data:image\/png;base64,/, 'the attachment is not shown');
+  assert.match(html, /id="unattach"/, 'an attachment cannot be taken off');
+
+  const none = chatPageHtml(state(), 'n0nce');
+  assert.doesNotMatch(none, /class="attached"/, 'an empty attachment drew a box anyway');
+});
+
+test('taking the picture off names it to the host', () => {
+  const page = runChatPage({ attached: 'data:image/png;base64,iVBORw0KGgo=' });
+
+  page.fire('unattach', 'click');
+
+  assert.deepStrictEqual(page.posted.filter((message) => message['command'] === 'unattach'),
+    [{ type: 'command', command: 'unattach' }]);
+});
+
+test('an attachment that is not an image cannot be shown at all', () => {
+  // The state comes from the host, which built it from what the page sent — but a page rendering a
+  // src it has not looked at is a page that would render `javascript:` if the host ever handed it
+  // one. The check is here as well because this is where it becomes an attribute.
+  for (const attached of ['javascript:alert(1)', 'https://example.com/a.png', 'data:text/html;base64,PHA+']) {
+    const html = chatPageHtml(state({ attached }), 'n0nce');
+
+    assert.doesNotMatch(html, /<img class="attached"/, `${attached} was rendered as an attachment`);
+  }
 });
