@@ -107,6 +107,12 @@ jobs:
       - name: Gate snippet
         run: node .agents/conventions/tools/gate-snippet-check.mjs
 
+      # The half of `csharp/dotnet-build.md` no file can enforce is a PreToolUse hook, and a hook is
+      # a thing that can silently stop being wired. This asks the repository instead: the response
+      # file is there, and it says what it has to say.
+      - name: Build flags
+        run: node .agents/conventions/tools/build-flags-check.mjs
+
       # A workflow file that does not PARSE fails at startup, in zero seconds, with no job, no log
       # and no annotation — and the run that discovers it is the release you just tagged. Measured
       # 2026-09-03: a single stray carriage return inside a quoted `tr -d '\r'` reads as a line
