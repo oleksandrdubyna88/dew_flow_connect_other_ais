@@ -820,6 +820,8 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   // What the person wrote in the session this conversation came from, once the host has read it.
   let asked = ${jsonForScript(state.asked)};
   let askedAt = 0;
+  // Why there is nothing, when there is nothing. Empty until the host has answered at all.
+  let askedWhy = '';
   // The frame a paint is waiting for, declared HERE because the first paint runs at load - before
   // the painter's own place in this script - and a let in the temporal dead zone throws.
   let painting = 0;
@@ -1093,7 +1095,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     if (!box || !at) { return; }
     const count = asked.length;
     if (count === 0) {
-      box.textContent = 'Nothing of yours was found in that session.';
+      box.textContent = askedWhy.length > 0 ? askedWhy : 'Reading the session…';
       at.textContent = '';
 
       return;
@@ -1116,9 +1118,12 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       const region = document.getElementById('asking');
       const open = region ? !region.classList.contains('open') : true;
       showAsked(open);
-      // Read on the FIRST press only: a session file is somebody else's and megabytes long, and
-      // opening a tab is not a reason to read it.
-      if (open && asked.length === 0) {
+      // EVERY time it is opened, not only the first. The window this exists for is four hours old
+      // and still being typed into: a list read once and kept would be missing everything said since,
+      // which is most of what a person wants when they press it a second time. (gemini, the plan
+      // round.) Never on LOAD, though — a session file is somebody else's and megabytes long, and
+      // opening a tab is not a reason to read one.
+      if (open) {
         vscode.postMessage({ type: 'showAsked' });
       }
       paintAsked();
@@ -1323,8 +1328,14 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     // as gone when a state message does not mention them, so answering "what did I ask" through the
     // state channel would silently clear both.
     if (data.type === 'asked') {
+      const before = askedAt;
+      const had = asked.length;
       asked = Array.isArray(data.asked) ? data.asked : [];
-      askedAt = 0;
+      askedWhy = typeof data.refusal === 'string' ? data.refusal : '';
+      // WHERE THEY WERE, when a re-read simply found more. Sending them back to the first turn every
+      // time the region is opened would undo the arrows they just pressed; a list that changed under
+      // them is a different matter and starts again.
+      askedAt = had > 0 && asked.length >= had ? before : 0;
       paintAsked();
 
       return;

@@ -90,8 +90,22 @@ back `{ type: 'asked', asked: [...] }`.
 and a failure line as *gone* when a state message does not mention them, so answering through that
 channel would silently clear both.
 
-**Read on the first press only.** A session file is megabytes long and belongs to somebody else;
-opening a tab is not a reason to read one. A second press folds the region and asks for nothing.
+**Read on every OPEN, never on load.** A session file is megabytes long and belongs to somebody
+else, so opening a tab is not a reason to read one — but the window this exists for is four hours old
+and still being typed into, and a list read once would be missing everything said since. Folding it
+away asks for nothing. Where the arrows had got to is kept when a re-read merely finds more.
+
+**Every outcome is named.** No session file, no folder open, two sessions sharing this tab's name,
+and a conversation nobody has spoken in yet look identical from an empty region, and that region is
+the only place a person is looking. `promptsInSession` answers `said` / `none` / `several`, each
+refusal carrying its own sentence.
+
+**Two sessions with one title is a refusal, never a pick.** `waitingIn` has always refused namesakes;
+this agrees with it. Handing over somebody else's conversation silently is the worst thing the title
+join can do, and choosing between namesakes is exactly that.
+
+**What crosses the bridge is bounded** — the earliest 200 turns, each cut at 8 000 characters and
+saying where it was cut. A day-long session is hundreds of turns and some of them are whole files.
 
 ### What counts as the person speaking
 
@@ -119,10 +133,13 @@ slash — measured on this machine's own session files, where every one reads
 
 - `humanPrompts`: order, the prefilled turn, each kind of machinery rejected by name, the slash
   command unwrapped without doubling its slash, a half-written last line skipped.
-- `promptsInSession`: the right session chosen by title; a title naming none reads nothing rather
-  than the newest; an empty title never looks; a folder Claude has never run in is empty, not a throw.
+- `promptsInSession`: the right session chosen by title; two sharing a title refused by count; a
+  title naming none, an empty title, a folder Claude has never run in and a session nobody has
+  spoken in each answered with their own sentence; the payload bounded at both ends.
 - The page: the button is in the header, the region is outside `#scroll`, a file-opened chat has
-  neither, and a session full of markup cannot open a second script element.
+  neither, a session full of markup cannot open a second script element, and the fold is `.5s`.
+- The bundle, pressed twice open: it asks again on the second open, keeps the arrow's place when the
+  re-read merely found more, stops at both ends, and paints a refusal rather than an empty box.
 - **The shipped bundle, pressed.** The button, the region, the arrows and the answering message are
   four more names a minifier can rewrite, and the rounds log has been broken exactly that way twice.
   The DOM harness the Send test built is extracted rather than copied.

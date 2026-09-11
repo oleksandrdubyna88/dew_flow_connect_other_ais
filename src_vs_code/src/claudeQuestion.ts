@@ -269,7 +269,10 @@ function saidIn(row: Record<string, unknown>): string {
   }
   for (const block of content as unknown[]) {
     const one = record(block);
-    if (typeof one?.['text'] === 'string' && one['text'].trim().length > 0) {
+    // The block's KIND, not merely the presence of a `text` field. A `tool_use` block carries one
+    // too, and taking the first thing that looked like prose would have shown the machinery's words
+    // as the person's. (The plan round, on a row whose blocks are mixed.)
+    if (one?.['type'] === 'text' && typeof one['text'] === 'string' && one['text'].trim().length > 0) {
       return one['text'];
     }
   }

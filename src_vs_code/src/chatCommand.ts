@@ -1538,17 +1538,25 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         const folders = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
         const caseBlind = process.platform === 'win32' || process.platform === 'darwin';
         void (async () => {
+          let refusal = 'This window has no folder open, so there is nowhere to look for a session.';
+          let named = false;
           for (const folder of folders) {
-            const said = await promptsInSession(os.homedir(), folder, caseBlind, mine.title);
-            if (said.length > 0) {
-              found.panel.post({ type: 'asked', asked: said });
+            const answer = await promptsInSession(os.homedir(), folder, caseBlind, mine.title);
+            if (answer.kind === 'said') {
+              found.panel.post({ type: 'asked', asked: answer.said, refusal: '' });
 
               return;
             }
+            // The FIRST reason, not the last: with several folders open, whichever happened to
+            // be checked last is no more relevant than the one before it, and replacing the reason
+            // each time round leaves the person reading about a folder they were not asking about.
+            refusal = named ? refusal : answer.refusal;
+            named = true;
           }
-          // NOTHING, said as nothing rather than left silent: the page shows a sentence in the space
-          // it just opened, which is the only place a person is looking.
-          found.panel.post({ type: 'asked', asked: [] });
+          // A REASON, never a blank region. Four situations look identical from an empty box — no
+          // session file, no folder, a namesake it refuses to pick between, and a conversation the
+          // person has not spoken in yet — and the box is the only place they are looking.
+          found.panel.post({ type: 'asked', asked: [], refusal });
         })();
       },
       onStop: (id, turn) => {

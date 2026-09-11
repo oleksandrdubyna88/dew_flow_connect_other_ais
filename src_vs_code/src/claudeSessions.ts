@@ -160,32 +160,72 @@ function where(reason: unknown): string {
 }
 
 /**
+ * The most turns that cross to a webview at once, and the most of each.
+ *
+ * <p>A day-long session holds hundreds of turns and some of them are whole files pasted in. All of
+ * it in one `postMessage` is megabytes over a bridge that has to stay responsive, rendered into a
+ * region 40vh tall. The EARLIEST are kept, because the question this button exists to answer is
+ * *what was this window for* — and a turn that is cut says so where it is cut. (gemini, the plan
+ * round, on a payload nobody had bounded.)</p>
+ */
+export const MOST_PROMPTS = 200;
+export const MOST_PER_PROMPT = 8_000;
+
+/** What the person wrote in a session, or why there is nothing to show. */
+export type Asked =
+  | { readonly kind: 'said'; readonly said: readonly string[] }
+  | { readonly kind: 'none'; readonly refusal: string }
+  | { readonly kind: 'several'; readonly refusal: string };
+
+/**
  * Everything the person wrote in the session THIS TAB is showing, oldest first.
  *
  * <p>Found by the same join the waiting question uses: Claude Code writes the conversation's title
- * into its own session file, and that title is what VS Code puts on the tab. No title, no match,
- * and an empty list — which the caller reports rather than guessing at another session.</p>
+ * into its own session file, and that title is what VS Code puts on the tab.</p>
+ *
+ * <p><b>Two sessions with one title is a refusal, never a pick.</b> It was a pick — the first file
+ * the directory listed — until the plan round said so twice, from two vendors. The whole reason this
+ * join exists is that delivering somebody else's conversation silently is the worst thing it can do,
+ * and picking between namesakes is exactly that with extra steps. {@link waitingIn} has always
+ * refused them; this now agrees with it.</p>
+ *
+ * <p><b>Every outcome is NAMED.</b> A session that cannot be read, a folder Claude has never run in,
+ * a tab whose title matches nothing and a session where the person has said nothing yet are four
+ * different situations, and a person looking at an empty box deserves to know which. (codex, on a
+ * protocol with no failure result.)</p>
  */
 export async function promptsInSession(
   home: string,
   cwd: string,
   caseBlind: boolean,
   looking: string,
-): Promise<readonly string[]> {
+): Promise<Asked> {
+  const root = projectsRoot(home);
   if (looking.length === 0) {
-    return [];
+    // A tab with no name cannot be joined to anything. It is not an error — a chat opened from a
+    // file is exactly this — so it is said plainly rather than dressed as a failure.
+    return { kind: 'none', refusal: 'This conversation is not named after a Claude Code session.' };
   }
   let names: string[];
   try {
-    names = await fs.readdir(projectsRoot(home));
-  } catch {
-    return [];
+    names = await fs.readdir(root);
+  } catch (reason) {
+    return missing(reason)
+      ? { kind: 'none', refusal: `Claude Code keeps its sessions in ${root}, and there is nothing there to read.` }
+      : { kind: 'none', refusal: `Claude Code's sessions could not be listed in ${root}: ${where(reason)}` };
   }
-  const dir = projectDirIn(projectsRoot(home), cwd, names, caseBlind);
+  const dir = projectDirIn(root, cwd, names, caseBlind);
+  if (dir.length === 0) {
+    return {
+      kind: 'none',
+      refusal: `Claude Code has no sessions for this folder — nothing named ${projectDirName(cwd)} in ${root}.`,
+    };
+  }
   const files = await sessionFiles(dir);
   if (!Array.isArray(files)) {
-    return [];
+    return { kind: 'none', refusal: (files as ReadFailure).refusal };
   }
+  const matched: string[][] = [];
   for (const file of files) {
     let body: string;
     try {
@@ -195,11 +235,33 @@ export async function promptsInSession(
     }
     const lines = body.split('\n');
     if (titleIn(lines) === looking) {
-      return humanPrompts(lines);
+      matched.push([...humanPrompts(lines)]);
     }
   }
+  if (matched.length > 1) {
+    return {
+      kind: 'several',
+      refusal: `${matched.length} sessions in this folder are called “${looking}”, so this tab cannot say which one is its own.`,
+    };
+  }
+  const said = matched[0];
+  if (said === undefined) {
+    return {
+      kind: 'none',
+      refusal: `No session in this folder is called “${looking}” — Claude Code names a conversation once it has one.`,
+    };
+  }
+  if (said.length === 0) {
+    return { kind: 'none', refusal: 'Nothing of yours is in that session yet.' };
+  }
 
-  return [];
+  return { kind: 'said', said: bounded(said) };
+}
+
+/** The earliest turns, each cut where it is too long to carry, saying so where it was cut. */
+function bounded(said: readonly string[]): readonly string[] {
+  return said.slice(0, MOST_PROMPTS).map((one) =>
+    one.length <= MOST_PER_PROMPT ? one : `${one.slice(0, MOST_PER_PROMPT)}\n\n… (cut here — the rest is in the session file)`);
 }
 
 /** What a session calls itself, or empty — the last title wins, as the tab shows the newest. */
