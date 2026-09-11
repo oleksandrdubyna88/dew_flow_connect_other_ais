@@ -68,7 +68,13 @@ public static class Auth
                 {
                     ValidateIssuer = true,
                     ValidIssuers = ["https://accounts.google.com", "accounts.google.com"],
-                    ValidateAudience = googleAudiences.Count > 0,
+                    // Unconditional, which is what Microsoft's amounts to: Startup.Guard refuses a
+                    // Google-enabled server with no audiences, so there is no longer a state in which
+                    // this could be false. It WAS conditional, and the conditional was the defect —
+                    // a configuration mistake turned the check off instead of stopping the server,
+                    // silently, and a Google ID token minted for any other application would then
+                    // have been accepted. (Product audit of 2026-09-09, finding 9.)
+                    ValidateAudience = true,
                     ValidAudiences = googleAudiences,
                     ValidateLifetime = true,
                 };

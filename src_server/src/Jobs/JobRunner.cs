@@ -40,21 +40,43 @@ public sealed class JobRunner(
     /// The pump needs that answer to decide whether to try again, and waiting for the review would
     /// mean one start per ten minutes rather than one per free account.
     /// </param>
+    /// <remarks>
+    /// <para><b>The promise is kept on EVERY exit, and that is what the <c>finally</c> is for.</b>
+    /// It used to be answered at each of the four ordinary returns and nowhere else — and between the
+    /// first of them and the last sit three calls that touch the filesystem: reading every slot's
+    /// <c>state.json</c>, creating the account directory, chmod-ing it, opening <c>.lock</c>. A throw
+    /// from any of them left the pump waiting on a promise nobody would ever keep, which stopped that
+    /// tick for good: no later vendor pumped, nothing ever expired again, and <c>/api/health</c> still
+    /// answering while the server accepted reviews and ran none. Product audit of 2026-09-09,
+    /// finding 6; reproduced with a directory where the lock file goes.</para>
+    /// <para>After a <c>TrySetResult(true)</c> the <c>finally</c> is a no-op, so the contract above is
+    /// unchanged: the pump still hears "claimed" before the review runs rather than after it. And the
+    /// exception still travels — the caller's continuation is what logs it.</para>
+    /// </remarks>
     public async Task<bool> PumpAsync(
         string vendorId, CancellationToken ct, TaskCompletionSource<bool>? started = null)
     {
-        if (catalog.Current.Find(vendorId) is not { } vendor)
+        try
+        {
+            return await ClaimAndRunAsync(vendorId, ct, started);
+        }
+        finally
         {
             started?.TrySetResult(false);
+        }
+    }
 
+    private async Task<bool> ClaimAndRunAsync(
+        string vendorId, CancellationToken ct, TaskCompletionSource<bool>? started)
+    {
+        if (catalog.Current.Find(vendorId) is not { } vendor)
+        {
             return false;
         }
 
         var now = DateTimeOffset.UtcNow;
         if (SlotSelector.Pick(slots.SlotsOf(vendor), now) is not { } candidate)
         {
-            started?.TrySetResult(false);
-
             return false;
         }
 
@@ -63,8 +85,6 @@ public sealed class JobRunner(
         using var lease = await slots.AcquireAsync(candidate, TimeSpan.Zero, ct: ct);
         if (lease is null)
         {
-            started?.TrySetResult(false);
-
             return false;
         }
 
@@ -73,8 +93,6 @@ public sealed class JobRunner(
         // fires, and it is what actually stops the vendor process.
         if (jobs.TryClaim(vendorId, candidate.Name, DateTimeOffset.UtcNow, ct) is not { } claimed)
         {
-            started?.TrySetResult(false);
-
             return false;
         }
 

@@ -70,6 +70,29 @@ code, the test is not weakened to fit** — the options assertion stays as what 
 this plan's deviations, and a `POST_DEPLOY.md` item covers it against the real identity provider. Which
 of the two happened is recorded when the work ships; nothing here is reported as covered until it is.
 
+### What actually shipped, 2026-09-11 — and what did NOT
+
+**The refusal test was not written, and this is the record of that decision rather than an omission
+nobody noticed.** What exists is `StartupGuardTests.GoogleEnabledWithNoAudience_RefusesToStart`, which
+is a real test of a real guarantee — the server refuses to start — and its teeth were proved by
+disabling the guard and watching it fail with *"Expected a `System.InvalidOperationException` to be
+thrown, but no exception was thrown"*. That closes the configuration mistake, which is the path this
+defect would actually have arrived by.
+
+**`ValidateAudience = true` itself is still only asserted as a REQUEST, not observed as a refusal.** No
+test here presents a Google token with the wrong `aud` and watches it answer 401. It is reachable: a
+test could `PostConfigure<JwtBearerOptions>("Google", …)` to point `MetadataAddress` at a loopback
+discovery document and turn off `RequireHttpsMetadata`, all on the test side, with no production code
+shaped by a test. It was not done, for a reason worth writing down rather than hiding: about eighty
+lines of OIDC stub and a hand-built JWKS, for a provider that is **disabled on the only deployment
+there is** (the operator, 2026-09-11), while the same eighty lines spent on anything else in this audit
+protects something live.
+
+So this is a gap with an owner and a trigger, not a claim of coverage: **the day Google is enabled on a
+deployment, that test is written before the switch is flipped.** No `POST_DEPLOY.md` item was added
+either — the file is capped at twelve and every item must name something a person loses today, which a
+disabled provider does not.
+
 ## Test plan
 
 | # | Test | Holds |

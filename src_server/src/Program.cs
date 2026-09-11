@@ -69,7 +69,7 @@ var googleAudiences = SplitCsv(config["Auth:Google:Audiences"]);
 var localKey = config["Auth:Local:SigningKey"];
 var localEnabled = !string.IsNullOrWhiteSpace(localKey);
 
-Startup.Guard(msTenant, msAudiences, googleEnabled, localEnabled, localKey, allowedDomains, allowAnyDomain, dataDir, sessionTtlDays);
+Startup.Guard(msTenant, msAudiences, googleEnabled, googleAudiences, localEnabled, localKey, allowedDomains, allowAnyDomain, dataDir, sessionTtlDays);
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {

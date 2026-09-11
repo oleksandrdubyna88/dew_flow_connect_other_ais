@@ -21,6 +21,7 @@ public static class Startup
         string? msTenant,
         IReadOnlyCollection<string> msAudiences,
         bool googleEnabled,
+        IReadOnlyCollection<string> googleAudiences,
         bool localEnabled,
         string? localKey,
         IReadOnlyCollection<string> allowedDomains,
@@ -47,6 +48,21 @@ public static class Startup
                 "Auth:Microsoft:Tenant is set but Auth:Microsoft:Audiences is empty, so any token from "
                 + "the tenant would be accepted — including one minted for another application. Set it "
                 + "to '<client-id>,api://<client-id>' from the app registration.");
+        }
+
+        // The SAME defect, one identity provider over, and it went unnoticed because the paragraph
+        // above was written about Microsoft and nobody carried it across. A Google ID token is handed
+        // to every application a person signs into with Google, so without an audience check any
+        // third-party app a colleague ever used could present that colleague here — the issuer, the
+        // signature, the lifetime, the allowed domain and email_verified are all still checked, which
+        // is why this is a privilege path rather than anonymous access, and why it reads as safe.
+        // Found by the product audit of 2026-09-09 (finding 9) rather than by anybody using it.
+        if (googleEnabled && googleAudiences.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Auth:Google:Enabled is true but Auth:Google:Audiences is empty, so a Google token "
+                + "minted for ANY application would be accepted here. Set it to the OAuth client id(s) "
+                + "this server is the audience for.");
         }
 
         // The local scheme signs identities with a SHARED SECRET: whoever holds the key can present
