@@ -316,11 +316,11 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'This page: search, language, and text size',
       whatItIs:
-        'The yellow ? in the panel title bar opens this help. The index lists every article with its first line; the box at the top searches all of them; the select changes language; the ± buttons change the text size.',
+        'The yellow ? in the panel title bar opens this help. The index lists every article with its first line; the box at the top searches all of them; the select changes language; the ± buttons change the text size, and the pair beside them the text tone — brighter, or dimmer and warmer.',
       why:
         'A settings panel with sixteen controls needs somewhere to say what each of them does, and a tooltip is not that place. Text size is here because eyesight is not a preference to be argued with — five steps either way is about ×1.6 up or down.',
       setup:
-        'Nothing to set up. The language switch writes `coai.helpLanguage`, which scopes it to these pages only — it is not the language your reviewers are asked in, which lives in **Language**. The ± buttons write `coai.uiScale`. Both are real settings, so both sync to your other machines.',
+        'Nothing to set up. The language switch writes `coai.helpLanguage`, which scopes it to these pages only — it is not the language your reviewers are asked in, which lives in **Language**. The ± buttons write `coai.uiScale` and `coai.textTone`; zero on the tone is the colour your theme already uses, so an untouched control changes nothing. Both are real settings, so both sync to your other machines.',
       usage:
         'The search runs over titles AND the full text of every article in the language shown, so a word you remember from a paragraph finds the article it was in. Escape closes an article back to the index, and Back keeps whatever you had typed.\n\nAn article not yet translated shows English with a visible note rather than an empty page.',
       whatCanGoWrong:

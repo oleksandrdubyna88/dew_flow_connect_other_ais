@@ -414,6 +414,13 @@
           "maximum": 5,
           "markdownDescription": "Text size on the ConnectOtherAIs help page, in steps of 10% from the base — `5` is about ×1.6, `-5` about ÷1.6. The ± buttons on the page write this same setting, and it syncs with your other machines."
         },
+        "coai.textTone": {
+          "type": "number",
+          "default": 0,
+          "minimum": -5,
+          "maximum": 5,
+          "markdownDescription": "Text tone on the ConnectOtherAIs pages, in steps away from your theme's own colour. `0` is the theme, untouched. Above it the text moves towards more contrast — whiter on a dark theme, blacker on a light one; below it towards a warm grey, dimmer and yellower at once. The ± buttons beside the text size write this same setting, and it syncs with your other machines."
+        },
         "coai.helpLanguage": {
           "type": "string",
           "default": "en",

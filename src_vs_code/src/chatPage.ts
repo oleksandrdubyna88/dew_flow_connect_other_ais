@@ -1,6 +1,7 @@
 import { escapeHtml, jsonForScript } from './webviewHtml';
 import { renderAnswer } from './renderAnswer';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
+import { TONE_CSS, toneControlHtml, toneScript, toneStyle } from './textTone';
 import { vendorPalette } from './vendorColour';
 import { ChatProvider, ChatProviderList } from './chatModels';
 import { ModelPreset, PromptPreset } from './chatPresets';
@@ -189,6 +190,12 @@ export interface ChatPageState {
    */
   readonly chosenModelId: string;
   readonly uiScale: number;
+  /**
+   * How far the text is from the theme's own colour: 0 is the theme, up is brighter, down is
+   * dimmer and warmer. Beside `uiScale` because it is the same kind of thing — a preference about
+   * this person's eyes, kept in a setting so it follows them.
+   */
+  readonly textTone: number;
 }
 
 /**
@@ -504,6 +511,7 @@ function modelColours(
 
 function chatStyle(
   uiScale: number,
+  textTone: number,
   models: readonly ChatModelChoice[] = [],
   messages: readonly ChatMessage[] = [],
 ): string {
@@ -514,7 +522,7 @@ function chatStyle(
   // padding, no font and no background of its own for as long as that stood. The help page always
   // did it this way (`helpPage.ts`); this one did not.
   return `  html, body { height: 100%; }
-  body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 0; display: flex; flex-direction: column; overflow: hidden; ${zoomStyle(uiScale)} }
+  body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 0; display: flex; flex-direction: column; overflow: hidden; ${zoomStyle(uiScale)} ${toneStyle(textTone)} }
   /* The conversation scrolls; the page does not. The min-height of 0 is what makes that true: a flex
      child refuses to shrink below its content without it, so the region would never scroll, the
      body would instead, and the composer would leave the screen — the symptom this layout exists
@@ -646,7 +654,8 @@ function chatStyle(
   #send[disabled] { opacity: .6; cursor: default; }
   .hint { font-size: .85em; opacity: .6; margin-top: 4px; }
 ${modelColours(models, messages)}
-${ZOOM_CSS}`;
+${ZOOM_CSS}
+${TONE_CSS}`;
 }
 
 /**
@@ -701,7 +710,7 @@ function chatBody(state: ChatPageState, regions: Regions): string {
   const locked = state.running || state.capped;
 
   return `<main id="scroll">
-<header><h1>${escapeHtml(state.title)}</h1>${zoomControlHtml(state.uiScale)}</header>
+<header><h1>${escapeHtml(state.title)}</h1>${zoomControlHtml(state.uiScale)}${toneControlHtml(state.textTone)}</header>
 <div class="passage" id="passage">${escapeHtml(state.passage)}</div>
 <div id="failure">${regions.failure}</div>
 <div id="messages">${regions.messages}</div>
@@ -785,6 +794,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     vscode.postMessage({ type: 'pageError', message: String(message) });
   };
   ${zoomScript()}
+  ${toneScript()}
   // Bound by ASSIGNMENT, not declared: the minifier renames a declaration and leaves the name in the
   // template string that calls it, which is how the rounds log shipped a dead page twice. Embedding
   // the source is also what makes the function the tests exercise the function the page runs.
@@ -1378,7 +1388,7 @@ export function chatPageHtml(state: ChatPageState, nonce: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(state.title)}</title>
 <style>
-${chatStyle(state.uiScale, state.models, state.messages)}
+${chatStyle(state.uiScale, state.textTone, state.models, state.messages)}
 </style>
 </head>
 <body>

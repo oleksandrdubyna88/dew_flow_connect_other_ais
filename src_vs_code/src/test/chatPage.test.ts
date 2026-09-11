@@ -45,6 +45,7 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
     draft: '',
     marks: NO_MARKS,
     uiScale: 0,
+    textTone: 0,
     ...over,
   };
 }
@@ -2150,4 +2151,31 @@ test('a burst of keystrokes paints once, not once each', () => {
   page.frames();
   assert.strictEqual(painted, 1, 'three keystrokes painted more than once');
   assert.match(layer.innerHTML, /abc/, 'the paint that ran was not the latest text');
+});
+
+test('the chosen tone lands INSIDE the body rule, where the size already does', () => {
+  // The trap this whole parsing helper exists for: a declaration placed above the body rule drops
+  // the entire rule and the page renders unstyled. The tone is a second declaration in the same
+  // place, so it gets the same parse rather than a substring match.
+  const html = chatPageHtml(state({ textTone: -2 }), 'n0nce');
+  const css = html.split('<style>')[1].split('</style>')[0];
+  const bodyRule = ruleFor(css, 'body');
+
+  assert.ok(bodyRule.includes('color-mix'), 'the chosen tone is not in the body rule: ' + bodyRule);
+  assert.ok(bodyRule.includes('--coai-tone-warm'), 'a step down did not reach the body rule');
+});
+
+test('an untouched tone leaves the body rule exactly as it was', () => {
+  const html = chatPageHtml(state({ textTone: 0 }), 'n0nce');
+  const css = html.split('<style>')[1].split('</style>')[0];
+
+  assert.doesNotMatch(ruleFor(css, 'body'), /color-mix/, 'a control nobody touched painted the page');
+});
+
+test('both steppers are in the header, each with its own buttons', () => {
+  const html = chatPageHtml(state({ uiScale: 1, textTone: 1 }), 'n0nce');
+  const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+
+  assert.match(header, /data-zoom="1"/, 'the size stepper left the header');
+  assert.match(header, /data-tone="1"/, 'the tone stepper is not beside it');
 });

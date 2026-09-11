@@ -86,6 +86,7 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.credsKey': 'credsfordevs config key',
   'coai.promptsPerRound': 'one picker per round per role',
   'coai.uiScale': 'text size',
+  'coai.textTone': 'text tone',
   'coai.helpLanguage': 'language switch',
   // The three gate switches. They shipped undeclared, so this guard never saw them: a setting that
   // VS Code does not know about is a setting nothing checks the help for either.

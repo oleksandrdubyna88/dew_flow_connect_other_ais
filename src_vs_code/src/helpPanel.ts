@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { HELP_LANGUAGES, HelpLanguage } from './helpContent';
 import { renderHelpHtml } from './helpPage';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
+import { applyToneDelta, currentTextTone, pushTextToneTo } from './textToneHost';
 
 /**
  * The help panel : one webview, reused while open. The language lives in the
@@ -23,6 +24,7 @@ interface HelpMessage {
 async function onHelpMessage(message: HelpMessage): Promise<void> {
   const handlers: Record<string, () => Promise<void>> = {
     zoom: () => applyZoomDelta(message.delta ?? 0),
+    tone: () => applyToneDelta(message.delta ?? 0),
     language: () => setHelpLanguage(message.language ?? ''),
   };
   await handlers[message.type]?.();
@@ -58,11 +60,16 @@ export function showHelp(): void {
   );
   const render = (): void => {
     if (panel !== undefined) {
-      panel.webview.html = renderHelpHtml({ language: helpLanguage(), uiScale: currentUiScale() });
+      panel.webview.html = renderHelpHtml({
+        language: helpLanguage(),
+        uiScale: currentUiScale(),
+        textTone: currentTextTone(),
+      });
     }
   };
   render();
   const zoomHook = pushUiScaleTo(panel.webview);
+  const toneHook = pushTextToneTo(panel.webview);
   const languageHook = vscode.workspace.onDidChangeConfiguration((change) => {
     if (change.affectsConfiguration(`${SECTION}.${LANGUAGE_KEY}`)) {
       render();
@@ -71,6 +78,7 @@ export function showHelp(): void {
   panel.webview.onDidReceiveMessage((message: HelpMessage) => void onHelpMessage(message));
   panel.onDidDispose(() => {
     zoomHook.dispose();
+    toneHook.dispose();
     languageHook.dispose();
     panel = undefined;
   });

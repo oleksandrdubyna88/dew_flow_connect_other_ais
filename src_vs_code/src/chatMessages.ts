@@ -81,6 +81,7 @@ export type ChatCommand =
    */
   | { readonly kind: 'stop'; readonly turn: number }
   | { readonly kind: 'zoom'; readonly delta: number }
+  | { readonly kind: 'tone'; readonly delta: number }
   /**
    * Ask the OTHER model the same thing: the conversation minus the last answer, and the question
    * that answer was given to. It carries nothing else — the host holds the transcript and decides
@@ -130,11 +131,16 @@ function text(value: unknown): string {
  * only ever sends ±1, so anything else is not a zoom. (gemini, the code round.)</p>
  */
 function zoomOf(message: PageMessage): ChatCommand {
-  if (typeof message.delta !== 'number' || !Number.isFinite(message.delta)) {
-    return { kind: 'zoom', delta: 0 };
+  return { kind: 'zoom', delta: stepOf(message.delta) };
+}
+
+/** One press, in one direction, or nothing. The rule both steppers send their presses through. */
+function stepOf(delta: unknown): number {
+  if (typeof delta !== 'number' || !Number.isFinite(delta)) {
+    return 0;
   }
 
-  return { kind: 'zoom', delta: Math.max(-1, Math.min(1, Math.trunc(message.delta))) };
+  return Math.max(-1, Math.min(1, Math.trunc(delta)));
 }
 
 /**
@@ -220,6 +226,11 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
   }
   if (message.type === 'zoom') {
     return zoomOf(message);
+  }
+  // The tone keeps the zoom's discipline: only a DIRECTION crosses the seam, and anything that is
+  // not one is a press of nothing rather than a jump to a bound.
+  if (message.type === 'tone') {
+    return { kind: 'tone', delta: stepOf(message.delta) };
   }
   if (message.type === 'pageError') {
     const said = text(message.message);
