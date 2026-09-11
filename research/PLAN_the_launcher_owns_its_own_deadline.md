@@ -54,10 +54,19 @@ is a runaway allocation in whichever process launched it — the Team server und
    Windows does) still ends with the `IOException` `WriteStdInAsync` already treats as the child's
    decision. The write task is awaited last, after the exit, so nothing is left running when the
    method returns. `TimedOut` keeps its meaning.
-2. **`ProcessRequest.MaxOutputBytes`**, default 16 MiB per stream. Past it, further lines are dropped
-   and ONE marker line — `[coai: output truncated after N bytes]` — is appended, so a truncated answer
-   fails to parse loudly rather than silently. The largest legitimate stream observed is a vendor's
-   NDJSON of a long review, well under a megabyte; sixteen is a ceiling on a runaway, not a budget.
+2. **`ProcessRequest.MaxOutputChars`**, default 8 Mi CHARACTERS per stream. Past it the rest is
+   dropped and ONE marker line is appended, so a truncated answer fails to parse loudly rather than
+   silently. The largest legitimate stream observed is a vendor's NDJSON of a long review, well under
+   a megabyte; the ceiling is on a runaway, not a budget.
+
+   *As built (CodeRabbit, on the pull request — the plan was written in the wrong unit):* the bound is
+   CHARACTERS, because what it protects is the memory of a .NET string, which is two bytes each — so
+   8 Mi characters IS the 16 MiB per stream this line meant. It is enforced as the stream is read
+   rather than per line, because a child can write two hundred megabytes without a newline. The marker
+   reads `[coai: output truncated at N characters; M more were dropped]`, or, when the grace ran out
+   with the stream still open, `[coai: output truncated — the stream was still open when the drain
+   grace ran out]`; a bare count could not say whether one character was lost or two hundred
+   megabytes.
 3. `module_runners.md`: the launcher's two ceilings, and why the write is a task.
 
 No growth surface — this bounds two.
@@ -92,7 +101,9 @@ All against the REAL launcher and a real child, because the defect is between th
 
 ## Definition of Done
 
-- [ ] Tests 1–4 written, watched fail for the real symptom, passing; test 5 unedited and green.
-- [ ] A non-reading child is ended by the timeout and by the caller's token, on Windows and on Linux.
-- [ ] Output is bounded per stream, with the truncation named in the stream itself.
-- [ ] `module_runners.md` updated.
+- [x] Tests 1–4 written, watched fail for the real symptom, passing; test 5 unedited and green.
+- [x] A non-reading child is ended by the timeout and by the caller's token — on Windows locally and
+      on Linux in CI, which runs the same suite on `ubuntu-latest`.
+- [x] Output is bounded per stream, with the truncation named in the stream itself, in CHARACTERS —
+      see the correction in step 2 above, which the plan had written in bytes.
+- [x] `module_runners.md` updated.

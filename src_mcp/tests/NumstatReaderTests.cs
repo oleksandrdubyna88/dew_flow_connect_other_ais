@@ -25,7 +25,8 @@ public sealed class NumstatReaderTests
 
         changes.Should().ContainSingle();
         changes[0].Should().Be(new NumstatChange("src/file.cs", string.Empty, IsBinary: false));
-        changes[0].Pathspecs.Should().Equal("src/file.cs");
+        changes[0].Path.Should().Be("src/file.cs", "the PATH is the name, unprefixed — it is what the reviewer reads");
+        changes[0].Pathspecs.Should().Equal(":(literal)src/file.cs");
     }
 
     [Fact]
@@ -48,7 +49,7 @@ public sealed class NumstatReaderTests
         changes[0].Path.Should().Be("src/new.cs", "the name the reviewer will look for is where it IS");
         changes[0].RenamedFrom.Should().Be("src/old.cs");
         changes[0].Pathspecs.Should().Equal(
-            ["src/old.cs", "src/new.cs"],
+            [":(literal)src/old.cs", ":(literal)src/new.cs"],
             "one name alone makes git print a whole-file add or a whole-file delete");
     }
 

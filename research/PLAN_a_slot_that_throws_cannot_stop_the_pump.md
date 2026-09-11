@@ -73,6 +73,9 @@ breaks.
 
 ## Definition of Done
 
-- [ ] Tests 1–3 written, watched fail for the real symptom, passing.
-- [ ] Guard 1 in `JobRunner`, guard 2 in `JobPump`; the existing continuation still logs the fault.
-- [ ] `module_team_server.md` story 2.3 records the invariant: *the start signal is answered on every exit, and the pump does not trust that it will be*.
+- [x] Tests 1–3 written, watched fail for the real symptom, passing — all three in `JobPumpTests`
+      rather than one in `JobRunnerTests` and two here, because the first needs the same broken-slot
+      fixture as the other two.
+- [x] Guard 1 in `JobRunner`, guard 2 in `JobPump`; the existing continuation still logs the fault.
+- [x] `module_team_server.md` records the invariant: *the start signal is answered on every exit, and
+      the pump does not trust that it will be*.

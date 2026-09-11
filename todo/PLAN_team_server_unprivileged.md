@@ -20,6 +20,30 @@ prompt that talks one of them into running a tool reaches:
 Raised on the code round of epic 4 and accepted there. It was **not** fixed in that change, and the
 reason is the thing this plan has to solve rather than repeat.
 
+## What the application half already closed, and what is left here
+
+Mirrored from [PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md](../research/PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md),
+which shipped on 2026-09-11, so this plan states its own scope rather than pointing at another
+document for it. The rows marked **open** are this plan's subject — and they are open TODAY, on the
+live box.
+
+| | Closed by the confinement change | This plan |
+|---|---|---|
+| The server's own configuration in the child's environment | **closed**, all three CLIs: the child gets an allowlist, not the parent's environment | — |
+| Claude reading files or running commands | **closed**: every file and shell tool denied for a confined launch | — |
+| codex / antigravity reading files | **open** — `-s read-only` and `--mode plan` bound WRITES; reads are the OS's to bound | closes it: a service user per host, then per job |
+| The slot's own token in its own environment | **open** — the CLI needs it to sign in | closes the cross-slot half (a job cannot read another slot); the token stays the job's own |
+| Root | **open** | the whole subject |
+
+**What the two open rows mean together**, said plainly because it is the reason this plan is not
+optional (CodeRabbit, on the pull request that shipped the other half): an authorised employee's
+prompt, handed to `codex` or `antigravity`, can ask for a READ of any path the process can reach —
+and the process is root, so that includes `/opt/coai/data/accounts/**`, which is every other slot's
+credential file, and `/etc/coai-server.env`. The confinement change removed the environment and the
+shell; it did not and could not remove the filesystem. When this plan is built, the acceptance test
+for each CLI is a sentinel credential file in ANOTHER slot's directory and a prompt that asks for it:
+the review must come back unable to read it.
+
 ## Why it is root today, which is the whole difficulty
 
 Nothing chose root. The CLIs were installed as root before the server existed:

@@ -306,23 +306,7 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         catch (OperationCanceledException)
         {
             timedOut = true;
-            // BEFORE the kill, and this is the finding that made it explicit: a write blocked on a
-            // full pipe does not honour its token on every platform, and a descendant that survived
-            // the tree kill still holding the read end would leave that write blocked for ever —
-            // with the launcher awaiting it, and on the Team server an account locked behind it.
-            // Closing our own end fails the write at once, whoever else is holding theirs.
-            // (codex, code round.)
-            Close(process.StandardInput);
-            try
-            {
-                process.Kill(entireProcessTree: true);
-            }
-            catch (InvalidOperationException)
-            {
-                // It exited between the deadline and the kill; the race loser is fine either way.
-            }
-
-            await process.WaitForExitAsync(CancellationToken.None);
+            await EndItAsync(process);
         }
 
         // The child is gone, so the streams should end now. The grace is what bounds the case where
@@ -343,6 +327,39 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
             // is spending money on an answer nobody is waiting for.
             Cancelled: timedOut && ct.IsCancellationRequested,
             Truncated: stdout.Truncated || stderr.Truncated);
+    }
+
+    /// <summary>
+    /// Ends a child that outlived its deadline, and waits for it to actually be gone.
+    /// </summary>
+    /// <remarks>
+    /// <para>Its own method because the doctrine's complexity bound is four and the loop it was
+    /// written inside already spends all four on the paths that matter; a recovery with a nested
+    /// catch inside it made five. (CodeRabbit, on the pull request.) Extracting it is the better
+    /// shape anyway — what the caller has to know here is "the child is gone", and that is the whole
+    /// of this name.</para>
+    /// <para><b>Stdin closes BEFORE the kill</b>, and that order is the finding that made it
+    /// explicit: a write blocked on a full pipe does not honour its token on every platform, and a
+    /// descendant that survived the tree kill still holding the read end would leave that write
+    /// blocked for ever — with the launcher awaiting it, and on the Team server an account locked
+    /// behind it. Closing our own end fails the write at once, whoever else is holding theirs.
+    /// (codex, code round.)</para>
+    /// </remarks>
+    private static async Task EndItAsync(Process process)
+    {
+        Close(process.StandardInput);
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException)
+        {
+            // It exited between the deadline and the kill; the race loser is fine either way.
+        }
+
+        // No token: this is the wait for a process we have already killed, and a cancelled one would
+        // return before the handle is free.
+        await process.WaitForExitAsync(CancellationToken.None);
     }
 
     /// <summary>

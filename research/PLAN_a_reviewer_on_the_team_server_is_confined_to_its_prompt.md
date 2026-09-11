@@ -144,8 +144,12 @@ accepted against a story that had already shipped its own half.
 
 ## Definition of Done
 
-- [ ] Tests 1–4 written, watched fail for the real symptom, passing.
-- [ ] The three server-launched CLIs receive an allowlisted environment; the local `coai-mcp` is unchanged.
-- [ ] The tool names were checked against the installed CLI's `--help`, and the deviation section records what was found.
-- [ ] The boundary table above is mirrored into `PLAN_team_server_unprivileged.md`.
-- [ ] `module_team_server.md`, `module_runners.md` and `architecture.md` updated; whole suites green.
+- [x] Tests 1–4 written, watched fail for the real symptom, passing.
+- [x] The three server-launched CLIs receive an allowlisted environment; the local `coai-mcp` is unchanged.
+- [ ] **Not done, and it cannot be done here** — the tool names were checked against this repository's
+      own knowledge of the CLI, never against the INSTALLED `--help` on the box, which is the only
+      copy whose answer counts. That observation is `POST_DEPLOY.md` item 12, which runs one real
+      review per vendor after the release and names the way back when it fails. Reopens on the first
+      release whose item 12 is skipped.
+- [x] The boundary table above is mirrored into `PLAN_team_server_unprivileged.md`.
+- [x] `module_team_server.md`, `module_runners.md` and `architecture.md` updated; whole suites green.

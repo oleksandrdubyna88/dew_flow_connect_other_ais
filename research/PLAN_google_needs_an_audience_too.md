@@ -112,5 +112,14 @@ disabled provider does not.
 
 ## Definition of Done
 
-- [ ] Tests 1–2 written, watched fail, passing; test 3 unedited and green.
-- [ ] The deploy note is in the release notes of the server version that carries this.
+- [x] Tests 1–2 written, watched fail, passing; the existing `StartupGuardTests` and
+      `AuthenticationTests` unedited and green. Two tests beyond the plan: the audience check is
+      asserted to be UNCONDITIONAL (the first version passed with the conditional restored, which is
+      the defect it was written for), and a server with Google disabled is asserted to register no
+      Google scheme at all.
+- [ ] **Test 3 — the refusal through the real handler — is deliberately not written**, for the reason
+      the section above gives: eighty lines of OIDC stub for a provider disabled on the only
+      deployment there is. Written the day Google is enabled on a deployment, before the switch is
+      flipped.
+- [ ] The deploy note is in the release notes of the server version that carries this — pending the
+      release, which is the next step after this branch merges.

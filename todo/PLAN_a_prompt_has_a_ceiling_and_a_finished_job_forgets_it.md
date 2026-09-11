@@ -104,6 +104,6 @@ worth a second look, and this section is where the number to compare against liv
 
 ## Definition of Done
 
-- [ ] Tests 1–5 written, watched fail for the real symptom, passing; whole server suite and the contract suite green.
+- [ ] Tests 1–7 written, watched fail for the real symptom, passing; whole server suite and the contract suite green. (6 and 7 were added by the gate's plan round and belong here: a plan reopened later must not be markable complete with the answer ceiling and the pre-handler refusal undone. CodeRabbit, on the pull request.)
 - [ ] The key is documented; the growth budget above is in `module_team_server.md`.
 - [ ] `ci.yml` runs `CoaiServer.Tests` on pull requests — today only `release.yml` and `sonarcloud.yml` do, so a red server test reaches `main` unseen.

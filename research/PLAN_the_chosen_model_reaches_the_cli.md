@@ -64,6 +64,7 @@ No growth surface.
 
 ## Definition of Done
 
-- [ ] Tests 1–4 written, watched fail for the real symptom, passing; a clean `tsc` read before the suite.
-- [ ] No adapter can be written without deciding what to do with the model.
-- [ ] `module_extension.md` records the launch context and the tail.
+- [x] Tests 1–4 written, watched fail for the real symptom, passing; a clean `tsc` read before the suite.
+- [x] No adapter can be written without deciding what to do with the model — `argv` takes a
+      `ChatLaunch`, so the compiler asks.
+- [x] `module_extension.md` records the launch context and the tail.
