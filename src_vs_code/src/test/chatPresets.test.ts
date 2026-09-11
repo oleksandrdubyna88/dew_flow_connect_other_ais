@@ -5,6 +5,7 @@ import {
   chatPromptPresetsFrom,
   freshModelRow,
   freshPromptRow,
+  deadModelRow,
   mainPrompt,
   modelRowsAfterAdd,
   promptRowsAfterMain,
@@ -284,11 +285,7 @@ test('unticking the only main one is refused, because something has to answer a 
   assert.deepStrictEqual(promptRowsAfterMain(rows, 'a', false).map((row: Record<string, unknown>) => row['main']), [true, false]);
 });
 
-test('unticking one that is not the main one changes nothing it should not', () => {
-  const rows = [{ id: 'a', name: 'A', text: 'a', main: true }, { id: 'b', name: 'B', text: 'b', main: false }];
 
-  assert.deepStrictEqual(promptRowsAfterMain(rows, 'b', false).map((row: Record<string, unknown>) => row['main']), [true, false]);
-});
 
 test('a main edit naming a prompt that is not there changes NOTHING', () => {
   // The code round, from codex and gemini independently: a webview message can name a row that was
@@ -315,4 +312,30 @@ test('a model row cannot be built without the reviewer that answers it', () => {
 
   assert.strictEqual(chatModelPresetsFrom([row]).length, 1);
   assert.strictEqual(chatPromptPresetsFrom([freshPromptRow([])]).length, 1);
+});
+
+test('the cleanup knows the litter it wrote, not merely what this reader refuses', () => {
+  // The code round (codex, Major): using the current reader's ACCEPTANCE rule as migration authority
+  // means an older build opening a newer file deletes rows it simply does not understand yet. The
+  // signature of the defect is its own rule — a provider written as an empty string — and a row that
+  // is strange for any other reason is left alone.
+  assert.strictEqual(deadModelRow({ id: 'x', name: 'New model', provider: '', model: '' }), true);
+  assert.strictEqual(deadModelRow({ id: 'x', name: 'Mine', provider: 'agy', model: '' }), false);
+  assert.strictEqual(deadModelRow({ id: 'x', name: 'Mine', provider: 'agy', someFutureField: 7 }), false,
+    'a row from a newer build was treated as litter');
+  assert.strictEqual(deadModelRow({ id: 'x', name: 'Mine' }), false, 'a row with no provider FIELD is not the litter');
+});
+
+test('re-ticking the prompt that is already main writes nothing', () => {
+  // Two vendors, from two directions: `rows.map(...)` allocates unconditionally, so the host's
+  // reference check saw a change that was not one and wrote the file back to say what it said.
+  const rows = [{ id: 'a', name: 'A', text: 'a', main: true }, { id: 'b', name: 'B', text: 'b', main: false }];
+
+  assert.strictEqual(promptRowsAfterMain(rows, 'a', true), rows);
+});
+
+test('unticking a prompt that was not main writes nothing either', () => {
+  const rows = [{ id: 'a', name: 'A', text: 'a', main: true }, { id: 'b', name: 'B', text: 'b', main: false }];
+
+  assert.strictEqual(promptRowsAfterMain(rows, 'b', false), rows);
 });

@@ -9,9 +9,9 @@ import {
   freshPromptRow,
   modelRowsAfterAdd,
   promptRowsAfterMain,
-  readableModelRow,
+  deadModelRow,
 } from './chatPresets';
-import { PresetCommand, chatPresetsHtml, presetEdit, repaintsAfter } from './chatPresetsPage';
+import { PresetCommand, chatPresetsHtml, editRepaints, presetEdit } from './chatPresetsPage';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 import { teamServersFrom } from './teamServers';
 import { vendorsFrom } from './vendors';
@@ -78,11 +78,16 @@ async function write(key: string, value: unknown): Promise<void> {
 function edited(
   rows: readonly Record<string, unknown>[],
   command: Extract<PresetCommand, { kind: 'edit' }>,
-): Record<string, unknown>[] {
+): readonly Record<string, unknown>[] {
   // The `main` box does NOT come through here any more — `promptRowsAfterMain` owns that rule, next
   // to the reader that enforces the same thing. The branch that used to untick the siblings was left
   // dead by that move, and dead code beside a live rule is the second copy that drifts.
-  return rows.map((row) => (row['id'] === command.id ? { ...row, [command.field]: command.value } : row));
+  // The list ITSELF when the row already holds that value — choosing the option a select is already
+  // on is a click somebody makes, and writing the file back to say what it says is a configuration
+  // event every window then reacts to. The host writes only when the reference moved.
+  return rows.some((row) => row['id'] === command.id && row[command.field] === command.value)
+    ? rows
+    : rows.map((row) => (row['id'] === command.id ? { ...row, [command.field]: command.value } : row));
 }
 
 function rowsOf(key: string): Record<string, unknown>[] {
@@ -135,19 +140,25 @@ async function apply(command: PresetCommand): Promise<boolean> {
     const rows = key === PROMPTS_KEY ? promptRowsToWrite() : rowsOf(key);
     // The `main` box is a rule of its own — exactly one, and the last one cannot be turned off —
     // so it is decided beside the reader that enforces the same thing, not in `edited`.
-    const next = command.field === 'main'
+    // The LIST as well as the field: `main` is a rule of the PROMPT list — exactly one, and the last
+    // cannot be turned off — and a message naming the model list must not be given it. No model row
+    // carries a `main` today, which is exactly why the guard belongs here rather than in a comment.
+    const next = command.list === 'prompt' && command.field === 'main'
       ? promptRowsAfterMain(rows, command.id, command.value === true)
       : edited(rows, command);
     // The SAME array back means the rule refused — unticking the last main one, or an id naming no
     // row. Writing it would be a configuration change event that says nothing, on every click.
-    if (next !== rows) {
-      await write(key, next);
+    if (next === rows) {
+      // Refused, or asked for what the file already said. Nothing was written, so there is nothing to
+      // draw again — and a repaint would move a caret in some other row for an edit that did nothing.
+      return false;
     }
+    await write(key, next);
 
-    // `repaintsAfter` decides, beside the message parser and tested with it. Typing must NOT
-    // repaint — the caret is in a box somebody is writing in — and the `main` tick MUST, because
-    // its whole effect is on the rows it is not in.
-    return repaintsAfter(command);
+    // `editRepaints` decides, beside the message parser and tested with it. Typing must NOT repaint —
+    // the caret is in a box somebody is writing in — and the `main` tick MUST, because its whole
+    // effect is on the rows it is not in.
+    return editRepaints(command);
   }
 
   return false;
@@ -244,7 +255,7 @@ async function addModel(rows: readonly Record<string, unknown>[]): Promise<boole
  */
 async function pruneDeadModelRows(): Promise<void> {
   const rows = rowsOf(MODELS_KEY);
-  const kept = rows.filter(readableModelRow);
+  const kept = rows.filter((row) => !deadModelRow(row));
   if (kept.length !== rows.length) {
     await write(MODELS_KEY, kept);
   }

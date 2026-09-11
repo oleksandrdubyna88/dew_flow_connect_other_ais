@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { chatPresetsHtml, presetEdit, repaintsAfter } from '../chatPresetsPage';
+import { chatPresetsHtml, editRepaints, presetEdit } from '../chatPresetsPage';
 
 /**
  * The tab where a person keeps their prompts and their models.
@@ -146,13 +146,13 @@ test('a message this page does not understand is ignored, not guessed at', () =>
  * be the same rule written twice, and the second copy is the one that drifts.</p>
  */
 test('ticking the main one is redrawn, because its effect is on the rows it is not in', () => {
-  assert.strictEqual(repaintsAfter({ kind: 'edit', list: 'prompt', id: 'p1', field: 'main', value: true }), true);
+  assert.strictEqual(editRepaints({ kind: 'edit', list: 'prompt', id: 'p1', field: 'main', value: true }), true);
 });
 
 test('typing is NOT redrawn, which is the rule this exception is carved out of', () => {
   for (const field of ['name', 'text', 'provider', 'model', 'startingPrompt'] as const) {
     assert.strictEqual(
-      repaintsAfter({ kind: 'edit', list: 'prompt', id: 'p1', field, value: 'x' }),
+      editRepaints({ kind: 'edit', list: 'prompt', id: 'p1', field, value: 'x' }),
       false,
       `${field} redraws the page under a caret`,
     );
@@ -160,11 +160,10 @@ test('typing is NOT redrawn, which is the rule this exception is carved out of',
 });
 
 test('unticking is redrawn too, so the list cannot be left showing none', () => {
-  assert.strictEqual(repaintsAfter({ kind: 'edit', list: 'prompt', id: 'p1', field: 'main', value: false }), true);
+  assert.strictEqual(editRepaints({ kind: 'edit', list: 'prompt', id: 'p1', field: 'main', value: false }), true);
 });
 
-test('adding and removing are redrawn, as they always were', () => {
-  assert.strictEqual(repaintsAfter({ kind: 'add', list: 'model' }), true);
-  assert.strictEqual(repaintsAfter({ kind: 'remove', list: 'model', id: 'm1' }), true);
-  assert.strictEqual(repaintsAfter({ kind: 'ignore' }), false);
-});
+// Adding and removing are NOT decided here any more. The code round was right that a whole-command
+// policy in the page parser, consulted by the host for edits only, is a rule with a test and no
+// effect: changing what it says about `add` would move a test and nothing else. Whether an add
+// redraws depends on whether it was refused, which only the host knows. (gemini, the code round.)

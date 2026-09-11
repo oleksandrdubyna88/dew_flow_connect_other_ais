@@ -241,14 +241,20 @@ export function freshModelRow(taken: readonly { readonly id: string }[], provide
 }
 
 /**
- * Whether a row is one its reader would keep — used to drop what an older build wrote by mistake.
+ * Whether a row is the LITTER the empty-provider seed wrote — a rule of its own, deliberately.
  *
- * <p>A model row with no provider cannot be rendered, edited or removed on any surface, so it is not
- * a draft somebody is composing: it is litter from the defect above. Cleared on the next write to
- * the list rather than by a migration nobody would run.</p>
+ * <p>The obvious implementation was `chatModelPresetsFrom([row]).length === 0`: whatever the reader
+ * refuses. The code round showed why that is wrong as a cleanup rule (codex, Major): it makes the
+ * CURRENT reader's acceptance the authority on what may be deleted, so an older build opening a
+ * newer settings file would permanently remove rows it merely does not understand yet. What may be
+ * deleted is what this product wrote by mistake, and that has a signature — a `provider` written as
+ * an empty string, which no surface has ever been able to produce any other way. A row that is
+ * strange for any other reason, or has no provider FIELD at all, is left where it is.</p>
  */
-export function readableModelRow(row: unknown): boolean {
-  return chatModelPresetsFrom([row]).length === 1;
+export function deadModelRow(row: unknown): boolean {
+  const one = record(row);
+
+  return one !== undefined && one['provider'] === '';
 }
 
 /** The rows a settings list holds, before any reader has had an opinion about them. */
@@ -276,7 +282,7 @@ export function modelRowsAfterAdd(
   if (providerId.length === 0) {
     return undefined;
   }
-  const kept = rows.filter(readableModelRow);
+  const kept = rows.filter((row) => !deadModelRow(row));
 
   return [...kept, freshModelRow(kept as { id: string }[], providerId)];
 }
@@ -303,11 +309,17 @@ export function promptRowsAfterMain(
   if (!rows.some((row) => row['id'] === id)) {
     return rows;
   }
-  if (!ticked) {
-    const others = rows.some((row) => row['id'] !== id && row['main'] === true);
+  // What the list WOULD hold. Unticking the only main one is refused — `onlyOneMain` marks nothing
+  // when nothing is ticked and `mainPrompt` then falls back to the first prompt, so the page would
+  // show no tick while the first one is quietly what a capture sends.
+  const wanted = (row: SavedRow): boolean => (ticked
+    ? row['id'] === id
+    : (row['id'] === id ? !rows.some((other) => other['id'] !== id && other['main'] === true) : row['main'] === true));
 
-    return others ? rows.map((row) => (row['id'] === id ? { ...row, main: false } : row)) : rows;
-  }
-
-  return rows.map((row) => ({ ...row, main: row['id'] === id }));
+  // The list ITSELF when every flag already says that. The host writes only when the reference moved,
+  // so re-ticking the row that is already main, or unticking one that was never main, stops being a
+  // configuration event that says what the file said. (gemini and local, the code round.)
+  return rows.every((row) => (row['main'] === true) === wanted(row))
+    ? rows
+    : rows.map((row) => ({ ...row, main: wanted(row) }));
 }
