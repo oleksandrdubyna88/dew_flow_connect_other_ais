@@ -58,7 +58,7 @@ public sealed class JobRunner(
     {
         try
         {
-            return await ClaimAndRunAsync(vendorId, ct, started);
+            return await ClaimAndRunAsync(vendorId, started, ct);
         }
         finally
         {
@@ -67,7 +67,7 @@ public sealed class JobRunner(
     }
 
     private async Task<bool> ClaimAndRunAsync(
-        string vendorId, CancellationToken ct, TaskCompletionSource<bool>? started)
+        string vendorId, TaskCompletionSource<bool>? started, CancellationToken ct)
     {
         if (catalog.Current.Find(vendorId) is not { } vendor)
         {

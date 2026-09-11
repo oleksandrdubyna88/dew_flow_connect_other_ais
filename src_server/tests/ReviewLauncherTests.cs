@@ -241,7 +241,7 @@ public sealed class ReviewLauncherTests
     private const string DisallowedToolsFlag = "--disallowedTools";
 
     /// <summary>The names that follow the one <c>--disallowedTools</c>, up to the next flag.</summary>
-    private static IReadOnlyList<string> Denied(IReadOnlyList<string> args)
+    private static List<string> Denied(IReadOnlyList<string> args)
     {
         args.Should().ContainSingle(a => a == DisallowedToolsFlag,
             "a variadic option given twice is whichever the CLI reads last, and that is not a list anybody wrote");

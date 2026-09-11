@@ -196,7 +196,7 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
     /// outlives the job. All three names, because POSIX tools read the first and Windows ones the
     /// other two, and this server is tested on both.</para>
     /// </remarks>
-    private static IReadOnlyDictionary<string, string?> OwnTemporaryDirectory(
+    private static Dictionary<string, string?> OwnTemporaryDirectory(
         IReadOnlyDictionary<string, string?> slot, string work) =>
         new Dictionary<string, string?>(slot, StringComparer.Ordinal)
         {

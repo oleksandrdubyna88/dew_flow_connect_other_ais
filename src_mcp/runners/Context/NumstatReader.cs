@@ -57,23 +57,31 @@ public static class NumstatReader
     /// </remarks>
     public static IEnumerable<NumstatChange> Read(string numstat)
     {
+        // A WHILE over a cursor rather than a `for`, because a rename consumes THREE fields and an
+        // ordinary record one: the step is part of what each record means, and a `for` whose body
+        // advances its own counter says the opposite — that the step is fixed and the body is an
+        // exception to it.
         var fields = numstat.Split('\0');
-        for (var i = 0; i < fields.Length; i++)
+        var at = 0;
+        while (at < fields.Length)
         {
-            if (Counts(fields[i]) is not var (path, binary))
+            if (Counts(fields[at]) is not var (path, binary))
             {
+                at += 1;
+
                 continue;
             }
 
             if (path.Length > 0)
             {
                 yield return new NumstatChange(path, string.Empty, binary);
+                at += 1;
 
                 continue;
             }
 
-            yield return Renamed(fields, i, binary);
-            i += 2;
+            yield return Renamed(fields, at, binary);
+            at += 3;
         }
     }
 

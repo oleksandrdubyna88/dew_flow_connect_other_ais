@@ -366,6 +366,8 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         }
         catch (Exception e) when (e is IOException or ObjectDisposedException or InvalidOperationException)
         {
+            // Nothing to do and nothing to report: each of these means our end is already closed,
+            // which is the state this method exists to reach.
         }
     }
 
@@ -420,6 +422,9 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         }
         catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
         {
+            // The child's own departure, in its three spellings. Not a failure of the LAUNCH — its
+            // exit code and its own words are the answer — and the remarks above say why letting one
+            // out of here cost a whole round once.
         }
     }
 
