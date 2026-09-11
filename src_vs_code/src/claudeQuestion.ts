@@ -228,33 +228,49 @@ export function lastAsked(lines: readonly string[]): FileAsked {
  * <p>A slash command is kept and unwrapped: `&lt;command-name&gt;` tags are Claude Code's own
  * envelope around something a person really did type.</p>
  */
-export function humanPrompts(lines: readonly string[]): readonly string[] {
-  const said: string[] = [];
-
-  for (const line of lines) {
-    if (line.trim().length === 0) {
-      continue;
-    }
-    let row: Record<string, unknown> | undefined;
-    try {
-      row = record(JSON.parse(line));
-    } catch {
-      continue;
-    }
-    if (row?.['type'] !== 'user' || row['isSidechain'] === true || row['isMeta'] === true) {
-      continue;
-    }
-    const origin = record(row['origin']);
-    if (origin?.['kind'] !== 'human') {
-      continue;
-    }
-    const spoken = plainly(saidIn(row));
-    if (spoken.length > 0) {
-      said.push(spoken);
-    }
+/**
+ * What the person said in ONE line of a session file, or empty when nobody did.
+ *
+ * <p>A line at a time, so the file can be streamed rather than held. A day-long session is tens of
+ * megabytes and a project folder holds weeks of them; reading each one into a string and splitting
+ * it into an array of lines allocates both, on the extension host's own thread. (The code round, on
+ * this point from five reviewers across two vendors.)</p>
+ */
+export function humanSaid(line: string): string {
+  if (line.trim().length === 0) {
+    return '';
+  }
+  let row: Record<string, unknown> | undefined;
+  try {
+    row = record(JSON.parse(line));
+  } catch {
+    // A half-written last line, which is what the end of a live session always looks like.
+    return '';
+  }
+  if (row?.['type'] !== 'user' || row['isSidechain'] === true || row['isMeta'] === true) {
+    return '';
+  }
+  const origin = record(row['origin']);
+  if (origin?.['kind'] !== 'human') {
+    return '';
   }
 
-  return said;
+  return plainly(saidIn(row));
+}
+
+/** The title a session gives itself in ONE line, or empty. The caller keeps the last one. */
+export function titleSaid(line: string): string {
+  if (!line.includes('"ai-title"')) {
+    return '';
+  }
+  try {
+    const row = JSON.parse(line) as { type?: unknown; aiTitle?: unknown };
+
+    return row.type === 'ai-title' && typeof row.aiTitle === 'string' ? row.aiTitle : '';
+  } catch {
+    // A half-written line names nothing.
+    return '';
+  }
 }
 
 /** The text of a user row, whichever shape its content takes. */
@@ -267,24 +283,31 @@ function saidIn(row: Record<string, unknown>): string {
   if (!Array.isArray(content)) {
     return '';
   }
+  // EVERY text block, not the first. A turn can arrive in several of them — a prefilled preamble
+  // and the person's own question are two — and returning at the first cut their words in half.
+  // (gemini, the code round.)
+  const spoken: string[] = [];
   for (const block of content as unknown[]) {
     const one = record(block);
     // The block's KIND, not merely the presence of a `text` field. A `tool_use` block carries one
     // too, and taking the first thing that looked like prose would have shown the machinery's words
     // as the person's. (The plan round, on a row whose blocks are mixed.)
     if (one?.['type'] === 'text' && typeof one['text'] === 'string' && one['text'].trim().length > 0) {
-      return one['text'];
+      spoken.push(one['text']);
     }
   }
 
-  return '';
+  return spoken.join('\n');
 }
 
 /**
  * A prompt as a person would recognise it: the slash-command envelope unwrapped, the tooling gone.
  */
 function plainly(said: string): string {
-  const name = /<command-name>([^<]*)<\/command-name>/.exec(said);
+  // ANCHORED. Claude Code's envelope opens the message; the same tags in the middle of one are a
+  // person quoting them, and unwrapping there replaced everything they actually wrote with the
+  // quotation. (gemini, the code round.)
+  const name = /^\s*<command-name>([^<]*)<\/command-name>/.exec(said);
   const args = /<command-args>([^<]*)<\/command-args>/.exec(said);
   if (name !== null) {
     // The tag already carries its slash — measured on this machine's own session files, where every

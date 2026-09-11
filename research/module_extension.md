@@ -387,11 +387,16 @@ thought of.
 
 ### The chat page's layout: one scrolling region, a pinned footer (2026-09-09)
 
-`chatPage.ts` renders two children of `body` and nothing else at the top level: `<main id="scroll">`
-holds the header, the passage, the failure box, the messages, the thinking line and the capped
-notice; `<footer id="composer">` holds the picker row, the textarea, the **Send** button and the
-hint. `body` is a flex column with `overflow: hidden`, so **the page itself never scrolls** — only
-the region does.
+`chatPage.ts` renders four children of `body` and nothing else at the top level: `<header>` with the
+title, the two steppers and the **Asked** button; `<section id="asking">`, the region that shows what
+was asked; `<main id="scroll">` with the passage, the failure box, the messages, the thinking line
+and the capped notice; and `<footer id="composer">` with the picker row, the textarea, the **Send**
+button and the hint. `body` is a flex column with `overflow: hidden`, so **the page itself never
+scrolls** — only the region does.
+
+The header and the asking section left `#scroll` on 2026-09-12, and that is the whole point of them:
+the operator asked for a question that stays put *"неважно где я, в начале или в конце"*. Inside the
+scrolling region it would have slid away exactly when it was being read.
 
 `#scroll` carries `flex: 1 1 auto; min-height: 0; overflow-y: auto`, and the `min-height: 0` is the
 load-bearing line: a flex child refuses to shrink below its content without it, so the region would
@@ -1057,6 +1062,51 @@ void looks exactly like one that does nothing.
 Three more about not guessing. The case-insensitive directory match happens only where the FILESYSTEM is case-insensitive, because on Linux `/work/App` and `/work/app` are two projects. A directory that will not answer is not an empty one — only ENOENT is absence. And the label re-key is refused for FILES: two `README.md` in two folders share a label and are not the same document, so a file whose tab has gone starts a new conversation rather than inheriting one. That fallback belongs to Claude panels, where a label is a session name somebody chose.
 
 **A shape this build cannot read is NAMED.** An `AskUserQuestion` whose questions will not parse is a third answer beside "a question" and "nothing" — if Anthropic moves a field, the command says the format changed instead of reporting that Claude is asking nothing while a question sits on screen.
+
+### The tab knows its own session, and can show what you asked (2026-09-12)
+
+**A tab is joined to a session by its TITLE.** Asked as *"по айди окна разве не можем определить
+однозначно?"* — by window id, no: VS Code exposes none. But Claude Code writes
+`{"type":"ai-title","aiTitle":"…","sessionId":"…"}` into the session file as it names the
+conversation, and that string is exactly what VS Code puts on the tab. Measured against a live
+session before it was built. So two sessions waiting in one folder are no longer a flat refusal: the
+one whose title matches the active tab wins, and a title matching neither or both still refuses.
+
+**And the tab can read that session back.** The symptom was *"когда окно долго работает (4 ч и более)
+начальный вопрос исчезает, и мне приходится спрашивать клод над чем ты работаешь"*. **Asked**, in the
+header beside the steppers, opens the pinned region above the conversation and shows what the PERSON
+wrote, oldest first, with `‹` and `›` to step through. Pressed again it folds, over half a second.
+A chat opened from a FILE has no session behind it and gets no button at all.
+
+`humanSaid(line)` in `claudeQuestion.ts` decides what counts, one line at a time: `origin.kind ===
+'human'` on a `user` row, minus a `tool_result`, a sidechain, a meta row and a local command's own
+stdout. A turn an extension PREFILLED is still the person's — CredsForDevs writes a preamble into the
+composer and they type at the end of it, so the two arrive as one message, confirmed with the
+operator rather than guessed. Every `text` block of a turn is joined, because a preamble and a
+question can be two of them. A `<command-name>` envelope is unwrapped only at the START of a message,
+since the same tags mid-sentence are somebody quoting them.
+
+**The whole read is streamed.** `promptsInSession` makes two passes with `node:readline`: one over
+every candidate file taking nothing but its title, then one over the single matching file taking
+prompts and stopping at `MOST_PROMPTS` (200, each cut at `MOST_PER_PROMPT` = 8 000 characters, saying
+where it was cut). The first version read each whole file into a string and split it into an array of
+lines to compare a title, and five reviewers across two vendors measured the same shape at 10× as
+seconds of a blocked extension host.
+
+**Three refusals, all of them named.** Two sessions in one folder sharing a title is a refusal, never
+a pick — `oneAnswerFrom` says the same for two workspace ROOTS each holding one, which was a
+first-match-wins bug the code round caught. Every outcome carries its own sentence, because no session
+file, no folder open, a namesake, and a conversation nobody has spoken in yet all look identical from
+an empty region. And a `SavedTab` that does not say which door it came through is NOT a session: a
+file chat called `README.md` restored beside a session Claude named `README.md` would otherwise show
+that session's words inside the file's tab.
+
+**The seam carries a sequence number.** The page posts `{type:'showAsked'}` and the host answers
+`{type:'asked', at, asked, refusal}` — its own message type, because the page's `state` handler treats
+a capped notice and a failure line as gone when a message does not mention them. `at` counts presses:
+opening, folding and opening again starts a second read while the first is still running, and the page
+ignores anything older than the newest it has seen. It re-reads on every OPEN, never on load — the
+window this exists for is still being typed into, so a list read once would go stale.
 
 **The tail all three doors share is one function now.** `deliverPassage` — resolve the CLI, resolve
 the remote session, open or reveal the conversation, ask or leave the turn in the composer. Three

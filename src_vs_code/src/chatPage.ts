@@ -818,10 +818,13 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   // Which words in the turn are which, so the layer behind the box can draw them apart.
   let marks = ${jsonForScript(state.marks)};
   // What the person wrote in the session this conversation came from, once the host has read it.
-  let asked = ${jsonForScript(state.asked)};
+  let asked = ${jsonForScript(state.asked ?? [])};
   let askedAt = 0;
   // Why there is nothing, when there is nothing. Empty until the host has answered at all.
   let askedWhy = '';
+  // The newest answer this page has taken. A read started by an earlier press can finish after one
+  // started by a later press, and landing second it would replace what was just asked for.
+  let askedSeen = 0;
   // The frame a paint is waiting for, declared HERE because the first paint runs at load - before
   // the painter's own place in this script - and a let in the temporal dead zone throws.
   let painting = 0;
@@ -1094,9 +1097,15 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     const at = document.getElementById('askedAt');
     if (!box || !at) { return; }
     const count = asked.length;
+    const back = document.getElementById('askedBack');
+    const next = document.getElementById('askedNext');
     if (count === 0) {
       box.textContent = askedWhy.length > 0 ? askedWhy : 'Reading the session…';
       at.textContent = '';
+      // Nothing to step through. Arrows that look pressable and do nothing are a worse answer than
+      // arrows that say they have nothing to do.
+      if (back) { back.disabled = true; }
+      if (next) { next.disabled = true; }
 
       return;
     }
@@ -1104,6 +1113,8 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     if (askedAt < 0) { askedAt = 0; }
     box.textContent = asked[askedAt];
     at.textContent = (askedAt + 1) + ' / ' + count;
+    if (back) { back.disabled = askedAt === 0; }
+    if (next) { next.disabled = askedAt >= count - 1; }
   }
   function showAsked(open) {
     const region = document.getElementById('asking');
@@ -1328,6 +1339,11 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     // as gone when a state message does not mention them, so answering "what did I ask" through the
     // state channel would silently clear both.
     if (data.type === 'asked') {
+      const at = typeof data.at === 'number' ? data.at : 0;
+      if (at < askedSeen) {
+        return;
+      }
+      askedSeen = at;
       const before = askedAt;
       const had = asked.length;
       asked = Array.isArray(data.asked) ? data.asked : [];

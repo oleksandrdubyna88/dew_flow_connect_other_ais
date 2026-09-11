@@ -3,8 +3,8 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { humanPrompts } from '../claudeQuestion';
-import { MOST_PER_PROMPT, MOST_PROMPTS, promptsInSession } from '../claudeSessions';
+import { humanSaid } from '../claudeQuestion';
+import { Asked, MOST_PER_PROMPT, MOST_PROMPTS, oneAnswerFrom, promptsInSession } from '../claudeSessions';
 import { chatCommandOf } from '../chatMessages';
 
 /**
@@ -15,6 +15,10 @@ import { chatCommandOf } from '../chatMessages';
  * Code writes every one of them to its own session file. These tests fix the two halves of getting
  * them back — which rows count as a person speaking, and which session belongs to this tab.</p>
  */
+
+/** What the shipping reader would take from these lines: it is fed one at a time, off a stream. */
+const humanPrompts = (lines: readonly string[]): readonly string[] =>
+  lines.map(humanSaid).filter((one) => one.length > 0);
 
 const said = (text: string, extra: Record<string, unknown> = {}): string => JSON.stringify({
   type: 'user',
@@ -205,4 +209,63 @@ test('the page can ask for it, and cannot ask for anything else by that name', (
   assert.deepStrictEqual(chatCommandOf({ type: 'showAsked' }), { kind: 'showAsked' });
   // And a page from an older build, asking for it the way nothing asks for it, is a press of nothing.
   assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'showAsked' }), { kind: 'ignore' });
+});
+
+test('a turn written in several blocks comes back whole', () => {
+  // A prefilled preamble and the person's own question can be two blocks of one turn. Returning at
+  // the first cut their words in half. (gemini, the code round.)
+  const split = JSON.stringify({
+    type: 'user',
+    origin: { kind: 'human' },
+    message: {
+      content: [
+        { type: 'text', text: 'You have CredsForDevs available.' },
+        { type: 'tool_result', tool_use_id: 'x' },
+        { type: 'text', text: 'а если в папке 2 сессии?' },
+      ],
+    },
+  });
+
+  assert.deepStrictEqual(humanPrompts([split]), ['You have CredsForDevs available.\nа если в папке 2 сессии?']);
+});
+
+test('a command envelope is unwrapped only where Claude Code puts one — at the start', () => {
+  // Quoting the tags mid-sentence replaced everything the person actually wrote with the quotation.
+  const quoted = said('is <command-name>/compact</command-name> the tag you meant?');
+
+  assert.deepStrictEqual(humanPrompts([quoted]), ['is <command-name>/compact</command-name> the tag you meant?']);
+  // And the real envelope still unwraps.
+  assert.deepStrictEqual(humanPrompts([said('<command-name>/compact</command-name>')]), ['/compact']);
+});
+
+test('one folder of several answers; two of them is a refusal, never a pick', () => {
+  // FIRST-MATCH-WINS was the bug: a workspace with two roots, each holding a session called Build,
+  // showed whichever root VS Code listed first. Five reviewers across two vendors, one round.
+  const found = (said: string): Asked => ({ kind: 'said', said: [said] });
+  const nothing: Asked = { kind: 'none', refusal: 'nothing in this one' };
+
+  assert.deepStrictEqual(oneAnswerFrom([nothing, found('mine'), nothing]), found('mine'));
+
+  const both = oneAnswerFrom([found('one root'), found('the other root')]);
+  assert.strictEqual(both.kind, 'several', 'a tab was handed one of two folders at random');
+  assert.match(both.kind === 'several' ? both.refusal : '', /2 of the folders/);
+});
+
+test('with nothing found anywhere, the reason given is the first one, and never silence', () => {
+  const first: Asked = { kind: 'none', refusal: 'the nearest miss' };
+  const second: Asked = { kind: 'none', refusal: 'a folder they were not asking about' };
+
+  assert.deepStrictEqual(oneAnswerFrom([first, second]), first);
+
+  // A window with no folder open at all still gets a sentence rather than an empty region.
+  const none = oneAnswerFrom([]);
+  assert.strictEqual(none.kind, 'none');
+  assert.match(none.kind === 'none' ? none.refusal : '', /no folder open/);
+});
+
+test('a namesake refusal outranks a plain miss, because it is the one worth acting on', () => {
+  const ambiguous: Asked = { kind: 'several', refusal: '2 sessions here share this name' };
+  const nothing: Asked = { kind: 'none', refusal: 'nothing in this one' };
+
+  assert.deepStrictEqual(oneAnswerFrom([nothing, ambiguous]), ambiguous);
 });
