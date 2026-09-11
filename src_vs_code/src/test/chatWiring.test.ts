@@ -57,13 +57,26 @@ test('the command the extension registers is the command the manifest declares',
   );
 });
 
-test('the keybinding door exists, is scoped to the assistant panel, and names that command', () => {
+test('the chord has one binding per door, and neither of them is unscoped', () => {
+  // TWO doors since the chat learned to open from a file. Each is scoped to the surface it can
+  // actually read: the panel's binding to the panel, the editor's to a focused editor. What must
+  // never appear is a binding with no `when` at all — it would fire over a settings page, an image
+  // preview and the Output pane, where there is nothing to send.
   const bound = MANIFEST.contributes.keybindings.filter((row) => row.command === COMMAND);
 
-  assert.strictEqual(bound.length, 1, 'the keybinding is missing or declared twice');
-  assert.strictEqual(bound[0]!.key, 'ctrl+alt+a');
-  // Unscoped, it would fire over an editor, where there is no selection to copy out of a webview.
-  assert.match(bound[0]!.when ?? '', new RegExp(`activeWebviewPanelId == '${PANEL}'`));
+  assert.strictEqual(bound.length, 2, 'a door is missing, or one is declared twice');
+  for (const row of bound) {
+    assert.strictEqual(row.key, 'ctrl+alt+a');
+    assert.ok((row.when ?? '').length > 0, 'a binding with no scope fires wherever the chord is pressed');
+  }
+  assert.ok(
+    bound.some((row) => new RegExp(`activeWebviewPanelId == '${PANEL}'`).test(row.when ?? '')),
+    'the assistant panel lost the chord it had',
+  );
+  assert.ok(
+    bound.some((row) => (row.when ?? '').includes('editorTextFocus')),
+    'the chord does nothing in an ordinary editor',
+  );
 });
 
 test('the right-click door exists, and is scoped to the same panel', () => {
