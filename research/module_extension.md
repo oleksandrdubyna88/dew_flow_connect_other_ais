@@ -898,6 +898,20 @@ REQUIRED provider — one factory with a defaulted one left the original defect 
 caller who forgot the argument. And the sibling-unticking branch inside `edited` was left dead by
 the move and is gone: dead code beside a live rule is the second copy that drifts.
 
+**The second code round, which is where the cleanup rule got its own name.** Using the current
+reader’s ACCEPTANCE rule as migration authority was the mistake: an older build opening a newer
+settings file would permanently delete rows it merely does not understand yet. What may be deleted
+is what this product wrote by mistake, and that has a signature — `deadModelRow` is a `provider`
+written as an empty string, which no surface can produce any other way. A row with no `provider`
+field at all, or one carrying fields from a later build, is left where it is.
+
+Three more: a `main` edit is guarded by the LIST as well as the field, so a message naming the model
+list cannot be given a rule that belongs to the prompt list; `promptRowsAfterMain` returns the list
+ITSELF whenever every flag already says what was asked, so re-ticking the main one writes nothing;
+and `repaintsAfter` narrowed to `editRepaints`, taking only edit commands. A whole-command policy in
+the page parser that the host consulted for edits alone was a rule with a test and no effect —
+whether an `add` redraws depends on whether it was refused, which only the host knows.
+
 **`coai.editChatPresets` reached a menu.** It shipped registered, in no `contributes.menus` entry and
 named in no view, so the tab it opens was reachable only from the command palette. The section has an
 **Edit presets…** button, routed like *Install the MCP server…* through `VSCODE_COMMAND_FOR`.

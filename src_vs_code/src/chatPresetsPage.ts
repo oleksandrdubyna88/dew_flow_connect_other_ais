@@ -76,14 +76,8 @@ function idOf(value: unknown): string {
  * rather than by unticking the siblings in the page's own script: that would be the same rule
  * written twice, and the second copy is the one that drifts.</p>
  */
-export function repaintsAfter(command: PresetCommand): boolean {
-  // An `ignore` changed nothing, so there is nothing to draw again — and a repaint on every message
-  // this page does not understand would rebuild it from anything that reached the webview.
-  if (command.kind === 'ignore') {
-    return false;
-  }
-
-  return command.kind !== 'edit' || command.field === 'main';
+export function editRepaints(command: Extract<PresetCommand, { kind: 'edit' }>): boolean {
+  return command.field === 'main';
 }
 
 export function presetEdit(message: unknown): PresetCommand {
