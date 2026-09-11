@@ -1,0 +1,221 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { test } from 'node:test';
+import { askedAsText, lastAsked } from '../claudeQuestion';
+import {
+  WaitingSession,
+  projectDirIn,
+  projectDirName,
+  waitingIn,
+  waitingQuestion,
+} from '../claudeSessions';
+
+/**
+ * Taking the question Claude Code is asking, off its own session file.
+ *
+ * <p>The fixtures are the shape a real file has, measured against one on this machine rather than
+ * imagined: an assistant row whose `message.content` carries a `tool_use` named `AskUserQuestion`,
+ * and a later row whose `tool_result` names that `tool_use_id`.</p>
+ */
+
+const asks = (id: string, questions: unknown, extra: Record<string, unknown> = {}): string => JSON.stringify({
+  type: 'assistant',
+  sessionId: 'session-1',
+  timestamp: '2026-09-11T18:00:00.000Z',
+  message: { content: [{ type: 'tool_use', id, name: 'AskUserQuestion', input: { questions } }] },
+  ...extra,
+});
+
+const answers = (id: string): string => JSON.stringify({
+  type: 'user',
+  message: { content: [{ type: 'tool_result', tool_use_id: id, content: 'the answer' }] },
+});
+
+const ONE = [{
+  header: 'Scope',
+  question: 'How far should this go?',
+  multiSelect: false,
+  options: [
+    { label: 'All of it', description: 'every part in one pass' },
+    { label: 'Just the first', description: 'and stop' },
+  ],
+}];
+
+// ---------------------------------------------------------------------------------------------
+// Reading the file.
+// ---------------------------------------------------------------------------------------------
+
+test('the last question in the file is the one taken', () => {
+  const found = lastAsked([asks('a', ONE), asks('b', [{ ...ONE[0], question: 'And then?' }])]);
+
+  assert.strictEqual(found?.id, 'b', 'an older question won');
+  assert.strictEqual(found?.questions[0]?.question, 'And then?');
+  assert.strictEqual(found?.answered, false);
+});
+
+test('a question with an answer after it is reported ANSWERED, not handed over as live', () => {
+  // Handing a second model a question that is already settled is the worst outcome this command
+  // has: the answer comes back about a decision that was made ten minutes ago.
+  const found = lastAsked([asks('a', ONE), answers('a')]);
+
+  assert.strictEqual(found?.answered, true, 'an answered question looked like one still waiting');
+});
+
+test('EVERY question in the block is read, not the first', () => {
+  // `questions` holds four at a time often enough that taking the first would drop most of what
+  // was asked — and silently. (codex, the plan round.)
+  const four = [0, 1, 2, 3].map((n) => ({ ...ONE[0], question: `Question ${n}` }));
+  const found = lastAsked([asks('a', four)]);
+
+  assert.strictEqual(found?.questions.length, 4, 'questions were dropped');
+  assert.deepStrictEqual(found?.questions.map((one) => one.question), [
+    'Question 0', 'Question 1', 'Question 2', 'Question 3',
+  ], 'the order of the questions moved');
+});
+
+test('a half-written line costs that line and nothing else', () => {
+  // The file is being appended to by another process while this reads it, so a truncated last line
+  // is the ordinary case rather than a corrupt file.
+  const found = lastAsked([asks('a', ONE), '{"type":"assistant","message":{"cont', '', 'not json at all']);
+
+  assert.strictEqual(found?.id, 'a', 'one bad line took the whole file with it');
+});
+
+test('a file with nothing asked in it is nothing, not an exception', () => {
+  assert.strictEqual(lastAsked([]), undefined);
+  assert.strictEqual(lastAsked(['{"type":"user","message":{"content":[]}}']), undefined);
+});
+
+test('a block that is not a question is not read as one', () => {
+  const other = JSON.stringify({
+    type: 'assistant',
+    message: { content: [{ type: 'tool_use', id: 'x', name: 'Bash', input: { command: 'ls' } }] },
+  });
+
+  assert.strictEqual(lastAsked([other]), undefined, 'another tool was taken for a question');
+});
+
+// ---------------------------------------------------------------------------------------------
+// Rendering it.
+// ---------------------------------------------------------------------------------------------
+
+test('every option and every description reaches the passage', () => {
+  const found = lastAsked([asks('a', ONE)]);
+  const text = askedAsText(found!);
+
+  assert.match(text, /\[Scope\] How far should this go\?/, 'the header or the question is missing');
+  assert.match(text, /All of it — every part in one pass/, 'an option lost its description');
+  assert.match(text, /Just the first — and stop/, 'the second option is missing');
+});
+
+test('a question that takes more than one answer says so', () => {
+  const many = lastAsked([asks('a', [{ ...ONE[0], multiSelect: true }])]);
+  const one = lastAsked([asks('a', ONE)]);
+
+  assert.match(askedAsText(many!), /more than one answer/, 'a multi-select question did not say so');
+  assert.doesNotMatch(askedAsText(one!), /more than one answer/, 'a single-answer question said it was not');
+});
+
+test('an option with no description is still an option', () => {
+  const bare = lastAsked([asks('a', [{ ...ONE[0], options: [{ label: 'Yes' }] }])]);
+
+  assert.match(askedAsText(bare!), /- Yes$/m, 'an option without a description was dropped or left a dangling dash');
+});
+
+// ---------------------------------------------------------------------------------------------
+// WHICH session, and the refusal to guess.
+// ---------------------------------------------------------------------------------------------
+
+test('the project directory is the path with every separator replaced', () => {
+  // Measured against a real ~/.claude/projects rather than assumed.
+  assert.strictEqual(projectDirName('D:\\rsd\\ClaudeRag'), 'D--rsd-ClaudeRag');
+  assert.strictEqual(projectDirName('/home/me/work/app'), '-home-me-work-app');
+});
+
+test('the directory is matched case-insensitively, because its case is not ours to predict', () => {
+  const root = '/root';
+
+  assert.strictEqual(projectDirIn(root, 'D:\\rsd\\ClaudeRag', ['D--rsd-ClaudeRag']), join(root, 'D--rsd-ClaudeRag'));
+  assert.strictEqual(projectDirIn(root, 'D:\\rsd\\ClaudeRag', ['d--rsd-clauderag']), join(root, 'd--rsd-clauderag'));
+  assert.strictEqual(projectDirIn(root, 'D:\\rsd\\ClaudeRag', ['something-else']), '', 'a stranger directory matched');
+});
+
+const session = (file: string, answered: boolean, at = '2026-09-11T18:00:00.000Z'): WaitingSession => ({
+  file,
+  asked: { id: file, questions: ONE, answered, sessionId: file, at },
+});
+
+test('one session waiting is the answer; two is a refusal, never a pick', () => {
+  assert.deepStrictEqual(waitingIn([session('a', false)]).kind, 'one');
+  // The host cannot see into Claude Code's webview, so it cannot tell which tab is being looked at.
+  // A plausible guess here delivers somebody else's question, silently.
+  assert.deepStrictEqual(waitingIn([session('a', false), session('b', false)]).kind, 'several');
+});
+
+test('nothing waiting is told apart from nothing asked', () => {
+  assert.strictEqual(waitingIn([]).kind, 'none');
+  assert.strictEqual(waitingIn([session('a', true)]).kind, 'answered');
+});
+
+test('the newest answered one is the one reported answered', () => {
+  const found = waitingIn([
+    session('old', true, '2026-09-11T10:00:00.000Z'),
+    session('new', true, '2026-09-11T18:00:00.000Z'),
+  ]);
+
+  assert.strictEqual(found.kind === 'answered' ? found.session.file : '', 'new');
+});
+
+// ---------------------------------------------------------------------------------------------
+// Against a real directory.
+// ---------------------------------------------------------------------------------------------
+
+test('a folder Claude Code has never run in is a refusal that names where it looked', () => {
+  const home = mkdtempSync(join(tmpdir(), 'coai-home-'));
+  try {
+    const answer = waitingQuestion(home, 'D:\\nowhere');
+
+    assert.strictEqual(answer.kind, 'failed');
+    assert.match(answer.kind === 'failed' ? answer.refusal : '', /projects/, 'the refusal does not say where it looked');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a real session file is found, read, and its question taken', () => {
+  const home = mkdtempSync(join(tmpdir(), 'coai-home-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'one.jsonl'), `${asks('a', ONE)}\n`, 'utf8');
+    const answer = waitingQuestion(home, 'D:\\work\\app');
+
+    assert.strictEqual(answer.kind, 'one', 'the question in the only session was not found');
+    assert.match(
+      answer.kind === 'one' ? askedAsText(answer.session.asked) : '',
+      /How far should this go/,
+      'the question did not survive the round trip',
+    );
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('two sessions both waiting are refused by count, not resolved by mtime', () => {
+  const home = mkdtempSync(join(tmpdir(), 'coai-home-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'one.jsonl'), `${asks('a', ONE)}\n`, 'utf8');
+    writeFileSync(join(dir, 'two.jsonl'), `${asks('b', ONE)}\n`, 'utf8');
+    // Make one clearly newer, so a mtime-based pick would have something to prefer.
+    const later = Date.now() / 1000 + 60;
+    utimesSync(join(dir, 'two.jsonl'), later, later);
+
+    assert.strictEqual(waitingQuestion(home, 'D:\\work\\app').kind, 'several', 'a session was picked for the person');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});

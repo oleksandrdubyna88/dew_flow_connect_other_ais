@@ -193,6 +193,11 @@
         "command": "coai.chatWithOtherAi",
         "title": "Chat with other AI",
         "category": "ConnectOtherAIs"
+      },
+      {
+        "command": "coai.takeTheQuestion",
+        "title": "Take the question to another AI",
+        "category": "ConnectOtherAIs"
       }
     ],
     "configuration": {
@@ -605,6 +610,10 @@
       "webview/context": [
         {
           "command": "coai.chatWithOtherAi",
+          "when": "webviewId == 'claudeVSCodePanel'"
+        },
+        {
+          "command": "coai.takeTheQuestion",
           "when": "webviewId == 'claudeVSCodePanel'"
         }
       ],

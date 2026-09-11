@@ -999,6 +999,69 @@ retained webview from an older build posts. And escaping the optional fourth ste
 named in no view, so the tab it opens was reachable only from the command palette. The section has an
 **Edit presets…** button, routed like *Install the MCP server…* through `VSCODE_COMMAND_FOR`.
 
+### Three doors, and a tone for the text (2026-09-11)
+
+Three things asked for in one sitting, and the first two are small only because of where the
+existing seams already were.
+
+**The chat opens from any file.** `Ctrl+Alt+A` and the right-click item used to exist inside Claude
+Code's panel alone, shut in three places — two `when` clauses in the manifest and, behind them, the
+real gate: `sourceSession` refused any tab that was not that panel. It takes an ELIGIBILITY
+PREDICATE now, and that is the whole change to it: identity first, a label re-key only for a panel
+whose own tab has gone, a refusal to guess when a name is ambiguous — none of that was ever about
+Claude Code, and two files called `README.md` in two folders collide exactly the way two tabs called
+`main` do. Eligibility is by URI SCHEME (`file`, `untitled`), so an Output pane, a settings editor
+and a git revision are excluded structurally rather than by a list of names to keep up to date.
+
+**And that door needs none of the clipboard machinery.** `selectionCapture.ts` synthesises a
+keystroke through PowerShell and borrows the clipboard for one measured reason: a foreign webview
+cannot be read. An editor can, so the passage is read synchronously — no 1.7-second spinner, no
+clipboard given back, no synthetic `Ctrl+C` that can land in another window. The menu-versus-keyboard
+split disappears with it, because both doors now read the same live selection rather than something
+copied at an unknown time. With nothing selected the whole file goes, which the operator chose over
+a refusal; over 20 000 characters it asks first, because the accident to guard against is the chord
+pressed to focus a window, in a minified bundle, becoming a paid turn nobody meant.
+
+**A stepper for the TONE of the text, beside the one for its size.** `textTone.ts` is
+`zoomControl.ts`'s shape with its own arithmetic; `textToneHost.ts` is `uiScaleHost.ts`'s. Zero is
+the theme and emits NOTHING — not the same colour by another name — so an untouched control leaves
+the page exactly as it was. Up pushes the text away from the background, down pulls it towards a
+warm grey, which is one gesture: a lamp turned down is dimmer and warmer at once, which is what
+"желтее — серее" describes. WHICH WAY IS AWAY is the theme's to say: a fixed ramp towards white
+erases the text on a light theme, so the host's own `vscode-light` class flips the target to black.
+It is `color-mix` against two custom properties rather than a colour computed in the page — the
+theme variable resolves where it is USED, so one string serves both the stylesheet at render time
+and an inline style pushed later.
+
+**Taking the question Claude Code is asking.** The operator was screenshotting it, and not from
+habit: the question widget CANNOT BE SELECTED — a select-all in that panel highlights the transcript
+above it and stops at the widget's edge, which they proved with a picture. So a copy, even the
+synthetic one, takes everything except the thing wanted.
+
+It is on disk, though. Claude Code appends each session to `~/.claude/projects/<the cwd with every
+separator replaced by a dash>/<uuid>.jsonl`, and a question is a `tool_use` block named
+`AskUserQuestion` whose input carries every question, every option and every description; a later
+row's `tool_result` names its `tool_use_id` once it has been answered. `claudeQuestion.ts` reads
+that — pure, lines in, decisions out — and `claudeSessions.ts` finds the file.
+
+**It refuses rather than guesses, in three separate ways.** A question that already has an answer is
+reported as answered, never handed over: a second model asked to solve something settled ten minutes
+ago is the worst outcome this command has. Two sessions in one folder both waiting are NAMED rather
+than picked between, because the host cannot see into the webview and cannot tell which tab is being
+looked at — the same silent wrong-conversation `sessionKey.ts` exists to prevent, one layer down.
+And every filesystem failure says which operation failed, because a command that throws into the
+void looks exactly like one that does nothing.
+
+**The tail all three doors share is one function now.** `deliverPassage` — resolve the CLI, resolve
+the remote session, open or reveal the conversation, ask or leave the turn in the composer. Three
+copies of that would have been three places for the opening instruction, the temp directory and the
+reveal to drift apart.
+
+**The manifest is part of a feature, and it is tested as one.** Every unit test for the second door
+passes while the chord stays bound to the panel alone — and then nothing happens on a `.md` file. A
+test reads `package.json` for both bindings and the `editor/context` item, and it was watched red
+with the binding removed.
+
 ### The chat is its own thing, and its turn can be read (2026-09-11)
 
 Said five times before it was built, in the end as plainly as it can be put: *"это полностью

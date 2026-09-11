@@ -64,6 +64,8 @@ import {
 } from './chatPrompt';
 import { LanguageCode } from './settingsShape';
 import { isClaudeSessionTab, isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
+import { askedAsText } from './claudeQuestion';
+import { waitingQuestion } from './claudeSessions';
 import { EditorText, confirmWholeFile, passageFromEditor } from './editorPassage';
 import { triggerPlan } from './chatTrigger';
 import { Vendor } from './vendors';
@@ -1884,6 +1886,28 @@ export async function chatWithOtherAi(
     return;
   }
 
+  await deliverPassage(panels, extensionUri, ready, source, passage, plan.send);
+}
+
+/**
+ * Everything a door does once it HOLDS a passage: resolve the CLI, resolve the remote session,
+ * open or reveal the conversation, and either ask or leave the turn in the composer.
+ *
+ * <p>Extracted when the second door arrived, and the third made it certain: the part that differs
+ * between doors is where the passage came from and nothing else. A copy of this per door would be
+ * three places for the opening instruction, the temp directory and the reveal to drift apart.</p>
+ */
+async function deliverPassage(
+  panels: ChatPanels,
+  extensionUri: vscode.Uri,
+  ready: Extract<Ready, { ok: true }>,
+  source: NonNullable<ReturnType<typeof sourceSession>>,
+  passage: { readonly text: string },
+  send: boolean,
+): Promise<void> {
+  const config = vscode.workspace.getConfiguration('coai');
+  const settings = chatSettingsFrom((key) => config.get(key));
+  const opening = { providerId: ready.providerId };
   // Resolved BEFORE a tab exists, because `spawn` does not search PATHEXT: a bare `codex` on
   // Windows means `codex.cmd`, and spawning the bare name fails with ENOENT at the first turn —
   // deep inside a conversation, where it reads as the model refusing rather than as a CLI that is
@@ -1916,7 +1940,7 @@ export async function chatWithOtherAi(
   const opened = panels.open(source.key, source.label, () => newConversation(panels, ready, {
     title: source.label,
     passage: passage.text,
-    draft: plan.send ? '' : turn,
+    draft: send ? '' : turn,
   }, cli.resolved, remote.session, extensionUri));
 
   opened.entry.panel.reveal();
@@ -1943,7 +1967,7 @@ export async function chatWithOtherAi(
   const asking = instruction.length === 0
     ? turn
     : openingTurn(instruction, settings.language, passage.text);
-  if (plan.send) {
+  if (send) {
     await ask(opened.entry, asking);
 
     return;
@@ -1963,4 +1987,100 @@ export async function chatWithOtherAi(
   // that opens with an instruction nothing on screen names is a tab that looks like it ignored the
   // presets.
   show(opened.entry, false, '');
+}
+
+/**
+ * Take the question Claude Code is asking and hand it to a second model.
+ *
+ * <p>Asked for as *"перехватывать целиком что спрашивает Клод, потому что сейчас приходится делать
+ * скриншоты"*. The screenshots are not a habit — they are the only way, because the question widget
+ * cannot be selected: a select-all in that panel highlights the transcript above it and stops at the
+ * widget's edge. So this reads the question off the session file Claude Code writes, where it is
+ * text, with every option and every description.</p>
+ *
+ * <p>It goes to the same place a captured paragraph goes: the conversation named after the tab it
+ * came from, fenced as MATERIAL like any other passage. Which means the second model sees the
+ * question, sees every option, and is never asked to obey any of it.</p>
+ */
+export async function takeTheQuestion(
+  panels: ChatPanels,
+  extensionUri: vscode.Uri,
+): Promise<void> {
+  const config = vscode.workspace.getConfiguration('coai');
+  const settings = chatSettingsFrom((key) => config.get(key));
+  const ticked = mainModel(savedModels(config));
+  const saved = ticked === undefined ? savedPick(config, settings.model) : undefined;
+  const opening = saved ?? { providerId: ticked?.id ?? '', modelId: ticked?.model ?? '' };
+  const model = saved === undefined
+    ? opening.modelId
+    : openingModel(chatProvidersFromPresets(savedModels(config), chatCatalogFrom(config)), saved, settings.modelName);
+  const ready = readyToChat(config, opening.providerId, model);
+  if (!ready.ok) {
+    void vscode.window.showWarningMessage(ready.refusal);
+
+    return;
+  }
+  // FROM THE PANEL, like the capture beside it — the conversation is named after the tab, and this
+  // question belongs to the session in that tab.
+  const source = matchedSession(panels);
+  if (source === undefined) {
+    void vscode.window.showWarningMessage(
+      'Open this from a Claude Code session tab — the question and the conversation both belong to it.',
+    );
+
+    return;
+  }
+  if (source.kind === 'rekey') {
+    panels.rekey(source.from, source.key);
+  }
+  const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
+  if (folder.length === 0) {
+    void vscode.window.showWarningMessage('Open a folder first — a session belongs to one.');
+
+    return;
+  }
+  const waiting = waitingQuestion(os.homedir(), folder);
+  if (waiting.kind === 'failed') {
+    void vscode.window.showWarningMessage(waiting.refusal);
+
+    return;
+  }
+  if (waiting.kind === 'none') {
+    void vscode.window.showWarningMessage('Claude Code has asked nothing in this folder yet.');
+
+    return;
+  }
+  if (waiting.kind === 'answered') {
+    // A DIFFERENT SENTENCE from "nothing was asked". Handing a second model a question that is
+    // already settled is the worst outcome this command has, so it is refused by default rather
+    // than offered quietly. (local, three findings on the plan round.)
+    void vscode.window.showWarningMessage(
+      'The last question in this session has already been answered — there is nothing waiting.',
+    );
+
+    return;
+  }
+  if (waiting.kind === 'several') {
+    // NEVER a pick. The host cannot see into Claude Code's webview, so it cannot tell which tab is
+    // being looked at; a plausible guess here delivers somebody else's question, silently, which is
+    // the failure `sessionKey.ts` spends its whole design preventing.
+    void vscode.window.showWarningMessage(
+      `${waiting.sessions.length} Claude Code sessions in this folder are waiting for an answer.`
+      + ' Close the ones you do not mean, and press it again.',
+    );
+
+    return;
+  }
+
+  await deliverPassage(
+    panels,
+    extensionUri,
+    ready,
+    source,
+    { text: askedAsText(waiting.session.asked) },
+    // NEVER sent by itself, whatever the auto-send setting says. A question taken off disk is one a
+    // person is in the middle of answering; it goes into the composer so they can look at it, add
+    // what they think, and press send themselves.
+    false,
+  );
 }
