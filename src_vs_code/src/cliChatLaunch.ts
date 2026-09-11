@@ -1,6 +1,6 @@
 import { needsShell } from './cliVersions';
 import { Platform } from './hostSide';
-import { ChatAdapter } from './chatAdapter';
+import { ChatAdapter, ChatLaunch, NEW_CONVERSATION } from './chatAdapter';
 import { agyAdapter } from './agyAdapter';
 import { claudeAdapter } from './claudeAdapter';
 import { codexAdapter } from './codexAdapter';
@@ -156,7 +156,15 @@ function asText(reason: unknown): string {
 export function launchSpecFor(
   vendor: Vendor,
   tempDir: string,
-  resume = '',
+  /**
+   * What this turn is asking for: the thread to continue, and the model the person picked.
+   *
+   * <p>It used to be the resume id alone, which is why the picker decided nothing — see
+   * `ChatAdapter.argv`. The model here is the CONVERSATION's, not the row's: `readyToChat` keeps
+   * `modelId` and `vendor.model` apart deliberately, and a row's default is what the person is
+   * choosing away from.</p>
+   */
+  launch: ChatLaunch = NEW_CONVERSATION,
   /** The file the vendor's name resolved to, from `resolvedExecutable`. Empty falls back to the name. */
   resolved = '',
   platform: Platform = process.platform === 'darwin' ? 'darwin' : process.platform === 'win32' ? 'win32' : 'linux',
@@ -173,7 +181,7 @@ export function launchSpecFor(
     shell: needsShell(executable, platform),
     // From the adapter, because the command line and the wire protocol are one decision: a vendor
     // launched with another's flags answers in a shape nobody here can read.
-    args: known.adapter.argv(resume),
+    args: known.adapter.argv(launch),
     // An empty temp directory, never the workspace. The task is to explain a paragraph: handing a
     // third-party agent the source tree buys nothing but startup time, and on Windows a working
     // directory is also something `cmd.exe` searches before the PATH.

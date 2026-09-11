@@ -24,9 +24,22 @@ import { forget, remember } from './chatOrphans';
  * bundle and esbuild dutifully inlined a `require` into a webview. The guard exists for exactly
  * this, it caught it in one run, and the fix is a file the page's import graph never touches.</p>
  */
-export function chatProcessFor(vendor: Vendor, home: string, resolved: string): (resume: string) => ProcessHandle {
+/**
+ * @param model
+ * The model the CONVERSATION is on, which is NOT the row's `vendor.model`. `readyToChat` keeps the
+ * two apart deliberately — the row's is the default a person is choosing away from — and passing the
+ * row's here would have been the same defect in a new place: the tab would go on labelling an answer
+ * with a model the CLI was never told about. Empty means the CLI's own default, which is what both a
+ * Team-server row with no model and the picker's "the first one that can answer" come to.
+ */
+export function chatProcessFor(
+  vendor: Vendor,
+  home: string,
+  resolved: string,
+  model: string,
+): (resume: string) => ProcessHandle {
   return (resume) => {
-    const spec = launchSpecFor(vendor, home, resume, resolved);
+    const spec = launchSpecFor(vendor, home, { resume, model }, resolved);
     const child = launch(spec.executable, spec.args, { cwd: spec.cwd, shell: spec.shell });
 
     // Written down BEFORE anything is asked of it, and SYNCHRONOUSLY: the window this guards

@@ -65,7 +65,7 @@ test('agy: init is ready, a SUCCESS result is the answer, and any other status i
 });
 
 test('agy: the four flags are all there, each one bought with a measured failure', () => {
-  assert.deepStrictEqual([...agyAdapter.argv('')], [...AGY_ARGS]);
+  assert.deepStrictEqual([...agyAdapter.argv({ resume: '', model: '' })], [...AGY_ARGS]);
   for (const flag of ['--mode', 'plan', '--disable-slash-commands', '--input-format', '--output-format']) {
     assert.ok(AGY_ARGS.includes(flag), `${flag} is gone`);
   }
@@ -82,7 +82,7 @@ test('claude: --verbose is in the argv, because without it the CLI refuses outri
   // flag somebody removes.
   assert.ok(CLAUDE_ARGS.includes('--verbose'), 'the CLI will refuse every launch');
   assert.ok(CLAUDE_ARGS.includes('-p'));
-  assert.deepStrictEqual([...claudeAdapter.argv('anything')], [...CLAUDE_ARGS], 'claude took a resume id');
+  assert.deepStrictEqual([...claudeAdapter.argv({ resume: 'anything', model: '' })], [...CLAUDE_ARGS], 'claude took a resume id');
 });
 
 test('claude: system/init is ready and result/success is the answer', () => {
@@ -109,9 +109,9 @@ test('claude: an assistant message mid-turn is nothing — the result is the ans
 });
 
 test('codex: the first turn opens a thread and a later one RESUMES it by id', () => {
-  assert.deepStrictEqual([...codexAdapter.argv('')], ['exec', ...CODEX_ARGS]);
+  assert.deepStrictEqual([...codexAdapter.argv({ resume: '', model: '' })], ['exec', ...CODEX_ARGS]);
   assert.deepStrictEqual(
-    [...codexAdapter.argv('01a0851c-488c-7be0-9e51-e35c5fb2ce5c')],
+    [...codexAdapter.argv({ resume: '01a0851c-488c-7be0-9e51-e35c5fb2ce5c', model: '' })],
     ['exec', 'resume', '01a0851c-488c-7be0-9e51-e35c5fb2ce5c', ...CODEX_ARGS],
   );
 });
@@ -119,7 +119,7 @@ test('codex: the first turn opens a thread and a later one RESUMES it by id', ()
 test('codex: it resumes by ID and never by --last, which is the machine’s last session', () => {
   // `--last` is the most recent codex session on the whole machine, so two chat tabs — or one chat
   // and one review round — would answer each other's questions.
-  for (const argv of [codexAdapter.argv(''), codexAdapter.argv('some-id')]) {
+  for (const argv of [codexAdapter.argv({ resume: '', model: '' }), codexAdapter.argv({ resume: 'some-id', model: '' })]) {
     assert.ok(!argv.includes('--last'), 'the adapter resumes whatever ran last on this machine');
   }
 });
@@ -203,9 +203,9 @@ test('codex: argv refuses a resume id it would not have accepted, without asking
   // `classify` is the only place an id is minted today, so the adapter is safe by construction —
   // and by construction is a reason a reader has to reconstruct. The command line refuses on its
   // own terms, so no future caller can hand it something it would not have made. (local.)
-  assert.deepStrictEqual([...codexAdapter.argv('id" & calc.exe')], ['exec', ...CODEX_ARGS]);
+  assert.deepStrictEqual([...codexAdapter.argv({ resume: 'id" & calc.exe', model: '' })], ['exec', ...CODEX_ARGS]);
   assert.deepStrictEqual(
-    [...codexAdapter.argv('01a0851c-488c-7be0-9e51-e35c5fb2ce5c')],
+    [...codexAdapter.argv({ resume: '01a0851c-488c-7be0-9e51-e35c5fb2ce5c', model: '' })],
     ['exec', 'resume', '01a0851c-488c-7be0-9e51-e35c5fb2ce5c', ...CODEX_ARGS],
   );
 });

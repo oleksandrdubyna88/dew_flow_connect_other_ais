@@ -53,9 +53,17 @@ export const codexAdapter: ChatAdapter = {
   // today, so this line is safe by construction — and "safe by construction" is a proof a reader
   // has to reconstruct. A command line that refuses on its own terms cannot be handed anything a
   // future caller invented. (local, the second code round.)
-  argv: (resume) => (THREAD_ID.test(resume)
-    ? ['exec', 'resume', resume, ...CODEX_ARGS]
-    : ['exec', ...CODEX_ARGS]),
+  // `-m`, read from `codex exec --help` (`-m, --model <MODEL>`) and already the flag the reviewer
+  // runtime passes on this same CLI. It goes BEFORE `CODEX_ARGS`, because the bare `-` in there is
+  // the positional that makes codex read its instructions from stdin: an option after a positional
+  // is still parsed as an option here, but writing it that way asks a reader to know that, and the
+  // one place this product cannot afford a reader's benefit of the doubt is a command line.
+  argv: ({ resume, model }) => [
+    'exec',
+    ...(THREAD_ID.test(resume) ? ['resume', resume] : []),
+    ...(model.length > 0 ? ['-m', model] : []),
+    ...CODEX_ARGS,
+  ],
   // The prompt itself: there is no envelope, and the session writes it followed by EOF.
   encode: (turn) => turn,
   classify: (line) => {

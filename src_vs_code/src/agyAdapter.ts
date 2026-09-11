@@ -30,7 +30,8 @@ export const agyAdapter: ChatAdapter = {
   // Per-turn: each `result` carries the tokens of the turn it ends, not the pipe's running total.
   cumulative: false,
   announces: true,
-  argv: () => AGY_ARGS,
+  // `--model`, as AntigravityRuntime passes it for a reviewer on the same CLI.
+  argv: ({ model }) => (model.length > 0 ? [...AGY_ARGS, '--model', model] : AGY_ARGS),
   encode: (turn) => JSON.stringify({ event: 'user', message: { role: 'user', content: turn } }),
   classify: (line) => {
     const event = parsed(line);

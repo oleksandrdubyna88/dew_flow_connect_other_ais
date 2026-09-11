@@ -33,7 +33,9 @@ export const claudeAdapter: ChatAdapter = {
   // Per-turn: each `result` prices the turn it ends, `total_cost_usd` included.
   cumulative: false,
   announces: false,
-  argv: () => CLAUDE_ARGS,
+  // `--model`, the spelling this repository already verified against the installed CLI for its
+  // reviewers (ClaudeRuntime). Empty sends nothing, so the CLI keeps its own default.
+  argv: ({ model }) => (model.length > 0 ? [...CLAUDE_ARGS, '--model', model] : CLAUDE_ARGS),
   // The block shape, not a bare string: the content of a user message is a list of typed blocks,
   // and a string where a list is expected is refused by the CLI rather than misread.
   encode: (turn) => JSON.stringify({
