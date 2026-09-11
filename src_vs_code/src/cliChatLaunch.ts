@@ -149,6 +149,34 @@ function asText(reason: unknown): string {
 }
 
 /**
+ * What a model id may look like before it is put in a command line.
+ *
+ * <p>The same reason `codexAdapter`'s `THREAD_ID` exists, written down there: this is untrusted input
+ * by POSITION rather than by provenance. A model id arrives from settings a person typed, from a Team
+ * server's catalog, or from a restored tab, and it leaves in an argv that on Windows goes through
+ * `cmd.exe`. **A name beginning with a dash is an OPTION to the CLI, not a model** — and the options
+ * these three accept include ones that remove their own restrictions.</p>
+ *
+ * <p>Deliberately permissive about the middle and strict about the first character and the alphabet:
+ * real ids carry dots, colons and slashes (`Qwen3.5-35B-A3B-Q5_vk128:latest`, `openai/gpt-oss-120b`)
+ * and a pattern that refused those would break every chat while passing the test above it.</p>
+ */
+const MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$/;
+
+/**
+ * Why this model may not be put on a command line, or an empty string.
+ *
+ * <p>REFUSED rather than dropped. Dropping it would re-create the defect the model parameter exists to
+ * fix — the tab labels an answer from the pick, so a silently discarded model means an answer
+ * attributed to a model the CLI was never told about, which is exactly what nobody could see before.</p>
+ */
+function modelRefusal(model: string): string {
+  return model.length === 0 || MODEL_NAME.test(model)
+    ? ''
+    : `${JSON.stringify(model)} is not a model name this chat will put on a command line`;
+}
+
+/**
  * The command line for one vendor row, or the reason there is none.
  *
  * @param tempDir a directory with nothing in it — see the note below
@@ -169,7 +197,7 @@ export function launchSpecFor(
   resolved = '',
   platform: Platform = process.platform === 'darwin' ? 'darwin' : process.platform === 'win32' ? 'win32' : 'linux',
 ): LaunchSpec {
-  const refusal = chatRuntimeRefusal(vendor);
+  const refusal = chatRuntimeRefusal(vendor) || modelRefusal(launch.model);
   const known = ADAPTERS[vendor.runtime];
   if (refusal.length > 0 || known === undefined) {
     return { executable: '', args: [], cwd: '', shell: false, refusal };

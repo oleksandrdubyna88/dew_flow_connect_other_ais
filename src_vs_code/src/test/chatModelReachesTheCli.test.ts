@@ -116,3 +116,37 @@ test('the model travels beside the resume, not instead of it', () => {
   assert.ok(spec.args.includes('thread-abc'));
   assert.ok(spec.args.includes('gpt-5.6-luna'));
 });
+
+test('a model name that could be read as a flag is refused by name, never sent', () => {
+  // The same reason codex's resume id is checked before it reaches a command line, written down in
+  // that adapter: this is untrusted input by POSITION. A model id arrives from settings a person
+  // typed, from a Team server's catalog, or from a restored tab, and it leaves in an argv that on
+  // Windows goes through cmd.exe. A name beginning with a dash is an OPTION to the CLI, not a model.
+  //
+  // Refused rather than dropped: dropping it silently would re-create the defect this whole file is
+  // about — the tab would label the answer with a model the CLI was never told about.
+  for (const hostile of ['--dangerously-skip-permissions', '-m other', 'a b', 'x" & calc.exe', '--']) {
+    const spec = launchSpecFor(onRuntime('claude'), 'C:/temp/empty', { resume: '', model: hostile });
+
+    assert.notStrictEqual(spec.refusal, '', `a model of ${JSON.stringify(hostile)} was not refused`);
+    assert.deepStrictEqual([...spec.args], [], 'a refused launch builds no command line');
+  }
+});
+
+test('the model names this product actually uses are not refused', () => {
+  // The companion the refusal needs. A pattern that rejects everything would pass the test above and
+  // break every chat — and these five are real: three from the vendors' own lists, one from the
+  // local engine's, one a Team server's row.
+  for (const real of [
+    'claude-opus-4-6-thinking',
+    'gpt-5.6-luna',
+    'gemini-3.7-flash-high',
+    'Qwen3.5-35B-A3B-Q5_vk128:latest',
+    'openai/gpt-oss-120b',
+  ]) {
+    const spec = launchSpecFor(onRuntime('claude'), 'C:/temp/empty', { resume: '', model: real });
+
+    assert.strictEqual(spec.refusal, '', `a real model name was refused: ${real}`);
+    assert.ok(spec.args.includes(real));
+  }
+});

@@ -58,6 +58,37 @@ can see it — so it runs when a person decides to spend it, never on every pass
 | 11 | The installed extension reports the gate missing, or the installed MCP reviews only bootstrap text, after the repository moved to shared instructions | Open a neutral-layout checkout with the installed extension: its snippet must be current, and an older local copy must be reported as older. Run a code review using the installed MCP; its log must name canonical rule files and explicit omissions or missing mounts. Check the installed artifact, not the source build | manual |
 | 12 | **Every review of one vendor fails before it starts** — `not_started` or `non_zero_exit`, on each — because the box's `claude` does not know a name in the `--disallowedTools` list this release sends, or a vendor cannot start on the allowlisted environment without something the server's own environment used to supply. Each half of the confinement is asserted in the suite as SENT; only the installed CLI can say whether it is accepted, and it says so on every review of that vendor rather than once | `node -e "(async()=>{const b='https://coai.remsoft.dev/api',h={Authorization:'Bearer '+process.env.COAI_SESSION_TOKEN,'Content-Type':'application/json'};const j=async r=>{if(!r.ok)throw new Error(r.status+' '+await r.text());return r.json()};let bad=0;for(const v of (await j(await fetch(b+'/catalog',{headers:h}))).vendors){const a=await j(await fetch(b+'/reviews',{method:'POST',headers:h,body:JSON.stringify({vendor:v.id,model:v.models[0],role:'Architecture',prompt:'Reply with the word OK and nothing else.',timeoutSeconds:120})}));let s;do{s=await j(await fetch(b+'/reviews/'+a.id+'?wait=25',{headers:h}))}while(s.status==='queued'?true:s.status==='running');const dead=s.failure==='not_started'?true:s.failure==='non_zero_exit';console.log(v.id,s.status,s.failure,s.reason);if(dead)bad++}process.exitCode=bad?1:0})()"` — with a session token in `COAI_SESSION_TOKEN`; one real review per configured vendor, polled to its end. It prints each vendor's terminal state and fails on the two that mean the CLI never ran; `unparseable_by_vendor` on a one-word prompt is not this item | manual |
 
+## When item 12 fails: the way back, written down before it is needed
+
+Item 12 is the only check whose failure means **every review of a vendor is dead**, and it is the one
+most likely to be met at an awkward hour, so the recovery belongs here rather than in somebody's head.
+Asked for on the plan round of the confinement change (codex, Major): a deployment whose only guard is
+an observation needs a written way back.
+
+The failure looks like `not_started` or `non_zero_exit` on every review of one vendor, with the
+vendor's own words in `reason`. Two causes and one answer:
+
+1. **The installed CLI does not know a name in `--disallowedTools`.** Only `claude` receives that list;
+   codex and antigravity are untouched by the confinement's tool half, so a failure on all three is the
+   environment rather than the flags.
+2. **A vendor cannot start on the allowlisted environment**, because it needed something the server's
+   own environment used to supply. `ProcessEnvironment.Passthrough` is the list; `reason` usually names
+   what is missing, and a Node CLI with no `HOME` says so loudly.
+
+**The way back is the previous release, not a code change.** `deploy/systemd-release.sh --rollback`
+pops one deployment off the retained trail and restarts — seconds, no build — and `--list` shows what
+is there if you would rather name one by hand. The version `/api/health` reports is how you know which
+is serving. Roll back FIRST and diagnose after: the box is shared, and a vendor that cannot review is
+the whole team's gate down.
+
+**And be clear about what a rollback costs here, because it is not nothing.** This release is the one
+that introduces confinement, so the previous one is the server as the audit of 2026-09-09 found it: an
+employee's arbitrary prompt running with the box's own environment and, for `claude`, a shell, on the
+machine that holds every shared vendor account. Rolling back is still the right first move — a gate
+nobody can use is worse, and the exposure needs a colleague who means harm — but it is a return to a
+known state rather than to a safe one, and the fix is to go forward again with the flag the installed
+CLI accepts rather than to sit there.
+
 ## Why item 1 is first
 
 Because a partial publish is the worst of the three sibling failures
