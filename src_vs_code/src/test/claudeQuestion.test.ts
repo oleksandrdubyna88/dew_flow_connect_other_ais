@@ -137,9 +137,9 @@ test('the project directory is the path with every separator replaced', () => {
 test('the directory is matched case-insensitively, because its case is not ours to predict', () => {
   const root = '/root';
 
-  assert.strictEqual(projectDirIn(root, 'D:\\rsd\\ClaudeRag', ['D--rsd-ClaudeRag']), join(root, 'D--rsd-ClaudeRag'));
-  assert.strictEqual(projectDirIn(root, 'D:\\rsd\\ClaudeRag', ['d--rsd-clauderag']), join(root, 'd--rsd-clauderag'));
-  assert.strictEqual(projectDirIn(root, 'D:\\rsd\\ClaudeRag', ['something-else']), '', 'a stranger directory matched');
+  assert.strictEqual(projectDirIn(root, 'D:\\rsd\\ClaudeRag', ['D--rsd-ClaudeRag'], true), join(root, 'D--rsd-ClaudeRag'));
+  assert.strictEqual(projectDirIn(root, 'D:\\rsd\\ClaudeRag', ['d--rsd-clauderag'], true), join(root, 'd--rsd-clauderag'));
+  assert.strictEqual(projectDirIn(root, 'D:\\rsd\\ClaudeRag', ['something-else'], true), '', 'a stranger directory matched');
 });
 
 const session = (file: string, answered: boolean, at = '2026-09-11T18:00:00.000Z'): WaitingSession => ({
@@ -172,10 +172,10 @@ test('the newest answered one is the one reported answered', () => {
 // Against a real directory.
 // ---------------------------------------------------------------------------------------------
 
-test('a folder Claude Code has never run in is a refusal that names where it looked', () => {
+test('a folder Claude Code has never run in is a refusal that names where it looked', async () => {
   const home = mkdtempSync(join(tmpdir(), 'coai-home-'));
   try {
-    const answer = waitingQuestion(home, 'D:\\nowhere');
+    const answer = await waitingQuestion(home, 'D:\\nowhere', true);
 
     assert.strictEqual(answer.kind, 'failed');
     assert.match(answer.kind === 'failed' ? answer.refusal : '', /projects/, 'the refusal does not say where it looked');
@@ -184,13 +184,13 @@ test('a folder Claude Code has never run in is a refusal that names where it loo
   }
 });
 
-test('a real session file is found, read, and its question taken', () => {
+test('a real session file is found, read, and its question taken', async () => {
   const home = mkdtempSync(join(tmpdir(), 'coai-home-'));
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'one.jsonl'), `${asks('a', ONE)}\n`, 'utf8');
-    const answer = waitingQuestion(home, 'D:\\work\\app');
+    const answer = await waitingQuestion(home, 'D:\\work\\app', true);
 
     assert.strictEqual(answer.kind, 'one', 'the question in the only session was not found');
     assert.match(
@@ -203,7 +203,7 @@ test('a real session file is found, read, and its question taken', () => {
   }
 });
 
-test('two sessions both waiting are refused by count, not resolved by mtime', () => {
+test('two sessions both waiting are refused by count, not resolved by mtime', async () => {
   const home = mkdtempSync(join(tmpdir(), 'coai-home-'));
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
@@ -214,8 +214,50 @@ test('two sessions both waiting are refused by count, not resolved by mtime', ()
     const later = Date.now() / 1000 + 60;
     utimesSync(join(dir, 'two.jsonl'), later, later);
 
-    assert.strictEqual(waitingQuestion(home, 'D:\\work\\app').kind, 'several', 'a session was picked for the person');
+    assert.strictEqual(
+      (await waitingQuestion(home, 'D:\\work\\app', true)).kind,
+      'several',
+      'a session was picked for the person',
+    );
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test('a case-sensitive filesystem does not take a namesake project for this one', () => {
+  // On a case-sensitive host `/work/App` and `/work/app` are two different projects, and a loose
+  // match there hands one project's question to the other. (codex, the code round, as a security
+  // finding.)
+  const root = '/root';
+
+  assert.strictEqual(projectDirIn(root, '/work/App', ['-work-app'], false), '', 'a namesake project matched');
+  assert.strictEqual(projectDirIn(root, '/work/App', ['-work-app'], true), join(root, '-work-app'));
+  // And two names that differ only in case are an ambiguity, not a pick.
+  assert.strictEqual(projectDirIn(root, '/work/App', ['-work-app', '-work-App2'.toLowerCase(), '-WORK-APP'], true), '');
+});
+
+test('a question still waiting wins over a later one that was answered', () => {
+  // A question can be left open while the conversation goes on around it. Taking only the LAST one
+  // reported "already answered" while the first still sat on screen. (codex, the code round.)
+  const found = lastAsked([asks('a', ONE), asks('b', ONE), answers('b')]);
+
+  assert.strictEqual(found?.id, 'a', 'the question still waiting was passed over');
+  assert.strictEqual(found?.answered, false);
+});
+
+test('when every question has been answered, the newest of them is the one reported', () => {
+  const found = lastAsked([asks('a', ONE), answers('a'), asks('b', ONE), answers('b')]);
+
+  assert.strictEqual(found?.id, 'b');
+  assert.strictEqual(found?.answered, true);
+});
+
+test('a tool_result with no id names nothing, and answers nothing', () => {
+  const nameless = JSON.stringify({
+    type: 'user',
+    message: { content: [{ type: 'tool_result', content: 'x' }] },
+  });
+  const found = lastAsked([asks('a', ONE), nameless]);
+
+  assert.strictEqual(found?.answered, false, 'an answer that names no question answered one');
 });

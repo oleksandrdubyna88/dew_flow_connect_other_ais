@@ -78,7 +78,7 @@ test('a big file is ASKED about, and a small one is not', () => {
 
   assert.strictEqual(confirmWholeFile(editor()), '', 'an ordinary file asked for permission');
   assert.match(confirmWholeFile(big), /notes\.md/, 'the question does not name the file');
-  assert.match(confirmWholeFile(big), /KB/, 'the question does not say how much it is');
+  assert.match(confirmWholeFile(big), /thousand characters/, 'the question does not say how much it is');
 });
 
 // ---------------------------------------------------------------------------------------------

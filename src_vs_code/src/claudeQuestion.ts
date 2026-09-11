@@ -103,15 +103,9 @@ function blocksOf(row: Record<string, unknown>): unknown[] {
   return Array.isArray(message?.['content']) ? (message['content'] as unknown[]) : [];
 }
 
-/**
- * The last question asked in this session, and whether it has been answered.
- *
- * <p><b>A malformed line is skipped, never thrown over.</b> The file is being appended to by another
- * process, so its last line is routinely half-written — that is the ordinary case, not a corrupt
- * file. Each line is parsed on its own and a failure costs that line alone.</p>
- */
-export function lastAsked(lines: readonly string[]): AskedSet | undefined {
-  let found: AskedSet | undefined;
+/** Every question in the file, in the order they were asked, each with its answered state. */
+function everyAsked(lines: readonly string[]): AskedSet[] {
+  const asked: { id: string; questions: readonly AskedQuestion[]; sessionId: string; at: string }[] = [];
   const answered = new Set<string>();
 
   for (const line of lines) {
@@ -122,6 +116,8 @@ export function lastAsked(lines: readonly string[]): AskedSet | undefined {
     try {
       row = record(JSON.parse(line));
     } catch {
+      // A half-written last line is the ordinary case for a file another process is appending to,
+      // not a corrupt file. It costs that line and nothing else.
       continue;
     }
     if (row === undefined) {
@@ -130,23 +126,40 @@ export function lastAsked(lines: readonly string[]): AskedSet | undefined {
     for (const block of blocksOf(row)) {
       const one = record(block);
       if (one?.['type'] === 'tool_result') {
-        answered.add(text(one['tool_use_id']));
+        const names = text(one['tool_use_id']);
+        if (names.length > 0) {
+          answered.add(names);
+        }
         continue;
       }
       const questions = askedIn(block);
-      if (questions.length > 0) {
-        found = {
-          id: text(one?.['id']),
-          questions,
-          answered: false,
-          sessionId: text(row['sessionId']),
-          at: text(row['timestamp']),
-        };
+      const id = text(one?.['id']);
+      if (questions.length > 0 && id.length > 0) {
+        asked.push({ id, questions, sessionId: text(row['sessionId']), at: text(row['timestamp']) });
       }
     }
   }
 
-  return found === undefined ? undefined : { ...found, answered: answered.has(found.id) };
+  return asked.map((one) => ({ ...one, answered: answered.has(one.id) }));
+}
+
+/**
+ * The question this session is waiting on — or the newest one, when none is waiting.
+ *
+ * <p><b>The newest UNANSWERED, not simply the newest.</b> A file where an unanswered question is
+ * followed by an answered one is ordinary — a question can be left open while the conversation goes
+ * on around it — and taking only the last one reported "already answered" while the first still sat
+ * on screen waiting. (codex, the code round.)</p>
+ *
+ * <p>When nothing is waiting, the newest ANSWERED question comes back marked as such, so the caller
+ * can say "the last question was already answered", which is a different sentence from "nothing was
+ * ever asked here".</p>
+ */
+export function lastAsked(lines: readonly string[]): AskedSet | undefined {
+  const every = everyAsked(lines);
+  const waiting = every.filter((one) => !one.answered);
+
+  return waiting.length > 0 ? waiting[waiting.length - 1] : every[every.length - 1];
 }
 
 /**

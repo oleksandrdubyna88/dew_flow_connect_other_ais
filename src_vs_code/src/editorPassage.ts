@@ -69,7 +69,11 @@ export function confirmWholeFile(editor: EditorText, limit = WHOLE_FILE_LIMIT): 
   if (editor.whole.length <= limit) {
     return '';
   }
-  const kb = Math.round(editor.whole.length / 1024);
+  // CHARACTERS, because that is what was counted. A KB computed from a UTF-16 length is wrong for
+  // every file that is not ASCII, and this number is shown to a person as a reason to decide.
+  // (gemini, the code round.)
+  const thousands = Math.round(editor.whole.length / 1000);
 
-  return `Nothing is selected, so this would send the whole of ${editor.name} — ${kb} KB. Send all of it?`;
+  return `Nothing is selected, so this would send the whole of ${editor.name}`
+    + ` — about ${thousands} thousand characters. Send all of it?`;
 }

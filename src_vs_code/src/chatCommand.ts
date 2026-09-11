@@ -1015,6 +1015,9 @@ function matchedSession(
   return sourceSession(active, all, panels.known(), eligible);
 }
 
+/** A refusal nobody needs to read: the person just cancelled the question that caused it. */
+const CANCELLED = '\u0000';
+
 /**
  * The passage from the active editor — and the one question this door asks before it sends.
  *
@@ -1038,14 +1041,32 @@ async function fromTheEditor(): Promise<{ text: string; failure: string }> {
     return { text: passage.text, failure: '' };
   }
   const said = await vscode.window.showWarningMessage(ask, { modal: true }, 'Send all of it');
+  if (said === 'Send all of it') {
+    return { text: passage.text, failure: '' };
+  }
 
-  return said === 'Send all of it' ? { text: passage.text, failure: '' } : { text: '', failure: ' ' };
+  // CANCELLED, which is not a failure and needs no sentence: the person was asked a question one
+  // second ago and answered it. A refusal here showed an empty warning box. (codex, the code round.)
+  return { text: '', failure: CANCELLED };
 }
 
-/** The active editor, narrowed to the two strings the decision needs. */
+/**
+ * The active editor, narrowed to the two strings the decision needs — and only when it is the tab
+ * the conversation is being keyed to.
+ *
+ * <p>`matchedSession` reads the active TAB and this reads the active EDITOR, and in a split with the
+ * focus somewhere else those are two different documents. Then the conversation would be named after
+ * one file and carry the text of another. They are checked against each other rather than assumed
+ * equal. (gemini, the code round.)</p>
+ */
 function editorText(): EditorText | undefined {
   const editor = vscode.window.activeTextEditor;
   if (editor === undefined) {
+    return undefined;
+  }
+  const tab = vscode.window.tabGroups.activeTabGroup.activeTab?.input as { uri?: { toString?: () => string } } | undefined;
+  const named = typeof tab?.uri?.toString === 'function' ? tab.uri.toString() : '';
+  if (named.length > 0 && named !== editor.document.uri.toString()) {
     return undefined;
   }
 
@@ -1879,9 +1900,11 @@ export async function chatWithOtherAi(
   const plan = triggerPlan(args, settings.autoSend);
   const passage = match === undefined ? await fromTheEditor() : await passageFor(plan.path);
   if (passage.text.trim().length === 0) {
-    void vscode.window.showWarningMessage(
-      passage.failure.length > 0 ? passage.failure : 'Nothing to explain — copy the text first.',
-    );
+    if (passage.failure !== CANCELLED) {
+      void vscode.window.showWarningMessage(
+        passage.failure.length > 0 ? passage.failure : 'Nothing to explain — copy the text first.',
+      );
+    }
 
     return;
   }
@@ -1989,6 +2012,64 @@ async function deliverPassage(
   show(opened.entry, false, '');
 }
 
+/** Which model answers, resolved the one way both commands resolve it. */
+function readyForChat(): Ready {
+  const config = vscode.workspace.getConfiguration('coai');
+  const settings = chatSettingsFrom((key) => config.get(key));
+  const ticked = mainModel(savedModels(config));
+  const saved = ticked === undefined ? savedPick(config, settings.model) : undefined;
+  const opening = saved ?? { providerId: ticked?.id ?? '', modelId: ticked?.model ?? '' };
+  const model = saved === undefined
+    ? opening.modelId
+    : openingModel(chatProvidersFromPresets(savedModels(config), chatCatalogFrom(config)), saved, settings.modelName);
+
+  return readyToChat(config, opening.providerId, model);
+}
+
+/**
+ * The question waiting in this window, or the sentence saying why there is none.
+ *
+ * <p>EVERY workspace folder, not the first: a multi-root window has a Claude session per root, and
+ * reading only `workspaceFolders[0]` refuses in one root while a question waits in another. One
+ * waiting question across all of them is the answer; two is a refusal that says so. (codex, the
+ * code round.)</p>
+ */
+async function questionWaitingHere(): Promise<{ text: string; refusal: string }> {
+  const folders = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
+  if (folders.length === 0) {
+    return { text: '', refusal: 'Open a folder first — a Claude Code session belongs to one.' };
+  }
+  // Case-blindness is the FILESYSTEM's, not the platform's in general: Windows and macOS treat two
+  // names differing only in case as one, and Linux does not.
+  const caseBlind = process.platform === 'win32' || process.platform === 'darwin';
+  const found = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Window, title: 'Reading Claude Code\u2019s sessions\u2026' },
+    async () => Promise.all(folders.map((folder) => waitingQuestion(os.homedir(), folder, caseBlind))),
+  );
+  const waiting = found.flatMap((one) => (one.kind === 'one' ? [one.session] : []));
+  if (waiting.length > 1 || found.some((one) => one.kind === 'several')) {
+    return {
+      text: '',
+      refusal: 'More than one Claude Code session here is waiting for an answer.'
+        + ' Close the ones you do not mean, and press it again.',
+    };
+  }
+  if (waiting.length === 1) {
+    return { text: askedAsText(waiting[0]!.asked), refusal: '' };
+  }
+  if (found.some((one) => one.kind === 'answered')) {
+    // A DIFFERENT SENTENCE from "nothing was asked". Handing a second model a question that is
+    // already settled is the worst outcome this command has.
+    return { text: '', refusal: 'The last question in this session has already been answered — there is nothing waiting.' };
+  }
+  const failed = found.find((one) => one.kind === 'failed');
+
+  return {
+    text: '',
+    refusal: failed?.kind === 'failed' ? failed.refusal : 'Claude Code has asked nothing in this folder yet.',
+  };
+}
+
 /**
  * Take the question Claude Code is asking and hand it to a second model.
  *
@@ -1998,34 +2079,24 @@ async function deliverPassage(
  * widget's edge. So this reads the question off the session file Claude Code writes, where it is
  * text, with every option and every description.</p>
  *
- * <p>It goes to the same place a captured paragraph goes: the conversation named after the tab it
- * came from, fenced as MATERIAL like any other passage. Which means the second model sees the
- * question, sees every option, and is never asked to obey any of it.</p>
+ * <p>It goes where a captured paragraph goes — the conversation named after the tab it was invoked
+ * from, whether that is Claude's own panel or a file, fenced as MATERIAL like any other passage. So
+ * the second model sees the question and every option, and is asked to obey none of it.</p>
  */
 export async function takeTheQuestion(
   panels: ChatPanels,
   extensionUri: vscode.Uri,
 ): Promise<void> {
-  const config = vscode.workspace.getConfiguration('coai');
-  const settings = chatSettingsFrom((key) => config.get(key));
-  const ticked = mainModel(savedModels(config));
-  const saved = ticked === undefined ? savedPick(config, settings.model) : undefined;
-  const opening = saved ?? { providerId: ticked?.id ?? '', modelId: ticked?.model ?? '' };
-  const model = saved === undefined
-    ? opening.modelId
-    : openingModel(chatProvidersFromPresets(savedModels(config), chatCatalogFrom(config)), saved, settings.modelName);
-  const ready = readyToChat(config, opening.providerId, model);
+  const ready = readyForChat();
   if (!ready.ok) {
     void vscode.window.showWarningMessage(ready.refusal);
 
     return;
   }
-  // FROM THE PANEL, like the capture beside it — the conversation is named after the tab, and this
-  // question belongs to the session in that tab.
-  const source = matchedSession(panels);
+  const source = matchedSession(panels) ?? matchedSession(panels, isOrdinaryEditorTab);
   if (source === undefined) {
     void vscode.window.showWarningMessage(
-      'Open this from a Claude Code session tab — the question and the conversation both belong to it.',
+      'Open this from a Claude Code session tab or from a file — the conversation is named after it.',
     );
 
     return;
@@ -2033,54 +2104,15 @@ export async function takeTheQuestion(
   if (source.kind === 'rekey') {
     panels.rekey(source.from, source.key);
   }
-  const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
-  if (folder.length === 0) {
-    void vscode.window.showWarningMessage('Open a folder first — a session belongs to one.');
-
-    return;
-  }
-  const waiting = waitingQuestion(os.homedir(), folder);
-  if (waiting.kind === 'failed') {
-    void vscode.window.showWarningMessage(waiting.refusal);
-
-    return;
-  }
-  if (waiting.kind === 'none') {
-    void vscode.window.showWarningMessage('Claude Code has asked nothing in this folder yet.');
-
-    return;
-  }
-  if (waiting.kind === 'answered') {
-    // A DIFFERENT SENTENCE from "nothing was asked". Handing a second model a question that is
-    // already settled is the worst outcome this command has, so it is refused by default rather
-    // than offered quietly. (local, three findings on the plan round.)
-    void vscode.window.showWarningMessage(
-      'The last question in this session has already been answered — there is nothing waiting.',
-    );
-
-    return;
-  }
-  if (waiting.kind === 'several') {
-    // NEVER a pick. The host cannot see into Claude Code's webview, so it cannot tell which tab is
-    // being looked at; a plausible guess here delivers somebody else's question, silently, which is
-    // the failure `sessionKey.ts` spends its whole design preventing.
-    void vscode.window.showWarningMessage(
-      `${waiting.sessions.length} Claude Code sessions in this folder are waiting for an answer.`
-      + ' Close the ones you do not mean, and press it again.',
-    );
+  const question = await questionWaitingHere();
+  if (question.text.length === 0) {
+    void vscode.window.showWarningMessage(question.refusal);
 
     return;
   }
 
-  await deliverPassage(
-    panels,
-    extensionUri,
-    ready,
-    source,
-    { text: askedAsText(waiting.session.asked) },
-    // NEVER sent by itself, whatever the auto-send setting says. A question taken off disk is one a
-    // person is in the middle of answering; it goes into the composer so they can look at it, add
-    // what they think, and press send themselves.
-    false,
-  );
+  // NEVER sent by itself, whatever the auto-send setting says. A question taken off disk is one a
+  // person is in the middle of answering; it goes into the composer so they can look at it, add
+  // what they think, and press send themselves.
+  await deliverPassage(panels, extensionUri, ready, source, { text: question.text }, false);
 }

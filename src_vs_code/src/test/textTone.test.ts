@@ -79,8 +79,11 @@ test('a press crosses the seam as a DIRECTION, and anything else as nothing', ()
   // The control only ever sends ±1, so a bigger number is not a press — it is a jump to a bound
   // from a surface the host does not control, which is the rule the zoom already keeps.
   assert.deepStrictEqual(chatCommandOf({ type: 'tone', delta: 99 }), { kind: 'tone', delta: 1 });
+  // Built as the WIRE shape rather than cast through it: `chatCommandOf` takes a message whose
+  // fields are already `unknown`, so a junk delta needs no cast at all — and `as never` is
+  // forbidden here. (codex, the code round.)
   for (const junk of ['lots', Number.NaN, undefined]) {
-    assert.deepStrictEqual(chatCommandOf({ type: 'tone', delta: junk } as never), { kind: 'tone', delta: 0 });
+    assert.deepStrictEqual(chatCommandOf({ type: 'tone', delta: junk }), { kind: 'tone', delta: 0 });
   }
 });
 
