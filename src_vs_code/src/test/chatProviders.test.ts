@@ -468,10 +468,19 @@ test('a model that was ASKED for and is not offered is REFUSED by name, never sw
   const models = [{ id: 'a', label: 'A' }];
   const answer = modelToRun(models, 'gone', 'a');
 
-  assert.strictEqual(answer.ok, false);
-  assert.match(answer.ok === false ? answer.refusal : '', /gone/, 'the refusal does not name the model');
+  // The WHOLE sentence, not merely that there was one: a refusal a person cannot act on is the thing
+  // this rule exists to replace, and a lower-level message could take its place without failing a
+  // test that only checked the status. (CodeRabbit, PR #200.)
+  assert.deepStrictEqual(answer, {
+    ok: false,
+    refusal: 'gone is not one of the models this reviewer offers any more.',
+  });
 });
 
 test('a provider offering nothing at all refuses rather than inventing a model', () => {
-  assert.strictEqual(modelToRun([], '', 'anything').ok, false);
+  assert.deepStrictEqual(modelToRun([], '', 'anything'), {
+    ok: false,
+    refusal: 'That reviewer offers no model this chat can run.',
+  });
 });
+

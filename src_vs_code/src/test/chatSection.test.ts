@@ -5,7 +5,7 @@ import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS, Vendor } from '../vendors';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { CHAT_AUTO_SEND, ChatSettings, chatSettingsFrom } from '../chatSettings';
-import { PromptPreset } from '../chatPresets';
+import { ModelPreset, PromptPreset } from '../chatPresets';
 import { escapeHtml } from '../escapeHtml';
 
 /**
@@ -26,11 +26,20 @@ const chat: ChatSettings = {
   prompt: 'Explain',
   promptChoice: '',
   prompts: [],
+  models: [],
   language: 'en',
   autoSend: 'keyboard',
   model: '',
   modelName: '',
 };
+
+/** A saved MODEL, which is what the chat's picker offers now — no reviewer anywhere near it. */
+function saved(id: string, name: string, over: Partial<ModelPreset> = {}): ModelPreset {
+  return {
+    id, name, runtime: 'antigravity', model: 'gemini-3.7-flash-high',
+    executablePath: '', baseUrl: '', ...over,
+  };
+}
 
 function preset(id: string, name: string): PromptPreset {
   return { id, name, text: `${name} — the words that are actually sent`, main: id === 'p1' };
@@ -147,14 +156,18 @@ test('who presses send is a choice, and its three values are all offered', () =>
   assert.match(body, /<option value="keyboard" selected>/, 'the default is not the selected one');
 });
 
-test('the model list is the models that can actually answer, with its own model named', () => {
+test('the section offers the chat’s OWN saved models, named by the person who saved them', () => {
+  // THE GUARANTEE CHANGED with the architecture, and this is the test that says so. The section used
+  // to list the reviewer ROWS — so a reviewer switched off took the chat with it, and the picker read
+  // as a list of somebody's reviewers. Asked for by the operator five times: *"это полностью
+  // независимый функционал этот чат… чат никак не должен трогать ревьюы"*.
   const body = chatSection(panelHtml(state({
-    vendors: [vendor(), vendor({ id: 'second', model: 'gemini-3.7-pro' })],
+    chat: { ...chat, models: [saved('m1', 'Architect'), saved('m2', 'Fast', { model: 'gemini-3.8-flash-low' })] },
   }), 'n0nce'));
+  const providers = body.slice(body.indexOf('data-setting="chatModel"'), body.indexOf('data-setting="chatModelName"'));
 
-  assert.match(body, /<select[^>]*data-setting="chatModel"/);
-  assert.ok(body.includes('gemini-3.7-flash-high'), 'a row is offered without saying which model it is');
-  assert.ok(body.includes('gemini-3.7-pro'), 'the second row is missing');
+  assert.ok(providers.includes('>Architect</option>'), 'a saved model is not offered under its own name');
+  assert.ok(providers.includes('>Fast</option>'), 'the second saved model is missing');
 });
 
 test('an unset model reads as the first one offered, not as an empty box', () => {
@@ -163,34 +176,28 @@ test('an unset model reads as the first one offered, not as an empty box', () =>
   assert.match(body, /<option value=""[^>]*selected>[^<]*first/i, 'an empty setting looks like a broken control');
 });
 
-test('the panel asks for a PROVIDER and then one of its models, as the tab already does', () => {
-  // The DoD of `PLAN_provider_then_model.md` says "in the tab and in the panel". The tab got the
-  // pair; the panel kept the flat list of rows, and the plan recorded no deviation saying so.
+test('the panel asks which saved model, and then which of ITS models, as the tab does', () => {
   const body = chatSection(panelHtml(state({
-    vendors: [vendor(), vendor({ id: 'second', model: 'gemini-3.7-pro' })],
-    chat: { ...chat, model: 'second' },
+    chat: { ...chat, model: 'm2', models: [saved('m1', 'Architect'), saved('m2', 'Fast')] },
   }), 'n0nce'));
 
-  assert.match(body, /<select[^>]*data-setting="chatModel"/, 'there is no provider select');
-  assert.match(body, /<select[^>]*data-setting="chatModelName"/, 'there is no model select beside it');
-  assert.match(body, /<option value="second" selected>/, 'the chosen provider is not the selected one');
+  assert.match(body, /<select[^>]*data-setting="chatModel"/, 'there is no model select');
+  assert.match(body, /<select[^>]*data-setting="chatModelName"/, 'there is no second select beside it');
+  assert.match(body, /<option value="m2" selected>/, 'the chosen one is not the selected one');
 });
 
-test('the model select offers the models of the CHOSEN provider, and nobody else\'s', () => {
-  // The pair is checked as a pair everywhere else in this feature — `resolveChatPick` refuses a
-  // model the provider does not offer — so a picker that offered every provider's models would be
-  // offering combinations the command will then refuse by name.
+test('the second select offers the models of the CHOSEN saved model, and nobody else’s', () => {
   const body = chatSection(panelHtml(state({
-    vendors: [
-      vendor({ id: 'agy-row', runtime: 'antigravity', model: 'gemini-3.7-flash-high' }),
-      vendor({ id: 'claude-row', runtime: 'claude', model: 'claude-opus-5' }),
-    ],
-    chat: { ...chat, model: 'claude-row' },
+    chat: {
+      ...chat,
+      model: 'claude-one',
+      models: [saved('agy-one', 'Fast'), saved('claude-one', 'Deep', { runtime: 'claude', model: 'claude-opus-5' })],
+    },
   }), 'n0nce'));
   const models = body.slice(body.indexOf('data-setting="chatModelName"'));
 
-  assert.ok(models.includes('claude-opus-5'), 'the chosen provider\'s own model is not offered');
-  assert.ok(!models.includes('gemini-3.7-flash-high'), 'another provider\'s model is offered under this one');
+  assert.ok(models.includes('claude-opus-5'), 'the chosen one’s own model is not offered');
+  assert.ok(!models.includes('gemini-3.7-flash-high'), 'another saved model’s models are offered under this one');
 });
 
 test('an unset model name reads as the row\'s own model, not as an empty box', () => {
@@ -200,14 +207,14 @@ test('an unset model name reads as the row\'s own model, not as an empty box', (
   assert.match(models, /<option value=""[^>]*selected>/, 'an unset model name looks like a broken control');
 });
 
-test('a reviewer the chat cannot speak to is named in the section, not silently absent', () => {
-  // The same rule the command follows: a person who configured `codex` and finds it missing from a
-  // picker cannot tell a bug from a policy.
+test('a saved model on a runtime the chat cannot speak to is named, not silently absent', () => {
+  // The rule is unchanged; only what it is about. A person who saved a model and finds the picker
+  // silently missing it cannot tell a bug from a policy.
   const body = chatSection(panelHtml(state({
-    vendors: [vendor(), vendor({ id: 'my-local', runtime: 'local' })],
+    chat: { ...chat, models: [saved('m1', 'Fast'), saved('m2', 'On a local engine', { runtime: 'local' })] },
   }), 'n0nce'));
 
-  assert.ok(body.includes('my-local'), 'the refused reviewer is not mentioned at all');
+  assert.ok(body.includes('On a local engine'), 'the refused one is not mentioned at all');
   assert.match(body, /can only speak to/, 'it is mentioned without saying why it cannot answer');
 });
 
@@ -246,13 +253,14 @@ test('the panel and the command read the same settings through the same reader',
     chatPrompt: 'Объясни по-русски, коротко',
     chatLanguage: 'ru',
     chatAutoSend: 'always',
-    chatModel: 'second',
+    chatModel: 'm2',
+    chatModelPresets: [
+      { id: 'm1', name: 'Architect', runtime: 'antigravity', model: 'gemini-3.7-flash-high' },
+      { id: 'm2', name: 'Fast', runtime: 'antigravity', model: 'gemini-3.8-flash-low' },
+    ],
   };
   const asCommandReadsIt = chatSettingsFrom((key) => file[key]);
-  const body = chatSection(panelHtml(state({
-    vendors: [vendor(), vendor({ id: 'second' })],
-    chat: asCommandReadsIt,
-  }), 'n0nce'));
+  const body = chatSection(panelHtml(state({ chat: asCommandReadsIt }), 'n0nce'));
 
   assert.ok(body.includes(`<div class="hint">${escapeHtml(asCommandReadsIt.prompt)}</div>`), 'the section shows a different prompt');
   assert.ok(body.includes(`<option value="${asCommandReadsIt.language}" selected>`), 'a different language is selected');

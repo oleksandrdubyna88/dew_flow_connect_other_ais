@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { openChatPresets } from './chatPresetsPanel';
+import { openChatPresets, presetsReadDiscoveriesFrom } from './chatPresetsPanel';
 import { ChatPanels } from './chatPanels';
 import { chatReadsThisSide, chatWithOtherAi, rememberChatsIn, restoreConversation } from './chatCommand';
 import { ChatTabMemory } from './chatTabs';
@@ -44,6 +44,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // reached is closed by ordering rather than argued about. Four reviewers raised it in one round,
   // and `chatWiring.test.ts` now fails if this line ever drifts below a `registerCommand`.
   chatReadsThisSide(context);
+  presetsReadDiscoveriesFrom(context);
   const watcher = new EscalationWatcher(dataDir());
   // Declared before the panel so the hooks can reach it; assigned right after.
   let roundsLog: RoundsLogPanel;

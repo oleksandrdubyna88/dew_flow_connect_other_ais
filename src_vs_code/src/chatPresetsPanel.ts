@@ -1,11 +1,14 @@
 import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
-import { ChatProvider, chatProvidersFrom } from './chatModels';
+import { ChatCatalog, ChatProvider, chatProvidersFromPresets } from './chatModels';
+import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './chatDiscovery';
 import {
   ModelPreset,
   PromptPreset,
   chatModelPresetsFrom,
   chatPromptPresetsFrom,
+  ChatVendorChoice,
+  chatRunSpec,
   freshPromptRow,
   modelRowsAfterAdd,
   promptRowsAfterMain,
@@ -13,8 +16,10 @@ import {
 } from './chatPresets';
 import { PresetCommand, chatPresetsHtml, editRepaints, editedRows, presetEdit } from './chatPresetsPage';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
+import { CHAT_RUNTIMES } from './cliChatLaunch';
+import { allowedModelsFor, modelsFor } from './models';
 import { teamServersFrom } from './teamServers';
-import { vendorsFrom } from './vendors';
+import { VENDOR_PRESETS } from './vendors';
 
 /**
  * The presets tab: one webview, reused while open.
@@ -51,17 +56,29 @@ function models(): readonly ModelPreset[] {
 }
 
 /** The rows a model preset may point at — the same list the chat's own picker offers. */
-function providers(): readonly ChatProvider[] {
-  const vendors = vendorsFrom(config().get('vendors'));
+/**
+ * What a row can be pointed at, with the PANEL's discoveries in it.
+ *
+ * <p>This passed every discovered list EMPTY, so `modelsFor` had nothing to build from and a `codex`
+ * row offered exactly one model: the one it is configured to, marked `(yours)`. The operator opened
+ * the chooser and asked why he could not see the models his reviewer card lists — and that card sits
+ * in the panel, which is where the fetch happens. Same handoff the chat command was given:
+ * `DISCOVERY_KEY` holds what the panel last found. Nothing is fetched here; a dialog must not wait on
+ * three probes to open.</p>
+ */
+function chatCatalogHere(): ChatCatalog {
+  const store = presetsContext?.globalState;
 
-  return chatProvidersFrom(vendors, {
-    discoveredCodex: [],
-    discoveredAgy: [],
-    localEngine: undefined,
-    teamServers: teamServersFrom(config().get('teamServers'))
-      .map((server) => ({ server, email: '', problem: '', stale: false })),
-  }).providers;
+  return catalogUsing(
+    store === undefined ? EMPTY_DISCOVERY : discoveryFrom(store.get(DISCOVERY_KEY)),
+    teamServersFrom(config().get('teamServers')),
+  );
 }
+
+function providers(): readonly ChatProvider[] {
+  return chatProvidersFromPresets(models(), chatCatalogHere()).providers;
+}
+
 
 async function write(key: string, value: unknown): Promise<void> {
   await config().update(key, value, vscode.ConfigurationTarget.Global);
@@ -152,6 +169,20 @@ function render(): void {
 }
 
 /** Open the tab, or bring back the one that is already open. */
+/**
+ * This extension host, so the presets tab can read what the panel discovered.
+ *
+ * <p>The bind-once shape `chatReadsThisSide` and `rememberChatsIn` already use, and for the reason
+ * recorded there: a host has ONE context for its whole life, and threading it through a command, a
+ * webview and four dialogs would put a parameter on six signatures to carry a value that never
+ * changes. Absent only in tests of this file's pure neighbours, and every use is guarded.</p>
+ */
+let presetsContext: vscode.ExtensionContext | undefined;
+
+export function presetsReadDiscoveriesFrom(context: vscode.ExtensionContext): void {
+  presetsContext = context;
+}
+
 export function openChatPresets(): void {
   if (panel !== undefined) {
     panel.reveal();
@@ -210,7 +241,7 @@ async function addModel(rows: readonly Record<string, unknown>[]): Promise<boole
   const chosen = await askForAModel();
   const written = chosen === undefined
     ? undefined
-    : modelRowsAfterAdd(rows, chosen.provider, chosen.model, chosen.name, chosen.startingPrompt);
+    : modelRowsAfterAdd(rows, chosen.vendor, chosen.model, chosen.name, chosen.startingPrompt);
   if (written === undefined) {
     return false;
   }
@@ -250,28 +281,19 @@ async function pruneDeadModelRows(): Promise<void> {
  * preset that only changes the model.</p>
  */
 async function askForAModel(): Promise<
-{ provider: string; model: string; name: string; startingPrompt: string } | undefined> {
-  const rows = providers();
-  if (rows.length === 0) {
-    void vscode.window.showWarningMessage(
-      'A model preset names the reviewer that answers, and no configured reviewer can chat yet.'
-      + ' Enable one in the panel first — the chat speaks to antigravity, claude, codex and Team servers.',
-    );
-
+{ vendor: ChatVendorChoice; model: string; name: string; startingPrompt: string } | undefined> {
+  const chosen = await askWhichVendor();
+  if (chosen === undefined) {
     return undefined;
   }
-  const provider = await askWhichProvider(rows);
-  if (provider === undefined) {
-    return undefined;
-  }
-  const model = await askWhichModel(provider.row);
+  const model = await askWhichModel(chosen.vendor, chosen.label);
   if (model === undefined) {
     return undefined;
   }
   const name = await vscode.window.showInputBox({
     title: 'Add a model — step 3 of 4',
     prompt: 'A name for this preset — it is what the button above the composer says',
-    value: model.label.length > 0 ? model.label : provider.label,
+    value: model.label.length > 0 ? model.label : chosen.label,
   });
   if (name === undefined) {
     return undefined;
@@ -279,23 +301,54 @@ async function askForAModel(): Promise<
   // The LAST step is optional, and escaping it means "none" rather than "throw the other three
   // away". Escape is how a person skips an optional field in every other VS Code dialog, and
   // discarding a finished preset for using it is the wizard punishing the ordinary gesture.
-  // (local, the code round, Blocking.)
   const startingPrompt = await vscode.window.showInputBox({
     title: 'Add a model — step 4 of 4, optional',
     prompt: 'What the composer opens with when this model is chosen. Leave it empty for none.',
     placeHolder: 'You are a business analyst…',
   });
 
-  return { provider: provider.row.id, model: model.id, name, startingPrompt: startingPrompt ?? '' };
+  return { vendor: chosen.vendor, model: model.id, name, startingPrompt: startingPrompt ?? '' };
 }
 
-/** Step 1 — the configured rows, each with the sentence that says what it reaches. */
-function askWhichProvider(rows: readonly ChatProvider[]):
-Thenable<{ label: string; row: ChatProvider } | undefined> {
+/**
+ * Step 1 — the VENDORS, which is the list *Add a reviewer* offers.
+ *
+ * <p>Asked for five times before it was built, and the reason is the one that made the chat
+ * independent in the first place: the person is choosing what will ANSWER, not borrowing somebody's
+ * reviewer. One source — `VENDOR_PRESETS` and the *Team servers* section — so a vendor added to
+ * the product appears here without anybody remembering to, and the sentence under each is the
+ * vendor's own.</p>
+ *
+ * <p>Only vendors the chat can speak to are offered; the rest would be an entry that cannot answer.
+ * A Team server contributes one entry per vendor IT hosts, because the server is the endpoint and
+ * the vendor on it is what runs.</p>
+ */
+async function askWhichVendor(): Promise<{ label: string; vendor: ChatVendorChoice } | undefined> {
+  const local = VENDOR_PRESETS
+    .filter((preset) => CHAT_RUNTIMES.includes(preset.runtime))
+    .map((preset) => ({
+      label: preset.label,
+      detail: preset.hint,
+      vendor: { runtime: preset.runtime, baseUrl: preset.baseUrl } as ChatVendorChoice,
+    }));
+  const remote = teamServersFrom(config().get('teamServers')).flatMap((server) =>
+    serverVendorsOf(server.id).map((name) => ({
+      label: server.name + ' · ' + name,
+      detail: 'on ' + server.url + " — the company's subscription, nothing to install",
+      vendor: { runtime: 'remote', teamServerId: server.id, remoteVendor: name } as ChatVendorChoice,
+    })));
+
   return vscode.window.showQuickPick(
-    rows.map((one) => ({ label: one.id, detail: one.caption, row: one })),
-    { title: 'Add a model — step 1 of 4', placeHolder: 'Which provider answers?' },
+    [...local, ...remote],
+    { title: 'Add a model — step 1 of 4', placeHolder: 'Which vendor should answer?' },
   );
+}
+
+/** What a Team server said it hosts, from the catalog the panel last fetched. */
+function serverVendorsOf(serverId: string): readonly string[] {
+  const cached = chatCatalogHere().teamServers.find((one) => one.server.id === serverId);
+
+  return (cached?.catalog?.vendors ?? []).map((one) => one.id);
 }
 
 /**
@@ -305,13 +358,40 @@ Thenable<{ label: string; row: ChatProvider } | undefined> {
  * would be a dialog with nothing in it, so the answer is an empty model — which everywhere else in
  * this feature means "whatever the row is set to".</p>
  */
-async function askWhichModel(row: ChatProvider): Promise<{ id: string; label: string } | undefined> {
-  if (row.models.length === 0) {
+/**
+ * Step 2 — the models that vendor offers, from the catalog the panel discovered.
+ *
+ * <p>A vendor whose models are DISCOVERED and whose probe has not answered offers none. Asking
+ * anyway would be a dialog with nothing in it, so the answer is an empty model — which everywhere
+ * else in this feature means "whatever that vendor is set to".</p>
+ */
+async function askWhichModel(vendor: ChatVendorChoice, label: string):
+Promise<{ id: string; label: string } | undefined> {
+  const catalog = chatCatalogHere();
+  const spec = chatRunSpec({
+    id: '',
+    name: '',
+    runtime: vendor.runtime,
+    model: '',
+    executablePath: '',
+    baseUrl: vendor.baseUrl ?? '',
+    teamServerId: vendor.teamServerId,
+    remoteVendor: vendor.remoteVendor,
+  });
+  const offered = modelsFor(
+    vendor.runtime,
+    catalog.discoveredCodex,
+    '',
+    catalog.localEngine,
+    catalog.discoveredAgy,
+    allowedModelsFor(spec, catalog.teamServers).models,
+  );
+  if (offered.length === 0) {
     return { id: '', label: '' };
   }
 
   return vscode.window.showQuickPick(
-    row.models.map((one) => ({ label: one.label, id: one.id })),
-    { title: 'Add a model — step 2 of 4', placeHolder: `Which of ${row.id}'s models?` },
+    offered.map((one) => ({ label: one.label, id: one.id })),
+    { title: 'Add a model — step 2 of 4', placeHolder: 'Which of ' + label + ' models?' },
   );
 }

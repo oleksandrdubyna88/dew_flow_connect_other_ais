@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { Vendor } from '../vendors';
+
+/** One vendor, as the wizard hands it to the factory. */
+const AGY = { runtime: 'antigravity' } as const;
 import {
   chatModelPresetsFrom,
   chatPromptPresetsFrom,
+  chatRunSpec,
   freshModelRow,
   freshPromptRow,
   deadModelRow,
@@ -78,25 +83,25 @@ test('a saved list is never overwritten by the old single prompt', () => {
   assert.deepStrictEqual(presets.map((preset) => preset.text), ['mine']);
 });
 
-test('a model preset names a provider, and one without is not a model preset', () => {
-  const presets = chatModelPresetsFrom([
-    { id: 'a', name: 'Fast', provider: 'antigravity', model: 'gemini-3.8-flash' },
-    { id: 'b', name: 'Nameless provider', model: 'x' },
-    { id: 'c', name: '', provider: 'claude' },
-    { id: 'd', name: 'Deep', provider: 'claude', model: 'opus', startingPrompt: 'Think hard' },
+test('a model preset names the VENDOR it runs on, and one without is not a preset', () => {
+  // THE GUARANTEE CHANGED with the architecture. A preset used to name a reviewer ROW and borrow its
+  // runtime; it carries its own now, because the chat must not depend on somebody's reviewer being
+  // switched on. What is refused is unchanged in spirit: a preset that names nothing to run is not
+  // one, whatever else it has.
+  const kept = chatModelPresetsFrom([
+    { id: 'm1', name: 'Fast', runtime: 'antigravity', model: 'gemini-3.8-flash-low' },
+    { id: 'm2', name: 'Nothing to run', model: 'x' },
   ]);
 
-  assert.deepStrictEqual(presets.map((preset) => preset.name), ['Fast', 'Deep']);
-  assert.strictEqual(presets[1]?.startingPrompt, 'Think hard');
+  assert.deepStrictEqual(kept.map((one) => one.id), ['m1']);
+  assert.strictEqual(kept[0]!.runtime, 'antigravity');
 });
 
-test('a model preset may name no model, which means whatever the row is set to', () => {
-  // The same meaning `modelId` has everywhere else in this feature — a row without a model chosen
-  // answers with the one it is configured to.
-  const presets = chatModelPresetsFrom([{ id: 'a', name: 'Whatever', provider: 'claude' }]);
+test('a model preset may name no model, which means whatever that vendor is set to', () => {
+  const kept = chatModelPresetsFrom([{ id: 'm1', name: 'Whatever', runtime: 'codex', model: '' }]);
 
-  assert.strictEqual(presets.length, 1);
-  assert.strictEqual(presets[0]?.model, '');
+  assert.strictEqual(kept.length, 1);
+  assert.strictEqual(kept[0]!.model, '');
 });
 
 test('ids are made where they are missing, and never collide', () => {
@@ -210,10 +215,10 @@ test('the answer before last is kept, because the conversation is not the last e
  * values; the model side seeded the field its own reader refuses on.</p>
  */
 test('a new model preset survives the reader that will render it', () => {
-  const kept = chatModelPresetsFrom([freshModelRow([], 'agy')]);
+  const kept = chatModelPresetsFrom([freshModelRow([], AGY)]);
 
   assert.strictEqual(kept.length, 1, 'the row a press of Add a model writes is dropped by the reader');
-  assert.strictEqual(kept[0]!.provider, 'agy');
+  assert.strictEqual(kept[0]!.runtime, 'antigravity');
   assert.strictEqual(kept[0]!.name, 'New model');
 });
 
@@ -224,15 +229,15 @@ test('a new prompt preset survives its reader too, which is why that button alwa
   assert.strictEqual(kept[0]!.name, 'New prompt');
 });
 
-test('the reader still refuses a model row with no provider — the rule did not move', () => {
-  // The fix is the SEED, not a loosened reader: a preset that names no row names nothing that can
-  // answer, and the two button rows above the composer would render it as a button that does nothing.
-  assert.deepStrictEqual(chatModelPresetsFrom([freshModelRow([], '')]), []);
+test('the reader still refuses a row with nothing to run — the rule did not move', () => {
+  // The fix for the vanishing Add a model was the SEED, not a loosened reader, and that is still
+  // true: a preset naming no vendor names nothing that can answer.
+  assert.deepStrictEqual(chatModelPresetsFrom([freshModelRow([], { runtime: '' as never })]), []);
 });
 
 test('two new rows in a row do not share an id', () => {
-  const first = freshModelRow([], 'agy');
-  const second = freshModelRow([first as { id: string }], 'agy');
+  const first = freshModelRow([], AGY);
+  const second = freshModelRow([first as { id: string }], AGY);
 
   assert.notStrictEqual(first['id'], second['id'], 'a second press produced a row that shadows the first');
 });
@@ -247,11 +252,11 @@ test('two new rows in a row do not share an id', () => {
 test('adding a model prunes what the old defect wrote, and seeds a row the reader keeps', () => {
   const rows = [
     { id: 'dead-1', name: 'New model', provider: '', model: '' },
-    { id: 'real', name: 'Mine', provider: 'agy', model: 'gemini-3.8-flash-low' },
+    { id: 'real', name: 'Mine', runtime: 'antigravity', model: 'gemini-3.8-flash-low' },
     { id: 'dead-2', name: 'New model', provider: '', model: '' },
   ];
 
-  const written = modelRowsAfterAdd(rows, 'agy');
+  const written = modelRowsAfterAdd(rows, AGY);
 
   assert.notStrictEqual(written, undefined);
   // On the WHOLE list, not its first entry: CodeRabbit pointed out that a head-only assertion passes
@@ -265,13 +270,13 @@ test('adding a model prunes what the old defect wrote, and seeds a row the reade
 test('adding a model with nothing that can chat writes NOTHING, so the list is not touched', () => {
   // The alternative is the defect again: a write nobody can see. Refusing is the caller's cue to say
   // why, and saying nothing while writing is what this whole fix is about.
-  assert.strictEqual(modelRowsAfterAdd([{ id: 'real', name: 'Mine', provider: 'agy', model: '' }], ''), undefined);
+  assert.strictEqual(modelRowsAfterAdd([{ id: 'real', name: 'Mine', runtime: 'antigravity', model: '' }], undefined), undefined);
 });
 
 test('a list that is already clean is still written with its rows in order', () => {
-  const rows = [{ id: 'a', name: 'A', provider: 'agy', model: '' }, { id: 'b', name: 'B', provider: 'codex', model: '' }];
+  const rows = [{ id: 'a', name: 'A', runtime: 'antigravity', model: '' }, { id: 'b', name: 'B', runtime: 'antigravity', model: '' }];
 
-  assert.deepStrictEqual(modelRowsAfterAdd(rows, 'agy')!.map((row: Record<string, unknown>) => row['id']).slice(0, 2), ['a', 'b']);
+  assert.deepStrictEqual(modelRowsAfterAdd(rows, AGY)!.map((row: Record<string, unknown>) => row['id']).slice(0, 2), ['a', 'b']);
 });
 
 test('ticking one prompt as main unticks every other, in what is SAVED', () => {
@@ -312,7 +317,7 @@ test('a model row cannot be built without the reviewer that answers it', () => {
   // The code round (codex): `freshPreset('model', rows)` was callable and defaulted the provider to
   // an empty string, which is the original defect available to the next caller. Two factories now,
   // and the model one cannot be called without the row it answers through.
-  const row = freshModelRow([], 'agy');
+  const row = freshModelRow([], AGY);
 
   assert.strictEqual(chatModelPresetsFrom([row]).length, 1);
   assert.strictEqual(chatPromptPresetsFrom([freshPromptRow([])]).length, 1);
@@ -347,7 +352,7 @@ test('unticking a prompt that was not main writes nothing either', () => {
 test('the guided add carries every answer it collected into the row', () => {
   // Provider, then that provider's model, then a name, then an optional starting prompt — the four
   // questions the operator asked for by name, in the shape `Add a reviewer` asks its one.
-  const written = modelRowsAfterAdd([], 'agy', 'gemini-3.8-flash-low', 'Fast Gemini', 'You are a business analyst.');
+  const written = modelRowsAfterAdd([], AGY, 'gemini-3.8-flash-low', 'Fast Gemini', 'You are a business analyst.');
   const kept = chatModelPresetsFrom(written!);
 
   assert.strictEqual(kept.length, 1);
@@ -357,9 +362,72 @@ test('the guided add carries every answer it collected into the row', () => {
 });
 
 test('an empty starting prompt is absent rather than empty, and a blank name falls back', () => {
-  const written = modelRowsAfterAdd([], 'agy', '', '   ', '   ');
+  const written = modelRowsAfterAdd([], AGY, '', '   ', '   ');
   const kept = chatModelPresetsFrom(written!);
 
   assert.strictEqual(kept[0]!.startingPrompt, undefined, 'an empty starting prompt was stored as one');
   assert.strictEqual(kept[0]!.name, 'New model', 'a blank name produced a row the reader drops');
+});
+
+/**
+ * A preset IS the chat's configuration — it names no reviewer.
+ *
+ * <p>Decided 2026-09-11, after the operator said it five times and I built the other thing each time:
+ * *"это полностью независимый функционал этот чат… чат никак не должен трогать ревьюы"*. The chat had
+ * been running ON the reviewer rows — `coai.vendors` — so a reviewer switched off took the chat with
+ * it, the pickers read as lists of reviewers, and a preset stored a row id. A preset now carries
+ * everything a run needs: the vendor, the model, and where that vendor's CLI is.</p>
+ */
+test('a preset carries the vendor it runs on, not a reviewer to borrow it from', () => {
+  const kept = chatModelPresetsFrom([{
+    id: 'm1', name: 'Architect', runtime: 'antigravity', model: 'gemini-3.8-flash-low',
+    executablePath: '/usr/bin/agy', baseUrl: '', startingPrompt: 'You are an architect.',
+  }]);
+
+  assert.strictEqual(kept.length, 1);
+  assert.strictEqual(kept[0]!.runtime, 'antigravity');
+  assert.strictEqual(kept[0]!.executablePath, '/usr/bin/agy');
+});
+
+test('a preset with no vendor is not one, whatever else it has', () => {
+  assert.deepStrictEqual(chatModelPresetsFrom([{ id: 'm1', name: 'Nameless vendor', model: 'x' }]), []);
+  assert.deepStrictEqual(chatModelPresetsFrom([{ id: 'm1', runtime: 'codex', model: 'x' }]), [],
+    'a preset with no name is still a preset');
+});
+
+test('a preset written when it named a reviewer row is carried across, once', () => {
+  // The rows are passed IN, for the migration and for nothing else — after the next write the chat
+  // never asks about them again. Somebody who built three presets should not lose them to an
+  // architecture decision they did not make.
+  const rows: readonly Vendor[] = [{
+    id: 'agy', runtime: 'antigravity', model: 'gemini-3.7-flash-high', enabled: true, plan: true, code: true,
+    baseUrl: '', executablePath: '/usr/bin/agy', pricePerMillionIn: 0, pricePerMillionOut: 0,
+  }];
+  const kept = chatModelPresetsFrom([{ id: 'm1', name: 'Old', provider: 'agy', model: 'gemini-3.8-flash-low' }], rows);
+
+  assert.strictEqual(kept[0]!.runtime, 'antigravity', 'the runtime was not carried over from the row');
+  assert.strictEqual(kept[0]!.executablePath, '/usr/bin/agy', 'the CLI path was left behind');
+  assert.strictEqual(kept[0]!.model, 'gemini-3.8-flash-low', 'the preset lost the model it named');
+});
+
+test('a preset naming a row that is gone keeps its model and says the vendor is missing', () => {
+  // Not silently dropped: the words a person wrote are in the name and the starting prompt.
+  const kept = chatModelPresetsFrom([{ id: 'm1', name: 'Orphan', provider: 'removed', model: 'x' }], []);
+
+  assert.deepStrictEqual(kept, [], 'an unrunnable preset was offered as if it could answer');
+});
+
+test('a run spec is built FROM the preset, so nothing downstream needs a reviewer', () => {
+  const preset = chatModelPresetsFrom([{
+    id: 'm1', name: 'Architect', runtime: 'codex', model: 'gpt-5.6-luna',
+    executablePath: 'C:/codex.cmd', baseUrl: 'https://api.deepseek.com',
+  }])[0]!;
+  const spec = chatRunSpec(preset);
+
+  assert.strictEqual(spec.runtime, 'codex');
+  assert.strictEqual(spec.model, 'gpt-5.6-luna');
+  assert.strictEqual(spec.executablePath, 'C:/codex.cmd');
+  assert.strictEqual(spec.baseUrl, 'https://api.deepseek.com');
+  assert.strictEqual(spec.enabled, true, 'a preset is always on — there is no reviewer switch over it');
+  assert.strictEqual(spec.id, 'm1', 'the spec is identified by the preset, not by a reviewer row');
 });

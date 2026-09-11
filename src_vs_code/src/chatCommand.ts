@@ -11,6 +11,7 @@ import {
   PromptPreset,
   chatModelPresetsFrom,
   chatPromptPresetsFrom,
+  chatRunSpec,
   reaskFrom,
 } from './chatPresets';
 import { ChatTabMemory, SavedTab, reloadedNote } from './chatTabs';
@@ -25,7 +26,7 @@ import {
   LegacyPick,
   ChatProvider,
   chatModelsFrom,
-  chatProvidersFrom,
+  chatProvidersFromPresets,
   isRemote,
   legacyPick,
   memoryOf,
@@ -42,7 +43,7 @@ import { ChatOutcome, ReportedUsage, chatTurnRecord } from './chatUsage';
 import { recordChatTurn } from './chatUsageFile';
 import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './chatDiscovery';
 import { chatSettingsFrom } from './chatSettings';
-import { chatUiScale, createChatPanel, pushChatDraft, pushChatState } from './chatPanel';
+import { chatUiScale, createChatPanel, pushChatDraft, pushChatState, setChatDraft } from './chatPanel';
 import { captureSelection, COPY_SCRIPT, RunOutcome, argvFor, ran } from './selectionCapture';
 import { windowsReach } from './hostSide';
 import { ChatHome, adapterFor, chatHome, chatRuntimeRefusal, defaultExecutableFor } from './cliChatLaunch';
@@ -50,11 +51,10 @@ import { chatProcessFor } from './chatProcess';
 import { launch } from './processLauncher';
 import { resolvedExecutable } from './versionProbe';
 import { CARRY_BUDGET, REMOTE_CARRY_BUDGET, carriedTurn, openingTurn } from './chatPrompt';
-import { ConfigReader, LanguageCode } from './settingsShape';
-import { readerFor } from './sideConfig';
+import { LanguageCode } from './settingsShape';
 import { sourceSession, TabSnapshot } from './sessionKey';
 import { triggerPlan } from './chatTrigger';
-import { Vendor, vendorsFrom } from './vendors';
+import { Vendor } from './vendors';
 
 /**
  * The one command the person actually presses.
@@ -197,28 +197,6 @@ export function chatReadsThisSide(context: vscode.ExtensionContext): void {
   hostContext = context;
 }
 
-/**
- * How this command reads a `coai.*` setting: this side's own value first, the shared one otherwise.
- *
- * <p>It matters for `vendors` above all, because that row carries `executablePath`. With *Separate
- * settings for each side* on, the shared list is another side's — and on a machine where a bare
- * `codex` in WSL resolves through the interop PATH into the Windows npm directory, reading it here
- * launched a Windows shim from Linux.</p>
- *
- * <p>Falls back to the shared reader when nothing has been bound, which is only the case before
- * `activate` has run. A chat that reads shared settings is the old behaviour; a chat that throws is
- * a new defect.</p>
- */
-function sideRead(config: vscode.WorkspaceConfiguration): ConfigReader {
-  const host = hostContext;
-
-  // Unreachable once `activate` has run, and `chatReadsThisSide` is called at the TOP of it —
-  // before any command is registered, so nothing can be invoked while this is undefined. It stays
-  // because a chat that reads the shared settings is the old behaviour, and a chat that throws on a
-  // keypress is a new defect. `chatWiring.test.ts` pins the ordering. (codex, local and gemini, the
-  // code round, four findings.)
-  return host === undefined ? (section) => config.get(section) : readerFor(host, config);
-}
 
 /** The tabs, narrowed to what `sessionKey` judges on. */
 function snapshots(): { active: TabSnapshot | undefined; all: TabSnapshot[] } {
@@ -725,9 +703,9 @@ function savedModels(config: vscode.WorkspaceConfiguration): readonly ModelPrese
  * place so the two callers cannot drift.</p>
  */
 function savedPick(config: vscode.WorkspaceConfiguration, saved: string): LegacyPick {
-  const vendors = vendorsFrom(sideRead(config)('vendors'));
+  const specs = savedModels(config).map(chatRunSpec);
 
-  return legacyPick(chatProvidersFrom(vendors, chatCatalogFrom(config)), vendors, saved);
+  return legacyPick(chatProvidersFromPresets(savedModels(config), chatCatalogFrom(config)), specs, saved);
 }
 
 /**
@@ -747,9 +725,9 @@ function readyToChat(
   askedProvider: string,
   askedModel: string,
 ): Ready {
-  const vendors = vendorsFrom(sideRead(config)('vendors'));
-  const list = chatProvidersFrom(vendors, chatCatalogFrom(config));
-  const pick = resolveChatPick(vendors, list, askedProvider, askedModel);
+  const specs = savedModels(config).map(chatRunSpec);
+  const list = chatProvidersFromPresets(savedModels(config), chatCatalogFrom(config));
+  const pick = resolveChatPick(specs, list, askedProvider, askedModel);
   if (!pick.ok) {
     return { ok: false, refusal: pick.refusal };
   }
@@ -761,7 +739,7 @@ function readyToChat(
     : {
       ok: true,
       vendor: pick.row,
-      models: chatModelsFrom(vendors).offered,
+      models: chatModelsFrom(specs).offered,
       providers: list.providers,
       providerId: pick.row.id,
       modelId: pick.model,
@@ -894,8 +872,18 @@ async function cliFor(vendor: Vendor): Promise<{ resolved: string; refusal: stri
 }
 
 /** The vendor row behind a model id, read fresh — the person may have edited settings since. */
-function vendorFor(modelId: string): Vendor | undefined {
-  return vendorsFrom(sideRead(vscode.workspace.getConfiguration('coai'))('vendors')).find((row) => row.id === modelId);
+/**
+ * How to RUN the preset with this id — built from the preset itself, never from a reviewer row.
+ *
+ * <p>This looked the id up in `coai.vendors`, which is what made the chat depend on the review gate:
+ * a reviewer switched off, renamed or removed took a conversation with it. A preset carries its own
+ * vendor, model, CLI path and endpoint, and `chatRunSpec` shapes them into the `Vendor` every
+ * launcher, session and Team-server client here was already written against.</p>
+ */
+function vendorFor(presetId: string): Vendor | undefined {
+  const preset = savedModels(vscode.workspace.getConfiguration('coai')).find((one) => one.id === presetId);
+
+  return preset === undefined ? undefined : chatRunSpec(preset);
 }
 
 /**
@@ -911,11 +899,21 @@ function vendorFor(modelId: string): Vendor | undefined {
  * that turn with "the conversation was closed" — an error about something the person did on
  * purpose. The switch simply joins the queue the turns already run in.</p>
  */
-function switchModel(entry: ChatEntry, providerId: string, asked: string): boolean {
+function switchModel(entry: ChatEntry, providerId: string, asked: string): Promise<boolean> {
   const thread = threads.get(entry.id);
-  const provider = thread?.providers.find((one) => one.id === providerId);
-  if (thread === undefined || provider === undefined) {
-    return false;
+  if (thread === undefined) {
+    return Promise.resolve(false);
+  }
+  const provider = thread.providers.find((one) => one.id === providerId);
+  if (provider === undefined) {
+    // A saved preset can name a row that has since been removed or switched off. Said out loud, like
+    // every other refusal on this path — a button that does nothing and explains nothing is the
+    // defect this whole change started from. (CodeRabbit, PR #200.)
+    const refusal = `${providerId} is not a reviewer this conversation can be sent to any more.`;
+    void vscode.window.showWarningMessage(refusal);
+    show(entry, false, refusal);
+
+    return Promise.resolve(false);
   }
   // An EMPTY model is the page saying the provider moved: which of the new row's models answers is
   // decided here, because this side holds the catalog. The row's own configured model, which is what
@@ -930,18 +928,22 @@ function switchModel(entry: ChatEntry, providerId: string, asked: string): boole
     // The page has already moved its own select; put the state back so it stops claiming otherwise.
     show(entry, false, running.refusal);
 
-    return false;
+    return Promise.resolve(false);
   }
   const modelId = running.model;
   if (thread.providerId === providerId && thread.modelId === modelId) {
-    return false;
+    return Promise.resolve(false);
   }
   if (thread.running) {
     void vscode.window.showInformationMessage(
       `Switching to ${modelId} as soon as the current answer arrives.`,
     );
   }
-  thread.turns = thread.turns
+  // The ANSWER is what the queued switch did, not that it was queued. A caller that acts on the
+  // switch — a model preset putting its own prompt in the composer — would otherwise act while
+  // `switchNow` was still to find that the CLI is not installed, and offer those words to the model
+  // that is still answering. (CodeRabbit, PR #200.)
+  const done = thread.turns
     .then(() => switchNow(entry, providerId, modelId))
     .catch((reason: unknown) => {
       // Not swallowed: a switch that failed leaves the thread on the OLD model, and a person who
@@ -949,15 +951,18 @@ function switchModel(entry: ChatEntry, providerId: string, asked: string): boole
       const failure = `The chat could not switch to ${modelId}: ${asText(reason)}`;
       void vscode.window.showWarningMessage(failure);
       show(entry, false, failure);
-    });
 
-  return true;
+      return false;
+    });
+  thread.turns = done;
+
+  return done;
 }
 
-async function switchNow(entry: ChatEntry, providerId: string, modelId: string): Promise<void> {
+async function switchNow(entry: ChatEntry, providerId: string, modelId: string): Promise<boolean> {
   const thread = threads.get(entry.id);
   if (thread === undefined || (thread.providerId === providerId && thread.modelId === modelId)) {
-    return;
+    return false;
   }
   // The PROVIDER is the row — it carries the runtime, the executable, the base URL, the price and,
   // for a Team server, the server and the vendor name on it. This used to look the row up by the
@@ -971,7 +976,7 @@ async function switchNow(entry: ChatEntry, providerId: string, modelId: string):
     // The page has already moved its own select; put the state back so it stops claiming otherwise.
     show(entry, false, refusal);
 
-    return;
+    return false;
   }
 
   // The same resolution the first launch did, because the model being switched TO may be a vendor
@@ -984,7 +989,7 @@ async function switchNow(entry: ChatEntry, providerId: string, modelId: string):
     void vscode.window.showWarningMessage(cannot);
     show(entry, false, cannot);
 
-    return;
+    return false;
   }
 
   thread.session.dispose();
@@ -1012,6 +1017,8 @@ async function switchNow(entry: ChatEntry, providerId: string, modelId: string):
   void vscode.window.showInformationMessage(
     `Now asking ${modelId}. Your next question carries this conversation across to it.`,
   );
+
+  return true;
 }
 
 /** Everything one new conversation is made of. Called ONLY when a tab has no panel yet. */
@@ -1108,7 +1115,7 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
       onPick: (id, providerId, modelId) => {
         const found = panels.entryOf(id);
         if (found !== undefined) {
-          switchModel(found, providerId, modelId);
+          void switchModel(found, providerId, modelId);
         }
       },
       onUsePrompt: (id, presetId) => {
@@ -1119,7 +1126,7 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
           // Into the COMPOSER, replacing what is in it. A saved prompt is an instruction the person
           // chose by pressing its name, and appending it to a half-typed sentence would make a
           // question neither of them wrote.
-          pushChatDraft(found, preset.text);
+          setChatDraft(found, preset.text);
         }
       },
       onUseModel: (id, presetId, draft) => {
@@ -1133,22 +1140,25 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         // putting its words in the box would offer them to the model that is still answering.
         // (codex, the code round.)
         const starting = preset.startingPrompt ?? '';
-        if (!switchModel(found, preset.provider, preset.model) || starting.length === 0) {
-          return;
-        }
+        // The preset IS the provider now: its own id names it in the conversation's list.
+        void switchModel(found, preset.id, preset.model).then((switched) => {
+          if (!switched || starting.length === 0) {
+            return;
+          }
         // ONLY INTO AN EMPTY COMPOSER, which is where this differs from the prompt button beside it.
         // That button IS the instruction "ask this instead", and replacing is what was asked for. A
         // starting prompt is a side effect of changing the MODEL, and somebody who switches model
         // half-way through writing a question did not ask for their words to be thrown away. Two
         // vendors raised the destruction on the plan round; the split is the answer to it — and it is
         // SAID rather than silently skipped, which the code round asked for in turn.
-        if (draft.trim().length === 0) {
-          pushChatDraft(found, starting);
-        } else {
-          void vscode.window.showInformationMessage(
-            `${preset.name} opens with its own prompt, and the box already has something in it — so it was left alone.`,
-          );
-        }
+          if (draft.trim().length === 0) {
+            setChatDraft(found, starting);
+          } else {
+            void vscode.window.showInformationMessage(
+              `${preset.name} opens with its own prompt, and the box already has something in it — so it was left alone.`,
+            );
+          }
+        });
       },
       onStop: (id, turn) => {
         const found = panels.entryOf(id);
@@ -1479,8 +1489,7 @@ export async function chatWithOtherAi(
   // The panel names a provider AND, since the pair reached it, one of that provider's models. A name
   // it does not offer is not a pick — the row's own model answers — so a value gone stale in
   // `settings.json` or withdrawn by a Team server opens a conversation rather than a refusal.
-  const vendors = vendorsFrom(sideRead(config)('vendors'));
-  const model = openingModel(chatProvidersFrom(vendors, chatCatalogFrom(config)), opening, settings.modelName);
+  const model = openingModel(chatProvidersFromPresets(savedModels(config), chatCatalogFrom(config)), opening, settings.modelName);
   const ready = readyToChat(config, opening.providerId, model);
   if (!ready.ok) {
     void vscode.window.showWarningMessage(ready.refusal);

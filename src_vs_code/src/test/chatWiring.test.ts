@@ -176,30 +176,31 @@ test('a stopped turn is written into the transcript before the conversation is c
 /**
  * The third thing no unit test can see: a read that goes AROUND the one accessor.
  *
- * <p>`panelProvider` has said since the per-side switch shipped that "a read that goes around it is
- * a setting that silently stays shared" — and its accessor was private, so three reads went around
- * it. Both files below import `vscode` and cannot be exercised here, which is exactly the shape the
- * `argvFor` guard above was written for: the fact is in the source, so the source is what is
- * checked.</p>
+ * <p><b>THE GUARANTEE CHANGED, and into a stronger one.</b> This used to say that the chat must read
+ * `vendors` through the per-side reader rather than straight off the shared configuration — because
+ * that row carries `executablePath`, and a shared read hands a WSL window the Windows npm shim. The
+ * chat does not read `vendors` AT ALL now: a preset carries its own vendor, model and CLI path, so
+ * there is no reviewer row to read from the wrong side of the machine.</p>
  *
- * <p>It matters most for `vendors`, because that row carries `executablePath`. On a machine with the
- * switch on, a shared read hands a WSL window the Windows npm shim.</p>
+ * <p>Asked for by the operator, five times, in the end as plainly as it can be put: *"это полностью
+ * независимый функционал этот чат… чат никак не должен трогать ревьюы"*. A test is the only thing
+ * that keeps it true — the coupling was convenient, and it will be convenient again.</p>
  */
+/** A read of the reviewer rows that goes around this side's overlay. */
 const DIRECT_VENDORS = /\.get(?:<[^>]*>)?\(\s*'vendors'\s*\)/g;
 
-test('the chat reads vendors only through the per-side reader, never straight off the shared configuration', () => {
-  const text = read(join('src', 'chatCommand.ts'));
+const ANY_VENDORS = /\.get(?:<[^>]*>)?\(\s*'vendors'\s*\)|vendorsFrom\(/g;
 
-  assert.deepStrictEqual(
-    [...text.matchAll(DIRECT_VENDORS)].map((hit) => hit[0]),
-    [],
-    'a direct read of vendors bypasses this side’s overlay — go through the per-side reader',
-  );
-  assert.match(
-    text,
-    /readerFor\(/,
-    'nothing in the chat builds a per-side reader, so every setting it reads is the shared one',
-  );
+test('the chat reads no reviewer row, from either side of the machine', () => {
+  for (const file of ['chatCommand.ts', 'chatPresetsPanel.ts', 'chatPresets.ts', 'chatPanel.ts']) {
+    const text = read(join('src', file));
+
+    assert.deepStrictEqual(
+      [...text.matchAll(ANY_VENDORS)].map((hit) => hit[0]),
+      [],
+      `${file} reads the reviewer rows — the chat is independent of the review gate, and stays so`,
+    );
+  }
 });
 
 test('the side is bound before any command can be invoked', () => {
