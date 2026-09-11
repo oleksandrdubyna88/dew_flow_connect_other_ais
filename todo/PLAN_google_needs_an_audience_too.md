@@ -20,8 +20,17 @@ lifetime, the allowed domain and `email_verified` are still checked, so this is 
 it is any third-party application a colleague ever signed into being able to present that colleague to
 this server. Same defect, same fix, one identity provider over.
 
-Deployments that use only Microsoft are unaffected. Whether the live box has Google enabled is not
-known from this repository; `deploy/README.md:257-259` lists Microsoft keys only.
+Deployments that use only Microsoft are unaffected, and `coai.remsoft.dev` is one of them: **the
+operator stated on 2026-09-11 that Google is disabled there and Microsoft is the only scheme
+configured.** That is a person's answer about a file this repository cannot read
+(`/etc/coai-server.env`, `0600` on the box), not something measured here — `deploy/README.md:257-259`
+lists Microsoft keys only, which is consistent with it and proves nothing on its own.
+
+Two things follow and they point in opposite directions, which is why the answer is worth writing down
+rather than acted on twice. **The deploy risk is nil**: a server with Google disabled cannot reach the
+new refusal, so this change cannot stop that box from starting. And **the live exposure is nil too**:
+nobody can present a Google token to it at all today. So this closes a footgun for the NEXT deployment
+rather than an open door on this one — worth doing, and not worth hurrying.
 
 ## The change
 
@@ -33,10 +42,13 @@ known from this repository; `deploy/README.md:257-259` lists Microsoft keys only
 3. `Program.cs:72` passes the list.
 4. `module_team_server.md` *Configuration*: the refusal joins the list of start-up refusals.
 
-**A deploy note, because this is the one change here that can stop a server from starting.** A live
+**A deploy note, because this is the one change here that CAN stop a server from starting** — not
+this one, on today's answer, but the next box or the day somebody adds Google to this one. A live
 `/etc/coai-server.env` with Google enabled and no audiences will refuse to start after this release.
 Read that file before deploying; POST_DEPLOY item 10 (`/api/health` reports the new version) is what
-catches a server that did not come up.
+catches a server that did not come up. The note stays in the release notes even though
+`coai.remsoft.dev` is out of its reach: a refusal nobody was warned about is the same outage whether
+or not this deployment was the one at risk.
 
 No growth surface.
 

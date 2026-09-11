@@ -55,16 +55,32 @@ edited by 1.1 then 1.2, so the security diff reviews as an environment change ra
 with a stream rewrite. `JobRunner.cs` is edited by 3.1, then 3.2, then 2.4: the guard wraps the body
 before the body grows a loop, so a bug in the walk fails a test instead of hanging it.
 
-## What each story owes before the next one starts
+## What each story owes, and what each EPIC owes
 
-A story that is not reviewed, documented, tested and committed is not finished. For every one:
+A story that is not documented, tested and committed is not finished. For every one:
 
 1. the RED test first, watched failing for the symptom the table names;
 2. the change;
 3. that test green, and the whole suite of the project it touched green;
 4. `research/module_*.md` updated where the story changed what a module does;
-5. `review_code` on the story's diff, every finding resolved, the accepted ones fixed;
-6. one commit.
+5. one commit.
+
+**The review gate runs per EPIC, not per story** — the operator's decision on 2026-09-11, which
+overrides the gate command's own *"after EVERY story: call review_code"*. One code round over the
+epic's whole diff, every finding resolved, the accepted ones fixed and committed before the next epic
+starts. The reason is cost rather than taste: story 1.1's code round alone was twelve reviewers and
+520k input tokens against the operator's own paid subscriptions, and twelve of those is most of the
+budget for this work.
+
+What it trades is real and worth naming, because a later reader will otherwise read the change as
+free: an epic's diff is three stories wide, so a reviewer holds more at once and localises a defect
+less precisely than it would on one story — and a finding that would have stopped story 1.2 now
+arrives after 1.3 is also written. The mitigation is the order in the table: the two file-level
+orderings below exist so that a finding against an earlier story lands on code the later ones have
+not yet buried.
+
+Story 1.1 was gated on its own before this decision, and story 1.2's plan round ran on its own branch;
+both are recorded in their commits.
 
 ## Risks carried from the split
 
