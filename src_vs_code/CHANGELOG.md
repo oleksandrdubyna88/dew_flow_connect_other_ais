@@ -41,6 +41,21 @@ and a ticked preset opens on its own model rather than on the one the panel reme
 **Send moved** to the end of the line that names the model, so the box is the full width of the
 panel.
 
+**Switching the model in an open chat works again.** It had stopped the day the picker became two
+steps: the page sends the provider and the model, and the half that receives them was still reading
+the single value from before, so every switch was discarded in silence and the dropdown went back to
+what it had been. Both halves were tested, each against its own idea of the message, and neither ever
+met the other.
+
+**Adding a model asks, instead of guessing.** *Add a model* opens the same kind of chooser as *Add a
+reviewer*: which vendor answers — each named with what it reaches — then which of that vendor's
+models, then a name for the button, then a starting prompt if you want one. Cancelling one of the
+first three writes nothing at all; cancelling the last one means you did not want a starting prompt,
+and the preset is saved without one.
+
+**A model that is no longer offered is refused by name, not swapped.** Press a preset for a model a
+vendor has since stopped offering and the chat says so, instead of quietly running a different one.
+
 **A saved model this build cannot read is named.** Presets written before a model preset carried its
 own vendor cannot be repaired without reading the reviewer list, which the chat no longer does — so
 the presets tab says which ones they are and asks you to add them again, rather than passing over

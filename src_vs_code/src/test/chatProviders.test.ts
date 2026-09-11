@@ -211,10 +211,12 @@ test('a model valid under ANOTHER provider is refused, because the pair is check
   const picked = resolveChatPick(vendors, list, 'agy', 'sonnet');
 
   assert.strictEqual(picked.ok, false, 'a model this provider does not offer must not resolve');
-  assert.match(
+  // The WHOLE sentence. A refusal that merely mentions the model would still pass while a low-level
+  // message replaced the short, actionable one a person is meant to read. (CodeRabbit, PR #200.)
+  assert.strictEqual(
     picked.ok === false ? picked.refusal : '',
-    /sonnet/,
-    'the refusal names the model that was asked for',
+    'agy does not offer sonnet',
+    'the refusal is no longer the short sentence this feature owns',
   );
 });
 
@@ -225,7 +227,11 @@ test('a pick naming a provider that is not configured is refused by that name', 
   const picked = resolveChatPick(vendors, list, 'codex-gone', 'gpt-5.2');
 
   assert.strictEqual(picked.ok, false);
-  assert.match(picked.ok === false ? picked.refusal : '', /codex-gone/);
+  assert.strictEqual(
+    picked.ok === false ? picked.refusal : '',
+    'codex-gone is not a model this conversation can be sent to any more',
+    'the refusal is no longer the short sentence this feature owns',
+  );
 });
 
 test('a legacy chatModel naming a ROW resolves to that row and its configured model', () => {
