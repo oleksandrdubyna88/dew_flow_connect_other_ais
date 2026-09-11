@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { clampTone, toneColour, toneLabel } from './textTone';
+import { clampTone, toneColours, toneLabel } from './textTone';
 
 /**
  * The host half of the ± text tone: read the setting, apply a press, keep every open page in step.
@@ -39,9 +39,10 @@ export async function applyToneDelta(delta: number): Promise<void> {
 export function pushTextToneTo(webview: vscode.Webview): vscode.Disposable {
   const push = (): void => {
     const offset = currentTextTone();
-    // An empty colour is the theme's own, and assigning '' to `style.color` is how the page gives
-    // the property back rather than painting over it with something that looks the same.
-    void webview.postMessage({ type: 'textTone', color: toneColour(offset), label: toneLabel(offset) });
+    const { text, read } = toneColours(offset);
+    // An empty colour is the theme's own, and assigning '' is how the page gives the property back
+    // rather than painting over it with something that looks the same.
+    void webview.postMessage({ type: 'textTone', color: text, read, label: toneLabel(offset) });
   };
   push();
 

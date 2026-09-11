@@ -556,7 +556,9 @@ function chatStyle(
   /* The PROSE takes the editor's foreground, and only the prose: the chrome around it - the hint,
      the picker, the captions - belongs to --vscode-foreground, and overriding that on body produces
      a seam between the two rather than a brighter page. (gemini, the plan round.) */
-  .msg .what { color: var(--vscode-editor-foreground); line-height: 1.55; }
+  /* By NAME, not by inheritance: this rule sets a colour of its own, so the tone has to reach it
+     through the property or the answers — the text somebody is actually reading — ignore it. */
+  .msg .what { color: var(--coai-read); line-height: 1.55; }
   .msg.you .what { white-space: pre-wrap; }
   .msg .what > :first-child { margin-top: 0; }
   .msg .what > :last-child { margin-bottom: 0; }

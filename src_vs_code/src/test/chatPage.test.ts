@@ -1205,7 +1205,12 @@ test('the prose is the editor\'s foreground and has room to breathe', () => {
   // Scoped to the prose rather than reset on body: the chrome around it — inputs, the hint, the
   // picker — belongs to `--vscode-foreground`, and a seam between the two is what a blanket
   // override produces. (gemini, the plan round.)
-  assert.match(ruleFor(css, '.msg .what'), /var\(--vscode-editor-foreground\)/, 'the prose is the chrome colour');
+  //
+  // Through the tone PROPERTY since the stepper arrived, whose default IS the editor foreground: a
+  // rule that named the theme variable directly ignored the tone, and the prose is the text somebody
+  // dimming their screen is reading. (CodeRabbit, PR #206.)
+  assert.match(ruleFor(css, '.msg .what'), /var\(--coai-read\)/, 'the prose does not follow the tone');
+  assert.match(ruleFor(css, ':root'), /--coai-read: var\(--vscode-editor-foreground\)/, 'the prose default moved');
   assert.match(ruleFor(css, '.msg .what'), /line-height/, 'the lines have no room between them');
   assert.doesNotMatch(ruleFor(css, '.msg.you .what'), /opacity/, 'the person\'s own words are dimmed');
 });

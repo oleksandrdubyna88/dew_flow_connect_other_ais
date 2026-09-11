@@ -65,7 +65,7 @@ export function toneLabel(offset: number): string {
  * in a stylesheet at render time and assigned to `body.style.color` later by a pushed message: the
  * theme variable and the direction variable are read at paint, not at build.</p>
  */
-export function toneColour(offset: number): string {
+export function toneColour(offset: number, base = 'var(--vscode-foreground)'): string {
   const clamped = clampTone(offset);
   if (clamped === 0) {
     return '';
@@ -73,7 +73,22 @@ export function toneColour(offset: number): string {
   const mixed = Math.abs(clamped) * MIX_PER_STEP;
   const target = clamped > 0 ? 'var(--coai-tone-away)' : 'var(--coai-tone-warm)';
 
-  return `color-mix(in srgb, var(--vscode-foreground) ${100 - mixed}%, ${target} ${mixed}%)`;
+  return `color-mix(in srgb, ${base} ${100 - mixed}%, ${target} ${mixed}%)`;
+}
+
+/**
+ * The two colours a page paints with, toned: its own chrome, and the text of the conversation.
+ *
+ * <p>TWO, because the transcript does not inherit the body's colour — `.msg .what` sets
+ * `--vscode-editor-foreground` for itself, and a tone applied to `body` alone left the answers
+ * exactly as they were. Which is the text somebody dimming their screen at night is reading.
+ * (CodeRabbit, PR #206.)</p>
+ */
+export function toneColours(offset: number): { readonly text: string; readonly read: string } {
+  return {
+    text: toneColour(offset),
+    read: toneColour(offset, 'var(--vscode-editor-foreground)'),
+  };
 }
 
 /**
@@ -84,9 +99,12 @@ export function toneColour(offset: number): string {
  * trap `chatPage.ts` documents and a test parses for.</p>
  */
 export function toneStyle(offset: number): string {
-  const colour = toneColour(offset);
+  const { text, read } = toneColours(offset);
 
-  return colour.length === 0 ? '' : `color: ${colour};`;
+  // Two custom properties and one `color`, rather than one `color`: the page's chrome takes it by
+  // inheritance and the transcript takes it by name, because the transcript sets a colour of its own
+  // and would otherwise ignore the tone entirely.
+  return text.length === 0 ? '' : `--coai-text: ${text}; --coai-read: ${read}; color: var(--coai-text);`;
 }
 
 /** The header control: minus, the offset, plus. The zoom's shape, its own field. */
@@ -113,7 +131,11 @@ export function toneScript(): string {
   }
   window.addEventListener('message', (event) => {
     if (event.data?.type !== 'textTone') { return; }
-    document.body.style.color = event.data.color;
+    // BOTH, for the same reason the stylesheet writes both: the transcript names its own colour and
+    // would keep it through every press otherwise.
+    document.body.style.setProperty('--coai-text', event.data.color);
+    document.body.style.setProperty('--coai-read', event.data.read);
+    document.body.style.color = event.data.color.length > 0 ? 'var(--coai-text)' : '';
     const toneLabelNode = document.getElementById('toneOffset');
     if (toneLabelNode) { toneLabelNode.textContent = event.data.label; }
   });`;
@@ -127,6 +149,9 @@ export function toneScript(): string {
  * of a webview under a light theme — the page is told which world it is in by the host itself.</p>
  */
 export const TONE_CSS = `
+  /* The defaults sit on the ROOT so a page's own body rule can override them: a declaration on the
+     element beats one it merely inherits, whichever order the two rules are written in. */
+  :root { --coai-text: var(--vscode-foreground); --coai-read: var(--vscode-editor-foreground); }
   body { --coai-tone-away: #ffffff; --coai-tone-warm: ${WARM}; }
   body.vscode-light { --coai-tone-away: #000000; }
   .toneCtl { display: inline-flex; align-items: center; gap: 2px; margin-left: 6px; }

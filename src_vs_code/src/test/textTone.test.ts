@@ -8,6 +8,7 @@ import {
   TONE_CSS,
   clampTone,
   toneColour,
+  toneColours,
   toneControlHtml,
   toneLabel,
   toneScript,
@@ -103,4 +104,23 @@ test('both pages that carry the zoom are pushed the tone, and both let it go', (
     assert.match(text, /tone(Hook)?\.dispose\(\)/, `${file} never releases its tone listener`);
     assert.match(text, /applyToneDelta/, `${file} takes no tone press`);
   }
+});
+
+test('the tone reaches the text a person is actually READING', () => {
+  // It was applied to the body alone, and the transcript sets a colour of its own — so every answer
+  // ignored the tone, which is the text somebody dimming their screen at night is looking at.
+  // (CodeRabbit, PR #206.)
+  const both = toneColours(-3);
+
+  assert.match(both.text, /var\(--vscode-foreground\)/, 'the chrome lost its base');
+  assert.match(both.read, /var\(--vscode-editor-foreground\)/, 'the prose is toned from the wrong base');
+  assert.match(toneStyle(-3), /--coai-read:/, 'the style does not carry the prose colour');
+  assert.match(toneStyle(-3), /--coai-text:/, 'the style does not carry the chrome colour');
+  assert.strictEqual(toneStyle(0), '', 'an untouched control still wrote properties');
+  assert.match(TONE_CSS, /--coai-read: var\(--vscode-editor-foreground\)/, 'the prose has no default');
+});
+
+test('a pushed tone sets both properties, so nothing keeps its own colour', () => {
+  assert.match(toneScript(), /--coai-read/, 'a press leaves the prose behind');
+  assert.match(toneScript(), /--coai-text/, 'a press leaves the chrome behind');
 });
