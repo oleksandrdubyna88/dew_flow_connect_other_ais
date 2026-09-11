@@ -916,7 +916,7 @@ dead rows *on the next write* clears nothing for somebody who opens the tab, loo
 and nothing at all for somebody whose add is refused because no reviewer can chat. `pruneDeadModelRows`
 runs when the tab OPENS and writes only when something was dropped, so it runs once. The two decisions
 the host used to make inline moved beside the readers that judge them — `modelRowsAfterAdd` and
-`promptRowsAfterMain` — because a test of the seed passes while the command is still wired to the old
+`rowsAfterMain` — because a test of the seed passes while the command is still wired to the old
 one, which is exactly what codex said. And unticking the ONLY main prompt is refused: `onlyOneMain`
 marks nothing when nothing is ticked and `mainPrompt` then falls back to the first, so the page would
 have shown no tick while the first prompt was quietly what a capture sends.
@@ -940,7 +940,7 @@ written as an empty string, which no surface can produce any other way. A row wi
 field at all, or one carrying fields from a later build, is left where it is.
 
 Three more: a `main` edit is guarded by the LIST as well as the field, so a message naming the model
-list cannot be given a rule that belongs to the prompt list; `promptRowsAfterMain` returns the list
+list cannot be given a rule that belongs to the prompt list; `rowsAfterMain` returns the list
 ITSELF whenever every flag already says what was asked, so re-ticking the main one writes nothing;
 and `repaintsAfter` narrowed to `editRepaints`, taking only edit commands. A whole-command policy in
 the page parser that the host consulted for edits alone was a rule with a test and no effect —
@@ -998,6 +998,75 @@ retained webview from an older build posts. And escaping the optional fourth ste
 **`coai.editChatPresets` reached a menu.** It shipped registered, in no `contributes.menus` entry and
 named in no view, so the tab it opens was reachable only from the command palette. The section has an
 **Edit presets…** button, routed like *Install the MCP server…* through `VSCODE_COMMAND_FOR`.
+
+### The chat is its own thing, and its turn can be read (2026-09-11)
+
+Said five times before it was built, in the end as plainly as it can be put: *"это полностью
+независимый функционал этот чат... чат никак не должен трогать ревьюы"*. Every wrong thing in the
+pickers came from one root — the chat ran on `coai.vendors`, the reviewer rows — so a reviewer
+switched off took a conversation with it and every list read as a list of somebody's reviewers.
+
+**A preset IS the configuration.** `ModelPreset` carries the vendor it runs on, the model, the CLI
+path and the endpoint; for a Team server it names the server entry and the vendor on it, and the
+address, the token and the allowlist come from the *Team servers* section, which is its own
+configuration and has nothing to do with reviewers either. `chatRunSpec` shapes a preset into the
+`Vendor` the launcher, the session and the Team-server client were already written against, so
+nothing downstream had to change and nothing downstream reads a reviewer. A preset written when it
+named a reviewer row carries that row's fields out of it once, on the next read. `chatWiring.test.ts`
+guards the coupling from both sides of the machine, because it was convenient and will be again.
+
+**Both lists carry a main tick, under one rule.** `rowsAfterMain` — the prompt list's rule, renamed
+because it is now both lists' — keeps exactly one and refuses to untick the last: a control that
+turns off and changes nothing is dishonest, and `mainPrompt` would go on quietly using the first row.
+The ticks mean different things by one deliberate step: `mainPrompt` falls back to the FIRST prompt,
+because a capture always sends something; `mainModel` answers only what is ticked, because
+`coai.chatModel` is a value a person sets in the panel and an untouched list must not overrule it. A
+capture opens on the ticked pair with both buttons drawn pressed, and a ticked preset brings its OWN
+model — `coai.chatModelName` was overruling it, so a button labelled *Gemini 3.7 Flash (High)* opened
+a conversation whose picker said 3.8 Flash (Medium).
+
+**A turn is three kinds of text, and it is drawn as three.** The role — the model preset's own prompt
+— is purple, the task — the prompt preset in force — is green, and the machinery between them (the
+language line, the material note, the fence) is underlined and dimmed so a reader's eye steps over
+it. `turnParts` decides which words are which; the host renders those parts with `escapeHtml` and the
+page renders them with its own escape, from ONE embedded copy of the function. The stripe on a preset
+button is the colour of the half that button changes, so pressing one shows which words below it
+moved. `chatInstruction(role, task)` is why both survive at once: they had been replacing each other,
+and *"один указывает одно, другой другое. они должны быть оба"*.
+
+**The composer draws its own text, which is not as obvious as it sounds.** A textarea cannot colour
+part of its own text, so the box's text is transparent and a layer behind it in the same metrics does
+the drawing. A layer that is not painted therefore renders an EMPTY-looking composer holding a whole
+opening turn — which is what shipped, because the paint ran only when a draft was pushed: not on the
+first render, and not on a keystroke. It is painted on load, on input and on scroll now, and the
+scroll of the two layers is kept in step.
+
+**A button swaps its half; it does not rebuild the turn.** `reinstructed(draft, was, now)` replaces
+the instruction at the front of the text the PAGE sent and keeps everything after it byte for byte.
+Rebuilding the turn from what the conversation remembers looks equivalent and is not: the box is the
+only place that knows what is really in it, so a passage captured a second time, a sentence added
+under the fence or a page one repaint behind made the rebuild refuse or replace text nobody asked it
+to. That is how a model preset's role came to be dropped press after press while the prompt button
+beside it worked — both rebuilt, and only one of them happened to match. The whole-turn write is the
+fallback, guarded by `stillOurs`, for a box this side has never written to.
+
+**Pressing a model changes the screen NOW; the process follows.** A switch disposes one process,
+resolves a CLI and starts another, and everything the button did to the screen used to ride on its
+answer — so the pressed button and the role waited for all of that, and were dropped outright
+whenever the switch answered anything but success. `Thread.chosenId` is the preset the person pressed
+and `providerId` stays the model that is ANSWERING, which is what the picker below shows; a refused
+switch puts the button, the role and the words back.
+
+**And the layout:** *Send* sits at the end of the line that names the model, so the composer is the
+full width of the panel. It is deliberately outside `pickerBox`, whose innerHTML every state push
+replaces — inside it, the first push would destroy the control and the listener bound to it once at
+load, and a *Send* that stops sending after the first answer is the worst version of that change.
+
+**One trap worth recording.** A function handed to the page by `toString()` may use nothing but its
+own arguments. The first `markedTurn` built HTML and escaped it with a helper of its own; the bundler
+hoisted that helper out of the function, so the source the page received called a name the page did
+not have — and `bundledPage.test.ts` is what said so. Splitting the decision (`turnParts`) from the
+drawing is what makes the embedding safe.
 
 ### A provider is a ROW, and the pair is checked as a pair (2026-09-09)
 
