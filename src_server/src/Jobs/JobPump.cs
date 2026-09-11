@@ -127,6 +127,14 @@ public sealed class JobPump(
 
         // Never `await run` — that is the ten-minute review, and awaiting it here would stop every
         // other vendor's queue for its duration, which is what the promise exists to avoid.
-        return await Task.WhenAny(started.Task, run) == started.Task && await started.Task;
+        //
+        // And the ANSWER is read off the promise rather than off which task `WhenAny` returned. The
+        // two are the same in every case this code can reach — the runner's `finally` completes the
+        // promise before its task can complete, so a finished run implies a kept promise — but that
+        // is a fact a reader has to reconstruct from another file, and a reviewer reconstructed it
+        // wrongly on this change's code round. This form needs no tie-break reasoning at all.
+        await Task.WhenAny(started.Task, run);
+
+        return started.Task.IsCompletedSuccessfully && await started.Task;
     }
 }
