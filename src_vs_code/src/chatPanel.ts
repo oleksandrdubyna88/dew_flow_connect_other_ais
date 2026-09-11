@@ -6,13 +6,16 @@ import {
   ChatMessage,
   ChatModelChoice,
   ChatPageState,
+  TurnMarks,
   chatCappedHtml,
   chatMessagesHtml,
   chatPageHtml,
   chatPickerHtml,
+  chatPresetRowsHtml,
   chatStatusHtml,
 } from './chatPage';
 import { ChatProvider } from './chatModels';
+import { ModelPreset, PromptPreset } from './chatPresets';
 import { chatTabIcon } from './chatIcon';
 import { escapeHtml } from './webviewHtml';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
@@ -51,7 +54,7 @@ export interface ChatPanelHooks {
    */
   readonly onPick: (id: object, providerId: string, modelId: string) => void;
   /** A saved prompt was pressed. The host owns the list; the page only names which. */
-  readonly onUsePrompt: (id: object, presetId: string) => void;
+  readonly onUsePrompt: (id: object, presetId: string, draft?: string) => void;
   /** A saved model was pressed. Its provider and model answer, and its starting prompt is offered. */
   readonly onUseModel: (id: object, presetId: string, draft: string) => void;
   /**
@@ -115,6 +118,20 @@ export interface ChatPushState {
   readonly spend: string;
   readonly providerId: string;
   readonly modelId: string;
+  /** Which saved PROMPT is in force — the button that looks pressed. */
+  readonly promptId: string;
+  /** The two lists, so the rows of buttons can be redrawn with the right one pressed. */
+  readonly promptPresets: readonly PromptPreset[];
+  readonly modelPresets: readonly ModelPreset[];
+  /**
+   * Which words in the turn are which — who is answering, what is asked, and the machinery.
+   *
+   * <p>Pushed because the page cannot tell them apart: it holds one string, and it draws the box's
+   * own text transparent so a layer behind it can colour part of it. Empty marks nothing.</p>
+   */
+  readonly marks: TurnMarks;
+  /** Which model button is pressed: the preset chosen, which is ahead of the session mid-switch. */
+  readonly chosenModelId: string;
   /**
    * How many turns are ahead of this one on a Team server, or 0 for none and for a local model.
    *
@@ -258,7 +275,7 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
 
       return;
     case 'usePrompt':
-      hooks.onUsePrompt(id, command.id);
+      hooks.onUsePrompt(id, command.id, command.draft);
 
       return;
     case 'useModel':
@@ -349,13 +366,22 @@ ReadonlyMap<string, ReadonlySet<string>> {
 export function pushChatState(entry: ChatEntry, state: ChatPushState): boolean {
   const payload = {
     type: 'state',
-    messagesHtml: chatMessagesHtml(state.messages),
+    // MARKED like the composer below it: a question that has been sent is the same words, and they
+    // stop being readable if the colours go when it moves.
+    messagesHtml: chatMessagesHtml(state.messages, state.marks),
     running: state.running,
     capped: state.capped,
     thinkingHtml: chatStatusHtml(state.running, state.queued, state.turn),
     cappedHtml: chatCappedHtml(state.capped),
     failureHtml: state.failure.length === 0 ? '' : `<div class="failure">${escapeHtml(state.failure)}</div>`,
     pickerHtml: chatPickerHtml({ providers: state.providers, refused: [] }, state.providerId, state.modelId),
+    // The ROWS as well as the picker. They were drawn once, when the page was built, so pressing a
+    // prompt changed the words in the box and left every button looking exactly as it had — and a row
+    // of buttons where the one in force looks like the others is a row you have to remember.
+    presetsHtml: chatPresetRowsHtml(state.promptPresets, state.modelPresets, state.promptId, state.chosenModelId),
+    // Trimmed, because the instruction they were built into is: an untrimmed mark would not match
+    // the text in the box and the page would silently colour nothing.
+    marks: { ...state.marks, role: state.marks.role.trim(), task: state.marks.task.trim() },
     modelId: state.modelId,
   };
 

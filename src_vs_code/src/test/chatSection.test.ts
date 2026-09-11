@@ -36,7 +36,7 @@ const chat: ChatSettings = {
 /** A saved MODEL, which is what the chat's picker offers now — no reviewer anywhere near it. */
 function saved(id: string, name: string, over: Partial<ModelPreset> = {}): ModelPreset {
   return {
-    id, name, runtime: 'antigravity', model: 'gemini-3.7-flash-high',
+    id, name, main: false, runtime: 'antigravity', model: 'gemini-3.7-flash-high',
     executablePath: '', baseUrl: '', ...over,
   };
 }

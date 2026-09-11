@@ -11,7 +11,7 @@ import {
   chatRunSpec,
   freshPromptRow,
   modelRowsAfterAdd,
-  promptRowsAfterMain,
+  rowsAfterMain,
   deadModelRow,
 } from './chatPresets';
 import { PresetCommand, chatPresetsHtml, editRepaints, editedRows, presetEdit } from './chatPresetsPage';
@@ -133,12 +133,11 @@ async function apply(command: PresetCommand): Promise<boolean> {
   if (command.kind === 'edit') {
     const rows = key === PROMPTS_KEY ? promptRowsToWrite() : rowsOf(key);
     // The `main` box is a rule of its own — exactly one, and the last one cannot be turned off —
-    // so it is decided beside the reader that enforces the same thing, not in `edited`.
-    // The LIST as well as the field: `main` is a rule of the PROMPT list — exactly one, and the last
-    // cannot be turned off — and a message naming the model list must not be given it. No model row
-    // carries a `main` today, which is exactly why the guard belongs here rather than in a comment.
-    const next = command.list === 'prompt' && command.field === 'main'
-      ? promptRowsAfterMain(rows, command.id, command.value === true)
+    // so it is decided beside the reader that enforces the same thing, not in `edited`. BOTH lists
+    // carry one now: the prompts' tick says which one a capture sends with, the models' says which
+    // one it opens on, and they are the same rule about the same field.
+    const next = command.field === 'main'
+      ? rowsAfterMain(rows, command.id, command.value === true)
       : editedRows(rows, command);
     // The SAME array back means the rule refused — unticking the last main one, or an id naming no
     // row. Writing it would be a configuration change event that says nothing, on every click.
@@ -371,6 +370,9 @@ Promise<{ id: string; label: string } | undefined> {
   const spec = chatRunSpec({
     id: '',
     name: '',
+    // Nothing is saved here — this is the probe that asks a vendor what it offers, and `main` is a
+    // fact about a LIST that this row is not in yet.
+    main: false,
     runtime: vendor.runtime,
     model: '',
     executablePath: '',

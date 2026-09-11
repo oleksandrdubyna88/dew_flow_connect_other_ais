@@ -54,7 +54,7 @@ export type ChatCommand =
    */
   | { readonly kind: 'pick'; readonly provider: string; readonly model: string }
   /** A saved prompt was pressed: its words go into the composer. */
-  | { readonly kind: 'usePrompt'; readonly id: string }
+  | { readonly kind: 'usePrompt'; readonly id: string; readonly draft?: string }
   /**
    * A saved model was pressed: its provider and model answer from now on.
    *
@@ -244,8 +244,14 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
     }
     case 'usePromptPreset': {
       const id = text(message.id);
+      // The draft is OPTIONAL here, where the model preset's is required: a webview retained from a
+      // build before this field existed posts none, and a prompt button has always replaced what it
+      // found. Absent, the host rebuilds the turn instead of swapping the instruction in it.
+      const draft = typeof message.text === 'string' ? message.text : undefined;
 
-      return id.length === 0 ? IGNORE : { kind: 'usePrompt', id };
+      return id.length === 0
+        ? IGNORE
+        : { kind: 'usePrompt', id, ...(draft === undefined ? {} : { draft }) };
     }
     case 'useModelPreset': {
       const id = text(message.id);

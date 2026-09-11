@@ -17,13 +17,13 @@ const PROMPTS = [
 ];
 
 const MODELS = [
-  { id: 'm1', name: 'Fast', runtime: 'antigravity' as const, executablePath: '', baseUrl: '', model: 'gemini-3.8-flash' },
-  { id: 'm2', name: 'Deep', runtime: 'antigravity' as const, executablePath: '', baseUrl: '', model: 'opus', startingPrompt: 'Think hard' },
+  { id: 'm1', name: 'Fast', main: false, runtime: 'antigravity' as const, executablePath: '', baseUrl: '', model: 'gemini-3.8-flash' },
+  { id: 'm2', name: 'Deep', main: false, runtime: 'antigravity' as const, executablePath: '', baseUrl: '', model: 'opus', startingPrompt: 'Think hard' },
 ];
 
 const PROVIDERS = [
-  { id: 'antigravity', label: 'antigravity', caption: 'local', models: [{ id: 'gemini-3.8-flash', label: 'Flash' }] },
-  { id: 'claude', label: 'claude', caption: 'local', models: [{ id: 'opus', label: 'Opus' }] },
+  { id: 'antigravity', vendor: 'antigravity', label: 'antigravity', caption: 'local', models: [{ id: 'gemini-3.8-flash', label: 'Flash' }] },
+  { id: 'claude', vendor: 'claude', label: 'claude', caption: 'local', models: [{ id: 'opus', label: 'Opus' }] },
 ];
 
 test('both lists are on the page, each entry named', () => {
@@ -77,7 +77,7 @@ test('everything a person typed is escaped, in a name and in a prompt alike', ()
   const html = chatPresetsHtml(
     {
       prompts: [{ id: 'p', name: '<img src=x onerror=alert(1)>', text: '</textarea><script>alert(1)</script>', main: true }],
-      models: [{ id: 'm', name: '"><b>', runtime: 'antigravity' as const, executablePath: '', baseUrl: '', model: '' }],
+      models: [{ id: 'm', name: '"><b>', main: false, runtime: 'antigravity' as const, executablePath: '', baseUrl: '', model: '' }],
       providers: [],
       uiScale: 0,
     },
@@ -112,10 +112,38 @@ test('an edit names a list, an id, a field and a value', () => {
     presetEdit({ type: 'edit', list: 'prompt', id: 'p1', field: 'name', value: 'Explain it' }),
     { kind: 'edit', list: 'prompt', id: 'p1', field: 'name', value: 'Explain it' },
   );
+  // BOTH lists carry the tick now: the prompts' says which one a capture sends with, the models'
+  // which one it opens on. It used to be refused for the model list, because no model row had one.
   assert.deepStrictEqual(
     presetEdit({ type: 'edit', list: 'model', id: 'm1', field: 'main', value: true }),
+    { kind: 'edit', list: 'model', id: 'm1', field: 'main', value: true },
+  );
+  // And it is still a BOOLEAN on both. A string through the same field would be written straight
+  // into the rule that decides which row is the one.
+  assert.deepStrictEqual(
+    presetEdit({ type: 'edit', list: 'model', id: 'm1', field: 'main', value: 'yes' }),
     { kind: 'ignore' },
   );
+});
+
+test('the models tab offers the tick, and shows which model a capture opens on', () => {
+  const html = chatPresetsHtml(
+    {
+      prompts: [],
+      models: [
+        { id: 'm1', name: 'Fast', main: false, runtime: 'antigravity' as const, executablePath: '', baseUrl: '', model: '' },
+        { id: 'm2', name: 'Deep', main: true, runtime: 'antigravity' as const, executablePath: '', baseUrl: '', model: '' },
+      ],
+      providers: [],
+      uiScale: 0,
+    },
+    'n0nce',
+  );
+  const rows = html.split('<div class="preset"').filter((row) => row.includes('data-list="model"'));
+
+  assert.strictEqual(rows.length, 2, 'both models were drawn');
+  assert.doesNotMatch(rows[0] ?? '', /data-field="main"[^>]* checked/, 'a model nobody ticked looked ticked');
+  assert.match(rows[1] ?? '', /data-list="model" data-field="main" checked/, 'the ticked model did not look ticked');
 });
 
 test('a field this page does not have is not an edit', () => {

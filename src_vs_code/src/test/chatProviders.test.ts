@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ChatCatalog, chatProvidersFrom, legacyPick, modelToRun, openingModel, resolveChatPick } from '../chatModels';
+import { ChatCatalog, chatProvidersFrom, chatProvidersFromPresets, legacyPick, modelToRun, openingModel, resolveChatPick } from '../chatModels';
+import { chatRunSpec } from '../chatPresets';
 import { Vendor } from '../vendors';
 import { TeamServerState } from '../teamServerView';
 import { requestBody } from '../remoteAsk';
@@ -389,13 +390,19 @@ test('an ambiguous legacy model names the providers that offer it', () => {
   assert.deepStrictEqual(legacyPick(list, both, 'gpt-5.2-mini').candidates, ['codex-a', 'codex-b']);
 });
 
-test('a legacy value nobody offers strands with no candidates to suggest', () => {
+test('a legacy value nobody offers is not a choice, so the first one answers', () => {
+  // THE GUARANTEE CHANGED, and the operator is the one who found out why. This used to strand such a
+  // value — keep the name, return no provider — so that the caller could refuse it BY NAME. That was
+  // right while every saved value named a reviewer row that might come back. It is wrong now: the
+  // chat has its own saved models, so `coai.chatModel` holds a REVIEWER id on every installation
+  // that predates them, and stranding it produced `" is not a model this conversation can be sent to
+  // any more"` — a leading space and no name — the moment a passage was opened for analysis.
   const vendors = [vendor({ id: 'codex', runtime: 'codex', model: 'gpt-5.2' })];
   const list = chatProvidersFrom(vendors, CATALOG);
 
   assert.deepStrictEqual(
     legacyPick(list, vendors, 'a-model-that-went-away'),
-    { providerId: '', modelId: 'a-model-that-went-away', candidates: [] },
+    { providerId: 'codex', modelId: 'gpt-5.2', candidates: [] },
   );
 });
 
@@ -484,3 +491,44 @@ test('a provider offering nothing at all refuses rather than inventing a model',
   });
 });
 
+
+/**
+ * A saved value from BEFORE the chat had its own models must not end in a nameless refusal.
+ *
+ * <p>Reported 2026-09-11, with the toast in the screenshot: `" is not a model this conversation can
+ * be sent to any more"` — a leading space and no name, because the name it was built from was an
+ * empty string. `coai.chatModel` still held a reviewer ROW id, which after the architecture change
+ * names nothing in this feature's world: `legacyPick` could resolve it to neither a provider nor a
+ * model, answered with an empty provider, and `resolveChatPick` built a sentence out of it.</p>
+ *
+ * <p>Two rules, and the second one is the general guard: a value that names nothing HERE is not a
+ * choice at all, so the first saved model answers, exactly as an empty setting does; and no refusal
+ * is ever built from an empty name.</p>
+ */
+test('a saved reviewer id names nothing here, so the first saved model answers', () => {
+  const presets = [
+    { id: 'p1', name: 'Terra', main: false, runtime: 'codex' as const, model: 'gpt-5.6-terra', executablePath: '', baseUrl: '' },
+    { id: 'p2', name: 'Fast', main: false, runtime: 'codex' as const, model: 'gpt-5.2-mini', executablePath: '', baseUrl: '' },
+  ];
+  const list = chatProvidersFromPresets(presets, CATALOG);
+  const specs = presets.map(chatRunSpec);
+
+  assert.deepStrictEqual(legacyPick(list, specs, 'gemini'), { providerId: 'p1', modelId: 'gpt-5.6-terra', candidates: [] });
+});
+
+test('a refusal is never built out of an empty name', () => {
+  const presets = [{ id: 'p1', name: 'Terra', main: false, runtime: 'codex' as const, model: 'gpt-5.6-terra', executablePath: '', baseUrl: '' }];
+  const list = chatProvidersFromPresets(presets, CATALOG);
+  const answer = resolveChatPick(presets.map(chatRunSpec), list, '', '');
+
+  assert.strictEqual(answer.ok, false);
+  assert.doesNotMatch(answer.ok === false ? answer.refusal : 'x', /^\s/, 'the refusal opens with the gap where a name should be');
+  assert.match(answer.ok === false ? answer.refusal : '', /saved model/i, 'the refusal does not say what to do about it');
+});
+
+test('with no saved models at all the chat says so, rather than refusing a blank', () => {
+  const answer = resolveChatPick([], { providers: [], refused: [] }, '', '');
+
+  assert.strictEqual(answer.ok, false);
+  assert.match(answer.ok === false ? answer.refusal : '', /Edit chat presets/i, 'nobody is told where to add one');
+});

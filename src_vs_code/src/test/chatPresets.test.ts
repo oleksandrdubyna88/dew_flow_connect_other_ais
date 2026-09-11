@@ -11,9 +11,10 @@ import {
   freshModelRow,
   freshPromptRow,
   deadModelRow,
+  mainModel,
   mainPrompt,
   modelRowsAfterAdd,
-  promptRowsAfterMain,
+  rowsAfterMain,
   presetById,
   reaskFrom,
 } from '../chatPresets';
@@ -282,7 +283,7 @@ test('a list that is already clean is still written with its rows in order', () 
 test('ticking one prompt as main unticks every other, in what is SAVED', () => {
   const rows = [{ id: 'a', name: 'A', text: 'a', main: true }, { id: 'b', name: 'B', text: 'b', main: false }];
 
-  assert.deepStrictEqual(promptRowsAfterMain(rows, 'b', true).map((row: Record<string, unknown>) => row['main']), [false, true]);
+  assert.deepStrictEqual(rowsAfterMain(rows, 'b', true).map((row: Record<string, unknown>) => row['main']), [false, true]);
 });
 
 test('unticking the only main one is refused, because something has to answer a capture', () => {
@@ -291,7 +292,7 @@ test('unticking the only main one is refused, because something has to answer a 
   // prompt is quietly the one being sent. A checkbox that cannot be unticked says the truth instead.
   const rows = [{ id: 'a', name: 'A', text: 'a', main: true }, { id: 'b', name: 'B', text: 'b', main: false }];
 
-  assert.deepStrictEqual(promptRowsAfterMain(rows, 'a', false).map((row: Record<string, unknown>) => row['main']), [true, false]);
+  assert.deepStrictEqual(rowsAfterMain(rows, 'a', false).map((row: Record<string, unknown>) => row['main']), [true, false]);
 });
 
 
@@ -303,14 +304,14 @@ test('a main edit naming a prompt that is not there changes NOTHING', () => {
   // exact state the untick refusal above exists to prevent, reached through a different door.
   const rows = [{ id: 'a', name: 'A', text: 'a', main: true }, { id: 'b', name: 'B', text: 'b', main: false }];
 
-  assert.strictEqual(promptRowsAfterMain(rows, 'gone', true), rows, 'an unknown id rewrote the list');
-  assert.strictEqual(promptRowsAfterMain(rows, 'gone', false), rows, 'an unknown id rewrote the list');
+  assert.strictEqual(rowsAfterMain(rows, 'gone', true), rows, 'an unknown id rewrote the list');
+  assert.strictEqual(rowsAfterMain(rows, 'gone', false), rows, 'an unknown id rewrote the list');
 });
 
 test('a refused untick returns the list ITSELF, so the caller can skip a write that changes nothing', () => {
   const rows = [{ id: 'a', name: 'A', text: 'a', main: true }];
 
-  assert.strictEqual(promptRowsAfterMain(rows, 'a', false), rows, 'a no-op still produced a new list to write');
+  assert.strictEqual(rowsAfterMain(rows, 'a', false), rows, 'a no-op still produced a new list to write');
 });
 
 test('a model row cannot be built without the reviewer that answers it', () => {
@@ -340,13 +341,13 @@ test('re-ticking the prompt that is already main writes nothing', () => {
   // reference check saw a change that was not one and wrote the file back to say what it said.
   const rows = [{ id: 'a', name: 'A', text: 'a', main: true }, { id: 'b', name: 'B', text: 'b', main: false }];
 
-  assert.strictEqual(promptRowsAfterMain(rows, 'a', true), rows);
+  assert.strictEqual(rowsAfterMain(rows, 'a', true), rows);
 });
 
 test('unticking a prompt that was not main writes nothing either', () => {
   const rows = [{ id: 'a', name: 'A', text: 'a', main: true }, { id: 'b', name: 'B', text: 'b', main: false }];
 
-  assert.strictEqual(promptRowsAfterMain(rows, 'b', false), rows);
+  assert.strictEqual(rowsAfterMain(rows, 'b', false), rows);
 });
 
 test('the guided add carries every answer it collected into the row', () => {
@@ -430,4 +431,62 @@ test('a run spec is built FROM the preset, so nothing downstream needs a reviewe
   assert.strictEqual(spec.baseUrl, 'https://api.deepseek.com');
   assert.strictEqual(spec.enabled, true, 'a preset is always on — there is no reviewer switch over it');
   assert.strictEqual(spec.id, 'm1', 'the spec is identified by the preset, not by a reviewer row');
+});
+
+test('exactly one model is the main one, and the first claim wins', () => {
+  const models = chatModelPresetsFrom([
+    { id: 'm1', name: 'Fast', runtime: 'codex', model: 'gpt-5.6-terra' },
+    { id: 'm2', name: 'Deep', runtime: 'codex', model: 'gpt-5.6-luna', main: true },
+    { id: 'm3', name: 'Other', runtime: 'codex', model: 'gpt-5.6-nova', main: true },
+  ]);
+
+  assert.deepStrictEqual(models.map((one) => one.main), [false, true, false], 'two models claimed to be main');
+  assert.strictEqual(mainModel(models)?.id, 'm2');
+});
+
+test('a list with no tick still opens on something, and it is the first', () => {
+  const models = chatModelPresetsFrom([
+    { id: 'm1', name: 'Fast', runtime: 'codex', model: 'gpt-5.6-terra' },
+    { id: 'm2', name: 'Deep', runtime: 'codex', model: 'gpt-5.6-luna' },
+  ]);
+
+  assert.deepStrictEqual(models.map((one) => one.main), [false, false], 'a tick was invented');
+  // And NOTHING, rather than the first row: the saved setting is a person's own answer to the same
+  // question, and an untouched list must not overrule it.
+  assert.strictEqual(mainModel(models), undefined, 'an untouched list claimed a model');
+});
+
+test('an empty model list opens on nothing rather than inventing a model', () => {
+  assert.strictEqual(mainModel(chatModelPresetsFrom([])), undefined);
+});
+
+test('the prompt list DOES fall back to its first row, which is the difference between the two', () => {
+  const prompts = chatPromptPresetsFrom([
+    { id: 'p1', name: 'Explain', text: 'Explain this' },
+    { id: 'p2', name: 'Answer', text: 'What would you answer?' },
+  ]);
+
+  // A capture always sends SOMETHING, so a prompt list with no tick still has an answer. A model
+  // list with no tick defers to the saved setting instead.
+  assert.strictEqual(mainPrompt(prompts)?.id, 'p1');
+});
+
+test('a model added to a list does not take the tick from the one that has it', () => {
+  const rows = [{ id: 'm1', name: 'Deep', runtime: 'codex', model: '', main: true }];
+  const fresh = freshModelRow(rows as { id: string }[], { runtime: 'codex' });
+
+  assert.strictEqual(fresh['main'], false, 'a new row arrived as the main one');
+});
+
+test('the models tick follows the same rule the prompts tick does', () => {
+  const rows = [
+    { id: 'm1', name: 'Fast', runtime: 'codex', model: '', main: true },
+    { id: 'm2', name: 'Deep', runtime: 'codex', model: '', main: false },
+  ];
+  const moved = rowsAfterMain(rows, 'm2', true);
+
+  assert.deepStrictEqual(moved.map((row) => row['main']), [false, true], 'the tick did not move');
+  // And the last one cannot be turned off - a list showing no tick while something is quietly the
+  // one a capture opens on is the dishonest control this rule exists to refuse.
+  assert.strictEqual(rowsAfterMain(moved, 'm2', false), moved, 'the only tick was allowed off');
 });

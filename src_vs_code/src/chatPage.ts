@@ -124,6 +124,8 @@ export interface ChatPageState {
   readonly providerId: string;
   /** Which of that row's models. Empty means "whatever the row is set to". */
   readonly modelId: string;
+  /** Which saved PROMPT this conversation is using — the button that looks pressed. */
+  readonly promptId: string;
   /**
    * Which turn is in flight, counted from 1 — and 0 when the page cannot say.
    *
@@ -157,11 +159,135 @@ export interface ChatPageState {
    * decoration — it is the whole difference between the two doors.</p>
    */
   readonly draft: string;
+  /**
+   * WHICH WORDS IN THE TURN ARE WHICH — who is answering, what is asked, and the machinery.
+   *
+   * <p>The page is told because it cannot work it out: a textarea holds one string, and a role and a
+   * task read alike. Marking "the first block" painted whichever of the two happened to be there —
+   * so a conversation with no role painted its task in the role's colour, and one with both left the
+   * task unmarked, which is what the operator saw.</p>
+   */
+  readonly marks: TurnMarks;
+  /**
+   * WHICH MODEL BUTTON is pressed — the preset the person chose.
+   *
+   * <p>Not `providerId`, which is the model actually answering. A switch disposes one process and
+   * starts another, and while that runs the choice has been made but the session has not moved: a
+   * button drawn from `providerId` stayed unpressed for as long as it took, which is what the
+   * operator felt as the model switch hanging.</p>
+   */
+  readonly chosenModelId: string;
   readonly uiScale: number;
 }
 
+/**
+ * WHICH WORDS IN A TURN ARE WHICH: who is answering, what is being asked, and the machinery.
+ *
+ * <p>Three kinds of text and three ways of showing them, because a turn is not one thing: a role is
+ * a standing fact, a task is this question, and the language line, the material note and the fence
+ * are addressed to the model and identical every time.</p>
+ */
+export interface TurnMarks {
+  /** WHO is answering — the model preset's own prompt. Empty marks nothing. */
+  readonly role: string;
+  /** WHAT is being asked — the prompt preset in force. Empty marks nothing. */
+  readonly task: string;
+  /** The lines that are nobody's question, marked to be skipped rather than read. */
+  readonly service: readonly string[];
+}
+
+/** Nothing known about a turn, which marks none of it. */
+export const NO_MARKS: TurnMarks = { role: '', task: '', service: [] };
+
+/** One stretch of a turn, and what it IS. */
+export interface TurnPart {
+  readonly kind: 'role' | 'task' | 'service' | 'plain';
+  readonly text: string;
+}
+
+/**
+ * One turn, cut into the parts it is made of — the same function behind the composer and inside the
+ * transcript.
+ *
+ * <p>Embedded into the page by `toString()`, like `shouldFollow` beside it, so what the tests
+ * exercise is what the page runs. A second implementation would be a second set of rules about the
+ * same words, and the box and the message it becomes a second later would drift.</p>
+ *
+ * <p><b>It returns parts rather than HTML, and calls nothing at all.</b> The first version built the
+ * markup here and escaped it with a helper of its own — and the bundler hoisted that helper out of
+ * the function, so the source `toString()` handed the page called a name the page did not have. A
+ * function that is going to be read out of itself may use nothing but its own arguments.</p>
+ *
+ * <p>The two halves of the instruction are matched at the FRONT and nowhere else: text that no
+ * longer begins with them has been written over by the person, and marking a prefix that does not
+ * match colours half of a sentence they wrote. The service lines are matched wherever they stand,
+ * because they always stand in the same place and never mean anything else.</p>
+ */
+export function turnParts(text: string, marks: TurnMarks): TurnPart[] {
+  const parts: TurnPart[] = [];
+  const role = marks === undefined || marks.role === undefined ? '' : marks.role;
+  const task = marks === undefined || marks.task === undefined ? '' : marks.task;
+  const service = marks === undefined || marks.service === undefined ? [] : marks.service;
+  let at = 0;
+  if (role.length > 0 && text.slice(0, role.length) === role) {
+    parts.push({ kind: 'role', text: role });
+    at = role.length;
+  }
+  const gap = at > 0 ? '\n\n' : '';
+  if (task.length > 0 && text.slice(at, at + gap.length + task.length) === gap + task) {
+    if (gap.length > 0) {
+      parts.push({ kind: 'plain', text: gap });
+    }
+    parts.push({ kind: 'task', text: task });
+    at += gap.length + task.length;
+  }
+  const rest = text.slice(at);
+  let from = 0;
+  while (from < rest.length) {
+    let best = -1;
+    let hit = '';
+    for (let index = 0; index < service.length; index += 1) {
+      const line = service[index] ?? '';
+      const found = line.length === 0 ? -1 : rest.indexOf(line, from);
+      if (found >= 0 && (best < 0 || found < best)) {
+        best = found;
+        hit = line;
+      }
+    }
+    if (best < 0) {
+      break;
+    }
+    if (best > from) {
+      parts.push({ kind: 'plain', text: rest.slice(from, best) });
+    }
+    parts.push({ kind: 'service', text: hit });
+    from = best + hit.length;
+  }
+  if (from < rest.length) {
+    parts.push({ kind: 'plain', text: rest.slice(from) });
+  }
+
+  return parts;
+}
+
+/** The parts as HTML, escaped — the host's half of the drawing. */
+export function markedTurn(text: string, marks: TurnMarks): string {
+  return turnParts(text, marks)
+    .map((part) => {
+      const body = escapeHtml(part.text);
+      if (part.kind === 'plain') {
+        return body;
+      }
+
+      return part.kind === 'service'
+        ? `<u class="service">${body}</u>`
+        : `<mark class="${part.kind}">${body}</mark>`;
+    })
+    .join('');
+}
+
 /** The messages region on its own, so the host can push it without re-rendering the page. */
-export function chatMessagesHtml(messages: readonly ChatMessage[]): string {
+export function chatMessagesHtml(messages: readonly ChatMessage[], marks: TurnMarks = NO_MARKS): string {
   if (messages.length === 0) {
     return '<p class="empty">Nothing asked yet.</p>';
   }
@@ -171,7 +297,10 @@ export function chatMessagesHtml(messages: readonly ChatMessage[]): string {
       const mine = message.role === 'you';
       // What the PERSON typed is not markdown until they say so: a question that begins with a hash
       // is a question, not a heading, and rendering it would silently eat what they wrote.
-      const body = mine ? escapeHtml(message.text) : renderAnswer(message.text);
+      // MARKED, not merely escaped: a question that has been sent is the same words it was in the
+      // box a moment earlier, and they stop being readable if the colours go when it moves. Asked
+      // for looking at a sent turn — the role, the task and three lines of machinery, all one grey.
+      const body = mine ? markedTurn(message.text, marks) : renderAnswer(message.text);
       // The copy control carries the INDEX, and the host reads the message out of the same array
       // this was rendered from - so what is copied is the markdown that arrived, which is the one
       // thing a selection cannot give: selecting the page gives what the page shows.
@@ -228,7 +357,15 @@ export function chatPickerHtml(list: ChatProviderList, providerId: string, model
     return '';
   }
   const chosen = list.providers.find((provider) => provider.id === providerId) ?? list.providers[0];
-  const providers = list.providers.map((provider) => option(provider.id, provider.label, chosen?.id ?? '')).join('');
+  // WHICH VENDOR, and then which of its models. One entry per vendor among the saved models, valued
+  // by the first saved model of that vendor — so choosing a vendor switches to it and the second
+  // select fills with what it can be pointed at. Two selects that both named the saved model were
+  // two dropdowns saying one thing, which is what the operator asked about.
+  const seen = new Set<string>();
+  const providers = list.providers
+    .filter((provider) => !seen.has(provider.vendor) && seen.add(provider.vendor) !== undefined)
+    .map((provider) => option(provider.id, provider.vendor, chosen?.vendor === provider.vendor ? provider.id : ''))
+    .join('');
   const models = (chosen?.models ?? []).map((model) => option(model.id, model.label, modelId)).join('');
   // Refused rows are SHOWN. A person who configured a reviewer and finds the picker silently missing
   // it has no way to tell a bug from a policy — the rule the flat list already followed.
@@ -250,36 +387,46 @@ export function chatPickerHtml(list: ChatProviderList, providerId: string, model
  * button whose effect cannot be predicted from its name. A preset that named a model AND a prompt
  * would be a third thing to explain.</p>
  *
- * <p><b>The colour is an EDGE, and only the model row has one of its own.</b> A model button wears
- * its vendor's colour from `vendorPalette` — one vendor, one colour, everywhere, which is the rule
- * the rounds list, the reviewer cards and the answer captions already keep — so a model button IS a
- * vendor's button. The prompt row takes the link colour, which is in no vendor's palette, because a
- * prompt must never be able to look like a vendor. An edge rather than a filled box, for the reason
- * the reviewer cards already gave: a wall of filled blocks is harder to read than the text in it.</p>
+ * <p><b>The colour is an EDGE, and it says WHICH HALF of the instruction the button changes.</b>
+ * A model button wears the colour the ROLE is written in behind the composer; a prompt button wears
+ * the TASK's. Press one and you can see, in the box below, exactly which words moved — which is the
+ * whole question a person has about a row of buttons that all look alike.</p>
+ *
+ * <p>It used to be the VENDOR's colour from `vendorPalette`, one vendor one colour, as the rounds
+ * list and the reviewer cards keep it. That rule belongs to the review gate, where the question
+ * being answered is "whose model is this"; here the question is "what does this button do to my
+ * question", and the two colours that already answer it are the ones in the text. An edge rather
+ * than a filled box, for the reason the reviewer cards gave: a wall of filled blocks is harder to
+ * read than the text in it.</p>
  */
 export function chatPresetRowsHtml(
   prompts: readonly PromptPreset[],
   models: readonly ModelPreset[],
+  chosenPrompt = '',
+  chosenModel = '',
 ): string {
   if (prompts.length === 0 && models.length === 0) {
     return '';
   }
   // One vendor, one colour — and the vendor is the RUNTIME now, which is what that rule always
   // meant. It used to key on the reviewer row, so two rows of one vendor wore two colours.
-  const colour = vendorPalette(models.map((preset) => preset.runtime));
   const promptRow = prompts.length === 0
     ? ''
     : `<div class="presets prompts">${prompts
       .map((preset) =>
-        `<button type="button" class="preset prompt" data-prompt-preset="${escapeHtml(preset.id)}">`
+        `<button type="button" class="preset prompt${preset.id === chosenPrompt ? ' on' : ''}"`
+        + ` data-prompt-preset="${escapeHtml(preset.id)}"`
+        + `${preset.id === chosenPrompt ? ' aria-pressed="true"' : ''}>`
         + `${escapeHtml(preset.name)}</button>`)
       .join('')}</div>`;
   const modelRow = models.length === 0
     ? ''
     : `<div class="presets models">${models
       .map((preset) =>
-        `<button type="button" class="preset model" data-model-preset="${escapeHtml(preset.id)}"`
-        + ` style="border-left-color: ${colour(preset.runtime)}">${escapeHtml(preset.name)}</button>`)
+        `<button type="button" class="preset model${preset.id === chosenModel ? ' on' : ''}"`
+        + ` data-model-preset="${escapeHtml(preset.id)}"`
+        + `${preset.id === chosenModel ? ' aria-pressed="true"' : ''}`
+        + `>${escapeHtml(preset.name)}</button>`)
       .join('')}</div>`;
 
   return `<div id="presets">${modelRow}${promptRow}</div>`;
@@ -425,9 +572,49 @@ function chatStyle(
      is the label in the ordinary foreground. A filled box per button would be a wall. */
   .preset { font: inherit; font-size: .9em; color: var(--vscode-foreground); background: var(--vscode-button-secondaryBackground, transparent); border: 1px solid var(--vscode-panel-border); border-left-width: 3px; border-radius: 3px; padding: 2px 8px; cursor: pointer; max-width: 18rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .preset:hover { background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground)); }
-  /* Not in the palette, deliberately: a prompt must never be able to look like a vendor. */
-  .preset.prompt { border-left-color: var(--vscode-textLink-foreground); }
-  .picker { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; flex-wrap: wrap; }
+  /* WHICH one is answering, and which words will be sent. A row of buttons that all look alike is a
+     row where the one in force is the one you have to remember. */
+  .preset.on { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-focusBorder); }
+  /* The instruction, marked by the COLOUR OF ITS TEXT.
+     A textarea cannot colour part of its own text, so the words are drawn by a layer behind it in
+     the same metrics and the box gives up drawing them: its own text is transparent and only its
+     caret shows. A background block was the first attempt and it made the words unreadable, which
+     is the opposite of the point — you mark the instruction so it can be READ apart from the
+     passage. Selected text is painted back in, because a selection over invisible text is a
+     coloured rectangle with nothing in it. */
+  /* The layer is positioned against the box, so it does not stretch across the Send button. */
+  .compose { position: relative; }
+  .composeBox { position: relative; flex: 1 1 auto; min-width: 0; display: flex; }
+  #say { color: transparent; caret-color: var(--vscode-input-foreground, var(--vscode-foreground)); background: transparent; position: relative; z-index: 1; }
+  #say::selection { color: var(--vscode-input-foreground, var(--vscode-foreground)); background: var(--vscode-editor-selectionBackground); }
+  #backdrop {
+    position: absolute; inset: 0; box-sizing: border-box; margin: 0; padding: 8px; overflow: hidden;
+    pointer-events: none; white-space: pre-wrap; overflow-wrap: break-word;
+    color: var(--vscode-input-foreground); font: inherit;
+    border: 1px solid transparent; border-radius: 4px;
+  }
+  /* WHO is answering and WHAT they are being asked: two decisions, made with two different
+     buttons, so two colours rather than one undifferentiated block of "instruction". */
+  /* WHO is answering and WHAT is being asked. Two colours, named once and used wherever either of
+     them appears: the words behind the composer, and the stripe on the button that changes them. */
+  body { --coai-role: var(--vscode-charts-purple, #b180d7); --coai-task: var(--vscode-charts-green, #89d185); }
+  mark { background: none; font-weight: 600; }
+  mark.role { color: var(--coai-role); }
+  mark.task { color: var(--coai-task); }
+  /* The machinery: underlined and dimmed, so an eye looking for the question steps over it. */
+  u.service { text-decoration: underline; text-decoration-style: solid; opacity: .55; }
+  /* The stripe names the half. After the pressed-state rule, whose border shorthand would otherwise take the
+     left edge with it — a pressed button must still say what it changes. */
+  .preset.model { border-left-color: var(--coai-role); }
+  .preset.prompt { border-left-color: var(--coai-task); }
+  .picker { display: flex; gap: 8px; align-items: center; margin: 0; flex-wrap: wrap; }
+  /* Send sits at the end of the line that names the model, rather than beside the box. Asked for:
+     the composer is then the full width of the panel, which is where the long text goes. The button
+     is OUTSIDE the pickerBox element, whose innerHTML a push replaces - inside it, every state push would
+     destroy the control and the listener bound to it once at load. */
+  .pickerRow { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; flex-wrap: wrap; }
+  .pickerRow #pickerBox { flex: 1 1 auto; min-width: 0; }
+  .pickerRow #send { margin-left: auto; }
   .picker select { max-width: 45%; }
   .refused { font-size: .85em; opacity: .75; margin: 0 0 8px; }
   .caption { font-size: .85em; opacity: .7; }
@@ -487,7 +674,7 @@ type Regions = Record<'messages' | 'thinking' | 'capped' | 'failure', string>;
 
 function regionsOf(state: ChatPageState): Regions {
   return {
-    messages: chatMessagesHtml(state.messages),
+    messages: chatMessagesHtml(state.messages, state.marks),
     thinking: chatStatusHtml(state.running, 0, state.turn),
     capped: chatCappedHtml(state.capped),
     failure: state.failure.length === 0 ? '' : `<div class="failure">${escapeHtml(state.failure)}</div>`,
@@ -508,13 +695,18 @@ function chatBody(state: ChatPageState, regions: Regions): string {
 </main>
 <footer id="composer">
 <button type="button" id="jump" class="jump" hidden>Jump to newest ↓</button>
-${chatPresetRowsHtml(state.promptPresets, state.modelPresets)}
+${chatPresetRowsHtml(state.promptPresets, state.modelPresets, state.promptId, state.chosenModelId)}
+<div class="pickerRow">
 <div id="pickerBox">${chatPickerHtml({ providers: state.providers, refused: [] }, state.providerId, state.modelId)}</div>
 <span id="spend" class="spend" title="What this conversation has cost so far. A turn carries the whole conversation, so each question is billed for the ones before it.">${escapeHtml(state.spend)}</span>
+<button type="button" id="send"${locked ? ' disabled' : ''}>${state.reask.length > 0 ? `Re-ask · ${escapeHtml(state.reask)}` : 'Send'}</button>
+</div>
 ${attachedHtml(state.attached)}
 <div class="compose">
+<div class="composeBox">
+<div id="backdrop" aria-hidden="true"></div>
 <textarea id="say" rows="3" placeholder="Ask about the text above…"${locked ? ' disabled' : ''}>${escapeHtml(state.draft)}</textarea>
-<button type="button" id="send"${locked ? ' disabled' : ''}>${state.reask.length > 0 ? `Re-ask · ${escapeHtml(state.reask)}` : 'Send'}</button>
+</div>
 </div>
 <div class="hint">Enter sends · Shift+Enter for a new line</div>
 </footer>`;
@@ -563,6 +755,8 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   // not, because two Claude Code sessions can share one.
   vscode.setState(${jsonForScript({ id: state.id })});
   let captions = ${jsonForScript(Object.fromEntries(state.models.map((model) => [model.id, model.caption])))};
+  // Which words in the turn are which, so the layer behind the box can draw them apart.
+  let marks = ${jsonForScript(state.marks)};
   // The webview swallows a thrown error silently, and a page that stops responding to Enter with no
   // sign of why is the defect this trap exists to name. Same shape as the rounds log's.
   window.onerror = function (message) {
@@ -577,6 +771,10 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   // template string that calls it, which is how the rounds log shipped a dead page twice. Embedding
   // the source is also what makes the function the tests exercise the function the page runs.
   var shouldFollow = ${shouldFollow.toString()};
+  // The SAME marking the transcript above is rendered with. Embedded rather than written twice: two
+  // sets of rules about the same words would show one thing in the box and another in the message
+  // it becomes a second later.
+  var turnParts = ${turnParts.toString()};
   var SLACK = ${FOLLOW_SLACK_PX};
   var pendingFollow = 0;
   // The ONE turn a stop has been asked for and not yet answered. The thinking line is replaced
@@ -712,6 +910,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     box.value = '';
     vscode.postMessage({ type: 'command', command: 'send', text: text });
     fitComposer();
+    paintBackdrop();
     // Locked HERE, not when the host gets round to saying so. Between the post and the state that
     // comes back there was a window - small, and the width of a second Enter - in which a second
     // turn went down a pipe that carries one. Two vendors found it independently; the page did not
@@ -734,7 +933,18 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     say.addEventListener('keydown', function (event) {
       if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send(); }
     });
-    say.addEventListener('input', fitComposer);
+    // PAINTED, not only fitted. The box draws its own text transparent and the layer behind it does
+    // the drawing, so anything that changes the text and does not repaint makes those words VANISH —
+    // which is what typing did, and what a tab opened from a capture did with the whole opening turn
+    // in it. The operator sent a screenshot of an empty-looking composer that was not empty.
+    say.addEventListener('input', function () { fitComposer(); paintBackdrop(); });
+    // The two layers scroll as one or the words drift apart from the caret that is on them.
+    say.addEventListener('scroll', function () {
+      const layer = document.getElementById('backdrop');
+      if (layer) { layer.scrollTop = say.scrollTop; }
+    });
+    // THE FIRST PAINT. The draft is rendered into the box by the HTML, which fires no event.
+    paintBackdrop();
     // A picture from the clipboard. The page reads the bytes because only the page has a clipboard
     // event; it writes nothing to disk, because it cannot - the HOST holds the file, which is what
     // the vendor process will open. Anything that is not an image pastes as the text it is.
@@ -768,6 +978,29 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   const sendButton = document.getElementById('send');
   if (sendButton) {
     sendButton.addEventListener('click', function () { send(); });
+  }
+  // The words the model is being instructed with, marked behind the box by the COLOUR OF THEIR
+  // TEXT: the role in one colour, the task in another. Which is which comes from the host - the page
+  // holds one string, and a role and a task read alike - and a question typed from scratch has
+  // neither, which is why nothing is marked then.
+  function paintBackdrop() {
+    const box = document.getElementById('say');
+    const behind = document.getElementById('backdrop');
+    if (!box || !behind) { return; }
+    const escape = function (t) {
+      return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    };
+    const parts = turnParts(box.value || '', marks);
+    let html = '';
+    for (let index = 0; index < parts.length; index += 1) {
+      const part = parts[index];
+      const body = escape(part.text);
+      if (part.kind === 'plain') { html += body; }
+      else if (part.kind === 'service') { html += '<u class="service">' + body + '</u>'; }
+      else { html += '<mark class="' + part.kind + '">' + body + '</mark>'; }
+    }
+    behind.innerHTML = html;
+    behind.scrollTop = box.scrollTop;
   }
   function wirePicker() {
     const provider = document.getElementById('provider');
@@ -912,15 +1145,18 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       // The page NAMES what was chosen and does nothing else. What a prompt preset does to the
       // composer, and what a model preset does to the conversation, are the host's to decide - it
       // holds the lists, and a page acting on its own copy would be a second place they can drift.
+      // WITH WHAT IS IN THE COMPOSER, whichever button it was. Each preset changes one half of the
+      // instruction at the front of that text, and the host can only swap a half it can see - the
+      // box is the only place that knows what is really in it.
+      const box = document.getElementById('say');
+      const text = box ? box.value : '';
       if (typeof pressed.dataset.promptPreset === 'string') {
-        vscode.postMessage({ type: 'command', command: 'usePromptPreset', id: pressed.dataset.promptPreset });
-      } else if (typeof pressed.dataset.modelPreset === 'string') {
-        // WITH what is in the composer. A model preset can carry a starting prompt, and whether that
-        // may land depends on whether there is anything to overwrite - which only this side knows.
-        const box = document.getElementById('say');
         vscode.postMessage({
-          type: 'command', command: 'useModelPreset', id: pressed.dataset.modelPreset,
-          text: box ? box.value : '',
+          type: 'command', command: 'usePromptPreset', id: pressed.dataset.promptPreset, text: text,
+        });
+      } else if (typeof pressed.dataset.modelPreset === 'string') {
+        vscode.postMessage({
+          type: 'command', command: 'useModelPreset', id: pressed.dataset.modelPreset, text: text,
         });
       }
     });
@@ -1002,6 +1238,15 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     // longer offers.
     const pickerBox = document.getElementById('pickerBox');
     if (pickerBox && typeof data.pickerHtml === 'string') { pickerBox.innerHTML = data.pickerHtml; wirePicker(); }
+    // The container stays, so the delegated click listener on it survives the swap.
+    const rows = document.getElementById('presets');
+    if (rows && typeof data.presetsHtml === 'string') { rows.innerHTML = data.presetsHtml; }
+    // WHICH words are the instruction, before any draft below is applied - so the paint that follows
+    // colours the new halves rather than the ones a previous model put there.
+    if (data.marks && typeof data.marks === 'object') {
+      marks = data.marks;
+      paintBackdrop();
+    }
     const nextFailure = typeof data.failureHtml === 'string' ? data.failureHtml : '';
     if (failure && lastWritten.failure !== nextFailure) {
       failure.innerHTML = nextFailure;
@@ -1021,6 +1266,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       if (box2) {
         box2.value = box2.value.length > 0 ? box2.value + '\\n\\n' + data.draft : data.draft;
         fitComposer();
+        paintBackdrop();
         if (typeof box2.focus === 'function') { box2.focus(); }
       }
     }
@@ -1032,6 +1278,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       if (box3) {
         box3.value = data.setDraft;
         fitComposer();
+        paintBackdrop();
         if (typeof box3.focus === 'function') { box3.focus(); }
       }
     }
