@@ -43,8 +43,17 @@ import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 export interface ChatPanelHooks {
   /** The person pressed send. */
   readonly onSend: (id: object, text: string) => void;
-  /** The person chose a different model — already checked against the offered list. */
-  readonly onPick: (id: object, modelId: string) => void;
+  /**
+   * The person chose a different PAIR — already checked against what this conversation offers.
+   *
+   * <p>`modelId` may be empty: the page sends no model when the provider moved, because the model
+   * that was showing belonged to the provider being left.</p>
+   */
+  readonly onPick: (id: object, providerId: string, modelId: string) => void;
+  /** A saved prompt was pressed. The host owns the list; the page only names which. */
+  readonly onUsePrompt: (id: object, presetId: string) => void;
+  /** A saved model was pressed. Its provider and model answer, and its starting prompt is offered. */
+  readonly onUseModel: (id: object, presetId: string) => void;
   /**
    * The person stopped the answer they were waiting for.
    *
@@ -151,7 +160,7 @@ export function createChatPanel(
   // replaced by every push. A separate predicate handed in at creation was the alternative, and it
   // would have drifted the moment a Team server's catalog arrived: two places deciding what a valid
   // model is, one of them frozen. (gemini, the second code round.)
-  offered.set(id, new Set(state.models.map((model) => model.id)));
+  offered.set(id, pairsOf(state.providers));
 
   const panel = restored ?? vscode.window.createWebviewPanel(
     'coaiChat',
@@ -236,14 +245,24 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
 
       return;
     case 'pick':
-      // A page can post any id it likes — a stale retained webview certainly will, and a tampered
+      // A page can post any pair it likes — a stale retained webview certainly will, and a tampered
       // one might. Choosing a model is choosing who gets paid, so the host checks the name against
       // what this conversation was actually offered rather than trusting the page. (codex.)
-      if (offered.get(id)?.has(command.id) === true) {
-        hooks.onPick(id, command.id);
+      // The PAIR is checked as a pair, the rule this feature keeps everywhere else: a model offered
+      // by somebody is not a model offered by THIS provider, and `vendor-routing.md` is the reason.
+      if (offers(id, command.provider, command.model)) {
+        hooks.onPick(id, command.provider, command.model);
       } else {
-        hooks.onPageError(id, `that model is not one this conversation offers: ${command.id}`);
+        hooks.onPageError(id, `that pair is not one this conversation offers: ${command.provider} · ${command.model}`);
       }
+
+      return;
+    case 'usePrompt':
+      hooks.onUsePrompt(id, command.id);
+
+      return;
+    case 'useModel':
+      hooks.onUseModel(id, command.id);
 
       return;
     case 'stop':
@@ -304,8 +323,27 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
  */
 const lastPushed = new WeakMap<object, string>();
 
-/** Which models each conversation currently offers — the one source the pick check reads. */
-const offered = new WeakMap<object, Set<string>>();
+/** Which PAIRS each conversation currently offers — the one source the pick check reads. */
+const offered = new WeakMap<object, ReadonlyMap<string, ReadonlySet<string>>>();
+
+/**
+ * Whether this conversation offers that pair.
+ *
+ * <p>An empty model is a legitimate half: the page sends none when the provider moved, and which of
+ * the new row's models answers is the host's to decide. The PROVIDER must be one that was offered
+ * either way.</p>
+ */
+function offers(id: object, providerId: string, modelId: string): boolean {
+  const models = offered.get(id)?.get(providerId);
+
+  return models !== undefined && (modelId.length === 0 || models.has(modelId));
+}
+
+/** The pairs a state offers, by provider. */
+function pairsOf(providers: readonly { readonly id: string; readonly models: readonly { readonly id: string }[] }[]):
+ReadonlyMap<string, ReadonlySet<string>> {
+  return new Map(providers.map((provider) => [provider.id, new Set(provider.models.map((model) => model.id))]));
+}
 
 /**
  * Push what changed into an open page.
@@ -334,7 +372,7 @@ export function pushChatState(entry: ChatEntry, state: ChatPushState): boolean {
     modelId: state.modelId,
   };
 
-  offered.set(entry.id, new Set(state.models.map((model) => model.id)));
+  offered.set(entry.id, pairsOf(state.providers));
 
   const serialised = JSON.stringify(payload);
   if (lastPushed.get(entry.id) === serialised) {

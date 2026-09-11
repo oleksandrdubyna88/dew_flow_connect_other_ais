@@ -946,6 +946,33 @@ and `repaintsAfter` narrowed to `editRepaints`, taking only edit commands. A who
 the page parser that the host consulted for edits alone was a rule with a test and no effect —
 whether an `add` redraws depends on whether it was refused, which only the host knows.
 
+**THE SEAM WAS BROKEN, and both halves were green about it (2026-09-11).** `chatPickerHtml` posts
+`{command: ‘pick’, provider, model}` since the two-step choice shipped; `chatCommandOf` read
+`message.id`, which the page had stopped sending, so every model switch in an open tab resolved to
+`ignore`. `chatPage.test.ts` asserted the page posts the pair and `chatMessages.test.ts` asserted the
+parser takes an id — the exact failure `PLAN_contract_across_the_seam.md` exists for, inside one
+extension. `ChatCommand.pick` carries the PAIR now, `offered` holds provider→models and checks it as
+a pair (vendor-routing again), `switchModel`/`switchNow` take the provider as the ROW — they had been
+looking the row up by the MODEL id — and `chatPage.test.ts` runs what the page posts THROUGH
+`chatCommandOf`, which is where the two halves now meet.
+
+**The preset buttons were inert.** The page posted `usePromptPreset` / `useModelPreset` and the
+parser had no case for either, so both fell to `ignore`. `usePrompt` puts the preset’s words in the
+composer (replacing, not appending — a saved instruction merged into a half-typed sentence is a
+question neither of them wrote); `useModel` switches the pair and pushes the preset’s starting
+prompt when it has one.
+
+**`Add a model` asks four questions.** `askForAModel` is `showQuickPick` in the shape of *Add a
+reviewer* — provider with the sentence that says what it reaches, then that provider’s models, then
+a name, then an optional starting prompt — and escaping any step writes nothing. The list is the
+configured ROWS rather than the vendor kinds *Add a reviewer* offers, because a vendor cannot say
+which row answers and two `codex` rows with different keys are two backends.
+
+**The console on right-click was never ours.** `coai-probe`, installed locally and absent from this
+repository, contributed to the same `webview/context` menu one line below and called `out.show(true)`
+on its own Output channel. Removed from the machine on the operator’s instruction, which is step 1
+of `todo/PLAN_the_menu_path_opens_nothing.md`.
+
 **`coai.editChatPresets` reached a menu.** It shipped registered, in no `contributes.menus` entry and
 named in no view, so the tab it opens was reachable only from the command palette. The section has an
 **Edit presets…** button, routed like *Install the MCP server…* through `VSCODE_COMMAND_FOR`.

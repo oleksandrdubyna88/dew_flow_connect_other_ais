@@ -343,3 +343,23 @@ test('unticking a prompt that was not main writes nothing either', () => {
 
   assert.strictEqual(promptRowsAfterMain(rows, 'b', false), rows);
 });
+
+test('the guided add carries every answer it collected into the row', () => {
+  // Provider, then that provider's model, then a name, then an optional starting prompt — the four
+  // questions the operator asked for by name, in the shape `Add a reviewer` asks its one.
+  const written = modelRowsAfterAdd([], 'agy', 'gemini-3.8-flash-low', 'Fast Gemini', 'You are a business analyst.');
+  const kept = chatModelPresetsFrom(written!);
+
+  assert.strictEqual(kept.length, 1);
+  assert.strictEqual(kept[0]!.name, 'Fast Gemini');
+  assert.strictEqual(kept[0]!.model, 'gemini-3.8-flash-low');
+  assert.strictEqual(kept[0]!.startingPrompt, 'You are a business analyst.');
+});
+
+test('an empty starting prompt is absent rather than empty, and a blank name falls back', () => {
+  const written = modelRowsAfterAdd([], 'agy', '', '   ', '   ');
+  const kept = chatModelPresetsFrom(written!);
+
+  assert.strictEqual(kept[0]!.startingPrompt, undefined, 'an empty starting prompt was stored as one');
+  assert.strictEqual(kept[0]!.name, 'New model', 'a blank name produced a row the reader drops');
+});

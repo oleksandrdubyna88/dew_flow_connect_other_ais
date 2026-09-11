@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ChatProvider } from '../chatModels';
 import { ChatModelChoice, ChatPageState, FOLLOW_SLACK_PX, chatCappedHtml, chatMessagesHtml, chatPresetRowsHtml, chatPageHtml, chatPickerHtml, chatStatusHtml, shouldFollow } from '../chatPage';
+import { chatCommandOf } from '../chatMessages';
 
 /**
  * The page, as a string.
@@ -1834,4 +1835,55 @@ test('the running total is updated by a push, not only at open', () => {
   page.deliver({ type: 'state', spend: '$0.0200', running: false, capped: false });
 
   assert.strictEqual(page.seen['spend'].textContent, '$0.0200', 'the total stayed at what it opened with');
+});
+
+/**
+ * THE SEAM, asserted in one place — what the page posts is what the host accepts.
+ *
+ * <p>Reported 2026-09-11 as "I press the model button and the dropdown below stays gemini". The
+ * button was one half of it; the other half is that the PICKER had been dead since the two-step
+ * choice shipped. The page posts `{command: 'pick', provider, model}` and `chatCommandOf` read
+ * `message.id`, which the page has not sent since — so every model switch in an open tab resolved to
+ * `ignore` and nothing happened.</p>
+ *
+ * <p><b>Both suites were green about opposite wire formats</b>, which is the exact failure
+ * `PLAN_contract_across_the_seam.md` was written for after 0.31.1 shipped a sign-in nobody could use:
+ * `chatPage.test.ts` asserted the page posts the pair, `chatMessages.test.ts` asserted the parser
+ * takes an id, and neither ever met the other. This test is where they meet.</p>
+ */
+test('every message the picker posts is one the host understands', () => {
+  const page = runChatPage({ providers: [...PROVIDERS], providerId: 'antigravity', modelId: 'gemini-3.8-flash' });
+
+  page.seen['provider'].value = 'remsoftdev-codex';
+  page.fire('provider', 'change');
+  page.seen['model'].value = 'gpt-5.6';
+  page.fire('model', 'change');
+
+  const picks = page.posted.filter((message) => message['command'] === 'pick');
+  assert.ok(picks.length > 0, 'the picker posted nothing at all');
+  for (const posted of picks) {
+    assert.notStrictEqual(chatCommandOf(posted).kind, 'ignore',
+      `the host ignores what the page posts: ${JSON.stringify(posted)}`);
+  }
+});
+
+test('the preset buttons post messages the host understands too', () => {
+  const page = runChatPage({
+    providers: [...PROVIDERS],
+    providerId: 'antigravity',
+    modelId: 'gemini-3.8-flash',
+    promptPresets: PROMPT_PRESETS,
+    modelPresets: MODEL_PRESETS,
+  });
+
+  page.fire('presets', 'click', { target: { closest: () => ({ dataset: { promptPreset: 'p2' } }) } });
+  page.fire('presets', 'click', { target: { closest: () => ({ dataset: { modelPreset: 'm2' } }) } });
+
+  const pressed = page.posted.filter((message) =>
+    message['command'] === 'usePromptPreset' || message['command'] === 'useModelPreset');
+  assert.strictEqual(pressed.length, 2, 'the preset buttons posted nothing');
+  for (const posted of pressed) {
+    assert.notStrictEqual(chatCommandOf(posted).kind, 'ignore',
+      `the host ignores what a preset button posts: ${JSON.stringify(posted)}`);
+  }
 });

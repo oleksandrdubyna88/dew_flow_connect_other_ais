@@ -236,8 +236,13 @@ export function freshPromptRow(taken: readonly { readonly id: string }[]): Saved
  *   caller who forgot the argument. `model` is deliberately empty — the documented "whatever the row
  *   is set to" — because seeding one would pick a model on somebody's behalf.
  */
-export function freshModelRow(taken: readonly { readonly id: string }[], providerId: string): SavedRow {
-  return { id: freshId(taken), name: 'New model', provider: providerId, model: '' };
+export function freshModelRow(
+  taken: readonly { readonly id: string }[],
+  providerId: string,
+  modelId = '',
+  name = 'New model',
+): SavedRow {
+  return { id: freshId(taken), name: name.trim().length > 0 ? name.trim() : 'New model', provider: providerId, model: modelId };
 }
 
 /**
@@ -278,13 +283,17 @@ export type SavedRow = Record<string, unknown>;
 export function modelRowsAfterAdd(
   rows: readonly SavedRow[],
   providerId: string,
+  modelId = '',
+  name = 'New model',
+  startingPrompt = '',
 ): readonly SavedRow[] | undefined {
   if (providerId.length === 0) {
     return undefined;
   }
   const kept = rows.filter((row) => !deadModelRow(row));
+  const fresh = freshModelRow(kept as { id: string }[], providerId, modelId, name);
 
-  return [...kept, freshModelRow(kept as { id: string }[], providerId)];
+  return [...kept, startingPrompt.trim().length > 0 ? { ...fresh, startingPrompt: startingPrompt.trim() } : fresh];
 }
 
 /**
