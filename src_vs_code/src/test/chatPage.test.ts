@@ -2101,3 +2101,21 @@ test('Send is NOT inside the picker, which a push rewrites wholesale', () => {
   assert.strictEqual(insideDiv(html, 'pickerBox', 'id="send"'), false, 'Send is inside the region a push replaces');
   assert.strictEqual(insideDiv(html, 'pickerBox', 'id="provider"'), true, 'the harness cannot see inside the picker');
 });
+
+test('a sent question keeps the colours it was ASKED with, not the ones in force now', () => {
+  // The conversation moves on. Switch model after asking and the current role no longer matches the
+  // words above it, so a question sent a minute ago quietly lost its colours. (codex and local, the
+  // plan round.) The question carries what it was asked with.
+  const asked = { role: 'You are a business analyst', task: TASK };
+  const box = [asked.role, '', TASK, '', 'Answer in English.'].join('\n');
+  const html = chatMessagesHtml([{ role: 'you', text: box, marks: asked }], MARKS);
+
+  assert.match(html, /<mark class="role">You are a business analyst<\/mark>/, 'the question lost the role it was asked with');
+  assert.match(html, /<u class="service">Answer in English\.<\/u>/, 'the machinery is named by the page, not by the message');
+});
+
+test('a question from a build before that field falls back to the conversation', () => {
+  const html = chatMessagesHtml([{ role: 'you', text: OPENING }], MARKS);
+
+  assert.match(html, new RegExp(`<mark class="role">${ROLE}</mark>`), 'an older question was left unmarked');
+});

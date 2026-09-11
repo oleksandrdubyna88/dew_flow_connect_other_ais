@@ -507,7 +507,21 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
 
     return;
   }
-  thread.messages = [...thread.messages, { role: 'you', text }];
+  // WITH what it was asked with. The conversation moves on — a model switched after the question
+  // was sent would leave the words above it uncoloured, because the role in force is no longer the
+  // one they were written with. (codex and local, the plan round.)
+  thread.messages = [...thread.messages, {
+    role: 'you',
+    text,
+    marks: {
+      role: thread.role,
+      task: taskOf(
+        vscode.workspace.getConfiguration('coai'),
+        thread.promptId,
+        chatSettingsFrom((key) => vscode.workspace.getConfiguration('coai').get(key)).prompt,
+      ),
+    },
+  }];
   thread.running = true;
   thread.turn += 1;
   show(entry, true, '');
@@ -1341,7 +1355,11 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         // claiming a conversation that never moved.
         const wrote = mine.role !== wasRole;
         void switchModel(found, preset.id, preset.model).then((switched) => {
-          if (switched) {
+          // ONLY IF THIS PRESS IS STILL THE LAST ONE. A refusal can arrive after the person has
+          // pressed something else — the switch waits for an answer in flight and for a CLI to
+          // resolve — and rolling back then would undo a choice nobody refused. (codex, the plan
+          // round: a late M2 refusal must not take M3 with it.)
+          if (switched || mine.chosenId !== preset.id) {
             return;
           }
           const undo = instructionOf(mine, config);
@@ -1762,7 +1780,16 @@ export async function chatWithOtherAi(
     return;
   }
 
-  const turn = openingTurn(settings.prompt, settings.language, passage.text);
+  // THE TURN THE TAB IS BUILT WITH, instruction and all. It used to be the panel's prompt alone,
+  // with the role added a moment later by a posted draft — so a page that was still loading when
+  // that arrived showed a composer the conversation had already moved past. The page bootstrap
+  // carries it instead; nothing about what a capture opens with depends on a message landing.
+  // (codex, the plan round.)
+  const turn = openingTurn(
+    chatInstruction(roleOf(config, opening.providerId), taskOf(config, openingPrompt(config), settings.prompt)),
+    settings.language,
+    passage.text,
+  );
   // A factory, not a value: nothing is built — no process, no temp directory — for a tab that
   // already holds a conversation.
   const opened = panels.open(match.key, match.label, () => newConversation(panels, ready, {

@@ -48,6 +48,17 @@ export interface ChatMessage {
   readonly role: 'you' | 'model';
   readonly text: string;
   /**
+   * WHAT THIS QUESTION WAS ASKED WITH — the role and the task in force when it was sent.
+   *
+   * <p>Carried by the message rather than read from the conversation, because the conversation moves
+   * on: switch model after asking and the current role no longer matches the words above, so a
+   * question sent a minute ago would quietly lose its colours. (codex and local, the plan round.)</p>
+   *
+   * <p>Optional: an answer has none, and neither has a question from a build before this field —
+   * a restored tab, whose transcript falls back to the conversation's current marks.</p>
+   */
+  readonly marks?: { readonly role: string; readonly task: string };
+  /**
    * The model that gave this answer, for a `model` message.
    *
    * <p>Optional because two kinds of message legitimately have none: what the PERSON said, and an
@@ -300,7 +311,9 @@ export function chatMessagesHtml(messages: readonly ChatMessage[], marks: TurnMa
       // MARKED, not merely escaped: a question that has been sent is the same words it was in the
       // box a moment earlier, and they stop being readable if the colours go when it moves. Asked
       // for looking at a sent turn — the role, the task and three lines of machinery, all one grey.
-      const body = mine ? markedTurn(message.text, marks) : renderAnswer(message.text);
+      const body = mine
+        ? markedTurn(message.text, message.marks === undefined ? marks : { ...marks, ...message.marks })
+        : renderAnswer(message.text);
       // The copy control carries the INDEX, and the host reads the message out of the same array
       // this was rendered from - so what is copied is the markdown that arrived, which is the one
       // thing a selection cannot give: selecting the page gives what the page shows.
