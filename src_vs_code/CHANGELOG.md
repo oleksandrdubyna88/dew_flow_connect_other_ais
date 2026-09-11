@@ -1,5 +1,35 @@
 # Changelog
 
+## Extension 0.35.0 — 2026-09-11
+
+**The chat opens from any file.** `Ctrl+Alt+A` and the right-click item used to work only inside
+Claude Code's own panel. They work in an ordinary editor now — a `.md`, a `.cs`, anything you can
+open. Select a passage and press the same keys, or right-click it.
+
+There the selection is read straight out of the editor instead of being copied through the
+clipboard, which is the whole difference: it is instant, your clipboard is left alone, and nothing
+is synthesised that could land in another window. With nothing selected it sends the whole file,
+and asks first when the file is a big one. The conversation is named after the file, and a second
+question about the same file continues the same conversation — while two files that happen to share
+a name never inherit each other's.
+
+**A second stepper, for the tone of the text.** Beside the one that changes its size: `−` `+` with
+the current step between them. Zero is your theme's own colour and changes nothing at all. Upwards
+the text moves away from the background — whiter on a dark theme, blacker on a light one; downwards
+it dims through a warm cream towards grey. It is one setting, `coai.textTone`, shared by every
+ConnectOtherAIs page and synced to your other machines, like the text size beside it.
+
+**Take the question Claude Code is asking.** When it stops and asks you something with options,
+that box cannot be selected — so there was nothing to copy and a screenshot was the only way.
+**Take the question to another AI**, in the right-click menu and the command palette, reads the
+question out of the session file instead: every question in it, every option, every description, as
+text, straight into the composer.
+
+It refuses rather than guesses. If the last question was already answered it says so instead of
+handing a solved problem to a second model. If two sessions here are both waiting, it names that
+rather than picking one. If it cannot read the file, or the session format has changed under it, it
+says which and where — never silence.
+
 ## Extension 0.34.0 — 2026-09-11
 
 **The chat is its own feature.** It used to run on the reviewer rows — the models you had configured

@@ -63,7 +63,7 @@ import {
   stillOurs,
 } from './chatPrompt';
 import { LanguageCode } from './settingsShape';
-import { isClaudeSessionTab, isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
+import { isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
 import { askedAsText } from './claudeQuestion';
 import { waitingQuestion } from './claudeSessions';
 import { EditorText, confirmWholeFile, passageFromEditor } from './editorPassage';
@@ -1005,15 +1005,6 @@ async function passageFor(path: 'menu' | 'keyboard'): Promise<{ text: string; fa
   );
 }
 
-/** Which conversation this belongs to, or nothing when the active tab is not an eligible source. */
-function matchedSession(
-  panels: ChatPanels,
-  eligible: (tab: TabSnapshot) => boolean = isClaudeSessionTab,
-): ReturnType<typeof sourceSession> {
-  const { active, all } = snapshots();
-
-  return sourceSession(active, all, panels.known(), eligible);
-}
 
 /** A refusal nobody needs to read: the person just cancelled the question that caused it. */
 const CANCELLED = '\u0000';
@@ -1048,6 +1039,25 @@ async function fromTheEditor(): Promise<{ text: string; failure: string }> {
   // CANCELLED, which is not a failure and needs no sentence: the person was asked a question one
   // second ago and answered it. A refusal here showed an empty warning box. (codex, the code round.)
   return { text: '', failure: CANCELLED };
+}
+
+/**
+ * Which conversation this belongs to, over ONE snapshot of the tabs.
+ *
+ * <p>Both doors judged from the same list, rather than two lookups that could see the tabs in two
+ * states — and it is one function because two commands ask the same question now. `claude` is
+ * `undefined` when the source is a file, which is what tells the caller where the passage comes
+ * from. (gemini, the code round.)</p>
+ */
+function matchedSource(panels: ChatPanels): {
+  claude: ReturnType<typeof sourceSession>;
+  source: ReturnType<typeof sourceSession>;
+} {
+  const { active, all } = snapshots();
+  const known = panels.known();
+  const claude = sourceSession(active, all, known);
+
+  return { claude, source: claude ?? sourceSession(active, all, known, isOrdinaryEditorTab) };
 }
 
 /**
@@ -1845,30 +1855,10 @@ export async function chatWithOtherAi(
   extensionUri: vscode.Uri,
   args: readonly unknown[],
 ): Promise<void> {
-  const config = vscode.workspace.getConfiguration('coai');
-  const settings = chatSettingsFrom((key) => config.get(key));
-  // THE TICKED MODEL, and the saved setting only when nothing is ticked. A list nobody has ticked
-  // must not overrule a model the person named in the panel, and `legacyPick` already answers "that
-  // id names nothing" with the first provider.
-  //
-  // A ticked preset is NAMED, though, so it does not go through that fallback: `legacyPick` would
-  // quietly open the first provider instead, which is a different vendor's model, billed, in a voice
-  // nobody chose — the rule this feature keeps everywhere else. `readyToChat` refuses it by name.
-  // (codex, the second code round.)
-  const ticked = mainModel(savedModels(config));
-  const saved = ticked === undefined ? savedPick(config, settings.model) : undefined;
-  const opening = saved ?? { providerId: ticked?.id ?? '', modelId: ticked?.model ?? '' };
-  // The panel names a provider AND, since the pair reached it, one of that provider's models. A name
-  // it does not offer is not a pick — the row's own model answers — so a value gone stale in
-  // `settings.json` or withdrawn by a Team server opens a conversation rather than a refusal.
-  // A TICKED PRESET BRINGS ITS OWN MODEL. `coai.chatModelName` is the panel's answer to the same
-  // question from before presets existed, and it was winning: a button labelled "Gemini 3.7 Flash
-  // (High)" opened a conversation whose picker said 3.8 Flash (Medium), because the panel's saved
-  // name was one this vendor also offers. The preset is the configuration now.
-  const model = saved === undefined
-    ? opening.modelId
-    : openingModel(chatProvidersFromPresets(savedModels(config), chatCatalogFrom(config)), saved, settings.modelName);
-  const ready = readyToChat(config, opening.providerId, model);
+  const settings = chatSettingsFrom((key) => vscode.workspace.getConfiguration('coai').get(key));
+  // ONE resolution for both commands, in `readyForChat`. It was written twice — here and beside the
+  // question command — two places deciding which model answers. (gemini, the code round.)
+  const ready = readyForChat();
   if (!ready.ok) {
     void vscode.window.showWarningMessage(ready.refusal);
 
@@ -1883,9 +1873,7 @@ export async function chatWithOtherAi(
   // copied out through the OS, because that webview cannot be read; from an ordinary file it is
   // simply read. The second door is what the operator asked for: *"хочу чтоб можно было через
   // Ctrl+Alt+A в обычных окнах тоже вызывать. например на md файлах, cs файлах"*.
-  const match = matchedSession(panels);
-  const fromFile = match === undefined ? matchedSession(panels, isOrdinaryEditorTab) : undefined;
-  const source = match ?? fromFile;
+  const { claude: match, source } = matchedSource(panels);
   if (source === undefined) {
     void vscode.window.showWarningMessage(
       'Open this from a Claude Code session tab or from a file — the conversation is named after it.',
@@ -2093,7 +2081,7 @@ export async function takeTheQuestion(
 
     return;
   }
-  const source = matchedSession(panels) ?? matchedSession(panels, isOrdinaryEditorTab);
+  const { source } = matchedSource(panels);
   if (source === undefined) {
     void vscode.window.showWarningMessage(
       'Open this from a Claude Code session tab or from a file — the conversation is named after it.',

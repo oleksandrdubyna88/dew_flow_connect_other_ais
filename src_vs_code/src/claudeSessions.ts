@@ -196,8 +196,16 @@ export async function waitingQuestion(home: string, cwd: string, caseBlind: bool
       return { kind: 'failed', refusal: `Claude Code's session file could not be read: ${where(reason)}` };
     }
     const asked = lastAsked(body.split('\n'));
-    if (asked !== undefined) {
-      sessions.push({ file, asked });
+    if (asked.kind === 'asked') {
+      sessions.push({ file, asked: asked.set });
+    } else if (asked.kind === 'unreadable') {
+      // A question this build could not read is NOT silence. If Anthropic moves a field, the command
+      // must say that rather than report that Claude is asking nothing. (codex, the code round.)
+      return {
+        kind: 'failed',
+        refusal: `Claude Code asked something this build does not recognise, in ${file}.`
+          + ' The session format has changed — this needs a new release.',
+      };
     }
   }
 

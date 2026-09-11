@@ -88,6 +88,20 @@ export function isClaudeSessionTab(tab: TabSnapshot): boolean {
 }
 
 /**
+ * Whether a source of this kind may be re-keyed by its LABEL when its own tab has gone.
+ *
+ * <p>Claude's panels may: a label there is a session name a person chose, and re-attaching a
+ * conversation to a renamed tab is the case the fallback exists for. FILES may not: `/a/README.md`
+ * and `/b/README.md` share a label and are not the same document, so a capture from the second
+ * would continue the first's conversation — the silent wrong-conversation this module exists to
+ * prevent, arriving through the door that was just added. A file whose tab has gone starts a new
+ * conversation instead, which costs a tab and lies about nothing. (codex, the code round.)</p>
+ */
+export function rekeysByLabel(tab: TabSnapshot): boolean {
+  return isClaudeSessionTab(tab);
+}
+
+/**
  * A tab that is an ordinary document — a file, or an unsaved buffer.
  *
  * <p>By SCHEME, not by "it has no viewType": an Output pane, a settings editor and a diff of a git
@@ -135,6 +149,9 @@ export function sourceSession(
   // tab was re-keyed onto the closed one while the live namesake sat beside it. That is the same
   // silent wrong-conversation this module exists to prevent, re-entering through the fallback.
   // (codex, the code round on this very file.)
+  if (!rekeysByLabel(active)) {
+    return { kind: 'new', key: active.key, label: active.label };
+  }
   const sameLabel = known.filter((panel) => panel.label === active.label);
   const orphaned = sameLabel.length === 1 && !stillOpen(sameLabel[0]!, tabs) ? sameLabel[0]! : undefined;
   if (orphaned !== undefined) {

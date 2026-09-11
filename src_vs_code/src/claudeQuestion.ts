@@ -86,10 +86,11 @@ function questionOf(value: unknown): AskedQuestion[] {
  * <p>EVERY question in the array, in order. `questions` holds four at a time often enough that
  * taking the first would drop most of what was asked — and silently, which is the worst way.</p>
  */
-function askedIn(block: unknown): readonly AskedQuestion[] {
+function askedIn(block: unknown): readonly AskedQuestion[] | undefined {
   const one = record(block);
   if (one?.['type'] !== 'tool_use' || one['name'] !== 'AskUserQuestion') {
-    return [];
+    // Not a question at all — a Bash call, an answer, anything else. Nothing to say about it.
+    return undefined;
   }
   const input = record(one['input']);
 
@@ -103,10 +104,25 @@ function blocksOf(row: Record<string, unknown>): unknown[] {
   return Array.isArray(message?.['content']) ? (message['content'] as unknown[]) : [];
 }
 
+/**
+ * What a file had to say, which is three things and not two.
+ *
+ * <p>`unreadable` is a block that IS an `AskUserQuestion` and whose questions this build could not
+ * read. Collapsing it into "nothing was asked" is what would happen if Anthropic moved a field: the
+ * command would report that Claude is asking nothing while a question sat on screen, and the next
+ * person to look would have no way to tell format drift from an empty session. The plan promised a
+ * sentence naming the shape, so there is a third answer to give one. (codex, the code round.)</p>
+ */
+export type FileAsked =
+  | { readonly kind: 'asked'; readonly set: AskedSet }
+  | { readonly kind: 'unreadable' }
+  | { readonly kind: 'nothing' };
+
 /** Every question in the file, in the order they were asked, each with its answered state. */
-function everyAsked(lines: readonly string[]): AskedSet[] {
+function everyAsked(lines: readonly string[]): { asked: AskedSet[]; unreadable: boolean } {
   const asked: { id: string; questions: readonly AskedQuestion[]; sessionId: string; at: string }[] = [];
   const answered = new Set<string>();
+  let unreadable = false;
 
   for (const line of lines) {
     if (line.trim().length === 0) {
@@ -133,14 +149,21 @@ function everyAsked(lines: readonly string[]): AskedSet[] {
         continue;
       }
       const questions = askedIn(block);
+      if (questions === undefined) {
+        continue;
+      }
       const id = text(one?.['id']);
       if (questions.length > 0 && id.length > 0) {
         asked.push({ id, questions, sessionId: text(row['sessionId']), at: text(row['timestamp']) });
+      } else {
+        // A question-shaped block this build could not read. Said out loud rather than counted as
+        // silence, because the two want opposite reactions from whoever reads the sentence.
+        unreadable = true;
       }
     }
   }
 
-  return asked.map((one) => ({ ...one, answered: answered.has(one.id) }));
+  return { asked: asked.map((one) => ({ ...one, answered: answered.has(one.id) })), unreadable };
 }
 
 /**
@@ -155,11 +178,15 @@ function everyAsked(lines: readonly string[]): AskedSet[] {
  * can say "the last question was already answered", which is a different sentence from "nothing was
  * ever asked here".</p>
  */
-export function lastAsked(lines: readonly string[]): AskedSet | undefined {
-  const every = everyAsked(lines);
-  const waiting = every.filter((one) => !one.answered);
+export function lastAsked(lines: readonly string[]): FileAsked {
+  const { asked, unreadable } = everyAsked(lines);
+  const waiting = asked.filter((one) => !one.answered);
+  const found = waiting.length > 0 ? waiting[waiting.length - 1] : asked[asked.length - 1];
+  if (found !== undefined) {
+    return { kind: 'asked', set: found };
+  }
 
-  return waiting.length > 0 ? waiting[waiting.length - 1] : every[every.length - 1];
+  return unreadable ? { kind: 'unreadable' } : { kind: 'nothing' };
 }
 
 /**
