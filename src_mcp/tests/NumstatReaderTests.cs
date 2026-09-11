@@ -63,17 +63,24 @@ public sealed class NumstatReaderTests
     }
 
     [Fact]
-    public void APathWithATabOrANewlineSurvivesBecauseTheSeparatorIsNeither()
+    public void APathWithATabOrANewlineSurvivesWholeBecauseTheSeparatorIsNeither()
     {
         // Legal names on Linux, and the reason the field separator has to be NUL rather than
-        // anything a filesystem allows. Neither can be produced on Windows, so this is the only
-        // place either is exercised.
+        // anything a filesystem allows. Neither can be created on Windows, so this is the only place
+        // either is exercised — and a fixture rather than a repository for that reason.
+        //
+        // The FIRST version of this test asserted `src/od`, the truncated value, as though it were
+        // right: the parser split on every tab, and the test was written from the parser instead of
+        // from the guarantee. Six reviewers across two vendors caught it in one round. A path with a
+        // tab in it that arrives shortened matches nothing, so the file reaches the reviewer named
+        // with an empty diff — this class's own defect, one line below the fix for it, and a way for
+        // a contributor to hide a file from review by naming it.
         var changes = NumstatReader.Read("1\t0\tsrc/od\td.cs\0" + "1\t0\tsrc/two\nlines.cs\0").ToList();
 
         changes.Select(c => c.Path).Should().Equal(
-            ["src/od", "src/two\nlines.cs"],
-            "a tab inside a name is indistinguishable from a column separator, and that is a fact "
-            + "about tabs rather than something a parser can recover from");
+            ["src/od\td.cs", "src/two\nlines.cs"],
+            "the path is everything after the SECOND tab — a tab inside a name is part of the name, "
+            + "and NUL is what separates one record from the next");
     }
 
     [Fact]
@@ -102,12 +109,17 @@ public sealed class NumstatReaderTests
         NumstatReader.Read(string.Empty).Should().BeEmpty();
 
     [Fact]
-    public void ATruncatedRenameIsDroppedRatherThanGuessedAt()
+    public void ATruncatedRenameIsRefusedRatherThanSilentlyShorteningTheDiff()
     {
         // It cannot happen against a git that exited zero, which the assembler has already checked.
-        // What it must not do is invent a name from half a record.
-        var changes = NumstatReader.Read("2\t1\tsrc/kept.cs\0" + "1\t0\t\0src/only-one-name.cs\0").ToList();
+        // What it must not do is return the records read so far: that hands the reviewer a diff
+        // SHORTER than the change and calls it the change, which is this class's whole subject
+        // arriving by a different door. The first version dropped the rest and said nothing.
+        var truncated = () =>
+            NumstatReader.Read("2\t1\tsrc/kept.cs\0" + "1\t0\t\0src/only-one-name.cs\0").ToList();
 
-        changes.Should().ContainSingle().Which.Path.Should().Be("src/kept.cs");
+        truncated.Should().Throw<ContextException>()
+            .WithMessage("*rename record ended without its new name*")
+            .WithMessage("*src/only-one-name.cs*", "the reader names what it was in the middle of");
     }
 }

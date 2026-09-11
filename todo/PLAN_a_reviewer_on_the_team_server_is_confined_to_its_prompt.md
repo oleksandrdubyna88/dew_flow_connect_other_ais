@@ -93,6 +93,25 @@ No growth surface.
   a note in the adapter naming the CLI version each flag was verified against, so the next reader knows
   what the claim rests on.
 
+### What epic 1's code round added to story 2.2 (2026-09-11, accepted)
+
+Both are about the SERVER half and belong here rather than in the launcher, which is why they were
+accepted against a story that had already shipped its own half.
+
+- **One confinement policy, not two independent flags** (codex, Major). `InheritsEnvironment` lives on
+  the request and `Confined` on the reviewer settings, and nothing makes them agree. A server change
+  that sets one and misses the other — on the initial launch or, more likely, on the RETRY the ladder
+  performs — produces a reviewer with an isolated environment and a shell, or the reverse, and both
+  look like a confined launch from every angle except the one that matters. So `ReviewLauncher`
+  derives both from a single value at the launch boundary rather than setting two fields, and the
+  test asserts the pair on the repair path as well as the first one.
+- **A per-job `TMPDIR`** (gemini, Major). The allowlist passes `TMPDIR`/`TMP`/`TEMP` through, which on
+  a shared box running as root means every reviewer sees the same `/tmp` — where other jobs' files
+  and the host's sockets are. The launcher cannot fix this (a temp directory is the caller's to
+  choose), and the caller already has one: `ReviewLauncher` creates `coai-server-job-…` and uses it as
+  the working directory. It sets `TMPDIR`, `TMP` and `TEMP` to that directory in the request's own
+  variables, which are applied last and therefore win.
+
 ## Test plan
 
 | # | Test | Holds |
