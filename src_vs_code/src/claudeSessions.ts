@@ -1,4 +1,4 @@
-import * as fs from 'node:fs';
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { AskedSet, lastAsked } from './claudeQuestion';
 
@@ -9,7 +9,16 @@ import { AskedSet, lastAsked } from './claudeQuestion';
  * temporary directory. The uncertainty this module carries is named rather than hidden: the
  * extension host cannot see into Claude Code's webview, so it cannot ask which session a tab is.
  * What it can do is refuse to guess when more than one session is waiting for an answer.</p>
+ *
+ * <p><b>Asynchronous throughout.</b> A session file is megabytes after a long day, and reading eight
+ * of them synchronously holds the extension host — every webview with it. Three reviewers said so
+ * on one round, and the fix is not a cap on how much is read but not blocking while it is.</p>
  */
+
+/** The directory listing failed for a reason that is not "it is not there". */
+export interface ReadFailure {
+  readonly refusal: string;
+}
 
 /**
  * The directory name Claude Code gives a working folder.
@@ -28,23 +37,33 @@ export function projectsRoot(home: string): string {
 }
 
 /**
- * The project directory for this folder, matched case-INSENSITIVELY.
+ * The project directory for this folder, or empty when there is none.
  *
- * <p>The case of the name is the one part that is not ours to predict — it is whatever the cwd
- * string was when the session started, and `d:\\rsd` and `D:\\rsd` are the same folder to Windows
- * and two different names here. So the exact name is tried first and a case-insensitive match
- * answers when it misses. Nothing at all is a legitimate answer: this folder may never have had a
- * session in it.</p>
+ * <p>Exact first. A case-INSENSITIVE match answers after it, because the case of the name is
+ * whatever the cwd string was when the session started and `d:\\rsd` and `D:\\rsd` are the same
+ * folder to Windows — but only where the filesystem agrees that they are. On a case-SENSITIVE host
+ * `/work/App` and `/work/app` are two different projects, and a loose match there would hand one
+ * project's question to the other. (codex, the code round, as a security finding.)</p>
  */
-export function projectDirIn(root: string, cwd: string, names: readonly string[]): string {
+export function projectDirIn(
+  root: string,
+  cwd: string,
+  names: readonly string[],
+  caseBlind: boolean,
+): string {
   const wanted = projectDirName(cwd);
   const exact = names.find((name) => name === wanted);
   if (exact !== undefined) {
     return path.join(root, exact);
   }
-  const loose = names.find((name) => name.toLowerCase() === wanted.toLowerCase());
+  if (!caseBlind) {
+    return '';
+  }
+  const loose = names.filter((name) => name.toLowerCase() === wanted.toLowerCase());
 
-  return loose === undefined ? '' : path.join(root, loose);
+  // Two names that differ only in case, on a host that cannot tell them apart, is not a thing that
+  // happens — and if it does, picking one of them is the guess this module exists to refuse.
+  return loose.length === 1 ? path.join(root, loose[0]!) : '';
 }
 
 /** One session file, and the question waiting in it. */
@@ -78,74 +97,105 @@ export function waitingIn(sessions: readonly WaitingSession[]): Waiting {
   if (waiting.length > 1) {
     return { kind: 'several', sessions: waiting };
   }
+  if (sessions.length === 0) {
+    return { kind: 'none' };
+  }
   const newest = [...sessions].sort((a, b) => a.asked.at.localeCompare(b.asked.at)).pop();
 
   return newest === undefined ? { kind: 'none' } : { kind: 'answered', session: newest };
 }
 
 /**
- * Every session file in a directory, newest first.
+ * Every session file in a directory, newest first — or the reason the directory could not be read.
  *
- * <p>A directory that is not there is an empty list, not an exception: a folder Claude Code has
- * never run in is an ordinary state of the world.</p>
+ * <p>A directory that is NOT THERE is an empty list: a folder Claude Code has never run in is an
+ * ordinary state of the world. Anything else — a permission, a disconnected drive — is a failure
+ * that says which operation failed, because reporting it as "nothing was asked here" would be this
+ * module lying about the world. (codex, twice, and the coding-style rule it cites.)</p>
  */
-export function sessionFiles(dir: string): readonly string[] {
+export async function sessionFiles(dir: string): Promise<readonly string[] | ReadFailure> {
   if (dir.length === 0) {
     return [];
   }
   let names: string[];
   try {
-    names = fs.readdirSync(dir).filter((name) => name.endsWith('.jsonl'));
-  } catch {
-    return [];
+    names = (await fs.readdir(dir)).filter((name) => name.endsWith('.jsonl'));
+  } catch (reason) {
+    return missing(reason) ? [] : { refusal: `Claude Code's session folder could not be listed: ${where(reason)}` };
   }
+  const dated = await Promise.all(names.map(async (name) => {
+    const full = path.join(dir, name);
+    try {
+      return { full, at: (await fs.stat(full)).mtimeMs };
+    } catch {
+      // Gone between the listing and the stat: another product owns this directory and is writing
+      // in it. It sorts last rather than failing the whole command.
+      return { full, at: 0 };
+    }
+  }));
 
-  return names
-    .map((name) => {
-      const full = path.join(dir, name);
-      try {
-        return { full, at: fs.statSync(full).mtimeMs };
-      } catch {
-        // Gone between the listing and the stat. Somebody else owns this directory.
-        return { full, at: 0 };
-      }
-    })
-    .sort((a, b) => b.at - a.at)
-    .map((one) => one.full);
+  return dated.sort((a, b) => b.at - a.at).map((one) => one.full);
+}
+
+/** Whether a filesystem error means "it is not there" rather than "it would not answer". */
+function missing(reason: unknown): boolean {
+  return typeof reason === 'object' && reason !== null && (reason as { code?: unknown }).code === 'ENOENT';
+}
+
+/** A filesystem error as one short sentence, without a stack nobody reads. */
+function where(reason: unknown): string {
+  const code = typeof reason === 'object' && reason !== null ? (reason as { code?: unknown }).code : undefined;
+
+  return typeof code === 'string' ? code : String(reason);
 }
 
 /**
  * The question waiting in this folder's sessions, or the reason there is none.
  *
- * <p>Every filesystem failure is CAUGHT and named. A command that throws into the void looks
- * exactly like a command that does nothing, and this one runs against a directory another product
- * owns and rewrites while it is being read.</p>
+ * <p>EVERY session file is read, not the newest few: a folder with nine of them can hold its only
+ * waiting question in the ninth, and reporting "nothing is waiting" then is telling the person the
+ * wrong thing. (codex, twice.)</p>
  *
  * @param home the extension host's own home. In a WSL or Remote window the host and Claude Code run
  *   on the same side, so this is the right one — and when they do not, nothing is found and the
  *   refusal names the directory that was looked in, so the difference is visible.
+ * @param caseBlind whether this filesystem treats two names differing only in case as one
  */
-export function waitingQuestion(home: string, cwd: string, howMany = 8): Waiting {
+export async function waitingQuestion(home: string, cwd: string, caseBlind: boolean): Promise<Waiting> {
   const root = projectsRoot(home);
   let names: string[];
   try {
-    names = fs.readdirSync(root);
-  } catch {
-    return { kind: 'failed', refusal: `Claude Code keeps its sessions in ${root}, and there is nothing there to read.` };
+    names = await fs.readdir(root);
+  } catch (reason) {
+    return missing(reason)
+      ? { kind: 'failed', refusal: `Claude Code keeps its sessions in ${root}, and there is nothing there to read.` }
+      : { kind: 'failed', refusal: `Claude Code's sessions could not be listed in ${root}: ${where(reason)}` };
   }
-  const dir = projectDirIn(root, cwd, names);
+  const dir = projectDirIn(root, cwd, names, caseBlind);
   if (dir.length === 0) {
-    return { kind: 'failed', refusal: `Claude Code has no sessions for this folder — nothing named ${projectDirName(cwd)} in ${root}.` };
+    return {
+      kind: 'failed',
+      refusal: `Claude Code has no sessions for this folder — nothing named ${projectDirName(cwd)} in ${root}.`,
+    };
+  }
+  const files = await sessionFiles(dir);
+  if (!Array.isArray(files)) {
+    return { kind: 'failed', refusal: (files as ReadFailure).refusal };
   }
   const sessions: WaitingSession[] = [];
-  for (const file of sessionFiles(dir).slice(0, howMany)) {
-    let lines: string[];
+  for (const file of files) {
+    let body: string;
     try {
-      lines = fs.readFileSync(file, 'utf8').split('\n');
+      body = await fs.readFile(file, 'utf8');
     } catch (reason) {
-      return { kind: 'failed', refusal: `Claude Code's session file could not be read: ${String(reason)}` };
+      if (missing(reason)) {
+        // Deleted while this was running. Another product owns the directory; the rest still counts.
+        continue;
+      }
+
+      return { kind: 'failed', refusal: `Claude Code's session file could not be read: ${where(reason)}` };
     }
-    const asked = lastAsked(lines);
+    const asked = lastAsked(body.split('\n'));
     if (asked !== undefined) {
       sessions.push({ file, asked });
     }
