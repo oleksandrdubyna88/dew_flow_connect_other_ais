@@ -1,14 +1,50 @@
 # Changelog
 
-## Unreleased
+## Extension 0.34.0 — 2026-09-11
 
-**Switching the model in an open chat works again.** It had stopped the day the picker became two steps: the page sends the provider and the model, and the half that receives them was still reading the single value from before — so every switch was discarded in silence, and the dropdown went back to what it had been. Both halves were tested, each against its own idea of the message, and neither ever met the other. They meet now, in a test that runs what the page sends through the thing that receives it.
+**The chat is its own feature.** It used to run on the reviewer rows — the models you had configured
+for the review gate — so switching a reviewer off took a conversation with it, renaming one orphaned
+a preset, and every list in the chat read as a list of somebody's reviewers. A model preset now
+carries everything it needs: the vendor, the model, where the CLI is, and the endpoint; for a Team
+server it names the server and the vendor on it, and the address and the key come from the *Team
+servers* section. Nothing in the chat reads a reviewer any more, and a test fails the build if
+anything starts to.
 
-**The preset buttons above the composer do something.** They named what was pressed and nothing listened. A prompt button puts its words in the box; a model button switches the model and, if that preset carries a starting prompt, opens the box with it.
+**The composer shows what is in it.** A tab opened from a selection looked empty and was not — it
+held the whole opening turn, drawn in a layer that was only painted when the extension pushed a
+draft into it. Never on opening, and never as you typed. It is painted now whenever the words
+change, and the two layers scroll together.
 
-**A model that is no longer offered is refused by name, not swapped.** Press a preset for a model a reviewer has since stopped offering and the chat says so, instead of quietly running a different one. And a preset that opens the composer with its own prompt leaves what you were writing alone — it says it did, rather than dropping the prompt in silence.
+**You can read your own turn.** Who the model is being told to be is one colour, what it is being
+asked to do is another, and the three lines that are neither — the language instruction, the note
+about the text below, the fence — are underlined and dimmed so your eye steps over them. The same
+marking stays on the question after you send it, in the colours it was asked with, even if you
+switch model afterwards. A preset button wears the colour of the half it changes, so pressing one
+shows you which words moved.
 
-**Adding a model asks, instead of guessing.** *Add a model* opens the same kind of chooser as *Add a reviewer*: which provider answers — each named with what it reaches — then which of that provider’s models, then a name for the button, then a starting prompt if you want one. Escaping one of the first three writes nothing; escaping the last one means you did not want a starting prompt. And the list is every reviewer you have configured — the ones that cannot answer are on it too, each saying why, rather than quietly missing.
+**A model button and a prompt button stop treading on each other.** Each swaps its own half of the
+instruction in the text that is actually in the box, keeping everything after it exactly as it was —
+the language line, the fence, the passage you captured, and anything you added under it. Choosing a
+model changes who is answering; choosing a prompt changes what is asked; neither waits for a process
+and neither disturbs the other. If the switch itself is refused, the button goes back to the model
+that is answering and your words are left alone.
+
+**The model you pick is applied at once.** The pressed button used to wait for the old process to be
+disposed and a new one to start — seconds, sometimes, and longer while an answer was still arriving —
+so pressing a model looked like nothing had happened. The button is your choice and it is drawn
+immediately; the dropdown under it goes on naming the model that is actually answering.
+
+**Models take a `main` tick, like prompts.** Exactly one, and the last one cannot be turned off. A
+captured passage opens on the ticked model and the ticked prompt with both buttons already pressed,
+and a ticked preset opens on its own model rather than on the one the panel remembered.
+
+**Send moved** to the end of the line that names the model, so the box is the full width of the
+panel.
+
+**A saved model this build cannot read is named.** Presets written before a model preset carried its
+own vendor cannot be repaired without reading the reviewer list, which the chat no longer does — so
+the presets tab says which ones they are and asks you to add them again, rather than passing over
+them in silence.
 
 ## Extension 0.33.1 — 2026-09-11
 
