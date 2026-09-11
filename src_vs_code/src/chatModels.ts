@@ -431,3 +431,41 @@ export function openingModel(list: ChatProviderList, saved: LegacyPick, named: s
     ? named
     : saved.modelId;
 }
+
+/** What a switch will run, or the sentence saying why it will not. Never both. */
+export type ModelToRun =
+  | { readonly ok: true; readonly model: string }
+  | { readonly ok: false; readonly refusal: string };
+
+/**
+ * Which of a provider's models a switch runs, given what was asked for.
+ *
+ * <p><b>The fallback belongs to the EMPTY ask alone.</b> An empty model is the page saying the
+ * PROVIDER moved and it will not carry a model across — which of the new row's models answers is
+ * this side's to decide, because it holds the catalog. A model that was NAMED and is not offered is
+ * a refusal: four reviewers across three vendors raised the same thing on one round, and they were
+ * right. A person presses a button labelled `gpt-5.6-luna`, a catalog changes under them, and the
+ * turns go somewhere else — billed, in a voice nobody chose, which is what every rule in this
+ * feature exists to prevent. A stale preset must say so, not quietly become another model.</p>
+ *
+ * <p>The row's own model is preferred for an empty ask and is not assumed to be offered:
+ * `routableOn` drops a Claude model from an `agy` row, so a row configured that way has a configured
+ * model its own picker never shows.</p>
+ */
+export function modelToRun(
+  models: readonly ModelChoice[],
+  asked: string,
+  own: string,
+): ModelToRun {
+  const offers = (id: string): boolean => models.some((one) => one.id === id);
+  if (asked.length > 0) {
+    return offers(asked)
+      ? { ok: true, model: asked }
+      : { ok: false, refusal: `${asked} is not one of the models this reviewer offers any more.` };
+  }
+  const fallback = offers(own) ? own : (models[0]?.id ?? '');
+
+  return fallback.length === 0
+    ? { ok: false, refusal: 'That reviewer offers no model this chat can run.' }
+    : { ok: true, model: fallback };
+}

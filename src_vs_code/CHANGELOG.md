@@ -6,6 +6,8 @@
 
 **The preset buttons above the composer do something.** They named what was pressed and nothing listened. A prompt button puts its words in the box; a model button switches the model and, if that preset carries a starting prompt, opens the box with it.
 
+**A model that is no longer offered is refused by name, not swapped.** Press a preset for a model a reviewer has since stopped offering and the chat says so, instead of quietly running a different one. And a preset that opens the composer with its own prompt leaves what you were writing alone — it says it did, rather than dropping the prompt in silence.
+
 **Adding a model asks, instead of guessing.** *Add a model* opens the same kind of chooser as *Add a reviewer*: which provider answers — each named with what it reaches — then which of that provider’s models, then a name for the button, then a starting prompt if you want one. Escaping any step writes nothing.
 
 ## Extension 0.33.1 — 2026-09-11

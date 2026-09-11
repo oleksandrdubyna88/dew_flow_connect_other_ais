@@ -260,40 +260,58 @@ async function askForAModel(): Promise<
 
     return undefined;
   }
-  const provider = await vscode.window.showQuickPick(
-    rows.map((one) => ({ label: one.id, detail: one.caption, row: one })),
-    { title: 'Add a model', placeHolder: 'Which provider answers?' },
-  );
+  const provider = await askWhichProvider(rows);
   if (provider === undefined) {
     return undefined;
   }
-  // A row whose models are discovered and whose probe has not answered offers none. Asking anyway
-  // would be a dialog with nothing in it, so the row's own configured model answers — which is what
-  // an empty model means everywhere else in this feature.
-  const model = provider.row.models.length === 0
-    ? { id: '', label: '' }
-    : await vscode.window.showQuickPick(
-      provider.row.models.map((one) => ({ label: one.label, id: one.id })),
-      { title: 'Add a model', placeHolder: `Which of ${provider.label}'s models?` },
-    );
+  const model = await askWhichModel(provider.row);
   if (model === undefined) {
     return undefined;
   }
   const name = await vscode.window.showInputBox({
-    title: 'Add a model',
+    title: 'Add a model — step 3 of 4',
     prompt: 'A name for this preset — it is what the button above the composer says',
     value: model.label.length > 0 ? model.label : provider.label,
   });
   if (name === undefined) {
     return undefined;
   }
+  // The LAST step is optional, and escaping it means "none" rather than "throw the other three
+  // away". Escape is how a person skips an optional field in every other VS Code dialog, and
+  // discarding a finished preset for using it is the wizard punishing the ordinary gesture.
+  // (local, the code round, Blocking.)
   const startingPrompt = await vscode.window.showInputBox({
-    title: 'Add a model',
-    prompt: 'What the composer opens with when this model is chosen (optional)',
+    title: 'Add a model — step 4 of 4, optional',
+    prompt: 'What the composer opens with when this model is chosen. Leave it empty for none.',
     placeHolder: 'You are a business analyst…',
   });
 
-  return startingPrompt === undefined
-    ? undefined
-    : { provider: provider.row.id, model: model.id, name, startingPrompt };
+  return { provider: provider.row.id, model: model.id, name, startingPrompt: startingPrompt ?? '' };
+}
+
+/** Step 1 — the configured rows, each with the sentence that says what it reaches. */
+function askWhichProvider(rows: readonly ChatProvider[]):
+Thenable<{ label: string; row: ChatProvider } | undefined> {
+  return vscode.window.showQuickPick(
+    rows.map((one) => ({ label: one.id, detail: one.caption, row: one })),
+    { title: 'Add a model — step 1 of 4', placeHolder: 'Which provider answers?' },
+  );
+}
+
+/**
+ * Step 2 — that provider's models.
+ *
+ * <p>A row whose models are DISCOVERED and whose probe has not answered offers none. Asking anyway
+ * would be a dialog with nothing in it, so the answer is an empty model — which everywhere else in
+ * this feature means "whatever the row is set to".</p>
+ */
+async function askWhichModel(row: ChatProvider): Promise<{ id: string; label: string } | undefined> {
+  if (row.models.length === 0) {
+    return { id: '', label: '' };
+  }
+
+  return vscode.window.showQuickPick(
+    row.models.map((one) => ({ label: one.label, id: one.id })),
+    { title: 'Add a model — step 2 of 4', placeHolder: `Which of ${row.id}'s models?` },
+  );
 }

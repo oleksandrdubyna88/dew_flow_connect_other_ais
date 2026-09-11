@@ -29,6 +29,7 @@ import {
   isRemote,
   legacyPick,
   memoryOf,
+  modelToRun,
   openingModel,
   resolveChatPick,
 } from './chatModels';
@@ -910,24 +911,30 @@ function vendorFor(modelId: string): Vendor | undefined {
  * that turn with "the conversation was closed" — an error about something the person did on
  * purpose. The switch simply joins the queue the turns already run in.</p>
  */
-function switchModel(entry: ChatEntry, providerId: string, asked: string): void {
+function switchModel(entry: ChatEntry, providerId: string, asked: string): boolean {
   const thread = threads.get(entry.id);
   const provider = thread?.providers.find((one) => one.id === providerId);
   if (thread === undefined || provider === undefined) {
-    return;
+    return false;
   }
   // An EMPTY model is the page saying the provider moved: which of the new row's models answers is
   // decided here, because this side holds the catalog. The row's own configured model, which is what
   // every other entry point into this feature falls back to.
-  // The fallback has to come from the list this provider actually OFFERS, not merely from the row.
-  // `modelsFor` normally carries the row's own model, but not always: `routableOn` drops a Claude
-  // model from an `agy` row, so a row configured that way would otherwise be switched to a model the
-  // picker never showed and `resolveChatPick` would refuse one step later. (gemini, the plan round.)
-  const own = vendorFor(providerId)?.model ?? '';
-  const offers = (id: string): boolean => provider.models.some((one) => one.id === id);
-  const modelId = offers(asked) ? asked : (offers(own) ? own : (provider.models[0]?.id ?? ''));
+  // A model that was NAMED and is not offered is REFUSED, never swapped for another — four reviewers
+  // across three vendors on one round, and they were right: a person presses a button labelled
+  // `gpt-5.6-luna`, a catalog moves under them, and the turns go somewhere else. The fallback belongs
+  // to the EMPTY ask alone, which is the page saying the provider moved.
+  const running = modelToRun(provider.models, asked, vendorFor(providerId)?.model ?? '');
+  if (!running.ok) {
+    void vscode.window.showWarningMessage(running.refusal);
+    // The page has already moved its own select; put the state back so it stops claiming otherwise.
+    show(entry, false, running.refusal);
+
+    return false;
+  }
+  const modelId = running.model;
   if (thread.providerId === providerId && thread.modelId === modelId) {
-    return;
+    return false;
   }
   if (thread.running) {
     void vscode.window.showInformationMessage(
@@ -943,6 +950,8 @@ function switchModel(entry: ChatEntry, providerId: string, asked: string): void 
       void vscode.window.showWarningMessage(failure);
       show(entry, false, failure);
     });
+
+  return true;
 }
 
 async function switchNow(entry: ChatEntry, providerId: string, modelId: string): Promise<void> {
@@ -1120,17 +1129,25 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         if (found === undefined || preset === undefined) {
           return;
         }
-        switchModel(found, preset.provider, preset.model);
-        // And the starting prompt, if this preset carries one — "you are a business analyst" is the
-        // half of the choice that is not the model.
-        //
+        // The prompt rides on the SWITCH: a preset whose provider refused has not been applied, and
+        // putting its words in the box would offer them to the model that is still answering.
+        // (codex, the code round.)
+        const starting = preset.startingPrompt ?? '';
+        if (!switchModel(found, preset.provider, preset.model) || starting.length === 0) {
+          return;
+        }
         // ONLY INTO AN EMPTY COMPOSER, which is where this differs from the prompt button beside it.
         // That button IS the instruction "ask this instead", and replacing is what was asked for. A
         // starting prompt is a side effect of changing the MODEL, and somebody who switches model
         // half-way through writing a question did not ask for their words to be thrown away. Two
-        // vendors raised the destruction on the plan round; the split is the answer to it.
-        if ((preset.startingPrompt ?? '').length > 0 && draft.trim().length === 0) {
-          pushChatDraft(found, preset.startingPrompt ?? '');
+        // vendors raised the destruction on the plan round; the split is the answer to it — and it is
+        // SAID rather than silently skipped, which the code round asked for in turn.
+        if (draft.trim().length === 0) {
+          pushChatDraft(found, starting);
+        } else {
+          void vscode.window.showInformationMessage(
+            `${preset.name} opens with its own prompt, and the box already has something in it — so it was left alone.`,
+          );
         }
       },
       onStop: (id, turn) => {

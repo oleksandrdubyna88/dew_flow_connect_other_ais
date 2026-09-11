@@ -52,8 +52,12 @@ test('a preset button names which preset, and a nameless press is ignored', () =
   assert.deepStrictEqual(
     chatCommandOf({ type: 'command', command: 'useModelPreset', id: 'm2', text: 'half a question' }),
     { kind: 'useModel', id: 'm2', draft: 'half a question' });
+  // A message with NO draft is ignored rather than read as an empty box: that is what a retained
+  // webview from a build before this field existed posts, and acting on it would overwrite a
+  // question somebody is writing with the preset's own prompt.
+  assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'useModelPreset', id: 'm2' }), { kind: 'ignore' });
   assert.deepStrictEqual(
-    chatCommandOf({ type: 'command', command: 'useModelPreset', id: 'm2' }),
+    chatCommandOf({ type: 'command', command: 'useModelPreset', id: 'm2', text: '' }),
     { kind: 'useModel', id: 'm2', draft: '' });
   assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'usePromptPreset', id: '' }), { kind: 'ignore' });
   assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'useModelPreset' }), { kind: 'ignore' });
