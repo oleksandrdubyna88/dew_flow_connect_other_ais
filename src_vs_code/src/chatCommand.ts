@@ -1375,7 +1375,15 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         const preset = savedPrompts(vscode.workspace.getConfiguration('coai'))
           .find((one) => one.id === presetId);
         const thread = threads.get(id);
-        if (found === undefined || preset === undefined || thread === undefined) {
+        if (found === undefined || thread === undefined) {
+          return;
+        }
+        // Said out loud, like the model button beside it: a press can outlive the row it names.
+        if (preset === undefined) {
+          const gone = 'That saved prompt is no longer in your presets — it was removed or renamed.';
+          void vscode.window.showWarningMessage(gone);
+          show(found, thread.running, gone);
+
           return;
         }
         // The INSTRUCTION changes and the captured passage stays. The composer holds both — the
@@ -1405,7 +1413,18 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         const found = panels.entryOf(id);
         const preset = savedModels(config).find((one) => one.id === presetId);
         const mine = threads.get(id);
-        if (found === undefined || preset === undefined || mine === undefined) {
+        if (found === undefined || mine === undefined) {
+          return;
+        }
+        // A BUTTON THAT NAMES NOTHING SAYS SO. The rows are redrawn on every state push, so a preset
+        // deleted in the other tab normally takes its button with it — but a press can outlive the
+        // row it names, and a button that does nothing and explains nothing is the defect this whole
+        // change started from. (CodeRabbit, PR #200.)
+        if (preset === undefined) {
+          const gone = 'That saved model is no longer in your presets — it was removed or renamed.';
+          void vscode.window.showWarningMessage(gone);
+          show(found, mine.running, gone);
+
           return;
         }
         chooseModel(found, mine, preset, draft, config);
