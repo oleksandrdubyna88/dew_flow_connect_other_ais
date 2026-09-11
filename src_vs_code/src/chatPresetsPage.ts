@@ -76,6 +76,33 @@ function idOf(value: unknown): string {
  * rather than by unticking the siblings in the page's own script: that would be the same rule
  * written twice, and the second copy is the one that drifts.</p>
  */
+/**
+ * One edit, applied to the list it names.
+ *
+ * <p>The whole list is written back, because that is what a settings array IS — there is no way to
+ * update one element of one. Ticking `main` untick's the others here rather than in the reader, so
+ * what is SAVED is already true: a reader that had to correct the file every time it read it would
+ * be hiding a file nobody could trust.</p>
+ */
+export function editedRows(
+  rows: readonly Record<string, unknown>[],
+  command: Extract<PresetCommand, { kind: 'edit' }>,
+): readonly Record<string, unknown>[] {
+  // The `main` box does NOT come through here any more — `promptRowsAfterMain` owns that rule, next
+  // to the reader that enforces the same thing. The branch that used to untick the siblings was left
+  // dead by that move, and dead code beside a live rule is the second copy that drifts.
+  // The list ITSELF when the row already holds that value — choosing the option a select is already
+  // on is a click somebody makes, and writing the file back to say what it says is a configuration
+  // event every window then reacts to. The host writes only when the reference moved.
+  // The list ITSELF when nothing would change — the row already holds that value, or there is no row
+  // with that id at all. A stale message naming a removed row used to produce a new array with
+  // identical content, which the host read as a change and wrote back. (CodeRabbit, PR #198.)
+  return !rows.some((row) => row['id'] === command.id)
+    || rows.some((row) => row['id'] === command.id && row[command.field] === command.value)
+    ? rows
+    : rows.map((row) => (row['id'] === command.id ? { ...row, [command.field]: command.value } : row));
+}
+
 export function editRepaints(command: Extract<PresetCommand, { kind: 'edit' }>): boolean {
   return command.field === 'main';
 }

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-**Add a model works.** It was not doing nothing — it was writing a preset with no reviewer named, and a preset that names no reviewer names nothing that can answer, so the list dropped it on the way back to the screen. Every press left a row in your settings that nothing could show, edit or remove. A new model preset now opens on the first reviewer that can chat, which you change on the row; with no such reviewer configured the button says so instead of writing something invisible, and the rows the old behaviour left behind are cleared the next time the list is written.
+**Add a model works.** It was not doing nothing — it was writing a preset with no reviewer named, and a preset that names no reviewer names nothing that can answer, so the list dropped it on the way back to the screen. Every press left a row in your settings that nothing could show, edit or remove. A new model preset now opens on the first reviewer that can chat, which you change on the row; with no such reviewer configured the button says so instead of writing something invisible, and the rows the old behaviour left behind are cleared when the tab opens.
 
 **And only one prompt can look like the main one.** Ticking a second left both ticked on screen while the file held one — what was saved had been right all along, but the page is deliberately not redrawn while you type, and that rule had swallowed the one control whose whole effect is on the rows it is not in. A checkbox has no caret, so it is redrawn now.
 
