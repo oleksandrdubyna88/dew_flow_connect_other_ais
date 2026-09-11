@@ -1,12 +1,19 @@
 # PLAN — the chat opens anywhere, the text has a tone, and a question can be taken
 
-> Status: **plan only, nothing implemented yet.** Scope: the VS Code extension's chat trigger
+> Status: **IMPLEMENTED, 2026-09-11.** All three parts shipped together.
+>
+> Deviations, each one from the gate's plan round: the question command takes the PENDING
+> question rather than the last one and says so when the last was answered; it renders every question
+> in the block rather than the first; the tone follows the theme rather than ramping to white; a whole
+> file over 20 000 characters is asked about before it is sent; the directory name is matched
+> case-insensitively; and the manifest is tested as part of the feature. The migration parameter this
+> plan did not mention was removed on the branch before it: nothing ever passed it. Scope: the VS Code extension's chat trigger
 > (`src_vs_code/src/chatCommand.ts`, `sessionKey.ts`, `chatTrigger.ts`, `package.json`), the webview
 > steppers (`zoomControl.ts`, `uiScaleHost.ts`, `chatPage.ts`, `helpPage.ts`) and a new reader for
 > Claude Code's own session files.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_chat_with_other_ais.md](../research/PLAN_chat_with_other_ais.md).
+> Related docs: [module_extension.md](module_extension.md),
+> [PLAN_chat_with_other_ais.md](PLAN_chat_with_other_ais.md).
 
 Three things the operator asked for in one sitting, in their words:
 
