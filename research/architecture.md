@@ -206,6 +206,15 @@ The unit runs as **root**, which is a consequence and not a default: `claude` an
 symlinks into `/root`, and the slots were signed in as root. Tightening it means re-installing the
 CLIs and re-signing every slot as a service account.
 
+Since 2026-09-11 a reviewer the server launches is **confined to its prompt on the application side**:
+the child starts from an allowlisted environment rather than the server's own, so
+`/etc/coai-server.env` is not in it; `claude` is additionally launched with every file and shell tool
+denied; and the job's `TMPDIR` is the per-job directory the launcher already creates and deletes,
+rather than the shared `/tmp` of a root box. Both halves are derived from one `Confinement` value, so
+a later edit cannot confine half a launch. **This is not filesystem isolation**: `codex` and
+`antigravity` are bound to read-only rather than to a directory, and the process is still root — a
+cross-slot READ is what the unprivileged plan above is for.
+
 ## Cross-cutting decisions already in force
 
 - **Solution layout follows `dew_flow_creds_for_devs`**: `src_mcp/{src,tests}`, later

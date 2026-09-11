@@ -574,6 +574,14 @@ catalog that could not be re-fetched is shown as STALE rather than as absent.
   time however many accounts it has. Nil effect on this deployment, which has one slot per vendor, and
   total on the day a second is signed in. Deliberately not fixed (the operator, 2026-09-11):
   [../todo/PLAN_the_second_account_actually_runs.md](../todo/PLAN_the_second_account_actually_runs.md).
+- **The start signal is answered on EVERY exit, and the pump does not trust that it will be.** A
+  filesystem error before the runner reached its claim — the audit's shape, a directory where a
+  `.lock` file belongs — left `PumpAsync`'s promise unanswered for ever: the pump waited on it, no
+  later vendor pumped, `Expire` never ran again, `StopAsync` wedged, and `/api/health` stayed green
+  through all of it. Two guards, one at each end of the promise, because a wait whose correctness
+  depends on another file keeping a promise is exactly what the next edit to that file breaks:
+  `JobRunner` answers it in a `finally`, and `JobPump` waits on the promise OR the run, whichever
+  settles first. The existing continuation still logs the fault.
 - **A job's cancellation source is fired on cancel and disposed on FINISH, never both at once.**
   Cancelling and disposing in one breath meant the runner was awaiting on a token whose source had
   gone, so an ordinary cancellation surfaced as an `ObjectDisposedException` and was reported as

@@ -47,11 +47,17 @@ base.
 1. **`--numstat -z`.** Fields NUL-separated, paths never quoted, and a rename carried as an EMPTY path
    field followed by the old and the new path as two more fields. The parser reads that shape and
    nothing else; the human-readable form is gone from the code.
-2. **A rename is diffed as one.** The per-file diff receives BOTH paths as pathspecs (`-- old new`),
-   which is what lets git show the rename with its similarity and the edit under it, rather than a
-   deletion and an unrelated addition. `FileDiff` carries the new path as `Path` and the old one as
-   `RenamedFrom` (empty otherwise), so `DiffShaper` gates and elides by the name a reviewer will look
-   for; `BlobSize` reads the old side by the old name.
+2. **A rename is diffed as one.** The per-file diff receives BOTH paths as pathspecs
+   (`-- :(literal)old :(literal)new`), which is what lets git show the rename with its similarity and
+   the edit under it, rather than a deletion and an unrelated addition.
+
+   *As built (CodeRabbit, on the pull request — the plan described a shape that never shipped):* the
+   old name lives on **`NumstatChange.RenamedFrom`**, not on `FileDiff`, which carries only `Path`,
+   `Text`, `IsBinary` and `BinaryBytes`. `DiffShaper` therefore gates and elides by the name a
+   reviewer will look for because that is the ONLY name it is given. And `BlobSize` never reads the
+   old side: it asks `{sha}:{path}` and then `{baseRef}:{path}`, the NEW path both times, and answers
+   `0` when neither resolves — a binary deleted on both sides of a rename chain still reaches the
+   reviewer named.
 3. Tests on a fixture repository, beside the ones `ContextAssemblerTests` already builds.
 
 No growth surface.
@@ -68,6 +74,16 @@ No growth surface.
 
 ## Definition of Done
 
-- [ ] Tests 1–5 written, watched fail for the real symptom, passing.
-- [ ] No pathspec is ever built from a quoted or `=>`-joined column; the only parser reads `-z`.
-- [ ] `module_runners.md` — *What a code round is a diff OF* — records the rename shape and why both paths travel.
+- [x] Tests 1–5 written, watched fail for the real symptom, passing — with two of them shipping under
+      other names, for reasons in *What shipped differently*: test 3's quote half became
+      `APathWithATabOrANewlineSurvivesWholeBecauseTheSeparatorIsNeither`, a parser test rather than a
+      repository one, because the defect it caught is in the SPLIT and no filesystem is needed to show
+      it; and test 4 is `ARenamedBinaryFileIsStillABinaryFile`, sized by the NEW name, since the old
+      one was never what `BlobSize` asks for.
+- [x] No pathspec is ever built from a quoted or `=>`-joined column; the only parser reads `-z`.
+- [x] Every pathspec is additionally `:(literal)`-prefixed, so a filename that IS pathspec magic
+      cannot decide which file's diff comes back. Found by CodeRabbit on this plan's own pull request
+      — the third shape of the same defect, and the only one that returns somebody ELSE'S file rather
+      than nothing.
+- [x] `module_runners.md` — *And it is a diff of files git NAMED* — records the rename shape and why
+      both paths travel.

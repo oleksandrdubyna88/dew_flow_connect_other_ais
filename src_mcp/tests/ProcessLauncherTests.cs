@@ -222,7 +222,7 @@ public sealed class ProcessLauncherTests
     }
 
     [Fact]
-    public async Task ACeilingOfNothingIsRefusedRatherThanKeepingNothing()
+    public void ACeilingOfNothingIsRefusedRatherThanKeepingNothing()
     {
         // Zero and -1 are both ordinary spellings of "unlimited" elsewhere, and either would make
         // every launch answer with an empty stream — a discarded vendor answer that reads exactly

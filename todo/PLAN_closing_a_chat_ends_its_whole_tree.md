@@ -36,7 +36,11 @@ process on the NEXT activation; closing a tab is supposed to end it now.
 1. **A process group on Unix.** `launch` spawns with `detached: true` on every platform but Windows
    (`:113`), so the child leads a group of its own — and nothing calls `unref()`, so the extension
    host still waits for it exactly as now. `killTree` then ends the GROUP: `process.kill(-pid, 'SIGTERM')`,
-   and `SIGKILL` after a short grace if the direct child has not exited.
+   and after a short grace `process.kill(-pid, 'SIGKILL')` **unconditionally** — never gated on the
+   direct child, which on Linux is a `sh` shim that exits immediately while the CLI under it keeps
+   running. `ESRCH` there means the group is already empty, which is the success case. (The gate's
+   plan round changed this and the section below records it; the step said the opposite until
+   CodeRabbit read the two against each other on the pull request.)
 2. **Windows without a shell takes the `taskkill /t` path too** — the condition at `:375` drops the
    `shell` half. The absolute-path rule for `taskkill` and the reason for it stay as they are.
 3. **The pid-reuse caveat in the file's header still governs.** A group kill by `-pid` has the same

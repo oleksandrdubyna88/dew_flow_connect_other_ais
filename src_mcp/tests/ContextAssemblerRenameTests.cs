@@ -31,6 +31,9 @@ public sealed class ContextAssemblerRenameTests : IAsyncLifetime
     /// <summary>A name git C-quotes under the default <c>core.quotePath</c>.</summary>
     private const string OutsideAscii = "файл.cs";
 
+    /// <summary>A NUL in the first bytes is what makes git call a file binary.</summary>
+    private static readonly byte[] Binary = [0x89, 0x50, 0x4E, 0x47, 0x00, 0x01, 0x02, 0x03, 0x00, 0xFF];
+
     private readonly ProcessLauncher _launcher = new();
     private readonly ContextAssembler _assembler;
     private string _repo = string.Empty;
@@ -48,6 +51,7 @@ public sealed class ContextAssemblerRenameTests : IAsyncLifetime
             string.Concat(Enumerable.Range(0, LinesEnoughToBeRecognisedAsARename).Select(i => $"    var line{i} = {i};\n")));
         await File.WriteAllTextAsync(Path.Combine(_repo, "src", OutsideAscii), "before\n");
         await File.WriteAllTextAsync(Path.Combine(_repo, "src", "dead.cs"), "removed on the branch\n");
+        await File.WriteAllBytesAsync(Path.Combine(_repo, "src", "logo.bin"), Binary);
         await Git("add", ".");
         await Git("commit", "-m", "base");
         await Git("checkout", "-b", "feature");
@@ -58,6 +62,7 @@ public sealed class ContextAssemblerRenameTests : IAsyncLifetime
         await File.AppendAllTextAsync(Path.Combine(_repo, "src", "new.cs"), "    var addedByTheBranch = 1;\n");
         await File.WriteAllTextAsync(Path.Combine(_repo, "src", OutsideAscii), "after\nand a second line\n");
         await Git("rm", "src/dead.cs");
+        await Git("mv", "src/logo.bin", "src/badge.bin");
         await Git("add", ".");
         await Git("commit", "-m", "a refactor that renames");
     }
@@ -109,14 +114,29 @@ public sealed class ContextAssemblerRenameTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ARenamedBinaryFileIsStillABinaryFile()
+    {
+        // The rename path forks on IsBinary, and only the text side had a test: a binary that moved
+        // takes the BlobSize branch, whose argument is the new path while the pathspecs are the pair.
+        // Asked for by CodeRabbit on the pull request, and worth having — a binary rename is the one
+        // shape where the two halves of the record are read by different code.
+        var moved = await FileNamed("badge.bin");
+
+        moved.IsBinary.Should().BeTrue("a NUL in the first bytes is what git itself calls binary");
+        moved.Text.Should().BeEmpty("bytes are not a diff, and a reviewer reading them learns nothing");
+        moved.BinaryBytes.Should().Be(Binary.Length,
+            "the size is the only thing there IS to say about it, so a zero here is a silent loss");
+    }
+
+    [Fact]
     public async Task EveryChangedFileIsAccountedFor()
     {
-        // Three files, and NOT four: a rename is one file that moved, never an add beside a delete.
-        // Without this the two tests above would pass on a parser that emitted both halves.
+        // Four files, and NOT six: each rename is one file that moved, never an add beside a delete.
+        // Without this the tests above would pass on a parser that emitted both halves.
         var files = await Collect();
 
         files.Select(f => Path.GetFileName(f.Path))
-            .Should().BeEquivalentTo(["new.cs", OutsideAscii, "dead.cs"]);
+            .Should().BeEquivalentTo(["new.cs", OutsideAscii, "dead.cs", "badge.bin"]);
     }
 
     private async Task<FileDiff> FileNamed(string name)

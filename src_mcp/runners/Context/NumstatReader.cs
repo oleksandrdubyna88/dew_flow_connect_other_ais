@@ -6,15 +6,31 @@ namespace CoaiMcp.Runners.Context;
 public sealed record NumstatChange(string Path, string RenamedFrom, bool IsBinary)
 {
     /// <summary>
-    /// What to hand git to get this file's diff — BOTH names when it moved.
+    /// What to hand git to get this file's diff — BOTH names when it moved, each one neutralised.
     /// </summary>
     /// <remarks>
-    /// One name is not enough for a rename: asking for the new path alone shows an addition of a
-    /// whole file, and the old path alone a deletion of one. Given the pair, git recognises the move
-    /// and prints the similarity, the rename header and the edit underneath — which is the only form
-    /// in which a refactor's change is readable at all.
+    /// <para>One name is not enough for a rename: asking for the new path alone shows an addition of
+    /// a whole file, and the old path alone a deletion of one. Given the pair, git recognises the
+    /// move and prints the similarity, the rename header and the edit underneath — which is the only
+    /// form in which a refactor's change is readable at all.</para>
+    /// <para><b><c>:(literal)</c> on every one of them, and that prefix is the third shape of
+    /// finding 4</b> (CodeRabbit, on the pull request that fixed the other two). After <c>--</c> git
+    /// reads a leading <c>:(…)</c> as MAGIC, not as a name — and <c>:(exclude)ordinary.txt</c> is a
+    /// perfectly legal POSIX filename. Sent as it arrived it asks for "everything except
+    /// ordinary.txt", so the reviewer receives somebody else's changed file under this one's name,
+    /// with nothing anywhere saying so. Measured on a fixture built through <c>mktree</c>: the
+    /// one-file diff came back carrying two files. The prefix says "the rest of this is a path",
+    /// which is what the caller meant every time.</para>
+    /// <para>It belongs HERE rather than at the call site because the property is already named for
+    /// what it produces: a pathspec is not a path, and the one thing a caller must not have to
+    /// remember is the difference.</para>
     /// </remarks>
-    public IReadOnlyList<string> Pathspecs => RenamedFrom.Length == 0 ? [Path] : [RenamedFrom, Path];
+    public IReadOnlyList<string> Pathspecs => RenamedFrom.Length == 0
+        ? [Literal(Path)]
+        : [Literal(RenamedFrom), Literal(Path)];
+
+    /// <summary>A path, spelled so that git reads all of it as a name.</summary>
+    private static string Literal(string path) => $":(literal){path}";
 }
 
 /// <summary>
