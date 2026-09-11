@@ -58,7 +58,13 @@ export interface ChatPanelHooks {
   readonly onUsePrompt: (id: object, presetId: string, draft?: string) => void;
   /** A saved model was pressed. Its provider and model answer, and its starting prompt is offered. */
   readonly onUseModel: (id: object, presetId: string, draft: string) => void;
-  /** The page asked what the person wrote in the session this conversation came from. */
+  /**
+   * The page asked what the person wrote in the session this conversation came from.
+   *
+   * <p>It must ALWAYS answer, even to say it cannot: the page paints *Reading the session…* the
+   * moment the region opens, and a hook that returns without posting leaves that on the screen for
+   * as long as the tab is open. (gemini, the code round.)</p>
+   */
   readonly onShowAsked: (id: object) => void;
   /**
    * The person stopped the answer they were waiting for.

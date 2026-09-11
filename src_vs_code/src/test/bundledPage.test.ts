@@ -317,10 +317,39 @@ function bundledChatPage(): { bundle: string; html: string } {
  * binding out from under it, and a second copy of this harness would drift from the first — which
  * is the very thing it exists to catch.</p>
  */
+function stubClassList(): StubClassList {
+  const on = new Set<string>();
+
+  return {
+    add: (name: string) => { on.add(name); },
+    remove: (name: string) => { on.delete(name); },
+    contains: (name: string) => on.has(name),
+    toggle: (name: string, force?: boolean) => {
+      const want = force === undefined ? !on.has(name) : force;
+      if (want) { on.add(name); } else { on.delete(name); }
+
+      return want;
+    },
+  };
+}
+
+/** What a real element's `classList` does, as much of it as the page uses. */
+interface StubClassList {
+  add(name: string): void;
+  remove(name: string): void;
+  contains(name: string): boolean;
+  toggle(name: string, force?: boolean): boolean;
+}
+
+/** One stubbed element. Typed rather than cast: a cast is a promise kept by hand, and it comes due. */
+interface StubNode extends Record<string, unknown> {
+  readonly classList: StubClassList;
+}
+
 function runPage(): {
   readonly html: string;
   readonly rendered: Map<string, string>;
-  readonly nodes: Record<string, Record<string, unknown>>;
+  readonly nodes: Record<string, StubNode>;
   readonly listeners: Record<string, Record<string, Array<() => void>>>;
   readonly onWindow: Record<string, Array<(event: { data: unknown }) => void>>;
   readonly posted: Array<Record<string, unknown>>;
@@ -335,8 +364,8 @@ function runPage(): {
     [...html.matchAll(/<[a-z]+[^>]*\bid="([^"]+)"[^>]*>/g)].map((match) => [match[1], match[0]]),
   );
   const listeners: Record<string, Record<string, Array<() => void>>> = {};
-  const nodes: Record<string, Record<string, unknown>> = {};
-  const node = (id: string) => (nodes[id] ??= {
+  const nodes: Record<string, StubNode> = {};
+  const node = (id: string): StubNode => (nodes[id] ??= {
     innerHTML: '', textContent: '', hidden: false, value: '', className: '',
     scrollTop: 0, clientHeight: 0, scrollHeight: 0,
     disabled: / disabled(?=[ >])/.test(rendered.get(id) ?? ''),
@@ -346,21 +375,7 @@ function runPage(): {
     setAttribute() { /* the page sets none */ },
     querySelectorAll: () => [],
     // A real element has one, and the page opens the region it pins by adding a class to it.
-    classList: (() => {
-      const on = new Set<string>();
-
-      return {
-        add: (name: string) => { on.add(name); },
-        remove: (name: string) => { on.delete(name); },
-        contains: (name: string) => on.has(name),
-        toggle: (name: string, force?: boolean) => {
-          const want = force === undefined ? !on.has(name) : force;
-          if (want) { on.add(name); } else { on.delete(name); }
-
-          return want;
-        },
-      };
-    })(),
+    classList: stubClassList(),
   });
 
   const onWindow: Record<string, Array<(event: { data: unknown }) => void>> = {};
@@ -453,12 +468,12 @@ test('the shipped Asked button asks the host, and paints what comes back', () =>
 
   // Pressed once: the region is open, and the host has been asked to go and read the file. The page
   // cannot read one itself, so a press that posts nothing would show an empty box forever.
-  const asking = nodes['asking']?.['classList'] as { contains(name: string): boolean } | undefined;
+  const asking = nodes['asking']?.classList;
   assert.ok(asking?.contains('open'), 'the shipped page did not open the region');
   assert.strictEqual(posted.filter((message) => message['type'] === 'showAsked').length, 1,
     'the shipped Asked button did not ask the host for the session');
 
-  push({ type: 'asked', asked: ['make the task text green', 'and now the arrows'], refusal: '' });
+  push({ type: 'asked', at: 1, asked: ['make the task text green', 'and now the arrows'], refusal: '' });
 
   // textContent, never innerHTML: what came back is somebody's typing off a file on disk, and the
   // one safe way to put it on a page is as text. (codex, the plan round.)
@@ -474,10 +489,12 @@ test('the shipped Asked button asks the host, and paints what comes back', () =>
   assert.strictEqual(nodes['askedAt']?.['textContent'], '2 / 2');
   press('askedNext');
   assert.strictEqual(nodes['askedAt']?.['textContent'], '2 / 2', 'the forward arrow walked off the end');
+  assert.strictEqual(nodes['askedNext']?.['disabled'], true, 'the forward arrow still looked pressable at the end');
   press('askedBack');
   press('askedBack');
   press('askedBack');
   assert.strictEqual(nodes['askedAt']?.['textContent'], '1 / 2', 'the back arrow walked off the front');
+  assert.strictEqual(nodes['askedBack']?.['disabled'], true, 'the back arrow still looked pressable at the front');
 
   // Pressed again it folds away, and asks for nothing while it is closed.
   press('asked');
@@ -493,8 +510,24 @@ test('the shipped Asked button asks the host, and paints what comes back', () =>
 
   // And where they were is kept when a re-read merely found MORE.
   press('askedNext');
-  push({ type: 'asked', asked: ['make the task text green', 'and now the arrows', 'and one more'], refusal: '' });
+  push({ type: 'asked', at: 2, asked: ['make the task text green', 'and now the arrows', 'and one more'], refusal: '' });
   assert.strictEqual(nodes['askedAt']?.['textContent'], '2 / 3', 'a re-read threw away the arrow they just pressed');
+});
+
+test('an answer from an earlier press cannot replace the one just asked for', () => {
+  // Open, fold, open again: two reads are in flight and the slower one is the older one. Landing
+  // second it would put back what the person had already moved on from. (codex and gemini, the code
+  // round, on the host half and the page half of the same race.)
+  const { nodes, press, push } = runPage();
+
+  press('asked');
+  press('asked');
+  press('asked');
+  push({ type: 'asked', at: 2, asked: ['the newer read'], refusal: '' });
+  push({ type: 'asked', at: 1, asked: ['the older read, finishing late'], refusal: '' });
+
+  assert.strictEqual(nodes['askedText']?.['textContent'], 'the newer read',
+    'a read started earlier overwrote the one the person just asked for');
 });
 
 test('the shipped page says WHY there is nothing, rather than showing an empty box', () => {
@@ -504,10 +537,13 @@ test('the shipped page says WHY there is nothing, rather than showing an empty b
   const { nodes, press, push } = runPage();
 
   press('asked');
-  push({ type: 'asked', asked: [], refusal: '2 sessions in this folder are called “main”.' });
+  // Before the host has said anything, the region says it is working rather than sitting blank.
+  assert.strictEqual(nodes['askedText']?.['textContent'], 'Reading the session…');
+  push({ type: 'asked', at: 1, asked: [], refusal: '2 sessions in this folder are called “main”.' });
 
   assert.strictEqual(nodes['askedText']?.['textContent'], '2 sessions in this folder are called “main”.');
   assert.strictEqual(nodes['askedAt']?.['textContent'], '', 'a count was drawn for nothing');
+  assert.strictEqual(nodes['askedNext']?.['disabled'], true, 'arrows offered to step through nothing');
 });
 
 test('the chat page carries nothing from the host into the webview', () => {

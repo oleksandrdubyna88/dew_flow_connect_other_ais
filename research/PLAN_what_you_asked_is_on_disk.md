@@ -1,11 +1,11 @@
 # PLAN — two ways to ask, and a button that remembers what you asked
 
-> Status: **plan only, nothing implemented yet.** Scope: the chat tab's header and the Claude Code
-> session reader — `src_vs_code/src/chatPage.ts`, `chatCommand.ts`, `chatPanel.ts`, `chatMessages.ts`,
-> `claudeQuestion.ts`, `claudeSessions.ts`, and the five help catalogs.
+> Status: **IMPLEMENTED, 2026-09-12.** All three parts shipped together. Scope: the chat tab's header
+> and the Claude Code session reader — `src_vs_code/src/chatPage.ts`, `chatCommand.ts`, `chatPanel.ts`,
+> `chatMessages.ts`, `chatTabs.ts`, `claudeQuestion.ts`, `claudeSessions.ts`, and the five help catalogs.
 >
-> Related docs: [PLAN_the_chat_opens_anywhere.md](../research/PLAN_the_chat_opens_anywhere.md), which
-> built the session reader this extends.
+> Related docs: [PLAN_the_chat_opens_anywhere.md](PLAN_the_chat_opens_anywhere.md), which built the
+> session reader this extends; [module_extension.md](module_extension.md) documents what shipped.
 
 ## Part 1 — two menu items that say what they do
 
@@ -155,3 +155,48 @@ slash — measured on this machine's own session files, where every one reads
 - [ ] Help updated in English, Russian, Ukrainian, German and Spanish in the same commit.
 - [ ] `npm run typecheck` clean, the whole suite green, and the bundled-page test watched red before
       it was watched green.
+
+## What shipped differently
+
+Everything above shipped. Five things are not in the plan, and every one of them came from the gate.
+
+**The whole read is streamed, and stops.** The plan said nothing about how the file would be read,
+and the first implementation read every candidate session file into a string and split it into an
+array of lines — to compare a title. Five reviewers across two vendors measured the same shape at
+10× and called it seconds of a blocked extension host. `promptsInSession` now makes two passes with
+`node:readline`: titles only over every candidate, then prompts over the one that matched, stopping
+at `MOST_PROMPTS`. `humanPrompts(lines)` was replaced by `humanSaid(line)` for it; the array wrapper
+was deleted rather than kept, because a function its own tests keep alive is a second implementation
+waiting to drift.
+
+**Two workspace ROOTS holding same-titled sessions was the same bug one level up.** `onShowAsked`
+returned on the first folder that answered, so a tab was shown whichever root VS Code listed first.
+`oneAnswerFrom` is now a pure decision over every folder's answer: exactly one is an answer, two are
+a refusal that says so, none gives the first reason.
+
+**The seam carries a sequence number.** Opening, folding and opening again starts a second read while
+the first is still running, and the slower one landing last would replace what was just asked for.
+The host counts presses per conversation; the page ignores anything older than the newest it has seen.
+
+**A record that does not say which door it came through is NOT a session — the plan said the
+opposite, and it was wrong.** The plan argued that an absent `fromSession` should read as `true` so a
+long-running session tab keeps its button across the upgrade, and the plan round's finding on it was
+rejected with that reasoning. The code round came back with the case that settles it: a file chat
+called `README.md`, restored in a folder holding a session Claude happened to name `README.md`, would
+show that session's words inside the file's tab. Handing over another conversation silently is the one
+outcome this entire join exists to prevent, and it outranks a button missing from stored tabs until
+they are opened again. Absent now reads as `false`.
+
+**Every text block of a turn is joined, and the command envelope is anchored.** A prefilled preamble
+and the person's own question can be two blocks of one message, and returning at the first cut their
+words in half. `<command-name>` is unwrapped only at the start of a message, since the same tags
+mid-sentence are somebody quoting them.
+
+## The open tail
+
+- The button finds nothing until Claude Code has NAMED the conversation — before the first `ai-title`
+  row there is nothing to join to. It says so rather than going quiet. There is no better join
+  available from an extension: VS Code exposes no window id, and this product does not launch Claude
+  Code, so it has no channel to that webview. Revisit if Anthropic ever puts the session id on the tab.
+- The earliest 200 turns are what crosses. A session with more than that cannot be paged further from
+  the page today; nobody has asked to.

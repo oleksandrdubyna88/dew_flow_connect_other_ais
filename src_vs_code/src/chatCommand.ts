@@ -65,7 +65,7 @@ import {
 import { LanguageCode } from './settingsShape';
 import { isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
 import { askedAsText } from './claudeQuestion';
-import { promptsInSession, waitingQuestion } from './claudeSessions';
+import { oneAnswerFrom, promptsInSession, waitingQuestion } from './claudeSessions';
 import { EditorText, confirmWholeFile, passageFromEditor } from './editorPassage';
 import { triggerPlan } from './chatTrigger';
 import { Vendor } from './vendors';
@@ -227,6 +227,14 @@ interface Thread extends ChatMemory {
 }
 
 const threads = new WeakMap<object, Thread>();
+
+/**
+ * How many times each conversation has asked what was written in its session.
+ *
+ * <p>The number is the only thing that tells a late answer from a current one, and it lives here
+ * rather than on the thread because it is about presses rather than about the conversation.</p>
+ */
+const asking = new WeakMap<object, number>();
 
 /**
  * Where conversations are kept so a window reload does not empty them. Set once, in `activate`.
@@ -1532,31 +1540,43 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
       onShowAsked: (id) => {
         const found = panels.entryOf(id);
         const mine = threads.get(id);
-        if (found === undefined || mine === undefined) {
+        if (found === undefined) {
+          // The tab is gone; there is nobody to answer.
+          return;
+        }
+        if (mine === undefined) {
+          // SAID, not left silent. The page paints "Reading the session…" the moment the region
+          // opens, and a hook that returns without posting leaves that there for as long as the tab
+          // is open. (gemini, the code round.)
+          found.panel.post({
+            type: 'asked',
+            at: Number.MAX_SAFE_INTEGER,
+            asked: [],
+            refusal: 'This conversation is no longer held by the extension, so its session cannot be found.',
+          });
+
           return;
         }
         const folders = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
         const caseBlind = process.platform === 'win32' || process.platform === 'darwin';
+        // WHICH PRESS THIS IS. Opening, folding and opening again starts a second read while the
+        // first is still going, and the slower one landing last would replace what the person just
+        // asked for with what they asked for before. The page keeps the highest it has seen and
+        // ignores anything older. (codex and gemini, the code round, on both halves of it.)
+        const at = (asking.get(id) ?? 0) + 1;
+        asking.set(id, at);
         void (async () => {
-          let refusal = 'This window has no folder open, so there is nowhere to look for a session.';
-          let named = false;
-          for (const folder of folders) {
-            const answer = await promptsInSession(os.homedir(), folder, caseBlind, mine.title);
-            if (answer.kind === 'said') {
-              found.panel.post({ type: 'asked', asked: answer.said, refusal: '' });
-
-              return;
-            }
-            // The FIRST reason, not the last: with several folders open, whichever happened to
-            // be checked last is no more relevant than the one before it, and replacing the reason
-            // each time round leaves the person reading about a folder they were not asking about.
-            refusal = named ? refusal : answer.refusal;
-            named = true;
-          }
+          // EVERY folder, never the first that answers — see `oneAnswerFrom`.
+          const answers = await Promise.all(
+            folders.map((folder) => promptsInSession(os.homedir(), folder, caseBlind, mine.title)),
+          );
+          const answer = oneAnswerFrom(answers);
           // A REASON, never a blank region. Four situations look identical from an empty box — no
           // session file, no folder, a namesake it refuses to pick between, and a conversation the
           // person has not spoken in yet — and the box is the only place they are looking.
-          found.panel.post({ type: 'asked', asked: [], refusal });
+          found.panel.post(answer.kind === 'said'
+            ? { type: 'asked', at, asked: answer.said, refusal: '' }
+            : { type: 'asked', at, asked: [], refusal: answer.refusal });
         })();
       },
       onStop: (id, turn) => {
@@ -1814,7 +1834,7 @@ function restoredPage(
       turn: 0,
       failure: ready.ok ? reloadedNote(saved.modelId) : ready.refusal,
       draft: '',
-      fromSession: saved.fromSession ?? true,
+      fromSession: saved.fromSession === true,
       asked: [],
       marks: {
         role: presets.modelPresets.find((one) => one.id === (ready.ok ? ready.providerId : restored.providerId))?.startingPrompt ?? '',
@@ -1871,9 +1891,16 @@ export function restoreConversation(
     presses: 0,
     ourDraft: '',
     // Which door opened it is remembered across the reload, so a chat restored from a `.md` does
-    // not come back offering to read a session there was never one of. An older record, written
-    // before the field existed, reads as a session tab — which every tab was when it was written.
-    fromSession: saved.fromSession ?? true,
+    // not come back offering to read a session there was never one of.
+    //
+    // A record written BEFORE the field existed says nothing, and nothing is read as not a session.
+    // The plan round argued the other way — absent as `true`, so a long-running session tab keeps
+    // its button across the upgrade — and the code round answered it with the case that settles it:
+    // a file chat called `README.md` in a folder holding a session Claude named `README.md` would
+    // show that session's words inside the file's tab. Handing over another conversation silently is
+    // the one outcome this whole join exists to prevent, and it outranks a button that is missing
+    // from stored tabs until they are opened again. (codex, twice, from two roles.)
+    fromSession: saved.fromSession === true,
     running: false,
     turn: 0,
     // Replaced by `reopened` with the rules of whatever model actually answers — this conversation

@@ -1,6 +1,8 @@
 import * as fs from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import * as readline from 'node:readline';
 import * as path from 'node:path';
-import { AskedSet, humanPrompts, lastAsked } from './claudeQuestion';
+import { AskedSet, humanSaid, lastAsked, titleSaid } from './claudeQuestion';
 
 /**
  * Where Claude Code keeps its sessions, and which of them is the one being looked at.
@@ -160,6 +162,37 @@ function where(reason: unknown): string {
 }
 
 /**
+ * One answer from however many folders were looked in.
+ *
+ * <p>FIRST-MATCH-WINS was the bug. `onShowAsked` returned as soon as a folder produced prompts, so
+ * in a workspace with two roots each holding a session called *Build*, the tab was shown whichever
+ * folder VS Code happened to list first — the exact silent cross-session hand-over the title join
+ * exists to prevent. Five reviewers across two vendors, on one round.</p>
+ *
+ * <p>So: every folder is looked in, and exactly one match is an answer. Two are a refusal that says
+ * so. None is the first reason given, because with several roots open the nearest miss is more use
+ * than whichever folder happened to be checked last.</p>
+ */
+export function oneAnswerFrom(answers: readonly Asked[]): Asked {
+  const said = answers.filter((one) => one.kind === 'said');
+  if (said.length === 1) {
+    return said[0]!;
+  }
+  if (said.length > 1) {
+    return {
+      kind: 'several',
+      refusal: `${said.length} of the folders open here have a session by this tab's name, so it cannot say which one is its own.`,
+    };
+  }
+  const several = answers.find((one) => one.kind === 'several');
+
+  return several ?? answers[0] ?? {
+    kind: 'none',
+    refusal: 'This window has no folder open, so there is nowhere to look for a session.',
+  };
+}
+
+/**
  * The most turns that cross to a webview at once, and the most of each.
  *
  * <p>A day-long session holds hundreds of turns and some of them are whole files pasted in. All of
@@ -225,17 +258,14 @@ export async function promptsInSession(
   if (!Array.isArray(files)) {
     return { kind: 'none', refusal: (files as ReadFailure).refusal };
   }
-  const matched: string[][] = [];
+  // TITLES FIRST, and nothing else. Which file this tab owns is one string per file; the prompts are
+  // the whole conversation. Reading both in one pass meant a folder of fifty sessions was fifty
+  // whole files in memory to answer a question about fifty titles. Two reviewers measured the same
+  // shape at 10x and called it seconds of a blocked extension host.
+  const matched: string[] = [];
   for (const file of files) {
-    let body: string;
-    try {
-      body = await fs.readFile(file, 'utf8');
-    } catch {
-      continue;
-    }
-    const lines = body.split('\n');
-    if (titleIn(lines) === looking) {
-      matched.push([...humanPrompts(lines)]);
+    if (await titleOf(file) === looking) {
+      matched.push(file);
     }
   }
   if (matched.length > 1) {
@@ -244,44 +274,80 @@ export async function promptsInSession(
       refusal: `${matched.length} sessions in this folder are called “${looking}”, so this tab cannot say which one is its own.`,
     };
   }
-  const said = matched[0];
-  if (said === undefined) {
+  const only = matched[0];
+  if (only === undefined) {
     return {
       kind: 'none',
       refusal: `No session in this folder is called “${looking}” — Claude Code names a conversation once it has one.`,
     };
   }
+  const said = await promptsOf(only);
   if (said.length === 0) {
     return { kind: 'none', refusal: 'Nothing of yours is in that session yet.' };
   }
 
-  return { kind: 'said', said: bounded(said) };
+  return { kind: 'said', said };
 }
 
-/** The earliest turns, each cut where it is too long to carry, saying so where it was cut. */
-function bounded(said: readonly string[]): readonly string[] {
-  return said.slice(0, MOST_PROMPTS).map((one) =>
-    one.length <= MOST_PER_PROMPT ? one : `${one.slice(0, MOST_PER_PROMPT)}\n\n… (cut here — the rest is in the session file)`);
-}
-
-/** What a session calls itself, or empty — the last title wins, as the tab shows the newest. */
-function titleIn(lines: readonly string[]): string {
-  let title = '';
-  for (const line of lines) {
-    if (!line.includes('"ai-title"')) {
-      continue;
-    }
-    try {
-      const row = JSON.parse(line) as { type?: unknown; aiTitle?: unknown };
-      if (row.type === 'ai-title' && typeof row.aiTitle === 'string' && row.aiTitle.length > 0) {
-        title = row.aiTitle;
+/**
+ * Every line of a file, one at a time, stopping when the caller has what it needs.
+ *
+ * <p>`readline` over a stream rather than `readFile` + `split`: the second allocates the whole file
+ * as a string AND again as an array of lines, and these files are tens of megabytes after a long
+ * day. A file that cannot be opened or read is not an error here — another product owns this
+ * directory and is writing in it — so it contributes nothing and the next one is tried.</p>
+ */
+async function eachLine(file: string, take: (line: string) => boolean): Promise<void> {
+  let lines: readline.Interface | undefined;
+  try {
+    lines = readline.createInterface({ input: createReadStream(file, 'utf8'), crlfDelay: Infinity });
+    for await (const line of lines) {
+      if (!take(line)) {
+        return;
       }
-    } catch {
-      // A half-written line names nothing.
     }
+  } catch {
+    // Locked, gone, or not text. What has been taken so far stands.
+  } finally {
+    lines?.close();
   }
+}
+
+/** What a session calls itself — the LAST title, as the tab shows the newest. */
+async function titleOf(file: string): Promise<string> {
+  let title = '';
+  await eachLine(file, (line) => {
+    const named = titleSaid(line);
+    if (named.length > 0) {
+      title = named;
+    }
+
+    return true;
+  });
 
   return title;
+}
+
+/**
+ * What the person wrote in one session, EARLIEST first, and no more than will fit.
+ *
+ * <p>It stops at {@link MOST_PROMPTS}: the question this answers is what the window was FOR, so the
+ * earliest turns are the ones worth carrying, and a day-long session need not be read past them.</p>
+ */
+async function promptsOf(file: string): Promise<readonly string[]> {
+  const said: string[] = [];
+  await eachLine(file, (line) => {
+    const spoken = humanSaid(line);
+    if (spoken.length > 0) {
+      said.push(spoken.length <= MOST_PER_PROMPT
+        ? spoken
+        : `${spoken.slice(0, MOST_PER_PROMPT)}\n\n… (cut here — the rest is in the session file)`);
+    }
+
+    return said.length < MOST_PROMPTS;
+  });
+
+  return said;
 }
 
 /**
