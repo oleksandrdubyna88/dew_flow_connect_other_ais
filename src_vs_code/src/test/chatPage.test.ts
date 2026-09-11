@@ -1663,7 +1663,9 @@ test('pressing a preset names it to the host and nothing else', () => {
 
   assert.deepStrictEqual(page.posted.filter((message) => String(message['command']).startsWith('use')), [
     { type: 'command', command: 'usePromptPreset', id: 'p2' },
-    { type: 'command', command: 'useModelPreset', id: 'm2' },
+    // WITH the composer, because whether a starting prompt may land depends on whether there is
+    // anything to overwrite — and only this side knows what is in the box.
+    { type: 'command', command: 'useModelPreset', id: 'm2', text: '' },
   ]);
 });
 

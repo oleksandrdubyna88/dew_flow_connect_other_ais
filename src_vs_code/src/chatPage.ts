@@ -913,7 +913,13 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       if (typeof pressed.dataset.promptPreset === 'string') {
         vscode.postMessage({ type: 'command', command: 'usePromptPreset', id: pressed.dataset.promptPreset });
       } else if (typeof pressed.dataset.modelPreset === 'string') {
-        vscode.postMessage({ type: 'command', command: 'useModelPreset', id: pressed.dataset.modelPreset });
+        // WITH what is in the composer. A model preset can carry a starting prompt, and whether that
+        // may land depends on whether there is anything to overwrite - which only this side knows.
+        const box = document.getElementById('say');
+        vscode.postMessage({
+          type: 'command', command: 'useModelPreset', id: pressed.dataset.modelPreset,
+          text: box ? box.value : '',
+        });
       }
     });
   }

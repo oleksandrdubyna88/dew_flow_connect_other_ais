@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { chatCommandOf, isInside } from '../chatMessages';
+import { chatCommandOf, offersPair, isInside } from '../chatMessages';
 
 /**
  * What the page said, read without a host.
@@ -48,8 +48,13 @@ test('a pick carries the PAIR, and one naming no provider is ignored', () => {
 test('a preset button names which preset, and a nameless press is ignored', () => {
   assert.deepStrictEqual(
     chatCommandOf({ type: 'command', command: 'usePromptPreset', id: 'p2' }), { kind: 'usePrompt', id: 'p2' });
+  // A model preset carries what the composer held: its starting prompt lands only into an empty box.
   assert.deepStrictEqual(
-    chatCommandOf({ type: 'command', command: 'useModelPreset', id: 'm2' }), { kind: 'useModel', id: 'm2' });
+    chatCommandOf({ type: 'command', command: 'useModelPreset', id: 'm2', text: 'half a question' }),
+    { kind: 'useModel', id: 'm2', draft: 'half a question' });
+  assert.deepStrictEqual(
+    chatCommandOf({ type: 'command', command: 'useModelPreset', id: 'm2' }),
+    { kind: 'useModel', id: 'm2', draft: '' });
   assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'usePromptPreset', id: '' }), { kind: 'ignore' });
   assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'useModelPreset' }), { kind: 'ignore' });
 });
@@ -199,4 +204,35 @@ test('an extensionless file a model names is still a file', () => {
       `${named} was refused as a workspace file`,
     );
   }
+});
+
+/**
+ * Which pairs a conversation offers — the check that stands between a page and somebody's bill.
+ *
+ * <p>The plan round (codex, Major) pointed out that parsing was tested and this was not: a build can
+ * accept every message and still apply a pair nobody was offered. It lives here, pure, for that
+ * reason — the dispatcher that calls it imports `vscode` and no unit test can reach it.</p>
+ */
+test('a pair is offered only when THAT provider offers THAT model', () => {
+  const pairs = new Map([
+    ['agy', new Set(['gemini-3.8-flash-low'])],
+    ['claude-row', new Set(['sonnet'])],
+  ]);
+
+  assert.strictEqual(offersPair(pairs, 'agy', 'gemini-3.8-flash-low'), true);
+  // A model offered by SOMEBODY is not a model offered by this provider — `vendor-routing.md` is the
+  // reason, and it is the rule `resolveChatPick` keeps one step later.
+  assert.strictEqual(offersPair(pairs, 'agy', 'sonnet'), false);
+  assert.strictEqual(offersPair(pairs, 'nobody', 'sonnet'), false);
+});
+
+test('an empty model is a legitimate half, but only under a provider that IS offered', () => {
+  const pairs = new Map([['agy', new Set(['gemini-3.8-flash-low'])]]);
+
+  assert.strictEqual(offersPair(pairs, 'agy', ''), true, 'a provider change was refused');
+  assert.strictEqual(offersPair(pairs, 'gone', ''), false, 'an unknown provider slipped through on an empty model');
+});
+
+test('a conversation that has been told nothing offers nothing', () => {
+  assert.strictEqual(offersPair(undefined, 'agy', ''), false);
 });

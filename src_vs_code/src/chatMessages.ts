@@ -55,8 +55,15 @@ export type ChatCommand =
   | { readonly kind: 'pick'; readonly provider: string; readonly model: string }
   /** A saved prompt was pressed: its words go into the composer. */
   | { readonly kind: 'usePrompt'; readonly id: string }
-  /** A saved model was pressed: its provider and model answer from now on. */
-  | { readonly kind: 'useModel'; readonly id: string }
+  /**
+   * A saved model was pressed: its provider and model answer from now on.
+   *
+   * <p>`draft` is what the composer held at that moment. A model preset can carry a starting prompt,
+   * and it lands only into an EMPTY box: switching model half-way through writing a question is not
+   * a request to throw the question away. The prompt button beside it does replace, because that
+   * button IS the instruction "ask this instead".</p>
+   */
+  | { readonly kind: 'useModel'; readonly id: string; readonly draft: string }
   /**
    * End the turn numbered `turn`, and no other. Always 1 or more.
    *
@@ -243,7 +250,7 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
     case 'useModelPreset': {
       const id = text(message.id);
 
-      return id.length === 0 ? IGNORE : { kind: 'useModel', id };
+      return id.length === 0 ? IGNORE : { kind: 'useModel', id, draft: text(message.text) };
     }
     case 'stop': {
       const turn = turnOf(message.turn);
@@ -284,4 +291,31 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
     default:
       return IGNORE;
   }
+}
+
+/**
+ * Whether a conversation offers that pair — the check that stands between a page and somebody's bill.
+ *
+ * <p>A page can post any pair it likes: a stale retained webview certainly will, and a tampered one
+ * might. Choosing a model is choosing who gets paid, so the pair is checked against what this
+ * conversation was actually offered rather than trusted.</p>
+ *
+ * <p><b>Checked as a PAIR.</b> A model offered by SOMEBODY is not a model offered by THIS provider —
+ * `vendor-routing.md` is the reason, and it is the same rule `resolveChatPick` applies one step
+ * later. An EMPTY model is a legitimate half: the page sends none when the provider moved, because
+ * the model that was showing belonged to the provider being left. The PROVIDER must be offered
+ * either way.</p>
+ *
+ * <p>Here, pure, rather than beside the dispatcher that calls it: that module imports `vscode`, so
+ * nothing there can be unit-tested — which the plan round named as the gap that let a build accept
+ * every message and still apply a pair nobody was offered.</p>
+ */
+export function offersPair(
+  pairs: ReadonlyMap<string, ReadonlySet<string>> | undefined,
+  providerId: string,
+  modelId: string,
+): boolean {
+  const models = pairs?.get(providerId);
+
+  return models !== undefined && (modelId.length === 0 || models.has(modelId));
 }
