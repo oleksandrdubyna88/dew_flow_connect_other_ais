@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { chatPresetsHtml, editRepaints, presetEdit } from '../chatPresetsPage';
+import { chatPresetsHtml, editRepaints, editedRows, presetEdit } from '../chatPresetsPage';
 
 /**
  * The tab where a person keeps their prompts and their models.
@@ -167,3 +167,13 @@ test('unticking is redrawn too, so the list cannot be left showing none', () => 
 // policy in the page parser, consulted by the host for edits only, is a rule with a test and no
 // effect: changing what it says about `add` would move a test and nothing else. Whether an add
 // redraws depends on whether it was refused, which only the host knows. (gemini, the code round.)
+
+test('an edit naming a row that is not in the list is a no-op the host can see', () => {
+  // CodeRabbit on PR #198: `edited` mapped over the rows and produced a NEW array with identical
+  // content, and the host's reference check read that as a change and wrote the file back. The same
+  // class as the `main` no-ops the code round found, through the field that is not `main`.
+  const rows = [{ id: 'a', name: 'A', text: 'a', main: true }];
+
+  assert.strictEqual(editedRows(rows, { kind: 'edit', list: 'prompt', id: 'gone', field: 'name', value: 'x' }), rows);
+  assert.notStrictEqual(editedRows(rows, { kind: 'edit', list: 'prompt', id: 'a', field: 'name', value: 'B' }), rows);
+});

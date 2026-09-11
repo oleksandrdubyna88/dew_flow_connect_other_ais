@@ -254,6 +254,10 @@ test('adding a model prunes what the old defect wrote, and seeds a row the reade
   const written = modelRowsAfterAdd(rows, 'agy');
 
   assert.notStrictEqual(written, undefined);
+  // On the WHOLE list, not its first entry: CodeRabbit pointed out that a head-only assertion passes
+  // while `dead-2` is still in what gets written, because the reader filters it out again on the way
+  // back and hides exactly what this is meant to catch.
+  assert.deepStrictEqual(written!.filter(deadModelRow), [], 'a dead row survived the write');
   assert.deepStrictEqual(written!.map((row: Record<string, unknown>) => row['id']).slice(0, 1), ['real'], 'the dead rows survived the write');
   assert.strictEqual(chatModelPresetsFrom(written!).length, 2, 'the row that was added is not one the reader keeps');
 });
