@@ -222,16 +222,22 @@ export function presetById<T extends { readonly id: string }>(
  *   all, so the caller resolves one before offering to create it rather than writing an empty string
  *   and hoping.
  */
-export function freshPreset(
-  list: 'prompt' | 'model',
-  taken: readonly { readonly id: string }[],
-  providerId = '',
-): Record<string, unknown> {
-  const id = `preset-${Date.now().toString(36)}-${taken.length + 1}`;
+function freshId(taken: readonly { readonly id: string }[]): string {
+  return `preset-${Date.now().toString(36)}-${taken.length + 1}`;
+}
 
-  return list === 'prompt'
-    ? { id, name: 'New prompt', text: 'Explain', main: false }
-    : { id, name: 'New model', provider: providerId, model: '' };
+export function freshPromptRow(taken: readonly { readonly id: string }[]): SavedRow {
+  return { id: freshId(taken), name: 'New prompt', text: 'Explain', main: false };
+}
+
+/**
+ * @param providerId the row this preset answers through. REQUIRED, and that is the second half of
+ *   the fix: one factory with a DEFAULTED provider left the original defect available to the next
+ *   caller who forgot the argument. `model` is deliberately empty — the documented "whatever the row
+ *   is set to" — because seeding one would pick a model on somebody's behalf.
+ */
+export function freshModelRow(taken: readonly { readonly id: string }[], providerId: string): SavedRow {
+  return { id: freshId(taken), name: 'New model', provider: providerId, model: '' };
 }
 
 /**
@@ -272,7 +278,7 @@ export function modelRowsAfterAdd(
   }
   const kept = rows.filter(readableModelRow);
 
-  return [...kept, freshPreset('model', kept as { id: string }[], providerId)];
+  return [...kept, freshModelRow(kept as { id: string }[], providerId)];
 }
 
 /**
@@ -289,10 +295,18 @@ export function promptRowsAfterMain(
   id: string,
   ticked: boolean,
 ): readonly SavedRow[] {
+  // An id naming no row rewrites NOTHING. A webview message can arrive after the prompt it names was
+  // removed in another window, and mapping over the list would then set every flag to false: no tick
+  // on the page while `mainPrompt` falls back to the first prompt. The list ITSELF comes back, so the
+  // caller can tell a no-op from a change and skip a write that would say the same thing.
+  // (codex and gemini, the code round, from two directions.)
+  if (!rows.some((row) => row['id'] === id)) {
+    return rows;
+  }
   if (!ticked) {
     const others = rows.some((row) => row['id'] !== id && row['main'] === true);
 
-    return others ? rows.map((row) => (row['id'] === id ? { ...row, main: false } : row)) : [...rows];
+    return others ? rows.map((row) => (row['id'] === id ? { ...row, main: false } : row)) : rows;
   }
 
   return rows.map((row) => ({ ...row, main: row['id'] === id }));

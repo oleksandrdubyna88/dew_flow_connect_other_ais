@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import {
   chatModelPresetsFrom,
   chatPromptPresetsFrom,
-  freshPreset,
+  freshModelRow,
+  freshPromptRow,
   mainPrompt,
   modelRowsAfterAdd,
   promptRowsAfterMain,
@@ -208,7 +209,7 @@ test('the answer before last is kept, because the conversation is not the last e
  * values; the model side seeded the field its own reader refuses on.</p>
  */
 test('a new model preset survives the reader that will render it', () => {
-  const kept = chatModelPresetsFrom([freshPreset('model', [], 'agy')]);
+  const kept = chatModelPresetsFrom([freshModelRow([], 'agy')]);
 
   assert.strictEqual(kept.length, 1, 'the row a press of Add a model writes is dropped by the reader');
   assert.strictEqual(kept[0]!.provider, 'agy');
@@ -216,7 +217,7 @@ test('a new model preset survives the reader that will render it', () => {
 });
 
 test('a new prompt preset survives its reader too, which is why that button always worked', () => {
-  const kept = chatPromptPresetsFrom([freshPreset('prompt', [])]);
+  const kept = chatPromptPresetsFrom([freshPromptRow([])]);
 
   assert.strictEqual(kept.length, 1);
   assert.strictEqual(kept[0]!.name, 'New prompt');
@@ -225,12 +226,12 @@ test('a new prompt preset survives its reader too, which is why that button alwa
 test('the reader still refuses a model row with no provider — the rule did not move', () => {
   // The fix is the SEED, not a loosened reader: a preset that names no row names nothing that can
   // answer, and the two button rows above the composer would render it as a button that does nothing.
-  assert.deepStrictEqual(chatModelPresetsFrom([freshPreset('model', [], '')]), []);
+  assert.deepStrictEqual(chatModelPresetsFrom([freshModelRow([], '')]), []);
 });
 
 test('two new rows in a row do not share an id', () => {
-  const first = freshPreset('model', [], 'agy');
-  const second = freshPreset('model', [first as { id: string }], 'agy');
+  const first = freshModelRow([], 'agy');
+  const second = freshModelRow([first as { id: string }], 'agy');
 
   assert.notStrictEqual(first['id'], second['id'], 'a second press produced a row that shadows the first');
 });
@@ -287,4 +288,31 @@ test('unticking one that is not the main one changes nothing it should not', () 
   const rows = [{ id: 'a', name: 'A', text: 'a', main: true }, { id: 'b', name: 'B', text: 'b', main: false }];
 
   assert.deepStrictEqual(promptRowsAfterMain(rows, 'b', false).map((row: Record<string, unknown>) => row['main']), [true, false]);
+});
+
+test('a main edit naming a prompt that is not there changes NOTHING', () => {
+  // The code round, from codex and gemini independently: a webview message can name a row that was
+  // removed in another window, and `rows.map(row => ({...row, main: row.id === id}))` then sets every
+  // flag to false. The page shows no tick while `mainPrompt` falls back to the first prompt — the
+  // exact state the untick refusal above exists to prevent, reached through a different door.
+  const rows = [{ id: 'a', name: 'A', text: 'a', main: true }, { id: 'b', name: 'B', text: 'b', main: false }];
+
+  assert.strictEqual(promptRowsAfterMain(rows, 'gone', true), rows, 'an unknown id rewrote the list');
+  assert.strictEqual(promptRowsAfterMain(rows, 'gone', false), rows, 'an unknown id rewrote the list');
+});
+
+test('a refused untick returns the list ITSELF, so the caller can skip a write that changes nothing', () => {
+  const rows = [{ id: 'a', name: 'A', text: 'a', main: true }];
+
+  assert.strictEqual(promptRowsAfterMain(rows, 'a', false), rows, 'a no-op still produced a new list to write');
+});
+
+test('a model row cannot be built without the reviewer that answers it', () => {
+  // The code round (codex): `freshPreset('model', rows)` was callable and defaulted the provider to
+  // an empty string, which is the original defect available to the next caller. Two factories now,
+  // and the model one cannot be called without the row it answers through.
+  const row = freshModelRow([], 'agy');
+
+  assert.strictEqual(chatModelPresetsFrom([row]).length, 1);
+  assert.strictEqual(chatPromptPresetsFrom([freshPromptRow([])]).length, 1);
 });

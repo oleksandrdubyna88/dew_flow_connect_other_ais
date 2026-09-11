@@ -887,6 +887,17 @@ one, which is exactly what codex said. And unticking the ONLY main prompt is ref
 marks nothing when nothing is ticked and `mainPrompt` then falls back to the first, so the page would
 have shown no tick while the first prompt was quietly what a capture sends.
 
+**And what the code round then found in the fix itself.** The prune and the first render were
+started side by side, so the page painted the very rows the prune was removing — it is AWAITED
+before the panel is created now, and a cleanup that fails is logged rather than left as an unhandled
+rejection. A `main` edit naming a row that is not there rewrote every flag to `false` (a webview
+message can outlive the prompt it names), so an unknown id now changes nothing; and a refused untick
+returns the list ITSELF, which is how the host knows to skip a configuration write that would say
+the same thing. `freshPreset` became `freshPromptRow` and `freshModelRow`, the second with a
+REQUIRED provider — one factory with a defaulted one left the original defect available to the next
+caller who forgot the argument. And the sibling-unticking branch inside `edited` was left dead by
+the move and is gone: dead code beside a live rule is the second copy that drifts.
+
 **`coai.editChatPresets` reached a menu.** It shipped registered, in no `contributes.menus` entry and
 named in no view, so the tab it opens was reachable only from the command palette. The section has an
 **Edit presets…** button, routed like *Install the MCP server…* through `VSCODE_COMMAND_FOR`.
