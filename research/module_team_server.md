@@ -648,11 +648,26 @@ vendor may take, which is the caller's own `timeoutSeconds`);
 `Auth:Microsoft:Tenant|Audiences|ClientScope`,
 `Auth:Google:Enabled|Audiences`, `Auth:Local:SigningKey`. Environment form uses `__`.
 
-**Startup refuses** when no scheme is configured, when a Microsoft tenant has no audiences, when the
-domain list is empty without the explicit override, when a Local signing key is under 32 bytes, when
-`SessionTtlDays` is not positive, or when `DataDir` cannot be written — each with the sentence that
-names the cure. A misconfiguration that starts is a server that answers 401 or 403 to everything with
-nothing in the log connecting the two.
+**Startup refuses** when no scheme is configured, when a Microsoft tenant has no audiences, **when
+Google is enabled with no audiences**, when the domain list is empty without the explicit override,
+when a Local signing key is under 32 bytes, when `SessionTtlDays` is not positive, or when `DataDir`
+cannot be written — each with the sentence that names the cure. A misconfiguration that starts is a
+server that answers 401 or 403 to everything with nothing in the log connecting the two.
+
+**The Google refusal was added on 2026-09-11 and is the same defect as the Microsoft one, one provider
+over** (product audit of 2026-09-09, finding 9). The paragraph justifying the Microsoft guard had been
+written, agreed and never carried across, so `Auth.cs` read `ValidateAudience = googleAudiences.Count > 0`
+— a configuration mistake turning the check OFF instead of stopping the server. A Google ID token is
+handed to every application a person signs into with Google, so without an audience check any
+third-party app a colleague ever used could present that colleague here; issuer, signature, lifetime,
+the allowed domain and `email_verified` stay checked, which is why it is a privilege path rather than
+anonymous access and why it read as safe. `ValidateAudience` is unconditional now, because the guard
+means there is no longer a state in which it could be false.
+
+`coai.remsoft.dev` has Google disabled and Microsoft only, so this closed a door for the next
+deployment rather than an open one here. What is NOT covered: no test presents a Google token with the
+wrong `aud` and observes the 401 — the guard is tested, the enforcement is a request. The trigger is
+written into the plan: that test is owed before Google is enabled anywhere.
 
 ## What is on disk
 

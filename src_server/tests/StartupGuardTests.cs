@@ -15,6 +15,7 @@ public sealed class StartupGuardTests
         string? tenant = null,
         IReadOnlyCollection<string>? audiences = null,
         bool google = false,
+        IReadOnlyCollection<string>? googleAudiences = null,
         string? localKey = "coai-server-test-signing-key-32b!!",
         IReadOnlyCollection<string>? domains = null,
         bool allowAny = false,
@@ -24,6 +25,7 @@ public sealed class StartupGuardTests
             tenant,
             audiences ?? [],
             google,
+            googleAudiences ?? [],
             !string.IsNullOrWhiteSpace(localKey),
             localKey,
             domains ?? Company,
@@ -88,6 +90,36 @@ public sealed class StartupGuardTests
     /// checked when this was written and carries no local key, so nothing was open; this closes
     /// the door rather than an incident.</para>
     /// </remarks>
+    /// <summary>
+    /// The same defect as the Microsoft one above, one identity provider over.
+    /// </summary>
+    /// <remarks>
+    /// <para>Found by the product audit of 2026-09-09 (finding 9) and not by anybody using it. The
+    /// paragraph justifying the Microsoft guard was written, agreed and never carried across, so
+    /// <c>Auth.cs</c> read <c>ValidateAudience = googleAudiences.Count > 0</c> — a configuration
+    /// mistake silently turning the check off instead of stopping the server.</para>
+    /// <para>A Google ID token is handed to EVERY application a person signs into with Google, so
+    /// without an audience check any third-party app a colleague ever used could present that
+    /// colleague here. Issuer, signature, lifetime, the allowed domain and <c>email_verified</c> are
+    /// all still checked, which is why this is a privilege path rather than anonymous access — and
+    /// why it read as safe for as long as it did.</para>
+    /// <para><c>coai.remsoft.dev</c> has Google disabled and Microsoft only (the operator, 2026-09-11),
+    /// so this closes a door for the next deployment rather than an open one on that box.</para>
+    /// </remarks>
+    [Fact]
+    public void GoogleEnabledWithNoAudience_RefusesToStart()
+    {
+        Guard(google: true, localKey: null).Should().Throw<InvalidOperationException>()
+            .WithMessage("*Auth:Google:Audiences is empty*")
+            .WithMessage("*minted for ANY application*");
+
+        // `localKey: null` for the reason the Microsoft test gives: a real provider beside the local
+        // scheme is refused by the guard below, so the helper's default key would pass this for the
+        // wrong reason.
+        Guard(google: true, googleAudiences: ["1234.apps.googleusercontent.com"], localKey: null)
+            .Should().NotThrow();
+    }
+
     [Fact]
     public void TheLocalSchemeBesideARealProvider_RefusesToStart()
     {
@@ -95,7 +127,12 @@ public sealed class StartupGuardTests
             .Should().Throw<InvalidOperationException>()
             .WithMessage("*alongside a real identity provider*");
 
-        Guard(google: true).Should().Throw<InvalidOperationException>()
+        // Audiences given, and they have to be: since 2026-09-11 a Google-enabled server with none
+        // is refused BEFORE this check, so without them this half would pass on the wrong sentence —
+        // and its subject is the local scheme beside a REAL provider, which a misconfigured one is
+        // not. The same reason the Microsoft half above carries its audiences.
+        Guard(google: true, googleAudiences: ["1234.apps.googleusercontent.com"])
+            .Should().Throw<InvalidOperationException>()
             .WithMessage("*alongside a real identity provider*");
     }
 

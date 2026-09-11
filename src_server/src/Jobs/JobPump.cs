@@ -105,6 +105,16 @@ public sealed class JobPump(
     }
 
     /// <summary>Claim and start one job, and say whether there might be another.</summary>
+    /// <remarks>
+    /// <b>The wait cannot outlive the run, and that is deliberately a SECOND guard.</b> The runner now
+    /// answers its promise on every exit including a throw, so in principle awaiting the promise alone
+    /// would be enough — but a wait whose correctness depends entirely on somebody else keeping a
+    /// promise is a wait the next edit to that other file breaks, silently and permanently: this loop
+    /// is the only thing that starts work, and a tick that never ends takes the deadline sweep with
+    /// it. So the run itself is one of the things waited on, and a run that ended without signalling
+    /// reads as "nothing started" rather than as for ever. The cancellation path needs no third arm —
+    /// <c>ct</c> is passed into the run, where it reaches the lease and the claim.
+    /// </remarks>
     private async Task<bool> CanStartAsync(string vendorId, CancellationToken ct)
     {
         var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -115,6 +125,8 @@ public sealed class JobPump(
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
 
-        return await started.Task;
+        // Never `await run` — that is the ten-minute review, and awaiting it here would stop every
+        // other vendor's queue for its duration, which is what the promise exists to avoid.
+        return await Task.WhenAny(started.Task, run) == started.Task && await started.Task;
     }
 }
