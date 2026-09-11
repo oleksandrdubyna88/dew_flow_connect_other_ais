@@ -7,8 +7,10 @@
 > *what* and *why* stays in its own plan and is not repeated here.
 >
 > **Shipped:** 1.1, 1.2, 1.3 (epic 1, gated), 2.2, 3.1 and the Google guard (epic 2), 4.1 (epic 4).
-> **Cut on 2026-09-11, each with its reason and its trigger in its own plan:** 2.3 and 2.4 (the prompt
-> ceiling), 3.2 (the second account), 3.3 (the usage window), 4.2 (the process tree). The operator's
+> **Cut on 2026-09-11 — five STORIES across four plans**, each with its reason and its trigger in its
+> own plan: 2.3 and 2.4 are two halves of the prompt-ceiling plan, then 3.2 (the second account),
+> 3.3 (the usage window) and 4.2 (the process tree). Four plans, because the prompt ceiling and the
+> answer ceiling were always one document. The operator's
 > call after being asked which of the ten were worth building; the reasoning is in the plans and in
 > the two documents that were corrected instead of the code.
 >
