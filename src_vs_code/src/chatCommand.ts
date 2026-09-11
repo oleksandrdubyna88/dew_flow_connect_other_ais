@@ -835,6 +835,54 @@ function writeInstruction(
   return true;
 }
 
+/**
+ * The person chose a model — from a preset button, or from the picker under them.
+ *
+ * <p>ONE implementation for both, because they are one decision. The picker used to switch the
+ * session and leave the composer instructed by the model before it, so the next turn went to B
+ * carrying A's role while the marking said A was answering. (codex, the second code round.)</p>
+ *
+ * <p>Everything about the SCREEN happens now; the process follows. A switch that is refused leaves
+ * the old model answering, so the button goes back to it — and nothing else does: the box may have
+ * been typed into while the switch resolved, and the refusal is said out loud instead.</p>
+ */
+function chooseModel(
+  entry: ChatEntry,
+  thread: Thread,
+  preset: ModelPreset,
+  draft: string | undefined,
+  config: vscode.WorkspaceConfiguration,
+): void {
+  const wasChosen = thread.chosenId;
+  const wasRole = thread.role;
+  const was = instructionOf(thread, config);
+  thread.presses += 1;
+  const press = thread.presses;
+  thread.chosenId = preset.id;
+  thread.role = preset.startingPrompt ?? '';
+  if (!writeInstruction(entry, thread, draft, was, config)) {
+    // The box holds something the person wrote, so it keeps the instruction it has — and the
+    // conversation keeps the role that MATCHES it, or the two would disagree about the same words
+    // and the marking behind the box would stop finding them.
+    thread.role = wasRole;
+    if ((preset.startingPrompt ?? '').length > 0) {
+      void vscode.window.showInformationMessage(
+        `${preset.name} opens with its own prompt, and the box holds something you wrote — so it was left alone.`,
+      );
+    }
+  }
+  show(entry, thread.running, '');
+  void switchModel(entry, preset.id, preset.model).then((switched) => {
+    // ONLY IF THIS PRESS IS STILL THE LAST ONE — by count, not by id: pressing A, then B, then A
+    // again would otherwise let the first A's refusal undo the second. (codex, the code round.)
+    if (switched || thread.presses !== press) {
+      return;
+    }
+    thread.chosenId = wasChosen;
+    show(entry, thread.running, '');
+  });
+}
+
 /** What this conversation is instructing with: the model's role, then the prompt's task. */
 function instructionOf(thread: Thread, config: vscode.WorkspaceConfiguration): string {
   return chatInstruction(
@@ -1304,11 +1352,23 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
           void ask(found, text);
         }
       },
-      onPick: (id, providerId, modelId) => {
+      onPick: (id, providerId, modelId, draft) => {
+        const config = vscode.workspace.getConfiguration('coai');
         const found = panels.entryOf(id);
-        if (found !== undefined) {
-          void switchModel(found, providerId, modelId);
+        const mine = threads.get(id);
+        const preset = savedModels(config).find((one) => one.id === providerId);
+        if (found === undefined) {
+          return;
         }
+        // A PRESET is what the first select names, so choosing one there is choosing a model in
+        // every sense the buttons above mean it. The bare switch is what is left for a pick this
+        // side cannot match to a preset — a page one write behind, or the model half alone.
+        if (mine !== undefined && preset !== undefined && modelId.length === 0) {
+          chooseModel(found, mine, preset, draft, config);
+
+          return;
+        }
+        void switchModel(found, providerId, modelId);
       },
       onUsePrompt: (id, presetId, draft) => {
         const found = panels.entryOf(id);
@@ -1324,11 +1384,20 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         // happen every time they pressed a second button. Rebuilt from the same three parts instead.
         const config = vscode.workspace.getConfiguration('coai');
         const was = instructionOf(thread, config);
+        const wasPrompt = thread.promptId;
         // The TASK changes; the role the model carries is untouched, because pressing "explain" does
         // not stop it being an architect. The two buttons run the same three lines with different
         // halves, which is the only way they can go on behaving the same.
         thread.promptId = presetId;
-        writeInstruction(found, thread, draft, was, config);
+        if (!writeInstruction(found, thread, draft, was, config)) {
+          // The box was not rewritten, so the conversation keeps the task the words in it were
+          // written with — otherwise the marking, and the pair recorded with the question when it is
+          // sent, would both name a prompt nothing on screen used. (gemini, the second code round.)
+          thread.promptId = wasPrompt;
+          void vscode.window.showInformationMessage(
+            `${preset.name} replaces the instruction, and the box holds something you wrote — so it was left alone.`,
+          );
+        }
         show(found, thread.running, '');
       },
       onUseModel: (id, presetId, draft) => {
@@ -1339,45 +1408,7 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         if (found === undefined || preset === undefined || mine === undefined) {
           return;
         }
-        // EVERYTHING ABOUT THE SCREEN HAPPENS NOW. Which button is pressed, and whose words are in
-        // the box, are decisions the person just made; neither needs a process. This used to ride on
-        // the switch's answer, so both waited for a CLI to resolve and a session to start — and were
-        // dropped altogether whenever that answered anything but success.
-        const wasChosen = mine.chosenId;
-        const wasRole = mine.role;
-        const was = instructionOf(mine, config);
-        mine.presses += 1;
-        const press = mine.presses;
-        mine.chosenId = preset.id;
-        mine.role = preset.startingPrompt ?? '';
-        if (!writeInstruction(found, mine, draft, was, config)) {
-          // The box holds something the person wrote, so it keeps the instruction it has — and the
-          // conversation keeps the role that MATCHES it, or the two would disagree about the same
-          // words and the marking behind the box would stop finding them.
-          mine.role = wasRole;
-          if ((preset.startingPrompt ?? '').length > 0) {
-            void vscode.window.showInformationMessage(
-              `${preset.name} opens with its own prompt, and the box holds something you wrote — so it was left alone.`,
-            );
-          }
-        }
-        show(found, mine.running, '');
-        // And the MODEL, which may have to wait for an answer in flight. A switch that is REFUSED
-        // leaves the old model answering, so the button goes back to it — and nothing else does.
-        //
-        // The words are deliberately left where they are. The box may have been typed into while the
-        // switch was resolving, and overwriting a question somebody is writing is the one thing this
-        // feature has been careful about from the start; the refusal is said out loud instead, and
-        // the composer stays consistent with what is actually in it. (local, the code round.)
-        void switchModel(found, preset.id, preset.model).then((switched) => {
-          // ONLY IF THIS PRESS IS STILL THE LAST ONE — by count, not by id: pressing A, then B, then
-          // A again would otherwise let the first A's refusal undo the second. (codex, twice.)
-          if (switched || mine.presses !== press) {
-            return;
-          }
-          mine.chosenId = wasChosen;
-          show(found, mine.running, '');
-        });
+        chooseModel(found, mine, preset, draft, config);
       },
       onStop: (id, turn) => {
         const found = panels.entryOf(id);
@@ -1725,8 +1756,14 @@ export async function chatWithOtherAi(
   // THE TICKED MODEL, and the saved setting only when nothing is ticked. A list nobody has ticked
   // must not overrule a model the person named in the panel, and `legacyPick` already answers "that
   // id names nothing" with the first provider.
+  //
+  // A ticked preset is NAMED, though, so it does not go through that fallback: `legacyPick` would
+  // quietly open the first provider instead, which is a different vendor's model, billed, in a voice
+  // nobody chose — the rule this feature keeps everywhere else. `readyToChat` refuses it by name.
+  // (codex, the second code round.)
   const ticked = mainModel(savedModels(config));
-  const opening = savedPick(config, ticked?.id ?? settings.model);
+  const saved = ticked === undefined ? savedPick(config, settings.model) : undefined;
+  const opening = saved ?? { providerId: ticked?.id ?? '', modelId: ticked?.model ?? '' };
   // The panel names a provider AND, since the pair reached it, one of that provider's models. A name
   // it does not offer is not a pick — the row's own model answers — so a value gone stale in
   // `settings.json` or withdrawn by a Team server opens a conversation rather than a refusal.
@@ -1734,9 +1771,9 @@ export async function chatWithOtherAi(
   // question from before presets existed, and it was winning: a button labelled "Gemini 3.7 Flash
   // (High)" opened a conversation whose picker said 3.8 Flash (Medium), because the panel's saved
   // name was one this vendor also offers. The preset is the configuration now.
-  const model = ticked !== undefined
+  const model = saved === undefined
     ? opening.modelId
-    : openingModel(chatProvidersFromPresets(savedModels(config), chatCatalogFrom(config)), opening, settings.modelName);
+    : openingModel(chatProvidersFromPresets(savedModels(config), chatCatalogFrom(config)), saved, settings.modelName);
   const ready = readyToChat(config, opening.providerId, model);
   if (!ready.ok) {
     void vscode.window.showWarningMessage(ready.refusal);

@@ -1079,6 +1079,8 @@ otherwise let the first A's refusal undo the second. And the tag a marked part i
 chosen from a table rather than built out of the part's own name, so nothing there can reach an
 attribute.
 
+**And what the second code round found.** Choosing a model in the PICKER left the composer instructed by the model before it, so the next turn went to B carrying A's role while the marking said A was answering: both controls run `chooseModel` now, which is one decision with two surfaces. A TICKED preset that cannot answer is refused BY NAME rather than falling through `legacyPick` to the first provider — a different vendor's model, billed, in a voice nobody chose. And a prompt press whose write is refused puts its `promptId` back: the marking and the pair recorded with a question would otherwise name a prompt nothing on screen used.
+
 **The migration that could never run.** `chatModelPresetsFrom` took the reviewer rows for a one-time
 migration of presets written before a preset carried its own vendor — and no caller ever passed any,
 in any build. Repairing such a row means reading `coai.vendors`, which is the one thing this feature

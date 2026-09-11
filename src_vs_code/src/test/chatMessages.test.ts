@@ -240,3 +240,20 @@ test('an empty model is a legitimate half, but only under a provider that IS off
 test('a conversation that has been told nothing offers nothing', () => {
   assert.strictEqual(offersPair(undefined, 'agy', ''), false);
 });
+
+test('a pick carries the composer, and a wrong-typed one is not read as an empty box', () => {
+  // The dropdown is the same decision the preset button is, so the host swaps the role in the text
+  // the page sends. A field of the wrong type is a message this host cannot read. (codex, round two.)
+  assert.deepStrictEqual(
+    chatCommandOf({ type: 'command', command: 'pick', provider: 'm1', model: '', text: 'hello' }),
+    { kind: 'pick', provider: 'm1', model: '', draft: 'hello' },
+  );
+  assert.deepStrictEqual(
+    chatCommandOf({ type: 'command', command: 'pick', provider: 'm1', model: '' }),
+    { kind: 'pick', provider: 'm1', model: '' },
+  );
+  assert.deepStrictEqual(
+    chatCommandOf({ type: 'command', command: 'pick', provider: 'm1', model: '', text: 7 }),
+    { kind: 'ignore' },
+  );
+});

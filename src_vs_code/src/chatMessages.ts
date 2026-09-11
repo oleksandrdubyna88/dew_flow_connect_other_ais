@@ -52,7 +52,7 @@ export type ChatCommand =
    * model across: which of the new row's models answers is the host's to decide, because it holds
    * the catalog, and the one showing belonged to somebody else.</p>
    */
-  | { readonly kind: 'pick'; readonly provider: string; readonly model: string }
+  | { readonly kind: 'pick'; readonly provider: string; readonly model: string; readonly draft?: string }
   /** A saved prompt was pressed: its words go into the composer. */
   | { readonly kind: 'usePrompt'; readonly id: string; readonly draft?: string }
   /**
@@ -240,7 +240,14 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
       const provider = text(message.provider);
 
       // A pick with no PROVIDER names nobody. The model half may legitimately be empty.
-      return provider.length === 0 ? IGNORE : { kind: 'pick', provider, model: text(message.model) };
+      // The draft is optional and absent means "the host was told nothing about the box" — a page
+      // retained from a build before the dropdown carried it. Wrong-typed is not absent.
+      const chose = typeof message.text === 'string' ? message.text : undefined;
+      const badDraft = message.text !== undefined && typeof message.text !== 'string';
+
+      return provider.length === 0 || badDraft
+        ? IGNORE
+        : { kind: 'pick', provider, model: text(message.model), ...(chose === undefined ? {} : { draft: chose }) };
     }
     case 'usePromptPreset': {
       const id = text(message.id);
