@@ -65,7 +65,7 @@ import {
 import { LanguageCode } from './settingsShape';
 import { isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
 import { askedAsText } from './claudeQuestion';
-import { waitingQuestion } from './claudeSessions';
+import { promptsInSession, waitingQuestion } from './claudeSessions';
 import { EditorText, confirmWholeFile, passageFromEditor } from './editorPassage';
 import { triggerPlan } from './chatTrigger';
 import { Vendor } from './vendors';
@@ -163,6 +163,13 @@ interface Thread extends ChatMemory {
    * behind — but a box that holds precisely what was put in it is not somebody's typing.</p>
    */
   ourDraft: string;
+  /**
+   * Whether this conversation came from a Claude Code session tab rather than from a file.
+   *
+   * <p>Only then is there anything to read back: the button that shows what was asked joins the tab
+   * to a session by its title, and a chat opened from a `.md` has no session behind it at all.</p>
+   */
+  fromSession: boolean;
   /** Whether a turn is in flight. Only so a switch can say out loud that it is waiting for one. */
   running: boolean;
   /**
@@ -384,6 +391,7 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
     passage: thread.passage,
     modelId: thread.modelId,
     messages: thread.messages,
+    fromSession: thread.fromSession,
   });
 }
 
@@ -1334,7 +1342,12 @@ async function switchNow(entry: ChatEntry, providerId: string, modelId: string):
 function newConversation(
   panels: ChatPanels,
   ready: Extract<Ready, { ok: true }>,
-  state: { readonly title: string; readonly passage: string; readonly draft: string },
+  state: {
+    readonly title: string;
+    readonly passage: string;
+    readonly draft: string;
+    readonly fromSession: boolean;
+  },
   resolved: string,
   remote: ChatSession | undefined,
   extensionUri: vscode.Uri,
@@ -1373,6 +1386,8 @@ function newConversation(
       turn: 0,
       failure: '',
       draft: state.draft,
+      fromSession: state.fromSession,
+      asked: [],
       marks: {
         role: roleOf(config, ready.providerId),
         task: taskOf(config, openingPrompt(config), chatSettingsFrom((key) => config.get(key)).prompt),
@@ -1405,6 +1420,7 @@ function newConversation(
     chosenId: ready.providerId,
     presses: 0,
     ourDraft: state.draft,
+    fromSession: state.fromSession,
     running: false,
     // Counted from 1 by the first turn, so 0 is "this conversation has not asked anything yet" and
     // can never be mistaken for a turn a stop could name.
@@ -1512,6 +1528,28 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
           return;
         }
         chooseModel(found, mine, preset, draft, config);
+      },
+      onShowAsked: (id) => {
+        const found = panels.entryOf(id);
+        const mine = threads.get(id);
+        if (found === undefined || mine === undefined) {
+          return;
+        }
+        const folders = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
+        const caseBlind = process.platform === 'win32' || process.platform === 'darwin';
+        void (async () => {
+          for (const folder of folders) {
+            const said = await promptsInSession(os.homedir(), folder, caseBlind, mine.title);
+            if (said.length > 0) {
+              found.panel.post({ type: 'asked', asked: said });
+
+              return;
+            }
+          }
+          // NOTHING, said as nothing rather than left silent: the page shows a sentence in the space
+          // it just opened, which is the only place a person is looking.
+          found.panel.post({ type: 'asked', asked: [] });
+        })();
       },
       onStop: (id, turn) => {
         const found = panels.entryOf(id);
@@ -1768,6 +1806,8 @@ function restoredPage(
       turn: 0,
       failure: ready.ok ? reloadedNote(saved.modelId) : ready.refusal,
       draft: '',
+      fromSession: saved.fromSession ?? true,
+      asked: [],
       marks: {
         role: presets.modelPresets.find((one) => one.id === (ready.ok ? ready.providerId : restored.providerId))?.startingPrompt ?? '',
         task: mainPrompt(presets.promptPresets)?.text ?? '',
@@ -1822,6 +1862,10 @@ export function restoreConversation(
     chosenId: ready.ok ? ready.providerId : restored.providerId,
     presses: 0,
     ourDraft: '',
+    // Which door opened it is remembered across the reload, so a chat restored from a `.md` does
+    // not come back offering to read a session there was never one of. An older record, written
+    // before the field existed, reads as a session tab — which every tab was when it was written.
+    fromSession: saved.fromSession ?? true,
     running: false,
     turn: 0,
     // Replaced by `reopened` with the rules of whatever model actually answers — this conversation
@@ -1898,7 +1942,7 @@ export async function chatWithOtherAi(
     return;
   }
 
-  await deliverPassage(panels, extensionUri, ready, source, passage, plan.send);
+  await deliverPassage(panels, extensionUri, ready, source, passage, plan.send, match !== undefined);
 }
 
 /**
@@ -1916,6 +1960,7 @@ async function deliverPassage(
   source: NonNullable<ReturnType<typeof sourceSession>>,
   passage: { readonly text: string },
   send: boolean,
+  fromSession: boolean,
 ): Promise<void> {
   const config = vscode.workspace.getConfiguration('coai');
   const settings = chatSettingsFrom((key) => config.get(key));
@@ -1953,6 +1998,9 @@ async function deliverPassage(
     title: source.label,
     passage: passage.text,
     draft: send ? '' : turn,
+    // A session tab has a file behind it; a file does not. The button that reads one back is
+    // offered only where there is something to read.
+    fromSession,
   }, cli.resolved, remote.session, extensionUri));
 
   opened.entry.panel.reveal();
@@ -2105,5 +2153,5 @@ export async function takeTheQuestion(
   // NEVER sent by itself, whatever the auto-send setting says. A question taken off disk is one a
   // person is in the middle of answering; it goes into the composer so they can look at it, add
   // what they think, and press send themselves.
-  await deliverPassage(panels, extensionUri, ready, source, { text: question.text }, false);
+  await deliverPassage(panels, extensionUri, ready, source, { text: question.text }, false, claude !== undefined);
 }

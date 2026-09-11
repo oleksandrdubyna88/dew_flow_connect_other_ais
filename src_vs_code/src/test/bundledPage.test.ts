@@ -298,6 +298,8 @@ function bundledChatPage(): { bundle: string; html: string } {
       draft: '',
       promptId: '',
       chosenModelId: 'antigravity',
+      fromSession: true,
+      asked: [],
       marks: { role: '', task: '', service: [] },
       uiScale: 0,
       textTone: 0,
@@ -308,11 +310,24 @@ function bundledChatPage(): { bundle: string; html: string } {
   return { bundle, html };
 }
 
-test('the chat page the bundle produces runs, and its Send button sends exactly one turn', () => {
-  // The rounds log has had this since a minifier renamed a binding out from under it — twice. The
-  // chat page had only ever been READ here, and story 2 of this plan is about to embed a function
-  // by `toString()` into its script, which is precisely the shape that broke there. So the page is
-  // run as it SHIPS: bundled, minified, then executed against a stub DOM.
+/**
+ * The shipped script, run against a stub DOM — the page exactly as it ships.
+ *
+ * <p>One stub, not one per test. The rounds log has been broken twice by a minifier renaming a
+ * binding out from under it, and a second copy of this harness would drift from the first — which
+ * is the very thing it exists to catch.</p>
+ */
+function runPage(): {
+  readonly html: string;
+  readonly rendered: Map<string, string>;
+  readonly nodes: Record<string, Record<string, unknown>>;
+  readonly listeners: Record<string, Record<string, Array<() => void>>>;
+  readonly onWindow: Record<string, Array<(event: { data: unknown }) => void>>;
+  readonly posted: Array<Record<string, unknown>>;
+  readonly press: (id: string) => void;
+  readonly push: (data: unknown) => void;
+  readonly frame: () => void;
+} {
   const { html } = bundledChatPage();
   const script = html.split('<script nonce="n0nce">')[1].split('</script>')[0];
   const posted: Array<Record<string, unknown>> = [];
@@ -330,10 +345,31 @@ test('the chat page the bundle produces runs, and its Send button sends exactly 
     getAttribute: () => null,
     setAttribute() { /* the page sets none */ },
     querySelectorAll: () => [],
+    // A real element has one, and the page opens the region it pins by adding a class to it.
+    classList: (() => {
+      const on = new Set<string>();
+
+      return {
+        add: (name: string) => { on.add(name); },
+        remove: (name: string) => { on.delete(name); },
+        contains: (name: string) => on.has(name),
+        toggle: (name: string, force?: boolean) => {
+          const want = force === undefined ? !on.has(name) : force;
+          if (want) { on.add(name); } else { on.delete(name); }
+
+          return want;
+        },
+      };
+    })(),
   });
 
   const onWindow: Record<string, Array<(event: { data: unknown }) => void>> = {};
   const frames: Array<() => void> = [];
+  const frame = (): void => {
+    for (const fn of frames.splice(0)) {
+      fn();
+    }
+  };
 
   assert.doesNotThrow(
     () => new Function('document', 'window', 'acquireVsCodeApi', 'requestAnimationFrame', script)(
@@ -355,17 +391,35 @@ test('the chat page the bundle produces runs, and its Send button sends exactly 
     ),
     'the minified chat page script threw on its first render',
   );
-  for (const fn of frames.splice(0)) {
-    fn();
-  }
+  frame();
+
+  const press = (id: string): void => {
+    for (const fire of listeners[id]?.['click'] ?? []) {
+      fire();
+    }
+  };
+  const push = (data: unknown): void => {
+    for (const fire of onWindow['message'] ?? []) {
+      fire({ data });
+    }
+    frame();
+  };
+
+  return { html, rendered, nodes, listeners, onWindow, posted, press, push, frame };
+}
+
+test('the chat page the bundle produces runs, and its Send button sends exactly one turn', () => {
+  // The rounds log has had this since a minifier renamed a binding out from under it — twice. The
+  // chat page had only ever been READ here, and story 2 of this plan is about to embed a function
+  // by `toString()` into its script, which is precisely the shape that broke there. So the page is
+  // run as it SHIPS: bundled, minified, then executed against a stub DOM.
+  const { rendered, nodes, onWindow, posted, press, push } = runPage();
 
   // The button exists in the shipped markup, its listener survived minification, and it reaches the
   // one send. A page whose button was renamed away would attach nothing and post nothing here.
   assert.ok(rendered.has('send'), 'the shipped chat page has no Send button');
   nodes['say']['value'] = 'does the shipped button work';
-  for (const fire of listeners['send']?.['click'] ?? []) {
-    fire();
-  }
+  press('send');
 
   const sends = posted.filter((message) => message['command'] === 'send');
   assert.strictEqual(sends.length, 1, 'the shipped Send button did not send exactly one turn');
@@ -381,17 +435,45 @@ test('the chat page the bundle produces runs, and its Send button sends exactly 
   scroll['clientHeight'] = 500;
   scroll['scrollHeight'] = 2000;
   scroll['scrollTop'] = 1500;
-  const push = onWindow['message'] ?? [];
-  assert.ok(push.length > 0, 'the shipped page is not listening for host state');
-  for (const fire of push) {
-    fire({ data: { type: 'state', messagesHtml: '<p>an answer</p>' } });
-  }
-  for (const fn of frames.splice(0)) {
-    fn();
-  }
+  assert.ok((onWindow['message'] ?? []).length > 0, 'the shipped page is not listening for host state');
+  push({ type: 'state', messagesHtml: '<p>an answer</p>' });
 
   assert.strictEqual(scroll['scrollTop'], 2000,
     'the shipped page did not follow a reader who was at the bottom — the embedded rule did not run');
+});
+
+test('the shipped Asked button asks the host, and paints what comes back', () => {
+  // The one thing a person does with this button is press it in a four-hour-old window, and the one
+  // place it can break silently is the bundle: the region it opens, the arrows beside it and the
+  // message it answers are four more names a minifier gets to rewrite.
+  const { rendered, nodes, posted, press, push } = runPage();
+
+  assert.ok(rendered.has('asked'), 'the shipped page from a session has no Asked button');
+  press('asked');
+
+  // Pressed once: the region is open, and the host has been asked to go and read the file. The page
+  // cannot read one itself, so a press that posts nothing would show an empty box forever.
+  const asking = nodes['asking']?.['classList'] as { contains(name: string): boolean } | undefined;
+  assert.ok(asking?.contains('open'), 'the shipped page did not open the region');
+  assert.strictEqual(posted.filter((message) => message['type'] === 'showAsked').length, 1,
+    'the shipped Asked button did not ask the host for the session');
+
+  push({ type: 'asked', asked: ['make the task text green', 'and now the arrows'] });
+
+  assert.strictEqual(nodes['askedText']?.['textContent'], 'make the task text green',
+    'the shipped page did not paint what the host read back');
+  assert.strictEqual(nodes['askedAt']?.['textContent'], '1 / 2', 'the shipped page did not say where it was');
+
+  // The arrows step, and the count follows them.
+  press('askedNext');
+  assert.strictEqual(nodes['askedText']?.['textContent'], 'and now the arrows', 'the arrow moved nothing');
+  assert.strictEqual(nodes['askedAt']?.['textContent'], '2 / 2');
+
+  // Pressed again it folds away — and asks for nothing a second time, because it already holds it.
+  press('asked');
+  assert.strictEqual(asking?.contains('open'), false, 'a second press did not fold it away');
+  assert.strictEqual(posted.filter((message) => message['type'] === 'showAsked').length, 1,
+    'the shipped page re-read a session file it was already holding');
 });
 
 test('the chat page carries nothing from the host into the webview', () => {

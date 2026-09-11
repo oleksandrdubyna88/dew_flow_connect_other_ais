@@ -30,6 +30,14 @@ export interface SavedTab {
   readonly passage: string;
   readonly modelId: string;
   readonly messages: readonly ChatMessage[];
+  /**
+   * Whether this conversation came from a Claude Code session rather than from a file.
+   *
+   * <p>OPTIONAL, so a record written before this field existed is still read rather than dropped —
+   * the alternative was bumping {@link TAB_VERSION}, which discards every stored conversation to
+   * carry one boolean. Absent reads as `true`, which every tab was when it was written.</p>
+   */
+  readonly fromSession?: boolean;
 }
 
 /** The `globalState`/`workspaceState` key, in the dotted form `coai.usageForgottenBefore` set. */
@@ -70,7 +78,10 @@ const isTab = (value: unknown): value is SavedTab => {
     && typeof tab.savedAt === 'number' && Number.isFinite(tab.savedAt)
     && typeof tab.title === 'string' && typeof tab.passage === 'string'
     && typeof tab.modelId === 'string'
-    && Array.isArray(tab.messages) && tab.messages.every(isMessage);
+    && Array.isArray(tab.messages) && tab.messages.every(isMessage)
+    // Absent is legitimate — an older record. Present and not a boolean is a record this build
+    // cannot trust, and it is dropped with the rest of them rather than half-read.
+    && (tab.fromSession === undefined || typeof tab.fromSession === 'boolean');
 };
 
 /**

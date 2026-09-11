@@ -1,6 +1,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { AskedSet, lastAsked } from './claudeQuestion';
+import { AskedSet, humanPrompts, lastAsked } from './claudeQuestion';
 
 /**
  * Where Claude Code keeps its sessions, and which of them is the one being looked at.
@@ -157,6 +157,69 @@ function where(reason: unknown): string {
   const code = typeof reason === 'object' && reason !== null ? (reason as { code?: unknown }).code : undefined;
 
   return typeof code === 'string' ? code : String(reason);
+}
+
+/**
+ * Everything the person wrote in the session THIS TAB is showing, oldest first.
+ *
+ * <p>Found by the same join the waiting question uses: Claude Code writes the conversation's title
+ * into its own session file, and that title is what VS Code puts on the tab. No title, no match,
+ * and an empty list — which the caller reports rather than guessing at another session.</p>
+ */
+export async function promptsInSession(
+  home: string,
+  cwd: string,
+  caseBlind: boolean,
+  looking: string,
+): Promise<readonly string[]> {
+  if (looking.length === 0) {
+    return [];
+  }
+  let names: string[];
+  try {
+    names = await fs.readdir(projectsRoot(home));
+  } catch {
+    return [];
+  }
+  const dir = projectDirIn(projectsRoot(home), cwd, names, caseBlind);
+  const files = await sessionFiles(dir);
+  if (!Array.isArray(files)) {
+    return [];
+  }
+  for (const file of files) {
+    let body: string;
+    try {
+      body = await fs.readFile(file, 'utf8');
+    } catch {
+      continue;
+    }
+    const lines = body.split('\n');
+    if (titleIn(lines) === looking) {
+      return humanPrompts(lines);
+    }
+  }
+
+  return [];
+}
+
+/** What a session calls itself, or empty — the last title wins, as the tab shows the newest. */
+function titleIn(lines: readonly string[]): string {
+  let title = '';
+  for (const line of lines) {
+    if (!line.includes('"ai-title"')) {
+      continue;
+    }
+    try {
+      const row = JSON.parse(line) as { type?: unknown; aiTitle?: unknown };
+      if (row.type === 'ai-title' && typeof row.aiTitle === 'string' && row.aiTitle.length > 0) {
+        title = row.aiTitle;
+      }
+    } catch {
+      // A half-written line names nothing.
+    }
+  }
+
+  return title;
 }
 
 /**

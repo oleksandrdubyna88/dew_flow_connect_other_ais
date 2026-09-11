@@ -189,6 +189,14 @@ export interface ChatPageState {
    * operator felt as the model switch hanging.</p>
    */
   readonly chosenModelId: string;
+  /**
+   * Whether this conversation came from a Claude Code session — the only case where there is
+   * anything to read back. A chat opened from a file has no session behind it, so it gets no button
+   * rather than a button that apologises.
+   */
+  readonly fromSession: boolean;
+  /** What the person wrote in that session, once they have asked for it. Empty until then. */
+  readonly asked: readonly string[];
   readonly uiScale: number;
   /**
    * How far the text is from the theme's own colour: 0 is the theme, up is brighter, down is
@@ -527,7 +535,7 @@ function chatStyle(
      child refuses to shrink below its content without it, so the region would never scroll, the
      body would instead, and the composer would leave the screen — the symptom this layout exists
      to end. (The gate raised it, and it is invisible to every test but a reading of this rule.) */
-  #scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px 20px 0; }
+  #scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 20px; }
   /* Positioned, because the jump control hangs above it. */
   #composer { flex: 0 0 auto; padding: 8px 20px 12px; position: relative; }
   /* OUT OF FLOW, and that is the point rather than the styling. In the flow it would take room in
@@ -541,7 +549,22 @@ function chatStyle(
   .attachment { display: flex; gap: 8px; align-items: center; margin: 0 0 6px; }
   .attached { max-height: 84px; max-width: 40%; border: 1px solid var(--vscode-panel-border); border-radius: 4px; }
   #unattach { font: inherit; font-size: .9em; color: var(--vscode-foreground); background: none; border: 1px solid var(--vscode-panel-border); border-radius: 3px; padding: 2px 8px; cursor: pointer; }
-  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  /* OUTSIDE the scrolling region, both of them: a question you are reading must not slide away
+     while you look for the line it is about, and the button that shows it has to stay reachable.
+     Asked for exactly so — "неважно где я, в начале или в конце". */
+  header { display: flex; align-items: baseline; gap: 12px; margin: 0; padding: 16px 20px 12px; flex: 0 0 auto; }
+  .asked { margin-left: auto; font: inherit; font-size: .9em; color: var(--vscode-foreground); background: var(--vscode-button-secondaryBackground, transparent); border: 1px solid var(--vscode-panel-border); border-radius: 3px; padding: 2px 10px; cursor: pointer; }
+  .asked.on { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-focusBorder); }
+  /* It OPENS: a height and an opacity that take half a second, because a block of text appearing
+     under your eyes with no warning is a jolt. Asked for in those words. */
+  .asking { flex: 0 0 auto; max-height: 0; opacity: 0; overflow: hidden; padding: 0 20px;
+            transition: max-height .5s ease, opacity .5s ease, padding .5s ease;
+            border-bottom: 1px solid transparent; }
+  .asking.open { max-height: 40vh; opacity: 1; padding: 0 20px 10px; border-bottom-color: var(--vscode-panel-border); }
+  .askingHead { display: flex; align-items: center; gap: 6px; opacity: .75; font-size: .85em; }
+  .askingHead button { min-width: 24px; padding: 2px 6px; font: inherit; }
+  .askedAt { min-width: 4em; text-align: center; }
+  .askedText { max-height: calc(40vh - 2.5em); overflow-y: auto; white-space: pre-wrap; overflow-wrap: break-word; }
   h1 { font-size: 1.2em; margin: 0; }
   .passage { border-left: 3px solid var(--vscode-panel-border); padding: 6px 0 6px 12px; margin: 0 0 16px; white-space: pre-wrap; opacity: .85; }
   /* A reading measure. A line that spans a wide tab is a line whose side says nothing, and the
@@ -711,8 +734,19 @@ function regionsOf(state: ChatPageState): Regions {
 function chatBody(state: ChatPageState, regions: Regions): string {
   const locked = state.running || state.capped;
 
-  return `<main id="scroll">
-<header><h1>${escapeHtml(state.title)}</h1>${zoomControlHtml(state.uiScale)}${toneControlHtml(state.textTone)}</header>
+  return `<header>
+<h1>${escapeHtml(state.title)}</h1>${zoomControlHtml(state.uiScale)}${toneControlHtml(state.textTone)}
+${state.fromSession ? '<button type="button" id="asked" class="asked" title="What you asked in this session, read back from disk">Asked</button>' : ''}
+</header>
+${state.fromSession ? `<section id="asking" class="asking" aria-live="polite">
+<div class="askingHead">
+  <button type="button" id="askedBack" aria-label="The one before">&lsaquo;</button>
+  <span id="askedAt" class="askedAt"></span>
+  <button type="button" id="askedNext" aria-label="The next one">&rsaquo;</button>
+</div>
+<div id="askedText" class="askedText"></div>
+</section>` : ''}
+<main id="scroll">
 <div class="passage" id="passage">${escapeHtml(state.passage)}</div>
 <div id="failure">${regions.failure}</div>
 <div id="messages">${regions.messages}</div>
@@ -783,6 +817,9 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   let captions = ${jsonForScript(Object.fromEntries(state.models.map((model) => [model.id, model.caption])))};
   // Which words in the turn are which, so the layer behind the box can draw them apart.
   let marks = ${jsonForScript(state.marks)};
+  // What the person wrote in the session this conversation came from, once the host has read it.
+  let asked = ${jsonForScript(state.asked)};
+  let askedAt = 0;
   // The frame a paint is waiting for, declared HERE because the first paint runs at load - before
   // the painter's own place in this script - and a let in the temporal dead zone throws.
   let painting = 0;
@@ -1048,6 +1085,55 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     behind.scrollTop = box.scrollTop;
     behind.scrollLeft = box.scrollLeft;
   }
+  // WHAT YOU ASKED, from the session file this conversation came from. The page holds no history
+  // of its own — that window may be four hours old and its first line long gone from the screen.
+  function paintAsked() {
+    const box = document.getElementById('askedText');
+    const at = document.getElementById('askedAt');
+    if (!box || !at) { return; }
+    const count = asked.length;
+    if (count === 0) {
+      box.textContent = 'Nothing of yours was found in that session.';
+      at.textContent = '';
+
+      return;
+    }
+    if (askedAt >= count) { askedAt = count - 1; }
+    if (askedAt < 0) { askedAt = 0; }
+    box.textContent = asked[askedAt];
+    at.textContent = (askedAt + 1) + ' / ' + count;
+  }
+  function showAsked(open) {
+    const region = document.getElementById('asking');
+    const button = document.getElementById('asked');
+    if (!region) { return; }
+    region.classList.toggle('open', open);
+    if (button) { button.classList.toggle('on', open); }
+  }
+  const askedButton = document.getElementById('asked');
+  if (askedButton) {
+    askedButton.addEventListener('click', () => {
+      const region = document.getElementById('asking');
+      const open = region ? !region.classList.contains('open') : true;
+      showAsked(open);
+      // Read on the FIRST press only: a session file is somebody else's and megabytes long, and
+      // opening a tab is not a reason to read it.
+      if (open && asked.length === 0) {
+        vscode.postMessage({ type: 'showAsked' });
+      }
+      paintAsked();
+    });
+  }
+  for (const step of [['askedBack', -1], ['askedNext', 1]]) {
+    const button = document.getElementById(step[0]);
+    if (button) {
+      button.addEventListener('click', () => {
+        askedAt += step[1];
+        paintAsked();
+      });
+    }
+  }
+
   function wirePicker() {
     const provider = document.getElementById('provider');
     const model = document.getElementById('model');
@@ -1233,6 +1319,16 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   }
   window.addEventListener('message', function (event) {
     const data = event.data || {};
+    // Its OWN message, not a thin state push. This handler treats a capped notice and a failure line
+    // as gone when a state message does not mention them, so answering "what did I ask" through the
+    // state channel would silently clear both.
+    if (data.type === 'asked') {
+      asked = Array.isArray(data.asked) ? data.asked : [];
+      askedAt = 0;
+      paintAsked();
+
+      return;
+    }
     if (data.type !== 'state') { return; }
     // BEFORE any write. Read after one, scrollHeight already includes what just arrived, so a reader
     // who was at the bottom measures as a screen short of it and is never followed - rule 2 turns
