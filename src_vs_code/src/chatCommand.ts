@@ -1854,6 +1854,7 @@ export async function chatWithOtherAi(
   panels: ChatPanels,
   extensionUri: vscode.Uri,
   args: readonly unknown[],
+  asked?: boolean,
 ): Promise<void> {
   const settings = chatSettingsFrom((key) => vscode.workspace.getConfiguration('coai').get(key));
   // ONE resolution for both commands, in `readyForChat`. It was written twice — here and beside the
@@ -1885,7 +1886,7 @@ export async function chatWithOtherAi(
     panels.rekey(source.from, source.key);
   }
 
-  const plan = triggerPlan(args, settings.autoSend);
+  const plan = triggerPlan(args, settings.autoSend, asked);
   const passage = match === undefined ? await fromTheEditor() : await passageFor(plan.path);
   if (passage.text.trim().length === 0) {
     if (passage.failure !== CANCELLED) {
@@ -2022,7 +2023,7 @@ function readyForChat(): Ready {
  * waiting question across all of them is the answer; two is a refusal that says so. (codex, the
  * code round.)</p>
  */
-async function questionWaitingHere(): Promise<{ text: string; refusal: string }> {
+async function questionWaitingHere(looking: string): Promise<{ text: string; refusal: string }> {
   const folders = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
   if (folders.length === 0) {
     return { text: '', refusal: 'Open a folder first — a Claude Code session belongs to one.' };
@@ -2032,7 +2033,7 @@ async function questionWaitingHere(): Promise<{ text: string; refusal: string }>
   const caseBlind = process.platform === 'win32' || process.platform === 'darwin';
   const found = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Window, title: 'Reading Claude Code\u2019s sessions\u2026' },
-    async () => Promise.all(folders.map((folder) => waitingQuestion(os.homedir(), folder, caseBlind))),
+    async () => Promise.all(folders.map((folder) => waitingQuestion(os.homedir(), folder, caseBlind, looking))),
   );
   const waiting = found.flatMap((one) => (one.kind === 'one' ? [one.session] : []));
   if (waiting.length > 1 || found.some((one) => one.kind === 'several')) {
@@ -2081,7 +2082,7 @@ export async function takeTheQuestion(
 
     return;
   }
-  const { source } = matchedSource(panels);
+  const { claude, source } = matchedSource(panels);
   if (source === undefined) {
     void vscode.window.showWarningMessage(
       'Open this from a Claude Code session tab or from a file — the conversation is named after it.',
@@ -2092,7 +2093,9 @@ export async function takeTheQuestion(
   if (source.kind === 'rekey') {
     panels.rekey(source.from, source.key);
   }
-  const question = await questionWaitingHere();
+  // THE TAB'S OWN LABEL, which is the only thing that can tell two waiting sessions apart: Claude
+  // Code writes the conversation's title into its session file, and the tab shows that same title.
+  const question = await questionWaitingHere(claude?.label ?? '');
   if (question.text.length === 0) {
     void vscode.window.showWarningMessage(question.refusal);
 

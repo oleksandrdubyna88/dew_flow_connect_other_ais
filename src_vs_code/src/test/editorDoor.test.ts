@@ -8,6 +8,7 @@ import {
   confirmWholeFile,
   passageFromEditor,
 } from '../editorPassage';
+import { triggerPlan } from '../chatTrigger';
 import {
   CLAUDE_PANEL_VIEW_TYPE,
   TabSnapshot,
@@ -152,12 +153,25 @@ test('the chord and the menu item reach an ordinary editor', () => {
     chords.some((one) => one.when.includes('editorTextFocus')),
     'the chord is still bound only inside the assistant panel',
   );
-  assert.ok(
-    editorMenu.some((one) => one.command === 'coai.chatWithOtherAi'),
-    'the right-click item is offered nowhere but the panel',
-  );
+  // TWO items here as well, each naming what it does — the same pair the panel's menu offers.
+  for (const command of ['coai.chatNow', 'coai.chatChoose']) {
+    assert.ok(
+      editorMenu.some((one) => one.command === command),
+      `${command} is offered nowhere in an ordinary editor`,
+    );
+  }
   assert.ok(
     chords.some((one) => one.when.includes('claudeVSCodePanel')),
     'the panel lost the chord it already had',
   );
+});
+
+test('the two items are one decision apart, and neither reads the setting', () => {
+  // `asked` overrides the setting outright: that is the whole difference between an item that says
+  // what it does and a chord that depends on a preference set somewhere else.
+  assert.strictEqual(triggerPlan([], 'never', true).send, true, 'the send-at-once item did not send');
+  assert.strictEqual(triggerPlan([], 'always', false).send, false, 'the composer item sent anyway');
+  // And with nothing asked, the setting still decides — the chord is unchanged.
+  assert.strictEqual(triggerPlan([], 'always').send, true, 'the chord stopped obeying the setting');
+  assert.strictEqual(triggerPlan([], 'never').send, false, 'the chord stopped obeying the setting');
 });

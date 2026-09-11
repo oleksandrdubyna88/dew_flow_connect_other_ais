@@ -42,6 +42,18 @@ export interface AskedSet {
   readonly sessionId: string;
   /** When it was asked, as the file recorded it. */
   readonly at: string;
+  /**
+   * What this session is CALLED — and what its tab is called, which is the same string.
+   *
+   * <p>Claude Code writes `{"type":"ai-title","aiTitle":"…","sessionId":"…"}` into the session as it
+   * names the conversation, and that title is what VS Code shows on the tab. Measured against a live
+   * session: the tab reading *Подключение к scoreMeter DB* has a row saying exactly that.</p>
+   *
+   * <p>It is the only honest join between a TAB and a SESSION on this machine — there is no window
+   * id to ask for — so it is what lets two sessions waiting in one folder be told apart instead of
+   * refused. Empty when the session has no title row yet, which a short one does not.</p>
+   */
+  readonly title: string;
 }
 
 /** Anything, narrowed to an object, or nothing. */
@@ -123,6 +135,9 @@ function everyAsked(lines: readonly string[]): { asked: AskedSet[]; unreadable: 
   const asked: { id: string; questions: readonly AskedQuestion[]; sessionId: string; at: string }[] = [];
   const answered = new Set<string>();
   let unreadable = false;
+  // The LAST one: Claude Code refines the title as the conversation goes on, and the tab shows the
+  // newest. An older row would name the tab as it was called an hour ago.
+  let title = '';
 
   for (const line of lines) {
     if (line.trim().length === 0) {
@@ -137,6 +152,10 @@ function everyAsked(lines: readonly string[]): { asked: AskedSet[]; unreadable: 
       continue;
     }
     if (row === undefined) {
+      continue;
+    }
+    if (row['type'] === 'ai-title' && text(row['aiTitle']).length > 0) {
+      title = text(row['aiTitle']);
       continue;
     }
     for (const block of blocksOf(row)) {
@@ -163,7 +182,10 @@ function everyAsked(lines: readonly string[]): { asked: AskedSet[]; unreadable: 
     }
   }
 
-  return { asked: asked.map((one) => ({ ...one, answered: answered.has(one.id) })), unreadable };
+  return {
+    asked: asked.map((one) => ({ ...one, answered: answered.has(one.id), title })),
+    unreadable,
+  };
 }
 
 /**

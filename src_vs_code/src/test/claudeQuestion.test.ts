@@ -150,9 +150,9 @@ test('the directory is matched case-insensitively, because its case is not ours 
   assert.strictEqual(projectDirIn(root, 'D:\\rsd\\ClaudeRag', ['something-else'], true), '', 'a stranger directory matched');
 });
 
-const session = (file: string, answered: boolean, at = '2026-09-11T18:00:00.000Z'): WaitingSession => ({
+const session = (file: string, answered: boolean, at = '2026-09-11T18:00:00.000Z', title = ''): WaitingSession => ({
   file,
-  asked: { id: file, questions: ONE, answered, sessionId: file, at },
+  asked: { id: file, questions: ONE, answered, sessionId: file, at, title },
 });
 
 test('one session waiting is the answer; two is a refusal, never a pick', () => {
@@ -376,4 +376,43 @@ test('an answered session is reported answered, from a real directory', async ()
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test('the TAB decides between two sessions that are both waiting', () => {
+  // There is no window id to ask for — but Claude Code writes the conversation's title into its
+  // session file, and the tab shows that same title. Measured against a live session before this
+  // was built: a tab reading 'Подключение к scoreMeter DB' has a row saying exactly that.
+  const one = session('a', false, '2026-09-11T10:00:00.000Z', 'Подключение к scoreMeter DB');
+  const two = session('b', false, '2026-09-11T18:00:00.000Z', 'Пул с несколькими PR');
+
+  const found = waitingIn([one, two], 'Пул с несколькими PR');
+
+  assert.strictEqual(found.kind, 'one', 'the tab could not name its own session');
+  assert.strictEqual(found.kind === 'one' ? found.session.file : '', 'b');
+});
+
+test('a tab that names NEITHER of them still refuses, rather than picking the newer', () => {
+  const one = session('a', false, '2026-09-11T10:00:00.000Z', 'One conversation');
+  const two = session('b', false, '2026-09-11T18:00:00.000Z', 'Another conversation');
+
+  assert.strictEqual(waitingIn([one, two], 'Something else entirely').kind, 'several');
+  // And with no tab to ask — the command invoked from a file rather than from the panel — the
+  // refusal is the same one it was before any of this.
+  assert.strictEqual(waitingIn([one, two]).kind, 'several');
+});
+
+test('two sessions that share a title are still an ambiguity', () => {
+  const one = session('a', false, '2026-09-11T10:00:00.000Z', 'Same name');
+  const two = session('b', false, '2026-09-11T18:00:00.000Z', 'Same name');
+
+  assert.strictEqual(waitingIn([one, two], 'Same name').kind, 'several', 'a namesake session was picked');
+});
+
+test('the title is read off the session, and the newest one wins', () => {
+  // Claude Code refines the title as the conversation goes on, and the tab shows the newest.
+  const titled = (name: string): string => JSON.stringify({ type: 'ai-title', aiTitle: name, sessionId: 's' });
+  const found = asked([titled('First guess'), asks('a', ONE), titled('What it is really about')]);
+
+  assert.strictEqual(found?.title, 'What it is really about', 'an older title named the tab');
+  assert.strictEqual(asked([asks('a', ONE)])?.title, '', 'a session with no title row invented one');
 });
