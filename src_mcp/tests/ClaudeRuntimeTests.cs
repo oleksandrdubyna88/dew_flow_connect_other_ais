@@ -51,7 +51,7 @@ public sealed class ClaudeRuntimeTests
     }
 
     /// <summary>The names that follow the one <c>--disallowedTools</c>, up to the next flag.</summary>
-    private static IReadOnlyList<string> Denied(ReviewerSettings settings)
+    private static List<string> Denied(ReviewerSettings settings)
     {
         var args = new ClaudeRuntime()
             .Build(ReviewRole.Architecture, "review this", Worktree, Schema, OutDir, settings)

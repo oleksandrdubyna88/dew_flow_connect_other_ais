@@ -61,8 +61,9 @@ public sealed record UsageScan(IReadOnlyList<UsageLine> Lines, int Unreadable);
 /// one line per reviewer per round, thousands rather than hundreds of thousands, so this is a few
 /// milliseconds today and rewriting the reader to walk backwards from the end would be optimising
 /// something that is not slow. The plan that would do it, with its measurement and its chunk-boundary
-/// hazards, is <c>todo/PLAN_the_usage_page_reads_the_window_not_the_history.md</c>. What would make it
-/// worth doing: a ledger past roughly 50 000 lines, or a usage page that feels slow to somebody.</para>
+/// hazards, is <c>PLAN_the_usage_page_reads_the_window_not_the_history.md</c>, kept with the other
+/// open plans. What would make it worth doing: a ledger past roughly 50 000 lines, or a usage page
+/// that feels slow to somebody.</para>
 /// </remarks>
 public sealed class UsageReader(string dataDir)
 {

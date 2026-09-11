@@ -263,7 +263,7 @@ public sealed class ProcessLauncherTests
     }
 
     /// <summary>One name per line is what <c>env-names</c> prints; Windows ends its lines in CR LF.</summary>
-    private static IReadOnlyList<string> Names(string stdout) =>
+    private static List<string> Names(string stdout) =>
         stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line.TrimEnd('\r')).ToList();
 
     /// <summary>
