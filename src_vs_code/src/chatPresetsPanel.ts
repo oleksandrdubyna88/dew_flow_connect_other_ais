@@ -1,8 +1,15 @@
 import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
 import { ChatProvider, chatProvidersFrom } from './chatModels';
-import { ModelPreset, PromptPreset, chatModelPresetsFrom, chatPromptPresetsFrom } from './chatPresets';
-import { PresetCommand, chatPresetsHtml, presetEdit } from './chatPresetsPage';
+import {
+  ModelPreset,
+  PromptPreset,
+  chatModelPresetsFrom,
+  chatPromptPresetsFrom,
+  freshPreset,
+  readableModelRow,
+} from './chatPresets';
+import { PresetCommand, chatPresetsHtml, presetEdit, repaintsAfter } from './chatPresetsPage';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 import { teamServersFrom } from './teamServers';
 import { vendorsFrom } from './vendors';
@@ -58,15 +65,6 @@ async function write(key: string, value: unknown): Promise<void> {
   await config().update(key, value, vscode.ConfigurationTarget.Global);
 }
 
-/** A new row, with an id nothing else holds and a name a person will replace. */
-function fresh(list: 'prompt' | 'model', taken: readonly { readonly id: string }[]): Record<string, unknown> {
-  const id = `preset-${Date.now().toString(36)}-${taken.length + 1}`;
-
-  return list === 'prompt'
-    ? { id, name: 'New prompt', text: 'Explain', main: false }
-    : { id, name: 'New model', provider: '', model: '' };
-}
-
 /**
  * One edit, applied to the list it names.
  *
@@ -120,9 +118,13 @@ async function apply(command: PresetCommand): Promise<boolean> {
   const key = command.kind === 'ignore' ? '' : (command.list === 'prompt' ? PROMPTS_KEY : MODELS_KEY);
   if (command.kind === 'add') {
     const rows = key === PROMPTS_KEY ? promptRowsToWrite() : rowsOf(key);
-    await write(key, [...rows, fresh(command.list, rows as { id: string }[])]);
+    if (command.list === 'prompt') {
+      await write(key, [...rows, freshPreset('prompt', rows as { id: string }[])]);
 
-    return true;
+      return true;
+    }
+
+    return addModel(rows);
   }
   if (command.kind === 'remove') {
     const rows = key === PROMPTS_KEY ? promptRowsToWrite() : rowsOf(key);
@@ -134,9 +136,10 @@ async function apply(command: PresetCommand): Promise<boolean> {
     const rows = key === PROMPTS_KEY ? promptRowsToWrite() : rowsOf(key);
     await write(key, edited(rows, command));
 
-    // Not a re-render: the caret is in a box somebody is typing in, and moving it to the end of
-    // what they wrote is the defect the sidebar's own prompt box had.
-    return false;
+    // `repaintsAfter` decides, beside the message parser and tested with it. Typing must NOT
+    // repaint — the caret is in a box somebody is writing in — and the `main` tick MUST, because
+    // its whole effect is on the rows it is not in.
+    return repaintsAfter(command);
   }
 
   return false;
@@ -178,4 +181,33 @@ export function openChatPresets(): void {
     panel = undefined;
   });
   render();
+}
+
+/**
+ * A new model preset, which cannot exist without a row for it to answer through.
+ *
+ * <p>`chatModelPresetsFrom` refuses a row with no provider, so seeding one with an empty string
+ * wrote a preset nothing could ever render, edit or remove — which is exactly what *Add a model* did
+ * until 2026-09-11. The provider is resolved FIRST: the first row that can chat, which is the same
+ * default the chat itself takes, and the person changes it in the select on the row.</p>
+ *
+ * <p>With no such row there is nothing to seed, and a button that silently writes litter is worse
+ * than one that says why it cannot. The dead rows an earlier build left behind go at the same time —
+ * they are not drafts, because no surface has ever been able to show one.</p>
+ */
+async function addModel(rows: readonly Record<string, unknown>[]): Promise<boolean> {
+  const answering = providers()[0]?.id ?? '';
+  if (answering.length === 0) {
+    void vscode.window.showWarningMessage(
+      'A model preset names the reviewer that answers, and no configured reviewer can chat yet.'
+      + ' Enable one in the panel first — the chat speaks to antigravity, claude, codex and Team servers.',
+    );
+
+    return false;
+  }
+  const kept = rows.filter(readableModelRow);
+
+  await write(MODELS_KEY, [...kept, freshPreset('model', kept as { id: string }[], answering)]);
+
+  return true;
 }

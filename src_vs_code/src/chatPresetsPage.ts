@@ -62,6 +62,28 @@ function idOf(value: unknown): string {
  * module that maps a webview message to an action is otherwise the one no unit test can reach, and a
  * wrong mapping would ship with every test green.</p>
  */
+/**
+ * Whether the page must be REDRAWN after this command was applied.
+ *
+ * <p>An edit deliberately does not repaint: the caret is in a box somebody is typing in, and moving
+ * it to the end of what they wrote is the defect the sidebar's own prompt box had. The `main` tick is
+ * the one edit that has to, and for a reason the rule did not anticipate — its whole effect is on the
+ * rows it is NOT in. Ticking one unticks the others in what is saved, so a page that is not redrawn
+ * shows two prompts marked main and a file that holds one. Reported with a screenshot of exactly
+ * that, 2026-09-11.</p>
+ *
+ * <p>A checkbox has no caret, so the rule it is carved out of does not apply to it. Decided here
+ * rather than by unticking the siblings in the page's own script: that would be the same rule
+ * written twice, and the second copy is the one that drifts.</p>
+ */
+export function repaintsAfter(command: PresetCommand): boolean {
+  if (command.kind === 'ignore') {
+    return false;
+  }
+
+  return command.kind !== 'edit' || command.field === 'main';
+}
+
 export function presetEdit(message: unknown): PresetCommand {
   if (typeof message !== 'object' || message === null) {
     return IGNORE;

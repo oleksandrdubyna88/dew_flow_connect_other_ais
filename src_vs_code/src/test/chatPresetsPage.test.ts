@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { chatPresetsHtml, presetEdit } from '../chatPresetsPage';
+import { chatPresetsHtml, presetEdit, repaintsAfter } from '../chatPresetsPage';
 
 /**
  * The tab where a person keeps their prompts and their models.
@@ -130,4 +130,41 @@ test('a message this page does not understand is ignored, not guessed at', () =>
   for (const message of [undefined, null, {}, { type: 'edit' }, 'text', { type: 'nope' }]) {
     assert.deepStrictEqual(presetEdit(message), { kind: 'ignore' });
   }
+});
+
+/**
+ * Which edits the page must be REDRAWN after.
+ *
+ * <p>Reported 2026-09-11, with a screenshot of two prompts both ticked as main: *"логично, что мейн
+ * может быть один. а оно дает 2 галочки поставить"*. What is SAVED was already right —
+ * ticking one row unticks the others before the write — but an edit deliberately does not repaint,
+ * because a repaint under a caret is the defect the sidebar's own prompt box had. A checkbox has no
+ * caret, and its whole effect is on OTHER rows, so it was the one edit that had to be redrawn and
+ * was not. The page therefore showed a state the file never held.</p>
+ *
+ * <p>Decided here rather than in the page's script: unticking the siblings in the DOM as well would
+ * be the same rule written twice, and the second copy is the one that drifts.</p>
+ */
+test('ticking the main one is redrawn, because its effect is on the rows it is not in', () => {
+  assert.strictEqual(repaintsAfter({ kind: 'edit', list: 'prompt', id: 'p1', field: 'main', value: true }), true);
+});
+
+test('typing is NOT redrawn, which is the rule this exception is carved out of', () => {
+  for (const field of ['name', 'text', 'provider', 'model', 'startingPrompt'] as const) {
+    assert.strictEqual(
+      repaintsAfter({ kind: 'edit', list: 'prompt', id: 'p1', field, value: 'x' }),
+      false,
+      `${field} redraws the page under a caret`,
+    );
+  }
+});
+
+test('unticking is redrawn too, so the list cannot be left showing none', () => {
+  assert.strictEqual(repaintsAfter({ kind: 'edit', list: 'prompt', id: 'p1', field: 'main', value: false }), true);
+});
+
+test('adding and removing are redrawn, as they always were', () => {
+  assert.strictEqual(repaintsAfter({ kind: 'add', list: 'model' }), true);
+  assert.strictEqual(repaintsAfter({ kind: 'remove', list: 'model', id: 'm1' }), true);
+  assert.strictEqual(repaintsAfter({ kind: 'ignore' }), false);
 });

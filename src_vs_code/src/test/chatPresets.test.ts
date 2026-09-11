@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   chatModelPresetsFrom,
   chatPromptPresetsFrom,
+  freshPreset,
   mainPrompt,
   presetById,
   reaskFrom,
@@ -192,4 +193,42 @@ test('the answer before last is kept, because the conversation is not the last e
 
   assert.ok(again?.said.some((message) => message.text === 'first answer'),
     'an earlier answer was dropped along with the rejected one');
+});
+
+/**
+ * A new row must be one its own reader will KEEP.
+ *
+ * <p>Reported 2026-09-11: *Add a model* did nothing. It was not doing nothing — it appended
+ * `{ name: 'New model', provider: '', model: '' }` to `coai.chatModelPresets`, and
+ * `chatModelPresetsFrom` drops any row without a provider, so the page re-read the list and showed
+ * exactly what it showed before. Every press left a dead row in `settings.json` that nothing can
+ * display, edit or remove. The prompt side does not have the defect because its seed is two real
+ * values; the model side seeded the field its own reader refuses on.</p>
+ */
+test('a new model preset survives the reader that will render it', () => {
+  const kept = chatModelPresetsFrom([freshPreset('model', [], 'agy')]);
+
+  assert.strictEqual(kept.length, 1, 'the row a press of Add a model writes is dropped by the reader');
+  assert.strictEqual(kept[0]!.provider, 'agy');
+  assert.strictEqual(kept[0]!.name, 'New model');
+});
+
+test('a new prompt preset survives its reader too, which is why that button always worked', () => {
+  const kept = chatPromptPresetsFrom([freshPreset('prompt', [])]);
+
+  assert.strictEqual(kept.length, 1);
+  assert.strictEqual(kept[0]!.name, 'New prompt');
+});
+
+test('the reader still refuses a model row with no provider — the rule did not move', () => {
+  // The fix is the SEED, not a loosened reader: a preset that names no row names nothing that can
+  // answer, and the two button rows above the composer would render it as a button that does nothing.
+  assert.deepStrictEqual(chatModelPresetsFrom([freshPreset('model', [], '')]), []);
+});
+
+test('two new rows in a row do not share an id', () => {
+  const first = freshPreset('model', [], 'agy');
+  const second = freshPreset('model', [first as { id: string }], 'agy');
+
+  assert.notStrictEqual(first['id'], second['id'], 'a second press produced a row that shadows the first');
 });

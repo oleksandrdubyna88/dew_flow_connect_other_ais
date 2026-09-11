@@ -207,3 +207,40 @@ export function presetById<T extends { readonly id: string }>(
 ): T | undefined {
   return id.length === 0 ? undefined : presets.find((preset) => preset.id === id);
 }
+
+/**
+ * A new row for one of the two lists, in a shape that list's own reader will KEEP.
+ *
+ * <p><b>That is the whole point of it living here.</b> It used to sit in the panel host beside the
+ * write, and it seeded a model row with `provider: ''` — the one field `chatModelPresetsFrom`
+ * refuses, because a preset that names no row names nothing that can answer. So *Add a model* wrote
+ * a row, the page re-read the list, the reader dropped it, and the screen showed what it showed
+ * before. Every press left a dead row in `settings.json` that nothing could display, edit or remove.
+ * Next to its reader, that cannot happen without a test going red.</p>
+ *
+ * @param providerId the row a model preset will answer through — required for the preset to exist at
+ *   all, so the caller resolves one before offering to create it rather than writing an empty string
+ *   and hoping.
+ */
+export function freshPreset(
+  list: 'prompt' | 'model',
+  taken: readonly { readonly id: string }[],
+  providerId = '',
+): Record<string, unknown> {
+  const id = `preset-${Date.now().toString(36)}-${taken.length + 1}`;
+
+  return list === 'prompt'
+    ? { id, name: 'New prompt', text: 'Explain', main: false }
+    : { id, name: 'New model', provider: providerId, model: '' };
+}
+
+/**
+ * Whether a row is one its reader would keep — used to drop what an older build wrote by mistake.
+ *
+ * <p>A model row with no provider cannot be rendered, edited or removed on any surface, so it is not
+ * a draft somebody is composing: it is litter from the defect above. Cleared on the next write to
+ * the list rather than by a migration nobody would run.</p>
+ */
+export function readableModelRow(row: unknown): boolean {
+  return chatModelPresetsFrom([row]).length === 1;
+}
