@@ -1,6 +1,6 @@
 import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
-import { PageMessage, chatCommandOf } from './chatMessages';
+import { PageMessage, chatCommandOf, offersPair } from './chatMessages';
 import { ChatEntry, DisposableSession, RevealablePanel } from './chatPanels';
 import {
   ChatMessage,
@@ -53,7 +53,7 @@ export interface ChatPanelHooks {
   /** A saved prompt was pressed. The host owns the list; the page only names which. */
   readonly onUsePrompt: (id: object, presetId: string) => void;
   /** A saved model was pressed. Its provider and model answer, and its starting prompt is offered. */
-  readonly onUseModel: (id: object, presetId: string) => void;
+  readonly onUseModel: (id: object, presetId: string, draft: string) => void;
   /**
    * The person stopped the answer they were waiting for.
    *
@@ -250,7 +250,7 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
       // what this conversation was actually offered rather than trusting the page. (codex.)
       // The PAIR is checked as a pair, the rule this feature keeps everywhere else: a model offered
       // by somebody is not a model offered by THIS provider, and `vendor-routing.md` is the reason.
-      if (offers(id, command.provider, command.model)) {
+      if (offersPair(offered.get(id), command.provider, command.model)) {
         hooks.onPick(id, command.provider, command.model);
       } else {
         hooks.onPageError(id, `that pair is not one this conversation offers: ${command.provider} · ${command.model}`);
@@ -262,7 +262,7 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
 
       return;
     case 'useModel':
-      hooks.onUseModel(id, command.id);
+      hooks.onUseModel(id, command.id, command.draft);
 
       return;
     case 'stop':
@@ -325,19 +325,6 @@ const lastPushed = new WeakMap<object, string>();
 
 /** Which PAIRS each conversation currently offers — the one source the pick check reads. */
 const offered = new WeakMap<object, ReadonlyMap<string, ReadonlySet<string>>>();
-
-/**
- * Whether this conversation offers that pair.
- *
- * <p>An empty model is a legitimate half: the page sends none when the provider moved, and which of
- * the new row's models answers is the host's to decide. The PROVIDER must be one that was offered
- * either way.</p>
- */
-function offers(id: object, providerId: string, modelId: string): boolean {
-  const models = offered.get(id)?.get(providerId);
-
-  return models !== undefined && (modelId.length === 0 || models.has(modelId));
-}
 
 /** The pairs a state offers, by provider. */
 function pairsOf(providers: readonly { readonly id: string; readonly models: readonly { readonly id: string }[] }[]):

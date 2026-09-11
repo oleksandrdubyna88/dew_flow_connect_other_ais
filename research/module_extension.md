@@ -973,6 +973,17 @@ repository, contributed to the same `webview/context` menu one line below and ca
 on its own Output channel. Removed from the machine on the operator’s instruction, which is step 1
 of `todo/PLAN_the_menu_path_opens_nothing.md`.
 
+**What the plan round added.** `offersPair` moved into `chatMessages.ts` — pure, and therefore
+testable, which is the point: the dispatcher that consults it imports `vscode`, so a build could
+have accepted every message and still applied a pair nobody was offered, and no test could have
+said so. The empty-model fallback resolves inside the list the PROVIDER offers rather than taking
+the row’s configured model on faith — `routableOn` drops a Claude model from an `agy` row, so that
+row would otherwise switch to a model the picker never showed. And a model preset’s starting prompt
+lands only into an EMPTY composer: the page sends what the box holds with the press, because only it
+knows. That is where it differs from the prompt button beside it, which replaces — that button IS the
+instruction “ask this instead”, while a starting prompt is a side effect of changing the model, and
+somebody switching model half-way through a question did not ask for the question to be thrown away.
+
 **`coai.editChatPresets` reached a menu.** It shipped registered, in no `contributes.menus` entry and
 named in no view, so the tab it opens was reachable only from the command palette. The section has an
 **Edit presets…** button, routed like *Install the MCP server…* through `VSCODE_COMMAND_FOR`.
