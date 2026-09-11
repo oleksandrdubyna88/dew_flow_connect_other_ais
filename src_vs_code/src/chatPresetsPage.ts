@@ -77,6 +77,8 @@ function idOf(value: unknown): string {
  * written twice, and the second copy is the one that drifts.</p>
  */
 export function repaintsAfter(command: PresetCommand): boolean {
+  // An `ignore` changed nothing, so there is nothing to draw again — and a repaint on every message
+  // this page does not understand would rebuild it from anything that reached the webview.
   if (command.kind === 'ignore') {
     return false;
   }

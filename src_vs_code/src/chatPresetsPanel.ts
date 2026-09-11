@@ -6,7 +6,7 @@ import {
   PromptPreset,
   chatModelPresetsFrom,
   chatPromptPresetsFrom,
-  freshPreset,
+  freshPromptRow,
   modelRowsAfterAdd,
   promptRowsAfterMain,
   readableModelRow,
@@ -79,13 +79,10 @@ function edited(
   rows: readonly Record<string, unknown>[],
   command: Extract<PresetCommand, { kind: 'edit' }>,
 ): Record<string, unknown>[] {
-  return rows.map((row) => {
-    if (row['id'] !== command.id) {
-      return command.field === 'main' && command.value === true ? { ...row, main: false } : row;
-    }
-
-    return { ...row, [command.field]: command.value };
-  });
+  // The `main` box does NOT come through here any more — `promptRowsAfterMain` owns that rule, next
+  // to the reader that enforces the same thing. The branch that used to untick the siblings was left
+  // dead by that move, and dead code beside a live rule is the second copy that drifts.
+  return rows.map((row) => (row['id'] === command.id ? { ...row, [command.field]: command.value } : row));
 }
 
 function rowsOf(key: string): Record<string, unknown>[] {
@@ -121,7 +118,7 @@ async function apply(command: PresetCommand): Promise<boolean> {
   if (command.kind === 'add') {
     const rows = key === PROMPTS_KEY ? promptRowsToWrite() : rowsOf(key);
     if (command.list === 'prompt') {
-      await write(key, [...rows, freshPreset('prompt', rows as { id: string }[])]);
+      await write(key, [...rows, freshPromptRow(rows as { id: string }[])]);
 
       return true;
     }
@@ -138,9 +135,14 @@ async function apply(command: PresetCommand): Promise<boolean> {
     const rows = key === PROMPTS_KEY ? promptRowsToWrite() : rowsOf(key);
     // The `main` box is a rule of its own — exactly one, and the last one cannot be turned off —
     // so it is decided beside the reader that enforces the same thing, not in `edited`.
-    await write(key, command.field === 'main'
+    const next = command.field === 'main'
       ? promptRowsAfterMain(rows, command.id, command.value === true)
-      : edited(rows, command));
+      : edited(rows, command);
+    // The SAME array back means the rule refused — unticking the last main one, or an id naming no
+    // row. Writing it would be a configuration change event that says nothing, on every click.
+    if (next !== rows) {
+      await write(key, next);
+    }
 
     // `repaintsAfter` decides, beside the message parser and tested with it. Typing must NOT
     // repaint — the caret is in a box somebody is writing in — and the `main` tick MUST, because
@@ -163,10 +165,21 @@ function render(): void {
 
 /** Open the tab, or bring back the one that is already open. */
 export function openChatPresets(): void {
-  // Cleared on the way in, before anything is rendered: the rows an older build wrote are invisible
-  // on every surface, so the only moment anybody can be rid of them is one they do not have to ask
-  // for. It writes only when something was dropped, and the render below then finds a clean list.
-  void pruneDeadModelRows();
+  if (panel !== undefined) {
+    panel.reveal();
+
+    return;
+  }
+  // AWAITED before anything is drawn, which the code round was right about: the prune writes, the
+  // render reads, and started side by side the page paints the very rows the prune is removing. The
+  // tab opens after it either way — a cleanup that cannot run is not a reason to withhold the tab,
+  // and it is said out loud rather than swallowed.
+  void pruneDeadModelRows()
+    .catch((error: unknown) => { console.error('coai: the unusable model presets could not be cleared', error); })
+    .then(openPanel);
+}
+
+function openPanel(): void {
   if (panel !== undefined) {
     panel.reveal();
 
