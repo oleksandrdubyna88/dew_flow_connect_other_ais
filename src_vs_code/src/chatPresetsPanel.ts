@@ -207,13 +207,11 @@ function openPanel(): void {
  * they are not drafts, because no surface has ever been able to show one.</p>
  */
 async function addModel(rows: readonly Record<string, unknown>[]): Promise<boolean> {
-  const written = modelRowsAfterAdd(rows, providers()[0]?.id ?? '');
+  const chosen = await askForAModel();
+  const written = chosen === undefined
+    ? undefined
+    : modelRowsAfterAdd(rows, chosen.provider, chosen.model, chosen.name, chosen.startingPrompt);
   if (written === undefined) {
-    void vscode.window.showWarningMessage(
-      'A model preset names the reviewer that answers, and no configured reviewer can chat yet.'
-      + ' Enable one in the panel first — the chat speaks to antigravity, claude, codex and Team servers.',
-    );
-
     return false;
   }
   await write(MODELS_KEY, written);
@@ -236,4 +234,66 @@ async function pruneDeadModelRows(): Promise<void> {
   if (kept.length !== rows.length) {
     await write(MODELS_KEY, kept);
   }
+}
+
+/**
+ * The four questions a model preset is made of, asked one at a time.
+ *
+ * <p>The shape of *Add a reviewer* — `showQuickPick` with a label and the sentence under it — because
+ * that is what the operator asked for by name, and because a row id alone ("remsoftdev-codex") does
+ * not say what it reaches. The list is the configured ROWS rather than the vendor kinds that dialog
+ * offers: a vendor cannot say WHICH row answers, and two `codex` rows with different keys or prices
+ * are two different backends, which is the decision three reviewers settled on the provider plan.</p>
+ *
+ * <p>Each step can be escaped, and escaping writes nothing — a half-made preset is the defect this
+ * whole area has just been cleared of. The starting prompt is the one optional step: empty is a
+ * preset that only changes the model.</p>
+ */
+async function askForAModel(): Promise<
+{ provider: string; model: string; name: string; startingPrompt: string } | undefined> {
+  const rows = providers();
+  if (rows.length === 0) {
+    void vscode.window.showWarningMessage(
+      'A model preset names the reviewer that answers, and no configured reviewer can chat yet.'
+      + ' Enable one in the panel first — the chat speaks to antigravity, claude, codex and Team servers.',
+    );
+
+    return undefined;
+  }
+  const provider = await vscode.window.showQuickPick(
+    rows.map((one) => ({ label: one.id, detail: one.caption, row: one })),
+    { title: 'Add a model', placeHolder: 'Which provider answers?' },
+  );
+  if (provider === undefined) {
+    return undefined;
+  }
+  // A row whose models are discovered and whose probe has not answered offers none. Asking anyway
+  // would be a dialog with nothing in it, so the row's own configured model answers — which is what
+  // an empty model means everywhere else in this feature.
+  const model = provider.row.models.length === 0
+    ? { id: '', label: '' }
+    : await vscode.window.showQuickPick(
+      provider.row.models.map((one) => ({ label: one.label, id: one.id })),
+      { title: 'Add a model', placeHolder: `Which of ${provider.label}'s models?` },
+    );
+  if (model === undefined) {
+    return undefined;
+  }
+  const name = await vscode.window.showInputBox({
+    title: 'Add a model',
+    prompt: 'A name for this preset — it is what the button above the composer says',
+    value: model.label.length > 0 ? model.label : provider.label,
+  });
+  if (name === undefined) {
+    return undefined;
+  }
+  const startingPrompt = await vscode.window.showInputBox({
+    title: 'Add a model',
+    prompt: 'What the composer opens with when this model is chosen (optional)',
+    placeHolder: 'You are a business analyst…',
+  });
+
+  return startingPrompt === undefined
+    ? undefined
+    : { provider: provider.row.id, model: model.id, name, startingPrompt };
 }

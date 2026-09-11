@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+**Switching the model in an open chat works again.** It had stopped the day the picker became two steps: the page sends the provider and the model, and the half that receives them was still reading the single value from before — so every switch was discarded in silence, and the dropdown went back to what it had been. Both halves were tested, each against its own idea of the message, and neither ever met the other. They meet now, in a test that runs what the page sends through the thing that receives it.
+
+**The preset buttons above the composer do something.** They named what was pressed and nothing listened. A prompt button puts its words in the box; a model button switches the model and, if that preset carries a starting prompt, opens the box with it.
+
+**Adding a model asks, instead of guessing.** *Add a model* opens the same kind of chooser as *Add a reviewer*: which provider answers — each named with what it reaches — then which of that provider’s models, then a name for the button, then a starting prompt if you want one. Escaping any step writes nothing.
+
 ## Extension 0.33.1 — 2026-09-11
 
 **Add a model works.** It was not doing nothing — it was writing a preset with no reviewer named, and a preset that names no reviewer names nothing that can answer, so the list dropped it on the way back to the screen. Every press left a row in your settings that nothing could show, edit or remove. A new model preset now opens on the first reviewer that can chat, which you change on the row; with no such reviewer configured the button says so instead of writing something invisible, and the rows the old behaviour left behind are cleared when the tab opens.

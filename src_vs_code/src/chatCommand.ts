@@ -910,9 +910,19 @@ function vendorFor(modelId: string): Vendor | undefined {
  * that turn with "the conversation was closed" — an error about something the person did on
  * purpose. The switch simply joins the queue the turns already run in.</p>
  */
-function switchModel(entry: ChatEntry, modelId: string): void {
+function switchModel(entry: ChatEntry, providerId: string, asked: string): void {
   const thread = threads.get(entry.id);
-  if (thread === undefined || thread.modelId === modelId) {
+  const provider = thread?.providers.find((one) => one.id === providerId);
+  if (thread === undefined || provider === undefined) {
+    return;
+  }
+  // An EMPTY model is the page saying the provider moved: which of the new row's models answers is
+  // decided here, because this side holds the catalog. The row's own configured model, which is what
+  // every other entry point into this feature falls back to.
+  const modelId = provider.models.some((one) => one.id === asked)
+    ? asked
+    : (vendorFor(providerId)?.model ?? '');
+  if (thread.providerId === providerId && thread.modelId === modelId) {
     return;
   }
   if (thread.running) {
@@ -921,7 +931,7 @@ function switchModel(entry: ChatEntry, modelId: string): void {
     );
   }
   thread.turns = thread.turns
-    .then(() => switchNow(entry, modelId))
+    .then(() => switchNow(entry, providerId, modelId))
     .catch((reason: unknown) => {
       // Not swallowed: a switch that failed leaves the thread on the OLD model, and a person who
       // believes otherwise reads the next answer as the new model's. (codex, the code round.)
@@ -931,14 +941,17 @@ function switchModel(entry: ChatEntry, modelId: string): void {
     });
 }
 
-async function switchNow(entry: ChatEntry, modelId: string): Promise<void> {
+async function switchNow(entry: ChatEntry, providerId: string, modelId: string): Promise<void> {
   const thread = threads.get(entry.id);
-  if (thread === undefined || thread.modelId === modelId) {
+  if (thread === undefined || (thread.providerId === providerId && thread.modelId === modelId)) {
     return;
   }
-  const vendor = vendorFor(modelId);
+  // The PROVIDER is the row — it carries the runtime, the executable, the base URL, the price and,
+  // for a Team server, the server and the vendor name on it. This used to look the row up by the
+  // MODEL id, which is what it meant before a provider and a model were two questions.
+  const vendor = vendorFor(providerId);
   const refusal = vendor === undefined
-    ? `The model ${modelId} is no longer configured.`
+    ? `The reviewer ${providerId} is no longer configured.`
     : chatRuntimeRefusal(vendor);
   if (vendor === undefined || refusal.length > 0) {
     void vscode.window.showWarningMessage(refusal);
@@ -966,6 +979,7 @@ async function switchNow(entry: ChatEntry, modelId: string): Promise<void> {
   const replacement = started(vendor, cli.resolved, modelId, remote.session);
   thread.session = replacement.session;
   thread.home = replacement.home;
+  thread.providerId = providerId;
   thread.modelId = modelId;
   // The memory rules move WITH the model. Left behind, they described the one just thrown away:
   // switching to a Team server kept `forgetful` false, so the server — which remembers nothing —
@@ -1078,10 +1092,36 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
           void ask(found, text);
         }
       },
-      onPick: (id, modelId) => {
+      onPick: (id, providerId, modelId) => {
         const found = panels.entryOf(id);
         if (found !== undefined) {
-          switchModel(found, modelId);
+          switchModel(found, providerId, modelId);
+        }
+      },
+      onUsePrompt: (id, presetId) => {
+        const found = panels.entryOf(id);
+        const preset = savedPrompts(vscode.workspace.getConfiguration('coai'))
+          .find((one) => one.id === presetId);
+        if (found !== undefined && preset !== undefined) {
+          // Into the COMPOSER, replacing what is in it. A saved prompt is an instruction the person
+          // chose by pressing its name, and appending it to a half-typed sentence would make a
+          // question neither of them wrote.
+          pushChatDraft(found, preset.text);
+        }
+      },
+      onUseModel: (id, presetId) => {
+        const found = panels.entryOf(id);
+        const preset = savedModels(vscode.workspace.getConfiguration('coai'))
+          .find((one) => one.id === presetId);
+        if (found === undefined || preset === undefined) {
+          return;
+        }
+        switchModel(found, preset.provider, preset.model);
+        // And the starting prompt, if this preset carries one — "you are a business analyst" is the
+        // half of the choice that is not the model, and a preset that sets one and leaves the
+        // composer empty has made only half the change its name promises.
+        if ((preset.startingPrompt ?? '').length > 0) {
+          pushChatDraft(found, preset.startingPrompt ?? '');
         }
       },
       onStop: (id, turn) => {

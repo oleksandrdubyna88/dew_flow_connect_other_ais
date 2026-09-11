@@ -24,6 +24,9 @@ export interface PageMessage {
   readonly command?: unknown;
   readonly text?: unknown;
   readonly id?: unknown;
+  /** The two halves of a pick. The page sends BOTH, whichever one the person moved. */
+  readonly provider?: unknown;
+  readonly model?: unknown;
   readonly delta?: unknown;
   readonly message?: unknown;
   readonly turn?: unknown;
@@ -36,7 +39,24 @@ export interface PageMessage {
 
 export type ChatCommand =
   | { readonly kind: 'send'; readonly text: string }
-  | { readonly kind: 'pick'; readonly id: string }
+  /**
+   * A different model answers from now on — the PAIR, because the page sends both halves.
+   *
+   * <p>It used to be one `id`, from before a provider and a model were two questions. The page was
+   * changed to send the pair and this was not, so `message.id` was absent, the parser answered
+   * `ignore`, and every switch in an open tab did nothing at all — with both suites green, one
+   * asserting the page sends the pair and the other that the parser takes an id. Neither ever met
+   * the other until `chatPage.test.ts` was made to run what it posts through this function.</p>
+   *
+   * <p>`model` may be EMPTY, which is the page saying the provider moved and it will not carry a
+   * model across: which of the new row's models answers is the host's to decide, because it holds
+   * the catalog, and the one showing belonged to somebody else.</p>
+   */
+  | { readonly kind: 'pick'; readonly provider: string; readonly model: string }
+  /** A saved prompt was pressed: its words go into the composer. */
+  | { readonly kind: 'usePrompt'; readonly id: string }
+  /** A saved model was pressed: its provider and model answer from now on. */
+  | { readonly kind: 'useModel'; readonly id: string }
   /**
    * End the turn numbered `turn`, and no other. Always 1 or more.
    *
@@ -210,9 +230,20 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
       return said.length === 0 ? IGNORE : { kind: 'send', text: said };
     }
     case 'pick': {
+      const provider = text(message.provider);
+
+      // A pick with no PROVIDER names nobody. The model half may legitimately be empty.
+      return provider.length === 0 ? IGNORE : { kind: 'pick', provider, model: text(message.model) };
+    }
+    case 'usePromptPreset': {
       const id = text(message.id);
 
-      return id.length === 0 ? IGNORE : { kind: 'pick', id };
+      return id.length === 0 ? IGNORE : { kind: 'usePrompt', id };
+    }
+    case 'useModelPreset': {
+      const id = text(message.id);
+
+      return id.length === 0 ? IGNORE : { kind: 'useModel', id };
     }
     case 'stop': {
       const turn = turnOf(message.turn);

@@ -24,12 +24,34 @@ test('an empty send is ignored rather than spending a vendor turn on a stray Ent
   assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'send' }), { kind: 'ignore' });
 });
 
-test('a pick carries its model id, and a nameless one is ignored', () => {
+test('a pick carries the PAIR, and one naming no provider is ignored', () => {
+  // THE GUARANTEE CHANGED because this test was the reason nobody noticed. It asserted the shape
+  // from before a provider and a model were two questions — `{command: 'pick', id}` — while
+  // `chatPage.test.ts` asserted the page posts `{provider, model}`. Both were green, about opposite
+  // wire formats, so every model switch in an open tab had been resolving to `ignore` since the
+  // two-step picker shipped. `chatPage.test.ts` now runs what the page posts THROUGH this parser,
+  // which is where the two halves meet.
   assert.deepStrictEqual(
-    chatCommandOf({ type: 'command', command: 'pick', id: 'remsoftdev-codex' }),
-    { kind: 'pick', id: 'remsoftdev-codex' },
+    chatCommandOf({ type: 'command', command: 'pick', provider: 'remsoftdev-codex', model: 'gpt-5.6' }),
+    { kind: 'pick', provider: 'remsoftdev-codex', model: 'gpt-5.6' },
   );
-  assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'pick', id: '' }), { kind: 'ignore' });
+  // The MODEL half may be empty — the page sends none when the provider moved, because the model
+  // that was showing belonged to the provider being left. The provider half may not.
+  assert.deepStrictEqual(
+    chatCommandOf({ type: 'command', command: 'pick', provider: 'remsoftdev-codex', model: '' }),
+    { kind: 'pick', provider: 'remsoftdev-codex', model: '' },
+  );
+  assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'pick', provider: '' }), { kind: 'ignore' });
+  assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'pick', id: 'remsoftdev-codex' }), { kind: 'ignore' });
+});
+
+test('a preset button names which preset, and a nameless press is ignored', () => {
+  assert.deepStrictEqual(
+    chatCommandOf({ type: 'command', command: 'usePromptPreset', id: 'p2' }), { kind: 'usePrompt', id: 'p2' });
+  assert.deepStrictEqual(
+    chatCommandOf({ type: 'command', command: 'useModelPreset', id: 'm2' }), { kind: 'useModel', id: 'm2' });
+  assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'usePromptPreset', id: '' }), { kind: 'ignore' });
+  assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'useModelPreset' }), { kind: 'ignore' });
 });
 
 test('the zoom control posts its own shape, not a command', () => {
@@ -70,7 +92,7 @@ test('nothing at all is ignored', () => {
 test('a message whose fields are the wrong types cannot become a command', () => {
   // The bridge is untyped: everything here arrived as JSON from a page.
   assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'send', text: 42 }), { kind: 'ignore' });
-  assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'pick', id: { id: 'x' } }), { kind: 'ignore' });
+  assert.deepStrictEqual(chatCommandOf({ type: 'command', command: 'pick', provider: { id: 'x' } }), { kind: 'ignore' });
   assert.deepStrictEqual(chatCommandOf({ type: 42, command: 'send', text: 'hi' }), { kind: 'ignore' });
 });
 
