@@ -107,6 +107,13 @@ jobs:
       - name: Gate snippet
         run: node .agents/conventions/tools/gate-snippet-check.mjs
 
+      # The root Directory.Build.rsp is really there and really says -nr:false. Measured on this
+      # family's machine: five sessions building at once held 72 MSBuild workers and 10.7 GB,
+      # because a worker busy in one build cannot be reused by another
+      # (see .agents/conventions/csharp/dotnet-build.md). A repository with no C# passes without an opinion.
+      - name: Build flags
+        run: node .agents/conventions/tools/build-flags-check.mjs
+
       # A workflow file that does not PARSE fails at startup, in zero seconds, with no job, no log
       # and no annotation — and the run that discovers it is the release you just tagged. Measured
       # 2026-09-03: a single stray carriage return inside a quoted `tr -d '\r'` reads as a line
