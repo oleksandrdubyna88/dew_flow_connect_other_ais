@@ -34,7 +34,7 @@ import { Vendor } from './vendors';
  * a Claude model reaches the `claude` CLI and never `agy`, because the runtime chooses the adapter
  * AND the executable together.</p>
  */
-const ADAPTERS: Readonly<Record<string, { readonly adapter: ChatAdapter; readonly executable: string }>> = {
+const ADAPTERS: Readonly<Partial<Record<Vendor['runtime'], { readonly adapter: ChatAdapter; readonly executable: string }>>> = {
   antigravity: { adapter: agyAdapter, executable: 'agy' },
   claude: { adapter: claudeAdapter, executable: 'claude' },
   codex: { adapter: codexAdapter, executable: 'codex' },
@@ -43,23 +43,37 @@ const ADAPTERS: Readonly<Record<string, { readonly adapter: ChatAdapter; readonl
 /**
  * The runtimes a chat can speak to, typed as the VENDOR's own union rather than as strings.
  *
- * <p>`Object.keys` answers `string[]`, so every caller that needs a `Vendor` had to cast — which is
- * the `as` standing in for a real type that this repository's TypeScript rule warns about, and it
- * appeared in a test fixture the moment one was written. The cast belongs here, once, where the map
- * it narrows is in view: a key added to `ADAPTERS` that `Vendor` does not know is a compile error at
- * the map rather than a surprise at a call site. (codex, the code round.)</p>
+ * <p>`Object.keys` answers `string[]`, so every caller that needs a `Vendor` had to cast — the `as`
+ * standing in for a real type that this repository's TypeScript rule warns about, and it appeared in a
+ * test fixture the moment one was written. The cast is here now, once — and it no longer LIES, which
+ * was codex's second point on the round: `ADAPTERS` is keyed by `Vendor['runtime']`, so a typo or an
+ * unsupported runtime fails at the map definition rather than being laundered into a valid vendor
+ * runtime by this line. `Partial` because the map holds the three that can chat, not every runtime a
+ * vendor row may be set to.</p>
  */
 export const CHAT_RUNTIMES: readonly Vendor['runtime'][] =
   Object.keys(ADAPTERS) as Vendor['runtime'][];
 
+/**
+ * The entry for a runtime NAME, or nothing.
+ *
+ * <p>The one cast on the read side, and it is a different thing from the cast the map used to need:
+ * a name the map does not hold answers `undefined` either way, which is what both callers below
+ * already handle. What matters is that the map's KEYS are checked, so an unsupported runtime cannot
+ * be written into it and then laundered back out as a valid one.</p>
+ */
+function entryFor(runtime: string): { readonly adapter: ChatAdapter; readonly executable: string } | undefined {
+  return ADAPTERS[runtime as Vendor['runtime']];
+}
+
 /** What a runtime's CLI is called when the reviewer's settings do not say. */
 export function defaultExecutableFor(runtime: string): string {
-  return ADAPTERS[runtime]?.executable ?? '';
+  return entryFor(runtime)?.executable ?? '';
 }
 
 /** The adapter for a runtime, or nothing when the chat cannot speak to it. */
 export function adapterFor(runtime: string): ChatAdapter | undefined {
-  return ADAPTERS[runtime]?.adapter;
+  return entryFor(runtime)?.adapter;
 }
 
 /** What the chat needs from a launch, decided without touching the world. */
@@ -210,7 +224,7 @@ export function launchSpecFor(
   platform: Platform = process.platform === 'darwin' ? 'darwin' : process.platform === 'win32' ? 'win32' : 'linux',
 ): LaunchSpec {
   const refusal = chatRuntimeRefusal(vendor) || modelRefusal(launch.model);
-  const known = ADAPTERS[vendor.runtime];
+  const known = entryFor(vendor.runtime);
   if (refusal.length > 0 || known === undefined) {
     return { executable: '', args: [], cwd: '', shell: false, refusal };
   }
