@@ -88,25 +88,8 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
         {
             work = Directory.CreateTempSubdirectory("coai-server-job-").FullName;
 
-            // WRITTEN, not merely named. Every adapter but claude's passes this path straight to its
-            // CLI — `--json-schema` for antigravity, `--output-schema` for codex — and a path to a
-            // file nobody wrote is a CLI that refuses before it reads the prompt. Measured against
-            // the live server: `failed to read schema file "/tmp/coai-server-job-…/…"`, for both
-            // vendors, on the first day either of them could be tried at all.
-            var built = runtime.Build(
-                RoleOf(job.Role),
-                job.Prompt,
-                work,
-                SchemaFile.Ensure(work),
-                work,
-                new ReviewerSettings(vendor.Id) { Model = job.Model, Timeout = job.RunBudget });
-
-            // The slot's HOME goes into the REQUEST's environment, never argv and never a log line —
-            // the rule every runtime here already keeps for credentials. The adapter built the command;
-            // this decides which account it runs as.
-            var invocation = built with { Request = built.Request with { Environment = environment } };
-
-            return Read(await new ReviewerExecutor(launcher).LaunchAsync(invocation, ct));
+            return Read(await new ReviewerExecutor(launcher)
+                .LaunchAsync(Confined(runtime, vendor, job, work, environment), ct));
         }
         finally
         {
@@ -146,9 +129,86 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
         new(new ReviewerOutcome.Unparseable(
             "the vendor exited cleanly without writing an answer", usage));
 
+    /// <summary>
+    /// The ONE step that makes this a confined launch: the adapter's argv and the child's
+    /// environment, both read off <see cref="Confinement.OfEveryJob"/>, and a temporary directory
+    /// that is the job's own.
+    /// </summary>
+    /// <remarks>
+    /// <para>It used to be two field assignments in two expressions — <c>Confined</c> on the settings
+    /// handed to <c>Build</c>, <c>InheritsEnvironment</c> on the request that came back — with nothing
+    /// making them agree (codex, Major, epic 1's code round). Every launch this server makes now
+    /// passes through this method and no other, so a later edit cannot set one half and miss the
+    /// other without also bypassing the method by name.</para>
+    /// <para><b>The retry that finding worried about does not rebuild an invocation here.</b> It
+    /// assumed the ladder re-BUILDS; it does not. This launcher makes exactly ONE launch — the
+    /// executor's <c>LaunchAsync</c>, not its <c>RunAsync</c>, so there is no repair launch, and the
+    /// rate-limit ladder lives in the client's scheduler rather than in this binary. The server's own
+    /// retry is <see cref="JobRunner"/> parking a rate-limited account and REQUEUEING the job, and the
+    /// next pump enters <see cref="RunAsync"/> from the top — a fresh directory, a fresh build, this
+    /// same step. First launch and retried launch are one code path, which is what makes the pair
+    /// testable once.</para>
+    /// <para>The schema file is WRITTEN, not merely named. Every adapter but claude's passes this
+    /// path straight to its CLI — <c>--json-schema</c> for antigravity, <c>--output-schema</c> for
+    /// codex — and a path to a file nobody wrote is a CLI that refuses before it reads the prompt.
+    /// Measured against the live server: <c>failed to read schema file
+    /// "/tmp/coai-server-job-…/…"</c>, for both vendors, on the first day either of them could be
+    /// tried at all.</para>
+    /// </remarks>
+    private static ReviewerInvocation Confined(
+        IReviewerRuntime runtime,
+        VendorConfig vendor,
+        JobRecord job,
+        string work,
+        IReadOnlyDictionary<string, string?> slot)
+    {
+        var policy = Confinement.OfEveryJob;
+        var built = runtime.Build(
+            RoleOf(job.Role),
+            job.Prompt,
+            work,
+            SchemaFile.Ensure(work),
+            work,
+            policy.Apply(new ReviewerSettings(vendor.Id) { Model = job.Model, Timeout = job.RunBudget }));
+
+        return built with
+        {
+            Request = policy.Apply(built.Request) with { Environment = OwnTemporaryDirectory(slot, work) },
+        };
+    }
+
+    /// <summary>
+    /// The slot's own variables, plus the job's directory as its temporary one — in every spelling
+    /// the platforms read.
+    /// </summary>
+    /// <remarks>
+    /// <para>The slot's <c>HOME</c> and token go into the REQUEST's environment, never argv and never
+    /// a log line — the rule every runtime here already keeps for credentials. The adapter built the
+    /// command; this decides which account it runs as.</para>
+    /// <para><b>Why the temporary directory is the job's own.</b> The allowlist a confined launch
+    /// starts from passes <c>TMPDIR</c>, <c>TMP</c> and <c>TEMP</c> through, which on a shared box
+    /// running as root means every reviewer sees the same <c>/tmp</c> — where other jobs' files and
+    /// the host's sockets are (gemini, Major, epic 1's code round). The launcher cannot choose a
+    /// temporary directory for its caller, and this caller already has one: the directory
+    /// <see cref="RunAsync"/> creates per job and uses as the working directory. It is set in the
+    /// request's own variables, which are applied LAST and therefore win over the inherited spelling
+    /// — and it is deleted in that same method's <c>finally</c>, so nothing a reviewer writes there
+    /// outlives the job. All three names, because POSIX tools read the first and Windows ones the
+    /// other two, and this server is tested on both.</para>
+    /// </remarks>
+    private static IReadOnlyDictionary<string, string?> OwnTemporaryDirectory(
+        IReadOnlyDictionary<string, string?> slot, string work) =>
+        new Dictionary<string, string?>(slot, StringComparer.Ordinal)
+        {
+            ["TMPDIR"] = work,
+            ["TMP"] = work,
+            ["TEMP"] = work,
+        };
+
     /// <summary>The role a client named. Validated at the endpoint, so a bad one cannot arrive here.</summary>
     private static ReviewRole RoleOf(string role) =>
         Enum.TryParse<ReviewRole>(role, ignoreCase: true, out var parsed) ? parsed : default;
+
     private void Delete(string directory)
     {
         // Empty means the creation itself threw, so there is nothing to remove and nothing to

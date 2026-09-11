@@ -393,10 +393,18 @@ printed the canary, and the confined adapter sent only the three write names. Th
 `fakecli-env` collection in the same change: the fake reads its verb only while `FAKECLI_MODE` is
 unset, and a test whose whole evidence is the child's output prints nothing when it loses that race.
 
-**What this does not yet do.** Nothing on the Team server sets either flag: `ReviewLauncher.RunAsync`
-flipping `Confined` and `InheritsEnvironment` is story 2.2 of the same plan, a separate change to
-`src_server`. Until it lands the server's reviewers run exactly as before; the launcher offers the
-mode and the adapter honours it.
+**Who asks for it.** The Team server, for every job, since story 2.2 landed on 2026-09-11 — and it
+asks through ONE value rather than by setting two fields: `CoaiServer.Confinement` has a single
+`Confined` and two `Apply` views, one producing the settings the adapter reads and one the request
+this launcher reads. The two flags live on types that never meet (the adapter composes argv before a
+request exists; the launcher reads the request after), so nothing made them agree, and a server edit
+that set one and missed the other would have produced an isolated environment with a shell, or the
+reverse. Both look like a confined launch from every angle except the one that matters.
+
+The LOCAL gate asks for neither, and that is not an omission: its reviewers are given a read-only
+worktree pinned to a SHA and are expected to read it — `Read`, `Glob` and `Grep` are how a reviewer
+checks a diff against the code around it. Confinement is correct only where the prompt already
+carries everything, which is the Team server and nowhere else.
 
 ## External dependencies
 
