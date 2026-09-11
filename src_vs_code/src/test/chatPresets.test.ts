@@ -5,6 +5,8 @@ import {
   chatPromptPresetsFrom,
   freshPreset,
   mainPrompt,
+  modelRowsAfterAdd,
+  promptRowsAfterMain,
   presetById,
   reaskFrom,
 } from '../chatPresets';
@@ -231,4 +233,58 @@ test('two new rows in a row do not share an id', () => {
   const second = freshPreset('model', [first as { id: string }], 'agy');
 
   assert.notStrictEqual(first['id'], second['id'], 'a second press produced a row that shadows the first');
+});
+
+/**
+ * The two decisions the HOST used to make inline, where no test could reach them.
+ *
+ * <p>The plan round said so in as many words (codex, Major): a helper test can pass while the
+ * command is still wired to the old seed. So the decisions moved here, beside the readers whose
+ * rules they have to respect.</p>
+ */
+test('adding a model prunes what the old defect wrote, and seeds a row the reader keeps', () => {
+  const rows = [
+    { id: 'dead-1', name: 'New model', provider: '', model: '' },
+    { id: 'real', name: 'Mine', provider: 'agy', model: 'gemini-3.8-flash-low' },
+    { id: 'dead-2', name: 'New model', provider: '', model: '' },
+  ];
+
+  const written = modelRowsAfterAdd(rows, 'agy');
+
+  assert.notStrictEqual(written, undefined);
+  assert.deepStrictEqual(written!.map((row: Record<string, unknown>) => row['id']).slice(0, 1), ['real'], 'the dead rows survived the write');
+  assert.strictEqual(chatModelPresetsFrom(written!).length, 2, 'the row that was added is not one the reader keeps');
+});
+
+test('adding a model with nothing that can chat writes NOTHING, so the list is not touched', () => {
+  // The alternative is the defect again: a write nobody can see. Refusing is the caller's cue to say
+  // why, and saying nothing while writing is what this whole fix is about.
+  assert.strictEqual(modelRowsAfterAdd([{ id: 'real', name: 'Mine', provider: 'agy', model: '' }], ''), undefined);
+});
+
+test('a list that is already clean is still written with its rows in order', () => {
+  const rows = [{ id: 'a', name: 'A', provider: 'agy', model: '' }, { id: 'b', name: 'B', provider: 'codex', model: '' }];
+
+  assert.deepStrictEqual(modelRowsAfterAdd(rows, 'agy')!.map((row: Record<string, unknown>) => row['id']).slice(0, 2), ['a', 'b']);
+});
+
+test('ticking one prompt as main unticks every other, in what is SAVED', () => {
+  const rows = [{ id: 'a', name: 'A', text: 'a', main: true }, { id: 'b', name: 'B', text: 'b', main: false }];
+
+  assert.deepStrictEqual(promptRowsAfterMain(rows, 'b', true).map((row: Record<string, unknown>) => row['main']), [false, true]);
+});
+
+test('unticking the only main one is refused, because something has to answer a capture', () => {
+  // The plan round (gemini, Major): `onlyOneMain` marks nothing when nothing is ticked, and
+  // `mainPrompt` then falls back to the FIRST prompt — so the page would show no tick while the first
+  // prompt is quietly the one being sent. A checkbox that cannot be unticked says the truth instead.
+  const rows = [{ id: 'a', name: 'A', text: 'a', main: true }, { id: 'b', name: 'B', text: 'b', main: false }];
+
+  assert.deepStrictEqual(promptRowsAfterMain(rows, 'a', false).map((row: Record<string, unknown>) => row['main']), [true, false]);
+});
+
+test('unticking one that is not the main one changes nothing it should not', () => {
+  const rows = [{ id: 'a', name: 'A', text: 'a', main: true }, { id: 'b', name: 'B', text: 'b', main: false }];
+
+  assert.deepStrictEqual(promptRowsAfterMain(rows, 'b', false).map((row: Record<string, unknown>) => row['main']), [true, false]);
 });

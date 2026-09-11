@@ -7,6 +7,8 @@ import {
   chatModelPresetsFrom,
   chatPromptPresetsFrom,
   freshPreset,
+  modelRowsAfterAdd,
+  promptRowsAfterMain,
   readableModelRow,
 } from './chatPresets';
 import { PresetCommand, chatPresetsHtml, presetEdit, repaintsAfter } from './chatPresetsPage';
@@ -134,7 +136,11 @@ async function apply(command: PresetCommand): Promise<boolean> {
   }
   if (command.kind === 'edit') {
     const rows = key === PROMPTS_KEY ? promptRowsToWrite() : rowsOf(key);
-    await write(key, edited(rows, command));
+    // The `main` box is a rule of its own — exactly one, and the last one cannot be turned off —
+    // so it is decided beside the reader that enforces the same thing, not in `edited`.
+    await write(key, command.field === 'main'
+      ? promptRowsAfterMain(rows, command.id, command.value === true)
+      : edited(rows, command));
 
     // `repaintsAfter` decides, beside the message parser and tested with it. Typing must NOT
     // repaint — the caret is in a box somebody is writing in — and the `main` tick MUST, because
@@ -157,6 +163,10 @@ function render(): void {
 
 /** Open the tab, or bring back the one that is already open. */
 export function openChatPresets(): void {
+  // Cleared on the way in, before anything is rendered: the rows an older build wrote are invisible
+  // on every surface, so the only moment anybody can be rid of them is one they do not have to ask
+  // for. It writes only when something was dropped, and the render below then finds a clean list.
+  void pruneDeadModelRows();
   if (panel !== undefined) {
     panel.reveal();
 
@@ -196,8 +206,8 @@ export function openChatPresets(): void {
  * they are not drafts, because no surface has ever been able to show one.</p>
  */
 async function addModel(rows: readonly Record<string, unknown>[]): Promise<boolean> {
-  const answering = providers()[0]?.id ?? '';
-  if (answering.length === 0) {
+  const written = modelRowsAfterAdd(rows, providers()[0]?.id ?? '');
+  if (written === undefined) {
     void vscode.window.showWarningMessage(
       'A model preset names the reviewer that answers, and no configured reviewer can chat yet.'
       + ' Enable one in the panel first — the chat speaks to antigravity, claude, codex and Team servers.',
@@ -205,9 +215,24 @@ async function addModel(rows: readonly Record<string, unknown>[]): Promise<boole
 
     return false;
   }
-  const kept = rows.filter(readableModelRow);
-
-  await write(MODELS_KEY, [...kept, freshPreset('model', kept as { id: string }[], answering)]);
+  await write(MODELS_KEY, written);
 
   return true;
+}
+
+/**
+ * The dead rows an older build wrote, cleared when the tab OPENS rather than on the next add.
+ *
+ * <p>Deferring it to the next write was the plan round's finding from all three vendors: somebody
+ * who opens the tab, sees their list and closes it again never triggers one, and somebody with no
+ * reviewer that can chat cannot trigger one at all — the add refuses before it writes. So the tab
+ * cleans up when it is shown. It writes ONLY when something was actually dropped, so it runs once
+ * and the render it triggers finds nothing left to do.</p>
+ */
+async function pruneDeadModelRows(): Promise<void> {
+  const rows = rowsOf(MODELS_KEY);
+  const kept = rows.filter(readableModelRow);
+  if (kept.length !== rows.length) {
+    await write(MODELS_KEY, kept);
+  }
 }
