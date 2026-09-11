@@ -21,11 +21,20 @@ interface HelpMessage {
   delta?: number;
 }
 
+/** A settings write that failed is said out loud, never dropped into a discarded promise. */
+async function said(writing: Promise<void>): Promise<void> {
+  try {
+    await writing;
+  } catch (reason) {
+    void vscode.window.showWarningMessage('That setting could not be saved: ' + String(reason));
+  }
+}
+
 async function onHelpMessage(message: HelpMessage): Promise<void> {
   const handlers: Record<string, () => Promise<void>> = {
-    zoom: () => applyZoomDelta(message.delta ?? 0),
-    tone: () => applyToneDelta(message.delta ?? 0),
-    language: () => setHelpLanguage(message.language ?? ''),
+    zoom: () => said(applyZoomDelta(message.delta ?? 0)),
+    tone: () => said(applyToneDelta(message.delta ?? 0)),
+    language: () => said(setHelpLanguage(message.language ?? '')),
   };
   await handlers[message.type]?.();
 }
