@@ -52,7 +52,7 @@ export interface ChatPanelHooks {
    * <p>`modelId` may be empty: the page sends no model when the provider moved, because the model
    * that was showing belonged to the provider being left.</p>
    */
-  readonly onPick: (id: object, providerId: string, modelId: string) => void;
+  readonly onPick: (id: object, providerId: string, modelId: string, draft?: string) => void;
   /** A saved prompt was pressed. The host owns the list; the page only names which. */
   readonly onUsePrompt: (id: object, presetId: string, draft?: string) => void;
   /** A saved model was pressed. Its provider and model answer, and its starting prompt is offered. */
@@ -268,7 +268,7 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
       // The PAIR is checked as a pair, the rule this feature keeps everywhere else: a model offered
       // by somebody is not a model offered by THIS provider, and `vendor-routing.md` is the reason.
       if (offersPair(offered.get(id), command.provider, command.model)) {
-        hooks.onPick(id, command.provider, command.model);
+        hooks.onPick(id, command.provider, command.model, command.draft);
       } else {
         hooks.onPageError(id, `that pair is not one this conversation offers: ${command.provider} · ${command.model}`);
       }

@@ -1612,9 +1612,11 @@ test('picking either half posts both halves, so the host never has to guess', ()
   page.seen['model'].value = 'gpt-5.6';
   page.fire('model', 'change');
 
+  // WITH the composer, like the preset buttons above: choosing a model in the dropdown is the same
+  // decision, and the host can only swap the role in text it can see.
   assert.deepStrictEqual(page.posted.filter((message) => message['command'] === 'pick'), [
-    { type: 'command', command: 'pick', provider: 'remsoftdev-codex', model: '' },
-    { type: 'command', command: 'pick', provider: 'remsoftdev-codex', model: 'gpt-5.6' },
+    { type: 'command', command: 'pick', provider: 'remsoftdev-codex', model: '', text: '' },
+    { type: 'command', command: 'pick', provider: 'remsoftdev-codex', model: 'gpt-5.6', text: '' },
   ]);
 });
 

@@ -1045,7 +1045,14 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     function pick(providerId, modelId) {
       const caption = document.getElementById('caption');
       if (caption) { caption.textContent = captions[providerId] || ''; }
-      vscode.postMessage({ type: 'command', command: 'pick', provider: providerId, model: modelId });
+      // WITH the composer, like the buttons above. Choosing a model in the dropdown is the same
+      // decision the button makes, so the role in the box follows it the same way - and the host can
+      // only swap a half it can see. (codex, the second code round.)
+      const box = document.getElementById('say');
+      vscode.postMessage({
+        type: 'command', command: 'pick', provider: providerId, model: modelId,
+        text: box ? box.value : '',
+      });
     }
     if (provider) {
       // A provider changed: the model is not carried across. Which of the new row's models answers is
