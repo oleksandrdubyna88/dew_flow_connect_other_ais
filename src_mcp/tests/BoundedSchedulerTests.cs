@@ -162,6 +162,19 @@ public sealed class BoundedSchedulerTests
     /// A reviewer whose own deadline is shorter than the ladder stops when the deadline does,
     /// rather than waiting past it to fail once more.
     /// </summary>
+    /// <remarks>
+    /// <para><b>Three seconds rather than the 250 ms it was written with, and that number is worth a
+    /// paragraph.</b> The guarantee is that a 1 ms ladder step fits inside the deadline and a 30 s one
+    /// does not, and it holds for any budget between roughly a third of a second and thirty. What
+    /// 250 ms added was a SECOND, unintended assertion — that two whole process launches complete in a
+    /// quarter of a second — which is a fact about the machine rather than about the scheduler.</para>
+    /// <para>Observed failing once on 2026-09-11, in the suite run immediately after a full solution
+    /// build, and passing alone and in two later full runs. Whether the launcher's rewrite that day
+    /// moved it from reliably passing to marginal is NOT established; it may always have been this
+    /// close. What is established is that the assertion was about the wrong thing, and this repository
+    /// is explicit that a test which passes alone and fails in the suite is traced rather than re-run.
+    /// Three seconds keeps a tenfold margin under the 30 s step and takes the machine out of it.</para>
+    /// </remarks>
     [Fact]
     public async Task ALadderLongerThanTheReviewersDeadline_StopsAtTheDeadline()
     {
@@ -169,7 +182,7 @@ public sealed class BoundedSchedulerTests
         var work = new ReviewerWork(FakeCliInvocations.Invoke(
             "codex",
             ["count", counter, "stderr-exit", "429 Too Many Requests", "1"],
-            timeout: TimeSpan.FromMilliseconds(250)));
+            timeout: TimeSpan.FromSeconds(3)));
 
         var results = await new BoundedScheduler(
                 retryLadder: [TimeSpan.FromMilliseconds(1), TimeSpan.FromSeconds(30)])
@@ -177,7 +190,7 @@ public sealed class BoundedSchedulerTests
 
         results.Single().Outcome.Should().BeOfType<ReviewerOutcome.RateLimited>();
         (await File.ReadAllLinesAsync(counter, TestContext.Current.CancellationToken))
-            .Should().HaveCount(2, "the 1ms step fits a 250ms deadline and the 30s step cannot");
+            .Should().HaveCount(2, "the 1ms step fits a 3s deadline and the 30s step cannot");
     }
 
     /// <summary>
