@@ -877,6 +877,16 @@ is on the rows it is NOT in. `repaintsAfter` carves the exception, beside `prese
 it: a checkbox has no caret. Unticking the siblings in the page’s own script was the alternative and
 was rejected — the same rule written twice, and the second copy is the one that drifts.
 
+**What the plan round added to those two fixes.** All three vendors named the same gap: clearing the
+dead rows *on the next write* clears nothing for somebody who opens the tab, looks, and closes it —
+and nothing at all for somebody whose add is refused because no reviewer can chat. `pruneDeadModelRows`
+runs when the tab OPENS and writes only when something was dropped, so it runs once. The two decisions
+the host used to make inline moved beside the readers that judge them — `modelRowsAfterAdd` and
+`promptRowsAfterMain` — because a test of the seed passes while the command is still wired to the old
+one, which is exactly what codex said. And unticking the ONLY main prompt is refused: `onlyOneMain`
+marks nothing when nothing is ticked and `mainPrompt` then falls back to the first, so the page would
+have shown no tick while the first prompt was quietly what a capture sends.
+
 **`coai.editChatPresets` reached a menu.** It shipped registered, in no `contributes.menus` entry and
 named in no view, so the tab it opens was reachable only from the command palette. The section has an
 **Edit presets…** button, routed like *Install the MCP server…* through `VSCODE_COMMAND_FOR`.

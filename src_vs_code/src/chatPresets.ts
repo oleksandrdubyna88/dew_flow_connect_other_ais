@@ -244,3 +244,56 @@ export function freshPreset(
 export function readableModelRow(row: unknown): boolean {
   return chatModelPresetsFrom([row]).length === 1;
 }
+
+/** The rows a settings list holds, before any reader has had an opinion about them. */
+export type SavedRow = Record<string, unknown>;
+
+/**
+ * What the model list should hold after *Add a model* — or nothing, when it must refuse.
+ *
+ * <p>Here rather than in the panel host, because the plan round said the obvious thing: a test of
+ * the seed passes while the command is still wired to the old one. The rule this has to respect is
+ * two lines up, and both are now one file.</p>
+ *
+ * <p>It prunes as it writes. A row the reader discards cannot be shown, edited or removed on any
+ * surface, so it is not a draft — it is what the empty-provider seed left behind, and the write that
+ * adds a real row is the moment to be rid of it.</p>
+ *
+ * @param providerId the row the new preset answers through. EMPTY means nothing configured can chat,
+ *   and the answer is `undefined`: no write at all, so the caller says why instead of leaving
+ *   something invisible in the file.
+ */
+export function modelRowsAfterAdd(
+  rows: readonly SavedRow[],
+  providerId: string,
+): readonly SavedRow[] | undefined {
+  if (providerId.length === 0) {
+    return undefined;
+  }
+  const kept = rows.filter(readableModelRow);
+
+  return [...kept, freshPreset('model', kept as { id: string }[], providerId)];
+}
+
+/**
+ * What the prompt list should hold after the `main` box on one row was ticked or unticked.
+ *
+ * <p><b>Unticking the only main one is refused</b>, which makes the box a radio in everything but
+ * appearance. `onlyOneMain` marks nothing when nothing is ticked and `mainPrompt` then falls back to
+ * the FIRST prompt — so a list with no tick shows none while the first one is quietly what a capture
+ * sends. A control that cannot be turned off is honest; one that turns off and changes nothing is
+ * not. (gemini, the plan round.)</p>
+ */
+export function promptRowsAfterMain(
+  rows: readonly SavedRow[],
+  id: string,
+  ticked: boolean,
+): readonly SavedRow[] {
+  if (!ticked) {
+    const others = rows.some((row) => row['id'] !== id && row['main'] === true);
+
+    return others ? rows.map((row) => (row['id'] === id ? { ...row, main: false } : row)) : [...rows];
+  }
+
+  return rows.map((row) => ({ ...row, main: row['id'] === id }));
+}
