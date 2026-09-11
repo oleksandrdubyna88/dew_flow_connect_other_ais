@@ -860,6 +860,23 @@ marked — refusing it would mean the silent substitution this whole change remo
 cannot be written says so once a session rather than once a render, because the consequence is one a
 person can act on: the section goes on offering models the command will not find.
 
+**Two defects in the CRUD tab, reported 2026-09-11 with screenshots.** *Add a model* appended
+`{ name: ‘New model’, provider: ‘’ }` and `chatModelPresetsFrom` refuses a row with no provider — so
+the page re-read the list, the reader dropped the row, and the screen was unchanged while
+`settings.json` grew a dead entry per press. The seed moved next to its reader as `freshPreset`,
+which is the whole point of where it lives now: a shape its own reader refuses cannot be written
+there without a test going red. `addModel` resolves the answering row FIRST — the first that can
+chat, the same default the chat itself takes — and refuses by name when none can, because a button
+that silently writes litter is worse than one that says why it cannot. `readableModelRow` clears the
+rows the old behaviour left, which are not drafts: no surface has ever been able to show one.
+
+And two prompts could both read as **main**. What was SAVED was right — `edited` unticks the others
+before the write — but an edit deliberately does not repaint, because a repaint under a caret is the
+defect the sidebar’s own prompt box had, and that rule had swallowed the one edit whose entire effect
+is on the rows it is NOT in. `repaintsAfter` carves the exception, beside `presetEdit` and tested with
+it: a checkbox has no caret. Unticking the siblings in the page’s own script was the alternative and
+was rejected — the same rule written twice, and the second copy is the one that drifts.
+
 **`coai.editChatPresets` reached a menu.** It shipped registered, in no `contributes.menus` entry and
 named in no view, so the tab it opens was reachable only from the command palette. The section has an
 **Edit presets…** button, routed like *Install the MCP server…* through `VSCODE_COMMAND_FOR`.
