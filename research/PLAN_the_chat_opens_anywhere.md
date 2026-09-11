@@ -255,14 +255,14 @@ Every part's decision is pure, and that is deliberate — a decision inside a mo
 - The refusals: no folder, no file, no question, and a read that fails — each names what it looked
   for and which operation failed.
 
-## Definition of Done
+## Definition of Done — every line of it met on 2026-09-11
 
-- [ ] The three parts are built, each with tests written RED first and watched fail for the real
+- [x] The three parts are built, each with tests written RED first and watched fail for the real
       reason before the fix.
-- [ ] `npm run typecheck` and the whole suite are green — every test, not only the new ones.
-- [ ] `research/module_extension.md` records all three, and `todo/README.md` is updated.
-- [ ] The help corpus mentions the new setting in all FIVE languages, in the same commit — a stale
+- [x] `npm run typecheck` and the whole suite are green — every test, not only the new ones.
+- [x] `research/module_extension.md` records all three, and `todo/README.md` is updated.
+- [x] The help corpus mentions the new setting in all FIVE languages, in the same commit — a stale
       translation is invisible to the coverage test, which only catches a MISSING one.
-- [ ] `helpCoverage.test.ts`'s `SETTING_ALIAS` carries the new setting, or the build is red.
-- [ ] The coai gate: `review_plan` → resolve → `review_code` → resolve.
-- [ ] One PR, checks green, CodeRabbit read and answered, merged, released and tagged.
+- [x] `helpCoverage.test.ts`'s `SETTING_ALIAS` carries the new setting, or the build is red.
+- [x] The coai gate: `review_plan` → resolve → `review_code` → resolve.
+- [x] One PR, checks green, CodeRabbit read and answered, merged, released and tagged.

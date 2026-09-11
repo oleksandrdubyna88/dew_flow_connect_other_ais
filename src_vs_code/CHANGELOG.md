@@ -25,8 +25,9 @@ that box cannot be selected — so there was nothing to copy and a screenshot wa
 question out of the session file instead: every question in it, every option, every description, as
 text, straight into the composer.
 
-It refuses rather than guesses. If the last question was already answered it says so instead of
-handing a solved problem to a second model. If two sessions here are both waiting, it names that
+It refuses rather than guesses. When nothing is waiting for an answer it says the last question was
+already answered, instead of handing a solved problem to a second model — and a question still
+waiting is taken even if a later one has been answered since. If two sessions here are both waiting, it names that
 rather than picking one. If it cannot read the file, or the session format has changed under it, it
 says which and where — never silence.
 
