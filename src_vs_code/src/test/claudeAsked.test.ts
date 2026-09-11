@@ -4,7 +4,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { humanSaid } from '../claudeQuestion';
-import { Asked, MOST_PER_PROMPT, MOST_PROMPTS, oneAnswerFrom, promptsInSession } from '../claudeSessions';
+import {
+  Asked,
+  MOST_PER_PROMPT,
+  MOST_PROMPTS,
+  oneAnswerFrom,
+  promptsFrom,
+  promptsInSession,
+  sessionFileIn,
+} from '../claudeSessions';
 import { chatCommandOf } from '../chatMessages';
 
 /**
@@ -229,6 +237,28 @@ test('a turn written in several blocks comes back whole', () => {
   assert.deepStrictEqual(humanPrompts([split]), ['You have CredsForDevs available.\nа если в папке 2 сессии?']);
 });
 
+test('the envelope is unwrapped in the shape a real session file has', () => {
+  // Measured on this machine rather than imagined: the tags are separated by a newline, the args run
+  // to several lines, and the name already carries its own slash.
+  const real = said('<command-name>/feature-dev:feature-dev</command-name>\n<command-args>проект стал '
+    + 'сильно большой.\nхочу структурировать.</command-args>');
+
+  assert.deepStrictEqual(humanPrompts([real]), [
+    '/feature-dev:feature-dev проект стал сильно большой.\nхочу структурировать.',
+  ]);
+});
+
+test('a message that merely OPENS with the tags is not an envelope', () => {
+  // Matching the two halves separately left a hole in the middle: a message opening with a command
+  // name and quoting a command-args tag further down came back as neither half of what was written.
+  // (codex, the second code round.)
+  const mixed = said('<command-name>/compact</command-name>please keep this text <command-args>quoted</command-args>');
+
+  assert.deepStrictEqual(humanPrompts([mixed]), [
+    '<command-name>/compact</command-name>please keep this text <command-args>quoted</command-args>',
+  ]);
+});
+
 test('a command envelope is unwrapped only where Claude Code puts one — at the start', () => {
   // Quoting the tags mid-sentence replaced everything the person actually wrote with the quotation.
   const quoted = said('is <command-name>/compact</command-name> the tag you meant?');
@@ -268,4 +298,73 @@ test('a namesake refusal outranks a plain miss, because it is the one worth acti
   const nothing: Asked = { kind: 'none', refusal: 'nothing in this one' };
 
   assert.deepStrictEqual(oneAnswerFrom([nothing, ambiguous]), ambiguous);
+});
+
+test('an ambiguity in ONE root is an ambiguity, even when another root has a single match', () => {
+  // One match here and two namesakes there is three candidates, not one — and answering with the
+  // single match picks between three while looking as though it picked between none. (codex, the
+  // second code round.)
+  const found: Asked = { kind: 'said', said: ['from the tidy root'] };
+  const ambiguous: Asked = { kind: 'several', refusal: '2 sessions in this folder share the name' };
+
+  assert.deepStrictEqual(oneAnswerFrom([found, ambiguous]), ambiguous);
+  assert.deepStrictEqual(oneAnswerFrom([ambiguous, found]), ambiguous);
+});
+
+test('a tab that found its file keeps reading it after Claude renames the conversation', () => {
+  // THE POINT OF PINNING. Claude Code refines a conversation's ai-title as it goes on and the tab
+  // follows it, so the name captured when this chat opened stops matching hours later — which is
+  // exactly the window the button exists for. A file does not move. (codex, the second code round.)
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+
+  return (async () => {
+    try {
+      const dir = join(home, '.claude', 'projects', 'D--work-app');
+      mkdirSync(dir, { recursive: true });
+      const file = join(dir, 'one.jsonl');
+      writeFileSync(file, `${titled('The name it had')}\n${said('over what was this window')}\n`, 'utf8');
+
+      const found = await sessionFileIn(home, 'D:\\work\\app', true, 'The name it had');
+      assert.strictEqual(found.kind, 'one', 'the tab could not find its own session while its name matched');
+
+      // Four hours later, Claude has renamed the conversation. Searching by the old name finds
+      // nothing at all — and the pinned file still answers.
+      writeFileSync(file, `${titled('The name it had')}\n${said('over what was this window')}\n${titled('What it became')}\n`, 'utf8');
+
+      assert.strictEqual((await promptsInSession(home, 'D:\\work\\app', true, 'The name it had')).kind, 'none');
+      const still = await promptsFrom(found.kind === 'one' ? found.file : '');
+      assert.deepStrictEqual(still.kind === 'said' ? still.said : [], ['over what was this window']);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  })();
+});
+
+test('a pinned file that is gone says so, rather than looking like an empty conversation', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const gone = join(home, 'never-existed.jsonl');
+
+    const answer = await promptsFrom(gone);
+
+    assert.strictEqual(answer.kind, 'none');
+    assert.match(answer.kind === 'none' ? answer.refusal : '', /no longer on disk/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a file that IS there but holds nothing of yours is told apart from one that is gone', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const file = join(home, 'empty.jsonl');
+    writeFileSync(file, `${titled('Fresh')}\n`, 'utf8');
+
+    const answer = await promptsFrom(file);
+
+    assert.strictEqual(answer.kind, 'none');
+    assert.match(answer.kind === 'none' ? answer.refusal : '', /Nothing of yours is in that session yet/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });

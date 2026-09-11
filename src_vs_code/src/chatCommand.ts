@@ -65,7 +65,7 @@ import {
 import { LanguageCode } from './settingsShape';
 import { isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
 import { askedAsText } from './claudeQuestion';
-import { oneAnswerFrom, promptsInSession, waitingQuestion } from './claudeSessions';
+import { oneAnswerFrom, promptsFrom, promptsInSession, sessionFileIn, waitingQuestion } from './claudeSessions';
 import { EditorText, confirmWholeFile, passageFromEditor } from './editorPassage';
 import { triggerPlan } from './chatTrigger';
 import { Vendor } from './vendors';
@@ -170,6 +170,16 @@ interface Thread extends ChatMemory {
    * to a session by its title, and a chat opened from a `.md` has no session behind it at all.</p>
    */
   fromSession: boolean;
+  /**
+   * The session file this tab belongs to, once it has been found. Empty until then, and empty
+   * forever for a chat opened from a file.
+   *
+   * <p>The FILE, not the name. Claude Code refines a conversation's `ai-title` as it goes on and the
+   * tab follows it, so the name captured when this chat was opened stops matching hours later —
+   * which is precisely the window the Asked button exists for. Resolved in the background as the tab
+   * opens, while the name is still current, and kept. (codex, the second code round.)</p>
+   */
+  sessionFile: string;
   /** Whether a turn is in flight. Only so a switch can say out loud that it is waiting for one. */
   running: boolean;
   /**
@@ -227,6 +237,44 @@ interface Thread extends ChatMemory {
 }
 
 const threads = new WeakMap<object, Thread>();
+
+/**
+ * One question asked of every folder this window has open, at once.
+ *
+ * <p>EVERY folder, never the first that answers: a workspace with two roots, each holding a session
+ * by this tab's name, would otherwise be shown whichever VS Code happened to list first. What to do
+ * with the answers is `oneAnswerFrom`'s to decide.</p>
+ */
+async function everyFolder<T>(ask: (folder: string, caseBlind: boolean) => Promise<T>): Promise<readonly T[]> {
+  const folders = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
+  const caseBlind = process.platform === 'win32' || process.platform === 'darwin';
+
+  return await Promise.all(folders.map((folder) => ask(folder, caseBlind)));
+}
+
+/**
+ * Find and keep this conversation's session file, in the background, as its tab opens.
+ *
+ * <p>Not awaited: a tab must appear at once, and this is a walk over a folder of session files whose
+ * answer is not needed until somebody presses Asked. Not on a FILE-opened chat at all — there is no
+ * session behind one. If it finds nothing, the button falls back to searching by name, which is
+ * where it started.</p>
+ */
+function pinSession(id: object, title: string, fromSession: boolean): void {
+  if (!fromSession || title.length === 0) {
+    return;
+  }
+  void (async () => {
+    const found = await everyFolder((folder, caseBlind) => sessionFileIn(os.homedir(), folder, caseBlind, title));
+    const one = found.filter((answer) => answer.kind === 'one');
+    const mine = threads.get(id);
+    // EXACTLY ONE, across every root. Two is the ambiguity the whole join exists to refuse, and
+    // pinning one of them would make that refusal permanent and invisible.
+    if (mine !== undefined && one.length === 1) {
+      mine.sessionFile = one[0]!.file;
+    }
+  })();
+}
 
 /**
  * How many times each conversation has asked what was written in its session.
@@ -1429,6 +1477,7 @@ function newConversation(
     presses: 0,
     ourDraft: state.draft,
     fromSession: state.fromSession,
+    sessionFile: '',
     running: false,
     // Counted from 1 by the first turn, so 0 is "this conversation has not asked anything yet" and
     // can never be mistaken for a turn a stop could name.
@@ -1441,6 +1490,9 @@ function newConversation(
     title: state.title,
     reopen: false,
   });
+
+  // In the background, while this tab's name still matches the session it came from.
+  pinSession(entry.id, state.title, state.fromSession);
 
   return entry;
 }
@@ -1557,8 +1609,6 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
 
           return;
         }
-        const folders = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
-        const caseBlind = process.platform === 'win32' || process.platform === 'darwin';
         // WHICH PRESS THIS IS. Opening, folding and opening again starts a second read while the
         // first is still going, and the slower one landing last would replace what the person just
         // asked for with what they asked for before. The page keeps the highest it has seen and
@@ -1566,11 +1616,12 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         const at = (asking.get(id) ?? 0) + 1;
         asking.set(id, at);
         void (async () => {
-          // EVERY folder, never the first that answers — see `oneAnswerFrom`.
-          const answers = await Promise.all(
-            folders.map((folder) => promptsInSession(os.homedir(), folder, caseBlind, mine.title)),
-          );
-          const answer = oneAnswerFrom(answers);
+          // THE FILE FIRST, when this tab has one. It was resolved as the tab opened, while its name
+          // still matched — and a name is what goes stale here, never a path.
+          const answer = mine.sessionFile.length > 0
+            ? await promptsFrom(mine.sessionFile)
+            : oneAnswerFrom(await everyFolder((folder, caseBlind) =>
+              promptsInSession(os.homedir(), folder, caseBlind, mine.title)));
           // A REASON, never a blank region. Four situations look identical from an empty box — no
           // session file, no folder, a namesake it refuses to pick between, and a conversation the
           // person has not spoken in yet — and the box is the only place they are looking.
@@ -1901,6 +1952,10 @@ export function restoreConversation(
     // the one outcome this whole join exists to prevent, and it outranks a button that is missing
     // from stored tabs until they are opened again. (codex, twice, from two roles.)
     fromSession: saved.fromSession === true,
+    // A reload loses it, and the first press resolves it again — by a name that may by then have
+    // moved on. Nothing better is available: the file is not in the store, and putting it there
+    // would be a path to somebody's home directory living in workspace state.
+    sessionFile: '',
     running: false,
     turn: 0,
     // Replaced by `reopened` with the rules of whatever model actually answers — this conversation

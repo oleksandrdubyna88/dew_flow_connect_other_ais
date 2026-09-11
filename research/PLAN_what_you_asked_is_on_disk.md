@@ -192,11 +192,20 @@ and the person's own question can be two blocks of one message, and returning at
 words in half. `<command-name>` is unwrapped only at the start of a message, since the same tags
 mid-sentence are somebody quoting them.
 
+**A tab pins its session FILE.** Not in the plan at all, and the second code round was right to ask
+for it: the plan joined a tab to its session by title and then never revisited the question, but a
+title MOVES — Claude Code refines it and the tab follows — so a name captured at open stops matching
+by the afternoon. The file does not move. `pinSession` resolves it in the background as the tab
+opens and keeps it; only ever when exactly one session across every root matches.
+
 ## The open tail
 
 - The button finds nothing until Claude Code has NAMED the conversation — before the first `ai-title`
   row there is nothing to join to. It says so rather than going quiet. There is no better join
   available from an extension: VS Code exposes no window id, and this product does not launch Claude
   Code, so it has no channel to that webview. Revisit if Anthropic ever puts the session id on the tab.
+- A RELOAD loses the pin, and the first press after one resolves by a name that may by then have
+  moved on. Putting the path in `SavedTab` would mean a home-directory path in workspace state, which
+  was judged the worse trade; a session id would be better if one were ever available on the tab.
 - The earliest 200 turns are what crosses. A session with more than that cannot be paged further from
   the page today; nobody has asked to.
