@@ -1052,6 +1052,12 @@ looked at — the same silent wrong-conversation `sessionKey.ts` exists to preve
 And every filesystem failure says which operation failed, because a command that throws into the
 void looks exactly like one that does nothing.
 
+**And what the code rounds then found in it.** Three real ones. A question still WAITING beats a later one that was answered — a file where an unanswered question is followed by an answered one reported "already answered" while the first still sat on screen. EVERY workspace folder is searched, because a multi-root window has a session per root. And nothing blocks the extension host: the whole path is `fs/promises`, it reads every session file rather than the newest few, and it runs under a progress note.
+
+Three more about not guessing. The case-insensitive directory match happens only where the FILESYSTEM is case-insensitive, because on Linux `/work/App` and `/work/app` are two projects. A directory that will not answer is not an empty one — only ENOENT is absence. And the label re-key is refused for FILES: two `README.md` in two folders share a label and are not the same document, so a file whose tab has gone starts a new conversation rather than inheriting one. That fallback belongs to Claude panels, where a label is a session name somebody chose.
+
+**A shape this build cannot read is NAMED.** An `AskUserQuestion` whose questions will not parse is a third answer beside "a question" and "nothing" — if Anthropic moves a field, the command says the format changed instead of reporting that Claude is asking nothing while a question sits on screen.
+
 **The tail all three doors share is one function now.** `deliverPassage` — resolve the CLI, resolve
 the remote session, open or reveal the conversation, ask or leave the turn in the composer. Three
 copies of that would have been three places for the opening instruction, the temp directory and the

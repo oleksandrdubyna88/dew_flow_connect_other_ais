@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync, utimesSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { askedAsText, lastAsked } from '../claudeQuestion';
+import { AskedSet, askedAsText, lastAsked } from '../claudeQuestion';
 import {
   WaitingSession,
   projectDirIn,
@@ -11,6 +11,7 @@ import {
   waitingIn,
   waitingQuestion,
 } from '../claudeSessions';
+import { CLAUDE_PANEL_VIEW_TYPE, isOrdinaryEditorTab, sourceSession } from '../sessionKey';
 
 /**
  * Taking the question Claude Code is asking, off its own session file.
@@ -33,6 +34,13 @@ const answers = (id: string): string => JSON.stringify({
   message: { content: [{ type: 'tool_result', tool_use_id: id, content: 'the answer' }] },
 });
 
+/** The question a file holds, for the tests that are about the question rather than the answer shape. */
+const asked = (lines: readonly string[]): AskedSet | undefined => {
+  const found = lastAsked(lines);
+
+  return found.kind === 'asked' ? found.set : undefined;
+};
+
 const ONE = [{
   header: 'Scope',
   question: 'How far should this go?',
@@ -48,7 +56,7 @@ const ONE = [{
 // ---------------------------------------------------------------------------------------------
 
 test('the last question in the file is the one taken', () => {
-  const found = lastAsked([asks('a', ONE), asks('b', [{ ...ONE[0], question: 'And then?' }])]);
+  const found = asked([asks('a', ONE), asks('b', [{ ...ONE[0], question: 'And then?' }])]);
 
   assert.strictEqual(found?.id, 'b', 'an older question won');
   assert.strictEqual(found?.questions[0]?.question, 'And then?');
@@ -58,7 +66,7 @@ test('the last question in the file is the one taken', () => {
 test('a question with an answer after it is reported ANSWERED, not handed over as live', () => {
   // Handing a second model a question that is already settled is the worst outcome this command
   // has: the answer comes back about a decision that was made ten minutes ago.
-  const found = lastAsked([asks('a', ONE), answers('a')]);
+  const found = asked([asks('a', ONE), answers('a')]);
 
   assert.strictEqual(found?.answered, true, 'an answered question looked like one still waiting');
 });
@@ -67,7 +75,7 @@ test('EVERY question in the block is read, not the first', () => {
   // `questions` holds four at a time often enough that taking the first would drop most of what
   // was asked — and silently. (codex, the plan round.)
   const four = [0, 1, 2, 3].map((n) => ({ ...ONE[0], question: `Question ${n}` }));
-  const found = lastAsked([asks('a', four)]);
+  const found = asked([asks('a', four)]);
 
   assert.strictEqual(found?.questions.length, 4, 'questions were dropped');
   assert.deepStrictEqual(found?.questions.map((one) => one.question), [
@@ -78,14 +86,14 @@ test('EVERY question in the block is read, not the first', () => {
 test('a half-written line costs that line and nothing else', () => {
   // The file is being appended to by another process while this reads it, so a truncated last line
   // is the ordinary case rather than a corrupt file.
-  const found = lastAsked([asks('a', ONE), '{"type":"assistant","message":{"cont', '', 'not json at all']);
+  const found = asked([asks('a', ONE), '{"type":"assistant","message":{"cont', '', 'not json at all']);
 
   assert.strictEqual(found?.id, 'a', 'one bad line took the whole file with it');
 });
 
 test('a file with nothing asked in it is nothing, not an exception', () => {
-  assert.strictEqual(lastAsked([]), undefined);
-  assert.strictEqual(lastAsked(['{"type":"user","message":{"content":[]}}']), undefined);
+  assert.strictEqual(lastAsked([]).kind, 'nothing');
+  assert.strictEqual(lastAsked(['{"type":"user","message":{"content":[]}}']).kind, 'nothing');
 });
 
 test('a block that is not a question is not read as one', () => {
@@ -94,7 +102,7 @@ test('a block that is not a question is not read as one', () => {
     message: { content: [{ type: 'tool_use', id: 'x', name: 'Bash', input: { command: 'ls' } }] },
   });
 
-  assert.strictEqual(lastAsked([other]), undefined, 'another tool was taken for a question');
+  assert.strictEqual(lastAsked([other]).kind, 'nothing', 'another tool was taken for a question');
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -102,7 +110,7 @@ test('a block that is not a question is not read as one', () => {
 // ---------------------------------------------------------------------------------------------
 
 test('every option and every description reaches the passage', () => {
-  const found = lastAsked([asks('a', ONE)]);
+  const found = asked([asks('a', ONE)]);
   const text = askedAsText(found!);
 
   assert.match(text, /\[Scope\] How far should this go\?/, 'the header or the question is missing');
@@ -111,15 +119,15 @@ test('every option and every description reaches the passage', () => {
 });
 
 test('a question that takes more than one answer says so', () => {
-  const many = lastAsked([asks('a', [{ ...ONE[0], multiSelect: true }])]);
-  const one = lastAsked([asks('a', ONE)]);
+  const many = asked([asks('a', [{ ...ONE[0], multiSelect: true }])]);
+  const one = asked([asks('a', ONE)]);
 
   assert.match(askedAsText(many!), /more than one answer/, 'a multi-select question did not say so');
   assert.doesNotMatch(askedAsText(one!), /more than one answer/, 'a single-answer question said it was not');
 });
 
 test('an option with no description is still an option', () => {
-  const bare = lastAsked([asks('a', [{ ...ONE[0], options: [{ label: 'Yes' }] }])]);
+  const bare = asked([asks('a', [{ ...ONE[0], options: [{ label: 'Yes' }] }])]);
 
   assert.match(askedAsText(bare!), /- Yes$/m, 'an option without a description was dropped or left a dangling dash');
 });
@@ -239,14 +247,14 @@ test('a case-sensitive filesystem does not take a namesake project for this one'
 test('a question still waiting wins over a later one that was answered', () => {
   // A question can be left open while the conversation goes on around it. Taking only the LAST one
   // reported "already answered" while the first still sat on screen. (codex, the code round.)
-  const found = lastAsked([asks('a', ONE), asks('b', ONE), answers('b')]);
+  const found = asked([asks('a', ONE), asks('b', ONE), answers('b')]);
 
   assert.strictEqual(found?.id, 'a', 'the question still waiting was passed over');
   assert.strictEqual(found?.answered, false);
 });
 
 test('when every question has been answered, the newest of them is the one reported', () => {
-  const found = lastAsked([asks('a', ONE), answers('a'), asks('b', ONE), answers('b')]);
+  const found = asked([asks('a', ONE), answers('a'), asks('b', ONE), answers('b')]);
 
   assert.strictEqual(found?.id, 'b');
   assert.strictEqual(found?.answered, true);
@@ -257,7 +265,40 @@ test('a tool_result with no id names nothing, and answers nothing', () => {
     type: 'user',
     message: { content: [{ type: 'tool_result', content: 'x' }] },
   });
-  const found = lastAsked([asks('a', ONE), nameless]);
+  const found = asked([asks('a', ONE), nameless]);
 
   assert.strictEqual(found?.answered, false, 'an answer that names no question answered one');
+});
+
+test('a question this build cannot read is NAMED, not counted as silence', () => {
+  // If Anthropic moves a field, the command must say the format changed rather than report that
+  // Claude is asking nothing while a question sits on screen. (codex, the code round.)
+  const strange = JSON.stringify({
+    type: 'assistant',
+    message: { content: [{ type: 'tool_use', id: 'a', name: 'AskUserQuestion', input: { prompts: [] } }] },
+  });
+
+  assert.strictEqual(lastAsked([strange]).kind, 'unreadable', 'an unrecognised question looked like an empty file');
+  assert.strictEqual(lastAsked([]).kind, 'nothing', 'an empty file looked like a format change');
+});
+
+test('two files of the same NAME do not inherit the other one\'s conversation', () => {
+  // /a/README.md and /b/README.md share a label and are not the same document. The label fallback
+  // belongs to Claude's panels, where a label is a session name somebody chose. (codex.)
+  const gone = { key: {}, label: 'README.md' };
+  const now = { key: {}, label: 'README.md', viewType: '', scheme: 'file' };
+
+  assert.deepStrictEqual(
+    sourceSession(now, [now], [gone], isOrdinaryEditorTab),
+    { kind: 'new', key: now.key, label: 'README.md' },
+    'a namesake file took over a conversation that belonged to another file',
+  );
+  // And the panel keeps the fallback it was given it for.
+  const panel = { key: {}, label: 'main', viewType: CLAUDE_PANEL_VIEW_TYPE, scheme: '' };
+
+  assert.strictEqual(
+    sourceSession(panel, [panel], [{ key: {}, label: 'main' }])?.kind,
+    'rekey',
+    'a renamed Claude tab lost its conversation',
+  );
 });
