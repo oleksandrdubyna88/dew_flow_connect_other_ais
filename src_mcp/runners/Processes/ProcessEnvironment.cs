@@ -39,8 +39,11 @@ public static class ProcessEnvironment
     /// variable, Linux keeps them apart. A list compared the other way would either pass a Windows
     /// <c>Path</c> nothing or let a Linux <c>path</c> through as <c>PATH</c>.
     /// </summary>
-    public static StringComparer NameComparer { get; } =
-        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+    public static StringComparer NameComparer { get; } = ComparerFor(OperatingSystem.IsWindows());
+
+    /// <summary>The comparer <paramref name="isWindows"/> calls for, whatever machine is asking.</summary>
+    public static StringComparer ComparerFor(bool isWindows) =>
+        isWindows ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     private static readonly string[] Everywhere =
     [
@@ -59,12 +62,23 @@ public static class ProcessEnvironment
     ];
 
     /// <summary>The allowlist for THIS platform, compared by <see cref="NameComparer"/>.</summary>
-    public static IReadOnlySet<string> Passthrough { get; } = ForThisPlatform();
+    public static IReadOnlySet<string> Passthrough { get; } = ForPlatform(OperatingSystem.IsWindows());
 
-    private static FrozenSet<string> ForThisPlatform()
-    {
-        var platform = OperatingSystem.IsWindows() ? WindowsOnly : UnixOnly;
-
-        return ((string[])[.. Everywhere, .. platform]).ToFrozenSet(NameComparer);
-    }
+    /// <summary>
+    /// The allowlist a given platform gets — asked as a QUESTION rather than read off the host.
+    /// </summary>
+    /// <remarks>
+    /// The platform is a parameter for one reason, and it is a testing one rather than a design
+    /// ambition: read off the host, each machine only ever exercises its own branch, so the Unix
+    /// entries are never asserted on a Windows developer's machine and the Windows ones never in a
+    /// Linux CI. That matters most for the entry that matters most — <c>HOME</c> was the plan round's
+    /// Blocking finding, the one whose absence fails every Node CLI in initialisation, and the only
+    /// test that could have caught its loss was a test that cannot run where the work is done.
+    /// A test that can only inspect what is PRESENT is the rule this answers.
+    /// <para>It is not an injection seam and should not become one: this launcher starts processes on
+    /// the machine it is running on, so a request to confine "as Windows" from Linux would describe a
+    /// capability that does not exist.</para>
+    /// </remarks>
+    public static IReadOnlySet<string> ForPlatform(bool isWindows) =>
+        ((string[])[.. Everywhere, .. isWindows ? WindowsOnly : UnixOnly]).ToFrozenSet(ComparerFor(isWindows));
 }
