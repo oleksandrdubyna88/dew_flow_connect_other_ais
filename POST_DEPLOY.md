@@ -17,7 +17,7 @@ What ships is **three** artefacts on three clocks, to three different places —
 Marketplace, the MCP binary to its own tag, the server to one VM — and most of the failures below are
 one of them arriving wrong.
 
-Target: the released **extension** version — `--target 0.29.3`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
+Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
 Last verified: 2026-09-11 · extension 0.33.1 / mcp 0.18.17 / **server 0.5.7** · all five automated items PASS. **Item 12 observed for the first time, and it is the reason this release exists**: the release script's canary ran one real review per configured vendor on the box — `codex: done`, `antigravity: done`, `claude: done` — so the INSTALLED claude (2.1.261, not the 2.1.258 the flags were read against) accepts both halves of the confinement: the eleven `--disallowedTools` names and an allowlisted environment. Until that ran, both were asserted as SENT and nothing had observed them being taken.
 
@@ -114,10 +114,16 @@ rebuilt, an artefact never deployed — at least leave something behind that loo
 
 ```bash
 gh auth status                                   # item 1 reads the release through gh
-export MCP_VERSION=0.15.0                        # the binary's own tag: mcp-v<version>
-export SERVER_VERSION=0.5.5                      # the Team server's own tag: server-v<version>
-node .agents/conventions/tools/post-deploy-check.mjs --target 0.29.3
+export MCP_VERSION=0.18.17                       # the binary's own tag: mcp-v<version>
+export SERVER_VERSION=0.5.7                      # the Team server's own tag: server-v<version>
+node .agents/conventions/tools/post-deploy-check.mjs --target 0.33.1
 ```
+
+**These three are the versions of the last run, not decoration — replace them with the ones you are
+releasing.** They used to be three releases stale, which was harmless only while the items merely
+fetched: since item 10 COMPARES what the box serves against `SERVER_VERSION`, a copied-out example
+verifies the wrong artefact, and item 1 and item 9 read a release that is not the one being shipped.
+(CodeRabbit, on the pull request that moved the stamp.)
 
 `TARGET` here is a **version**, not a URL: what is being checked is what a user receives, and both
 places a user receives it from are addressed by name rather than by host.
