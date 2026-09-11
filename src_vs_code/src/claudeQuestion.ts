@@ -258,8 +258,14 @@ export function humanSaid(line: string): string {
   return plainly(saidIn(row));
 }
 
-/** The title a session gives itself in ONE line, or empty. The caller keeps the last one. */
-export function titleSaid(line: string): string {
+/**
+ * The title a session gives itself in ONE line, or empty. The caller keeps the last one.
+ *
+ * <p>Named for what it reads out of the line rather than for who said it — the neighbouring
+ * {@link humanSaid} returns a PERSON's words, and a matching name here read as though this did too.
+ * (The second code round, as a nit worth taking.)</p>
+ */
+export function titleFrom(line: string): string {
   if (!line.includes('"ai-title"')) {
     return '';
   }
@@ -304,15 +310,17 @@ function saidIn(row: Record<string, unknown>): string {
  * A prompt as a person would recognise it: the slash-command envelope unwrapped, the tooling gone.
  */
 function plainly(said: string): string {
-  // ANCHORED. Claude Code's envelope opens the message; the same tags in the middle of one are a
-  // person quoting them, and unwrapping there replaced everything they actually wrote with the
-  // quotation. (gemini, the code round.)
-  const name = /^\s*<command-name>([^<]*)<\/command-name>/.exec(said);
-  const args = /<command-args>([^<]*)<\/command-args>/.exec(said);
-  if (name !== null) {
+  // ONE CONTIGUOUS ENVELOPE, anchored at the start. Claude Code writes the tags as a block that
+  // opens the message; the same tags elsewhere in one are a person quoting them, and unwrapping
+  // there replaced everything they actually wrote with the quotation. Matching the two halves
+  // separately had the same hole in the middle: a message that OPENED with a command name and went
+  // on to quote a command-args tag further down came back as neither. (gemini, then codex.)
+  const envelope = /^\s*<command-name>([^<]*)<\/command-name>\s*(?:<command-message>[^<]*<\/command-message>\s*)?(?:<command-args>([^<]*)<\/command-args>)?\s*$/
+    .exec(said);
+  if (envelope !== null) {
     // The tag already carries its slash — measured on this machine's own session files, where every
     // one of them reads <command-name>/compact</command-name>. Adding another made it //compact.
-    return [(name[1] ?? '').trim(), (args?.[1] ?? '').trim()].filter((part) => part.length > 0).join(' ');
+    return [(envelope[1] ?? '').trim(), (envelope[2] ?? '').trim()].filter((part) => part.length > 0).join(' ');
   }
   // A local command's own output is not something anybody wrote.
   if (said.startsWith('<local-command-stdout>')) {

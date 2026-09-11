@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import * as readline from 'node:readline';
 import * as path from 'node:path';
-import { AskedSet, humanSaid, lastAsked, titleSaid } from './claudeQuestion';
+import { AskedSet, humanSaid, lastAsked, titleFrom } from './claudeQuestion';
 
 /**
  * Where Claude Code keeps its sessions, and which of them is the one being looked at.
@@ -174,6 +174,13 @@ function where(reason: unknown): string {
  * than whichever folder happened to be checked last.</p>
  */
 export function oneAnswerFrom(answers: readonly Asked[]): Asked {
+  // AN AMBIGUITY ANYWHERE COUNTS. One root holding a single match and another holding two sessions
+  // that share the tab's name is three candidates, not one — and answering with the single match
+  // picks between three while looking like it picked between none. (codex, the second code round.)
+  const several = answers.find((one) => one.kind === 'several');
+  if (several !== undefined) {
+    return several;
+  }
   const said = answers.filter((one) => one.kind === 'said');
   if (said.length === 1) {
     return said[0]!;
@@ -184,9 +191,7 @@ export function oneAnswerFrom(answers: readonly Asked[]): Asked {
       refusal: `${said.length} of the folders open here have a session by this tab's name, so it cannot say which one is its own.`,
     };
   }
-  const several = answers.find((one) => one.kind === 'several');
-
-  return several ?? answers[0] ?? {
+  return answers[0] ?? {
     kind: 'none',
     refusal: 'This window has no folder open, so there is nowhere to look for a session.',
   };
@@ -233,6 +238,33 @@ export async function promptsInSession(
   caseBlind: boolean,
   looking: string,
 ): Promise<Asked> {
+  const found = await sessionFileIn(home, cwd, caseBlind, looking);
+
+  return found.kind === 'one' ? await promptsFrom(found.file) : found;
+}
+
+/** Which file a tab's name belongs to, or why it belongs to none. */
+export type Found =
+  | { readonly kind: 'one'; readonly file: string }
+  | { readonly kind: 'none'; readonly refusal: string }
+  | { readonly kind: 'several'; readonly refusal: string };
+
+/**
+ * The one session file this tab's name belongs to.
+ *
+ * <p>Separate from reading it, because a tab wants this ONCE and the prompts every time. Claude Code
+ * refines a conversation's `ai-title` as it goes on and the tab follows it, so a name captured when
+ * the chat was opened stops matching hours later — which is exactly the window this feature is for.
+ * A FILE does not move. So the tab resolves its file while its name is still current and keeps it.
+ * (codex, the second code round: *"persists only a mutable display title instead of stable session
+ * identity"*.)</p>
+ */
+export async function sessionFileIn(
+  home: string,
+  cwd: string,
+  caseBlind: boolean,
+  looking: string,
+): Promise<Found> {
   const root = projectsRoot(home);
   if (looking.length === 0) {
     // A tab with no name cannot be joined to anything. It is not an error — a chat opened from a
@@ -281,12 +313,38 @@ export async function promptsInSession(
       refusal: `No session in this folder is called “${looking}” — Claude Code names a conversation once it has one.`,
     };
   }
-  const said = await promptsOf(only);
+
+  return { kind: 'one', file: only };
+}
+
+/**
+ * What the person wrote in one known session file.
+ *
+ * <p>The file, not the name: a tab that resolved its session once reads straight from it afterwards,
+ * so a conversation Claude Code has since renamed is still the tab's own.</p>
+ */
+export async function promptsFrom(file: string): Promise<Asked> {
+  const said = await promptsOf(file);
   if (said.length === 0) {
-    return { kind: 'none', refusal: 'Nothing of yours is in that session yet.' };
+    // Told apart from a file that is gone: an empty read of a file that IS there means the person
+    // has not written in it yet, and a read of one that is not means the tab has outlived it.
+    return await readable(file)
+      ? { kind: 'none', refusal: 'Nothing of yours is in that session yet.' }
+      : { kind: 'none', refusal: 'That session file is no longer on disk.' };
   }
 
   return { kind: 'said', said };
+}
+
+/** Whether a path is still there to be read. */
+async function readable(file: string): Promise<boolean> {
+  try {
+    await fs.access(file);
+
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -317,7 +375,7 @@ async function eachLine(file: string, take: (line: string) => boolean): Promise<
 async function titleOf(file: string): Promise<string> {
   let title = '';
   await eachLine(file, (line) => {
-    const named = titleSaid(line);
+    const named = titleFrom(line);
     if (named.length > 0) {
       title = named;
     }

@@ -259,7 +259,8 @@ test('the first question after a restore carries the whole transcript', () => {
   // The WINDOW, not the file: this asserts the carry is set where a restored thread is built, and it
   // is widened when that function grows rather than dropped. It grew when a restored tab started
   // carrying its prompt, its role and the words this side last wrote.
-  assert.match(restore.slice(0, 3_500), /carry: \[\.\.\.saved\.messages\]/,
+  // It grew again when a restored tab started remembering which door it came through.
+  assert.match(restore.slice(0, 4_500), /carry: \[\.\.\.saved\.messages\]/,
     'a restored conversation hands the next model nothing, so it answers a follow-up it never heard');
 });
 

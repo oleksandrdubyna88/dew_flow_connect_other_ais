@@ -1093,6 +1093,15 @@ where it was cut). The first version read each whole file into a string and spli
 lines to compare a title, and five reviewers across two vendors measured the same shape at 10× as
 seconds of a blocked extension host.
 
+**A tab pins its FILE, not the name that found it.** Claude Code refines a conversation's
+`ai-title` as it goes on and the tab follows it, so a name captured when the chat opened stops
+matching hours later — which is precisely the window this button exists for. `pinSession` resolves
+the file in the background as the tab opens, while the name still matches, and keeps it; every later
+press reads that path directly. It pins only when exactly ONE session across every workspace root
+matches, because pinning one of two namesakes would make that refusal permanent and invisible. A
+reload loses the pin and the first press resolves again by name — the path is not put in the store,
+since that would be somebody's home directory living in workspace state.
+
 **Three refusals, all of them named.** Two sessions in one folder sharing a title is a refusal, never
 a pick — `oneAnswerFrom` says the same for two workspace ROOTS each holding one, which was a
 first-match-wins bug the code round caught. Every outcome carries its own sentence, because no session
