@@ -82,6 +82,7 @@ export type ChatCommand =
   | { readonly kind: 'stop'; readonly turn: number }
   | { readonly kind: 'zoom'; readonly delta: number }
   | { readonly kind: 'tone'; readonly delta: number }
+  | { readonly kind: 'showAsked' }
   /**
    * Ask the OTHER model the same thing: the conversation minus the last answer, and the question
    * that answer was given to. It carries nothing else — the host holds the transcript and decides
@@ -231,6 +232,10 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
   // not one is a press of nothing rather than a jump to a bound.
   if (message.type === 'tone') {
     return { kind: 'tone', delta: stepOf(message.delta) };
+  }
+  // "What did I ask?" — the page has no way to read a session file, so it asks the host to.
+  if (message.type === 'showAsked') {
+    return { kind: 'showAsked' };
   }
   if (message.type === 'pageError') {
     const said = text(message.message);

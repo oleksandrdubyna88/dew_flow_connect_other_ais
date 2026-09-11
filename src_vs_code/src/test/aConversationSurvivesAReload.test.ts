@@ -281,3 +281,49 @@ test('a question refused by a dead conversation comes back to the composer', () 
   assert.match(guard.slice(0, 600), /pushChatDraft\(entry, text\)/,
     'the refusal threw away what the person typed, so they must write it again to try the fix');
 });
+
+test('a record written before the door was remembered still reads, as a session tab', () => {
+  // The field is OPTIONAL rather than a TAB_VERSION bump — a bump discards every stored conversation
+  // to carry one boolean. Every tab that could have been written before it existed was a session one.
+  const old = {
+    id: 'c1',
+    savedAt: 10,
+    title: 'Подключение к БД',
+    passage: '',
+    modelId: 'antigravity',
+    messages: [],
+  };
+
+  const read = tabsFrom({ version: TAB_VERSION, tabs: [old] });
+
+  assert.strictEqual(read.length, 1, 'a record from before the field was dropped');
+  assert.strictEqual(read[0]?.fromSession, undefined, 'a field nobody wrote was invented on the way in');
+});
+
+test('a door that is not a boolean is a record this build cannot trust', () => {
+  const bad = {
+    id: 'c1',
+    savedAt: 10,
+    title: 'x',
+    passage: '',
+    modelId: 'antigravity',
+    messages: [],
+    fromSession: 'yes',
+  };
+
+  assert.deepStrictEqual(tabsFrom({ version: TAB_VERSION, tabs: [bad] }), []);
+});
+
+test('the door a chat came through survives the reload', () => {
+  const fromFile = {
+    id: 'c1',
+    savedAt: 10,
+    title: 'chatPage.ts',
+    passage: '',
+    modelId: 'antigravity',
+    messages: [],
+    fromSession: false,
+  };
+
+  assert.strictEqual(tabsFrom({ version: TAB_VERSION, tabs: [fromFile] })[0]?.fromSession, false);
+});

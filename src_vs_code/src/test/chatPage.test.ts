@@ -37,6 +37,8 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
     modelPresets: [],
     providerId: 'antigravity',
     chosenModelId: 'antigravity',
+    fromSession: true,
+    asked: [],
     modelId: 'antigravity',
     running: false,
     capped: false,
@@ -2183,4 +2185,35 @@ test('both steppers are in the header, each with its own buttons', () => {
 
   assert.match(header, /data-zoom="1"/, 'the size stepper left the header');
   assert.match(header, /data-tone="1"/, 'the tone stepper is not beside it');
+});
+
+test('the Asked button is in the header with the steppers, and the region it opens is outside the scroll', () => {
+  // Asked for exactly there: *"вот тут в начале справа на одной строке с плюсиками должна быть
+  // кнопка показать вопрос"*. And outside `#scroll`, because *"на этот текст не должна влиять
+  // прокрутка — неважно где я, в начале или в конце"*.
+  const html = chatPageHtml(state({ fromSession: true }), 'n0nce');
+  const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+
+  assert.match(header, /id="asked"/, 'the Asked button is not beside the steppers');
+  assert.ok(
+    html.indexOf('id="asking"') < html.indexOf('<main id="scroll">'),
+    'the region that shows the question is inside the scrolling one, so scrolling would move it',
+  );
+});
+
+test('a chat opened from a FILE has no button, and no region to open', () => {
+  // There is no session behind it to read, so it gets nothing rather than a button that apologises.
+  const html = chatPageHtml(state({ fromSession: false }), 'n0nce');
+
+  assert.doesNotMatch(html, /id="asked"/, 'a chat with no session behind it offered to read one');
+  assert.doesNotMatch(html, /id="asking"/, 'a region nothing can open was rendered anyway');
+});
+
+test('a session file full of markup cannot break out of the page either', () => {
+  // The same guarantee as the message above, by a different route: what the host reads off disk
+  // arrives as a script LITERAL rather than as markup, and jsonForScript encodes its angle brackets.
+  const closing = '</' + 'script>';
+  const html = chatPageHtml(state({ fromSession: true, asked: [closing + '<img src=x onerror=alert(1)>'] }), 'n0nce');
+
+  assert.strictEqual(html.split('<script').length - 1, 1, 'a session file opened a second script element');
 });

@@ -212,6 +212,91 @@ export function lastAsked(lines: readonly string[]): FileAsked {
 }
 
 /**
+ * Everything the PERSON wrote in this session, in the order they wrote it.
+ *
+ * <p>Asked for because a window four hours old has lost the thing it is about: *"начальный вопрос
+ * исчезает, и мне приходится спрашивать Клод над чем ты работаешь"*. It is on disk the whole time.</p>
+ *
+ * <p><b>A human prompt is one Claude Code attributed to a person</b> — `origin.kind === 'human'`.
+ * A prompt an extension prefilled is still theirs: CredsForDevs writes its preamble into the box and
+ * the person types their question at the end of it, so the two arrive as ONE message and the operator
+ * reads it as their own. Checked with them rather than guessed.</p>
+ *
+ * <p>ALL of them, oldest first, because the page offers to step through: after four hours the first
+ * line is not always the one that says what the work turned into.</p>
+ *
+ * <p>A slash command is kept and unwrapped: `&lt;command-name&gt;` tags are Claude Code's own
+ * envelope around something a person really did type.</p>
+ */
+export function humanPrompts(lines: readonly string[]): readonly string[] {
+  const said: string[] = [];
+
+  for (const line of lines) {
+    if (line.trim().length === 0) {
+      continue;
+    }
+    let row: Record<string, unknown> | undefined;
+    try {
+      row = record(JSON.parse(line));
+    } catch {
+      continue;
+    }
+    if (row?.['type'] !== 'user' || row['isSidechain'] === true || row['isMeta'] === true) {
+      continue;
+    }
+    const origin = record(row['origin']);
+    if (origin?.['kind'] !== 'human') {
+      continue;
+    }
+    const spoken = plainly(saidIn(row));
+    if (spoken.length > 0) {
+      said.push(spoken);
+    }
+  }
+
+  return said;
+}
+
+/** The text of a user row, whichever shape its content takes. */
+function saidIn(row: Record<string, unknown>): string {
+  const message = record(row['message']);
+  const content = message?.['content'];
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return '';
+  }
+  for (const block of content as unknown[]) {
+    const one = record(block);
+    if (typeof one?.['text'] === 'string' && one['text'].trim().length > 0) {
+      return one['text'];
+    }
+  }
+
+  return '';
+}
+
+/**
+ * A prompt as a person would recognise it: the slash-command envelope unwrapped, the tooling gone.
+ */
+function plainly(said: string): string {
+  const name = /<command-name>([^<]*)<\/command-name>/.exec(said);
+  const args = /<command-args>([^<]*)<\/command-args>/.exec(said);
+  if (name !== null) {
+    // The tag already carries its slash — measured on this machine's own session files, where every
+    // one of them reads <command-name>/compact</command-name>. Adding another made it //compact.
+    return [(name[1] ?? '').trim(), (args?.[1] ?? '').trim()].filter((part) => part.length > 0).join(' ');
+  }
+  // A local command's own output is not something anybody wrote.
+  if (said.startsWith('<local-command-stdout>')) {
+    return '';
+  }
+
+  return said.trim();
+}
+
+/**
  * The question as a passage: every question, every option, every description.
  *
  * <p>Plain text with the shape a reader expects, because this goes to a model as MATERIAL — it is

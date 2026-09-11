@@ -58,6 +58,8 @@ export interface ChatPanelHooks {
   readonly onUsePrompt: (id: object, presetId: string, draft?: string) => void;
   /** A saved model was pressed. Its provider and model answer, and its starting prompt is offered. */
   readonly onUseModel: (id: object, presetId: string, draft: string) => void;
+  /** The page asked what the person wrote in the session this conversation came from. */
+  readonly onShowAsked: (id: object) => void;
   /**
    * The person stopped the answer they were waiting for.
    *
@@ -287,6 +289,10 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
       return;
     case 'useModel':
       hooks.onUseModel(id, command.id, command.draft);
+
+      return;
+    case 'showAsked':
+      hooks.onShowAsked(id);
 
       return;
     case 'stop':
