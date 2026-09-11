@@ -4,7 +4,7 @@ Every route this server has, as a request a client actually sends. The tier noth
 routing, the path grammar, the verb, model binding, the auth scheme, the status code and the
 serialized shape — none of which a test inside the process can see.
 
-The rule is [`.claude/rules/shared/common/http-contracts.md`](../.claude/rules/shared/common/http-contracts.md).
+The rule is [`.agents/conventions/common/http-contracts.md`](../.agents/conventions/common/http-contracts.md).
 
 ## Running the whole suite
 
