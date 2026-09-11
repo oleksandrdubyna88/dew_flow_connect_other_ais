@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { ModelPreset } from '../chatPresets';
 import { ChatProvider } from '../chatModels';
 import { ChatModelChoice, ChatPageState, FOLLOW_SLACK_PX, chatCappedHtml, chatMessagesHtml, chatPresetRowsHtml, chatPageHtml, chatPickerHtml, chatStatusHtml, shouldFollow } from '../chatPage';
 import { chatCommandOf } from '../chatMessages';
@@ -1614,9 +1615,9 @@ const PROMPT_PRESETS = [
   { id: 'p2', name: 'What would you answer?', text: 'What would you answer?', main: false },
 ];
 
-const MODEL_PRESETS = [
-  { id: 'm1', name: 'Fast', provider: 'antigravity', model: 'gemini-3.8-flash' },
-  { id: 'm2', name: 'Deep', provider: 'claude', model: 'opus', startingPrompt: 'Think hard' },
+const MODEL_PRESETS: readonly ModelPreset[] = [
+  { id: 'm1', name: 'Fast', runtime: 'antigravity', executablePath: '', baseUrl: '', model: 'gemini-3.8-flash' },
+  { id: 'm2', name: 'Deep', runtime: 'antigravity', executablePath: '', baseUrl: '', model: 'opus', startingPrompt: 'Think hard' },
 ];
 
 test('both rows are there, each button naming its preset', () => {
@@ -1888,4 +1889,19 @@ test('the preset buttons post messages the host understands too', () => {
     assert.notStrictEqual(chatCommandOf(posted).kind, 'ignore',
       `the host ignores what a preset button posts: ${JSON.stringify(posted)}`);
   }
+});
+
+test('a pushed draft is APPENDED, and a set one REPLACES — two operations, not one', () => {
+  // CodeRabbit on PR #200: `pushChatDraft` posts `draft`, and the page appends it — deliberately, so
+  // that capturing a second passage does not throw away a half-typed follow-up. A prompt preset is
+  // the opposite instruction: "ask this instead". It had been sharing the appending operation, so
+  // pressing it while something was in the box produced a question neither of them wrote.
+  const page = runChatPage();
+  page.seen['say'].value = 'half a question';
+
+  page.deliver({ type: 'state', draft: 'a captured passage' });
+  assert.strictEqual(page.seen['say'].value, 'half a question\n\na captured passage', 'a capture stopped appending');
+
+  page.deliver({ type: 'state', setDraft: 'Explain this simply' });
+  assert.strictEqual(page.seen['say'].value, 'Explain this simply', 'a preset did not replace what was there');
 });

@@ -264,7 +264,9 @@ export function chatPresetRowsHtml(
   if (prompts.length === 0 && models.length === 0) {
     return '';
   }
-  const colour = vendorPalette(models.map((preset) => preset.provider));
+  // One vendor, one colour — and the vendor is the RUNTIME now, which is what that rule always
+  // meant. It used to key on the reviewer row, so two rows of one vendor wore two colours.
+  const colour = vendorPalette(models.map((preset) => preset.runtime));
   const promptRow = prompts.length === 0
     ? ''
     : `<div class="presets prompts">${prompts
@@ -277,7 +279,7 @@ export function chatPresetRowsHtml(
     : `<div class="presets models">${models
       .map((preset) =>
         `<button type="button" class="preset model" data-model-preset="${escapeHtml(preset.id)}"`
-        + ` style="border-left-color: ${colour(preset.provider)}">${escapeHtml(preset.name)}</button>`)
+        + ` style="border-left-color: ${colour(preset.runtime)}">${escapeHtml(preset.name)}</button>`)
       .join('')}</div>`;
 
   return `<div id="presets">${modelRow}${promptRow}</div>`;
@@ -1020,6 +1022,17 @@ function chatScript(state: ChatPageState, regions: Regions): string {
         box2.value = box2.value.length > 0 ? box2.value + '\\n\\n' + data.draft : data.draft;
         fitComposer();
         if (typeof box2.focus === 'function') { box2.focus(); }
+      }
+    }
+    // And the OTHER operation: replace. A prompt preset is the instruction "ask this instead", which
+    // is the opposite of a capture - sharing the appending branch above made it join a half-written
+    // question into one neither of them wrote. (CodeRabbit, PR #200.)
+    if (typeof data.setDraft === 'string') {
+      const box3 = document.getElementById('say');
+      if (box3) {
+        box3.value = data.setDraft;
+        fitComposer();
+        if (typeof box3.focus === 'function') { box3.focus(); }
       }
     }
     const box = document.getElementById('say');

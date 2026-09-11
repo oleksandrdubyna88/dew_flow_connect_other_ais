@@ -164,17 +164,24 @@ function promptRow(preset: PromptPreset): string {
 </div>`;
 }
 
+/**
+ * One saved model: its NAME, the vendor it runs on, which of that vendor's models, and its prompt.
+ *
+ * <p>The vendor is shown rather than chosen here — it is picked once, in the wizard, from the same
+ * list *Add a reviewer* offers, and changing it would change what the CLI, the endpoint and the key
+ * are. The MODEL is a select, because that is the one half a person changes without changing what
+ * the preset IS.</p>
+ */
 function modelRow(preset: ModelPreset, providers: readonly ChatProvider[]): string {
-  const chosen = providers.find((provider) => provider.id === preset.provider);
-  const rows = providers.map((provider) => option(provider.id, provider.label, preset.provider)).join('');
-  // Its own row's models and nobody else's — the same rule the chat's picker keeps, and for the same
-  // reason: a pair nothing can run is a pair a person can save here and be refused for later.
+  const chosen = providers.find((provider) => provider.id === preset.id);
+  // Its own vendor's models and nobody else's — the same rule the chat's picker keeps, and for the
+  // same reason: a pair nothing can run is a pair a person can save here and be refused for later.
   const models = (chosen?.models ?? []).map((model) => option(model.id, model.label, preset.model)).join('');
 
   return `<div class="preset" data-id="${escapeHtml(preset.id)}">
   <div class="head">
     <input type="text" data-list="model" data-field="name" value="${escapeHtml(preset.name)}" placeholder="A name for this model">
-    <select data-list="model" data-field="provider">${rows}</select>
+    <span class="vendor">${escapeHtml(preset.runtime)}</span>
     <select data-list="model" data-field="model">${models}</select>
     <button type="button" class="remove" data-remove="model" data-id="${escapeHtml(preset.id)}">Remove</button>
   </div>

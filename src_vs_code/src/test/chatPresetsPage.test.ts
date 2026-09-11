@@ -17,8 +17,8 @@ const PROMPTS = [
 ];
 
 const MODELS = [
-  { id: 'm1', name: 'Fast', provider: 'antigravity', model: 'gemini-3.8-flash' },
-  { id: 'm2', name: 'Deep', provider: 'claude', model: 'opus', startingPrompt: 'Think hard' },
+  { id: 'm1', name: 'Fast', runtime: 'antigravity' as const, executablePath: '', baseUrl: '', model: 'gemini-3.8-flash' },
+  { id: 'm2', name: 'Deep', runtime: 'antigravity' as const, executablePath: '', baseUrl: '', model: 'opus', startingPrompt: 'Think hard' },
 ];
 
 const PROVIDERS = [
@@ -51,11 +51,18 @@ test('exactly one prompt is ticked as the main one', () => {
   assert.strictEqual(ticked.length, 1, 'the main prompt is not exactly one');
 });
 
-test('a model preset offers the providers, and the chosen one is marked', () => {
-  const html = chatPresetsHtml({ prompts: [], models: MODELS, providers: PROVIDERS, uiScale: 0 }, 'n0nce');
+test('a model preset says the vendor it runs on, and offers that vendor’s models', () => {
+  // THE GUARANTEE CHANGED: the row used to carry a select over the reviewer rows. The vendor is
+  // chosen once, in the wizard, from the list *Add a reviewer* offers — changing it would change
+  // what the CLI, the endpoint and the key are. The MODEL stays a select, because that is the one
+  // half a person changes without changing what the preset IS.
+  const html = chatPresetsHtml(
+    { prompts: [], models: MODELS, providers: PROVIDERS, uiScale: 1 },
+    'n0nce',
+  );
 
-  assert.match(html, /<option value="claude" selected>/, 'the chosen provider is not marked');
-  assert.match(html, /<option value="opus" selected>/, 'the chosen model is not marked');
+  assert.match(html, /<span class="vendor">antigravity<\/span>/, 'the row does not say which vendor runs it');
+  assert.doesNotMatch(html, /data-field="provider"/, 'the row still offers a list of reviewers');
 });
 
 test('each list can be added to and each entry removed', () => {
@@ -70,7 +77,7 @@ test('everything a person typed is escaped, in a name and in a prompt alike', ()
   const html = chatPresetsHtml(
     {
       prompts: [{ id: 'p', name: '<img src=x onerror=alert(1)>', text: '</textarea><script>alert(1)</script>', main: true }],
-      models: [{ id: 'm', name: '"><b>', provider: 'x', model: '' }],
+      models: [{ id: 'm', name: '"><b>', runtime: 'antigravity' as const, executablePath: '', baseUrl: '', model: '' }],
       providers: [],
       uiScale: 0,
     },

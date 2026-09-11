@@ -7,7 +7,7 @@ import {
 import { escapeHtml } from './escapeHtml';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
-import { chatProvidersFrom } from './chatModels';
+import { chatProvidersFromPresets } from './chatModels';
 import { mainPrompt } from './chatPresets';
 import { CoaiSettings, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
 import { Escalation } from './escalations';
@@ -491,7 +491,7 @@ function chatBody(chat: ChatSettings, state: PanelState): string {
   // list with them empty, so a row whose models must be discovered offers only what it is set to.
   // A `local` row cannot chat at all (`canChat`), so the engine that would name its models is never
   // consulted: passing one would be passing a value nothing on this path can read.
-  const list = chatProvidersFrom(state.vendors, {
+  const list = chatProvidersFromPresets(chat.models, {
     discoveredCodex: state.codexModels,
     discoveredAgy: state.agyModels,
     localEngine: undefined,
@@ -504,7 +504,7 @@ function chatBody(chat: ChatSettings, state: PanelState): string {
   const chosen = chat.model.length === 0
     ? list.providers[0]
     : list.providers.find((one) => one.id === chat.model);
-  const ownModel = state.vendors.find((one) => one.id === chosen?.id)?.model ?? '';
+  const ownModel = chat.models.find((one) => one.id === chosen?.id)?.model ?? '';
   const refusals = list.refused.map((row) => row.reason);
 
   return `<div class="field">

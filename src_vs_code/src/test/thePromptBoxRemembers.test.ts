@@ -48,6 +48,7 @@ const chat: ChatSettings = {
   prompt: 'Explain',
   promptChoice: '',
   prompts: [],
+  models: [],
   language: 'en',
   autoSend: 'keyboard',
   model: '',

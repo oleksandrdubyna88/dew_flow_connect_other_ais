@@ -21,6 +21,7 @@ test('an untouched installation asks for an explanation in English, and waits on
     prompt: 'Explain',
     promptChoice: '',
     prompts: [],
+    models: [],
     language: 'en',
     autoSend: 'keyboard',
     model: '',

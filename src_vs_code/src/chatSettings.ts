@@ -1,5 +1,5 @@
 import { DEFAULT_CHAT_PROMPT } from './chatPrompt';
-import { PromptPreset, chatPromptPresetsFrom, mainPrompt } from './chatPresets';
+import { ModelPreset, PromptPreset, chatModelPresetsFrom, chatPromptPresetsFrom, mainPrompt } from './chatPresets';
 import { LANGUAGES, LanguageCode } from './settingsShape';
 
 /**
@@ -44,6 +44,11 @@ export interface ChatSettings {
   readonly promptChoice: string;
   /** The saved prompts, carrying the legacy migration — what the picker offers, by name. */
   readonly prompts: readonly PromptPreset[];
+  /**
+   * The saved MODELS — which is what the chat's own picker offers, reviewers being none of its
+   * business. One reader for both surfaces, so the panel and the command cannot disagree.
+   */
+  readonly models: readonly ModelPreset[];
   /** The language answers are asked in. Its own setting, NOT `coai.helpLanguage` — see below. */
   readonly language: LanguageCode;
   readonly autoSend: ChatAutoSend;
@@ -98,6 +103,7 @@ export function chatSettingsFrom(read: (key: string) => unknown): ChatSettings {
     prompt: chosen?.text ?? DEFAULT_CHAT_PROMPT,
     promptChoice: choice,
     prompts,
+    models: chatModelPresetsFrom(read('chatModelPresets')),
     modelName: text(read('chatModelName'), ''),
     // English by default, and NOT `coai.helpLanguage`: that one is set to English on the owner's
     // machine, so borrowing it would have delivered English explanations — exactly what the feature

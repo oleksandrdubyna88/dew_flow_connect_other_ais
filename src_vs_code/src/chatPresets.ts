@@ -1,3 +1,5 @@
+import { Vendor } from './vendors';
+import { Runtime } from './models';
 /**
  * The two lists a person builds: named prompts, and named models.
  *
@@ -30,15 +32,37 @@ export interface PromptPreset {
   readonly main: boolean;
 }
 
+/**
+ * A saved model — and the WHOLE of what the chat needs to run it.
+ *
+ * <p><b>The chat is independent of the review gate, and this type is where that became true.</b> A
+ * preset used to name a reviewer ROW and borrow its runtime, its CLI path and its endpoint, so a
+ * reviewer switched off took the chat with it and every picker read as a list of reviewers. Said by
+ * the operator five times before it was built: *"это полностью независимый функционал этот чат…
+ * чат никак не должен трогать ревьюы"*.</p>
+ *
+ * <p>A Team-server preset is the one that still points OUTWARD, and at the right thing: it names the
+ * server entry and the vendor on it, and the address, the token and the allowlist come from the
+ * *Team servers* section — which is its own configuration and has nothing to do with reviewers
+ * either.</p>
+ */
 export interface ModelPreset {
   readonly id: string;
   readonly name: string;
-  /** The vendor ROW that answers — the identity a saved choice stores, as everywhere else here. */
-  readonly provider: string;
-  /** Which of that row's models, or empty for whatever the row is set to. */
+  /** The vendor this preset runs on — a runtime, not somebody's reviewer. */
+  readonly runtime: Runtime;
+  /** Which of that vendor's models. Empty means the vendor's own default. */
   readonly model: string;
   /** What the composer opens with when this preset is chosen. Optional, and usually absent. */
   readonly startingPrompt?: string | undefined;
+  /** Where that vendor's CLI is. Empty = look it up on PATH. */
+  readonly executablePath: string;
+  /** An OpenAI-compatible endpoint, for a vendor riding the codex runtime. Empty = the CLI's own. */
+  readonly baseUrl: string;
+  /** For a `remote` preset: which entry in the *Team servers* section answers it. */
+  readonly teamServerId?: string | undefined;
+  /** For a `remote` preset: the vendor name THAT SERVER knows — `codex`, not the preset's own id. */
+  readonly remoteVendor?: string | undefined;
 }
 
 /** A string from a file a person edits: trimmed, and empty for anything that is not one. */
@@ -135,8 +159,17 @@ export function mainPrompt(presets: readonly PromptPreset[]): PromptPreset | und
   return presets.find((preset) => preset.main) ?? presets[0];
 }
 
-/** The model presets. A row without a PROVIDER is not one: the provider is what answers. */
-export function chatModelPresetsFrom(saved: unknown): readonly ModelPreset[] {
+/**
+ * The model presets. A row with no VENDOR is not one: the vendor is what answers.
+ *
+ * @param rows the reviewer rows, passed in for the MIGRATION and for nothing else. A preset written
+ *   before the chat had its own configuration names a reviewer row in `provider`; its runtime, CLI
+ *   path, endpoint and Team-server fields are copied out of that row once, and after the next write
+ *   the chat never asks about reviewers again. Somebody who built three presets should not lose them
+ *   to an architecture decision they did not make. A preset naming a row that is gone cannot be run
+ *   and is dropped, like any other row this reader refuses.
+ */
+export function chatModelPresetsFrom(saved: unknown, reviewerRows: readonly Vendor[] = []): readonly ModelPreset[] {
   const rows = Array.isArray(saved) ? saved : [];
   const taken = new Set<string>();
 
@@ -146,17 +179,25 @@ export function chatModelPresetsFrom(saved: unknown): readonly ModelPreset[] {
       return [];
     }
     const name = text(one['name']).slice(0, NAME_LIMIT);
-    const provider = text(one['provider']);
-    if (name.length === 0 || provider.length === 0) {
+    // The vendor, from the preset itself — or carried out of the reviewer row it used to name.
+    const carried = text(one['runtime']).length > 0 ? undefined : reviewerRows.find((row) => row.id === text(one['provider']));
+    const runtime = text(one['runtime']).length > 0 ? text(one['runtime']) : (carried?.runtime ?? '');
+    if (name.length === 0 || runtime.length === 0) {
       return [];
     }
     const starting = typeof one['startingPrompt'] === 'string' ? one['startingPrompt'].trim() : '';
+    const server = text(one['teamServerId']).length > 0 ? text(one['teamServerId']) : (carried?.teamServerId ?? '');
+    const onServer = text(one['remoteVendor']).length > 0 ? text(one['remoteVendor']) : (carried?.remoteVendor ?? '');
 
     return [{
       id: withId(text(one['id']), index, taken),
       name,
-      provider,
-      model: text(one['model']),
+      runtime: runtime as Runtime,
+      model: text(one['model']).length > 0 ? text(one['model']) : (carried?.model ?? ''),
+      executablePath: text(one['executablePath']).length > 0 ? text(one['executablePath']) : (carried?.executablePath ?? ''),
+      baseUrl: text(one['baseUrl']).length > 0 ? text(one['baseUrl']) : (carried?.baseUrl ?? ''),
+      ...(server.length > 0 ? { teamServerId: server } : {}),
+      ...(onServer.length > 0 ? { remoteVendor: onServer } : {}),
       ...(starting.length > 0 ? { startingPrompt: starting } : {}),
     }];
   });
@@ -238,11 +279,29 @@ export function freshPromptRow(taken: readonly { readonly id: string }[]): Saved
  */
 export function freshModelRow(
   taken: readonly { readonly id: string }[],
-  providerId: string,
+  vendor: ChatVendorChoice,
   modelId = '',
   name = 'New model',
 ): SavedRow {
-  return { id: freshId(taken), name: name.trim().length > 0 ? name.trim() : 'New model', provider: providerId, model: modelId };
+  return {
+    id: freshId(taken),
+    name: name.trim().length > 0 ? name.trim() : 'New model',
+    runtime: vendor.runtime,
+    model: modelId,
+    executablePath: vendor.executablePath ?? '',
+    baseUrl: vendor.baseUrl ?? '',
+    ...(vendor.teamServerId !== undefined ? { teamServerId: vendor.teamServerId } : {}),
+    ...(vendor.remoteVendor !== undefined ? { remoteVendor: vendor.remoteVendor } : {}),
+  };
+}
+
+/** What the wizard decided a preset runs on — the vendor, and how to reach it. */
+export interface ChatVendorChoice {
+  readonly runtime: Runtime;
+  readonly executablePath?: string | undefined;
+  readonly baseUrl?: string | undefined;
+  readonly teamServerId?: string | undefined;
+  readonly remoteVendor?: string | undefined;
 }
 
 /**
@@ -282,16 +341,16 @@ export type SavedRow = Record<string, unknown>;
  */
 export function modelRowsAfterAdd(
   rows: readonly SavedRow[],
-  providerId: string,
+  vendor: ChatVendorChoice | undefined,
   modelId = '',
   name = 'New model',
   startingPrompt = '',
 ): readonly SavedRow[] | undefined {
-  if (providerId.length === 0) {
+  if (vendor === undefined) {
     return undefined;
   }
   const kept = rows.filter((row) => !deadModelRow(row));
-  const fresh = freshModelRow(kept as { id: string }[], providerId, modelId, name);
+  const fresh = freshModelRow(kept as { id: string }[], vendor, modelId, name);
 
   return [...kept, startingPrompt.trim().length > 0 ? { ...fresh, startingPrompt: startingPrompt.trim() } : fresh];
 }
@@ -331,4 +390,33 @@ export function promptRowsAfterMain(
   return rows.every((row) => (row['main'] === true) === wanted(row))
     ? rows
     : rows.map((row) => ({ ...row, main: wanted(row) }));
+}
+
+/**
+ * What a preset looks like to everything that RUNS a conversation.
+ *
+ * <p>The launcher, the session, the price and the Team-server client were all written against a
+ * `Vendor`, and they are right to be: that type IS "how to run this thing". What was wrong was where
+ * the value came from — somebody's reviewer row. It is built from the preset now, so nothing
+ * downstream had to change and nothing downstream reads `coai.vendors`.</p>
+ *
+ * <p>`enabled` is always true: a preset a person saved is a preset they want, and there is no
+ * reviewer switch above it to turn it off. The id is the PRESET's, so the ledger and the spending
+ * view name the thing that was chosen.</p>
+ */
+export function chatRunSpec(preset: ModelPreset): Vendor {
+  return {
+    id: preset.id,
+    runtime: preset.runtime,
+    model: preset.model,
+    enabled: true,
+    plan: false,
+    code: false,
+    baseUrl: preset.baseUrl,
+    executablePath: preset.executablePath,
+    pricePerMillionIn: 0,
+    pricePerMillionOut: 0,
+    ...(preset.teamServerId !== undefined ? { teamServerId: preset.teamServerId } : {}),
+    ...(preset.remoteVendor !== undefined ? { remoteVendor: preset.remoteVendor } : {}),
+  };
 }

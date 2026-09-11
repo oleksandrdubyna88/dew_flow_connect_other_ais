@@ -5,6 +5,7 @@ import { allowedModelsFor, ModelChoice, modelsFor } from './models';
 import { REMOTE_TURNS } from './remoteAsk';
 import { TeamServerState } from './teamServerView';
 import { Vendor } from './vendors';
+import { ModelPreset, chatRunSpec } from './chatPresets';
 
 /**
  * Which models this feature may put a question to.
@@ -265,7 +266,13 @@ export function chatProvidersFrom(
   const enabled = vendors.filter((vendor) => vendor.enabled);
   const providers = enabled.filter(canChat).map((vendor): ChatProvider => ({
     id: vendor.id,
-    label: vendor.model.length > 0 ? `${vendor.id} · ${vendor.model}` : vendor.id,
+    // The ROW's name and nothing else. It used to append the model that row is configured to —
+    // `codex · gpt-5.6-luna` — which came from the flat list this replaced, where one entry WAS one
+    // model. Beside a model select it makes two dropdowns that read alike, and the operator asked
+    // the obvious question: what is the difference? The left is which reviewer answers, the right is
+    // which of its models, and the label has to say only the first. Two rows on one runtime are told
+    // apart by their names, which is the whole reason a provider is a row and not a runtime.
+    label: vendor.id,
     caption: captionOf(vendor),
     models: modelsFor(
       vendor.runtime,
@@ -468,4 +475,47 @@ export function modelToRun(
   return fallback.length === 0
     ? { ok: false, refusal: 'That reviewer offers no model this chat can run.' }
     : { ok: true, model: fallback };
+}
+
+/**
+ * The providers a CHAT may be sent to — its own saved models, and nothing a reviewer owns.
+ *
+ * <p>This replaces `chatProvidersFrom(vendors, …)` on every chat path. That one answers "which
+ * REVIEWER rows can chat", which is how the feature was built and what made it impossible to use
+ * without touching the review gate: a reviewer switched off took the chat with it, and every picker
+ * read as a list of somebody's reviewers. A preset carries its own vendor, model and CLI, so the
+ * list is the person's saved models — named by THEM.</p>
+ *
+ * <p>The models each one can be pointed at still come from the catalog: what the CLIs listed on this
+ * machine, and what a Team server allows. A preset whose vendor cannot chat at all is refused by
+ * name rather than hidden, the rule every other list here keeps.</p>
+ */
+export function chatProvidersFromPresets(
+  presets: readonly ModelPreset[],
+  catalog: ChatCatalog,
+): ChatProviderList {
+  const providers = presets.filter((preset) => canChat(chatRunSpec(preset))).map((preset): ChatProvider => {
+    const spec = chatRunSpec(preset);
+
+    return {
+      id: preset.id,
+      label: preset.name,
+      caption: captionOf(spec),
+      models: modelsFor(
+        preset.runtime,
+        catalog.discoveredCodex,
+        preset.model,
+        catalog.localEngine,
+        catalog.discoveredAgy,
+        allowedModelsFor(spec, catalog.teamServers).models,
+      ).filter((model) => routableOn(preset.runtime, model.id)),
+    };
+  });
+  const refused = presets.filter((preset) => !canChat(chatRunSpec(preset))).map((preset): RefusedModel => ({
+    id: preset.id,
+    reason: `the chat can only speak to ${CHAT_RUNTIMES.join(', ')} and Team servers so far`
+      + ` — ${preset.name} runs on ${preset.runtime}`,
+  }));
+
+  return { providers, refused };
 }

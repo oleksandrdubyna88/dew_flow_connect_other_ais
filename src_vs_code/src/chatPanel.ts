@@ -383,6 +383,19 @@ export function pushChatDraft(entry: ChatEntry, draft: string): void {
   entry.panel.post({ type: 'state', draft });
 }
 
+/**
+ * REPLACE what is in the composer, rather than adding to it.
+ *
+ * <p>Two operations because they are two instructions. A captured passage is ADDED to whatever was
+ * being written — throwing that away is the one thing this feature has been careful about since the
+ * prompt box lost what was typed into it. A prompt preset is the opposite: it IS "ask this instead",
+ * and joining it onto a half-written question produces one neither of them wrote. They had been
+ * sharing the appending one. (CodeRabbit, PR #200.)</p>
+ */
+export function setChatDraft(entry: ChatEntry, draft: string): void {
+  entry.panel.post({ type: 'state', setDraft: draft });
+}
+
 /** The scale the page opens at, so a new tab matches the ones already open. */
 export function chatUiScale(): number {
   return currentUiScale();
