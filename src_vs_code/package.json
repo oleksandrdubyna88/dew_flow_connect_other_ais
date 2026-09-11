@@ -607,6 +607,13 @@
           "command": "coai.chatWithOtherAi",
           "when": "webviewId == 'claudeVSCodePanel'"
         }
+      ],
+      "editor/context": [
+        {
+          "command": "coai.chatWithOtherAi",
+          "when": "editorTextFocus",
+          "group": "coai@1"
+        }
       ]
     },
     "keybindings": [
@@ -614,6 +621,11 @@
         "command": "coai.chatWithOtherAi",
         "key": "ctrl+alt+a",
         "when": "activeWebviewPanelId == 'claudeVSCodePanel'"
+      },
+      {
+        "command": "coai.chatWithOtherAi",
+        "key": "ctrl+alt+a",
+        "when": "editorTextFocus"
       }
     ]
   },

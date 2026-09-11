@@ -49,6 +49,15 @@ export interface TabSnapshot {
   readonly key: object;
   readonly label: string;
   readonly viewType: string;
+  /**
+   * The URI scheme of the document behind the tab, or empty for a tab that has no document.
+   *
+   * <p>What separates a FILE from everything else that can be the active tab. `file` and `untitled`
+   * are documents a person is reading and can send; `output`, `git`, `vscode-settings` and a webview
+   * are not, and a scheme test excludes them structurally rather than by a list of names to keep up
+   * to date. Optional, so every snapshot written before the second door compiles unchanged.</p>
+   */
+  readonly scheme?: string;
 }
 
 /** A panel the registry already holds, and the tab it was opened for. */
@@ -73,19 +82,45 @@ function stillOpen(known: KnownPanel, tabs: readonly TabSnapshot[]): boolean {
   return tabs.some((tab) => tab.key === known.key);
 }
 
+/** A tab that is one of Claude Code's own chat panels. */
+export function isClaudeSessionTab(tab: TabSnapshot): boolean {
+  return tab.viewType === CLAUDE_PANEL_VIEW_TYPE;
+}
+
 /**
- * The source session for the active tab, or nothing when the active tab is not a Claude Code panel.
+ * A tab that is an ordinary document — a file, or an unsaved buffer.
+ *
+ * <p>By SCHEME, not by "it has no viewType": an Output pane, a settings editor and a diff of a git
+ * revision all have documents of their own, and none of them is a thing a person means when they
+ * select a paragraph and press the chord. `file` and `untitled` are, and a new scheme arriving in a
+ * future VS Code is excluded until somebody decides it should not be.</p>
+ */
+export function isOrdinaryEditorTab(tab: TabSnapshot): boolean {
+  return tab.scheme === 'file' || tab.scheme === 'untitled';
+}
+
+/**
+ * The source session for the active tab, or nothing when the active tab is not an eligible source.
+ *
+ * <p><b>The eligibility is a parameter, and the rest of this function is why.</b> Identity first, a
+ * label re-key only for a panel whose own tab has gone, and a refusal to guess when a name is
+ * ambiguous — all of that is about TABS, not about Claude Code. Two files called `README.md` in two
+ * folders collide exactly the way two tabs called `main` do, and a second copy of this algorithm
+ * for the second door would be a second place for that collision to be handled differently.</p>
  *
  * @param active the active tab of the active group, or `undefined` when the group has none
  * @param tabs every open tab, used only to ask whether a known panel's tab is still there
  * @param known the panels the registry already holds
+ * @param eligible what may be a source at all; Claude Code's own panel by default, so every caller
+ *   written before the second door keeps the behaviour it had
  */
 export function sourceSession(
   active: TabSnapshot | undefined,
   tabs: readonly TabSnapshot[],
   known: readonly KnownPanel[],
+  eligible: (tab: TabSnapshot) => boolean = isClaudeSessionTab,
 ): SessionMatch | undefined {
-  if (active === undefined || active.viewType !== CLAUDE_PANEL_VIEW_TYPE) {
+  if (active === undefined || !eligible(active)) {
     return undefined;
   }
 

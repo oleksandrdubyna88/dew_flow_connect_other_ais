@@ -230,7 +230,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       whatItIs:
         'Select a paragraph in your assistant’s answer, press `Ctrl+Alt+A`, and it opens a tab where '
         + 'another vendor’s model explains it — in your language, in a conversation you can carry on. '
-        + 'The same thing is in the right-click menu as **Chat with other AI**.',
+        + 'The same thing is in the right-click menu as **Chat with other AI**.\n\nIt works in an ordinary file too — a `.md`, a `.cs`, anything you can open. Select a passage and press the same keys, or right-click it. There the selection is read straight out of the editor rather than copied through the clipboard, so it is instant and your clipboard is left alone. With nothing selected it sends the whole file, and asks first when the file is a big one. The conversation is named after the file, and a second question about the same file continues the same conversation.',
       why:
         'A dense English answer is not always a clear one, and asking the model that wrote it to '
         + 'explain itself gets you the same words again. A different vendor reads it cold. Doing that by '

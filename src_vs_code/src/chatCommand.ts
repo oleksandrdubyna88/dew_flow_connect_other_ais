@@ -63,7 +63,8 @@ import {
   stillOurs,
 } from './chatPrompt';
 import { LanguageCode } from './settingsShape';
-import { sourceSession, TabSnapshot } from './sessionKey';
+import { isClaudeSessionTab, isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
+import { EditorText, confirmWholeFile, passageFromEditor } from './editorPassage';
 import { triggerPlan } from './chatTrigger';
 import { Vendor } from './vendors';
 
@@ -258,11 +259,14 @@ function snapshots(): { active: TabSnapshot | undefined; all: TabSnapshot[] } {
   const all: TabSnapshot[] = [];
   for (const group of vscode.window.tabGroups.all) {
     for (const tab of group.tabs) {
-      const input = tab.input as { viewType?: unknown } | undefined;
+      const input = tab.input as { viewType?: unknown; uri?: { scheme?: unknown } } | undefined;
       all.push({
         key: tab,
         label: tab.label,
         viewType: typeof input?.viewType === 'string' ? input.viewType : '',
+        // A `TabInputText` carries the document's uri and no viewType; a webview carries the
+        // reverse. Reading both is what lets one snapshot answer for both doors.
+        scheme: typeof input?.uri?.scheme === 'string' ? input.uri.scheme : '',
       });
     }
   }
@@ -999,11 +1003,57 @@ async function passageFor(path: 'menu' | 'keyboard'): Promise<{ text: string; fa
   );
 }
 
-/** Which Claude Code session this belongs to, or nothing when it was not invoked from one. */
-function matchedSession(panels: ChatPanels): ReturnType<typeof sourceSession> {
+/** Which conversation this belongs to, or nothing when the active tab is not an eligible source. */
+function matchedSession(
+  panels: ChatPanels,
+  eligible: (tab: TabSnapshot) => boolean = isClaudeSessionTab,
+): ReturnType<typeof sourceSession> {
   const { active, all } = snapshots();
 
-  return sourceSession(active, all, panels.known());
+  return sourceSession(active, all, panels.known(), eligible);
+}
+
+/**
+ * The passage from the active editor — and the one question this door asks before it sends.
+ *
+ * <p>A SELECTION goes without a word, however large: choosing it was the choice. An empty selection
+ * sends the whole document, which the operator chose over a refusal — but over a bound it asks
+ * first, because the accident this guards against is the chord pressed to focus a window, in a
+ * minified bundle, becoming a paid turn nobody meant. Cancelling is not an error and says nothing
+ * more: the person has just been asked and has just answered.</p>
+ */
+async function fromTheEditor(): Promise<{ text: string; failure: string }> {
+  const editor = editorText();
+  const passage = passageFromEditor(editor);
+  if (!passage.ok) {
+    return { text: '', failure: passage.refusal };
+  }
+  if (!passage.whole || editor === undefined) {
+    return { text: passage.text, failure: '' };
+  }
+  const ask = confirmWholeFile(editor);
+  if (ask.length === 0) {
+    return { text: passage.text, failure: '' };
+  }
+  const said = await vscode.window.showWarningMessage(ask, { modal: true }, 'Send all of it');
+
+  return said === 'Send all of it' ? { text: passage.text, failure: '' } : { text: '', failure: ' ' };
+}
+
+/** The active editor, narrowed to the two strings the decision needs. */
+function editorText(): EditorText | undefined {
+  const editor = vscode.window.activeTextEditor;
+  if (editor === undefined) {
+    return undefined;
+  }
+
+  return {
+    whole: editor.document.getText(),
+    selected: editor.document.getText(editor.selection),
+    // The file name rather than the path: it is for a sentence a person reads, and the path is
+    // already in the tab they are looking at.
+    name: editor.document.uri.path.split('/').pop() ?? 'this file',
+  };
 }
 
 /**
@@ -1806,20 +1856,26 @@ export async function chatWithOtherAi(
   // The keybinding is scoped to the assistant panel, but the command palette is not: invoked from
   // the wrong tab this used to spend 1.7 seconds, borrow the clipboard and synthesise a keystroke,
   // and only then say it was the wrong tab. (gemini, the second code round.)
+  // TWO DOORS, and the active tab says which. From Claude Code's own panel the passage has to be
+  // copied out through the OS, because that webview cannot be read; from an ordinary file it is
+  // simply read. The second door is what the operator asked for: *"хочу чтоб можно было через
+  // Ctrl+Alt+A в обычных окнах тоже вызывать. например на md файлах, cs файлах"*.
   const match = matchedSession(panels);
-  if (match === undefined) {
+  const fromFile = match === undefined ? matchedSession(panels, isOrdinaryEditorTab) : undefined;
+  const source = match ?? fromFile;
+  if (source === undefined) {
     void vscode.window.showWarningMessage(
-      'Open this from a Claude Code session tab — the conversation is named after it.',
+      'Open this from a Claude Code session tab or from a file — the conversation is named after it.',
     );
 
     return;
   }
-  if (match.kind === 'rekey') {
-    panels.rekey(match.from, match.key);
+  if (source.kind === 'rekey') {
+    panels.rekey(source.from, source.key);
   }
 
   const plan = triggerPlan(args, settings.autoSend);
-  const passage = await passageFor(plan.path);
+  const passage = match === undefined ? await fromTheEditor() : await passageFor(plan.path);
   if (passage.text.trim().length === 0) {
     void vscode.window.showWarningMessage(
       passage.failure.length > 0 ? passage.failure : 'Nothing to explain — copy the text first.',
@@ -1857,8 +1913,8 @@ export async function chatWithOtherAi(
   );
   // A factory, not a value: nothing is built — no process, no temp directory — for a tab that
   // already holds a conversation.
-  const opened = panels.open(match.key, match.label, () => newConversation(panels, ready, {
-    title: match.label,
+  const opened = panels.open(source.key, source.label, () => newConversation(panels, ready, {
+    title: source.label,
     passage: passage.text,
     draft: plan.send ? '' : turn,
   }, cli.resolved, remote.session, extensionUri));
