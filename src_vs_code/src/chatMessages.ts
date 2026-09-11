@@ -250,7 +250,12 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
     case 'useModelPreset': {
       const id = text(message.id);
 
-      return id.length === 0 ? IGNORE : { kind: 'useModel', id, draft: text(message.text) };
+      // The draft must be a STRING. A retained webview from a build before this field existed posts
+      // none, and reading that as "the box is empty" would overwrite a question somebody is writing
+      // with the preset's own prompt. A message this host cannot read is not acted on. (codex.)
+      return id.length === 0 || typeof message.text !== 'string'
+        ? IGNORE
+        : { kind: 'useModel', id, draft: message.text };
     }
     case 'stop': {
       const turn = turnOf(message.turn);

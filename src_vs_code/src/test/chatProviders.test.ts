@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ChatCatalog, chatProvidersFrom, legacyPick, openingModel, resolveChatPick } from '../chatModels';
+import { ChatCatalog, chatProvidersFrom, legacyPick, modelToRun, openingModel, resolveChatPick } from '../chatModels';
 import { Vendor } from '../vendors';
 import { TeamServerState } from '../teamServerView';
 import { requestBody } from '../remoteAsk';
@@ -438,4 +438,40 @@ test('a name cannot reach a provider other than the one that was chosen', () => 
   const saved = legacyPick(list, vendors, 'agy-row');
 
   assert.strictEqual(openingModel(list, saved, 'sonnet'), 'gemini-3.7-flash-high');
+});
+
+/**
+ * Which model a SWITCH runs, or the refusal that says why it will not.
+ *
+ * <p>The code round, from four reviewers across three vendors: a switch that was asked for a model
+ * the provider does not offer fell back to another one and ran it. A person presses a button
+ * labelled `gpt-5.6-luna`, a catalog changes under them, and the turns go to something else — billed,
+ * in a voice nobody chose, which is the one thing every rule in this feature exists to prevent. The
+ * fallback belongs to the EMPTY ask alone: that is the page saying the provider moved and it will not
+ * carry a model across.</p>
+ */
+test('an empty ask takes the row’s own model, which is what a provider change means', () => {
+  const models = [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }];
+
+  assert.deepStrictEqual(modelToRun(models, '', 'b'), { ok: true, model: 'b' });
+});
+
+test('an empty ask whose row model is not offered takes the first that IS', () => {
+  // `routableOn` drops a Claude model from an `agy` row, so a row configured that way has a
+  // configured model its own picker never shows.
+  const models = [{ id: 'a', label: 'A' }];
+
+  assert.deepStrictEqual(modelToRun(models, '', 'claude-sonnet-4-6'), { ok: true, model: 'a' });
+});
+
+test('a model that was ASKED for and is not offered is REFUSED by name, never swapped', () => {
+  const models = [{ id: 'a', label: 'A' }];
+  const answer = modelToRun(models, 'gone', 'a');
+
+  assert.strictEqual(answer.ok, false);
+  assert.match(answer.ok === false ? answer.refusal : '', /gone/, 'the refusal does not name the model');
+});
+
+test('a provider offering nothing at all refuses rather than inventing a model', () => {
+  assert.strictEqual(modelToRun([], '', 'anything').ok, false);
 });

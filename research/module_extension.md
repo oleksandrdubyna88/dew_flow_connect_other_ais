@@ -984,6 +984,17 @@ knows. That is where it differs from the prompt button beside it, which replaces
 instruction “ask this instead”, while a starting prompt is a side effect of changing the model, and
 somebody switching model half-way through a question did not ask for the question to be thrown away.
 
+**And what the CODE round found in it.** The switch fell back to another model when the one asked
+for was not offered — four reviewers across three vendors, and they were right: a person presses a
+button labelled `gpt-5.6-luna`, a catalog moves under them, and the turns go somewhere else.
+`modelToRun` is the rule now, pure and tested: the fallback belongs to the EMPTY ask alone, which is
+the page saying the provider moved; a NAMED model that is not offered is a refusal carrying its own
+name. A starting prompt rides on the switch and is not pushed when the switch was refused, and when
+the composer already has words in it the prompt is withheld OUT LOUD rather than silently. A
+`useModelPreset` with no `text` field is ignored rather than read as an empty box — that is what a
+retained webview from an older build posts. And escaping the optional fourth step of the wizard means
+“no starting prompt”, not “throw the other three answers away”.
+
 **`coai.editChatPresets` reached a menu.** It shipped registered, in no `contributes.menus` entry and
 named in no view, so the tab it opens was reachable only from the command palette. The section has an
 **Edit presets…** button, routed like *Install the MCP server…* through `VSCODE_COMMAND_FOR`.
