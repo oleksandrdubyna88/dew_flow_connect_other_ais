@@ -19,6 +19,7 @@ import { ModelPreset, PromptPreset } from './chatPresets';
 import { chatTabIcon } from './chatIcon';
 import { escapeHtml } from './webviewHtml';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
+import { applyToneDelta, currentTextTone, pushTextToneTo } from './textToneHost';
 
 /**
  * The `vscode` half of a conversation tab, and deliberately the thin one.
@@ -215,6 +216,7 @@ export function createChatPanel(
   panel.webview.html = chatPageHtml(state, crypto.randomBytes(16).toString('hex'));
 
   const scale = pushUiScaleTo(panel.webview);
+  const tone = pushTextToneTo(panel.webview);
   panel.webview.onDidReceiveMessage((message: PageMessage) => {
     // A detached boundary: nothing awaits this, so a rejection here would have no owner and the
     // extension host would report it as unhandled instead of the tab saying anything. (codex.)
@@ -224,6 +226,7 @@ export function createChatPanel(
   });
   panel.onDidDispose(() => {
     scale.dispose();
+    tone.dispose();
     try {
       hooks.onClosed(id);
     } catch {
@@ -255,6 +258,10 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
   switch (command.kind) {
     case 'zoom':
       await applyZoomDelta(command.delta);
+
+      return;
+    case 'tone':
+      await applyToneDelta(command.delta);
 
       return;
     case 'send':
@@ -425,4 +432,9 @@ export function setChatDraft(entry: ChatEntry, draft: string): void {
 /** The scale the page opens at, so a new tab matches the ones already open. */
 export function chatUiScale(): number {
   return currentUiScale();
+}
+
+/** The tone the page opens at, for the same reason: a new tab matches the ones already open. */
+export function chatTextTone(): number {
+  return currentTextTone();
 }

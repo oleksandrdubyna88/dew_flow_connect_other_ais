@@ -45,7 +45,7 @@ import { ChatOutcome, ReportedUsage, chatTurnRecord } from './chatUsage';
 import { recordChatTurn } from './chatUsageFile';
 import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './chatDiscovery';
 import { chatSettingsFrom } from './chatSettings';
-import { chatUiScale, createChatPanel, pushChatDraft, pushChatState, setChatDraft } from './chatPanel';
+import { chatTextTone, chatUiScale, createChatPanel, pushChatDraft, pushChatState, setChatDraft } from './chatPanel';
 import { captureSelection, COPY_SCRIPT, RunOutcome, argvFor, ran } from './selectionCapture';
 import { windowsReach } from './hostSide';
 import { ChatHome, adapterFor, chatHome, chatRuntimeRefusal, defaultExecutableFor } from './cliChatLaunch';
@@ -1296,6 +1296,7 @@ function newConversation(
         service: serviceLines(chatLanguage()),
       },
       uiScale: chatUiScale(),
+      textTone: chatTextTone(),
     },
     session,
     conversationHooks(panels),
@@ -1690,6 +1691,7 @@ function restoredPage(
         service: serviceLines(chatLanguage()),
       },
       uiScale: chatUiScale(),
+      textTone: chatTextTone(),
     };
 }
 

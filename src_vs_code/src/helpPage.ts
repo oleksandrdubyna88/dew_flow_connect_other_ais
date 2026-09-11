@@ -2,6 +2,7 @@ import * as crypto from 'node:crypto';
 import { escapeHtml, jsonForScript } from './webviewHtml';
 import { PROMPT_GROUPS, PROMPT_TEXTS } from './helpPrompts';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
+import { TONE_CSS, toneControlHtml, toneScript, toneStyle } from './textTone';
 import {
   HELP_ARTICLES,
   HELP_LANGUAGES,
@@ -23,6 +24,8 @@ import {
 export interface HelpPageOptions {
   readonly language: HelpLanguage;
   readonly uiScale?: number;
+  /** How far the text is from the theme's own colour. Optional like the scale, and 0 is the theme. */
+  readonly textTone?: number;
 }
 
 const SECTION_LABELS: Record<HelpLanguage, Readonly<Record<'whatItIs' | 'why' | 'setup' | 'usage' | 'whatCanGoWrong', string>>> = {
@@ -161,21 +164,21 @@ export function renderHelpHtml(options: HelpPageOptions): string {
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <style>
-${helpStyles(options.uiScale ?? 0)}
+${helpStyles(options.uiScale ?? 0, options.textTone ?? 0)}
 </style>
 </head>
 <body>
-${helpBody(language, index, options.uiScale ?? 0)}
+${helpBody(language, index, options.uiScale ?? 0, options.textTone ?? 0)}
 ${helpScript(nonce, language, index)}
 </body>
 </html>`;
 }
 
-function helpStyles(uiScale: number): string {
+function helpStyles(uiScale: number, textTone: number): string {
   return `
   body { font-family: var(--vscode-font-family); color: var(--vscode-foreground);
          background: var(--vscode-editor-background); padding: 16px 24px; max-width: 900px;
-         margin: 0 auto; ${zoomStyle(uiScale)} }
+         margin: 0 auto; ${zoomStyle(uiScale)} ${toneStyle(textTone)} }
   .topBar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
   .topBar .crumbs { flex: 1; min-width: 0; opacity: .8; }
   .crumbs a { cursor: pointer; text-decoration: underline; }
@@ -209,10 +212,16 @@ function helpStyles(uiScale: number): string {
                border: 1px solid var(--vscode-widget-border, #3c3c3c); border-radius: 4px;
                font-family: var(--vscode-editor-font-family); font-size: .92em; }
   ${ZOOM_CSS}
+  ${TONE_CSS}
 `;
 }
 
-function helpBody(language: HelpLanguage, index: ReturnType<typeof searchIndex>, uiScale: number): string {
+function helpBody(
+  language: HelpLanguage,
+  index: ReturnType<typeof searchIndex>,
+  uiScale: number,
+  textTone: number,
+): string {
   const ui = UI[language];
   return `
   <div class="topBar">
@@ -221,7 +230,7 @@ function helpBody(language: HelpLanguage, index: ReturnType<typeof searchIndex>,
     <select id="language" aria-label="Help language">${HELP_LANGUAGES.map(
       (code) => `<option value="${code}"${code === language ? ' selected' : ''}>${escapeHtml(HELP_LANGUAGE_LABELS[code])}</option>`,
     ).join('')}</select>
-    ${zoomControlHtml(uiScale)}
+    ${zoomControlHtml(uiScale)}${toneControlHtml(textTone)}
   </div>
   <div class="searchRow" id="searchRow">
     <input id="search" type="search" placeholder="${escapeHtml(ui.search)}" autofocus>
@@ -305,5 +314,6 @@ function helpScript(nonce: string, language: HelpLanguage, index: ReturnType<typ
     if (e.key === 'Escape' && !articleEl.classList.contains('hidden')) { showIndex(); }
   });
   ${zoomScript()}
+  ${toneScript()}
 </script>`;
 }

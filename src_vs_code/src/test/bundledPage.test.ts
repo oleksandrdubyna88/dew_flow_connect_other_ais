@@ -300,6 +300,7 @@ function bundledChatPage(): { bundle: string; html: string } {
       chosenModelId: 'antigravity',
       marks: { role: '', task: '', service: [] },
       uiScale: 0,
+      textTone: 0,
     },
     'n0nce',
   );
