@@ -193,6 +193,52 @@ plan asked for it independently and the reason is theirs: a reviewer that checks
 the tip of `main` sees a diff that does not match, and that discrepancy is indistinguishable from the
 phantom deletions this change exists to stop.
 
+### And it is a diff of files git NAMED, not of a column that looks like a name (2026-09-10)
+
+The same section, one layer down, and the same class of defect: a diff that reaches the reviewer
+looking complete and is not. Found by the product audit of 2026-09-09 (finding 4).
+
+`git diff --numstat`'s third column is not a path. Two shapes it takes are sentences ABOUT paths:
+
+| the change | what the human-readable column says |
+|---|---|
+| `src/old.cs` renamed to `src/new.cs` | `src/{old.cs => new.cs}` |
+| any name with a byte outside ASCII, a quote, a backslash, a tab or a newline | `"src/\321\204\320\260\320\271\320\273.cs"`, quotes included, under the default `core.quotePath` |
+
+Handed back to git as a pathspec neither matches anything, so the per-file diff came back empty and
+the file reached the reviewer **named, with nothing under it, and no error anywhere**. In Fast mode
+there is nothing else to read: the reviewer then judged a change it could not see. Measured on a
+fixture repository — three changed files, and the collected paths were `src/dead.cs`,
+`src/{old.cs => new.cs}` and `"src/\321\204\320\260\320\271\320\273.cs"`.
+
+A refactor renames files, so this is the ordinary case rather than the exotic one, and it is the same
+failure as the merge-base bug above wearing different clothes: the reviewer's confidence is unchanged
+and its input is wrong.
+
+**`-z` fixes both at once rather than one at a time**, which is why there is no unescaper here — an
+unescaper would be a second parser to get wrong. Fields are NUL-separated, paths are never quoted, and
+a rename carries its two names as two further fields instead of being joined into a sentence:
+
+```
+2\t1\tsrc/file.cs\0                       an ordinary change
+-\t-\tsrc/logo.png\0                      a binary one, counts absent
+1\t0\t\0src/old.cs\0src/new.cs\0          a RENAME: the path column is EMPTY, two fields follow
+```
+
+`NumstatReader` is that parser, pure and separate from `ContextAssembler`, so every shape is tested
+without a repository — including a path with a newline in it, which is legal on Linux and cannot be
+created on Windows at all. Its fixtures are copied from real `git diff --numstat -z` output rather
+than written from the manual.
+
+**A renamed file is diffed with BOTH names** (`git diff base..sha -- old new`). One name alone makes
+git print a whole-file add or a whole-file delete; the pair makes it print the similarity, the rename
+header and the edit underneath, which is the only form in which a refactor's change is readable.
+
+Two things the plan got wrong and the work corrected. `BlobSize` needed no separate fix — it already
+tries the new side first, and `{sha}:{newPath}` resolves once the path is a real one. And `FileDiff`
+gained no `RenamedFrom` field: nothing downstream needs it, because the diff text carries the rename
+header itself, and a field on a core record used in a dozen places is not worth adding for nothing.
+
 ## Two delivery rules the first real run wrote
 
 Both cost a whole run each; see [RESULTS_first_real_run.md](RESULTS_first_real_run.md).

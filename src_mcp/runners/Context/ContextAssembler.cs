@@ -81,27 +81,28 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
 
         // --numstat: "added deleted path", binaries as "- - path". One call decides binary-ness
         // and file order; each text file then rides its own diff so elision stays whole-file.
-        var numstat = await Git(repoPath, ct, ["diff", "--numstat", $"{against}..{sha}", "--", ".", .. excludes]);
+        //
+        // `-z` is not a detail. Without it the third column is not a PATH: a rename arrives as
+        // `src/{old.cs => new.cs}` and a non-ASCII name C-quoted with escapes, and handing either
+        // back to git as a pathspec matches nothing — so the file reached the reviewer named, with an
+        // empty diff under it and no error anywhere. See NumstatReader, which is where the shape and
+        // the measurement are written down.
+        var numstat = await Git(repoPath, ct, ["diff", "--numstat", "-z", $"{against}..{sha}", "--", ".", .. excludes]);
 
         var files = new List<FileDiff>();
-        foreach (var line in numstat.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var change in NumstatReader.Read(numstat))
         {
-            var parts = line.Split('\t');
-            if (parts.Length < 3)
-            {
-                continue;
-            }
-
-            var path = parts[2];
-            if (parts[0] == "-")
-            {
-                files.Add(new FileDiff(path, string.Empty, IsBinary: true, BinaryBytes: await BlobSize(repoPath, sha, against, path, ct)));
-            }
-            else
-            {
-                var text = await Git(repoPath, ct, ["diff", $"{against}..{sha}", "--", path]);
-                files.Add(new FileDiff(path, text));
-            }
+            files.Add(change.IsBinary
+                ? new FileDiff(
+                    change.Path,
+                    string.Empty,
+                    IsBinary: true,
+                    BinaryBytes: await BlobSize(repoPath, sha, against, change.Path, ct))
+                // BOTH names when it moved, so git prints the rename rather than an add beside a
+                // delete — the pathspecs are the change's own, not a path this method reassembles.
+                : new FileDiff(
+                    change.Path,
+                    await Git(repoPath, ct, ["diff", $"{against}..{sha}", "--", .. change.Pathspecs])));
         }
 
         return new CollectedDiff(files, against, kind);
