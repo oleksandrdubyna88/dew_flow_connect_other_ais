@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Extension 0.33.1 — 2026-09-11
 
 **Add a model works.** It was not doing nothing — it was writing a preset with no reviewer named, and a preset that names no reviewer names nothing that can answer, so the list dropped it on the way back to the screen. Every press left a row in your settings that nothing could show, edit or remove. A new model preset now opens on the first reviewer that can chat, which you change on the row; with no such reviewer configured the button says so instead of writing something invisible, and the rows the old behaviour left behind are cleared when the tab opens.
 
