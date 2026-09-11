@@ -328,7 +328,7 @@ The whole `src_mcp` suite — 1148 tests — passed unedited across this change.
 ## The launcher's two environments, and why `HOME` is in the short one (2026-09-10)
 
 Finding 1 of the product audit of 2026-09-09, and the half of it that costs nothing to close
-([PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md](../todo/PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md)).
+([PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md](PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md)).
 A job on the Team server is one authorised employee's arbitrary prompt, run through a third-party
 agentic CLI on a box that holds every shared vendor account, as root. The job needs nothing but that
 prompt — the diff was shaped on the client and is inside the prompt text, and the working directory

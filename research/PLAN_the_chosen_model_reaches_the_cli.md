@@ -1,14 +1,23 @@
 # PLAN — the chosen model reaches the CLI
 
-> Status: **plan only, nothing implemented yet, 2026-09-10.** Scope: `src_vs_code/src/chatAdapter.ts`,
-> `cliChatLaunch.ts`, `chatProcess.ts`, the three adapters (`claudeAdapter.ts`, `codexAdapter.ts`,
-> `agyAdapter.ts`) and the session that launches them. Finding 7 of
-> [the product audit of 2026-09-09](../research/REVIEW_product_audit_2026-09-09.md).
+> Status: **IMPLEMENTED, 2026-09-11.** Story 4.1. Scope as built:
+> `src_vs_code/src/chatAdapter.ts` (`ChatLaunch`), `cliChatLaunch.ts`, `chatProcess.ts`, `chatCommand.ts`
+> and the three adapters.
 >
-> Related docs: [module_extension.md](../research/module_extension.md);
-> [PLAN_provider_then_model.md](../research/PLAN_provider_then_model.md) — the picker this plan makes
-> true; [PLAN_who_said_it_and_what_it_cost.md](../research/PLAN_who_said_it_and_what_it_cost.md) —
-> the label that currently names a model the CLI was never told about.
+> Related docs: [module_extension.md](module_extension.md) — *And the model it asks for is the model the
+> CLI is told to use*.
+
+## What shipped differently
+
+1. **Three session starts, not two.** The plan counted the first launch and the model switch; the tab
+   that opens a conversation is a third, and it would have carried an empty model.
+2. **No flag spelling was invented.** All three are what this repository already verified for its
+   REVIEWERS on the same CLIs, and codex's was read back from `codex exec --help`.
+3. **codex's `-m` goes BEFORE `CODEX_ARGS`**, because the bare `-` in there is the positional that makes
+   it read stdin. An option after a positional is still parsed as one, but a command line is the last
+   place to ask a reader for the benefit of the doubt.
+4. The tail the plan named — reading back the model a CLI REPORTS rather than the one it was asked for —
+   is not built, and is still worth doing.
 
 ## The symptom
 

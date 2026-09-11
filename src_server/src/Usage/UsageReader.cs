@@ -48,10 +48,21 @@ public sealed record UsageScan(IReadOnlyList<UsageLine> Lines, int Unreadable);
 /// finishing while somebody looked at the usage page would fail to append its own line, and the
 /// spending record would silently lose a row. The ledger's writer already opens with
 /// <see cref="FileShare.ReadWrite"/> for the same reason; the reader has to agree. (gemini, plan round.)</para>
-/// <para><b>Streamed, not materialised.</b> Nothing here holds the whole file: the caller is handed a
-/// filtered, aggregated result, and a window of one day never allocates a year. At this deployment's
-/// ceiling — one review at a time, minutes each — a year is tens of thousands of lines, but "small
-/// today" is not a reason to write the version that stops working when it is not.</para>
+/// <para><b>Streamed, not materialised — which is a statement about MEMORY and not about time.</b>
+/// Nothing here holds the whole file: the caller is handed a filtered, aggregated result, and a window
+/// of one day never allocates a year.</para>
+/// <para><b>It does read and parse the whole file, every time, and the sentence above used to read as
+/// though it did not.</b> The window is applied after each line is deserialized, so the cost of
+/// answering "today" is the cost of the entire history — linear in it, and multiplied by the number of
+/// open panels, each asking about once a minute. Measured 2026-09-09 on a synthetic ledger, warm:
+/// 1 000 old lines took 4–5 ms and 100 000 took <b>284–303 ms</b>, both returning zero rows. A local
+/// microbenchmark rather than production latency; the slope is the point.</para>
+/// <para><b>Left as it is, deliberately</b>, on 2026-09-11 — the operator's call. The live ledger holds
+/// one line per reviewer per round, thousands rather than hundreds of thousands, so this is a few
+/// milliseconds today and rewriting the reader to walk backwards from the end would be optimising
+/// something that is not slow. The plan that would do it, with its measurement and its chunk-boundary
+/// hazards, is <c>todo/PLAN_the_usage_page_reads_the_window_not_the_history.md</c>. What would make it
+/// worth doing: a ledger past roughly 50 000 lines, or a usage page that feels slow to somebody.</para>
 /// </remarks>
 public sealed class UsageReader(string dataDir)
 {

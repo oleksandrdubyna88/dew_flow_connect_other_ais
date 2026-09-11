@@ -97,6 +97,26 @@ setting says. Parallelism per vendor is bought in ACCOUNTS — a slot is a direc
 (`SlotEnvironment`), so ten concurrent codex means ten signed-in codex subscriptions, not a number
 in a config file.
 
+> **Correction, 2026-09-11: that last sentence is design INTENT, not a measured fact, and the code
+> does not implement it today.** The product audit of 2026-09-09 reproduced the opposite on the real
+> `JobRunner` and `SlotRegistry`: two ready accounts, two queued jobs, the first blocked inside a fake
+> launcher, and the second `PumpAsync` answered false — **launched 1, queued 1, with two slots.**
+> `SlotSelector.Pick` returns ONE candidate, the least-recently-used ready account; `IsReady` knows
+> about cooldowns and sign-ins but not about a lock somebody is holding; and `LastUsedUtc` is written
+> when a lease is RELEASED, so a busy account keeps its old timestamp and is offered again. One
+> refused zero-wait acquire ends the drain.
+>
+> **This campaign could not have seen it**, which is why the sentence survived unchallenged: every arm
+> above ran with one slot per vendor, and so does the deployment. The effect is nil today and total
+> the day somebody signs in a second account — nothing gets faster, and nothing says why.
+>
+> The fix is small (walk the ranking, take the first lease granted) and was **deliberately not made**
+> on 2026-09-11 — the operator's call, on the grounds that a defect with no symptom and no user does
+> not earn a change to the dispatch path. It is written up in
+> [../todo/PLAN_the_second_account_actually_runs.md](../todo/PLAN_the_second_account_actually_runs.md).
+> This note is what stops the sentence above being read as a promise: **read it before adding an
+> account, not after.**
+
 ## The polling question, still open
 
 `RemoteAsk.PollGap` is one second, and its docstring says the server long-polls up to 25 seconds so

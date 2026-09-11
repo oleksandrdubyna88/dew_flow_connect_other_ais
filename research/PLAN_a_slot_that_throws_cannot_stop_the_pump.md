@@ -1,12 +1,17 @@
 # PLAN — a slot that throws cannot stop the pump
 
-> Status: **plan only, nothing implemented yet, 2026-09-10.** Scope: `src_server/src/Jobs/JobPump.cs`,
-> `src_server/src/Jobs/JobRunner.cs`. Finding 6 of
-> [the product audit of 2026-09-09](../research/REVIEW_product_audit_2026-09-09.md).
+> Status: **IMPLEMENTED, 2026-09-11.** Story 3.1. Scope as built:
+> `src_server/src/Jobs/JobRunner.cs`, `JobPump.cs`.
 >
-> Related docs: [module_team_server.md](../research/module_team_server.md) — story 2.3;
-> `.agents/conventions/common/reliability.md` — *Background work neither dies silently nor takes the
-> host with it*.
+> Related docs: [module_team_server.md](module_team_server.md) — story 2.3.
+
+## What shipped differently
+
+Nothing of substance: both guards landed as planned. The third arm the plan round asked for — the host's
+token in the wait — proved unnecessary, because `ct` is already passed into the run where it reaches the
+lease and the claim, so `WhenAny(promise, run)` cannot outlive a cancelled tick. The reproduction was the
+audit's own: a DIRECTORY where the `.lock` file goes, which raises `UnauthorizedAccessException` past
+`TryOpen`'s `IOException` catch.
 
 ## The symptom
 

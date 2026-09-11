@@ -1,10 +1,18 @@
 # PLAN — Google needs an audience too
 
-> Status: **plan only, nothing implemented yet, 2026-09-10.** Scope: `src_server/src/Startup.cs`,
-> `src_server/src/Auth.cs`, `src_server/src/Program.cs`. Finding 9 of
-> [the product audit of 2026-09-09](../research/REVIEW_product_audit_2026-09-09.md).
+> Status: **IMPLEMENTED, 2026-09-11**, with one gap named in its own section below. Scope as built:
+> `src_server/src/Startup.cs`, `Auth.cs`, `Program.cs`.
 >
-> Related docs: [module_team_server.md](../research/module_team_server.md) — *Configuration* and story 2.1.
+> Related docs: [module_team_server.md](module_team_server.md) — *Configuration*.
+
+## What shipped differently
+
+1. **An existing test broke for the right reason and was fixed rather than worked around.** The local
+   scheme's "beside a REAL provider" case configured Google with no audiences, which is no longer a real
+   provider at all — the new guard fires first.
+2. **The refusal itself is still a REQUEST rather than an observed 401**, which is a decision with a
+   trigger rather than an oversight: see below. `coai.remsoft.dev` has Google disabled (the operator,
+   2026-09-11), so this closed a door for the next deployment rather than an open one here.
 
 ## The symptom
 
