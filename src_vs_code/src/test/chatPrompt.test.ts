@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CARRY_BUDGET, DEFAULT_CHAT_PROMPT, REMOTE_CARRY_BUDGET, carriedTurn, openingTurn } from '../chatPrompt';
+import { CARRY_BUDGET, DEFAULT_CHAT_PROMPT, REMOTE_CARRY_BUDGET, carriedTurn, openingTurn, chatInstruction, reinstructed, stillOurs } from '../chatPrompt';
 
 /**
  * What a captured passage actually travels in.
@@ -254,4 +254,107 @@ test('a conversation going to a SERVER carries less than one going to a pipe', (
   assert.ok(toAServer.length < toAPipe.length, 'the server was sent as much as the pipe');
   assert.ok(toAServer.length < REMOTE_CARRY_BUDGET + 5_000, `the server turn is ${toAServer.length} characters`);
   assert.match(toAServer, /cut here/, 'the cut is silent');
+});
+
+/**
+ * The two instructions are not rivals: one says WHO to be, the other says WHAT to do.
+ *
+ * <p>Said by the operator after watching them replace each other: *"они не конфликтуют. один
+ * указывает одно, другой другое. они должны быть оба"*. A model preset carries a role — "you are an
+ * architect of distributed systems" — and a prompt button carries a task — "explain". Both belong in
+ * the instruction, in that order, because the role is the standing fact and the task is the ask.</p>
+ */
+test('a role and a task are both sent, the role first', () => {
+  assert.strictEqual(
+    chatInstruction('Ты архитектор', 'поясни'),
+    'Ты архитектор\n\nпоясни',
+  );
+});
+
+test('either one alone is the whole instruction', () => {
+  assert.strictEqual(chatInstruction('', 'поясни'), 'поясни');
+  assert.strictEqual(chatInstruction('Ты архитектор', ''), 'Ты архитектор');
+});
+
+test('blank halves leave no gap where a paragraph would be', () => {
+  assert.strictEqual(chatInstruction('   ', '  поясни '), 'поясни');
+  assert.strictEqual(chatInstruction('', ''), '');
+});
+
+test('a box holding the turn this side built is ours to replace', () => {
+  const turn = openingTurn('Explain this', 'en', 'the captured passage');
+
+  assert.strictEqual(stillOurs(turn, 'the captured passage'), true, 'an untouched opening turn was called somebody else\'s');
+  assert.strictEqual(stillOurs('', 'the captured passage'), true, 'an empty box was called somebody else\'s');
+  assert.strictEqual(stillOurs('   \n  ', 'the captured passage'), true, 'a box of whitespace was called somebody else\'s');
+});
+
+test('a box somebody has typed into is theirs, and is left alone', () => {
+  // The guard two vendors asked for on the plan round. What it must NOT be is "is the box empty":
+  // after a capture the box is never empty, which is why a starting prompt almost never applied.
+  assert.strictEqual(stillOurs('I have a question about this', 'the captured passage'), false,
+    'a question somebody wrote would have been thrown away');
+  assert.strictEqual(stillOurs('the captured passage, rewritten by hand', 'the captured passage'), false,
+    'a box with no material line was still called ours');
+});
+
+test('the role and the task are both carried, in that order', () => {
+  assert.strictEqual(
+    chatInstruction('You are an architect', 'Explain this'),
+    'You are an architect\n\nExplain this',
+  );
+  assert.strictEqual(chatInstruction('', 'Explain this'), 'Explain this', 'a missing role left a blank paragraph');
+  assert.strictEqual(chatInstruction('You are an architect', ''), 'You are an architect', 'a missing task left one');
+});
+
+test('choosing another model swaps the ROLE and leaves the rest of the box alone', () => {
+  // The report, four times over: "промты модели не обновляются". The box begins with the role and
+  // the task, and everything after it - the language line, the material note, the fence, the passage
+  // and anything typed below - belongs to the conversation, not to the button.
+  const box = openingTurn(chatInstruction('You are a business analyst', 'explain'), 'ru', 'the captured passage');
+  const swapped = reinstructed(
+    box,
+    chatInstruction('You are a business analyst', 'explain'),
+    chatInstruction('You are an architect', 'explain'),
+  );
+
+  assert.ok(swapped !== undefined, 'the instruction at the front was not found');
+  assert.ok(swapped.startsWith('You are an architect'), 'the new role is not at the front');
+  assert.doesNotMatch(swapped, /business analyst/, 'the old role survived the swap');
+  assert.strictEqual(
+    swapped.slice(chatInstruction('You are an architect', 'explain').length),
+    box.slice(chatInstruction('You are a business analyst', 'explain').length),
+    'something after the instruction moved',
+  );
+});
+
+test('choosing another prompt swaps the TASK, with the same words kept', () => {
+  const box = openingTurn(chatInstruction('You are an architect', 'explain'), 'ru', 'the captured passage');
+  const swapped = reinstructed(
+    box,
+    chatInstruction('You are an architect', 'explain'),
+    chatInstruction('You are an architect', 'what would you answer?'),
+  );
+
+  assert.ok(swapped !== undefined);
+  assert.match(swapped, /You are an architect\n\nwhat would you answer\?/, 'the task was not swapped');
+  assert.match(swapped, /the captured passage$/, 'the passage did not survive');
+});
+
+test('a passage the conversation no longer remembers is still kept', () => {
+  // The reason this is a swap and not a rebuild. A second capture into the same tab leaves the box
+  // holding a passage the thread does not: rebuilding puts the OLD passage back, or refuses.
+  const box = openingTurn(chatInstruction('A', 'b'), 'en', 'a passage captured since');
+  const swapped = reinstructed(box, chatInstruction('A', 'b'), chatInstruction('C', 'b'));
+
+  assert.match(swapped ?? '', /a passage captured since/, 'the text in the box was not kept');
+});
+
+test('an instruction that is not at the front is not swapped at all', () => {
+  const box = openingTurn(chatInstruction('A', 'b'), 'en', 'the passage');
+
+  assert.strictEqual(reinstructed(`I wrote this first. ${box}`, chatInstruction('A', 'b'), 'C'), undefined,
+    'a swap was made in the middle of somebody\'s words');
+  assert.strictEqual(reinstructed(box, '', 'C'), undefined, 'an empty instruction matched the front of everything');
+  assert.strictEqual(reinstructed('', chatInstruction('A', 'b'), 'C'), undefined, 'an empty box was swapped');
 });

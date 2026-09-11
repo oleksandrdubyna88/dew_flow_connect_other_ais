@@ -44,7 +44,7 @@ const IGNORE: PresetCommand = { kind: 'ignore' };
 /** The fields each list HAS. A name this does not know is not a field — `__proto__` included. */
 const FIELDS: Record<'prompt' | 'model', readonly string[]> = {
   prompt: ['name', 'text', 'main'],
-  model: ['name', 'provider', 'model', 'startingPrompt'],
+  model: ['name', 'provider', 'model', 'startingPrompt', 'main'],
 };
 
 function listOf(value: unknown): 'prompt' | 'model' | undefined {
@@ -183,6 +183,7 @@ function modelRow(preset: ModelPreset, providers: readonly ChatProvider[]): stri
     <input type="text" data-list="model" data-field="name" value="${escapeHtml(preset.name)}" placeholder="A name for this model">
     <span class="vendor">${escapeHtml(preset.runtime)}</span>
     <select data-list="model" data-field="model">${models}</select>
+    <label class="main"><input type="checkbox" data-list="model" data-field="main"${preset.main ? ' checked' : ''}> main</label>
     <button type="button" class="remove" data-remove="model" data-id="${escapeHtml(preset.id)}">Remove</button>
   </div>
   <textarea data-list="model" data-field="startingPrompt" rows="3" placeholder="What the composer opens with when this model is chosen (optional)">${escapeHtml(preset.startingPrompt ?? '')}</textarea>
@@ -279,7 +280,8 @@ ${styles(state.uiScale)}
 ${prompts}
 <button type="button" data-add="prompt">Add a prompt</button>
 <h2>Models</h2>
-<p class="lead">A model preset names the reviewer row that answers, and optionally which of its models.</p>
+<p class="lead">A model preset is a vendor, one of its models, and the instruction the composer opens with.
+The one marked <b>main</b> is what a captured passage opens on.</p>
 ${models}
 <button type="button" data-add="model">Add a model</button>
 ${script(nonce)}

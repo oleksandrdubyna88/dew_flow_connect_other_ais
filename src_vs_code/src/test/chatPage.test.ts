@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ModelPreset } from '../chatPresets';
 import { ChatProvider } from '../chatModels';
-import { ChatModelChoice, ChatPageState, FOLLOW_SLACK_PX, chatCappedHtml, chatMessagesHtml, chatPresetRowsHtml, chatPageHtml, chatPickerHtml, chatStatusHtml, shouldFollow } from '../chatPage';
+import { ChatModelChoice, ChatPageState, NO_MARKS, markedTurn, FOLLOW_SLACK_PX, chatCappedHtml, chatMessagesHtml, chatPresetRowsHtml, chatPageHtml, chatPickerHtml, chatStatusHtml, shouldFollow } from '../chatPage';
 import { chatCommandOf } from '../chatMessages';
 
 /**
@@ -25,6 +25,7 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
   return {
     id: 'conversation-1',
     title: 'привет',
+    promptId: '',
     passage: 'The reviewers are read-only.',
     messages: [],
     models: MODELS,
@@ -35,12 +36,14 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
     promptPresets: [],
     modelPresets: [],
     providerId: 'antigravity',
+    chosenModelId: 'antigravity',
     modelId: 'antigravity',
     running: false,
     capped: false,
     turn: 0,
     failure: '',
     draft: '',
+    marks: NO_MARKS,
     uiScale: 0,
     ...over,
   };
@@ -116,7 +119,7 @@ test('a lone provider is still SHOWN, and nothing at all is hidden', () => {
   // models — and hiding the row would leave a person unable to see what will answer, which is the
   // complaint the two steps exist for.
   const one = chatPickerHtml(
-    { providers: [{ id: 'a', label: 'a', caption: 'local', models: [{ id: 'm', label: 'M' }] }], refused: [] },
+    { providers: [{ id: 'a', vendor: 'antigravity', label: 'a', caption: 'local', models: [{ id: 'm', label: 'M' }] }], refused: [] },
     'a',
     'm',
   );
@@ -130,8 +133,8 @@ test('the picker offers every provider and marks the chosen one', () => {
   const picker = chatPickerHtml(
     {
       providers: [
-        { id: 'antigravity', label: 'Gemini 3.8 Flash', caption: 'local', models: [{ id: 'g', label: 'G' }] },
-        { id: 'remsoftdev-codex', label: 'GPT (team)', caption: 'team server · no memory', models: [{ id: 'p', label: 'P' }] },
+        { id: 'antigravity', vendor: 'antigravity', label: 'Gemini 3.8 Flash', caption: 'local', models: [{ id: 'g', label: 'G' }] },
+        { id: 'remsoftdev-codex', vendor: 'remote', label: 'GPT (team)', caption: 'team server · no memory', models: [{ id: 'p', label: 'P' }] },
       ],
       refused: [],
     },
@@ -139,14 +142,19 @@ test('the picker offers every provider and marks the chosen one', () => {
     'p',
   );
 
-  assert.ok(picker.includes('Gemini 3.8 Flash'));
-  assert.ok(/value="remsoftdev-codex" selected/.test(picker), 'the chosen provider is not selected');
+  // THE GUARANTEE CHANGED: the first select names the VENDOR, not the saved model, because two
+  // dropdowns both naming the saved model are two dropdowns saying one thing — which is what the
+  // operator asked about, holding a screenshot of `GPT-5.6-Terra` beside `GPT-5.6-Terra`.
+  assert.ok(picker.includes('>antigravity</option>'), 'the first select does not name the vendor');
+  assert.ok(picker.includes('>remote</option>'), 'the second vendor is missing');
+  assert.ok(/value="remsoftdev-codex" selected/.test(picker), 'the chosen vendor is not selected');
+  assert.ok(picker.includes('>P</option>'), 'the chosen one’s models are not offered');
 });
 
 test('a remote model says what it cannot do, where the choice is made', () => {
   const picker = chatPickerHtml(
     {
-      providers: [{ id: 'remsoftdev-codex', label: 'GPT (team)', caption: 'team server · no memory', models: [{ id: 'p', label: 'P' }] }],
+      providers: [{ id: 'remsoftdev-codex', vendor: 'remote', label: 'GPT (team)', caption: 'team server · no memory', models: [{ id: 'p', label: 'P' }] }],
       refused: [],
     },
     'remsoftdev-codex',
@@ -350,6 +358,14 @@ function fake(): Fake {
   };
 }
 
+/** The opening turn a capture builds, as the host would hand it to the page. */
+const ROLE = 'You are an architect of distributed systems';
+const TASK = 'Explain this passage';
+const SERVICE = ['Answer in English.', 'Everything below', '---'];
+const MARKS = { role: ROLE, task: TASK, service: SERVICE };
+
+const OPENING = [ROLE, '', TASK, '', 'Answer in English.', '', 'Everything below', '---', 'the passage'].join('\n');
+
 interface RunningPage {
   seen: Record<string, Fake>;
   posted: Array<Record<string, unknown>>;
@@ -411,6 +427,16 @@ function runChatPage(over: RunOptions = {}): RunningPage {
       element.dataset[attribute[1] ?? ''] = attribute[2] ?? '';
     }
   };
+  // WHAT A TEXTAREA HOLDS, not only its attributes. The composer is rendered with the draft already
+  // in it, and a fake that starts empty cannot see anything the page does with that text — which is
+  // exactly the defect these tests exist for: the box's own text is drawn transparent, so a page
+  // that never paints its backdrop renders a composer that LOOKS empty while holding a whole turn.
+  const written = (markup: string): Map<string, string> => new Map(
+    [...markup.matchAll(/<textarea[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/textarea>/g)]
+      .map((match) => [match[1] ?? '', (match[2] ?? '')
+        .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')]),
+  );
+  const drafts = written(html);
   const rendered = taggedIn(html);
   const reparse = (markup: string): void => {
     for (const [id, tag] of taggedIn(markup)) {
@@ -440,6 +466,7 @@ function runChatPage(over: RunOptions = {}): RunningPage {
         // wrong reason until this was here.
         seen[id].reparse = reparse;
         seed(seen[id], tag);
+        seen[id].value = drafts.get(id) ?? '';
       }
 
       return seen[id];
@@ -1523,12 +1550,14 @@ test('a model label that is markup is escaped like everything else', () => {
 const PROVIDERS: readonly ChatProvider[] = [
   {
     id: 'antigravity',
+    vendor: 'antigravity',
     label: 'antigravity · gemini-3.8-flash',
     caption: 'local · antigravity · keeps the conversation',
     models: [{ id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' }, { id: 'gemini-3.8-pro', label: 'Gemini 3.8 Pro' }],
   },
   {
     id: 'remsoftdev-codex',
+    vendor: 'remote',
     label: 'remsoftdev-codex · gpt-5.6',
     caption: 'team server · no memory',
     models: [{ id: 'gpt-5.6', label: 'GPT-5.6' }],
@@ -1592,7 +1621,7 @@ test('picking either half posts both halves, so the host never has to guess', ()
 test('a provider label that is markup is escaped', () => {
   const html = chatPickerHtml(
     {
-      providers: [{ id: 'x', label: '<img src=x onerror=alert(1)>', caption: '<b>c</b>', models: [{ id: 'm', label: '<i>m</i>' }] }],
+      providers: [{ id: 'x', vendor: 'antigravity', label: '<img src=x onerror=alert(1)>', caption: '<b>c</b>', models: [{ id: 'm', label: '<i>m</i>' }] }],
       refused: [],
     },
     'x',
@@ -1616,8 +1645,8 @@ const PROMPT_PRESETS = [
 ];
 
 const MODEL_PRESETS: readonly ModelPreset[] = [
-  { id: 'm1', name: 'Fast', runtime: 'antigravity', executablePath: '', baseUrl: '', model: 'gemini-3.8-flash' },
-  { id: 'm2', name: 'Deep', runtime: 'antigravity', executablePath: '', baseUrl: '', model: 'opus', startingPrompt: 'Think hard' },
+  { id: 'm1', name: 'Fast', main: true, runtime: 'antigravity', executablePath: '', baseUrl: '', model: 'gemini-3.8-flash' },
+  { id: 'm2', name: 'Deep', main: false, runtime: 'antigravity', executablePath: '', baseUrl: '', model: 'opus', startingPrompt: 'Think hard' },
 ];
 
 test('both rows are there, each button naming its preset', () => {
@@ -1629,15 +1658,31 @@ test('both rows are there, each button naming its preset', () => {
   assert.strictEqual((html.match(/class="presets/g) ?? []).length, 2, 'the two kinds share one row');
 });
 
-test('a model button wears its own vendor colour and a prompt button does not', () => {
-  // One vendor, one colour, everywhere — the rule the rounds list, the reviewer cards and the
-  // answer captions already keep. A prompt is not a vendor and must not be able to look like one.
+test('a button wears the colour of the half it changes, and says so in a class', () => {
+  // The stripe answers "what does this button do to my question": a model changes WHO is answering,
+  // a prompt changes WHAT is asked, and those two already have a colour each in the composer below.
+  // It used to be the VENDOR's colour — a rule that belongs to the review gate, where the question
+  // is whose model this is.
   const html = chatPresetRowsHtml(PROMPT_PRESETS, MODEL_PRESETS);
   const model = html.slice(html.indexOf('data-model-preset="m1"'));
   const prompt = html.slice(html.indexOf('data-prompt-preset="p1"'));
 
-  assert.match(model, /style="border-left-color: var\(--vscode-coai-vendorColour/, 'a model button has no vendor colour');
-  assert.doesNotMatch(prompt.slice(0, 120), /vendorColour/, 'a prompt button was given a vendor colour');
+  assert.doesNotMatch(model, /vendorColour/, 'a model button still wears a vendor colour');
+  assert.doesNotMatch(html, /style="border-left-color/, 'a stripe is still painted inline, where a style rule cannot reach it');
+  // The CLASS is what the stripe hangs on, so it is what this asserts: a rule can only reach a
+  // button that says which kind it is.
+  assert.match(html, /class="preset model"[^>]*data-model-preset="m1"/, 'a model button does not say it is one');
+  assert.match(html, /class="preset prompt"[^>]*data-prompt-preset="p1"/, 'a prompt button does not say it is one');
+  assert.ok(prompt.length > 0, 'the prompt button was not drawn at all');
+});
+
+test('the stripe colours are the same two the words are written in', () => {
+  const page = chatPageHtml(state({ promptPresets: PROMPT_PRESETS, modelPresets: MODEL_PRESETS }), 'n0nce');
+
+  assert.match(page, /\.preset\.model \{ border-left-color: var\(--coai-role\); \}/, 'the model stripe is not the role colour');
+  assert.match(page, /\.preset\.prompt \{ border-left-color: var\(--coai-task\); \}/, 'the prompt stripe is not the task colour');
+  assert.match(page, /mark\.role \{ color: var\(--coai-role\); \}/, 'the role text and the model stripe drifted apart');
+  assert.match(page, /mark\.task \{ color: var\(--coai-task\); \}/, 'the task text and the prompt stripe drifted apart');
 });
 
 test('neither row appears when there is nothing saved in it', () => {
@@ -1663,9 +1708,10 @@ test('pressing a preset names it to the host and nothing else', () => {
   page.fire('presets', 'click', { target: { closest: () => ({ dataset: { modelPreset: 'm2' } }) } });
 
   assert.deepStrictEqual(page.posted.filter((message) => String(message['command']).startsWith('use')), [
-    { type: 'command', command: 'usePromptPreset', id: 'p2' },
-    // WITH the composer, because whether a starting prompt may land depends on whether there is
-    // anything to overwrite — and only this side knows what is in the box.
+    // WITH the composer, BOTH of them: each preset changes one half of the instruction at the front
+    // of that text, and a half can only be swapped where it can be seen. Only this side knows what
+    // is in the box.
+    { type: 'command', command: 'usePromptPreset', id: 'p2', text: '' },
     { type: 'command', command: 'useModelPreset', id: 'm2', text: '' },
   ]);
 });
@@ -1875,6 +1921,7 @@ test('the preset buttons post messages the host understands too', () => {
     providers: [...PROVIDERS],
     providerId: 'antigravity',
     modelId: 'gemini-3.8-flash',
+  promptId: '',
     promptPresets: PROMPT_PRESETS,
     modelPresets: MODEL_PRESETS,
   });
@@ -1904,4 +1951,153 @@ test('a pushed draft is APPENDED, and a set one REPLACES — two operations, not
 
   page.deliver({ type: 'state', setDraft: 'Explain this simply' });
   assert.strictEqual(page.seen['say'].value, 'Explain this simply', 'a preset did not replace what was there');
+});
+
+
+test('a composer that opens with a draft in it DRAWS that draft', () => {
+  const page = runChatPage({ draft: OPENING, marks: MARKS });
+
+  assert.match(page.seen.backdrop?.innerHTML ?? '', /architect of distributed systems/,
+    'the composer rendered its draft invisibly');
+});
+
+test('the role and the task are marked apart, in their own colours', () => {
+  const page = runChatPage({ draft: OPENING, marks: MARKS });
+  const drawn = page.seen.backdrop?.innerHTML ?? '';
+
+  assert.match(drawn, new RegExp(`<mark class="role">${ROLE}</mark>`), 'the role was not marked');
+  assert.match(drawn, new RegExp(`<mark class="task">${TASK}</mark>`), 'the task was not marked');
+  assert.doesNotMatch(drawn, /<mark[^>]*>Answer in English/, 'the language line was marked as instruction');
+});
+
+test('a task with no role in front of it is still the task', () => {
+  // The old painter marked "the first block", so a conversation on a model with no starting prompt
+  // painted its TASK in the role's colour - two different decisions drawn as one.
+  const page = runChatPage({ draft: [TASK, '', 'Answer in English.'].join('\n'), marks: { ...MARKS, role: '' } });
+
+  assert.match(page.seen.backdrop?.innerHTML ?? '', new RegExp(`<mark class="task">${TASK}</mark>`),
+    'a task standing alone was not marked as one');
+});
+
+test('typing repaints the layer that draws the typing', () => {
+  const page = runChatPage({ draft: OPENING, marks: MARKS });
+  const box = page.seen['say'];
+  box.value = `${OPENING} and one more thing`;
+  page.fire('say', 'input');
+
+  assert.match(page.seen.backdrop?.innerHTML ?? '', /and one more thing/, 'what was typed was not drawn');
+});
+
+test('an edited instruction stops being marked rather than marking half a sentence', () => {
+  const page = runChatPage({ draft: OPENING, marks: MARKS });
+  const box = page.seen['say'];
+  box.value = `Actually, ${OPENING}`;
+  page.fire('say', 'input');
+
+  assert.doesNotMatch(page.seen.backdrop?.innerHTML ?? '', /<mark/, 'a prefix that no longer matches was marked');
+});
+
+test('a push says which words are the instruction, and the layer follows', () => {
+  const page = runChatPage({ draft: OPENING, marks: MARKS });
+  const next = ['You are a business analyst', '', TASK].join('\n');
+  page.deliver({ type: 'state', marks: { ...MARKS, role: 'You are a business analyst' }, setDraft: next });
+
+  assert.match(page.seen.backdrop?.innerHTML ?? '', /<mark class="role">You are a business analyst<\/mark>/,
+    'the new role was not marked');
+});
+
+test('the pressed model button is the one CHOSEN, not the one still answering', () => {
+  // A switch disposes one process, resolves a CLI and starts another. While that runs the choice has
+  // been made and the session has not moved - and a button drawn from the session stayed unpressed
+  // for all of it, which is what a model switch hanging looks like from the outside.
+  const html = chatPageHtml(state({ modelPresets: MODEL_PRESETS, providerId: 'm1', chosenModelId: 'm2' }), 'n0nce');
+  const buttons = html.split('<button').filter((one) => one.includes('data-model-preset='));
+  const chosen = buttons.find((one) => one.includes('data-model-preset="m2"')) ?? '';
+  const answering = buttons.find((one) => one.includes('data-model-preset="m1"')) ?? '';
+
+  assert.strictEqual(buttons.length, 2, 'both model buttons were drawn');
+  assert.match(chosen, /class="preset model on"/, 'the model that was pressed does not look pressed');
+  assert.match(chosen, /aria-pressed="true"/, 'the pressed button says nothing to a screen reader');
+  assert.doesNotMatch(answering, /class="preset model on"/, 'the model being switched away from still looked chosen');
+});
+
+test('the machinery of a turn is underlined, so an eye can step over it', () => {
+  const drawn = markedTurn(OPENING, MARKS);
+
+  assert.match(drawn, /<u class="service">Answer in English\.<\/u>/, 'the language line was not marked');
+  assert.match(drawn, /<u class="service">Everything below<\/u>/, 'the material note was not marked');
+  assert.match(drawn, /<u class="service">---<\/u>/, 'the fence was not marked');
+  assert.match(drawn, /the passage$/, 'the passage did not survive the marking');
+  assert.doesNotMatch(drawn, /<u[^>]*>the passage/, 'the passage was marked as machinery');
+});
+
+test('a question that has been SENT keeps the colours it had in the box', () => {
+  // Asked for looking at a sent turn: the role, the task and three lines of machinery, all one grey.
+  // A question does not stop being readable because it moved four centimetres up the page.
+  const html = chatMessagesHtml([{ role: 'you', text: OPENING }], MARKS);
+
+  assert.match(html, new RegExp(`<mark class="role">${ROLE}</mark>`), 'the role lost its colour on sending');
+  assert.match(html, new RegExp(`<mark class="task">${TASK}</mark>`), 'the task lost its colour on sending');
+  assert.match(html, /<u class="service">Answer in English\.<\/u>/, 'the machinery was not marked in the transcript');
+});
+
+test('an ANSWER is not marked up as a turn - it is the other side speaking', () => {
+  const html = chatMessagesHtml([{ role: 'model', text: `${ROLE}\n\nsomething it said` }], MARKS);
+
+  assert.doesNotMatch(html, /<mark class="role">/, 'an answer was marked as if it were a question');
+});
+
+test('what somebody typed is still escaped, marked or not', () => {
+  const html = chatMessagesHtml([{ role: 'you', text: '<img src=x onerror=alert(1)>' }], MARKS);
+
+  assert.doesNotMatch(html, /<img/i, 'a question reached the page as markup');
+  assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/, 'the text was dropped rather than shown');
+});
+
+test('the composer underlines the same machinery the transcript does', () => {
+  const page = runChatPage({ draft: OPENING, marks: MARKS });
+
+  assert.match(page.seen.backdrop?.innerHTML ?? '', /<u class="service">Answer in English\.<\/u>/,
+    'the box did not mark the machinery');
+});
+
+/** Whether `needle` falls inside the div with this id, by walking to that div's matching close. */
+function insideDiv(html: string, id: string, needle: string): boolean {
+  const open = html.indexOf(`<div id="${id}"`);
+  if (open < 0) {
+    return false;
+  }
+  const tags = /<\/?div\b[^>]*>/g;
+  tags.lastIndex = open;
+  let depth = 0;
+  let tag = tags.exec(html);
+  while (tag !== null) {
+    depth += tag[0].startsWith('</div') ? -1 : 1;
+    if (depth === 0) {
+      return html.slice(open, tag.index).includes(needle);
+    }
+    tag = tags.exec(html);
+  }
+
+  return false;
+}
+
+test('Send sits on the line that names the model, at the end of it', () => {
+  const html = chatPageHtml(state({ providers: [...PROVIDERS], providerId: 'antigravity' }), 'n0nce');
+  const row = html.slice(html.indexOf('<div class="pickerRow">'), html.indexOf('<div class="compose">'));
+
+  assert.match(row, /id="send"/, 'Send is not on the picker row');
+  assert.doesNotMatch(html.slice(html.indexOf('<div class="compose">')), /id="send"/,
+    'Send was left beside the composer as well');
+  assert.ok(html.indexOf('id="pickerBox"') < html.indexOf('id="send"'), 'Send comes before the model it belongs beside');
+});
+
+test('Send is NOT inside the picker, which a push rewrites wholesale', () => {
+  // Every state push replaces the picker's innerHTML. A control living in there is destroyed on the
+  // first one, along with the click listener bound to it once when the page loaded - and a Send
+  // button that stops sending after the first answer is the worst version of this change.
+  const html = chatPageHtml(state({ providers: [...PROVIDERS], providerId: 'antigravity' }), 'n0nce');
+
+  assert.strictEqual(insideDiv(html, 'pickerBox', 'id="send"'), false, 'Send is inside the region a push replaces');
+  assert.strictEqual(insideDiv(html, 'pickerBox', 'id="provider"'), true, 'the harness cannot see inside the picker');
 });

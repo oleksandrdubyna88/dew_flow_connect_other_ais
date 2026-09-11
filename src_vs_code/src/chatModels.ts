@@ -215,6 +215,14 @@ export interface ChatProvider {
   /** The vendor ROW id. This is the identity a saved choice stores and resolution looks up. */
   readonly id: string;
   readonly label: string;
+  /**
+   * The VENDOR this one runs on — `codex`, `antigravity`, `claude`, `remote`.
+   *
+   * <p>The picker shows it beside the model, because those are the two questions a person has:
+   * who answers, and with what. It used to show the label twice over — the saved name in one select
+   * and its model in the other — which is two dropdowns that read alike and say one thing.</p>
+   */
+  readonly vendor: string;
   readonly caption: string;
   /** What this row can be pointed at — discovered, curated or a server's allowlist. */
   readonly models: readonly ModelChoice[];
@@ -266,6 +274,7 @@ export function chatProvidersFrom(
   const enabled = vendors.filter((vendor) => vendor.enabled);
   const providers = enabled.filter(canChat).map((vendor): ChatProvider => ({
     id: vendor.id,
+    vendor: vendor.runtime,
     // The ROW's name and nothing else. It used to append the model that row is configured to —
     // `codex · gpt-5.6-luna` — which came from the flat list this replaced, where one entry WAS one
     // model. Beside a model select it makes two dropdowns that read alike, and the operator asked
@@ -329,6 +338,17 @@ export function resolveChatPick(
     // two states arrive here indistinguishable and both read as "no longer configured".
     // (gemini, the code round.)
     const disabled = vendors.find((one) => one.id === providerId && !one.enabled);
+
+    // NEVER built out of an empty name. An empty provider is not a model that went away — it is a
+    // chat with nothing saved to send to, and the sentence has to say that and where to fix it.
+    if (providerId.length === 0) {
+      return {
+        ok: false,
+        refusal: list.providers.length === 0
+          ? 'There is no saved model to send this to yet — add one with Edit chat presets.'
+          : 'No saved model is chosen — pick one in the panel, or add one with Edit chat presets.',
+      };
+    }
 
     return {
       ok: false,
@@ -411,10 +431,25 @@ export function legacyPick(
     return { providerId: offering[0]!.id, modelId: saved, candidates: [] };
   }
 
-  // Ambiguous, or offered by nobody. The model is KEPT either way so the caller can strand it under
-  // its own name, and the candidates come with it so the question can be "which of these two?"
-  // rather than "pick something". (gemini, the code round.)
-  return { providerId: '', modelId: saved, candidates: offering.map((one) => one.id) };
+  if (offering.length > 1) {
+    // Ambiguous. The model is KEPT so the caller can strand it under its own name, and the candidates
+    // come with it so the question can be "which of these two?" rather than "pick something".
+    // (gemini, the code round.)
+    return { providerId: '', modelId: saved, candidates: offering.map((one) => one.id) };
+  }
+
+  // Offered by NOBODY — which after the chat got its own saved models is the ordinary case, not an
+  // exotic one: `coai.chatModel` holds a reviewer ROW id on every installation that predates it, and
+  // a reviewer names nothing in this feature's world any more. A value that names nothing HERE is not
+  // a choice, so the first saved model answers, exactly as an empty setting does. It used to answer
+  // with an empty provider, and one step later that empty string was built into the sentence
+  // `" is not a model this conversation can be sent to any more"` — a leading space and no name,
+  // which is what the operator was shown when he opened a passage for analysis.
+  const first = list.providers[0];
+
+  return first === undefined
+    ? { providerId: '', modelId: '', candidates: [] }
+    : { providerId: first.id, modelId: vendors.find((one) => one.id === first.id)?.model ?? '', candidates: [] };
 }
 
 /**
@@ -500,6 +535,7 @@ export function chatProvidersFromPresets(
     return {
       id: preset.id,
       label: preset.name,
+      vendor: preset.runtime,
       caption: captionOf(spec),
       models: modelsFor(
         preset.runtime,

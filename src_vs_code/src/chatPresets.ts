@@ -53,6 +53,14 @@ export interface ModelPreset {
   readonly runtime: Runtime;
   /** Which of that vendor's models. Empty means the vendor's own default. */
   readonly model: string;
+  /**
+   * The one a NEW conversation opens on. Exactly one list-wide; the first claim wins.
+   *
+   * <p>The rule the prompt list already keeps, for the same reason: a capture has to open on some
+   * model, and "whichever id was saved last" is a choice nobody made — the operator asked for the
+   * prompt list's tick in front of the models as well, and for the one thing it means.</p>
+   */
+  readonly main: boolean;
   /** What the composer opens with when this preset is chosen. Optional, and usually absent. */
   readonly startingPrompt?: string | undefined;
   /** Where that vendor's CLI is. Empty = look it up on PATH. */
@@ -141,8 +149,8 @@ function nameFor(prompt: string): string {
   return firstLine.length <= NAME_LIMIT ? firstLine : `${firstLine.slice(0, NAME_LIMIT - 1)}…`;
 }
 
-/** Exactly one main prompt, and the first claim wins — two would make the choice arbitrary. */
-function onlyOneMain(presets: readonly PromptPreset[]): readonly PromptPreset[] {
+/** Exactly one main row, and the first claim wins — two would make the choice arbitrary. */
+function onlyOneMain<T extends { readonly main: boolean }>(presets: readonly T[]): readonly T[] {
   const first = presets.findIndex((preset) => preset.main);
 
   return presets.map((preset, index) => ({ ...preset, main: index === first }));
@@ -173,7 +181,7 @@ export function chatModelPresetsFrom(saved: unknown, reviewerRows: readonly Vend
   const rows = Array.isArray(saved) ? saved : [];
   const taken = new Set<string>();
 
-  return rows.flatMap((row, index): ModelPreset[] => {
+  return onlyOneMain(rows.flatMap((row, index): ModelPreset[] => {
     const one = record(row);
     if (one === undefined) {
       return [];
@@ -192,6 +200,7 @@ export function chatModelPresetsFrom(saved: unknown, reviewerRows: readonly Vend
     return [{
       id: withId(text(one['id']), index, taken),
       name,
+      main: one['main'] === true,
       runtime: runtime as Runtime,
       model: text(one['model']).length > 0 ? text(one['model']) : (carried?.model ?? ''),
       executablePath: text(one['executablePath']).length > 0 ? text(one['executablePath']) : (carried?.executablePath ?? ''),
@@ -200,7 +209,19 @@ export function chatModelPresetsFrom(saved: unknown, reviewerRows: readonly Vend
       ...(onServer.length > 0 ? { remoteVendor: onServer } : {}),
       ...(starting.length > 0 ? { startingPrompt: starting } : {}),
     }];
-  });
+  }));
+}
+
+/**
+ * Which model a NEW conversation opens on, when the list says.
+ *
+ * <p>The TICKED one and nothing else — where `mainPrompt` falls back to the first row, this does
+ * not, and the difference is deliberate. `coai.chatModel` is a value a person sets in the panel,
+ * and a list nobody has ticked must not silently overrule it. "Nothing ticked" is answered further
+ * out by `legacyPick`, which already turns a saved id naming nothing into the first provider.</p>
+ */
+export function mainModel(presets: readonly ModelPreset[]): ModelPreset | undefined {
+  return presets.find((preset) => preset.main);
 }
 
 /**
@@ -286,6 +307,9 @@ export function freshModelRow(
   return {
     id: freshId(taken),
     name: name.trim().length > 0 ? name.trim() : 'New model',
+    // NOT main. A row added to a list that already has one would otherwise take the tick from it by
+    // arriving — and adding a model is not a decision about which one a capture opens on.
+    main: false,
     runtime: vendor.runtime,
     model: modelId,
     executablePath: vendor.executablePath ?? '',
@@ -356,7 +380,11 @@ export function modelRowsAfterAdd(
 }
 
 /**
- * What the prompt list should hold after the `main` box on one row was ticked or unticked.
+ * What a preset list should hold after the `main` box on one row was ticked or unticked.
+ *
+ * <p>BOTH lists, one implementation: the prompts' tick and the models' tick are the same rule about
+ * the same field, and two copies of it would be two chances to disagree about what unticking the
+ * last one does.</p>
  *
  * <p><b>Unticking the only main one is refused</b>, which makes the box a radio in everything but
  * appearance. `onlyOneMain` marks nothing when nothing is ticked and `mainPrompt` then falls back to
@@ -364,7 +392,7 @@ export function modelRowsAfterAdd(
  * sends. A control that cannot be turned off is honest; one that turns off and changes nothing is
  * not. (gemini, the plan round.)</p>
  */
-export function promptRowsAfterMain(
+export function rowsAfterMain(
   rows: readonly SavedRow[],
   id: string,
   ticked: boolean,
