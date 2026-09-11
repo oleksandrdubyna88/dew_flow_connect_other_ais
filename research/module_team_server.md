@@ -448,6 +448,30 @@ catalog that could not be re-fetched is shown as STALE rather than as absent.
   from the ambient environment when unset, so two slots would share one config directory and the
   second sign-in would overwrite the first. For `antigravity`, which has no directory variable of its
   own, these ARE the whole isolation.
+- **What a job can reach: its prompt, its account, its own directory — and nothing else** (story 2.2
+  of [PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md](../todo/PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md),
+  2026-09-11). A job is one authorised employee's arbitrary prompt run through an agentic CLI on the
+  box that holds every shared account, as root, and the finding text goes back to that employee
+  verbatim. So `ReviewLauncher` launches every reviewer confined, and it does so through ONE step
+  (`Confined`) reading ONE value (`Confinement.OfEveryJob`), from which both halves are derived: the
+  adapter's — `ReviewerSettings.Confined`, so claude's `--disallowedTools` names `Bash`, `Read`,
+  `Glob`, `Grep`, `WebFetch`, `WebSearch`, `Task` and `Agent` beside the write tools — and the
+  launcher's — `ProcessRequest.InheritsEnvironment = false`, so the child starts from
+  `ProcessEnvironment.Passthrough` rather than from the server's process, where `/etc/coai-server.env`
+  lives. Two flags on two types that never meet was epic 1's accepted Major (codex): set one and miss
+  the other and you have an isolated environment with a shell, or the reverse, and both look
+  confined. The slot's own variables are applied last and still arrive, so confinement takes nothing
+  from the account isolation above; and `TMPDIR`, `TMP` and `TEMP` are set to the job's own
+  `coai-server-job-…` directory (gemini, Major) — the allowlist passes them through, and on a shared
+  box as root that is one `/tmp` for every job and the host's sockets. The directory is deleted in
+  the same `finally`, so nothing a reviewer writes there outlives the job. The retry the finding
+  assumed does not exist in this binary: the launcher makes ONE launch (`LaunchAsync`, no repair),
+  and the server's own retry is the runner requeueing onto another account, which re-enters the same
+  step. What the suite asserts is what is SENT — `ReviewLauncherTests` reads both halves off the
+  launched request, `ConfinementTests` holds the derivation — and whether the installed CLI accepts
+  that argv is observable only on the box, which is `POST_DEPLOY.md` item 12. Codex and antigravity
+  take no new flag; what their sandboxes leave open, reads, is
+  [PLAN_team_server_unprivileged.md](../todo/PLAN_team_server_unprivileged.md)'s to close.
 - **The cooldown guess errs LONG.** Waiting too long costs one queued review some latency; retrying
   too early spends quota against a live limit, which on some plans extends it. So an unzoned time is
   never allowed to resolve to less than the 30-minute fallback, repeats double to a 5 h ceiling, and
@@ -686,6 +710,11 @@ The account directories are `chmod 700` on creation, because they accumulate OAu
 default permissions make those readable by every other user on a shared host. A bind-mounted volume
 owned by another uid cannot be chmod'ed by the server; that is the deployment check's job, and
 failing to start over it would be worse than the exposure.
+
+A running job has one directory outside `<DataDir>`: `coai-server-job-…` under the system temp, which
+is its working directory and, since 2026-09-11, its `TMPDIR`/`TMP`/`TEMP` as well. It is created before
+the launch and deleted in the launcher's `finally`, so a job's temporary files are gone with the job
+rather than left in the one `/tmp` every other job on the box can read.
 
 ## Verification that matters
 
