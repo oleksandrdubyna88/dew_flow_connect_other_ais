@@ -144,6 +144,15 @@ interface Thread extends ChatMemory {
    */
   chosenId: string;
   /**
+   * How many times a model button has been pressed in this conversation.
+   *
+   * <p>So a switch that comes back knows whether it is still the last thing asked for. A refusal
+   * waits for the answer in flight and for a CLI to resolve, so it can arrive after two more
+   * presses — including another press of the SAME preset, which an id alone cannot tell apart.
+   * (codex, the code round.)</p>
+   */
+  presses: number;
+  /**
    * Exactly what this side last wrote into the composer.
    *
    * <p>So "is the box still ours to replace" can be answered by comparing rather than by guessing
@@ -1262,6 +1271,7 @@ function newConversation(
     promptId: openingPrompt(config),
     role: roleOf(config, ready.providerId),
     chosenId: ready.providerId,
+    presses: 0,
     ourDraft: state.draft,
     running: false,
     // Counted from 1 by the first turn, so 0 is "this conversation has not asked anything yet" and
@@ -1336,6 +1346,8 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         const wasChosen = mine.chosenId;
         const wasRole = mine.role;
         const was = instructionOf(mine, config);
+        mine.presses += 1;
+        const press = mine.presses;
         mine.chosenId = preset.id;
         mine.role = preset.startingPrompt ?? '';
         if (!writeInstruction(found, mine, draft, was, config)) {
@@ -1350,26 +1362,20 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
           }
         }
         show(found, mine.running, '');
-        // And the MODEL, which may have to wait for an answer in flight. Refused, it leaves the old
-        // model answering — so the button, the role and the box all go back to it rather than
-        // claiming a conversation that never moved.
-        const wrote = mine.role !== wasRole;
+        // And the MODEL, which may have to wait for an answer in flight. A switch that is REFUSED
+        // leaves the old model answering, so the button goes back to it — and nothing else does.
+        //
+        // The words are deliberately left where they are. The box may have been typed into while the
+        // switch was resolving, and overwriting a question somebody is writing is the one thing this
+        // feature has been careful about from the start; the refusal is said out loud instead, and
+        // the composer stays consistent with what is actually in it. (local, the code round.)
         void switchModel(found, preset.id, preset.model).then((switched) => {
-          // ONLY IF THIS PRESS IS STILL THE LAST ONE. A refusal can arrive after the person has
-          // pressed something else — the switch waits for an answer in flight and for a CLI to
-          // resolve — and rolling back then would undo a choice nobody refused. (codex, the plan
-          // round: a late M2 refusal must not take M3 with it.)
-          if (switched || mine.chosenId !== preset.id) {
+          // ONLY IF THIS PRESS IS STILL THE LAST ONE — by count, not by id: pressing A, then B, then
+          // A again would otherwise let the first A's refusal undo the second. (codex, twice.)
+          if (switched || mine.presses !== press) {
             return;
           }
-          const undo = instructionOf(mine, config);
           mine.chosenId = wasChosen;
-          mine.role = wasRole;
-          if (wrote) {
-            // Back through the same swap, against the text this side last wrote: the words that went
-            // in come out, and anything below them stays.
-            writeInstruction(found, mine, mine.ourDraft, undo, config);
-          }
           show(found, mine.running, '');
         });
       },
@@ -1679,6 +1685,7 @@ export function restoreConversation(
     promptId: mainPrompt(presets.promptPresets)?.id ?? '',
     role: presets.modelPresets.find((one) => one.id === (ready.ok ? ready.providerId : restored.providerId))?.startingPrompt ?? '',
     chosenId: ready.ok ? ready.providerId : restored.providerId,
+    presses: 0,
     ourDraft: '',
     running: false,
     turn: 0,

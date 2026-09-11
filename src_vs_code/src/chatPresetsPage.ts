@@ -28,6 +28,11 @@ export interface PresetsPageState {
   readonly models: readonly ModelPreset[];
   /** What a model preset may point at — the same rows the chat's own picker offers. */
   readonly providers: readonly ChatProvider[];
+  /**
+   * Saved models this build cannot read, by name — rows written before a preset carried its own
+   * vendor. Shown rather than passed over, the rule every other list here keeps.
+   */
+  readonly unreadable: readonly string[];
   readonly uiScale: number;
 }
 
@@ -205,6 +210,7 @@ function styles(uiScale: number): string {
      the rows attribute is the floor for every engine that cannot. */
   textarea { width: 100%; box-sizing: border-box; field-sizing: content; max-height: 60vh; }
   .main { display: inline-flex; align-items: center; gap: 4px; opacity: .85; }
+  .refused { font-size: .9em; opacity: .8; margin: 0 0 10px; }
   button { font: inherit; color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: none; border-radius: 3px; padding: 4px 12px; cursor: pointer; }
   button.remove { color: var(--vscode-foreground); background: none; border: 1px solid var(--vscode-panel-border); }
 ${ZOOM_CSS}`;
@@ -260,6 +266,14 @@ function script(nonce: string): string {
 export function chatPresetsHtml(state: PresetsPageState, nonce: string): string {
   const prompts = state.prompts.map((preset) => promptRow(preset).replace('class="preset"', 'class="preset prompt-row"')).join('');
   const models = state.models.map((preset) => modelRow(preset, state.providers)).join('');
+  // NAMED, not silently passed over. These rows name a reviewer, and repairing them would mean
+  // reading the reviewer list — which this feature may not do. Saying so is what is left, and it is
+  // more than the silence the code round found. (codex, three findings.)
+  const unreadable = state.unreadable.length === 0
+    ? ''
+    : `<p class="refused">Saved before a model preset carried its own vendor, so ${state.unreadable.length === 1 ? 'it cannot be run' : 'they cannot be run'}`
+      + ` — add ${state.unreadable.length === 1 ? 'it' : 'them'} again: `
+      + `${state.unreadable.map((name) => `<b>${escapeHtml(name)}</b>`).join(', ')}.</p>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -282,7 +296,7 @@ ${prompts}
 <h2>Models</h2>
 <p class="lead">A model preset is a vendor, one of its models, and the instruction the composer opens with.
 The one marked <b>main</b> is what a captured passage opens on.</p>
-${models}
+${models}${unreadable}
 <button type="button" data-add="model">Add a model</button>
 ${script(nonce)}
 </body>

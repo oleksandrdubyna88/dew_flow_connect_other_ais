@@ -27,7 +27,7 @@ const PROVIDERS = [
 ];
 
 test('both lists are on the page, each entry named', () => {
-  const html = chatPresetsHtml({ prompts: PROMPTS, models: MODELS, providers: PROVIDERS, uiScale: 0 }, 'n0nce');
+  const html = chatPresetsHtml({ prompts: PROMPTS, models: MODELS, providers: PROVIDERS, unreadable: [], uiScale: 0 }, 'n0nce');
 
   assert.match(html, /Explain/);
   assert.match(html, /Review/);
@@ -38,14 +38,14 @@ test('both lists are on the page, each entry named', () => {
 test('the prompt editor is large, because reading a long prompt is the point', () => {
   // The operator asked for it in as many words: "окно промта большое, что б можно было легко
   // читать". A prompt is often a paragraph and sometimes several.
-  const html = chatPresetsHtml({ prompts: PROMPTS, models: [], providers: [], uiScale: 0 }, 'n0nce');
+  const html = chatPresetsHtml({ prompts: PROMPTS, models: [], providers: [], unreadable: [], uiScale: 0 }, 'n0nce');
 
   assert.match(html, /<textarea[^>]*data-field="text"[^>]*rows="(1[2-9]|[2-9]\d)"/,
     'the prompt box is not big enough to read a prompt in');
 });
 
 test('exactly one prompt is ticked as the main one', () => {
-  const html = chatPresetsHtml({ prompts: PROMPTS, models: [], providers: [], uiScale: 0 }, 'n0nce');
+  const html = chatPresetsHtml({ prompts: PROMPTS, models: [], providers: [], unreadable: [], uiScale: 0 }, 'n0nce');
   const ticked = [...html.matchAll(/data-field="main"[^>]*checked/g)];
 
   assert.strictEqual(ticked.length, 1, 'the main prompt is not exactly one');
@@ -57,7 +57,7 @@ test('a model preset says the vendor it runs on, and offers that vendor’s mode
   // what the CLI, the endpoint and the key are. The MODEL stays a select, because that is the one
   // half a person changes without changing what the preset IS.
   const html = chatPresetsHtml(
-    { prompts: [], models: MODELS, providers: PROVIDERS, uiScale: 1 },
+    { prompts: [], models: MODELS, providers: PROVIDERS, unreadable: [], uiScale: 1 },
     'n0nce',
   );
 
@@ -66,7 +66,7 @@ test('a model preset says the vendor it runs on, and offers that vendor’s mode
 });
 
 test('each list can be added to and each entry removed', () => {
-  const html = chatPresetsHtml({ prompts: PROMPTS, models: MODELS, providers: PROVIDERS, uiScale: 0 }, 'n0nce');
+  const html = chatPresetsHtml({ prompts: PROMPTS, models: MODELS, providers: PROVIDERS, unreadable: [], uiScale: 0 }, 'n0nce');
 
   assert.match(html, /data-add="prompt"/, 'there is no way to add a prompt');
   assert.match(html, /data-add="model"/, 'there is no way to add a model');
@@ -78,7 +78,7 @@ test('everything a person typed is escaped, in a name and in a prompt alike', ()
     {
       prompts: [{ id: 'p', name: '<img src=x onerror=alert(1)>', text: '</textarea><script>alert(1)</script>', main: true }],
       models: [{ id: 'm', name: '"><b>', main: false, runtime: 'antigravity' as const, executablePath: '', baseUrl: '', model: '' }],
-      providers: [],
+      providers: [], unreadable: [],
       uiScale: 0,
     },
     'n0nce',
@@ -95,7 +95,7 @@ test('everything a person typed is escaped, in a name and in a prompt alike', ()
 });
 
 test('an empty page says what to do rather than showing nothing', () => {
-  const html = chatPresetsHtml({ prompts: [], models: [], providers: [], uiScale: 0 }, 'n0nce');
+  const html = chatPresetsHtml({ prompts: [], models: [], providers: [], unreadable: [], uiScale: 0 }, 'n0nce');
 
   assert.match(html, /data-add="prompt"/, 'an empty page offers no way to start');
   assert.doesNotMatch(html, /data-remove=/, 'an empty page drew a row to remove');
@@ -134,7 +134,7 @@ test('the models tab offers the tick, and shows which model a capture opens on',
         { id: 'm1', name: 'Fast', main: false, runtime: 'antigravity' as const, executablePath: '', baseUrl: '', model: '' },
         { id: 'm2', name: 'Deep', main: true, runtime: 'antigravity' as const, executablePath: '', baseUrl: '', model: '' },
       ],
-      providers: [],
+      providers: [], unreadable: [],
       uiScale: 0,
     },
     'n0nce',
@@ -211,4 +211,20 @@ test('an edit naming a row that is not in the list is a no-op the host can see',
 
   assert.strictEqual(editedRows(rows, { kind: 'edit', list: 'prompt', id: 'gone', field: 'name', value: 'x' }), rows);
   assert.notStrictEqual(editedRows(rows, { kind: 'edit', list: 'prompt', id: 'a', field: 'name', value: 'B' }), rows);
+});
+
+test('a saved model this build cannot read is named on the page, not passed over', () => {
+  const html = chatPresetsHtml(
+    { prompts: [], models: [], providers: [], unreadable: ['Old codex'], uiScale: 0 },
+    'n0nce',
+  );
+
+  assert.match(html, /Old codex/, 'a row that cannot be run was left unmentioned');
+  assert.match(html, /add it again/, 'the page says it is missing without saying what to do');
+});
+
+test('a page with nothing unreadable says nothing about it', () => {
+  const html = chatPresetsHtml({ prompts: [], models: [], providers: [], unreadable: [], uiScale: 0 }, 'n0nce');
+
+  assert.doesNotMatch(html, /add it again/, 'an empty list still explained itself');
 });

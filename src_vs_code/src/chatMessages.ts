@@ -247,9 +247,14 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
       // The draft is OPTIONAL here, where the model preset's is required: a webview retained from a
       // build before this field existed posts none, and a prompt button has always replaced what it
       // found. Absent, the host rebuilds the turn instead of swapping the instruction in it.
+      //
+      // ABSENT is the only thing that means that, though. A `text` of the wrong type is a message
+      // this host cannot read, and reading it as "no draft" would be the parser inventing a meaning
+      // — the same rule the model preset's required draft already keeps. (codex, the code round.)
+      const wrong = message.text !== undefined && typeof message.text !== 'string';
       const draft = typeof message.text === 'string' ? message.text : undefined;
 
-      return id.length === 0
+      return id.length === 0 || wrong
         ? IGNORE
         : { kind: 'usePrompt', id, ...(draft === undefined ? {} : { draft }) };
     }

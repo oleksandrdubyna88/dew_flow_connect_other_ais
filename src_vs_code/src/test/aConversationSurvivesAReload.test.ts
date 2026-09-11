@@ -256,7 +256,10 @@ test('the first question after a restore carries the whole transcript', () => {
   const command = source('chatCommand.ts');
   const restore = command.slice(command.indexOf('export function restoreConversation'));
 
-  assert.match(restore.slice(0, 2_500), /carry: \[\.\.\.saved\.messages\]/,
+  // The WINDOW, not the file: this asserts the carry is set where a restored thread is built, and it
+  // is widened when that function grows rather than dropped. It grew when a restored tab started
+  // carrying its prompt, its role and the words this side last wrote.
+  assert.match(restore.slice(0, 3_500), /carry: \[\.\.\.saved\.messages\]/,
     'a restored conversation hands the next model nothing, so it answers a follow-up it never heard');
 });
 

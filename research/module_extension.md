@@ -1068,6 +1068,24 @@ hoisted that helper out of the function, so the source the page received called 
 not have — and `bundledPage.test.ts` is what said so. Splitting the decision (`turnParts`) from the
 drawing is what makes the embedding safe.
 
+**What the code round then found in it.** The backdrop is repainted once per FRAME rather than once
+per keystroke — the layer is a full rebuild of everything in the box, and keys arrive faster than a
+browser draws. It follows both axes of the scroll now, and the box breaks long words the way the
+layer behind it does, or a word too long for the width is drawn in two different places. A refused
+switch rolls back the BUTTON and nothing else: the words are left where they are, because the box may
+have been typed into while the switch was resolving, and the refusal is said out loud instead. The
+rollback is keyed to a press COUNT, not to a preset id — pressing A, then B, then A again would
+otherwise let the first A's refusal undo the second. And the tag a marked part is drawn with is
+chosen from a table rather than built out of the part's own name, so nothing there can reach an
+attribute.
+
+**The migration that could never run.** `chatModelPresetsFrom` took the reviewer rows for a one-time
+migration of presets written before a preset carried its own vendor — and no caller ever passed any,
+in any build. Repairing such a row means reading `coai.vendors`, which is the one thing this feature
+may not do from anywhere, so the parameter is gone. What those rows must not be is INVISIBLE:
+`unreadableModels` names them and the presets tab says they cannot be run and asks for them to be
+added again, which is the rule every other list here keeps.
+
 ### A provider is a ROW, and the pair is checked as a pair (2026-09-09)
 
 `chatProvidersFrom(vendors, catalog)` sits beside `chatModelsFrom` and answers a different question:

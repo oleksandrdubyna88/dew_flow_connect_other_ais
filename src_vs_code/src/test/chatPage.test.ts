@@ -1956,6 +1956,7 @@ test('a pushed draft is APPENDED, and a set one REPLACES — two operations, not
 
 test('a composer that opens with a draft in it DRAWS that draft', () => {
   const page = runChatPage({ draft: OPENING, marks: MARKS });
+  page.frames();
 
   assert.match(page.seen.backdrop?.innerHTML ?? '', /architect of distributed systems/,
     'the composer rendered its draft invisibly');
@@ -1963,6 +1964,7 @@ test('a composer that opens with a draft in it DRAWS that draft', () => {
 
 test('the role and the task are marked apart, in their own colours', () => {
   const page = runChatPage({ draft: OPENING, marks: MARKS });
+  page.frames();
   const drawn = page.seen.backdrop?.innerHTML ?? '';
 
   assert.match(drawn, new RegExp(`<mark class="role">${ROLE}</mark>`), 'the role was not marked');
@@ -1974,6 +1976,7 @@ test('a task with no role in front of it is still the task', () => {
   // The old painter marked "the first block", so a conversation on a model with no starting prompt
   // painted its TASK in the role's colour - two different decisions drawn as one.
   const page = runChatPage({ draft: [TASK, '', 'Answer in English.'].join('\n'), marks: { ...MARKS, role: '' } });
+  page.frames();
 
   assert.match(page.seen.backdrop?.innerHTML ?? '', new RegExp(`<mark class="task">${TASK}</mark>`),
     'a task standing alone was not marked as one');
@@ -1984,6 +1987,7 @@ test('typing repaints the layer that draws the typing', () => {
   const box = page.seen['say'];
   box.value = `${OPENING} and one more thing`;
   page.fire('say', 'input');
+  page.frames();
 
   assert.match(page.seen.backdrop?.innerHTML ?? '', /and one more thing/, 'what was typed was not drawn');
 });
@@ -1993,6 +1997,7 @@ test('an edited instruction stops being marked rather than marking half a senten
   const box = page.seen['say'];
   box.value = `Actually, ${OPENING}`;
   page.fire('say', 'input');
+  page.frames();
 
   assert.doesNotMatch(page.seen.backdrop?.innerHTML ?? '', /<mark/, 'a prefix that no longer matches was marked');
 });
@@ -2001,6 +2006,7 @@ test('a push says which words are the instruction, and the layer follows', () =>
   const page = runChatPage({ draft: OPENING, marks: MARKS });
   const next = ['You are a business analyst', '', TASK].join('\n');
   page.deliver({ type: 'state', marks: { ...MARKS, role: 'You are a business analyst' }, setDraft: next });
+  page.frames();
 
   assert.match(page.seen.backdrop?.innerHTML ?? '', /<mark class="role">You are a business analyst<\/mark>/,
     'the new role was not marked');
@@ -2056,6 +2062,7 @@ test('what somebody typed is still escaped, marked or not', () => {
 
 test('the composer underlines the same machinery the transcript does', () => {
   const page = runChatPage({ draft: OPENING, marks: MARKS });
+  page.frames();
 
   assert.match(page.seen.backdrop?.innerHTML ?? '', /<u class="service">Answer in English\.<\/u>/,
     'the box did not mark the machinery');
@@ -2118,4 +2125,27 @@ test('a question from a build before that field falls back to the conversation',
   const html = chatMessagesHtml([{ role: 'you', text: OPENING }], MARKS);
 
   assert.match(html, new RegExp(`<mark class="role">${ROLE}</mark>`), 'an older question was left unmarked');
+});
+
+test('a burst of keystrokes paints once, not once each', () => {
+  // The layer is a full rebuild of everything in the box, and a keystroke can arrive faster than the
+  // browser draws. (gemini and local, the code round.)
+  const page = runChatPage({ draft: OPENING, marks: MARKS });
+  page.frames();
+  const box = page.seen['say'];
+  let painted = 0;
+  const layer = page.seen.backdrop;
+  assert.ok(layer, 'there is no layer to paint');
+  layer.onWrite = () => { painted += 1; };
+  box.value = `${OPENING}a`;
+  page.fire('say', 'input');
+  box.value = `${OPENING}ab`;
+  page.fire('say', 'input');
+  box.value = `${OPENING}abc`;
+  page.fire('say', 'input');
+
+  assert.strictEqual(painted, 0, 'a keystroke painted before the frame it asked for');
+  page.frames();
+  assert.strictEqual(painted, 1, 'three keystrokes painted more than once');
+  assert.match(layer.innerHTML, /abc/, 'the paint that ran was not the latest text');
 });

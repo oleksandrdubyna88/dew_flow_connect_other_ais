@@ -598,7 +598,9 @@ function chatStyle(
   /* The layer is positioned against the box, so it does not stretch across the Send button. */
   .compose { position: relative; }
   .composeBox { position: relative; flex: 1 1 auto; min-width: 0; display: flex; }
-  #say { color: transparent; caret-color: var(--vscode-input-foreground, var(--vscode-foreground)); background: transparent; position: relative; z-index: 1; }
+  /* The same wrapping as the layer behind it: a word the box breaks in another place is a word
+     drawn in another place. */
+  #say { overflow-wrap: break-word; color: transparent; caret-color: var(--vscode-input-foreground, var(--vscode-foreground)); background: transparent; position: relative; z-index: 1; }
   #say::selection { color: var(--vscode-input-foreground, var(--vscode-foreground)); background: var(--vscode-editor-selectionBackground); }
   #backdrop {
     position: absolute; inset: 0; box-sizing: border-box; margin: 0; padding: 8px; overflow: hidden;
@@ -770,6 +772,9 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   let captions = ${jsonForScript(Object.fromEntries(state.models.map((model) => [model.id, model.caption])))};
   // Which words in the turn are which, so the layer behind the box can draw them apart.
   let marks = ${jsonForScript(state.marks)};
+  // The frame a paint is waiting for, declared HERE because the first paint runs at load - before
+  // the painter's own place in this script - and a let in the temporal dead zone throws.
+  let painting = 0;
   // The webview swallows a thrown error silently, and a page that stops responding to Enter with no
   // sign of why is the defect this trap exists to name. Same shape as the rounds log's.
   window.onerror = function (message) {
@@ -954,7 +959,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     // The two layers scroll as one or the words drift apart from the caret that is on them.
     say.addEventListener('scroll', function () {
       const layer = document.getElementById('backdrop');
-      if (layer) { layer.scrollTop = say.scrollTop; }
+      if (layer) { layer.scrollTop = say.scrollTop; layer.scrollLeft = say.scrollLeft; }
     });
     // THE FIRST PAINT. The draft is rendered into the box by the HTML, which fires no event.
     paintBackdrop();
@@ -996,24 +1001,40 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   // TEXT: the role in one colour, the task in another. Which is which comes from the host - the page
   // holds one string, and a role and a task read alike - and a question typed from scratch has
   // neither, which is why nothing is marked then.
+  // ONE PAINT PER FRAME. Every keystroke asks for one, and a keystroke can arrive faster than the
+  // browser draws: coalesced here rather than run per event, because the work is a full rebuild of a
+  // layer that can hold a whole captured passage. (gemini and local, the code round.)
   function paintBackdrop() {
+    if (painting !== 0) { return; }
+    const frame = typeof requestAnimationFrame === 'function'
+      ? requestAnimationFrame
+      : function (run) { return setTimeout(run, 0); };
+    painting = frame(function () { painting = 0; paintNow(); }) || 1;
+  }
+  function paintNow() {
     const box = document.getElementById('say');
     const behind = document.getElementById('backdrop');
     if (!box || !behind) { return; }
     const escape = function (t) {
       return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     };
+    // The tag is CHOSEN from what the part is, never built out of it. Nothing here can reach an
+    // attribute even if a future part kind arrives from somewhere less trustworthy than this page's
+    // own function. (gemini, the code round, as a security finding.)
+    const opens = { role: '<mark class="role">', task: '<mark class="task">', service: '<u class="service">' };
+    const closes = { role: '</mark>', task: '</mark>', service: '</u>' };
     const parts = turnParts(box.value || '', marks);
     let html = '';
     for (let index = 0; index < parts.length; index += 1) {
       const part = parts[index];
       const body = escape(part.text);
-      if (part.kind === 'plain') { html += body; }
-      else if (part.kind === 'service') { html += '<u class="service">' + body + '</u>'; }
-      else { html += '<mark class="' + part.kind + '">' + body + '</mark>'; }
+      html += opens[part.kind] === undefined ? body : opens[part.kind] + body + closes[part.kind];
     }
     behind.innerHTML = html;
+    // BOTH AXES. A word longer than the box scrolls the textarea sideways, and a layer that only
+    // follows the vertical scroll then draws the words in the wrong place. (gemini, the code round.)
     behind.scrollTop = box.scrollTop;
+    behind.scrollLeft = box.scrollLeft;
   }
   function wirePicker() {
     const provider = document.getElementById('provider');
