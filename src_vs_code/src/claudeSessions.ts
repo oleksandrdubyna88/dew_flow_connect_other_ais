@@ -89,13 +89,23 @@ export type Waiting =
  * preventing. When nothing is waiting but something was asked, the newest ANSWERED question is
  * reported as answered — that is a different sentence from "nothing was asked at all".</p>
  */
-export function waitingIn(sessions: readonly WaitingSession[]): Waiting {
+export function waitingIn(sessions: readonly WaitingSession[], looking = ''): Waiting {
   const waiting = sessions.filter((one) => !one.asked.answered);
   if (waiting.length === 1) {
     return { kind: 'one', session: waiting[0]! };
   }
   if (waiting.length > 1) {
-    return { kind: 'several', sessions: waiting };
+    // TWO WAITING, AND THE TAB SAYS WHICH. There is no window id to ask for — but Claude Code writes
+    // the conversation's title into the session, and that title is what the tab shows. Measured
+    // against a live session before this was built. A title that names exactly one of them is not a
+    // guess; anything else still refuses.
+    const named = looking.length === 0
+      ? []
+      : waiting.filter((one) => one.asked.title === looking);
+
+    return named.length === 1
+      ? { kind: 'one', session: named[0]! }
+      : { kind: 'several', sessions: waiting };
   }
   if (sessions.length === 0) {
     return { kind: 'none' };
@@ -161,7 +171,12 @@ function where(reason: unknown): string {
  *   refusal names the directory that was looked in, so the difference is visible.
  * @param caseBlind whether this filesystem treats two names differing only in case as one
  */
-export async function waitingQuestion(home: string, cwd: string, caseBlind: boolean): Promise<Waiting> {
+export async function waitingQuestion(
+  home: string,
+  cwd: string,
+  caseBlind: boolean,
+  looking = '',
+): Promise<Waiting> {
   const root = projectsRoot(home);
   let names: string[];
   try {
@@ -209,5 +224,5 @@ export async function waitingQuestion(home: string, cwd: string, caseBlind: bool
     }
   }
 
-  return waitingIn(sessions);
+  return waitingIn(sessions, looking);
 }

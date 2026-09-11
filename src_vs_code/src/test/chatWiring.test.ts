@@ -79,12 +79,23 @@ test('the chord has one binding per door, and neither of them is unscoped', () =
   );
 });
 
-test('the right-click door exists, and is scoped to the same panel', () => {
+test('the right-click door offers TWO items, each naming what it will do', () => {
+  // One item whose behaviour depends on `coai.chatAutoSend` is an item nobody can predict from its
+  // own label — which is what the operator was working around by asking for two. `default` sends at
+  // once on the main model; `choose` puts the turn in the composer and waits.
   const items = MANIFEST.contributes.menus['webview/context'] ?? [];
-  const ours = items.filter((row) => row.command === COMMAND);
+  const now = items.filter((row) => row.command === 'coai.chatNow');
+  const choose = items.filter((row) => row.command === 'coai.chatChoose');
 
-  assert.strictEqual(ours.length, 1, 'the context-menu item is missing — the measured path for a copy VS Code will not make for us');
-  assert.match(ours[0]!.when ?? '', new RegExp(`webviewId == '${PANEL}'`));
+  assert.strictEqual(now.length, 1, 'the send-at-once item is missing from the panel menu');
+  assert.strictEqual(choose.length, 1, 'the put-it-in-the-composer item is missing from the panel menu');
+  for (const row of [...now, ...choose]) {
+    assert.match(row.when ?? '', new RegExp(`webviewId == '${PANEL}'`), 'an item escaped the panel it belongs to');
+  }
+  // And the setting-dependent command keeps the chord and the palette, where its name is not a
+  // promise about what happens next.
+  assert.strictEqual(items.filter((row) => row.command === COMMAND).length, 0,
+    'the menu still carries the item whose behaviour is a setting');
 });
 
 test('the passage never reaches PowerShell: the script is a constant, and it is the only thing encoded', () => {

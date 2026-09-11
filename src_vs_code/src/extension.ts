@@ -193,6 +193,15 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('coai.chatWithOtherAi', (...args: unknown[]) => {
       void chatWithOtherAi(chatPanels, context.extensionUri, args);
     }),
+    // The two menu items, which differ from the chord in one way: each SAYS what it will do, so
+    // neither reads `coai.chatAutoSend`. An item whose behaviour depends on a setting in another
+    // window is an item nobody can predict from its own label.
+    vscode.commands.registerCommand('coai.chatNow', (...args: unknown[]) => {
+      void chatWithOtherAi(chatPanels, context.extensionUri, args, true);
+    }),
+    vscode.commands.registerCommand('coai.chatChoose', (...args: unknown[]) => {
+      void chatWithOtherAi(chatPanels, context.extensionUri, args, false);
+    }),
     // Take the question Claude Code is asking and hand it to a second model. Its own door, because
     // the passage comes from Claude's session file rather than from a selection — that box cannot
     // be selected, which is why a screenshot was the only way before this.

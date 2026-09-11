@@ -198,6 +198,16 @@
         "command": "coai.takeTheQuestion",
         "title": "Take the question to another AI",
         "category": "ConnectOtherAIs"
+      },
+      {
+        "command": "coai.chatNow",
+        "title": "Chat with other AI: default",
+        "category": "ConnectOtherAIs"
+      },
+      {
+        "command": "coai.chatChoose",
+        "title": "Chat with other AI: choose",
+        "category": "ConnectOtherAIs"
       }
     ],
     "configuration": {
@@ -609,7 +619,11 @@
       ],
       "webview/context": [
         {
-          "command": "coai.chatWithOtherAi",
+          "command": "coai.chatNow",
+          "when": "webviewId == 'claudeVSCodePanel'"
+        },
+        {
+          "command": "coai.chatChoose",
           "when": "webviewId == 'claudeVSCodePanel'"
         },
         {
@@ -619,9 +633,14 @@
       ],
       "editor/context": [
         {
-          "command": "coai.chatWithOtherAi",
+          "command": "coai.chatNow",
           "when": "editorTextFocus",
           "group": "coai@1"
+        },
+        {
+          "command": "coai.chatChoose",
+          "when": "editorTextFocus",
+          "group": "coai@2"
         }
       ]
     },

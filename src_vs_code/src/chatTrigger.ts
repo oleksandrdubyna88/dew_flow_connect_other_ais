@@ -38,9 +38,21 @@ export function fromMenuArgs(args: readonly unknown[]): boolean {
   return typeof first === 'object' && first !== null && 'webview' in first;
 }
 
-/** What to do, given the door and the person's setting. */
-export function triggerPlan(args: readonly unknown[], autoSend: ChatAutoSend): TriggerPlan {
+/**
+ * What to do, given the door, the person's setting — and, for the two menu items that say so, the
+ * answer they have already given.
+ *
+ * <p>`asked` is how *Chat with other AI: default* and *: choose* differ from each other and from the
+ * chord: each of them NAMES what it will do, so it does not consult `coai.chatAutoSend` at all. A
+ * menu item whose behaviour depends on a setting somewhere else is an item nobody can predict from
+ * its own label, which is what the operator was working around by having two.</p>
+ */
+export function triggerPlan(
+  args: readonly unknown[],
+  autoSend: ChatAutoSend,
+  asked?: boolean,
+): TriggerPlan {
   const menu = fromMenuArgs(args);
 
-  return { path: menu ? 'menu' : 'keyboard', send: sendsImmediately(autoSend, menu) };
+  return { path: menu ? 'menu' : 'keyboard', send: asked ?? sendsImmediately(autoSend, menu) };
 }
