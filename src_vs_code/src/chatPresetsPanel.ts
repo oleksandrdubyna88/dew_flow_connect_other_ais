@@ -13,6 +13,7 @@ import {
   modelRowsAfterAdd,
   rowsAfterMain,
   deadModelRow,
+  unreadableModels,
 } from './chatPresets';
 import { PresetCommand, chatPresetsHtml, editRepaints, editedRows, presetEdit } from './chatPresetsPage';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
@@ -162,7 +163,13 @@ function render(): void {
     return;
   }
   panel.webview.html = chatPresetsHtml(
-    { prompts: prompts(), models: models(), providers: providers(), uiScale: currentUiScale() },
+    {
+      prompts: prompts(),
+      models: models(),
+      providers: providers(),
+      unreadable: unreadableModels(config().get(MODELS_KEY)),
+      uiScale: currentUiScale(),
+    },
     crypto.randomBytes(16).toString('hex'),
   );
 }

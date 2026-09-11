@@ -170,14 +170,14 @@ export function mainPrompt(presets: readonly PromptPreset[]): PromptPreset | und
 /**
  * The model presets. A row with no VENDOR is not one: the vendor is what answers.
  *
- * @param rows the reviewer rows, passed in for the MIGRATION and for nothing else. A preset written
- *   before the chat had its own configuration names a reviewer row in `provider`; its runtime, CLI
- *   path, endpoint and Team-server fields are copied out of that row once, and after the next write
- *   the chat never asks about reviewers again. Somebody who built three presets should not lose them
- *   to an architecture decision they did not make. A preset naming a row that is gone cannot be run
- *   and is dropped, like any other row this reader refuses.
+ * <p><b>A row written before the chat had its own configuration names a REVIEWER in `provider` and
+ * carries no runtime of its own.</b> It is not read, and it is not repaired: repairing it would mean
+ * reading `coai.vendors`, which is the one thing this feature may not do from anywhere — the reader
+ * took reviewer rows for exactly that migration and no caller ever passed any, which the code round
+ * caught as dead code three times over. What such a row must NOT be is invisible: `unreadableModels`
+ * counts them so the presets tab can say they are there and cannot be run. (codex, three findings.)</p>
  */
-export function chatModelPresetsFrom(saved: unknown, reviewerRows: readonly Vendor[] = []): readonly ModelPreset[] {
+export function chatModelPresetsFrom(saved: unknown): readonly ModelPreset[] {
   const rows = Array.isArray(saved) ? saved : [];
   const taken = new Set<string>();
 
@@ -187,29 +187,50 @@ export function chatModelPresetsFrom(saved: unknown, reviewerRows: readonly Vend
       return [];
     }
     const name = text(one['name']).slice(0, NAME_LIMIT);
-    // The vendor, from the preset itself — or carried out of the reviewer row it used to name.
-    const carried = text(one['runtime']).length > 0 ? undefined : reviewerRows.find((row) => row.id === text(one['provider']));
-    const runtime = text(one['runtime']).length > 0 ? text(one['runtime']) : (carried?.runtime ?? '');
+    // The vendor, from the preset ITSELF. Nothing here reads a reviewer row.
+    const runtime = text(one['runtime']);
     if (name.length === 0 || runtime.length === 0) {
       return [];
     }
     const starting = typeof one['startingPrompt'] === 'string' ? one['startingPrompt'].trim() : '';
-    const server = text(one['teamServerId']).length > 0 ? text(one['teamServerId']) : (carried?.teamServerId ?? '');
-    const onServer = text(one['remoteVendor']).length > 0 ? text(one['remoteVendor']) : (carried?.remoteVendor ?? '');
+    const server = text(one['teamServerId']);
+    const onServer = text(one['remoteVendor']);
 
     return [{
       id: withId(text(one['id']), index, taken),
       name,
       main: one['main'] === true,
       runtime: runtime as Runtime,
-      model: text(one['model']).length > 0 ? text(one['model']) : (carried?.model ?? ''),
-      executablePath: text(one['executablePath']).length > 0 ? text(one['executablePath']) : (carried?.executablePath ?? ''),
-      baseUrl: text(one['baseUrl']).length > 0 ? text(one['baseUrl']) : (carried?.baseUrl ?? ''),
+      model: text(one['model']),
+      executablePath: text(one['executablePath']),
+      baseUrl: text(one['baseUrl']),
       ...(server.length > 0 ? { teamServerId: server } : {}),
       ...(onServer.length > 0 ? { remoteVendor: onServer } : {}),
       ...(starting.length > 0 ? { startingPrompt: starting } : {}),
     }];
   }));
+}
+
+/**
+ * The saved model rows this build cannot read, by the name their owner gave them.
+ *
+ * <p>A row with a name and no runtime: written before the chat carried its own vendor, and naming a
+ * reviewer this feature is no longer allowed to look at. Refusing it silently is the one thing this
+ * product does not do with a configured row — every other list here shows what it will not use and
+ * says why — so the presets tab names them and asks for them to be added again.</p>
+ */
+export function unreadableModels(saved: unknown): readonly string[] {
+  const rows = Array.isArray(saved) ? saved : [];
+
+  return rows.flatMap((row): string[] => {
+    const one = record(row);
+    if (one === undefined) {
+      return [];
+    }
+    const name = text(one['name']).slice(0, NAME_LIMIT);
+
+    return name.length > 0 && text(one['runtime']).length === 0 ? [name] : [];
+  });
 }
 
 /**

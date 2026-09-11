@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Vendor } from '../vendors';
 
 /** One vendor, as the wizard hands it to the factory. */
 const AGY = { runtime: 'antigravity' } as const;
@@ -13,6 +12,7 @@ import {
   deadModelRow,
   mainModel,
   mainPrompt,
+  unreadableModels,
   modelRowsAfterAdd,
   rowsAfterMain,
   presetById,
@@ -233,7 +233,12 @@ test('a new prompt preset survives its reader too, which is why that button alwa
 test('the reader still refuses a row with nothing to run — the rule did not move', () => {
   // The fix for the vanishing Add a model was the SEED, not a loosened reader, and that is still
   // true: a preset naming no vendor names nothing that can answer.
-  assert.deepStrictEqual(chatModelPresetsFrom([freshModelRow([], { runtime: '' as never })]), []);
+  // Built as a saved ROW rather than cast through the factory: the reader takes `unknown`, so a row
+  // with no vendor needs no cast at all — and `as never` is forbidden here. (codex, the code round.)
+  assert.deepStrictEqual(
+    chatModelPresetsFrom([{ id: 'p', name: 'New model', runtime: '', model: '', executablePath: '', baseUrl: '' }]),
+    [],
+  );
 });
 
 test('two new rows in a row do not share an id', () => {
@@ -396,26 +401,28 @@ test('a preset with no vendor is not one, whatever else it has', () => {
     'a preset with no name is still a preset');
 });
 
-test('a preset written when it named a reviewer row is carried across, once', () => {
-  // The rows are passed IN, for the migration and for nothing else — after the next write the chat
-  // never asks about them again. Somebody who built three presets should not lose them to an
-  // architecture decision they did not make.
-  const rows: readonly Vendor[] = [{
-    id: 'agy', runtime: 'antigravity', model: 'gemini-3.7-flash-high', enabled: true, plan: true, code: true,
-    baseUrl: '', executablePath: '/usr/bin/agy', pricePerMillionIn: 0, pricePerMillionOut: 0,
-  }];
-  const kept = chatModelPresetsFrom([{ id: 'm1', name: 'Old', provider: 'agy', model: 'gemini-3.8-flash-low' }], rows);
+test('a preset written when it named a reviewer row is not read, and not repaired', () => {
+  // It was going to be migrated — the reader took the reviewer rows for exactly that — and no caller
+  // ever passed any, so the migration was dead code from the day it shipped. Repairing such a row
+  // means reading `coai.vendors`, which is the one thing this feature may not do from anywhere.
+  // (codex, the code round, three findings on one branch.)
+  const rows = [{ id: 'm1', name: 'Old', provider: 'agy', model: 'gemini-3.8-flash-low' }];
 
-  assert.strictEqual(kept[0]!.runtime, 'antigravity', 'the runtime was not carried over from the row');
-  assert.strictEqual(kept[0]!.executablePath, '/usr/bin/agy', 'the CLI path was left behind');
-  assert.strictEqual(kept[0]!.model, 'gemini-3.8-flash-low', 'the preset lost the model it named');
+  assert.deepStrictEqual(chatModelPresetsFrom(rows), [], 'a row with no vendor of its own was run anyway');
 });
 
-test('a preset naming a row that is gone keeps its model and says the vendor is missing', () => {
-  // Not silently dropped: the words a person wrote are in the name and the starting prompt.
-  const kept = chatModelPresetsFrom([{ id: 'm1', name: 'Orphan', provider: 'removed', model: 'x' }], []);
+test('a row this build cannot read is NAMED rather than silently ignored', () => {
+  // Every other list in this product shows what it will not use and says why. These are the rows the
+  // presets tab tells their owner about, by the name they gave them.
+  const rows = [
+    { id: 'm1', name: 'Old', provider: 'agy', model: 'x' },
+    { id: 'm2', name: 'Fine', runtime: 'codex', model: 'y' },
+    { id: 'm3', provider: 'agy' },
+  ];
 
-  assert.deepStrictEqual(kept, [], 'an unrunnable preset was offered as if it could answer');
+  assert.deepStrictEqual(unreadableModels(rows), ['Old'], 'a row with a name and no vendor was passed over');
+  assert.deepStrictEqual(unreadableModels([]), [], 'an empty list named something');
+  assert.deepStrictEqual(unreadableModels('nonsense'), [], 'a settings value of the wrong shape named something');
 });
 
 test('a run spec is built FROM the preset, so nothing downstream needs a reviewer', () => {
