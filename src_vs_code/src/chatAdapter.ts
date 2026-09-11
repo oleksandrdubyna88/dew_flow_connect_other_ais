@@ -72,6 +72,33 @@ export type AdapterEvent =
 /** How a vendor is driven. See the note above — the difference reaches the context-loss rule. */
 export type ChatShape = 'persistent' | 'per-turn';
 
+/**
+ * Everything a command line is built from, as one value.
+ *
+ * <p>Two fields today and they are not the same kind of thing, which is exactly why they travel
+ * together: `resume` is the vendor's own bookkeeping and only a `per-turn` vendor has any use for
+ * it, while `model` is the PERSON's choice and every vendor must honour it. A third thing a launch
+ * needs — permissions, an effort level, a thinking budget — arrives as a field here, and the
+ * compiler then asks every adapter what it does about it.</p>
+ */
+export interface ChatLaunch {
+  /**
+   * The session to continue, for a `per-turn` vendor's second and later turns. Empty means a new
+   * conversation, and a `persistent` vendor ignores it entirely.
+   */
+  readonly resume: string;
+  /**
+   * The model the person picked, or empty for the CLI's own default.
+   *
+   * <p>Empty means send NO model flag rather than an empty one: asking a CLI for a model called ""
+   * is a different request from not asking, and the first is an error the person did not make.</p>
+   */
+  readonly model: string;
+}
+
+/** A launch that asks for nothing in particular — a first turn on whatever the row is set to. */
+export const NEW_CONVERSATION: ChatLaunch = { resume: '', model: '' };
+
 export interface ChatAdapter {
   readonly shape: ChatShape;
   /**
@@ -115,10 +142,15 @@ export interface ChatAdapter {
   /**
    * The command line for a process that will answer turns.
    *
-   * @param resume the session to continue, for a `per-turn` vendor's second and later turns. Empty
-   *   means a new conversation, and a `persistent` vendor ignores it entirely.
+   * <p>It takes a CONTEXT rather than a bare resume id, and that is a shipped defect rather than
+   * taste. The parameter used to be `resume: string`, which left nowhere for the chosen model to
+   * travel — so all three adapters omitted it, each of them correctly, and the model picker decided
+   * nothing at all for a local CLI while a Team-server chat honoured it. The audit of 2026-09-09
+   * (finding 7) compiled the launch for every runtime and swapped one model name for another:
+   * byte-identical command lines. A parameter that does not exist cannot be forgotten by one adapter
+   * and remembered by another; this one makes the compiler ask all of them.</p>
    */
-  argv(resume: string): readonly string[];
+  argv(launch: ChatLaunch): readonly string[];
   /**
    * One turn, as the bytes to send.
    *

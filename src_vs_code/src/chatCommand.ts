@@ -396,7 +396,7 @@ async function reopened(thread: Thread): Promise<string> {
     return remote.refusal;
   }
 
-  const opened = started(ready.vendor, cli.resolved, remote.session);
+  const opened = started(ready.vendor, cli.resolved, ready.modelId, remote.session);
   thread.session.dispose();
   thread.home.release();
   thread.session = opened.session;
@@ -815,7 +815,17 @@ function matchedSession(panels: ChatPanels): ReturnType<typeof sourceSession> {
  * id, and the id is not known until the first turn has been answered. A persistent vendor ignores
  * the argument entirely and gets the same argv every time.</p>
  */
-function started(vendor: Vendor, resolved: string, remote?: ChatSession): { session: ChatSession; home: ChatHome } {
+function started(
+  vendor: Vendor,
+  resolved: string,
+  /**
+   * The model this conversation is on — `modelId`, never `vendor.model`. The row's model is the
+   * default a person is choosing away from, and handing it here would relabel every answer with a
+   * model the CLI was never told about. (Audit finding 7 of 2026-09-09.)
+   */
+  model: string,
+  remote?: ChatSession,
+): { session: ChatSession; home: ChatHome } {
   if (remote !== undefined) {
     // A Team server needs no process and no directory: the home is a stub whose release does
     // nothing, so the rest of this file does not have to know which kind it holds.
@@ -826,7 +836,7 @@ function started(vendor: Vendor, resolved: string, remote?: ChatSession): { sess
 
   return {
     session: new CliChatSession(
-      chatProcessFor(vendor, home.dir, resolved),
+      chatProcessFor(vendor, home.dir, resolved, model),
       DEFAULT_BUDGETS,
       REAL_TIMERS,
       adapter,
@@ -953,7 +963,7 @@ async function switchNow(entry: ChatEntry, modelId: string): Promise<void> {
 
   thread.session.dispose();
   thread.home.release();
-  const replacement = started(vendor, cli.resolved, remote.session);
+  const replacement = started(vendor, cli.resolved, modelId, remote.session);
   thread.session = replacement.session;
   thread.home = replacement.home;
   thread.modelId = modelId;
@@ -986,7 +996,7 @@ function newConversation(
   remote: ChatSession | undefined,
   extensionUri: vscode.Uri,
 ): ChatEntry {
-  const first = started(ready.vendor, resolved, remote);
+  const first = started(ready.vendor, resolved, ready.modelId, remote);
   const session = first.session;
   // The saved lists, read here rather than passed in: every other setting this function needs it
   // reads for itself, and threading two more parameters through for one render is a seam nobody

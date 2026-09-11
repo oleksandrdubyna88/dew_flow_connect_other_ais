@@ -235,6 +235,40 @@ model it is configured to and nothing else — exactly what the flat list offere
 strictly not worse — and what gains a real choice today is Claude's curated three. Handing the
 panel's discovered lists across is the next step.
 
+### And the model it asks for is the model the CLI is told to use (2026-09-11)
+
+Found by the product audit of 2026-09-09 (finding 7), after the picker above had shipped. The picker
+worked, a Team-server chat honoured it, and a **local** chat did not: `launchSpecFor` built its
+command line from `adapter.argv(resume)`, and the adapter contract had no parameter a model could
+travel in. All three adapters therefore omitted it — each of them correctly — and the audit compiled
+the launch for every runtime and swapped one model name for another to get **byte-identical command
+lines**.
+
+What that cost is more than a wrong model. The tab records the label from the PICK, so an answer was
+attributed to a model that never ran, and `chat-usage.jsonl` priced the turn as that model. In a
+product whose README says the rounds table *is* the product, that is the table being wrong.
+
+**The root was the type rather than the three adapters**, which is why the fix is one. `ChatAdapter.argv`
+takes a `ChatLaunch` — `{ resume, model }` — so the compiler asks every adapter what it does about the
+model, and a fourth adapter cannot join without answering. The two fields are deliberately unalike:
+`resume` is the vendor's own bookkeeping and only a `per-turn` vendor has a use for it, while `model`
+is the person's choice and every vendor must honour it. A third thing a launch needs — permissions, an
+effort level, a thinking budget — arrives as a field there.
+
+Each adapter emits its own vendor's flag, and none of the three spellings was invented here: they are
+what this repository already verified for its REVIEWERS on the same CLIs — `--model` for claude and
+agy, `-m` for codex (`codex exec --help`: `-m, --model <MODEL>`). codex's goes before `CODEX_ARGS`,
+because the bare `-` in there is the positional that makes it read stdin.
+
+An empty model sends no flag at all rather than an empty one: asking a CLI for a model called `""` is
+a different request from not asking, and both the picker's *"the first one that can answer"* and a
+Team-server row with no model come to the second.
+
+**The model carried is the CONVERSATION's, never the row's.** `readyToChat` keeps `modelId` and
+`vendor.model` apart on purpose — the row's is the default a person is choosing away from — and
+threading the row's here would have been the same defect in a new place. All three places that start
+a session pass it: the first launch, the tab that opens one, and the mid-conversation switch.
+
 ### Every answer says which model gave it (2026-09-09)
 
 Every answer was captioned `The other AI`, while switching the model mid-conversation is a shipped
