@@ -60,42 +60,63 @@ public static class NumstatReader
         var fields = numstat.Split('\0');
         for (var i = 0; i < fields.Length; i++)
         {
-            // The tail after the final NUL, and any blank git chose to emit. Not a record.
-            if (fields[i].Length == 0)
+            if (Counts(fields[i]) is not var (path, binary))
             {
                 continue;
             }
 
-            var columns = fields[i].Split('\t');
-            if (columns.Length < 3)
+            if (path.Length > 0)
             {
-                continue;
-            }
-
-            var binary = columns[0] == NoLineCounts;
-            if (columns[2].Length > 0)
-            {
-                yield return new NumstatChange(columns[2], string.Empty, binary);
+                yield return new NumstatChange(path, string.Empty, binary);
 
                 continue;
             }
 
-            // A rename, and its two names are the next two fields. Output that ends here is
-            // truncated — dropping the half-record is the only honest thing available, and it cannot
-            // happen against a git that completed, which `Git` has already checked.
-            //
-            // The EMPTINESS of the new name is half the check and the half that was missing: the
-            // split leaves a blank tail after the final NUL, so a record cut off after its old name
-            // still has a field to read and it is "". Without this the reader emitted a change whose
-            // Path was empty, which downstream is a file nobody can name — caught by the test for
-            // exactly this, which is why it is here rather than in a later story's bug report.
-            if (i + 2 >= fields.Length || fields[i + 2].Length == 0)
-            {
-                yield break;
-            }
-
-            yield return new NumstatChange(fields[i + 2], fields[i + 1], binary);
+            yield return Renamed(fields, i, binary);
             i += 2;
         }
     }
+
+    /// <summary>
+    /// The counts and the path of one record, or nothing when the field is not a record at all.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>At most THREE parts, and that bound is the whole of it.</b> A tab is a legal
+    /// character in a filename on Linux, and `-z` does not escape it — it removes the need to escape
+    /// the SEPARATOR, which is NUL, and says nothing about the two tabs that divide the counts from
+    /// the path. Splitting on every tab therefore turned <c>1⇥0⇥src/od⇥d.cs</c> into a path of
+    /// <c>src/od</c>: a name that matches nothing, so the file reached the reviewer named with an
+    /// empty diff — which is the very defect this class was written to end, reintroduced one line
+    /// below the fix for it.</para>
+    /// <para>Six reviewers across two vendors found it in one round, and the first version of this
+    /// class's own test ASSERTED the truncated value as though it were correct. That is the shape
+    /// testing.md warns about: the suite that finds a defect must not be the thing that enshrines
+    /// it. The test asserts the whole name now.</para>
+    /// <para>An empty field — the tail after the final NUL, or a blank git chose to emit — splits
+    /// into one part and is answered with nothing, so the caller needs no separate check for it.</para>
+    /// </remarks>
+    private static (string Path, bool IsBinary)? Counts(string field)
+    {
+        var columns = field.Split('\t', 3);
+
+        return columns.Length < 3 ? null : (columns[2], columns[0] == NoLineCounts);
+    }
+
+    /// <summary>The rename whose two names follow the record that announced it.</summary>
+    /// <remarks>
+    /// <b>A stream that ends mid-record is refused, not trimmed.</b> Returning the records read so
+    /// far would hand the reviewer a diff SHORTER than the change and call it the change — the exact
+    /// failure this class exists to prevent, arriving by a different door. It cannot happen against a
+    /// git that exited zero, which <c>ContextAssembler.Git</c> has already checked, so a throw here
+    /// is the report of something impossible rather than a path anybody is expected to take. The
+    /// emptiness test is the half that matters: the split leaves a blank tail after the final NUL, so
+    /// a record cut off after its old name still has a field to read and that field is "".
+    /// </remarks>
+    private static NumstatChange Renamed(string[] fields, int at, bool binary) =>
+        at + 2 < fields.Length && fields[at + 2].Length > 0
+            ? new NumstatChange(fields[at + 2], fields[at + 1], binary)
+            : throw new ContextException(
+                "diff --numstat -z",
+                $"a rename record ended without its new name, after '{fields[at + 1]}' — the diff is "
+                + "incomplete and a short diff must never be presented as a whole one");
 }
