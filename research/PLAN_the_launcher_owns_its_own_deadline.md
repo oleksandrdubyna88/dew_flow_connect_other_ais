@@ -1,13 +1,28 @@
 # PLAN — the launcher owns its own deadline
 
-> Status: **plan only, nothing implemented yet, 2026-09-10.** Scope:
-> `src_mcp/runners/Processes/ProcessLauncher.cs` — the one launcher both binaries share. Finding 3 of
-> [the product audit of 2026-09-09](../research/REVIEW_product_audit_2026-09-09.md), plus the output
-> ceiling the audit noted beside finding 2.
+> Status: **IMPLEMENTED, 2026-09-11.** Story 1.1. Scope as built:
+> `src_mcp/runners/Processes/ProcessLauncher.cs` and its tests.
 >
-> Related docs: [module_runners.md](../research/module_runners.md);
-> `.agents/conventions/common/reliability.md` — *Every wait has a ceiling*, *A timed-out child process
-> is a killed child process*.
+> Related docs: [module_runners.md](module_runners.md) — *The launcher's two ceilings, and why the
+> write is a task*.
+
+## What shipped differently
+
+1. **The ceiling is in CHARACTERS, named `MaxOutputChars`**, not bytes. What is bounded is the memory
+   of a .NET string, two bytes per character; 8 Mi characters IS the 16 MiB the plan named, said in the
+   unit the code can count without re-encoding every chunk.
+2. **The line reader had to go entirely**, which the plan did not foresee. `BeginOutputReadLine`
+   delivers nothing until a newline arrives, so a ceiling checked in a callback fires only after the
+   allocation it exists to prevent — codex, plan round. Replacing it removed a defect nobody had
+   reported: the line reader appended a newline to every line, so **every vendor answer this product
+   has ever read carried a line ending the vendor did not write.**
+3. **`ProcessResult` gained `Cancelled` and `Truncated`**, both additive. A budget that ran out and a
+   caller that withdrew arrive as the same `OperationCanceledException` and mean opposite things.
+4. **Closing stdin on the cancellation path is of the HANDLE, not the writer.** `StreamWriter.Close()`
+   throws while an async write is in flight, which is the only state it is ever called in — measured on
+   the first run of the test that asked for it.
+5. **The drain grace cancels rather than abandons.** An abandoned reader faults against the disposed
+   process later and can still append to text the caller is already reading.
 
 ## The symptom
 

@@ -1,10 +1,16 @@
 # PLAN — the usage page reads the window, not the history
 
-> Status: **plan only, nothing implemented yet, 2026-09-10.** Scope: `src_server/src/Usage/UsageReader.cs`.
-> Finding 10 of [the product audit of 2026-09-09](../research/REVIEW_product_audit_2026-09-09.md) — the
-> server half. The extension's own read of its LOCAL ledger (`src_vs_code/src/panelProvider.ts`,
-> `readUsage`) has the same shape over a file that is one developer's and small; it is named here and
-> not built here.
+> Status: **DEFERRED by the operator, 2026-09-11 — not built, and the reason is on the record.**
+> The measurement stands (284–303 ms over 100 000 lines for an empty "today"), and so does the
+> condition that makes it irrelevant: the live ledger holds one line per reviewer per round —
+> thousands, not hundreds of thousands — so this is a few milliseconds today. Rewriting the reader
+> to walk backwards would be optimising something that is not slow. What shipped instead is the
+> correction to `UsageReader`'s own remarks, which read as though the window bounded the WORK when
+> it bounds only the memory.
+> **What re-opens it:** a ledger past roughly 50 000 lines, or a usage page that feels slow to
+> somebody. Scope: `src_server/src/Usage/UsageReader.cs`. Finding 10 of
+> [the product audit of 2026-09-09](../research/REVIEW_product_audit_2026-09-09.md) — the server
+> half; the extension's own `readUsage` has the same shape over a file that is one developer's.
 >
 > Related docs: [module_team_server.md](../research/module_team_server.md) — story 2.4.
 

@@ -449,7 +449,7 @@ catalog that could not be re-fetched is shown as STALE rather than as absent.
   second sign-in would overwrite the first. For `antigravity`, which has no directory variable of its
   own, these ARE the whole isolation.
 - **What a job can reach: its prompt, its account, its own directory — and nothing else** (story 2.2
-  of [PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md](../todo/PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md),
+  of [PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md](PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md),
   2026-09-11). A job is one authorised employee's arbitrary prompt run through an agentic CLI on the
   box that holds every shared account, as root, and the finding text goes back to that employee
   verbatim. So `ReviewLauncher` launches every reviewer confined, and it does so through ONE step
@@ -566,8 +566,14 @@ catalog that could not be re-fetched is shown as STALE rather than as absent.
   `lost` is the answer that tells an automated client to resubmit — reporting it for an id nobody
   ever issued is how a typo turns into duplicate vendor spend.
 - **The pump drains rather than ticking.** Starting one review per vendor per second left nine of ten
-  free accounts idle while a queue backed up; it now keeps starting while the vendor keeps saying yes,
-  and the slot lock is what stops it.
+  free accounts idle while a queue backed up; it keeps starting while the vendor keeps saying yes, and
+  the slot lock is what stops it. **What it does NOT yet do is use a second account** — measured
+  2026-09-09: the drain ends at the first refused acquire, and `SlotSelector.Pick` returns the one
+  least-recently-used ready account, whose `LastUsedUtc` is only written when its lease is RELEASED.
+  So a busy account stays first in the ranking and is offered again, and a vendor runs one review at a
+  time however many accounts it has. Nil effect on this deployment, which has one slot per vendor, and
+  total on the day a second is signed in. Deliberately not fixed (the operator, 2026-09-11):
+  [../todo/PLAN_the_second_account_actually_runs.md](../todo/PLAN_the_second_account_actually_runs.md).
 - **A job's cancellation source is fired on cancel and disposed on FINISH, never both at once.**
   Cancelling and disposing in one breath meant the runner was awaiting on a token whose source had
   gone, so an ordinary cancellation surfaced as an `ObjectDisposedException` and was reported as

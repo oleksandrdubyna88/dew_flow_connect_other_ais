@@ -1,12 +1,25 @@
 # PLAN — a renamed file still reaches the reviewer
 
-> Status: **plan only, nothing implemented yet, 2026-09-10.** Scope:
-> `src_mcp/runners/Context/ContextAssembler.cs`, `src_mcp/core/Context/` (`FileDiff`). Finding 4 of
-> [the product audit of 2026-09-09](../research/REVIEW_product_audit_2026-09-09.md).
+> Status: **IMPLEMENTED, 2026-09-11.** Story 1.3. Scope as built:
+> `src_mcp/runners/Context/NumstatReader.cs` (new), `ContextAssembler.cs`.
 >
-> Related docs: [module_runners.md](../research/module_runners.md) — *What a code round is a diff OF*;
-> [PLAN_the_gate_diffs_from_a_moving_base.md](../research/PLAN_the_gate_diffs_from_a_moving_base.md),
-> whose open tail (one git process per file) is unchanged by this.
+> Related docs: [module_runners.md](module_runners.md) — *And it is a diff of files git NAMED*; and
+> [PLAN_the_gate_diffs_from_a_moving_base.md](PLAN_the_gate_diffs_from_a_moving_base.md), the same class
+> of defect one layer up.
+
+## What shipped differently
+
+1. **`BlobSize` needed no separate fix.** The plan called it a second defect; it already tries the new
+   side first, and `{sha}:{newPath}` resolves the moment the path is a real one.
+2. **`FileDiff` gained no `RenamedFrom`.** Nothing downstream needs it — the diff text carries the rename
+   header itself — and a field on a core record used in a dozen places is not worth adding for nothing.
+3. **The tab was the thing this plan nearly got wrong.** `-z` removes the need to escape the SEPARATOR,
+   which is NUL; it says nothing about the two tabs dividing the counts from the path. Splitting on every
+   tab truncated a legal Linux filename — and **the first version of the test asserted the truncated
+   value as correct**, written from the parser instead of from the guarantee. Six reviewers across two
+   vendors found it in one round, and codex framed it correctly as a way to hide a file from review.
+4. **A truncated stream is refused, not trimmed.** Returning the records read so far hands the reviewer a
+   diff shorter than the change and calls it the change.
 
 ## The symptom
 

@@ -1,14 +1,35 @@
 # PLAN — a reviewer on the Team server is confined to its prompt
 
-> Status: **plan only, nothing implemented yet, 2026-09-10.** Scope: `src_server/src/Jobs/ReviewLauncher.cs`,
-> `src_mcp/runners/Processes/ProcessLauncher.cs`, `src_mcp/runners/Reviewers/ClaudeRuntime.cs`,
-> `src_mcp/runners/Reviewers/ReviewerRuntime.cs` (`ReviewerSettings`). Finding 1 of
-> [the product audit of 2026-09-09](../research/REVIEW_product_audit_2026-09-09.md) — the half of it that
-> costs nothing to close today. The other half is [PLAN_team_server_unprivileged.md](PLAN_team_server_unprivileged.md).
+> Status: **IMPLEMENTED, 2026-09-11.** Stories 1.2 (the `src_mcp` half) and 2.2 (the server half).
+> Scope as built: `src_mcp/runners/Processes/ProcessEnvironment.cs` (new), `ProcessLauncher.cs`,
+> `ClaudeRuntime.cs`, `ReviewerRuntime.cs`, `src_server/src/Jobs/Confinement.cs` (new),
+> `ReviewLauncher.cs`, `POST_DEPLOY.md`.
 >
-> Related docs: [module_team_server.md](../research/module_team_server.md),
-> [module_runners.md](../research/module_runners.md), [architecture.md](../research/architecture.md) —
-> *How the Team server is deployed*.
+> Related docs: [module_team_server.md](module_team_server.md), [module_runners.md](module_runners.md),
+> [architecture.md](architecture.md), and
+> [PLAN_team_server_unprivileged.md](../todo/PLAN_team_server_unprivileged.md), which still owns the OS half.
+
+## What shipped differently
+
+1. **`HOME` was missing from the allowlist and would have broken every launch** — the plan round's
+   Blocking finding, and the most valuable thing the gate produced here. A Node runtime with no `HOME`
+   fails in initialisation, before it reads a prompt.
+2. **One confinement value with two views** (`Confinement.OfEveryJob`), rather than two flags set in two
+   expressions. They live on types that never meet, so nothing made them agree and a later edit could
+   confine half of a launch. Codex, epic 1's code round.
+3. **A per-job `TMPDIR`.** The allowlist passes `TMPDIR`/`TMP`/`TEMP` through, which on a root box means
+   every reviewer shares one `/tmp`. They point at the directory `RunAsync` already creates and deletes.
+4. **`ProcessEnvironment.ForPlatform` takes the platform as a question**, because read off the host each
+   machine tested only its own half — and `HOME` is the entry that matters most.
+5. **The retry path was checked rather than assumed**: the finding supposed a rebuild and there is none.
+   The server's only retry requeues onto another slot and re-enters `RunAsync` from the top.
+
+## The open tail
+
+The deny list is a REQUEST, not an observed protection. Whether `claude -p --permission-mode plan` would
+have run `Bash` at all is still unmeasured, and whether the INSTALLED CLI accepts these eight names is
+observable only on the box — `POST_DEPLOY.md` item 12 is what observes it. The OS half (a service user,
+per-job isolation, root) stays with [PLAN_team_server_unprivileged.md](../todo/PLAN_team_server_unprivileged.md).
 
 ## The symptom
 
@@ -37,7 +58,7 @@ nothing either way, which is why it does not wait for the measurement.
 
 ## What this plan closes, and what it does not — named on both sides
 
-| | This plan | [PLAN_team_server_unprivileged.md](PLAN_team_server_unprivileged.md) |
+| | This plan | [PLAN_team_server_unprivileged.md](../todo/PLAN_team_server_unprivileged.md) |
 |---|---|---|
 | The server's own configuration in the child's environment | **closed**, all three CLIs: the child gets an allowlist, not the parent's environment | — |
 | Claude reading files or running commands | **closed**: every file and shell tool denied for a confined launch | — |

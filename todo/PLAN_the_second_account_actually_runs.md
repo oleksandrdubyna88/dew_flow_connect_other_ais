@@ -1,8 +1,16 @@
 # PLAN — the second account actually runs
 
-> Status: **plan only, nothing implemented yet, 2026-09-10.** Scope: `src_server/src/Jobs/JobRunner.cs`,
-> `src_server/src/Slots/AccountSlot.cs` (`SlotSelector`). Finding 5 of
-> [the product audit of 2026-09-09](../research/REVIEW_product_audit_2026-09-09.md).
+> Status: **DEFERRED by the operator, 2026-09-11 — not built, and the reason is on the record.**
+> The defect is real and reproduced; its effect today is **nil**, because this deployment runs one
+> slot per vendor, so nothing observable is wrong until a second account is signed in. What shipped
+> instead is the correction to the two documents that promised otherwise —
+> [RESULTS_team_server_under_load.md](../research/RESULTS_team_server_under_load.md) said
+> *"parallelism per vendor is bought in ACCOUNTS"* and `module_team_server.md` said the drain keeps
+> starting while the vendor says yes. Both now say what the code does.
+> **Re-open this the day a second account is added**, before it is added rather than after: the
+> symptom is that nothing gets faster and nothing says why. Scope:
+> `src_server/src/Jobs/JobRunner.cs`, `src_server/src/Slots/AccountSlot.cs` (`SlotSelector`).
+> Finding 5 of [the product audit of 2026-09-09](../research/REVIEW_product_audit_2026-09-09.md).
 >
 > Related docs: [module_team_server.md](../research/module_team_server.md) — story 2.3,
 > [RESULTS_team_server_under_load.md](../research/RESULTS_team_server_under_load.md),

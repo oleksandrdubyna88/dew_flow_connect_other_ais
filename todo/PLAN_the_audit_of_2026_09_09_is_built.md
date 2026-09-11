@@ -1,9 +1,16 @@
 # PLAN — the audit of 2026-09-09 is built, epic by epic
 
-> Status: **plan only, nothing implemented yet, 2026-09-10.** Scope: the build order over the ten
-> plans that close [the product audit of 2026-09-09](../research/REVIEW_product_audit_2026-09-09.md).
-> This document holds the epics, the stories and the order; each story's *what* and *why* stays in its
-> own plan and is not repeated here.
+> Status: **PARTLY BUILT, 2026-09-11 — seven stories shipped, five cut by the operator.** Kept in
+> `todo/` rather than promoted, because the cuts carry triggers that will bring some of them back and
+> this table is where a reader finds out which. Scope: the build order over the ten plans that close
+> [the product audit of 2026-09-09](../research/REVIEW_product_audit_2026-09-09.md); each story's
+> *what* and *why* stays in its own plan and is not repeated here.
+>
+> **Shipped:** 1.1, 1.2, 1.3 (epic 1, gated), 2.2, 3.1 and the Google guard (epic 2), 4.1 (epic 4).
+> **Cut on 2026-09-11, each with its reason and its trigger in its own plan:** 2.3 and 2.4 (the prompt
+> ceiling), 3.2 (the second account), 3.3 (the usage window), 4.2 (the process tree). The operator's
+> call after being asked which of the ten were worth building; the reasoning is in the plans and in
+> the two documents that were corrected instead of the code.
 >
 > Related docs: the ten plans listed below; [architecture.md](../research/architecture.md).
 
@@ -35,17 +42,17 @@ the CLI, and closing a tab ends the tree.
 
 | # | Story | Plan | RED symptom | Risk |
 |---|---|---|---|---|
-| 1.1 | Give the launcher one deadline and a byte ceiling | [launcher](PLAN_the_launcher_owns_its_own_deadline.md) | a sleeping child with 1 MiB on stdin returns after ~30 s, `TimedOut=false` | ordinary |
-| 1.2 | Let a launch be confined | [confinement](PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md) | the canary variable is printed by the child | **expensive** |
-| 1.3 | Parse `numstat -z`, diff a rename as one | [rename](PLAN_a_renamed_file_still_reaches_the_reviewer.md) | a renamed file's `Text` is empty | ordinary |
-| 2.1 | Refuse Google without an audience — and put the server tests in CI | [google](PLAN_google_needs_an_audience_too.md) + `ci.yml` | `Guard` does not throw | **expensive** |
-| 2.2 | The server launches every reviewer confined | [confinement](PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md) | the fake launcher sees an inherited environment and `Read` allowed | **expensive** |
+| 1.1 | Give the launcher one deadline and a byte ceiling | [launcher](../research/PLAN_the_launcher_owns_its_own_deadline.md) | a sleeping child with 1 MiB on stdin returns after ~30 s, `TimedOut=false` | ordinary |
+| 1.2 | Let a launch be confined | [confinement](../research/PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md) | the canary variable is printed by the child | **expensive** |
+| 1.3 | Parse `numstat -z`, diff a rename as one | [rename](../research/PLAN_a_renamed_file_still_reaches_the_reviewer.md) | a renamed file's `Text` is empty | ordinary |
+| 2.1 | Refuse Google without an audience — and put the server tests in CI | [google](../research/PLAN_google_needs_an_audience_too.md) + `ci.yml` | `Guard` does not throw | **expensive** |
+| 2.2 | The server launches every reviewer confined | [confinement](../research/PLAN_a_reviewer_on_the_team_server_is_confined_to_its_prompt.md) | the fake launcher sees an inherited environment and `Read` allowed | **expensive** |
 | 2.3 | A prompt has a ceiling, refused before it is bound | [ceiling](PLAN_a_prompt_has_a_ceiling_and_a_finished_job_forgets_it.md) | a 1 MiB + 1 prompt answers 202 | **expensive** |
-| 3.1 | Answer the start signal on every exit | [pump](PLAN_a_slot_that_throws_cannot_stop_the_pump.md) | the await on `started` never completes | ordinary |
+| 3.1 | Answer the start signal on every exit | [pump](../research/PLAN_a_slot_that_throws_cannot_stop_the_pump.md) | the await on `started` never completes | ordinary |
 | 3.2 | Walk the ranking, take the first lease granted | [slots](PLAN_the_second_account_actually_runs.md) | launched 1, queued 1, with two slots | ordinary |
 | 2.4 | A finished job forgets its prompt and bounds its answer | [ceiling](PLAN_a_prompt_has_a_ceiling_and_a_finished_job_forgets_it.md) | 40 MiB of prompt after `Sweep` | ordinary |
 | 3.3 | Read the usage window from the end | [usage](PLAN_the_usage_page_reads_the_window_not_the_history.md) | `BytesRead` equals the file | ordinary |
-| 4.1 | Carry the chosen model into the launch | [model](PLAN_the_chosen_model_reaches_the_cli.md) | byte-identical argv for two different models | ordinary |
+| 4.1 | Carry the chosen model into the launch | [model](../research/PLAN_the_chosen_model_reaches_the_cli.md) | byte-identical argv for two different models | ordinary |
 | 4.2 | End the whole process tree, resolve on exit | [tree](PLAN_closing_a_chat_ends_its_whole_tree.md) | the grandchild is alive after `handle.kill()` | ordinary |
 
 **Build order:** 1.1 → 1.2 → 1.3 → 2.1 → 2.2 → 2.3 → 3.1 → 3.2 → 2.4 → 3.3 → 4.1 → 4.2.

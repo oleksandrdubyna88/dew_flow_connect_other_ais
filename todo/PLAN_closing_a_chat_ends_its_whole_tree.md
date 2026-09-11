@@ -1,7 +1,14 @@
 # PLAN — closing a chat ends its whole tree
 
-> Status: **plan only, nothing implemented yet, 2026-09-10.** Scope: `src_vs_code/src/processLauncher.ts`.
-> Finding 8 of [the product audit of 2026-09-09](../research/REVIEW_product_audit_2026-09-09.md).
+> Status: **DECLINED by the operator, 2026-09-11 — not built, and the reason is on the record.**
+> The defect is real and reproduced in WSL (the grandchild alive 100 ms after `handle.kill()`), and
+> it is half-covered already: the orphan ledger collects such a process at the next activation, and
+> on Windows-with-a-shell — which is how this operator's own chats launch — `taskkill /T` already
+> ends the tree. What is left is an orphaned CLI between closing a tab and restarting the editor, on
+> Linux, macOS and WSL.
+> **What re-opens it:** a chat that is routinely held in a WSL or Linux window, or an orphan seen
+> spending after a tab was closed. Scope: `src_vs_code/src/processLauncher.ts`. Finding 8 of
+> [the product audit of 2026-09-09](../research/REVIEW_product_audit_2026-09-09.md).
 >
 > Related docs: [module_extension.md](../research/module_extension.md);
 > [PLAN_the_chat_is_correct_on_its_own_side.md](../research/PLAN_the_chat_is_correct_on_its_own_side.md)

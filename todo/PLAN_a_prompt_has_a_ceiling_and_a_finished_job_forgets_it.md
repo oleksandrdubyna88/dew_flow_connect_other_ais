@@ -1,8 +1,16 @@
 # PLAN — a prompt has a ceiling, and a finished job forgets it
 
-> Status: **plan only, nothing implemented yet, 2026-09-10.** Scope: `src_server/src/Jobs/ReviewEndpoints.cs`,
-> `src_server/src/Jobs/JobStore.cs`, `src_server/src/Program.cs`, `http/reviews/errors.http`. Finding 2
-> of [the product audit of 2026-09-09](../research/REVIEW_product_audit_2026-09-09.md).
+> Status: **DECLINED by the operator, 2026-09-11 — not built, and the reason is on the record.**
+> The arithmetic stands: no bound on a prompt but nginx's 4 MB, a cancelled job keeping its prompt
+> for an hour, and 120 requests per 10 s per email, which reaches `MemoryMax=1500M` in about half a
+> minute. What it needs is an authorised caller doing it — every caller here is a colleague, and the
+> realistic version is a retry loop in our own client rather than an attacker. Weighed against a
+> change to the wire contract (a 413 every installed extension would have to meet) and a transport
+> limit on every endpoint, the operator chose not to.
+> **What re-opens it:** the server reachable by anyone outside this team, or one OOM restart nobody
+> can explain. Scope: `src_server/src/Jobs/ReviewEndpoints.cs`, `JobStore.cs`, `Program.cs`,
+> `http/reviews/errors.http`. Finding 2 of
+> [the product audit of 2026-09-09](../research/REVIEW_product_audit_2026-09-09.md).
 >
 > Related docs: [module_team_server.md](../research/module_team_server.md) — story 2.3,
 > [architecture.md](../research/architecture.md) — *How the Team server is deployed* (`MemoryMax=1500M`).
