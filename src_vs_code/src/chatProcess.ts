@@ -40,6 +40,17 @@ export function chatProcessFor(
 ): (resume: string) => ProcessHandle {
   return (resume) => {
     const spec = launchSpecFor(vendor, home, { resume, model }, resolved);
+    // A refused spec carries an empty executable and an empty argv, and handing those to `launch`
+    // spawns "" — a spawn ENOENT, or nothing, in place of the sentence that says why. Found on this
+    // change's own code round by two reviewers, and it is a defect the refusal itself introduced:
+    // before there was anything to refuse, the only way here was a launchable row.
+    //
+    // A THROW because that is the shape `CliChatSession` already handles — both of its start paths
+    // wrap this factory in try/catch and turn a throw into a named failure the person reads — so the
+    // refusal arrives somewhere without inventing a second way to report one.
+    if (spec.refusal.length > 0) {
+      throw new Error(spec.refusal);
+    }
     const child = launch(spec.executable, spec.args, { cwd: spec.cwd, shell: spec.shell });
 
     // Written down BEFORE anything is asked of it, and SYNCHRONOUSLY: the window this guards

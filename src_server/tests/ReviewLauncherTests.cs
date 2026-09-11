@@ -218,7 +218,7 @@ public sealed class ReviewLauncherTests
         await Run(watching);
 
         var own = watching.Request.WorkingDirectory;
-        foreach (var name in new[] { "TMPDIR", "TMP", "TEMP" })
+        foreach (var name in (string[])["TMPDIR", "TMP", "TEMP"])
         {
             watching.Request.Environment.Should().ContainKey(name,
                 "the request's own variables win over the allowlist, and this one must")

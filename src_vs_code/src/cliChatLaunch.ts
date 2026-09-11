@@ -40,7 +40,17 @@ const ADAPTERS: Readonly<Record<string, { readonly adapter: ChatAdapter; readonl
   codex: { adapter: codexAdapter, executable: 'codex' },
 };
 
-export const CHAT_RUNTIMES: readonly string[] = Object.keys(ADAPTERS);
+/**
+ * The runtimes a chat can speak to, typed as the VENDOR's own union rather than as strings.
+ *
+ * <p>`Object.keys` answers `string[]`, so every caller that needs a `Vendor` had to cast — which is
+ * the `as` standing in for a real type that this repository's TypeScript rule warns about, and it
+ * appeared in a test fixture the moment one was written. The cast belongs here, once, where the map
+ * it narrows is in view: a key added to `ADAPTERS` that `Vendor` does not know is a compile error at
+ * the map rather than a surprise at a call site. (codex, the code round.)</p>
+ */
+export const CHAT_RUNTIMES: readonly Vendor['runtime'][] =
+  Object.keys(ADAPTERS) as Vendor['runtime'][];
 
 /** What a runtime's CLI is called when the reviewer's settings do not say. */
 export function defaultExecutableFor(runtime: string): string {
@@ -161,7 +171,7 @@ function asText(reason: unknown): string {
  * real ids carry dots, colons and slashes (`Qwen3.5-35B-A3B-Q5_vk128:latest`, `openai/gpt-oss-120b`)
  * and a pattern that refused those would break every chat while passing the test above it.</p>
  */
-const MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$/;
+const MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._:/+~-]{0,99}$/;
 
 /**
  * Why this model may not be put on a command line, or an empty string.
@@ -173,7 +183,9 @@ const MODEL_NAME = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$/;
 function modelRefusal(model: string): string {
   return model.length === 0 || MODEL_NAME.test(model)
     ? ''
-    : `${JSON.stringify(model)} is not a model name this chat will put on a command line`;
+    : `${JSON.stringify(model)} is not a model name this chat will put on a command line. `
+      + 'A model id starts with a letter or a digit and may then carry letters, digits and '
+      + '. _ - : / + ~ — pick one from the provider list beside the composer rather than typing it.';
 }
 
 /**

@@ -48,7 +48,7 @@ public sealed class JobPumpTests : IDisposable
         // Signed in, both — an account nobody signed in is NeedsSignIn and is never picked, which
         // would make this test pass for a reason that has nothing to do with its subject.
         var registry = new SlotRegistry(_dir, new JsonFileStore());
-        foreach (var vendor in new[] { "broken", "healthy" })
+        foreach (var vendor in (string[])["broken", "healthy"])
         {
             registry.MarkSignedIn(registry.Read(vendor, "a"));
         }

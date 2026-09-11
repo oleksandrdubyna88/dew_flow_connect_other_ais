@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CHAT_RUNTIMES, launchSpecFor } from '../cliChatLaunch';
+import { chatProcessFor } from '../chatProcess';
 import { Vendor } from '../vendors';
 
 /**
@@ -37,14 +38,13 @@ function vendor(over: Partial<Vendor> = {}): Vendor {
 /**
  * A row on one of the chat runtimes.
  *
- * <p>One cast, here, rather than four at the call sites. `CHAT_RUNTIMES` is DERIVED from the adapter
- * map — its members are exactly the runtimes a chat can speak to — but it is typed `readonly
- * string[]`, and narrowing it is what this does. It is not a fixture standing in for a real type,
- * which is the `as` the TypeScript doctrine warns about: if the map grows a runtime `Vendor` does not
- * know, the compiler catches it at the map, not here.</p>
+ * <p>No cast: `CHAT_RUNTIMES` carries `Vendor['runtime']` now. It used to be `readonly string[]`, so
+ * every call here narrowed it with an `as` — a fixture standing in for a real type, which is exactly
+ * what the TypeScript doctrine warns about, and codex named it on the code round. The narrowing moved
+ * to the adapter map, where a key `Vendor` does not know is a compile error rather than a surprise.</p>
  */
-function onRuntime(runtime: string): Vendor {
-  return vendor({ runtime: runtime as Vendor['runtime'] });
+function onRuntime(runtime: Vendor['runtime']): Vendor {
+  return vendor({ runtime });
 }
 
 /** The flag each vendor's own CLI takes, as this repository already verified for its reviewers. */
@@ -149,4 +149,39 @@ test('the model names this product actually uses are not refused', () => {
     assert.strictEqual(spec.refusal, '', `a real model name was refused: ${real}`);
     assert.ok(spec.args.includes(real));
   }
+});
+
+test('a refused launch never reaches the process launcher', () => {
+  // The refusal above builds an empty executable and an empty argv, and chatProcessFor used to hand
+  // both to `launch` without looking — so a refused model spawned "" and the person got a spawn
+  // ENOENT, or nothing at all, instead of the sentence that says why. Found on this change's own
+  // code round, by two reviewers, and it is a defect the refusal itself introduced.
+  //
+  // A THROW rather than a returned error, because that is the shape CliChatSession already handles:
+  // both its start paths wrap the factory in try/catch and turn a throw into a named failure the
+  // person reads. Nothing new had to be invented for it to arrive somewhere.
+  const start = chatProcessFor(
+    onRuntime('claude'),
+    'C:/temp/empty',
+    '',
+    '--dangerously-skip-permissions',
+  );
+
+  assert.throws(() => start(''), /is not a model name/);
+});
+
+test('an ordinary launch still reaches it', () => {
+  // The companion, and it is the one that would catch a guard that refused everything. It cannot
+  // assert the spawn without starting a real CLI, so it asserts the one thing short of that: the
+  // factory gets past the refusal check and fails, if at all, for a reason about the executable.
+  const start = chatProcessFor(onRuntime('claude'), 'C:/temp/empty', '', 'claude-opus-4-6-thinking');
+
+  assert.doesNotThrow(() => {
+    try {
+      start('').kill();
+    } catch (reason) {
+      const said = reason instanceof Error ? reason.message : String(reason);
+      assert.ok(!/is not a model name/.test(said), `refused a good model: ${said}`);
+    }
+  });
 });
