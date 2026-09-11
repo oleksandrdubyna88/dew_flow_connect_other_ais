@@ -2217,3 +2217,14 @@ test('a session file full of markup cannot break out of the page either', () => 
 
   assert.strictEqual(html.split('<script').length - 1, 1, 'a session file opened a second script element');
 });
+
+test('the region opens over half a second, because that is what was asked for', () => {
+  // *"добавь легкую анимацию на 0.5 сек, что б не было резкого рывка"* — a number in the request is
+  // a number in the test, or the next refactor rounds it to whatever feels right.
+  const css = chatPageHtml(state({ fromSession: true }), 'n0nce').split('<style>')[1].split('</style>')[0];
+  const asking = ruleFor(css, '.asking');
+
+  assert.match(asking, /transition:[^;]*max-height \.5s/, 'the region appears instead of opening');
+  assert.match(asking, /overflow: hidden/, 'a closed region would spill its text over the conversation');
+  assert.match(ruleFor(css, '.askedText'), /overflow-y: auto/, 'a long question would push the conversation away');
+});

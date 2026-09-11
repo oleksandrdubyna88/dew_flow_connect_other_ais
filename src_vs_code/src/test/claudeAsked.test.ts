@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { humanPrompts } from '../claudeQuestion';
-import { promptsInSession } from '../claudeSessions';
+import { MOST_PER_PROMPT, MOST_PROMPTS, promptsInSession } from '../claudeSessions';
 import { chatCommandOf } from '../chatMessages';
 
 /**
@@ -45,6 +45,13 @@ test('a turn an extension prefilled is still the person speaking', () => {
 test('what the machinery says is not what a person said', () => {
   const lines = [
     said('mine'),
+    // A block carrying a `text` field that is not a text BLOCK: the machinery's words, in the
+    // person's row. Taking the first thing that looked like prose showed them as theirs.
+    JSON.stringify({
+      type: 'user',
+      origin: { kind: 'human' },
+      message: { content: [{ type: 'tool_use', text: 'not typed by anyone', name: 'Read' }] },
+    }),
     // A tool result: a user row, but nobody typed it.
     JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'a' }] } }),
     // A sidechain is a subagent's own conversation, and a meta row is Claude Code talking to itself.
@@ -83,7 +90,12 @@ test('the TAB decides which session is read back', async () => {
 
     const found = await promptsInSession(home, 'D:\\work\\app', true, 'Подключение к БД');
 
-    assert.deepStrictEqual(found, ['the right one'], 'the tab was shown somebody else’s conversation');
+    assert.strictEqual(found.kind, 'said');
+    assert.deepStrictEqual(
+      found.kind === 'said' ? found.said : [],
+      ['the right one'],
+      'the tab was shown somebody else’s conversation',
+    );
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
@@ -98,18 +110,92 @@ test('a tab whose title names no session reads nothing, rather than the newest',
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'one.jsonl'), `${titled('One conversation')}\n${said('not for you')}\n`, 'utf8');
 
-    assert.deepStrictEqual(await promptsInSession(home, 'D:\\work\\app', true, 'Something else'), []);
+    const missed = await promptsInSession(home, 'D:\\work\\app', true, 'Something else');
+    assert.strictEqual(missed.kind, 'none');
+    assert.match(
+      missed.kind === 'none' ? missed.refusal : '',
+      /Something else/,
+      'the refusal does not name the title it looked for',
+    );
+
     // And a tab with no name at all — a chat opened from a file — never even looks.
-    assert.deepStrictEqual(await promptsInSession(home, 'D:\\work\\app', true, ''), []);
+    const unnamed = await promptsInSession(home, 'D:\\work\\app', true, '');
+    assert.strictEqual(unnamed.kind, 'none');
+    assert.match(unnamed.kind === 'none' ? unnamed.refusal : '', /not named after/);
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('a folder Claude has never run in is empty, not a throw', async () => {
+test('a folder Claude has never run in says so BY NAME, rather than throwing or going quiet', async () => {
   const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
   try {
-    assert.deepStrictEqual(await promptsInSession(home, 'D:\\work\\app', true, 'Anything'), []);
+    const answer = await promptsInSession(home, 'D:\\work\\app', true, 'Anything');
+
+    assert.strictEqual(answer.kind, 'none');
+    assert.match(answer.kind === 'none' ? answer.refusal : '', /nothing there to read|no sessions for this folder/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('two sessions sharing a title are REFUSED, never picked between', async () => {
+  // It picked the first the directory listed until the plan round said so, from two vendors at once.
+  // The whole reason the title join exists is that handing over somebody else's conversation
+  // silently is the worst thing this can do — and choosing between namesakes is that, with steps.
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'one.jsonl'), `${titled('Same name')}\n${said('the first')}\n`, 'utf8');
+    writeFileSync(join(dir, 'two.jsonl'), `${titled('Same name')}\n${said('the second')}\n`, 'utf8');
+
+    const answer = await promptsInSession(home, 'D:\\work\\app', true, 'Same name');
+
+    assert.strictEqual(answer.kind, 'several', 'a namesake session was shown as though it were this one');
+    assert.match(answer.kind === 'several' ? answer.refusal : '', /2 sessions/, 'the refusal does not say how many');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a session this tab owns but has never been spoken in is told apart from one that is missing', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'one.jsonl'), `${titled('Fresh')}\n`, 'utf8');
+
+    const answer = await promptsInSession(home, 'D:\\work\\app', true, 'Fresh');
+
+    assert.strictEqual(answer.kind, 'none');
+    assert.match(answer.kind === 'none' ? answer.refusal : '', /Nothing of yours is in that session yet/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('what crosses to the page is bounded, in both directions', async () => {
+  // A day-long session is hundreds of turns and some of them are whole files. All of it in one
+  // postMessage is megabytes over a bridge that has to stay responsive. (gemini, the plan round.)
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    const many = [titled('Long day'), said('x'.repeat(MOST_PER_PROMPT + 500))];
+    for (let turn = 0; turn < MOST_PROMPTS + 20; turn += 1) {
+      many.push(said(`turn ${turn}`));
+    }
+    writeFileSync(join(dir, 'one.jsonl'), `${many.join('\n')}\n`, 'utf8');
+
+    const answer = await promptsInSession(home, 'D:\\work\\app', true, 'Long day');
+    const got = answer.kind === 'said' ? answer.said : [];
+
+    assert.strictEqual(got.length, MOST_PROMPTS, 'the whole day crossed the bridge');
+    // The EARLIEST are kept: the question this button answers is what the window was FOR.
+    assert.match(got[1] ?? '', /^turn 0$/, 'the earliest turns were the ones dropped');
+    assert.ok((got[0] ?? '').length < MOST_PER_PROMPT + 200, 'a pasted file crossed whole');
+    assert.match(got[0] ?? '', /cut here/, 'a turn was cut without saying so');
   } finally {
     rmSync(home, { recursive: true, force: true });
   }

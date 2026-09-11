@@ -458,22 +458,56 @@ test('the shipped Asked button asks the host, and paints what comes back', () =>
   assert.strictEqual(posted.filter((message) => message['type'] === 'showAsked').length, 1,
     'the shipped Asked button did not ask the host for the session');
 
-  push({ type: 'asked', asked: ['make the task text green', 'and now the arrows'] });
+  push({ type: 'asked', asked: ['make the task text green', 'and now the arrows'], refusal: '' });
 
+  // textContent, never innerHTML: what came back is somebody's typing off a file on disk, and the
+  // one safe way to put it on a page is as text. (codex, the plan round.)
   assert.strictEqual(nodes['askedText']?.['textContent'], 'make the task text green',
     'the shipped page did not paint what the host read back');
+  assert.strictEqual(nodes['askedText']?.['innerHTML'], '', 'a session file was written into the page as markup');
   assert.strictEqual(nodes['askedAt']?.['textContent'], '1 / 2', 'the shipped page did not say where it was');
 
-  // The arrows step, and the count follows them.
+  // The arrows step, and the count follows them — and they STOP, rather than walking off the end
+  // into an empty box.
   press('askedNext');
   assert.strictEqual(nodes['askedText']?.['textContent'], 'and now the arrows', 'the arrow moved nothing');
   assert.strictEqual(nodes['askedAt']?.['textContent'], '2 / 2');
+  press('askedNext');
+  assert.strictEqual(nodes['askedAt']?.['textContent'], '2 / 2', 'the forward arrow walked off the end');
+  press('askedBack');
+  press('askedBack');
+  press('askedBack');
+  assert.strictEqual(nodes['askedAt']?.['textContent'], '1 / 2', 'the back arrow walked off the front');
 
-  // Pressed again it folds away — and asks for nothing a second time, because it already holds it.
+  // Pressed again it folds away, and asks for nothing while it is closed.
   press('asked');
   assert.strictEqual(asking?.contains('open'), false, 'a second press did not fold it away');
   assert.strictEqual(posted.filter((message) => message['type'] === 'showAsked').length, 1,
-    'the shipped page re-read a session file it was already holding');
+    'the shipped page asked again while folding away');
+
+  // OPENED AGAIN, it reads again. The window this exists for is four hours old and still being
+  // typed into; a list read once would be missing everything said since. (gemini, the plan round.)
+  press('asked');
+  assert.strictEqual(posted.filter((message) => message['type'] === 'showAsked').length, 2,
+    'the shipped page kept a list that had four more hours of typing after it');
+
+  // And where they were is kept when a re-read merely found MORE.
+  press('askedNext');
+  push({ type: 'asked', asked: ['make the task text green', 'and now the arrows', 'and one more'], refusal: '' });
+  assert.strictEqual(nodes['askedAt']?.['textContent'], '2 / 3', 'a re-read threw away the arrow they just pressed');
+});
+
+test('the shipped page says WHY there is nothing, rather than showing an empty box', () => {
+  // Four situations look identical from an empty region — no session file, no folder open, two
+  // sessions sharing this tab's name, and a conversation nobody has spoken in yet. The box is the
+  // only place a person is looking. (codex, on a protocol with no failure result.)
+  const { nodes, press, push } = runPage();
+
+  press('asked');
+  push({ type: 'asked', asked: [], refusal: '2 sessions in this folder are called “main”.' });
+
+  assert.strictEqual(nodes['askedText']?.['textContent'], '2 sessions in this folder are called “main”.');
+  assert.strictEqual(nodes['askedAt']?.['textContent'], '', 'a count was drawn for nothing');
 });
 
 test('the chat page carries nothing from the host into the webview', () => {
