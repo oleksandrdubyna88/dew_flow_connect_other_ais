@@ -4,7 +4,13 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { openChatPresets, presetsReadDiscoveriesFrom } from './chatPresetsPanel';
 import { ChatPanels } from './chatPanels';
-import { chatReadsThisSide, chatWithOtherAi, rememberChatsIn, restoreConversation } from './chatCommand';
+import {
+  chatReadsThisSide,
+  chatWithOtherAi,
+  rememberChatsIn,
+  restoreConversation,
+  takeTheQuestion,
+} from './chatCommand';
 import { ChatTabMemory } from './chatTabs';
 import { openLedger, reconcile } from './chatOrphans';
 import { coaiDataDir } from './dataDir';
@@ -184,6 +190,9 @@ export function activate(context: vscode.ExtensionContext): void {
     // Chat with another vendor about a passage. Two doors reach it — this keybinding and the
     // 'Chat with other AI' item in Claude Code's own right-click menu — and the command tells them
     // apart by what VS Code hands it, because only one of them can copy the selection itself.
+    vscode.commands.registerCommand('coai.takeTheQuestion', () => {
+      void takeTheQuestion(chatPanels, context.extensionUri);
+    }),
     vscode.commands.registerCommand('coai.chatWithOtherAi', (...args: unknown[]) => {
       void chatWithOtherAi(chatPanels, context.extensionUri, args);
     }),
