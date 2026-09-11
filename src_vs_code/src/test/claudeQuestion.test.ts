@@ -241,7 +241,7 @@ test('a case-sensitive filesystem does not take a namesake project for this one'
   assert.strictEqual(projectDirIn(root, '/work/App', ['-work-app'], false), '', 'a namesake project matched');
   assert.strictEqual(projectDirIn(root, '/work/App', ['-work-app'], true), join(root, '-work-app'));
   // And two names that differ only in case are an ambiguity, not a pick.
-  assert.strictEqual(projectDirIn(root, '/work/App', ['-work-app', '-work-App2'.toLowerCase(), '-WORK-APP'], true), '');
+  assert.strictEqual(projectDirIn(root, '/work/App', ['-work-app', '-WORK-APP'], true), '');
 });
 
 test('a question still waiting wins over a later one that was answered', () => {
@@ -301,4 +301,79 @@ test('two files of the same NAME do not inherit the other one\'s conversation', 
     'rekey',
     'a renamed Claude tab lost its conversation',
   );
+});
+
+test('a folder with no session directory of its own is refused BY NAME', async () => {
+  // Each refusal sentence is the only signal a person gets, and every one is reachable from an
+  // ordinary state of the world. (CodeRabbit, PR #206.)
+  const home = mkdtempSync(join(tmpdir(), 'coai-home-'));
+  try {
+    mkdirSync(join(home, '.claude', 'projects'), { recursive: true });
+
+    await waitingQuestion(home, 'D:\\work\\app', true).then((answer) => {
+      assert.strictEqual(answer.kind, 'failed');
+      assert.match(
+        answer.kind === 'failed' ? answer.refusal : '',
+        /D--work-app/,
+        'the refusal does not name the directory it looked for',
+      );
+    });
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a session whose shape this build cannot read says the format changed', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'coai-home-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    const strange = JSON.stringify({
+      type: 'assistant',
+      message: { content: [{ type: 'tool_use', id: 'a', name: 'AskUserQuestion', input: { prompts: [] } }] },
+    });
+    writeFileSync(join(dir, 'one.jsonl'), `${strange}\n`, 'utf8');
+
+    await waitingQuestion(home, 'D:\\work\\app', true).then((answer) => {
+      assert.strictEqual(answer.kind, 'failed', 'an unreadable shape was reported as silence');
+      assert.match(
+        answer.kind === 'failed' ? answer.refusal : '',
+        /format has changed/,
+        'the refusal does not say what is wrong',
+      );
+      assert.match(answer.kind === 'failed' ? answer.refusal : '', /one\.jsonl/, 'the refusal does not name the file');
+    });
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a folder Claude has run in but never asked anything in is nothing, not a failure', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'coai-home-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'one.jsonl'), '{"type":"user","message":{"content":[]}}\n', 'utf8');
+
+    await waitingQuestion(home, 'D:\\work\\app', true).then((answer) => {
+      assert.strictEqual(answer.kind, 'none', 'an empty session was reported as a failure');
+    });
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('an answered session is reported answered, from a real directory', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'coai-home-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'one.jsonl'), `${asks('a', ONE)}\n${answers('a')}\n`, 'utf8');
+
+    await waitingQuestion(home, 'D:\\work\\app', true).then((answer) => {
+      assert.strictEqual(answer.kind, 'answered', 'a settled question was offered as one still waiting');
+    });
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });

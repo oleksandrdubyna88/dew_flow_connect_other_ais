@@ -190,11 +190,19 @@ export function activate(context: vscode.ExtensionContext): void {
     // Chat with another vendor about a passage. Two doors reach it — this keybinding and the
     // 'Chat with other AI' item in Claude Code's own right-click menu — and the command tells them
     // apart by what VS Code hands it, because only one of them can copy the selection itself.
-    vscode.commands.registerCommand('coai.takeTheQuestion', () => {
-      void takeTheQuestion(chatPanels, context.extensionUri);
-    }),
     vscode.commands.registerCommand('coai.chatWithOtherAi', (...args: unknown[]) => {
       void chatWithOtherAi(chatPanels, context.extensionUri, args);
+    }),
+    // Take the question Claude Code is asking and hand it to a second model. Its own door, because
+    // the passage comes from Claude's session file rather than from a selection — that box cannot
+    // be selected, which is why a screenshot was the only way before this.
+    //
+    // The rejection is CAUGHT rather than dropped: a command that fails silently at the activation
+    // boundary is a keypress that does nothing and explains nothing. (CodeRabbit, PR #206.)
+    vscode.commands.registerCommand('coai.takeTheQuestion', () => {
+      takeTheQuestion(chatPanels, context.extensionUri).catch((reason: unknown) => {
+        void vscode.window.showWarningMessage(`The question could not be taken: ${String(reason)}`);
+      });
     }),
     // Deactivation is not a tab closing: nobody has told VS Code about these panels, so both the
     // panel and the vendor process behind it have to be ended here or they outlive the extension.
