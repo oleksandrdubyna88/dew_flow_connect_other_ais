@@ -17,6 +17,7 @@ import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, ROLES, promptsFor, selectedFor } from './prompts';
+import { composed, isActive, stageOf, type RoleRow } from './roles';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
@@ -1150,7 +1151,13 @@ function roleSwitchSkew(server: ServerStatus, settings: CoaiSettings): string {
 
 function promptsBody(state: PanelState): string {
   const s = state.settings;
-  const roleRow = (role: (typeof ROLES)[number]): string => {
+  // The COMPOSED catalog rather than the shipped five: a role a person added is drawn here beside
+  // them, under the name they gave it, with its own rounds, threshold and pickers. `composed` is the
+  // same order the server runs and the same edits it applies, so the box and the round agree.
+  const all = composed(s.roles);
+  const roleRow = (role: RoleRow): string => {
+    const label = role.name ?? role.id;
+    const stage = stageOf(role);
     // A role's own budget decides how many rounds it shows: a picker for a round that role will
     // never reach is a control that cannot do anything, which the spending tabs already taught.
     const budget = Math.max(1, Math.min(s.rounds[role.id] ?? 2, 6));
@@ -1171,22 +1178,26 @@ function promptsBody(state: PanelState): string {
 
     // A switch, but only on the CODE roles: the plan stage has one role, and a checkbox whose only
     // setting turns the whole stage off is a different feature nobody asked for.
-    const switched = role.stage !== 'plan';
-    const on = !switched || roleIsOn(s, role.id);
+    const switched = stage !== 'plan';
+    // Off by EITHER switch. `roleEnabled` is this section's own tick, per role; `active` is the
+    // catalog's, written by the roles page — and the server reads both, so a box showing a role as
+    // on because only the other switch was off would be a box that disagrees with the round.
+    const on = isActive(role) && (!switched || roleIsOn(s, role.id));
     // The LAST role standing cannot be unticked. Refusing here, where the pointer is, beats
     // refusing at round time with an error about a review somebody already waited for — and the
     // server still refuses the all-off round, because a hand-written env block has no checkbox.
     const last = switched && on && enabledCodeRoles(s).length === 1;
+    const inactive = !isActive(role) ? ' off' : '';
     const off = switched && !on ? ' off' : '';
 
     // The gate and the prompts were two sections describing one thing: how many times this role
     // asks, how much it may still find, and what it asks each time. One box now.
-    return `<div class="role role-${ROLE_TONE[role.id] ?? 'plan'}${off}">
+    return `<div class="role role-${ROLE_TONE[role.id] ?? (stage === 'plan' ? 'plan' : 'arch')}${off}${inactive}">
   <div class="head">${switched
       ? `<input type="checkbox" id="role-${role.id}" data-setting="roleEnabled" data-role="${role.id}"${on ? ' checked' : ''}${last ? ' disabled' : ''}
            title="${escapeHtml(last ? HELP.lastRole : HELP.roleEnabled)}">
-    <label class="name" for="role-${role.id}">${escapeHtml(role.label)}</label>`
-      : `<span class="name">${escapeHtml(role.label)}</span>`}</div>
+    <label class="name" for="role-${role.id}">${escapeHtml(label)}</label>`
+      : `<span class="name">${escapeHtml(label)}</span>`}</div>
 ${last ? `  <div class="hint">The only role still ticked — tick another one before turning this one off.</div>` : ''}
   <div class="field inline">
     ${labelled(`rounds-${role.id}`, 'Rounds', 'maxRounds')}
@@ -1202,8 +1213,11 @@ ${on ? pickers : ''}
 </div>`;
   };
 
-  const plan = ROLES.filter((r) => r.stage === 'plan').map(roleRow).join('\n');
-  const code = ROLES.filter((r) => r.stage !== 'plan').map(roleRow).join('\n');
+  const plan = all.filter((r) => stageOf(r) === 'plan').map(roleRow).join('\n');
+  // A role stored as NOT a programming task takes part in no round — the stage that reviews a
+  // document rather than a diff is a later plan — so it is not drawn among the roles that do. It is
+  // on the roles page, where it says as much about itself.
+  const code = all.filter((r) => stageOf(r) !== 'plan' && (r.programmingTask ?? true)).map(roleRow).join('\n');
 
   return `<div class="role-group">
   <div class="group-head">Plan stage</div>
