@@ -262,6 +262,37 @@ export function reinstructed(draft: string, was: string, now: string): string | 
 }
 
 /**
+ * The same swap when the instruction in the box is NOT the one we wrote — because somebody typed it.
+ *
+ * <p><b>Why there is a second way in.</b> The swap above matches the old instruction BYTE FOR BYTE
+ * at the front, which is the whole box in the ordinary case and nothing at all once a person has
+ * written over it. Writing over it is ordinary too: edit the role in the box, press a preset, and
+ * the preset has to win. It did not — the press fell through to the rebuild, the rebuild refused
+ * because the box no longer looked like one of ours, and the button said so and changed nothing.</p>
+ *
+ * <p>So the cut is made at the SERVICE LINES instead. They are the sentences this side writes and
+ * nobody types by hand, so everything above the first of them is the instruction, whoever wrote it.
+ * Everything from there on is kept byte for byte, which is what makes this a swap rather than the
+ * rebuild it replaces: a question added under the fence, a passage captured a second time, a
+ * sentence edited into the material — all of it survives the press.</p>
+ *
+ * <p>The language line is rewritten rather than matched, because it is the one service line that
+ * changes with a setting: matched, a box built in another language would cut below it and lose it.
+ * No note and no fence means no turn of ours in the box at all — a question somebody typed from
+ * scratch — and the caller is told nothing rather than handed a rewrite of it.</p>
+ */
+export function reinstructedHead(draft: string, now: string, language: LanguageCode): string | undefined {
+  const found = [MATERIAL_NOTE, FENCE].map((line) => draft.indexOf(line)).filter((at) => at >= 0);
+  if (found.length === 0) {
+    return undefined;
+  }
+  const named = ENGLISH_NAME[language] ?? ENGLISH_NAME.en;
+  const opening = now.trim().length > 0 ? now.trim() + '\n\n' : '';
+
+  return opening + 'Answer in ' + named + '.' + '\n\n' + draft.slice(Math.min(...found));
+}
+
+/**
  * The instruction a turn carries: the ROLE the model is given, then the TASK it is asked for.
  *
  * <p>They are two different things and they had been replacing each other — a model preset's

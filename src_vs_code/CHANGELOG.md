@@ -1,5 +1,9 @@
 # Changelog
 
+## Extension 0.37.5 — 2026-09-12
+
+**A preset replaces an instruction you edited by hand.** Type over the role or the question in the composer, press a preset, and the preset wins — it used to leave the box exactly as it was and say the box held something you had written. The swap matched the old instruction byte for byte at the front of the box, which is the whole box until somebody writes over it and nothing at all afterwards. It cuts at the service lines instead: everything above the language line is the instruction, whoever wrote it, and everything from there down is kept byte for byte — a passage captured a second time, a question added under the fence, a sentence edited into the material all survive the press.
+
 ## Extension 0.37.4 — 2026-09-12
 
 **The first prompt press after a model change lights its button again.** Pressing a preset sends the new text of the composer first and the description of it — the marks, the lit button — second, and in between the box held new words under old marks: which is exactly what somebody deleting the instruction looks like. The page reported it gone and the panel un-lit the button it had just lit, so the first press did nothing visible and the second worked. A half of the instruction now counts as edited away only when the PERSON typed — the panel knows what it wrote itself. Emptying the composer still darkens both buttons, because an empty box holds neither half.
