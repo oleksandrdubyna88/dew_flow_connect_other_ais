@@ -37,6 +37,71 @@ public sealed class RoleCompositionTests
         catalog.Dropped.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// The machine nobody configured, asserted as the thing it is — not as a suite that stayed green.
+    /// </summary>
+    /// <remarks>
+    /// "Nothing observable changes" was the promise of the whole plan, and until this test it was
+    /// carried by the absence of failures elsewhere: a catalog that came back in another order, with
+    /// another role switched on, or with another budget would have left every existing test passing
+    /// and changed what every round runs. Asked for by codex on this story's plan round.
+    /// </remarks>
+    [Fact]
+    public void WithNothingConfigured_TheRoundIsExactlyWhatTheProductShips()
+    {
+        var config = new PanelConfig(Roles: null, StagePolicy.Human) { Catalog = Composed() };
+
+        config.RolesForRound(Stage.PlanReview, round: 1).Should().Equal("PlanCritique");
+        config.RolesForRound(Stage.CodeReview, round: 1).Should().Equal(
+            "Conventions", "Architecture", "SecurityReliability", "UxDxPerformance");
+
+        config.For("PlanCritique").Should().Be(PanelConfig.PlanDefault);
+        foreach (var role in config.RolesForRound(Stage.CodeReview, round: 1))
+        {
+            config.For(role).Should().Be(PanelConfig.CodeDefault, $"{role}'s shipped budget");
+        }
+
+        config.Catalog.Roles.Should().OnlyContain(r => r.Active && r.BuiltIn && r.ProgrammingTask);
+        config.Catalog.Dropped.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// One input carrying an override, a role of the person's own and a capped one — asserted as a
+    /// whole catalog rather than as three sentences.
+    /// </summary>
+    /// <remarks>
+    /// A composition could produce every refusal correctly and still fail to append a role, lose an
+    /// override's prompts or reorder the built-ins, and a suite that only read `Dropped` would agree
+    /// with it. Asked for by codex on this story's plan round.
+    /// </remarks>
+    [Fact]
+    public void AMixedConfiguration_ProducesTheWholeCatalog_NotJustItsRefusals()
+    {
+        var catalog = Composed(
+            new RoleEntry(RoleCatalog.ConventionsRole, Active: false,
+                Prompts: [new PromptEntry("conv-ours", "Ours", "The rules we wrote.")]),
+            Custom("Requirements", RoleStages.Result, "req-general"),
+            Custom("Risks", RoleStages.Result, "risks-general"),
+            Custom("Brief", RoleStages.Plan, "brief-general"));
+
+        catalog.Roles.Select(r => (r.Id, r.Active, r.BuiltIn, r.Stage, r.ProgrammingTask)).Should().Equal(
+            ("PlanCritique", true, true, RoleStages.Plan, true),
+            ("Conventions", false, true, RoleStages.Result, true),
+            ("Architecture", true, true, RoleStages.Result, true),
+            ("SecurityReliability", true, true, RoleStages.Result, true),
+            ("UxDxPerformance", true, true, RoleStages.Result, true),
+            ("Requirements", true, false, RoleStages.Result, true),
+            ("Risks", true, false, RoleStages.Result, true),
+            ("Brief", true, false, RoleStages.Plan, true));
+
+        catalog.ById(RoleCatalog.ConventionsRole)!.Prompts.Select(p => p.Id)
+            .Should().Equal(["conventions", "conv-ours"], "an override keeps the shipped prompts and adds to them");
+        catalog.RolesOf(RoleStages.Result).Should().Equal(
+            "Architecture", "SecurityReliability", "UxDxPerformance", "Requirements", "Risks");
+        catalog.RolesOf(RoleStages.Plan).Should().Equal("PlanCritique", "Brief");
+        catalog.Dropped.Should().BeEmpty("every row here is usable — unticking one built-in made room for two");
+    }
+
     [Fact]
     public void ARowNamingABuiltIn_KeepsTheShippedIdentity_AndGainsOnlyItsExtraPrompts()
     {
@@ -125,10 +190,19 @@ public sealed class RoleCompositionTests
         catalog.Dropped.Should().BeEmpty();
     }
 
+    /// <remarks>
+    /// The hyphen is the one worth explaining. A prompt id is a FILE name and wears hyphens like
+    /// every shipped one does; a role id becomes the environment variable <c>COAI_ROUNDS_&lt;ID&gt;</c>,
+    /// and <c>COAI_ROUNDS_MY-ROLE</c> is not a name a POSIX shell can export — so a role whose
+    /// budget could be set through the settings file but never through the environment, or through
+    /// the block a person pastes into an MCP client, would be a role that works in one of the two
+    /// places its settings can come from. Raised by gemini on this story's plan round.
+    /// </remarks>
     [Theory]
     [InlineData("1st-role", "not a usable id")]
     [InlineData("Проверка", "not a usable id")]
     [InlineData("my role", "not a usable id")]
+    [InlineData("my-role", "not a usable id")]
     [InlineData("", "not a usable id")]
     public void AnIdThatCannotBecomeAnEnvironmentKey_IsDroppedAndNamed(string id, string expected)
     {
