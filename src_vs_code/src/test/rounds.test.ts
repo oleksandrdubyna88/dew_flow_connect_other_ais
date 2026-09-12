@@ -110,6 +110,36 @@ test('a model with an em dash in its name is not mistaken for a separator', () =
   })), ['local/Architecture · Qwen — custom — done (0 findings)'], 'and the one-line form is unchanged');
 });
 
+test('a session whose status is missing, blank or not a string does not blank the panel', () => {
+  // An interface is not runtime validation, and this file already learned that once with `model`.
+  // A session that omits `status` reached `.length` and threw while the Active rounds view was
+  // being built — one malformed reviewer taking the whole list with it. Raised on the code round by
+  // two vendors. Whitespace is not a status either, or the panel renders an indented empty line.
+  const states = [
+    { provider: 'local', role: 'A', status: undefined as unknown as string, findings: 0, note: '' },
+    { provider: 'local', role: 'B', status: 42 as unknown as string, findings: 0, note: '' },
+    { provider: 'local', role: 'C', status: '   ', findings: 0, note: '' },
+  ];
+
+  assert.deepEqual(reviewerRows(round({ reviewerStates: states })).map((r) => r.said), ['', '', '']);
+  assert.deepEqual(reviewerLines(round({ reviewerStates: states })), ['local/A', 'local/B', 'local/C']);
+});
+
+test('a reviewer with no status still reports the detail the file does record', () => {
+  // Raised on the code round: the first fix suppressed the whole detail when the status was blank,
+  // which hides a duration the session file states as a fact. Status and detail are independent.
+  //
+  // The finding COUNT is a separate matter and deliberately unchanged: it has been gated on
+  // `status === 'done'` since long before this change, because a count from a reviewer that has not
+  // finished is not a result. So a blank status keeps its duration and reports no findings.
+  const detailed = round({
+    reviewerStates: [{ provider: 'local', role: 'Architecture', status: '', findings: 3, note: '', seconds: 30 }],
+  });
+
+  assert.equal(reviewerRows(detailed)[0]!.said, '(30 s)');
+  assert.deepEqual(reviewerLines(detailed), ['local/Architecture — (30 s)']);
+});
+
 test('a reviewer with no status says nothing, rather than a dangling dash', () => {
   // A session file is JSON somebody else wrote. A blank status used to render `…/Architecture — `
   // with a trailing dash, and under a two-line row it would add an indented empty line. Raised on

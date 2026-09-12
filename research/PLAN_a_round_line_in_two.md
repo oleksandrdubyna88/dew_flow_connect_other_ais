@@ -1,8 +1,30 @@
 # PLAN — a reviewer's line breaks where the model made it long
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/rounds.ts` (one more seam
-> in `ReviewerRow`), `src_vs_code/src/panelView.ts` (the round card and one CSS rule), and the tests
-> for both.
+> Status: **IMPLEMENTED, 2026-09-12.** `ReviewerRow` is `{ provider, rest, said }`; the sidebar puts
+> the identity on one line and the status, indented, on the next, inside one `.reviewer` element;
+> `reviewerLines` joins all three and the rounds log page is untouched.
+>
+> **The code round found a defect this plan introduced.** Normalising the status meant reading
+> `state.status.length`, and a session file that omits `status` or carries a number reached it and
+> threw — one malformed reviewer blanking the whole Active rounds view. `rounds.ts` had learned this
+> once already, for `model`, and the same type check now guards the status; whitespace is normalised
+> with it. Two vendors raised it independently.
+>
+> Three more deviations from the plan, all from that round. **The detail survives a missing status**:
+> the first fix suppressed `(30 s)` along with the blank status, hiding a duration the file states as
+> a fact — though the finding COUNT stays gated on `done`, as it was long before this change, because
+> a count from an unfinished reviewer is not a result. **`.reviewer` gained `overflow-wrap: anywhere`**:
+> splitting the status onto its own line fixed where the status goes and not what a 30-character model
+> id does to the line above it. And the plan was still sitting in `todo/` marked *plan only* when the
+> round read the diff — correctly reported as a convention failure rather than as a nit.
+>
+> Of the plan round's eleven findings seven were accepted and four rejected; of the code round's
+> eighteen, seven accepted and eleven rejected with reasons. The largest rejection is architectural:
+> a reviewer proposed keeping the row structured and formatting per renderer, which is precisely what
+> `rounds.ts`' own docstring forbids — two renderers building the same sentence independently drift,
+> and this change adds a second seam to the one builder rather than a second builder.
+>
+> Related docs: [module_extension.md](module_extension.md).
 >
 > Issue [#132](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/132): *"when we
 > show the model the line gets very long, so break it into two lines —
@@ -106,8 +128,16 @@ as CI uses): `cd src_vs_code && npm test` — the whole suite, because `roundsLo
 
 ## Definition of Done
 
-- [ ] Tests 1 and 3 written first and watched fail; then green; then red again with the fix reverted.
-- [ ] `npm test` green in the worktree; the count reported in the pull request.
-- [ ] The diff through the `coai` code round, every finding resolved.
-- [ ] `research/module_extension.md` and `CHANGELOG.md` updated as named above.
-- [ ] This plan promoted to `research/` with `IMPLEMENTED` and the date.
+- [x] Tests 1 and 3 written first and watched fail — `what it IS — no status, no dash` and `the
+      status is a line of its own inside it` — then green; with the whole fix reverted **seven** fail
+      across three suites (rounds 3, activeRounds 2, panelView 2), all green when restored.
+- [x] `npm test` green in the worktree: **1728 tests, 1727 pass, 0 fail** (1 skipped).
+- [x] The diff through the `coai` code round — `proceed`, 10 gating against a threshold of 5, all 12
+      reviewers answered; 7 findings accepted, 11 rejected with reasons, all recorded via `resolve`.
+- [x] `research/module_extension.md` carries the decision and its three deliberate parts;
+      `CHANGELOG.md` under `## Unreleased`.
+- [x] This plan promoted to `research/` with `IMPLEMENTED` and the date; indexes updated both sides.
+
+**Deviation from this list:** the version is deliberately NOT bumped here. This is one of seven
+issues landing before a single extension release, and the release commit at the end of the batch
+renames the `## Unreleased` heading to the version it cuts.

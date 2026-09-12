@@ -1771,7 +1771,10 @@ const CSS = `
      line, not a control, and offering a hand over them is the panel telling a small lie. */
   /* Shown for the moment between the click and the reviewers arriving. The body is built by the
      provider, so there is always a gap; an empty card during it reads as a card with nothing in it. */
-  .reviewer { font-size: 11px; opacity: .85; margin: 1px 0 1px 8px; }
+  /* A model id is one unbreakable 30-character token and the sidebar is narrow: without this it
+     does not wrap, it overflows. Raised on the code round — splitting the status onto its own line
+     fixed where the status goes, not what a long identity line does. */
+  .reviewer { font-size: 11px; opacity: .85; margin: 1px 0 1px 8px; overflow-wrap: anywhere; }
   /* What a reviewer is DOING, under what it IS. Indented from the row's own 8px, so the status sits
      about five spaces in from the card edge and a long model id no longer decides where the line
      breaks. A margin rather than spaces: this is not a monospace surface. */
