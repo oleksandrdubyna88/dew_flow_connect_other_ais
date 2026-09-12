@@ -143,11 +143,26 @@ test('every vendor with recorded spending offers to forget it', () => {
  * for ten minutes contribute thirty minutes to it. Issue #116 asked for the three things that make
  * it unambiguous — say it is a sum, give the average, name the vendor with the most.</p>
  */
+/**
+ * Today's local NOON, not "now".
+ *
+ * <p>The page opens on the `day` window, which is since local midnight — so a fixture stamped with
+ * the ambient clock is a test that depends on what time it is run, and a run that crosses midnight
+ * between building the entry and rendering the page drops it. Noon is inside today whenever the
+ * suite runs. `bundledPage.test.ts` pins its own fixture the same way and for the same reason;
+ * raised on the code round against the UTC rule.</p>
+ */
+function todayAtNoon(): string {
+  const noon = new Date();
+  noon.setHours(12, 0, 0, 0);
+  return noon.toISOString();
+}
+
 function spent(provider: string, seconds: number, runs: number): UsageEntry[] {
-  return Array.from({ length: runs }, () => ({
-    utc: new Date().toISOString(), provider, model: 'm', role: 'PlanCritique', stage: 'PlanReview',
+  return Array.from({ length: runs }, (): UsageEntry => ({
+    utc: todayAtNoon(), provider, model: 'm', role: 'PlanCritique', stage: 'PlanReview',
     seconds: seconds / runs, tokensIn: 1000, tokensOut: 100, costUsd: null, outcome: 'ok',
-  } as UsageEntry));
+  }));
 }
 
 function totalsLine(entries: readonly UsageEntry[]): string {
