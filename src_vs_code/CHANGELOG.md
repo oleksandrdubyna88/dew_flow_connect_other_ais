@@ -17,6 +17,8 @@ help page's prompt list is generated from the same place.
 The same file is what lets a coai-mcp from `0.19.0` onward run review roles you define yourself. The
 panel cannot write them yet; that is the next release, with the page to manage them.
 
+**Today, All dates and Clear look like the buttons they are.** The three were painted with the secondary button colours, which in a dark theme are the tone of the text beside them — so they read as labels until somebody pressed one by accident. They take the same blue as every other action now. The pager's ◀ Newer / Older ▶ stay subtle on purpose: they move between pages, like the tabs, rather than changing what the table shows.
+
 ## Extension 0.38.4 — 2026-09-12
 
 **Chat cards are priced now.** The price table was built from the models your REVIEWER rows select, and a chat is switched between model presets that select their own — so a card read "no rate set for this model" for a model the published table prices perfectly well. Both lists are asked now.

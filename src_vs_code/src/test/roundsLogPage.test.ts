@@ -136,3 +136,41 @@ test('an instant bound compares against the instant the round started', () => {
   assert.equal(rowMatches(row, { from: '2026-09-05T15:00:00.000Z' }, ''), false, 'it started before that');
   assert.equal(rowMatches(row, { to: '2026-09-05T14:31:00.000Z' }, ''), true);
 });
+
+// ---------- the three date buttons are painted as buttons ----------
+
+/**
+ * Today, All dates and Clear are actions — each one changes what the table shows — and they were
+ * painted with the page's SECONDARY button colours, which in a dark theme are the tone of the text
+ * beside them. Issue #126: "I pressed one by accident and only then understood they were buttons."
+ *
+ * <p>The pager's ◀ Newer / Older ▶ keep the secondary class on purpose: they are navigation between
+ * pages, like the flat tab strip above the table, not actions on the current view.</p>
+ */
+test('the three date buttons are painted as buttons, not as secondary text', () => {
+  const html = roundsLogHtml([], [], 'n');
+
+  for (const id of ['today', 'alldates', 'clear']) {
+    const button = [...html.matchAll(/<button[^>]*>/g)].map((m) => m[0]).find((b) => b.includes(`id="${id}"`));
+    assert.ok(button, `#${id} is a button`);
+    assert.ok(!/class="[^"]*\bsecondary\b/.test(button), `#${id} is not painted secondary: ${button}`);
+  }
+});
+
+test('what the three are painted with is the one primary rule, and nothing later repaints them', () => {
+  // Raised on the plan round (codex): a test that only checks the class is gone would stay green
+  // while a later, more specific rule painted the toolbar's buttons grey again. So the cascade is
+  // pinned too — the bare rule carries the primary colour and the pointer, and no selector in the
+  // stylesheet singles the toolbar's buttons or the three ids out.
+  const html = roundsLogHtml([], [], 'n');
+  const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+
+  assert.match(css, /\n\s*button \{[^}]*var\(--vscode-button-background\)/, 'the bare rule is the primary colour');
+  assert.match(css, /\n\s*button \{[^}]*cursor: pointer/, 'and says it is pressable');
+  assert.doesNotMatch(css, /\.toolbar\s*>?\s*button|#today|#alldates|#clear/, 'no rule singles them out');
+
+  // The pager pair is the case that must NOT change: navigation, painted secondary on purpose.
+  for (const id of ['prev', 'next']) {
+    assert.match(html, new RegExp(`<button[^>]*class="secondary"[^>]*id="${id}"`), `#${id} stays secondary`);
+  }
+});

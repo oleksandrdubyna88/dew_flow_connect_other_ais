@@ -1,7 +1,18 @@
 # PLAN — the date buttons on the rounds log look like buttons
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/roundsLog.ts` (the
-> toolbar markup and the page's stylesheet) and `src_vs_code/src/test/roundsLogPage.test.ts`.
+> Status: **IMPLEMENTED, 2026-09-12.** Three attribute deletions in `src_vs_code/src/roundsLog.ts`;
+> the pager pair keeps `secondary`; two tests in `roundsLogPage.test.ts`, the second of which pins
+> the cascade (the bare `button` rule is the primary colour, and no selector singles the toolbar's
+> buttons out) — the one finding the plan round added.
+>
+> Shipped as planned, with no deviation. Of the plan round's eight findings three were accepted
+> (the cascade test, the record edits named in the change, the install prerequisite) and five
+> rejected with reasons: a `primary` utility class would invert the page's idiom, in which the bare
+> rule IS primary and `secondary` is the opt-out; a hover rule for every button is a different
+> change; Clear is a view reset on a read-only page, not a destructive action; a pressed state would
+> describe a toggle these momentary actions are not.
+>
+> Related docs: [module_extension.md](module_extension.md).
 >
 > Issue [#126](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/126): *"Today ·
 > All dates · Clear — these are buttons. Make them blue like everywhere else, so it is visible that

@@ -1098,10 +1098,10 @@ export function roundsLogHtml(
       <input id="search" type="search" placeholder="Search subject, branch, repository, reviewers…" autocomplete="off">
       <label>From <input id="from" type="datetime-local" step="60"></label>
       <label>To <input id="to" type="datetime-local" step="60"></label>
-      <button type="button" class="secondary" id="today">Today</button>
-      <button type="button" class="secondary" id="alldates">All dates</button>
+      <button type="button" id="today">Today</button>
+      <button type="button" id="alldates">All dates</button>
       ${filters}
-      <button type="button" class="secondary" id="clear">Clear</button>
+      <button type="button" id="clear">Clear</button>
       <span id="count"></span>
 </div>
 <div class="wrap">
