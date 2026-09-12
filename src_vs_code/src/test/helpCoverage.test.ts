@@ -48,6 +48,7 @@ function asProse(title: string): string {
  */
 const ALIAS: Record<string, string> = {
   'coai.editChatPresets': 'edit chat presets',
+  'coai.editRoles': 'opens the roles page',
   'coai.copyConfigBlock': 'copy the mcp config block',
   'coai.copyClaudeSnippet': 'copy the claude.md snippet',
   'coai.answerQuestion': 'answer it in the panel',
