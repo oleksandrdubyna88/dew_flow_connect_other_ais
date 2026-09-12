@@ -312,13 +312,19 @@ async function store(command: RolesCommand): Promise<boolean> {
   if (outcome.kind === 'refused') {
     void vscode.window.showInformationMessage(outcome.why);
 
+    // A refusal DOES redraw: the control has just moved to a state that was not saved, and putting
+    // it back is what makes the message about it true.
     return true;
   }
 
   await write(outcome.rows);
   await forget(outcome.forget);
 
-  return true;
+  // A TYPED field never redraws. The prompt body was already exempt; a role's name and a prompt's
+  // label were not, so storing them replaced the document under the person and put the caret at the
+  // end of whatever they were half-way through writing. The summary line above the field catches up
+  // with the name at the next structural change, which is a stale word against an unusable field.
+  return fieldOf(command) === undefined;
 }
 
 /**
