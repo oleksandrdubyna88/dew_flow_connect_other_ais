@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Security.Cryptography;
 using CoaiMcp.Core.Consultation;
 using CoaiMcp.Runners.Context;
 using CoaiMcp.Runners.Processes;
@@ -11,13 +12,15 @@ namespace CoaiMcp.Runners.Consultation;
 /// </summary>
 /// <remarks>
 /// <para>Three sources, each closing a hole the plan round named. <c>git status</c> with every
-/// untracked file and the ignored entries lists what git can see. A <c>stat</c> of every listed FILE
-/// catches what git does not hash: an overwritten ignored <c>.env</c>, an already-modified tracked
-/// file modified again. A <c>stat</c> of <c>.git</c>'s own metadata catches an edited hook or config,
-/// which no status line ever shows.</para>
+/// untracked file and the ignored entries lists what git can see. A read of every listed FILE catches
+/// what git does not hash: an overwritten ignored <c>.env</c>, an already-modified tracked file
+/// modified again. A read of the repository's own metadata catches an edited hook or config, which no
+/// status line ever shows.</para>
 /// <para><b>The residual, named:</b> a file changed deep inside an ignored DIRECTORY is not seen — git
 /// lists the directory as one entry and walking its contents would cost seconds on every call. An
-/// OS-level write audit is out of scope.</para>
+/// OS-level write audit is out of scope. A person's OWN git operation during a consultation — a
+/// checkout, a commit, an edit — is a real change to the tree and is reported as one; that is the
+/// honest behaviour, not a false positive.</para>
 /// </remarks>
 public sealed class FilesystemInvariant(IProcessLauncher launcher)
 {
@@ -34,6 +37,18 @@ public sealed class FilesystemInvariant(IProcessLauncher launcher)
     /// read-only git command does not write: where HEAD points, the configuration, and the hooks.
     /// </remarks>
     private static readonly string[] Metadata = ["HEAD", "config"];
+
+    /// <summary>
+    /// How much of a file is hashed. Past it, size and mtime stand in.
+    /// </summary>
+    /// <remarks>
+    /// The hash is what makes a same-size, same-mtime rewrite visible — a compromised consultant can
+    /// set both back, and <c>utime</c> is not a privileged call (codex, Blocking, code round). Hashing
+    /// is bounded because an ignored directory can hold a gigabyte of build output: past this size a
+    /// file falls back to the stat pair, which is the weaker guarantee, and the files that MATTER
+    /// here — a config, a hook, a `.env` — are kilobytes.
+    /// </remarks>
+    private const long HashUpTo = 1024 * 1024;
 
     public async Task<FilesystemSnapshot> SnapshotAsync(string repoPath, CancellationToken ct = default)
     {
@@ -65,72 +80,127 @@ public sealed class FilesystemInvariant(IProcessLauncher launcher)
         _ => "tracked",
     };
 
-    /// <summary>Size and modification time, or what stands in for them.</summary>
+    /// <summary>The file's content hash where that is affordable, and its stat pair otherwise.</summary>
     private static string Fingerprint(string full)
     {
-        if (File.Exists(full))
+        if (Directory.Exists(full))
         {
-            var info = new FileInfo(full);
-            return $"{info.Length}|{info.LastWriteTimeUtc.Ticks}";
+            return $"dir|{Directory.GetLastWriteTimeUtc(full).Ticks}";
         }
 
-        return Directory.Exists(full)
-            ? $"dir|{Directory.GetLastWriteTimeUtc(full).Ticks}"
-            : "missing";
+        if (!File.Exists(full))
+        {
+            return "missing";
+        }
+
+        var info = new FileInfo(full);
+
+        return info.Length <= HashUpTo
+            ? $"{info.Length}|{Hash(full)}"
+            : $"{info.Length}|{info.LastWriteTimeUtc.Ticks}";
+    }
+
+    private static string Hash(string full)
+    {
+        try
+        {
+            using var stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+
+            return Convert.ToHexString(SHA256.HashData(stream));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Unreadable is itself a fingerprint, and a STABLE one: a file locked in both snapshots
+            // compares equal, while one that becomes unreadable between them is a change and is
+            // reported as one.
+            return "unreadable:" + e.GetType().Name;
+        }
     }
 
     /// <summary>
-    /// The repository metadata worth watching: <c>HEAD</c>, <c>config</c>, <c>index</c> and every hook.
+    /// The repository metadata worth watching: <c>HEAD</c>, <c>config</c> and every hook — in the
+    /// worktree's own git directory AND in the common one it shares.
     /// </summary>
     /// <remarks>
-    /// <c>.git</c> is a FILE in a linked worktree (<c>gitdir: …</c>), which is how this feature is being
-    /// built; then the worktree's own directory holds <c>HEAD</c> and <c>index</c>, and <c>config</c>
-    /// and the hooks live in the common directory it points at. Both shapes are read.
+    /// <c>.git</c> is a FILE in a linked worktree (<c>gitdir: …</c>), which is how this feature is
+    /// being built. Its own directory holds <c>HEAD</c>; <c>config</c> and the hooks live in the
+    /// COMMON directory that <c>commondir</c> points at, and watching only the first leaves an edited
+    /// shared hook invisible to both snapshots (codex, code round).
     /// </remarks>
     private static IEnumerable<(string Name, string Full)> GitMetadata(string repoPath)
     {
+        foreach (var (label, dir) in GitDirectories(repoPath))
+        {
+            foreach (var name in Metadata)
+            {
+                yield return ($"{label}{name}", Path.Combine(dir, name));
+            }
+
+            var hooks = Path.Combine(dir, "hooks");
+            if (Directory.Exists(hooks))
+            {
+                foreach (var hook in Directory.EnumerateFiles(hooks).Order(StringComparer.Ordinal))
+                {
+                    yield return ($"{label}hooks/{Path.GetFileName(hook)}", hook);
+                }
+            }
+        }
+    }
+
+    /// <summary>The worktree's git directory, and the common directory when it is a different one.</summary>
+    private static IEnumerable<(string Label, string Directory)> GitDirectories(string repoPath)
+    {
         var dotGit = Path.Combine(repoPath, ".git");
-        var gitDir = Directory.Exists(dotGit) ? dotGit : GitDirOf(dotGit);
+        var gitDir = Directory.Exists(dotGit) ? dotGit : PointedAt(dotGit);
         if (gitDir.Length == 0)
         {
             yield break;
         }
 
-        foreach (var name in Metadata)
-        {
-            yield return (name, Path.Combine(gitDir, name));
-        }
+        yield return (string.Empty, gitDir);
 
-        var hooks = Path.Combine(gitDir, "hooks");
-        if (Directory.Exists(hooks))
+        var common = CommonDirOf(gitDir);
+        if (common.Length > 0 && !SamePath(common, gitDir))
         {
-            foreach (var hook in Directory.EnumerateFiles(hooks).Order(StringComparer.Ordinal))
-            {
-                yield return ("hooks/" + Path.GetFileName(hook), hook);
-            }
+            yield return ("common/", common);
         }
     }
 
+    /// <summary>Where a <c>commondir</c> file points, resolved against the worktree's git directory.</summary>
+    private static string CommonDirOf(string gitDir) => Resolved(Path.Combine(gitDir, "commondir"), gitDir, string.Empty);
+
     /// <summary>The directory a <c>.git</c> FILE points at, or empty when it is neither a file nor readable.</summary>
-    private static string GitDirOf(string dotGitFile)
+    private static string PointedAt(string dotGitFile) =>
+        Resolved(dotGitFile, Path.GetDirectoryName(dotGitFile) ?? ".", "gitdir:");
+
+    private static string Resolved(string pointerFile, string relativeTo, string prefix)
     {
-        if (!File.Exists(dotGitFile))
+        if (!File.Exists(pointerFile))
         {
             return string.Empty;
         }
 
         try
         {
-            var pointer = File.ReadAllText(dotGitFile).Trim();
-            return pointer.StartsWith("gitdir:", StringComparison.Ordinal)
-                ? Path.GetFullPath(pointer["gitdir:".Length..].Trim(), Path.GetDirectoryName(dotGitFile)!)
-                : string.Empty;
+            var pointer = File.ReadAllText(pointerFile).Trim();
+            if (prefix.Length > 0)
+            {
+                pointer = pointer.StartsWith(prefix, StringComparison.Ordinal) ? pointer[prefix.Length..].Trim() : string.Empty;
+            }
+
+            return pointer.Length > 0 ? Path.GetFullPath(pointer, relativeTo) : string.Empty;
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return string.Empty;
         }
     }
+
+    private static bool SamePath(string one, string other) =>
+        string.Equals(
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(one)),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(other)),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 }
 
 /// <summary>

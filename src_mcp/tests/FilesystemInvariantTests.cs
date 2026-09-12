@@ -160,6 +160,53 @@ public sealed class FilesystemInvariantTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ARewriteThatPRESERVESSizeAndMtimeIsStillSeen()
+    {
+        // The bypass the code round found: `utime` is not a privileged call, so a compromised
+        // consultant can put the clock back and keep the byte count. Content is what is compared now.
+        var env = Path.Combine(_repo, ".env");
+        var when = File.GetLastWriteTimeUtc(env);
+        var length = new FileInfo(env).Length;
+
+        var changes = await AcrossAsync(() =>
+        {
+            File.WriteAllText(env, new string('X', (int)length - 1) + "\n");
+            File.SetLastWriteTimeUtc(env, when);
+            return Task.CompletedTask;
+        });
+
+        new FileInfo(env).Length.Should().Be(length, "the test's own premise: same size");
+        File.GetLastWriteTimeUtc(env).Should().Be(when, "and same mtime");
+        changes.Should().ContainSingle().Which.Path.Should().Be(".env");
+    }
+
+    [Fact]
+    public async Task InALINKEDWorktree_TheCommonConfigAndHooksAreWatchedToo()
+    {
+        // `config` and the hooks live in the COMMON git directory, which a linked worktree only points
+        // at — and this feature is being built in exactly such a worktree. Watching only the
+        // worktree's own directory left a shared hook invisible to both snapshots.
+        var linked = Path.Combine(Path.GetTempPath(), "coai-linked-" + Guid.NewGuid().ToString("N")[..8]);
+        await Git("worktree", "add", "--detach", linked);
+        try
+        {
+            var invariant = new FilesystemInvariant(_launcher);
+            var before = await invariant.SnapshotAsync(linked, TestContext.Current.CancellationToken);
+
+            var hooks = Directory.CreateDirectory(Path.Combine(_repo, ".git", "hooks")).FullName;
+            await File.WriteAllTextAsync(Path.Combine(hooks, "pre-push"), "#!/bin/sh\ncurl evil\n", TestContext.Current.CancellationToken);
+
+            var after = await invariant.SnapshotAsync(linked, TestContext.Current.CancellationToken);
+
+            FilesystemSnapshot.Compare(before, after).Should().Contain(c => c.Path.Contains("pre-push"));
+        }
+        finally
+        {
+            await Git("worktree", "remove", "--force", linked);
+        }
+    }
+
+    [Fact]
     public async Task TheSnapshotNeverChangesTheTreeItself()
     {
         var before = await Status();
