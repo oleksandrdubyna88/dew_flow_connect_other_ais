@@ -1051,12 +1051,12 @@ export function roundsLogHtml(
   h3.ledger { font-size: 1.05em; margin: 18px 0 8px; font-weight: 600; }
   h3.ledger:first-child { margin-top: 4px; }
   hr.ledgers { border: 0; border-top: 1px solid var(--vscode-panel-border); margin: 20px 0 0; max-width: 640px; }
-  table.chatSpend { border-collapse: collapse; margin: 0 0 6px; font-size: .95em; }
-  table.chatSpend th, table.chatSpend td { padding: 4px 10px 4px 0; text-align: left; white-space: nowrap; }
-  table.chatSpend th { font-weight: 600; opacity: .8; border-bottom: 1px solid var(--vscode-panel-border); }
-  table.chatSpend td.name { font-weight: 600; }
-  /* Numbers line up on their right edge or they cannot be compared down a column. */
-  table.chatSpend th.n, table.chatSpend td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  /* The model a chat card is about, beside the vendor that ran it: quieter than the name, because
+     the vendor is what the eye is scanning for down a column of cards. */
+  .spend .model { opacity: .75; font-size: .95em; }
+  /* The line under BOTH ledgers. Nothing else on the page adds them up, and a reader asking "what
+     has this cost me" is not asking it about one half. */
+  .total.everything { font-weight: 600; opacity: .9; margin-top: 10px; }
   .warn { color: var(--vscode-charts-yellow); }
   .link { background: none; border: none; color: var(--vscode-textLink-foreground); padding: 0 4px; }
   .hint { opacity: .65; font-size: .9em; margin-top: 10px; }

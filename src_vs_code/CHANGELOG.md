@@ -1,5 +1,13 @@
 # Changelog
 
+## Extension 0.38.2 — 2026-09-12
+
+**The chat section reads like the reviewers above it.** It shipped as a table; it is cards now, with the same bar, and what a reviewer card has no equivalent of — the two rates, what the pair has cost all time, and the two counts — sits under it in the same quiet line the durations use there.
+
+**And it names the vendor.** A chat records the id of the model preset in force, which is a generated string like `preset-mtwxbymp-4`; the section above it is per vendor, so the page named the same three vendors two different ways. The preset knows its runtime, and that is resolved when the page is drawn — so every line already on disk is named correctly too, and two presets on one vendor and model are one card.
+
+**A second rule at the bottom, and one line under both.** *What has this cost me* is one question whichever half of the product spent it. The bill and the estimate stay apart across that join, as they do inside each half.
+
 ## Extension 0.38.1 — 2026-09-12
 
 **A chat row that is part billed and part not now shows both numbers.** One turn the vendor priced used to make every unpriced turn beside it read as free — the row said $0.50 for $11.50 of work. The bill and the estimate are kept apart and shown as both, the way the reviewers section above already writes them.

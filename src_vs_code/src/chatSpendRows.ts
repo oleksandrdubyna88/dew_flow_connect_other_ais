@@ -46,6 +46,18 @@ function round4(usd: number): number {
  * the only caller dropped it, which is a type promising something the data cannot keep. (gemini, the
  * code round.)</p>
  */
+/**
+ * WHOSE row a recorded id belongs to — the vendor, not the preset.
+ *
+ * <p>What the ledger holds is the id of the model preset in force, because a preset is what a chat
+ * is switched between. A preset id is a generated string nobody recognises (`preset-mtwxbymp-4`),
+ * and the section above this one is per VENDOR — so a page showing both named the same three vendors
+ * two different ways. A preset knows its runtime; this resolves one to the other at READ time, which
+ * fixes every line already on disk rather than only the next ones. A preset since deleted keeps its
+ * recorded id, because the honest answer is then "this is what was written down".</p>
+ */
+export type ChatVendorOf = (provider: string) => string;
+
 export type ChatPriceOf = (model: string) =>
   { readonly inPerMillion: number; readonly outPerMillion: number } | undefined;
 
@@ -197,10 +209,12 @@ export function chatSpend(
   window: Window,
   now: Date,
   priceOf: ChatPriceOf = () => undefined,
+  vendorOf: ChatVendorOf = (provider) => provider,
 ): ChatSpend {
   const from = windowStart(window, now);
   const buckets = new Map<string, Bucket>();
-  const bucket = (provider: string, model: string): Bucket => {
+  const bucket = (recorded: string, model: string): Bucket => {
+    const provider = vendorOf(recorded);
     const key = keyOf(provider, model);
     const found = buckets.get(key) ?? emptyBucket(provider, model);
     buckets.set(key, found);

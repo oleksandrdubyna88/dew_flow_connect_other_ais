@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { vendorOfPreset } from '../chatPresets';
 import { chatPresetsHtml, editRepaints, editedRows, presetEdit } from '../chatPresetsPage';
 
 /**
@@ -227,4 +228,21 @@ test('a page with nothing unreadable says nothing about it', () => {
   const html = chatPresetsHtml({ prompts: [], models: [], providers: [], unreadable: [], uiScale: 0 }, 'n0nce');
 
   assert.doesNotMatch(html, /add it again/, 'an empty list still explained itself');
+});
+
+test('a recorded preset id resolves to the vendor whose row it belongs in', () => {
+  // A chat records the id of the model PRESET in force, because a preset is what a conversation is
+  // switched between - and a preset id is a generated string that means nothing beside a list of
+  // vendors. The preset knows its runtime, which IS the vendor.
+  const vendorOf = vendorOfPreset([
+    { id: 'preset-mtwxbymp-4', name: 'Gemini high', runtime: 'antigravity', model: 'gemini-3.8-flash-high', main: true, executablePath: '', baseUrl: '' },
+    { id: 'preset-mtwtqr0p-3', name: 'GPT sol', runtime: 'codex', model: 'gpt-5.6-sol', main: false, executablePath: '', baseUrl: '' },
+  ]);
+
+  assert.strictEqual(vendorOf('preset-mtwxbymp-4'), 'antigravity');
+  assert.strictEqual(vendorOf('preset-mtwtqr0p-3'), 'codex');
+  // A preset can be deleted, and the honest answer for a row recorded under one that is gone is the
+  // id that was written down - never a guess, and never an empty cell.
+  assert.strictEqual(vendorOf('preset-deleted'), 'preset-deleted');
+  assert.strictEqual(vendorOf(''), '');
 });
