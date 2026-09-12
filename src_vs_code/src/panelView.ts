@@ -19,7 +19,7 @@ import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProve
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } from './prompts';
 import { composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
 import { CUSTOM_ROLES_SINCE } from './rolesPage';
-import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, within } from './usage';
+import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, VendorTotals, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
 import { CliStatus, cliStatusNote, updateAvailable, UNKNOWN_CLI } from './cliVersions';
@@ -1402,15 +1402,55 @@ ${team}${scope}`,
       // what we worked out from a rate somebody typed is a number nobody can check.
       guess: r.estimatedUsd === null ? t.guess : (t.guess ?? 0) + r.estimatedUsd,
       seconds: t.seconds + r.seconds,
+      runs: t.runs + r.runs,
     }),
-    { tokens: 0, cost: null as number | null, guess: null as number | null, seconds: 0 },
+    { tokens: 0, cost: null as number | null, guess: null as number | null, seconds: 0, runs: 0 },
   );
 
   return {
     html: `${cards}
-<div class="hint total">All vendors: ${shortNumber(all.tokens)} tokens · ${total(all.cost, all.guess)} · ${shortDuration(all.seconds)}</div>`,
+<div class="hint total">All vendors: ${shortNumber(all.tokens)} tokens · ${total(all.cost, all.guess)} · ${summedTimeSpent(rows)}</div>`,
     totals: all,
   };
+}
+
+/**
+ * What the summed duration IS, said rather than implied — issue #116.
+ *
+ * <p>The line used to end in a bare `2.0 h`, which beside per-vendor cards that each read
+ * `38 s total · 12 s average` looks like it might be elapsed time for the window. It is not: three
+ * reviewers running in parallel for ten minutes put thirty minutes into this number. So it says it
+ * is a sum and over how many vendors, gives the average per RUN — the same thing `x average` means
+ * on every card above it, because two averages meaning different things on one page is worse than
+ * none — and names the vendor that spent the most.</p>
+ *
+ * <p>"vendors", not "agents": every card here is a vendor and the line already opens `All vendors:`.
+ * The request used the word "agent" for the same thing, and using both would invent a second level this
+ * data does not have.</p>
+ */
+function summedTimeSpent(rows: readonly VendorTotals[]): string {
+  // Derived HERE, from the rows the cards are drawn from, rather than taken as a second argument
+  // beside them: a caller could otherwise hand this function filtered rows and an unfiltered total,
+  // and the line would count its vendors from one window and its seconds from another. Raised on the
+  // code round, and it is the plan's "same window, same forget-marks" made structural.
+  const seconds = rows.reduce((t, r) => t + r.seconds, 0);
+  const runs = rows.reduce((t, r) => t + r.runs, 0);
+
+  const named = `${shortDuration(seconds)} summed across ${rows.length} vendor${rows.length === 1 ? '' : 's'}`;
+  // Cannot be zero for a vendor that has a row — a row IS at least one run — but an unguarded
+  // division renders `Infinity` on a page rather than throwing anywhere anybody would see it.
+  const average = runs === 0 ? '' : ` · ${shortDuration(seconds / runs)} average per run`;
+
+  // Computed only when there is something to compare, rather than computed and then hidden: with one
+  // row there is no "longest", and asking for one over an empty list is a reduce with no seed.
+  if (rows.length < 2) {
+    return `${named}${average}`;
+  }
+  // `>` keeps the FIRST of equal values, and `totalsByVendor` orders rows busiest-by-tokens first,
+  // so a tie always names the same vendor rather than whichever the engine happened to visit.
+  const longest = rows.reduce((most, r) => (r.seconds > most.seconds ? r : most));
+
+  return `${named}${average} · ${escapeHtml(longest.provider)} longest at ${shortDuration(longest.seconds)}`;
 }
 
 /** What the chat ledgers hand the page: every turn and every invocation, unfiltered. */
