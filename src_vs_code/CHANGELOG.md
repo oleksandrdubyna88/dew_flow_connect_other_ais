@@ -21,6 +21,8 @@ panel cannot write them yet; that is the next release, with the page to manage t
 
 **And every button on that page answers the pointer.** It had no hover state at all — colour was the only thing saying a thing was pressable, which is exactly the signal a high-contrast theme flattens. Found by the review gate on the change above.
 
+**The round limit's box lines up with the four above it.** Its explanation — *worked out: at most 4 waves × 10 min* — was sitting on the same line as the box, squeezing the number out of the column the other four settings make. The explanation is a line underneath now, where every other description in the panel already was.
+
 ## Extension 0.38.4 — 2026-09-12
 
 **Chat cards are priced now.** The price table was built from the models your REVIEWER rows select, and a chat is switched between model presets that select their own — so a card read "no rate set for this model" for a model the published table prices perfectly well. Both lists are asked now.

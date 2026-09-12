@@ -736,6 +736,65 @@ test('a vendor that is off leaves its stage boxes readable but inert', () => {
 });
 
 /**
+ * The round limit's note is a line UNDER its row, not a third thing inside it.
+ *
+ * <p>Issue #118. Every numeric row in Limits is a `.field.inline` flex holding a label and a 64px
+ * number input, pushed to opposite ends — which is what puts all five inputs in one column. The
+ * round limit's row carried its derived note as a third flex item, so that row alone shared its
+ * width three ways: the input sat left of the other four and the note was squeezed in beside it.
+ * Every other description in this panel is a sibling `.hint` after its row, which is the shape this
+ * takes now.</p>
+ *
+ * <p>Asserted for all THREE wordings `roundLimitNote` can produce — raised on the plan round by two
+ * vendors, because a structural fix verified on two of three states leaves the third free to keep
+ * the old shape.</p>
+ */
+test('the round limit\'s note is a line under its row, in every state it can be in', () => {
+  const limits = (over: Partial<PanelState['settings']>): string => {
+    const html = panelHtml(state({ settings: { ...DEFAULTS, ...over }, openSections: ['limits'] }), 'n0nce');
+    const from = html.indexOf('data-section="limits"');
+    const to = html.indexOf('data-section="keys"');
+    assert.ok(from > 0 && to > from, 'the limits section is bounded — a -1 would read to the end of the document');
+    return html.slice(from, to);
+  };
+
+  const states: ReadonlyArray<[string, Partial<PanelState['settings']>, string]> = [
+    ['derived', { roundTimeoutMinutes: 0, reviewerTimeoutMinutes: 10, maxConcurrency: 3 }, 'worked out:'],
+    ['set by hand', { roundTimeoutMinutes: 90, reviewerTimeoutMinutes: 10 }, 'set by hand'],
+    ['cut off', { roundTimeoutMinutes: 5, reviewerTimeoutMinutes: 10 }, "shorter than one reviewer's"],
+  ];
+
+  for (const [name, settings, wording] of states) {
+    const html = limits(settings);
+    // The row is everything from its opening tag to the first </div>: it holds no nested div today,
+    // and the whole point of this test is that it must not grow one.
+    const row = /<div class="field inline">(?:(?!<\/div>)[\s\S])*id="roundTimeoutMinutes"(?:(?!<\/div>)[\s\S])*<\/div>/.exec(html);
+    assert.ok(row, `${name}: the round limit is a .field.inline row`);
+    assert.ok(!row[0].includes('hint'), `${name}: the note is not inside the row — ${row[0]}`);
+
+    const after = html.slice(row.index + row[0].length).trimStart();
+    assert.ok(after.startsWith('<div class="hint">'), `${name}: a hint follows the row, on its own line — got ${after.slice(0, 60)}`);
+    assert.ok(after.slice(0, 400).includes(wording), `${name}: and it carries the note`);
+  }
+});
+
+test('every limits row holds exactly a label and an input, so none can crowd its column again', () => {
+  // The structural property behind the row above, asserted for all five rather than one. Raised on
+  // the plan round: a test that names the round limit would not notice the next row to grow a third
+  // item, and the alignment is a property of the SET of rows.
+  const html = panelHtml(state({ openSections: ['limits'] }), 'n0nce');
+  const section = html.slice(html.indexOf('data-section="limits"'), html.indexOf('data-section="keys"'));
+  const rows = [...section.matchAll(/<div class="field inline">((?:(?!<\/div>)[\s\S])*)<\/div>/g)].map((m) => m[1]!);
+
+  assert.equal(rows.length, 5, 'five numeric settings');
+  for (const row of rows) {
+    // The label carries the `?` help span inside itself, so three tags for two flex children.
+    const tags = [...row.matchAll(/<(\w+)[\s>]/g)].map((m) => m[1]!);
+    assert.deepEqual(tags, ['label', 'span', 'input'], `a row is its label (with the ? help) and its input: ${row}`);
+  }
+});
+
+/**
  * The round limit shows what it will actually be, beside the box that sets it.
  *
  * <p>Zero means "work it out", and a reviewer on the plan round called that a hidden dependency:

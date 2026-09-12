@@ -2232,6 +2232,21 @@ that is NOT a hint: the tokens are what the section exists to show. A test walks
 and fails on any selector defined twice — the dimming had no other symptom, and nobody would have
 gone looking for a stylesheet collision.
 
+### A description is a line under its row, never a third thing in it (2026-09-12)
+
+The same lesson one layout down, from issue #118. Every numeric row in **Limits** is
+`<div class="field inline">` — a `space-between` flex holding a label and a 64px number input — and
+that is what puts all five inputs in one column at the right edge. The round limit's derived note
+(*worked out: at most 4 waves × 10 min = 40 min*) was a third child of that flex, so that row alone
+shared its width three ways: its input sat left of the other four, and the note was squeezed in
+beside it.
+
+It is a sibling `<div class="hint">` after the row now, which is what every other description in the
+panel already was (`keysBody`, `sideBody`, the chat section). `.hint` needed no change and neither
+did `.inline` — the layout was right, the markup was not. The regression test holds **every** limits
+row to exactly two children rather than naming the round limit, because the alignment is a property
+of the set of rows: the next one to grow a third item is the one nobody would think to test.
+
 ### Installing a reviewer's CLI from the row (2026-09-01)
 
 A fresh WSL box has none of these CLIs, and the panel is where somebody is standing when they find
