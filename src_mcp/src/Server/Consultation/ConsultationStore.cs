@@ -36,6 +36,17 @@ public sealed partial class ConsultationStore(string dataDir, Action<string>? wa
     public ConsultationRecord? Read(string id) =>
         IsWellFormedId(id) ? ReadFile(PathFor(id)) : null;
 
+    /// <summary>
+    /// Every consultation in the directory — and nothing else that happens to be JSON in it.
+    /// </summary>
+    /// <remarks>
+    /// <b>The NAME is the guard.</b> A consultation file is named by a consultation id; anything else
+    /// in this directory is not one, whatever it deserialises to. Found by story 2's live check: the
+    /// local consultant's answer schema was written here, came back as a record with a null id and no
+    /// status, and the sweep would then have written and deleted files named after nothing. The schema
+    /// has moved out of this directory as well — both, because a shared data directory acquires files
+    /// nobody planned for, and a reader that trusts an extension will meet the next one too.
+    /// </remarks>
     public IReadOnlyList<ConsultationRecord> All()
     {
         if (!System.IO.Directory.Exists(Directory))
@@ -44,8 +55,10 @@ public sealed partial class ConsultationStore(string dataDir, Action<string>? wa
         }
 
         return [.. System.IO.Directory.EnumerateFiles(Directory, "*.json")
+            .Where(path => IsWellFormedId(Path.GetFileNameWithoutExtension(path)))
             .Select(ReadFile)
-            .OfType<ConsultationRecord>()];
+            .OfType<ConsultationRecord>()
+            .Where(record => IsWellFormedId(record.Id))];
     }
 
     /// <summary>

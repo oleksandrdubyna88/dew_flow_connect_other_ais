@@ -132,7 +132,7 @@ public sealed class ConsultationService(
                   + " — a consultation stays on the vendor it started with, so this one cannot go on; start a new consultation");
         }
 
-        var runtime = ConsultantResolution.For(row.Identity());
+        var runtime = ConsultantResolution.For(row.Identity(), settings.DataDir);
         if (runtime is null)
         {
             return Error(ConsultantResolution.CannotConsult(row.Identity()));
@@ -289,7 +289,11 @@ public sealed class ConsultationService(
             return Error($"the consultant ({consultant.Row.Provider}) exited cleanly but answered nothing; its transcript is kept at {kept} — try once more with a sharper problem statement");
         }
 
-        var turn = new ConsultationTurn(ConsultationStore.Stamp(DateTime.UtcNow), problem, launched.Answer.Trim(), Math.Round(elapsed.TotalSeconds, 1), launched.Usage.TokensIn, launched.Usage.TokensOut, launched.Usage.CostUsd);
+        // The three CLIs answer prose and this passes it through; the local engine answers
+        // {"answer": …} because its route refuses to run without a schema. One reader, so "what did
+        // the consultant say" has a single answer whichever route produced it.
+        var advised = ConsultantAnswer.TextOf(launched.Answer).Trim();
+        var turn = new ConsultationTurn(ConsultationStore.Stamp(DateTime.UtcNow), problem, advised, Math.Round(elapsed.TotalSeconds, 1), launched.Usage.TokensIn, launched.Usage.TokensOut, launched.Usage.CostUsd);
         var answered = record with
         {
             Turns = [.. record.Turns, turn],
@@ -305,7 +309,7 @@ public sealed class ConsultationService(
         Record(consultant, "ok", elapsed, launched.Usage);
         log.Information("consultation {Id}: answered turn {Turn} in {Seconds}s ({TokensIn}/{TokensOut} tokens)", record.Id, record.Budget.Turn, turn.Seconds, turn.TokensIn, turn.TokensOut);
 
-        var advice = ConsultationFence.Advice(consultant.Row.Provider, consultant.Model, record.Budget, nonce, launched.Answer);
+        var advice = ConsultationFence.Advice(consultant.Row.Provider, consultant.Model, record.Budget, nonce, advised);
         var note = consultant.Caller.CounterNote;
 
         return Json(

@@ -13,15 +13,25 @@ namespace CoaiMcp.Runners.Consultation;
 /// </remarks>
 public static class ConsultantResolution
 {
-    /// <summary>The runtimes this build can hold a consultation with, in the order S1..S2 added them.</summary>
-    public static IReadOnlyList<string> Consulting { get; } = ["codex"];
+    /// <summary>The runtimes this build can hold a consultation with, in the order the stories added them.</summary>
+    public static IReadOnlyList<string> Consulting { get; } = ["codex", "claude", "antigravity", "local"];
 
-    public static IConsultantRuntime? For(VendorIdentity vendor) => RuntimeResolution.NameOf(vendor) switch
+    /// <param name="dataDir">Where a route that needs a file of its own may write one. Only the local engine does.</param>
+    public static IConsultantRuntime? For(VendorIdentity vendor, string dataDir = "") => RuntimeResolution.NameOf(vendor) switch
     {
         // A custom endpoint riding the codex CLI (DeepSeek) authenticates and configures differently;
         // it consults when its provider overrides are measured, not before.
         "codex" when vendor.BaseUrl.Length == 0 =>
             new CodexConsultant(RuntimeResolution.For(vendor) ?? new CodexRuntime(vendor.Provider), vendor.Provider),
+        "claude" =>
+            new ClaudeConsultant(RuntimeResolution.For(vendor) ?? new ClaudeRuntime(vendor.Provider), vendor.Provider),
+        "antigravity" =>
+            new AntigravityConsultant(RuntimeResolution.For(vendor) ?? new AntigravityRuntime(vendor.Provider), vendor.Provider),
+        // The local engine has no CLI and no conversation: it is a completion per turn, and the
+        // transcript is ours to carry. It needs the data directory for its answer schema, which is
+        // the one thing a consultation changes about its launch.
+        "local" when dataDir.Length > 0 =>
+            new LocalConsultant(new LocalRuntime(vendor.Provider, vendor.BaseUrl), vendor.Provider, dataDir),
         _ => null,
     };
 

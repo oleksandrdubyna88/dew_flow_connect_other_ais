@@ -113,6 +113,23 @@ chats would mix them with the person's own conversations. The Team server's wire
 unchanged: `UsageKinds.LocalOnly` names the difference, and `src_server`'s test now asserts
 *known == wire ∪ local-only* rather than an equality that stopped being true of this ledger.
 
+**All four routes consult, and three of them remember.** Measured live on 2026-09-12, two turns each
+with a number planted in the first: `codex` resumes a thread by its id (37.1 s then 13.6 s), `claude`
+a session by the id its own envelope reports whether or not it was given one (20.1 s then 5.5 s),
+`agy` a conversation by the id on its event stream (26.5 s then 6.0 s). The LOCAL engine keeps
+nothing — it is one HTTP completion per turn — so it is the only `WeRemember` here and its transcript
+travels in the prompt, bounded at 16 KB and frozen on the record (32.8 s then 12.8 s, and the planted
+number came back, which is what proves the carry works). Two things belong to the local route alone:
+it is bound to an ANSWER schema (`{"answer": string}`) because its shim refuses to run without one,
+and it takes the cross-process engine lease, so one card serves one caller however many rounds and
+consultations are in flight.
+
+**A consultation file is recognised by its NAME.** Story 2's live check found the local route's answer
+schema, written into the consultations directory, coming back from `All()` as a record with a null id
+— after which the sweep would have written and deleted files named after nothing. The schema moved to
+`<dataDir>/schemas/`, and the store now reads only files whose name is a well-formed consultation id.
+Both, because a shared data directory acquires files nobody planned for.
+
 **Which consultant a caller gets** is `COAI_CONSULTANTS`, a map from caller kind to vendor+model.
 `CallerIdentity.KindFrom` answers the kind from the VENDOR variables alone — `COAI_CALLER_SESSION` is
 an identity override with no vendor meaning and is deliberately not consulted. Shipped: Claude Code →
