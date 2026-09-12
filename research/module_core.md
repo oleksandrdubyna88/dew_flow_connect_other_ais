@@ -87,17 +87,23 @@ Five rules, in the order they apply:
    which is why every field of `RoleEntry` but the id is nullable. A non-nullable `active` would read
    an omitted one as `false` and switch Architecture off for somebody who only wanted to add a
    prompt to it.
-2. **Every other row is a role of the person's own.** Its id becomes `COAI_ROUNDS_<ID>`, so it is
-   latin and starts with a letter; its stage is `plan` or `result`; it must carry prompts, because
-   it has no shipped general one to fall back on. Absent `active` is on, absent kind is a
-   programming task.
+2. **Every other row is a role of the person's own.** Its id becomes the environment variable
+   `COAI_ROUNDS_<ID>`, so it is latin, starts with a letter and carries **no hyphen** — a prompt id
+   names a file and wears one, a role id names a variable and `COAI_ROUNDS_MY-ROLE` is not a name a
+   POSIX shell can export, which would leave the role's budget settable through the settings file
+   and not through the environment or the pasted block. Its stage is `plan` or `result`; it must
+   carry prompts, because it has no shipped general one to fall back on. Absent `active` is on,
+   absent kind is a programming task, absent name is the id.
 3. **Prompt ids are slugs and they are global.** `RolePrompts` keys text files by prompt id alone,
    so two roles naming `rules` would read one file. The slug rule is also what stops an id being a
    path: `../../secrets` is refused here, not at the moment a file is read into a reviewer's prompt.
 4. **At most five active roles per bucket**, and the trim never reaches a built-in — they come first
-   in catalog order, so a person's row can never switch a shipped role off by arriving. The
-   consequence, said out loud: with all four shipped result roles on, one custom result role fits,
-   and the way to make room is to untick a built-in.
+   in catalog order, so a person's row can never switch a shipped role off by arriving. Beyond that
+   the order is the order they were written, so which role is trimmed is predictable rather than
+   whichever one the dictionary happened to yield. A trimmed role is left in the catalog switched
+   off, with a sentence saying which limit it met. The consequence, said out loud: with all four
+   shipped result roles on, one custom result role fits, and the way to make room is to untick a
+   built-in.
 5. Anything a person added is `BuiltIn = false`, which is what makes it deletable and its text
    restorable-to-nothing rather than restorable-to-shipped.
 

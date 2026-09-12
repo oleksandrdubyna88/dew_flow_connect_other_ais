@@ -60,8 +60,18 @@ public static partial class RoleComposition
     /// </remarks>
     public const int MaxActivePerBucket = 5;
 
-    /// <summary>A role id becomes <c>COAI_ROUNDS_&lt;ID&gt;</c>, so it is latin and starts with a letter.</summary>
-    [GeneratedRegex("^[A-Za-z][A-Za-z0-9_-]*$")]
+    /// <summary>
+    /// A role id becomes the environment variable <c>COAI_ROUNDS_&lt;ID&gt;</c> — latin, starting with a
+    /// letter, and <b>no hyphen</b>.
+    /// </summary>
+    /// <remarks>
+    /// The hyphen is the one that has to be said out loud, because a prompt id is a file name and
+    /// wears hyphens like every shipped one does. <c>COAI_ROUNDS_MY-ROLE</c> is not a name a POSIX
+    /// shell can export, so a role called <c>my-role</c> would take its budget from the settings
+    /// file and never from the environment or from the block a person pastes into an MCP client —
+    /// working in one of the two places its settings can come from, which is worse than not working.
+    /// </remarks>
+    [GeneratedRegex("^[A-Za-z][A-Za-z0-9_]*$")]
     private static partial Regex RoleId { get; }
 
     /// <summary>A prompt id is a file name under <c>&lt;dataDir&gt;/prompts/</c> — the slug shape every shipped id has.</summary>
@@ -175,7 +185,7 @@ public static partial class RoleComposition
     {
         if (!RoleId.IsMatch(entry.Id ?? string.Empty))
         {
-            return "that is not a usable id — it becomes an environment variable, so it is latin, starts with a letter, and holds only letters, digits, '-' and '_'";
+            return "that is not a usable id — it becomes the environment variable COAI_ROUNDS_<ID>, so it is latin, starts with a letter, and holds only letters, digits and '_' (a hyphen is fine in a prompt id, which names a file, and not in this one, which names a variable)";
         }
 
         if (entry.Stage is not (RoleStages.Plan or RoleStages.Result))
