@@ -1032,3 +1032,33 @@ test('a role that is not a programming task is not drawn among the roles that re
 test('the Prompts section offers the way into the roles page', () => {
   assert.ok(promptsSection(panelHtml(state(), 'n0nce')).includes('data-command="editRoles"'));
 });
+
+test('a server too old to read a person’s roles says so, where the roles are drawn', () => {
+  // The quietest of the three skews: below 0.19.0 the key is never read, so the roles are in the
+  // panel and in no round — nothing fails and nothing errors. That is why it is said out loud.
+  const settings = {
+    ...DEFAULTS,
+    roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
+              prompts: [{ id: 'requirements-general' }] }],
+  };
+  const withServer = (version: string): string =>
+    promptsSection(panelHtml(state({
+      settings,
+      server: { kind: 'known', version, remembered: true, updateOffered: false },
+    }), 'n0nce'));
+
+  assert.ok(withServer('0.18.17').includes('Requirements we wrote'), 'it names the role that will not run');
+  assert.ok(withServer('0.18.17').includes('0.18.17'), 'and the version that is there');
+  assert.ok(!withServer('0.19.0').includes('does not read roles'), 'the one that reads them says nothing');
+  assert.ok(!withServer('0.20.3').includes('does not read roles'), 'nor does a later one');
+});
+
+test('and says nothing at all when the person has added no role of their own', () => {
+  // Everybody who upgrades is in this state. A warning about a feature nobody is using is a warning
+  // that teaches people to ignore the next one.
+  const older = promptsSection(panelHtml(state({
+    server: { kind: 'known', version: '0.18.17', remembered: true, updateOffered: false },
+  }), 'n0nce'));
+
+  assert.ok(!older.includes('does not read roles'));
+});
