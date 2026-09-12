@@ -3,20 +3,25 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { Claim, LOCK_STALE_MS, LOCK_SUFFIX, claimRevision, lockName } from '../chatStoreLock';
+import { Claim, HELD_PAUSE_MS, HELD_TRIES, LOCK_STALE_MS, LOCK_SUFFIX, claimConversation, lockName } from '../chatStoreLock';
 import { idOfMeta, isRecordName } from '../chatStore';
 
 /**
  * The claim that makes the store's compare-and-swap an actual swap, against a real directory.
  *
- * <p>The blocking finding of story A2's code round: "read the rev, then rename" is not a
+ * <p>The blocking finding of story A2's first code round: "read the rev, then rename" is not a
  * compare-and-swap, because a rename does not condition itself on what was read. What does is an
  * exclusive create, and that is the one operation this module rests on — so what is tested here is the
  * behaviour of a REAL `O_EXCL` create on this machine, never a fake of it. Eight racers, one lock; a
- * fresh lock refused; a stale one broken; a release that will not delete somebody else's.</p>
+ * fresh lock refused; a stale one broken; a release that will not delete anything it cannot positively
+ * read as its own; and the brief wait that keeps a millisecond-long reconciliation from being mistaken
+ * for a rival window.</p>
  */
 
 const NOW = Date.UTC(2026, 8, 12, 12, 0, 0);
+
+/** How long a claim may spend waiting on a held lock before it gives up — the bound the tests pay. */
+const WAIT_MS = Array.from({ length: HELD_TRIES - 1 }, (_, at) => HELD_PAUSE_MS * (at + 1)).reduce((sum, ms) => sum + ms, 0);
 
 function home(): string {
   return mkdtempSync(join(tmpdir(), 'coai-chat-lock-'));
@@ -41,17 +46,21 @@ async function letGo(claim: Claim): Promise<void> {
   }
 }
 
-test('a claim owns the transition, writes down who took it and when, and a release lets it go', async () => {
+const note = (path: string): { pid: number; at: string; token: string; doing: string } =>
+  JSON.parse(readFileSync(path, 'utf8')) as { pid: number; at: string; token: string; doing: string };
+
+test('a claim owns the conversation, writes down who took it, when and for what, and a release lets it go', async () => {
   const dir = home();
   try {
-    const claim = await claimRevision(dir, 'a1', 6, NOW);
-    assert.equal(claim.kind, 'claimed', 'a claim over an unclaimed transition was not granted');
+    const claim = await claimConversation(dir, 'a1', 'save 6', NOW);
+    assert.equal(claim.kind, 'claimed', 'a claim over an unclaimed conversation was not granted');
 
-    const path = join(dir, lockName('a1', 6));
-    const note = JSON.parse(readFileSync(path, 'utf8')) as { pid: number; at: string; token: string };
-    assert.equal(note.pid, process.pid, 'the lock does not say which process took it');
-    assert.equal(note.at, new Date(NOW).toISOString(), 'the lock is not dated in UTC from the clock it was given');
-    assert.ok(note.token.length > 0, 'the lock carries no token for the release to check');
+    const path = join(dir, lockName('a1'));
+    const taken = note(path);
+    assert.equal(taken.pid, process.pid, 'the lock does not say which process took it');
+    assert.equal(taken.at, new Date(NOW).toISOString(), 'the lock is not dated in UTC from the clock it was given');
+    assert.ok(taken.token.length > 0, 'the lock carries no token for the release to check');
+    assert.equal(taken.doing, 'save 6', 'the lock does not say what its holder is doing — the target rev lives HERE, not in the name');
 
     await letGo(claim);
     assert.equal(existsSync(path), false, 'a released lock is still on disk');
@@ -60,30 +69,67 @@ test('a claim owns the transition, writes down who took it and when, and a relea
   }
 });
 
-test('a second claim on a transition somebody holds is HELD — the exclusive create is the swap', async () => {
+test('a second claim on a conversation somebody holds is HELD, whatever either is doing — the exclusive create is the swap', async () => {
+  // One lock per CONVERSATION: a save, a forget and a reconciliation all contend, because each of them
+  // changes what the other two would read. The first draft's per-revision lock let a forget race a save.
   const dir = home();
   try {
-    const first = await claimRevision(dir, 'a1', 6, NOW);
-    assert.equal(first.kind, 'claimed');
+    const saving = await claimConversation(dir, 'a1', 'save 6', NOW);
+    assert.equal(saving.kind, 'claimed');
 
-    const second = await claimRevision(dir, 'a1', 6, NOW);
-    assert.equal(second.kind, 'held', 'two windows were both granted the same transition');
+    const started = Date.now();
+    assert.equal((await claimConversation(dir, 'a1', 'forget', NOW)).kind, 'held', 'a forget was granted while a save held the conversation');
+    assert.equal((await claimConversation(dir, 'a1', 'save 7', NOW)).kind, 'held', 'a writer of the NEXT revision was granted the conversation mid-save');
+    assert.ok(Date.now() - started >= WAIT_MS, 'a held claim was reported without waiting for the holder to finish');
 
-    await letGo(first);
+    await letGo(saving);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('eight claims racing for one transition admit exactly one', async () => {
+test('a lock that is released during the wait is then claimed — a reconciliation is not a rival', async () => {
+  // The implication of one lock per conversation: a `held` lock is usually a metadata write a few
+  // milliseconds from done. Reporting it as a rival on the first EEXIST would make story A3 re-mint the
+  // conversation over an index write that was never another window at all.
+  const dir = home();
+  try {
+    const first = await claimConversation(dir, 'a1', 'reconcile 3', NOW);
+    setTimeout(() => { void letGo(first); }, HELD_PAUSE_MS * 2);
+
+    const second = await claimConversation(dir, 'a1', 'save 4', NOW);
+
+    assert.equal(second.kind, 'claimed', 'a claim gave up on a lock that was released within the wait');
+    await letGo(second);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('claims on DIFFERENT conversations do not contend', async () => {
+  const dir = home();
+  try {
+    const one = await claimConversation(dir, 'a1', 'save 6', NOW);
+    const other = await claimConversation(dir, 'b2', 'save 1', NOW);
+
+    assert.equal(one.kind, 'claimed');
+    assert.equal(other.kind, 'claimed', 'a save to one conversation blocked a save to another');
+    await letGo(one);
+    await letGo(other);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('eight claims racing for one conversation admit exactly one', async () => {
   // Measured, not assumed: this is the property the whole compare-and-swap rests on, and it is the
   // filesystem's, not this module's. If it ever fails here, the store's guarantee is gone with it.
   const dir = home();
   try {
-    const racers = await Promise.all(Array.from({ length: 8 }, () => claimRevision(dir, 'a1', 6, NOW)));
+    const racers = await Promise.all(Array.from({ length: 8 }, (_, at) => claimConversation(dir, 'a1', `save ${at}`, NOW)));
     const won = racers.filter((one) => one.kind === 'claimed');
 
-    assert.equal(won.length, 1, `${won.length} writers were granted one transition`);
+    assert.equal(won.length, 1, `${won.length} writers were granted one conversation`);
     assert.equal(racers.filter((one) => one.kind === 'held').length, 7);
     for (const one of won) {
       await letGo(one);
@@ -93,34 +139,18 @@ test('eight claims racing for one transition admit exactly one', async () => {
   }
 });
 
-test('claims on DIFFERENT revisions do not contend — the lock names the transition, not the conversation', async () => {
-  const dir = home();
-  try {
-    const six = await claimRevision(dir, 'a1', 6, NOW);
-    const seven = await claimRevision(dir, 'a1', 7, NOW);
-
-    assert.equal(six.kind, 'claimed');
-    assert.equal(seven.kind, 'claimed', 'the writer of the NEXT revision was blocked by the writer of this one');
-    await letGo(six);
-    await letGo(seven);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
 test('a lock older than the window is broken and the claim granted — a killed writer cannot wedge a conversation', async () => {
   const dir = home();
   try {
-    const path = join(dir, lockName('a1', 6));
-    const abandoned = { pid: 1, at: new Date(NOW - LOCK_STALE_MS - 1_000).toISOString(), token: 'dead:1' };
+    const path = join(dir, lockName('a1'));
+    const abandoned = { pid: 1, at: new Date(NOW - LOCK_STALE_MS - 1_000).toISOString(), token: 'dead:1', doing: 'save 9' };
     writeFileSync(path, JSON.stringify(abandoned), 'utf8');
 
-    const { value: claim, lines } = await capturing(() => claimRevision(dir, 'a1', 6, NOW));
+    const { value: claim, lines } = await capturing(() => claimConversation(dir, 'a1', 'save 9', NOW));
 
-    assert.equal(claim.kind, 'claimed', 'a lock left by a dead writer held the transition for ever');
+    assert.equal(claim.kind, 'claimed', 'a lock left by a dead writer held the conversation for ever');
     assert.ok(lines.some((line) => line.includes('broken') && line.includes(path)), 'breaking a lock was not said, with its path');
-    const note = JSON.parse(readFileSync(path, 'utf8')) as { token: string };
-    assert.notEqual(note.token, 'dead:1', 'the stale lock was not replaced by the new claim');
+    assert.notEqual(note(path).token, 'dead:1', 'the stale lock was not replaced by the new claim');
     await letGo(claim);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -130,14 +160,14 @@ test('a lock older than the window is broken and the claim granted — a killed 
 test('a lock INSIDE the window is not broken, however tempting — a live writer is never written over', async () => {
   const dir = home();
   try {
-    const path = join(dir, lockName('a1', 6));
+    const path = join(dir, lockName('a1'));
     const takenAt = NOW - 1_000;
-    writeFileSync(path, JSON.stringify({ pid: 1, at: new Date(takenAt).toISOString(), token: 'live:1' }), 'utf8');
+    writeFileSync(path, JSON.stringify({ pid: 1, at: new Date(takenAt).toISOString(), token: 'live:1', doing: 'save 2' }), 'utf8');
 
-    assert.equal((await claimRevision(dir, 'a1', 6, NOW)).kind, 'held', 'a one-second-old lock was broken');
+    assert.equal((await claimConversation(dir, 'a1', 'save 2', NOW)).kind, 'held', 'a one-second-old lock was broken');
     // Exactly AT the window is still inside it: the window is "older than", not "as old as".
-    assert.equal((await claimRevision(dir, 'a1', 6, takenAt + LOCK_STALE_MS)).kind, 'held', 'a lock exactly at the window was broken');
-    assert.equal(JSON.parse(readFileSync(path, 'utf8')).token, 'live:1', 'a live lock was replaced');
+    assert.equal((await claimConversation(dir, 'a1', 'save 2', takenAt + LOCK_STALE_MS)).kind, 'held', 'a lock exactly at the window was broken');
+    assert.equal(note(path).token, 'live:1', 'a live lock was replaced');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -148,13 +178,13 @@ test('a lock whose note cannot be read is aged by its mtime — torn but fresh i
   // see an empty file. It is a real, fresh lock; the file's own time says so.
   const dir = home();
   try {
-    const path = join(dir, lockName('a1', 6));
+    const path = join(dir, lockName('a1'));
     writeFileSync(path, '', 'utf8');
-    assert.equal((await claimRevision(dir, 'a1', 6, Date.now())).kind, 'held', 'an empty but fresh lock was broken');
+    assert.equal((await claimConversation(dir, 'a1', 'save 1', Date.now())).kind, 'held', 'an empty but fresh lock was broken');
 
     const long = new Date(Date.now() - LOCK_STALE_MS - 60_000);
     utimesSync(path, long, long);
-    const { value: claim } = await capturing(() => claimRevision(dir, 'a1', 6, Date.now()));
+    const { value: claim } = await capturing(() => claimConversation(dir, 'a1', 'save 1', Date.now()));
     assert.equal(claim.kind, 'claimed', 'an empty lock a minute past the window was honoured for ever');
     await letGo(claim);
   } finally {
@@ -167,16 +197,34 @@ test('a release does NOT remove a lock somebody else has since taken — the tok
   // re-taken. Its `finally` must not then delete the NEW holder's lock, or a third writer walks in.
   const dir = home();
   try {
-    const stalled = await claimRevision(dir, 'a1', 6, NOW);
+    const stalled = await claimConversation(dir, 'a1', 'save 6', NOW);
     assert.equal(stalled.kind, 'claimed');
-    const path = join(dir, lockName('a1', 6));
-    writeFileSync(path, JSON.stringify({ pid: 2, at: new Date(NOW).toISOString(), token: 'breaker:1' }), 'utf8');
+    const path = join(dir, lockName('a1'));
+    writeFileSync(path, JSON.stringify({ pid: 2, at: new Date(NOW).toISOString(), token: 'breaker:1', doing: 'save 6' }), 'utf8');
 
     const { lines } = await capturing(() => letGo(stalled));
 
     assert.equal(existsSync(path), true, 'a stalled writer deleted the lock of the writer that replaced it');
-    assert.equal(JSON.parse(readFileSync(path, 'utf8')).token, 'breaker:1');
+    assert.equal(note(path).token, 'breaker:1');
     assert.ok(lines.some((line) => line.includes('taken over') && line.includes(path)), 'a save that outlived its lock was not said, with the path');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a release leaves a lock it cannot POSITIVELY read as its own — a torn note is not a licence to delete', async () => {
+  // gemini's exact fix: `note?.token !== token` returns. A replacement's lock that is still being
+  // written reads back as nothing, and "not verifiably mine" must never become "so I may remove it".
+  const dir = home();
+  try {
+    const mine = await claimConversation(dir, 'a1', 'save 6', NOW);
+    assert.equal(mine.kind, 'claimed');
+    const path = join(dir, lockName('a1'));
+    writeFileSync(path, '', 'utf8'); // somebody's fresh claim, content not yet landed
+
+    await letGo(mine);
+
+    assert.equal(existsSync(path), true, 'a lock that could not be read as ours was deleted anyway');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -185,8 +233,8 @@ test('a release does NOT remove a lock somebody else has since taken — the tok
 test('a release of a lock that is already gone is nothing, not a throw', async () => {
   const dir = home();
   try {
-    const claim = await claimRevision(dir, 'a1', 6, NOW);
-    rmSync(join(dir, lockName('a1', 6)));
+    const claim = await claimConversation(dir, 'a1', 'save 6', NOW);
+    rmSync(join(dir, lockName('a1')));
 
     await assert.doesNotReject(() => letGo(claim));
   } finally {
@@ -197,7 +245,7 @@ test('a release of a lock that is already gone is nothing, not a throw', async (
 test('a claim in a directory that is not there yet makes it — a first save is what creates a store', async () => {
   const dir = join(home(), 'chat-conversations');
   try {
-    const claim = await claimRevision(dir, 'a1', 1, NOW);
+    const claim = await claimConversation(dir, 'a1', 'save 1', NOW);
 
     assert.equal(claim.kind, 'claimed', 'the first claim of an installation was refused for want of a directory');
     await letGo(claim);
@@ -212,7 +260,7 @@ test('a claim that cannot create its lock fails with a reason that carries no pa
     const asFile = join(dir, 'parent-is-a-file');
     writeFileSync(asFile, 'a file standing where the store should be', 'utf8');
 
-    const { value: claim, lines } = await capturing(() => claimRevision(join(asFile, 'chat-conversations'), 'a1', 1, NOW));
+    const { value: claim, lines } = await capturing(() => claimConversation(join(asFile, 'chat-conversations'), 'a1', 'save 1', NOW));
 
     assert.equal(claim.kind, 'failed', 'a lock that could not be created was reported as something else');
     const reason = claim.kind === 'failed' ? claim.reason : '';
@@ -223,9 +271,9 @@ test('a claim that cannot create its lock fails with a reason that carries no pa
   }
 });
 
-test('a lock file is never mistaken for a record or a metadata file', async () => {
-  assert.equal(lockName('a1', 6), `a1.6${LOCK_SUFFIX}`);
-  assert.equal(isRecordName(lockName('a1', 6)), false, 'a lock would be read as a transcript');
-  assert.equal(idOfMeta(lockName('a1', 6)), '', 'a lock would be listed as a conversation');
-  assert.throws(() => lockName('../outside', 1), /id/u, 'an escaping id built a lock path');
+test('a lock file is never mistaken for a record or a metadata file', () => {
+  assert.equal(lockName('a1'), `a1${LOCK_SUFFIX}`);
+  assert.equal(isRecordName(lockName('a1')), false, 'a lock would be read as a transcript');
+  assert.equal(idOfMeta(lockName('a1')), '', 'a lock would be listed as a conversation');
+  assert.throws(() => lockName('../outside'), /id/u, 'an escaping id built a lock path');
 });

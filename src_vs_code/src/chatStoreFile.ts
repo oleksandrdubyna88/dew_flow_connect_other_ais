@@ -13,7 +13,7 @@ import {
   recordFrom,
   recordName,
 } from './chatStore';
-import { claimRevision } from './chatStoreLock';
+import { claimConversation } from './chatStoreLock';
 
 /**
  * The conversation store's world-facing half: the directory, the two files, and nothing else.
@@ -35,17 +35,19 @@ import { claimRevision } from './chatStoreLock';
  * reconciled — the record is the truth, the metadata is regenerated from it whenever the two
  * disagree.</p>
  *
- * <h2>The compare-and-swap, and the atomic operation it rests on</h2>
+ * <h2>Every mutation holds the conversation's lock; the swap is checked under it</h2>
  *
  * <p>A save proceeds only when the disk holds EXACTLY the revision the caller last read — or nothing
- * at all, for a first write. A rename cannot condition itself on what was read, so the check is made
- * under a claim of the transition: the writer of rev N must first own `<id>.N.lock`, taken by an
- * <b>exclusive create</b> (`chatStoreLock.ts`, which names the operation, the fence and the residual),
- * and the disk is probed only once the claim is held. Two windows that both read 5 both aim at 6; one
- * owns the lock, the other is refused. A window that reads 5 AFTER 6 has landed is refused by the
- * probe; a window whose record was DELETED under it — a baseline above zero and nothing on disk — is
- * refused too, rather than quietly resurrecting what somebody else threw away. Only baseline zero
- * over a genuinely absent record may create. (codex, story A2's code round.)</p>
+ * at all, for a first write, and that is checked as absence in so many words rather than inferred
+ * from a number. A rename cannot condition itself on what was read, so the check is made under a claim
+ * of the whole conversation: `<id>.lock`, taken by an <b>exclusive create</b> (`chatStoreLock.ts`,
+ * which names the operation, the fence, the wait and the residual). The same lock is taken by
+ * {@link ChatStoreFile.forget} and by the metadata write {@link ChatStoreFile.read} performs when it
+ * finds the index stale, so a delete cannot race a save into resurrecting a conversation or leaving a
+ * row that opens onto nothing, and a reader cannot write a rev-1 index beside a rev-2 transcript. A
+ * read that only reads takes nothing. Two windows that both read 5 both aim at 6; one owns the lock,
+ * the other is refused. A window whose record was DELETED under it — a baseline above zero and nothing
+ * on disk — is refused too, rather than quietly resurrecting what somebody else threw away.</p>
  *
  * <h2>The record is the commit — and a half-done save says so</h2>
  *
@@ -65,6 +67,15 @@ import { claimRevision } from './chatStoreLock';
  * whatever is already at that id. So a save over it is `incompatible` and writes nothing; the file
  * stays where it is until an explicit {@link ChatStoreFile.forget} or the sweep of story B1 clears it,
  * neither of which is built here. `read` returns nothing for it, saying so on the console.</p>
+ *
+ * <h2>What a crash between the two deletes leaves, and who collects it</h2>
+ *
+ * <p>{@link ChatStoreFile.forget} removes the metadata first, then the record. A crash between the two
+ * leaves a TRANSCRIPT WITH NO METADATA: invisible to {@link ChatStoreFile.listMeta}, which reads
+ * metadata only, and — because a baseline-zero save meets it and is `refused` — an id that cannot be
+ * reused for a new conversation. That is the intended shape of the failure (a file nobody sees beats a
+ * row nobody can open), and it is the sweep of story B1 that collects such a file. This listing does
+ * not hunt for it, deliberately: deletion by policy belongs in one place.</p>
  *
  * <h2>Missing is not unreadable</h2>
  *
@@ -92,14 +103,23 @@ import { claimRevision } from './chatStoreLock';
  * `reason` says why; the next read regenerates it. <b>`refused`</b> is not a failure: another window
  * is in this conversation, or deleted it (`diskRev` 0), and the caller keeps its transcript and
  * re-mints under a new id (story A3). <b>`incompatible`</b> means a file this build cannot read sits
- * at this id; nothing was written. <b>`failed`</b> is a disk that would not answer. Every `reason` is
- * a short person-facing sentence naming the fault and never the path.</p>
+ * at this id; nothing was written. <b>`failed`</b> is a disk that would not answer, or a call this
+ * half could not act on — an invalid baseline included. Every `reason` is a short person-facing
+ * sentence naming the fault and never the path.</p>
  */
 export type SaveOutcome =
   | { readonly kind: 'ok'; readonly rev: number }
   | { readonly kind: 'partial'; readonly rev: number; readonly reason: string }
   | { readonly kind: 'refused'; readonly diskRev: number }
   | { readonly kind: 'incompatible'; readonly reason: string }
+  | { readonly kind: 'failed'; readonly reason: string };
+
+/**
+ * What a delete did. `ok` is both files gone — or never there; `failed` is a conversation still on
+ * disk, in whole or in part, which the migration and the sweep must be able to tell from a deletion.
+ */
+export type ForgetOutcome =
+  | { readonly kind: 'ok' }
   | { readonly kind: 'failed'; readonly reason: string };
 
 /**
@@ -129,6 +149,21 @@ type Probe =
   | { readonly kind: 'incompatible' }
   | { readonly kind: 'unreadable'; readonly reason: string };
 
+/** A probe that came back with something a swap can be judged against. */
+type Present = Extract<Probe, { kind: 'absent' | 'record' }>;
+
+/**
+ * How many metadata files are read at once when the directory is listed.
+ *
+ * <p>Serially, the store's own projected size — thousands of files at ninety days — is thousands of
+ * awaits before the first row exists. All at once is a thundering herd of open descriptors against a
+ * directory another window may be writing. Eight is the width at which a listing is bounded by the
+ * disk rather than by the event loop, and it is a constant rather than a setting because nothing a
+ * person can observe would tell them which value to pick. Paging and the in-memory index are stories
+ * B1 and B2, not this.</p>
+ */
+const LIST_WIDTH = 8;
+
 /** The `code` off a Node filesystem error, or empty when there is none. Never its message: that carries the path. */
 const codeOf = (reason: unknown): string => {
   const code = (reason as { code?: unknown } | null)?.code;
@@ -157,6 +192,29 @@ function parsed(text: string): unknown {
 /** The sentence a person reads when a file this build cannot make sense of sits where a conversation should. */
 const INCOMPATIBLE = 'the conversation on disk is not one this build can read';
 
+/** Whether a baseline is one a swap can be judged against: a whole number, zero or more. Nothing is floored. */
+const isBaseline = (value: number): boolean => Number.isInteger(value) && value >= 0;
+
+/**
+ * Whether the disk is what the caller read — said explicitly for both kinds of baseline.
+ *
+ * <p>A baseline of zero is a CREATION and may meet only absence: anything present, whatever its
+ * revision, is a conflict. A baseline above zero is an UPDATE and must meet exactly the revision it
+ * read: nothing there means the conversation was deleted under it; another revision means it was
+ * replaced under it, and writing over either would splice two conversations into one file. The
+ * conflicting `diskRev` when there is one, `undefined` when the swap may proceed.</p>
+ */
+function conflictOf(seen: Present, base: number): number | undefined {
+  if (base === 0) {
+    return seen.kind === 'absent' ? undefined : seen.record.rev;
+  }
+  if (seen.kind === 'absent') {
+    return 0;
+  }
+
+  return seen.record.rev === base ? undefined : seen.record.rev;
+}
+
 /**
  * The I/O half of the conversation store, bound to ONE directory it is handed.
  *
@@ -181,18 +239,21 @@ export class ChatStoreFile {
   /**
    * Save one conversation, as a compare-and-swap against what is on disk.
    *
-   * <p><b>The new `rev` is `expectedRev + 1`.</b> `expectedRev` is the number the caller last read
-   * (undefined or 0 both mean "I have not read this record" — a first write, which lands at rev 1).
-   * Counting from what was READ rather than from the record's own `rev` field is deliberate: a first
-   * write then lands at 1 without the caller pre-incrementing, and the baseline the swap compares
-   * against and the number it writes are the same quantity. Because the swap demands EQUALITY with the
-   * disk, the new rev is always the disk's plus one — the count has no gaps.</p>
+   * <p><b>The new `rev` is `expectedRev + 1`.</b> `expectedRev` is the number the caller last read —
+   * REQUIRED, and zero means "I have not read this record": a first write, which lands at rev 1. It is
+   * required rather than defaulted because an update whose baseline the caller forgot to pass must not
+   * silently become a creation attempt; and a baseline that is negative, fractional or not a number is
+   * `failed` rather than floored, for the same reason. Counting from what was READ rather than from the
+   * record's own `rev` field is deliberate: a first write lands at 1 without the caller
+   * pre-incrementing, and the baseline the swap compares against and the number it writes are the same
+   * quantity. Because the swap demands EQUALITY with the disk, the new rev is always the disk's plus one
+   * — the count has no gaps.</p>
    *
-   * <p><b>The order under the claim.</b> Claim `<id>.<newRev>.lock`; a held claim is another window
-   * performing this exact transition, and is `refused`. Then probe the disk: a record at a different
-   * rev, or none at all under a baseline above zero, is `refused`; a file this build cannot read is
-   * `incompatible`; a disk that will not answer is `failed`. Then the record, then the metadata, then
-   * the lock is released in a `finally` — a lock must never outlive a failed save.</p>
+   * <p><b>The order under the claim.</b> Claim `<id>.lock`; a claim still held after the lock's own
+   * wait is another window mutating this conversation, and is `refused`. Then probe the disk and judge
+   * it with {@link conflictOf}; a file this build cannot read is `incompatible`; a disk that will not
+   * answer is `failed`. Then the record, then the metadata, then the lock is released in a `finally` —
+   * a lock must never outlive a failed save.</p>
    *
    * <p>The store stamps ONE field — `rev`, its own protocol number. Everything else, `updatedAt` and
    * `closedAt` included, is the caller's to set before it calls here; a decision about what a record
@@ -200,20 +261,22 @@ export class ChatStoreFile {
    *
    * @param now the clock, an argument so a test can pin it; it dates the lock and ages a rival's.
    */
-  public async save(record: ConversationRecord, expectedRev = 0, now = Date.now()): Promise<SaveOutcome> {
+  public async save(record: ConversationRecord, expectedRev: number, now = Date.now()): Promise<SaveOutcome> {
     if (!isSafeId(record.id)) {
       return { kind: 'failed', reason: 'a conversation id that cannot be a filename' };
     }
-    const base = expectedRev > 0 ? Math.floor(expectedRev) : 0;
-    const claim = await claimRevision(this.dir, record.id, base + 1, now);
+    if (!isBaseline(expectedRev)) {
+      return { kind: 'failed', reason: 'a save was asked against a baseline that is not a whole number of zero or more' };
+    }
+    const claim = await claimConversation(this.dir, record.id, `save ${expectedRev + 1}`, now);
     if (claim.kind === 'failed') {
       return { kind: 'failed', reason: claim.reason };
     }
     if (claim.kind === 'held') {
-      return { kind: 'refused', diskRev: await this.revSeen(record.id, base) };
+      return { kind: 'refused', diskRev: await this.revSeen(record.id, expectedRev) };
     }
     try {
-      return await this.saveClaimed({ ...record, rev: base + 1 }, base);
+      return await this.saveClaimed({ ...record, rev: expectedRev + 1 }, expectedRev);
     } finally {
       await claim.release();
     }
@@ -228,12 +291,9 @@ export class ChatStoreFile {
     if (seen.kind === 'incompatible') {
       return { kind: 'incompatible', reason: INCOMPATIBLE };
     }
-    const diskRev = seen.kind === 'record' ? seen.record.rev : 0;
-    if (diskRev !== base) {
-      // Higher: another window has taken turns since this one read. Lower, or absent under a baseline
-      // above zero: the record this window read was deleted or replaced under it, and writing would
-      // resurrect or overwrite what somebody else did on purpose. Either way, not this window's to write.
-      return { kind: 'refused', diskRev };
+    const conflict = conflictOf(seen, base);
+    if (conflict !== undefined) {
+      return { kind: 'refused', diskRev: conflict };
     }
     try {
       await writeFileAtomically(this.recordPath(written.id), JSON.stringify(written));
@@ -290,9 +350,10 @@ export class ChatStoreFile {
    * Write the metadata, from the record and nothing else. Returns the fault, or empty when it landed.
    *
    * <p>{@link metaOf} is the ONLY source of a metadata file, so the two can never describe different
-   * things. A write that fails is reported to the caller as the `partial` half of a save, and to the
-   * console with the path; it is not thrown, because the record has already landed and the reader
-   * regenerates the index from it whenever they disagree.</p>
+   * things. A write that fails is said on the console WITH ITS PATH here, once, and handed back as a
+   * sentence — the `partial` half of a save, or nothing more than the log for a reconciliation, whose
+   * caller asked for the record and already has it. It is not thrown, because the record has already
+   * landed and the reader regenerates the index from it whenever they disagree.</p>
    */
   private async writeMeta(record: ConversationRecord): Promise<string> {
     const path = this.metaPath(record.id);
@@ -317,11 +378,13 @@ export class ChatStoreFile {
    * reads as a conversation the person recognises with pieces missing, which is worse than one that
    * is not there.</p>
    *
-   * <p>The metadata is regenerated when it is missing, torn, or stale — the record is the truth, and
-   * the index is brought back into step with it here so a picker built afterwards is not looking at
-   * the turn before.</p>
+   * <p>The record returned is the one this read saw. If the reconciliation under the lock finds the
+   * disk has moved on, the caller still gets what it read — its next save is then refused by the swap,
+   * which is the honest answer and the one story A3 already handles.</p>
+   *
+   * @param now the clock, for the lock the reconciliation may take; a test pins it.
    */
-  public async read(id: string): Promise<ConversationRecord | undefined> {
+  public async read(id: string, now = Date.now()): Promise<ConversationRecord | undefined> {
     if (!isSafeId(id)) {
       return undefined;
     }
@@ -329,25 +392,57 @@ export class ChatStoreFile {
     if (seen.kind !== 'record') {
       return undefined;
     }
-    await this.reconcileMeta(seen.record);
+    await this.reconcileMeta(seen.record, now);
 
     return seen.record;
   }
 
-  /** Bring the metadata back into step with its record, best-effort: a read still hands back the record. */
-  private async reconcileMeta(record: ConversationRecord): Promise<void> {
+  /**
+   * Bring the metadata back into step with its record — under the lock, and against the disk as it is
+   * THEN, not as it was when the record was read.
+   *
+   * <p>Two races, both found on the second round. A `forget` that has just unlinked the metadata would
+   * have its deletion undone by a reader regenerating the row; and a read that captured revision 1
+   * while another window committed revision 2 would write a revision-1 index beside a revision-2
+   * transcript. So the index is written only with the conversation's lock held, and only if a re-probe
+   * under it finds the same revision this reconciliation started from — absent means forgotten under
+   * us, another revision means that writer owns the index now, and a lock still held after the wait
+   * means a mutation is in flight and will leave the index it means to. Best-effort throughout: a read
+   * hands back the record whatever this comes to, and a write that fails is logged with its path by
+   * {@link writeMeta}, which is why its returned sentence is not read here.</p>
+   */
+  private async reconcileMeta(record: ConversationRecord, now: number): Promise<void> {
     const meta = await this.readMeta(record.id);
     if (meta !== undefined && !isStale(meta, record)) {
       return;
     }
-    await this.writeMeta(record);
+    const claim = await claimConversation(this.dir, record.id, `reconcile ${record.rev}`, now);
+    if (claim.kind !== 'claimed') {
+      return;
+    }
+    try {
+      const again = await this.probe(record.id);
+      if (again.kind === 'record' && again.record.rev === record.rev) {
+        await this.writeMeta(again.record);
+      }
+    } finally {
+      await claim.release();
+    }
   }
 
-  /** One metadata file back, or nothing. Unreadable is said out loud with its path; missing and torn are silent nothings. */
+  /**
+   * One metadata file back, or nothing.
+   *
+   * <p>Missing is a silent nothing. Unreadable is said with its path. And a file that is THERE but torn
+   * or not of a shape this build knows is said with its path too, before it reads as nothing: the
+   * reconciliation will then write over it as if it had merely been absent, and a torn index is a fact
+   * somebody debugging wants to have seen. (The second round, accepted.)</p>
+   */
   private async readMeta(id: string): Promise<ConversationMeta | undefined> {
     const path = this.metaPath(id);
+    let text: string;
     try {
-      return metaFrom(parsed(await readFile(path, 'utf8')));
+      text = await readFile(path, 'utf8');
     } catch (reason) {
       if (codeOf(reason) !== 'ENOENT') {
         console.error(`ConnectOtherAIs: a conversation index entry could not be read: ${path}`, reason);
@@ -355,34 +450,62 @@ export class ChatStoreFile {
 
       return undefined;
     }
+    const meta = metaFrom(parsed(text));
+    if (meta === undefined) {
+      console.error(`ConnectOtherAIs: a conversation index entry is torn or not one this build can read: ${path}`);
+    }
+
+    return meta;
   }
 
   /**
-   * Delete both files — metadata FIRST, then the record.
+   * Delete both files — metadata FIRST, then the record — under the conversation's lock.
    *
    * <p>The reverse of a save's order, and deliberate. A crash between the two deletes then leaves a
    * record with no metadata: a file nobody can SEE, because the picker lists metadata only, which the
-   * sweep of story B1 collects later. The other order would leave metadata with no record — a row that
-   * opens onto nothing, which is the one outcome a person actually meets. So if the metadata delete
-   * FAILS, the record is left in place too: a row that still opens is what remains, never a broken
-   * one. This is also the one built-in way to clear an `incompatible` file at an id.</p>
+   * sweep of story B1 collects later (see the header). The other order would leave metadata with no
+   * record — a row that opens onto nothing, which is the one outcome a person actually meets. So if
+   * the metadata delete FAILS, the record is left in place too and the outcome is `failed`: a row that
+   * still opens is what remains, never a broken one. A conversation that is being written by another
+   * window is `failed` as well, with a reason that says so, for the migration and the sweep to retry.
+   * This is also the one built-in way to clear an `incompatible` file at an id.</p>
    */
-  public async forget(id: string): Promise<void> {
+  public async forget(id: string, now = Date.now()): Promise<ForgetOutcome> {
     if (!isSafeId(id)) {
-      return;
+      return { kind: 'failed', reason: 'a conversation id that cannot be a filename' };
     }
+    const claim = await claimConversation(this.dir, id, 'forget', now);
+    if (claim.kind === 'failed') {
+      return { kind: 'failed', reason: claim.reason };
+    }
+    if (claim.kind === 'held') {
+      return { kind: 'failed', reason: 'the conversation is being changed by another window' };
+    }
+    try {
+      return await this.forgetClaimed(id);
+    } finally {
+      await claim.release();
+    }
+  }
+
+  /** The two deletes, in their order, with the claim held. */
+  private async forgetClaimed(id: string): Promise<ForgetOutcome> {
     try {
       await rm(this.metaPath(id), { force: true });
     } catch (reason) {
       console.error(`ConnectOtherAIs: a conversation index entry could not be deleted: ${this.metaPath(id)}`, reason);
 
-      return;
+      return { kind: 'failed', reason: withCode('the conversation could not be deleted', codeOf(reason)) };
     }
     try {
       await rm(this.recordPath(id), { force: true });
     } catch (reason) {
       console.error(`ConnectOtherAIs: a conversation transcript could not be deleted after its index entry: ${this.recordPath(id)}`, reason);
+
+      return { kind: 'failed', reason: withCode('the conversation was removed from the list but its transcript could not be deleted', codeOf(reason)) };
     }
+
+    return { kind: 'ok' };
   }
 
   /**
@@ -392,7 +515,8 @@ export class ChatStoreFile {
    * a `<id>.meta.json` with a safe id, so a `<id>.json`, an interrupted `.tmp` write, a `.lock` and a
    * stray `notes.txt` are all skipped before a byte is read. An unreadable or torn entry is dropped
    * rather than allowed to fail the whole listing — one corrupt index file must not empty a person's
-   * picker. A directory that cannot be read lists as empty here; {@link state} is what tells a caller
+   * picker. The files are read {@link LIST_WIDTH} at a time, in directory order, and come back in that
+   * order. A directory that cannot be read lists as empty here; {@link state} is what tells a caller
    * that empty means "unavailable" rather than "nothing", which is the distinction it must check
    * first. A transcript with no metadata beside it is invisible here BY DESIGN and is the sweep's to
    * reclaim, not this listing's to hunt for.</p>
@@ -408,19 +532,19 @@ export class ChatStoreFile {
 
       return [];
     }
-    const metas: ConversationMeta[] = [];
-    for (const name of names) {
-      const id = idOfMeta(name);
-      if (id.length === 0) {
-        continue;
+    const ids = names.map(idOfMeta).filter((id) => id.length > 0);
+    const found: (ConversationMeta | undefined)[] = new Array<ConversationMeta | undefined>(ids.length);
+    let next = 0;
+    const worker = async (): Promise<void> => {
+      while (next < ids.length) {
+        const at = next;
+        next += 1;
+        found[at] = await this.readListed(ids[at] as string);
       }
-      const meta = await this.readListed(id);
-      if (meta !== undefined) {
-        metas.push(meta);
-      }
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(LIST_WIDTH, ids.length) }, worker));
 
-    return metas;
+    return found.filter((meta): meta is ConversationMeta => meta !== undefined);
   }
 
   /** One listed entry, dropped when it is torn, unreadable, or names an id its filename does not. */
