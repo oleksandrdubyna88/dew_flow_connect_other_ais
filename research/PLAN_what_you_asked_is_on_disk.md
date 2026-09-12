@@ -198,6 +198,23 @@ title MOVES — Claude Code refines it and the tab follows — so a name capture
 by the afternoon. The file does not move. `pinSession` resolves it in the background as the tab
 opens and keeps it; only ever when exactly one session across every root matches.
 
+**And then the operator ran it.** Three defects survived two gate rounds, fifteen reviewers and
+CodeRabbit, and every one of them needed a real machine to show itself.
+
+The deciding one was visible in the refusal on the very first screenshot and was read past three
+times: *No session on this machine is called "Подключение к scoreMeter…"* — the ellipsis was the
+answer, and it was quoted back in the complaint. **When a refusal quotes data, read the data first.**
+
+The other two: a window with no folder open was sent to read every project on the machine, which was
+worse than the bug it replaced; and `hidden` did nothing on the row of arrows, because
+`.askingHead { display: flex }` outranks the browser's own `[hidden] { display: none }` — the test
+asserted the PROPERTY on a stub and never the stylesheet, so it was green while two dead boxes sat on
+the operator's screen. That test reads the CSS now.
+
+A fourth thing, about how to ship a build for checking: two installs of `0.36.0` were
+indistinguishable in the UI and the operator had to ask which one they were running. A version per
+build from here.
+
 ## The open tail
 
 - The button finds nothing until Claude Code has NAMED the conversation — before the first `ai-title`

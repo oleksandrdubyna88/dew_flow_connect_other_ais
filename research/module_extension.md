@@ -1093,6 +1093,20 @@ where it was cut). The first version read each whole file into a string and spli
 lines to compare a title, and five reviewers across two vendors measured the same shape at 10× as
 seconds of a blocked extension host.
 
+**The tab wears a SHORTENED name.** Claude Code truncates the title it puts on its own panel and
+writes the whole of it to the session file: a tab reading *Подключение к scoreMeter…* belongs to a
+session called *Подключение к scoreMeter DB*. Comparing the two as written therefore matched short
+conversations and never long ones — `namesTheSame` reads a name ending in an ellipsis as a prefix
+and anything else exactly. Nothing else is loosened: a prefix fitting two sessions is the same
+refusal a whole name fitting two always was. Verified against every session on the machine it was
+found on — not one of 77 project directories holds a title with an ellipsis of its own, so an
+ellipsis here is always the tab's doing. `waitingIn` takes the same rule, since it had the same bug.
+
+**A window with NO FOLDER open looks in the home directory**, which is where a VS Code terminal with
+no folder starts and therefore where Claude Code ran. Reading every project on the machine instead
+was tried first and was worse than the bug it fixed: 77 directories and a gigabyte of transcript,
+read to compare titles, while the region sat on *Reading the session…*.
+
 **A tab pins its FILE, not the name that found it.** Claude Code refines a conversation's
 `ai-title` as it goes on and the tab follows it, so a name captured when the chat opened stops
 matching hours later — which is precisely the window this button exists for. `pinSession` resolves
