@@ -144,23 +144,33 @@ function noteFrom(text: string): LockNote | undefined {
 }
 
 /**
- * The lock as it is right now, or nothing when it is gone or will not be read.
+ * The lock as it is right now, or nothing when it is gone or will not even `stat`.
  *
  * <p>A lock opened by a reader in the instant between the exclusive create and the content landing
  * is empty; it is still a real, fresh lock, and the file's own time says so — so a torn note is aged
- * and signed by its `mtime`. A caller treats `undefined` as "not provably stale, and not mine".</p>
+ * and signed by its `mtime`. So is anything at the path that will not READ as a file at all — a
+ * directory somebody left there (`EISDIR`), a file this process may not open: it exists, it blocks the
+ * exclusive create, and it is aged by the one thing it will still answer, its `mtime`, so that it can
+ * be broken after the window rather than wedging the conversation for good. Only a path that is gone,
+ * or will not even `stat`, is `undefined` — "not provably stale, and not mine".</p>
  */
 async function seen(path: string): Promise<LockSeen | undefined> {
+  let note: LockNote | undefined;
   try {
-    const note = noteFrom(await readFile(path, 'utf8'));
-    if (note !== undefined) {
-      const at = Date.parse(note.at);
-
-      return { at: Number.isFinite(at) ? at : (await stat(path)).mtimeMs, signature: `token:${note.token}` };
+    note = noteFrom(await readFile(path, 'utf8'));
+  } catch (reason) {
+    if (codeOf(reason) === 'ENOENT') {
+      return undefined;
     }
+  }
+  const stamped = note === undefined ? Number.NaN : Date.parse(note.at);
+  if (note !== undefined && Number.isFinite(stamped)) {
+    return { at: stamped, signature: `token:${note.token}` };
+  }
+  try {
     const { mtimeMs } = await stat(path);
 
-    return { at: mtimeMs, signature: `mtime:${mtimeMs}` };
+    return { at: mtimeMs, signature: note === undefined ? `mtime:${mtimeMs}` : `token:${note.token}` };
   } catch {
     return undefined;
   }
@@ -188,6 +198,11 @@ async function tryCreate(path: string, note: LockNote): Promise<boolean> {
  * claim is not this side's to delete. The only safe error is to wait thirty seconds, never to unlink a
  * live writer. A removal that fails is the same answer — still held. The window that remains between
  * the re-read and the `rm` is the residual the header states.</p>
+ *
+ * <p>The removal is `recursive`, and the path is always `<id>.lock` and always ours to clear: nothing
+ * this module writes puts a directory there, but if anything ever does, a plain `rm` throws on it —
+ * and that throw would be read as "not stale", wedging the conversation for good instead of for
+ * thirty seconds. Defence, against a one-word cost. (The third round.)</p>
  */
 async function breakIfStale(path: string, now: number): Promise<boolean> {
   const aged = await seen(path);
@@ -199,7 +214,7 @@ async function breakIfStale(path: string, now: number): Promise<boolean> {
     return false;
   }
   try {
-    await rm(path, { force: true });
+    await rm(path, { force: true, recursive: true });
     console.error(`ConnectOtherAIs: a conversation lock older than ${LOCK_STALE_MS / 1000}s was broken: ${path}`);
 
     return true;
@@ -255,16 +270,27 @@ async function releaseOwn(path: string, token: string): Promise<void> {
  * failure is `failed` with a sentence a person can read (no path — that goes to the console, beside
  * it, for whoever is debugging several profiles).</p>
  *
- * @param now the clock, an argument so a test can pin it; it stamps the note AND ages a rival's lock.
+ * <p><b>The clock RUNS across the wait.</b> `now` is the instant the claim began, and a test pins it;
+ * but a rival's lock is aged against `now` plus the time that has really elapsed since, not against
+ * that frozen instant. Otherwise a lock taken 29.95 seconds before the claim — genuinely stale by the
+ * end of the wait — would still read as fresh on every attempt, the claim would report `held`, and the
+ * caller would re-mint a conversation as a copy for no reason. (gemini, the third round.) Real elapsed
+ * time rather than the nominal pauses, because a scheduler that runs late ages a lock further, never
+ * less.</p>
+ *
+ * @param now the clock's reading when the claim began, an argument so a test can pin it; it stamps
+ *   the note, and anchors the running clock the wait ages a rival's lock against.
  */
 export async function claimConversation(dir: string, id: string, doing: string, now = Date.now()): Promise<Claim> {
   const path = join(dir, lockName(id));
   claimSequence += 1;
   const note: LockNote = { pid: process.pid, at: new Date(now).toISOString(), token: `${process.pid}:${claimSequence}`, doing };
+  const began = Date.now();
+  const clock = (): number => now + (Date.now() - began);
   try {
     await mkdir(dir, { recursive: true });
     for (let attempt = 1; ; attempt += 1) {
-      if (await tryCreate(path, note) || (await breakIfStale(path, now) && await tryCreate(path, note))) {
+      if (await tryCreate(path, note) || (await breakIfStale(path, clock()) && await tryCreate(path, note))) {
         return { kind: 'claimed', release: () => releaseOwn(path, note.token) };
       }
       if (attempt >= HELD_TRIES) {
