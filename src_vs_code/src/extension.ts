@@ -8,12 +8,14 @@ import { ChatPanels } from './chatPanels';
 import {
   chatReadsThisSide,
   chatWithOtherAi,
+  keepChatsIn,
   noteChatDoor,
   rememberChatsIn,
   restoreConversation,
   takeTheQuestion,
 } from './chatCommand';
 import { ChatTabMemory } from './chatTabs';
+import { ChatStoreFile, conversationsDir } from './chatStoreFile';
 import { openLedger, reconcile } from './chatOrphans';
 import { coaiDataDir } from './dataDir';
 import { installFailureHint, SingleFlight } from './coaiInstall';
@@ -142,6 +144,11 @@ export function activate(context: vscode.ExtensionContext): void {
   // one window's conversations to another is the namesake defect wearing a different hat.
   const chatTabMemory = new ChatTabMemory(context.workspaceState);
   rememberChatsIn(chatTabMemory);
+  // AND the store on disk, written beside the memento and read by nothing yet. Story A4 is what
+  // makes it the source of truth; it can only do that against a store that has been filling while
+  // the memento was still in charge, which is what this line starts. It lives beside the two chat
+  // ledgers, under the same data directory the MCP server uses.
+  keepChatsIn(new ChatStoreFile(conversationsDir(coaiDataDir())));
   // A record is kept when a tab CLOSES as well as when it is reloaded, because a disposal cannot tell
   // the two apart — VS Code disposes every panel on reload too, and deleting on disposal would erase
   // the transcript at exactly the moment it is needed. A closed tab is simply never restored: VS Code
