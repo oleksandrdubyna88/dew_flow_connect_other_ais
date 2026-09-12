@@ -371,16 +371,16 @@ public sealed partial class PanelService
                     "context for review: plan {PlanBytes} bytes; no diff and no rules at this stage",
                     System.Text.Encoding.UTF8.GetByteCount(planText));
 
-                // A plan round skips no role: it has one, and there is nothing for a rule file to
-                // decide about it.
-                return Task.FromResult(new RoundWork(
+                // A plan round skips no role for a RULE's sake: it has one, and there is nothing for
+                // a rule file to decide about it. What BuildWork itself could not ask — a role
+                // whose prompt has no text — travels on the work it returns.
+                return Task.FromResult(WithNothingSkippedByRule(
                     BuildWork([RoleCatalog.PlanRole], workingDir, $"## The plan under review\n\n{planText}",
                         session.State.RoundsRunThisStage + 1,
                         isPlanStage: true,
                         seed: StableSeed(session.State.SessionId, session.State.RoundsRunThisStage + 1),
                         planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session) : null,
-                        deal: _settings.DealPlanLenses),
-                    []));
+                        deal: _settings.DealPlanLenses)));
             }),
             ct);
 
@@ -512,7 +512,7 @@ public sealed partial class PanelService
                         round, NoWrittenRules, string.Join(", ", RuleFiles.SourceNames));
                 }
                 _log.Information("round {Round} runs {Count} role(s): {Roles}", round, roles.Count, string.Join(", ", roles));
-                return new RoundWork(
+                return WithSkippedByRule(
                     BuildWork(roles, workingDir, context, round, isPlanStage: false,
                         seed: StableSeed(session.State.SessionId, round),
                         deal: _settings.DealCodeLenses),
@@ -687,7 +687,11 @@ public sealed partial class PanelService
             var subject = RoundSubject.From(planText, File.Exists);
             var live = new LiveRound(_store, session, work, subject);
             var audit = new RoundAudit(_log, session.State.Stage.ToString(), session.State.RoundsRunThisStage + 1);
-            var excluded = ExcludedFrom(stage.IsPlanStage);
+            // Two kinds of exclusion, one list: a vendor this round cannot run AT ALL — no adapter,
+            // no credential — and a vendor that cannot run one particular ROLE, which is what a Team
+            // server does with a role a person defined. The second is only discovered while the work
+            // is built, which is why it travels back on it.
+            var excluded = (IReadOnlyList<string>)[.. ExcludedFrom(stage.IsPlanStage), .. roundWork.Excluded];
             audit.Opening(work, workingDir, _settings.ReviewerTimeout, excluded);
             // The ROUND's own deadline, derived from its shape unless somebody set one. A reviewer
             // is bounded; a round was not, and the round is what a person watches — so a round could
@@ -952,6 +956,26 @@ public sealed partial class PanelService
         _settings.Providers.FirstOrDefault(p => p.Provider == provider)?.Model ?? string.Empty;
 
     /// <summary>
+    /// A round's work with the roles a RULE decided not to ask for added to the ones the build
+    /// itself could not.
+    /// </summary>
+    /// <remarks>
+    /// Two different reasons a role is absent, from two different places: the conventions pass is
+    /// dropped because the repository wrote no rules, and a role a person added is dropped because
+    /// its prompt has no text. Both reach the caller through one list, and neither is allowed to
+    /// overwrite the other — which is what a plain `new RoundWork(work, notAsked)` was doing.
+    /// </remarks>
+    private static RoundWork WithSkippedByRule(RoundWork built, IReadOnlyList<SkippedRole> byRule) =>
+        built with { NotAsked = [.. byRule, .. built.NotAsked] };
+
+    /// <summary>The same, for a stage where no rule skips anything.</summary>
+    private static RoundWork WithNothingSkippedByRule(RoundWork built) => built;
+
+    /// <summary>Whether a vendor's reviews are run by somebody else's server.</summary>
+    private static bool Remote(ProviderSettings provider) =>
+        string.Equals(provider.Runtime, "remote", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// The prompt this round of this role gets — from the session's CATALOG, not from the compiled
     /// list this product used to have.
     /// </summary>
@@ -1023,7 +1047,7 @@ public sealed partial class PanelService
     /// <para>With ONE vendor the deal is the identity, and this is exactly what it always was.</para>
     /// </remarks>
     /// <remarks>Internal so a test can read the working directory a reviewer is actually given.</remarks>
-    internal IReadOnlyList<ReviewerWork> BuildWork(
+    internal RoundWork BuildWork(
         IReadOnlyList<string> roles,
         string worktreePath,
         string context,
@@ -1090,7 +1114,7 @@ public sealed partial class PanelService
         var eligible = _settings.Providers.Where(p => p.Serves(isPlanStage)).Where(CanRun).ToList();
         if (eligible.Count == 0)
         {
-            return [];
+            return new RoundWork([], []);
         }
 
         // The ORDER the vendors are offered in, which is not a detail once a Team server is in the
@@ -1117,9 +1141,21 @@ public sealed partial class PanelService
 
         var items = Items(roles, round, planPrompts);
         var work = new List<ReviewerWork>();
+        var notAsked = new List<SkippedRole>();
+        var excluded = new List<string>();
         Assemble(runnable, items, deal, seed, Add);
 
-        return work;
+        return new RoundWork(work, notAsked, excluded);
+
+        // One sentence per ROLE however many vendors would have carried it: a person reading a round
+        // needs to know the role did not run, not that four vendors each did not run it.
+        void Skip(string role, string reason)
+        {
+            if (!notAsked.Any(s => s.Role == role))
+            {
+                notAsked.Add(new SkippedRole(role, reason));
+            }
+        }
 
         void Add(ProviderSettings provider, string role, string promptId)
         {
@@ -1127,6 +1163,29 @@ public sealed partial class PanelService
             var choice = catalog.PromptById(promptId) ?? catalog.UniversalFor(role);
             if (RuntimeFor(provider) is not { } runtime)
             {
+                return;
+            }
+
+            // A role a person defined cannot be sent to a Team server: that server validates the
+            // name against the catalog IT was compiled with, so the request comes back a 400 naming
+            // roles the person never asked for. Said here, before the launch, rather than read out
+            // of a refusal afterwards — and said per (vendor, role), because the same vendor runs
+            // the shipped roles perfectly well. Widening the server is plan 3 of this feature.
+            if (Remote(provider) && !choice.BuiltIn)
+            {
+                excluded.Add(
+                    $"{provider.Provider}: '{catalog.ById(role)?.Name ?? role}' is a role this Team "
+                    + "server does not know — it accepts the five this product ships");
+                return;
+            }
+
+            // A prompt with no text at all: a role somebody added and never wrote the prompt for.
+            // The round runs without it and SAYS so, because a reviewer that silently does not run
+            // is a round that reviewed less than it reported. The shipped prompts cannot reach this
+            // — their text is embedded in the binary.
+            if (!_prompts.Has(choice))
+            {
+                Skip(role, $"its prompt '{choice.Id}' has no text at {Path.Combine(_settings.DataDir, "prompts")} and none is shipped");
                 return;
             }
 
@@ -1734,10 +1793,23 @@ public sealed partial class PanelService
 /// is written where the round ends, and nothing carried the fact across the gap before — which is
 /// how a dropped role reached the server's log and never the caller.
 /// </remarks>
+/// <param name="Excluded">
+/// Vendors this round could not give a particular role to, each as <c>name: reason</c> — the same
+/// shape and the same list a vendor excluded for its own sake goes into. It exists because the
+/// exclusion is discovered while the work is BUILT rather than before it: a Team server accepts the
+/// roles it was compiled with, so a role a person defined is refused per (vendor, role) and not per
+/// vendor.
+/// </param>
 internal sealed record RoundWork(
     IReadOnlyList<ReviewerWork> Reviewers,
-    IReadOnlyList<SkippedRole> NotAsked)
-;
+    IReadOnlyList<SkippedRole> NotAsked,
+    IReadOnlyList<string> Excluded)
+{
+    public RoundWork(IReadOnlyList<ReviewerWork> reviewers, IReadOnlyList<SkippedRole> notAsked)
+        : this(reviewers, notAsked, [])
+    {
+    }
+}
 
 internal sealed record StageRun(
     Func<SessionState, Transition> Begin,

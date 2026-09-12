@@ -37,6 +37,18 @@ public sealed class RolePrompts(string dataDir)
     public string ForChoice(PromptChoice choice) => Text(choice.Id);
 
     /// <summary>
+    /// Whether this prompt has any text at all — an override on disk, or a shipped default.
+    /// </summary>
+    /// <remarks>
+    /// Only a prompt a PERSON added can answer false: a shipped one's text is embedded in the
+    /// binary, and a build missing one is a broken build that <see cref="Embedded"/> refuses loudly.
+    /// It is a question rather than a nullable read because the caller's answer is a sentence — the
+    /// round says which role it could not ask and why — not a fallback.
+    /// </remarks>
+    public bool Has(PromptChoice choice) =>
+        choice.BuiltIn || File.Exists(Path.Combine(OverrideDir, FileOf(choice.Id)));
+
+    /// <summary>
     /// One prompt's text: the override file if there is one, else what the binary ships.
     /// </summary>
     /// <remarks>

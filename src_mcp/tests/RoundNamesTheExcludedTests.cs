@@ -127,7 +127,7 @@ public class RoundNamesTheExcludedTests
         var worktree = Path.Combine(Path.GetTempPath(), $"coai-wt-{Guid.NewGuid():N}");
         Directory.CreateDirectory(worktree);
 
-        var asked = service.BuildWork([RoleCatalog.PlanRole], worktree, "ctx", round: 1, isPlanStage: true)
+        var asked = service.BuildWork([RoleCatalog.PlanRole], worktree, "ctx", round: 1, isPlanStage: true).Reviewers
             .Select(w => w.Invocation.Provider).Distinct().ToList();
         var excluded = service.ExcludedFrom(isPlanStage: true).Select(e => e.Split(':')[0]).ToList();
 
