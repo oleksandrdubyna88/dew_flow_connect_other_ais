@@ -22,13 +22,16 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class BuiltinRoleCatalogTests
 {
-    private sealed record SeedPrompt(string Id, string Label, string Purpose);
+    // Named for the FILE rather than for the seed types the core declares: those are visible here
+    // through InternalsVisibleTo, and two `SeedRole`s in one file is a question nobody should have
+    // to answer while reading an assertion.
+    private sealed record FilePrompt(string Id, string Label, string Purpose);
 
-    private sealed record SeedRole(string Id, string Name, string Stage, bool ProgrammingTask, SeedPrompt[] Prompts);
+    private sealed record FileRole(string Id, string Name, string Stage, bool ProgrammingTask, IReadOnlyList<FilePrompt> Prompts);
 
-    private static readonly SeedRole[] Seed = Load();
+    private static readonly IReadOnlyList<FileRole> Seed = Load();
 
-    private static SeedRole[] Load()
+    private static IReadOnlyList<FileRole> Load()
     {
         // tests/bin/<cfg>/net10.0 → the repository root, then the shared folder both sides read.
         var path = Path.GetFullPath(Path.Combine(
@@ -37,12 +40,12 @@ public sealed class BuiltinRoleCatalogTests
         using var file = File.OpenRead(path);
         using var parsed = JsonDocument.Parse(file);
 
-        return [.. parsed.RootElement.GetProperty("roles").EnumerateArray().Select(r => new SeedRole(
+        return [.. parsed.RootElement.GetProperty("roles").EnumerateArray().Select(r => new FileRole(
             r.GetProperty("id").GetString() ?? "",
             r.GetProperty("name").GetString() ?? "",
             r.GetProperty("stage").GetString() ?? "",
             r.GetProperty("programmingTask").GetBoolean(),
-            [.. r.GetProperty("prompts").EnumerateArray().Select(p => new SeedPrompt(
+            [.. r.GetProperty("prompts").EnumerateArray().Select(p => new FilePrompt(
                 p.GetProperty("id").GetString() ?? "",
                 p.GetProperty("label").GetString() ?? "",
                 p.GetProperty("purpose").GetString() ?? ""))]))];
@@ -152,5 +155,93 @@ public sealed class BuiltinRoleCatalogTests
     {
         RoleCatalog.Builtin.ById("architecture")!.Id.Should().Be(RoleCatalog.ArchitectureRole);
         RoleCatalog.Builtin.ById("no-such-role").Should().BeNull();
+    }
+
+    [Fact]
+    public void AnInactiveRole_IsInTheCatalog_AndInNoRound()
+    {
+        // `Active` is documented as "the role takes part at all; off is still in the catalog", and
+        // a member that ignores it would schedule a reviewer the operator switched off. The panel's
+        // own switch is a different key (`COAI_ENABLED_*` → `RoleGate.Enabled`); this one is the
+        // catalog's, and the round must honour both. Raised by two reviewers on A1's code round.
+        var off = RoleCatalog.Builtin.Roles.Single(r => r.Id == RoleCatalog.ArchitectureRole) with { Active = false };
+        var catalog = RoleCatalog.From([.. RoleCatalog.Builtin.Roles.Select(r => r.Id == off.Id ? off : r)]);
+
+        catalog.ById(RoleCatalog.ArchitectureRole).Should().NotBeNull("an inactive role is still catalogued");
+        catalog.RolesOf(RoleStages.Result).Should().NotContain(RoleCatalog.ArchitectureRole)
+            .And.Contain(RoleCatalog.ConventionsRole, "the roles left on are untouched");
+    }
+
+    /// <summary>
+    /// A seed this binary cannot trust is a broken BUILD, and it says so loudly.
+    /// </summary>
+    /// <remarks>
+    /// <para>The seed is embedded in the assembly and shipped by us, so every case here is a
+    /// release that should never have been cut — the one class of failure doctrine 5 still lets
+    /// throw. What a PERSON writes into <c>COAI_ROLES</c> is the opposite case and never reaches
+    /// here: story A2's composition answers it with a dropped row and a sentence.</para>
+    /// <para>Written against a hand-built seed rather than by corrupting the embedded file,
+    /// because the validation is the unit under test and the resource is not reachable from a
+    /// test without rebuilding the assembly.</para>
+    /// </remarks>
+    public sealed class ABrokenSeed
+    {
+        // A prompt of its own per role, because prompt ids are unique across the WHOLE catalog —
+        // a shared default here made the well-formed case fail on the rule it was meant to pass.
+        private static SeedPrompt PromptFor(string roleId) =>
+            new($"{roleId.ToLowerInvariant()}-general", "General", "What it is for.");
+
+        private static SeedRole Role(string id, params SeedPrompt[] prompts) =>
+            new(id, id, RoleStages.Result, ProgrammingTask: true, prompts.Length == 0 ? [PromptFor(id)] : prompts);
+
+        private static Action Loading(params SeedRole[] roles) =>
+            () => RoleCatalog.FromSeed(new RoleSeed(roles));
+
+        [Fact]
+        public void WithNoRolesAtAll_IsRefused_RatherThanRunningNoReviewers() =>
+            Loading().Should().Throw<InvalidOperationException>()
+                .WithMessage("*no roles*",
+                    "a catalog of nothing disables every round, and a silent one would look like a quiet afternoon");
+
+        [Fact]
+        public void WithTwoRolesOfOneId_IsRefused_NamingTheId() =>
+            Loading(Role("Architecture"), Role("architecture"))
+                .Should().Throw<InvalidOperationException>().WithMessage("*architecture*",
+                    "ById matches case-insensitively, so two spellings of one id make the round's role a coin toss");
+
+        [Fact]
+        public void WithOnePromptIdUnderTwoRoles_IsRefused_NamingThePrompt() =>
+            Loading(
+                    Role("Alpha", new SeedPrompt("shared-id", "A", "")),
+                    Role("Beta", new SeedPrompt("shared-id", "B", "")))
+                .Should().Throw<InvalidOperationException>().WithMessage("*shared-id*",
+                    "a prompt id is a file name under <dataDir>/prompts/, so two roles sharing one would read one text");
+
+        [Fact]
+        public void WithARoleThatHasNoPrompts_IsRefused_NamingTheRole() =>
+            Loading(new SeedRole("Empty", "Empty", RoleStages.Result, true, []))
+                .Should().Throw<InvalidOperationException>().WithMessage("*Empty*",
+                    "a role's first prompt is its general one, and a role without one has no question to ask");
+
+        [Fact]
+        public void WithANullPromptList_IsRefused_RatherThanThrowingAtTheFirstRound() =>
+            Loading(new SeedRole("Null", "Null", RoleStages.Result, true, null!))
+                .Should().Throw<InvalidOperationException>().WithMessage("*Null*");
+
+        [Fact]
+        public void WithAnUnknownStage_IsRefused_NamingIt() =>
+            Loading(new SeedRole("Odd", "Odd", "sometime", true, [PromptFor("Odd")]))
+                .Should().Throw<InvalidOperationException>().WithMessage("*sometime*",
+                    "a stage this build does not know puts the role in no round and says nothing");
+
+        [Fact]
+        public void ThatIsWellFormed_LoadsAndMarksEverythingShipped()
+        {
+            var catalog = RoleCatalog.FromSeed(new RoleSeed([Role("Alpha"), Role("Beta")]));
+
+            catalog.Roles.Select(r => r.Id).Should().Equal("Alpha", "Beta");
+            catalog.Roles.Should().OnlyContain(r => r.BuiltIn && r.Active);
+            catalog.Dropped.Should().BeEmpty("a seed is refused whole or accepted whole — dropping is A2's verb");
+        }
     }
 }

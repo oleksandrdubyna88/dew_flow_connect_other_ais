@@ -46,20 +46,28 @@ gate to check a CV against their own rules cannot be served by any of that witho
 halves.
 
 So the built-in catalog is **one file, `shared/builtin-roles.json`**, owned by neither container:
-this assembly embeds it (`CoaiMcp.Core.csproj`) and loads it once as `RoleCatalog.Builtin`; the
-extension generates its copy from the same file. Each half asserts its own LOADER against the file
-— `BuiltinRoleCatalogTests` here, `builtinRoleCatalog.test.ts` there — rather than against the other
-half's source, which is the same shape as `shared/team-server-url-vectors.json` and for the same
-reason: two self-consistent implementations cannot notice that they disagree.
+this assembly embeds it (`CoaiMcp.Core.csproj`) and loads it once as `RoleCatalog.Builtin`, and
+`BuiltinRoleCatalogTests` asserts the LOADER against the file rather than against any other
+implementation — the same shape as `shared/team-server-url-vectors.json` and for the same reason:
+two self-consistent implementations cannot notice that they disagree. **The extension still carries
+its own hand-typed mirror** (`prompts.ts`) and still has the regex-over-C# test holding the two
+level; generating that copy from this seed is a later story of the same plan, and until it lands
+this paragraph describes one half, not both.
 
-Three properties are worth knowing before touching it:
+Four properties are worth knowing before touching it:
 
 - **A role's first prompt is its general one.** `Universal` used to be a flag that a test had to
   check was set exactly once per role; it is now a position, so the invariant holds by construction
   and `RoleDefinition.General` is `Prompts[0]`.
-- **`Prompts` is never empty** — the record throws on an empty list rather than letting `General`
-  become an `IndexOutOfRangeException` reached from a configuration file. Only the seed loader and
-  (from the next story) the composition construct one, and both validate first.
+- **`Prompts` is never empty in a catalogued role, and the RECORD does not enforce it.** Validation
+  lives in the construction paths — `FromSeed` for the shipped seed, `Compose` for a person's roles
+  — because the two must fail differently: a broken seed is a broken build and throws, while a role
+  somebody typed into `COAI_ROLES` has to become a dropped row with a sentence. A type that threw on
+  its way in would turn the second into an exception nobody can report.
+- **A bad seed is refused whole, loudly, at load.** No roles, a role with no prompts, an unknown
+  stage, two roles sharing an id case-insensitively, one prompt id under two roles — each throws
+  naming the file and the offender. All five are reachable only by shipping a bad binary, which is
+  why they are exceptions rather than values.
 - **Ids are permanent.** `COAI_ROUNDS_ARCHITECTURE`, `coai.rounds`, every session file and every
   `coai.db` row is keyed by the role id, so a rename in the seed is a migration and not an edit.
   `PromptChoice.BuiltIn` marks a prompt the binary ships a text for: it can be overridden and
