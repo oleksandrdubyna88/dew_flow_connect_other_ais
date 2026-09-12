@@ -40,13 +40,37 @@ public sealed class RolePrompts(string dataDir)
     /// Whether this prompt has any text at all — an override on disk, or a shipped default.
     /// </summary>
     /// <remarks>
-    /// Only a prompt a PERSON added can answer false: a shipped one's text is embedded in the
+    /// <para>Only a prompt a PERSON added can answer false: a shipped one's text is embedded in the
     /// binary, and a build missing one is a broken build that <see cref="Embedded"/> refuses loudly.
     /// It is a question rather than a nullable read because the caller's answer is a sentence — the
-    /// round says which role it could not ask and why — not a fallback.
+    /// round says which role it could not ask and why — not a fallback.</para>
+    /// <para><b>Text, not a file.</b> This asked <c>File.Exists</c>, which made an empty file a
+    /// prompt: somebody who creates the file before writing it — the ordinary order of doing that —
+    /// got a reviewer launched with nothing to review by, instead of the sentence saying their role
+    /// could not run. The predicate has to answer the same question the read does, or the round
+    /// promises text it will not have. (codex, three times on story B2's code round.)</para>
     /// </remarks>
-    public bool Has(PromptChoice choice) =>
-        choice.BuiltIn || File.Exists(Path.Combine(OverrideDir, FileOf(choice.Id)));
+    public bool Has(PromptChoice choice) => choice.BuiltIn || !string.IsNullOrWhiteSpace(Override(choice.Id));
+
+    /// <summary>The override file's text, or empty when there is no override.</summary>
+    /// <remarks>
+    /// Empty covers both "no file" and "a file that says nothing", which is what the callers mean by
+    /// it: the layer below is the shipped default, and nothing is nothing either way.
+    /// </remarks>
+    private string Override(string promptId)
+    {
+        var path = Path.Combine(OverrideDir, FileOf(promptId));
+
+        return File.Exists(path) ? File.ReadAllText(path) : string.Empty;
+    }
+
+    /// <summary>Where a person writes the text for a prompt this build does not ship.</summary>
+    /// <remarks>
+    /// The round names it when a role has no text, because the DIRECTORY leaves somebody guessing
+    /// both the file name and the extension — and the id is not always the file name, since it is
+    /// sanitised on the way. (gemini, story B2's code round.)
+    /// </remarks>
+    public string FileToWrite(string promptId) => Path.Combine(OverrideDir, FileOf(promptId));
 
     /// <summary>
     /// One prompt's text: the override file if there is one, else what the binary ships.
@@ -58,12 +82,14 @@ public sealed class RolePrompts(string dataDir)
     /// arrive — this is the second lock, in the place that actually opens the file. Raised on the
     /// code round of the story that removed the enum, alongside the same guard in the adapters.
     /// </remarks>
-    private string Text(string promptId)
-    {
-        var file = FileOf(promptId);
-
-        return File.Exists(Path.Combine(OverrideDir, file)) ? File.ReadAllText(Path.Combine(OverrideDir, file)) : Embedded(file);
-    }
+    /// <remarks>
+    /// An override that says NOTHING is not an override. It used to win on existing alone, so a
+    /// half-written edit to a shipped prompt handed the reviewer an empty file where the binary had
+    /// the real text — and for a shipped prompt the way to go back is deleting the file, which this
+    /// now treats an empty one as. (Found beside the same defect in <see cref="Has"/>.)
+    /// </remarks>
+    private string Text(string promptId) =>
+        Override(promptId) is var text && !string.IsNullOrWhiteSpace(text) ? text : Embedded(FileOf(promptId));
 
     /// <summary>
     /// The one place a prompt id becomes a file name — read, write and restore alike.

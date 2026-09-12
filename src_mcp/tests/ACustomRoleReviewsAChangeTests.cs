@@ -142,6 +142,68 @@ public sealed class ACustomRoleReviewsAChangeTests : IAsyncLifetime
             Logger.None);
     }
 
+    /// <summary>The shipped plan role, plus one a person added to the same stage.</summary>
+    private PanelService WithACustomPlanRole()
+    {
+        File.WriteAllText(Path.Combine(_data, "prompts", "brief-general.md"),
+            "You read one thing: whether the plan says what it is for.");
+
+        var catalog = RoleComposition.Compose([
+            new RoleEntry(RoleCatalog.ConventionsRole, Active: false),
+            new RoleEntry(RoleCatalog.ArchitectureRole, Active: false),
+            new RoleEntry(RoleCatalog.SecurityRole, Active: false),
+            new RoleEntry(RoleCatalog.UxDxRole, Active: false),
+            new RoleEntry("Brief", Name: "The brief", Stage: RoleStages.Plan,
+                Prompts: [new PromptEntry("brief-general", "General", "Whether the plan says what it is for.")]),
+        ]);
+
+        return new PanelService(
+            new PanelSettings
+            {
+                Providers = [new("codex") { ExecutablePath = FakeCliExe }],
+                Rounds = new PanelConfig(catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 5)), StagePolicy.Human)
+                {
+                    Catalog = catalog,
+                },
+                DataDir = _data,
+                ReviewerTimeout = TimeSpan.FromSeconds(30),
+            },
+            VaultKeys.None("no vault in tests"),
+            default,
+            _launcher,
+            Logger.None);
+    }
+
+    /// <summary>
+    /// A plan-stage role a person added actually reviews the plan.
+    /// </summary>
+    /// <remarks>
+    /// Everything around it already worked: composition put the role in the catalog, the settings
+    /// gave it <c>COAI_ROUNDS_BRIEF</c> and an enable switch that the shipped plan role deliberately
+    /// does not have, and <c>RolesForRound</c> listed it. <c>ReviewPlanAsync</c> then passed a
+    /// hardcoded one-element array to <c>BuildWork</c>, so the role was configured, switchable, and
+    /// never asked anything — the code stage had been reading its roster from the catalog since
+    /// story B1 and the plan stage had not. (gemini, twice on this story's code round.)
+    /// </remarks>
+    [Fact]
+    public async Task ACustomPlanRole_ReviewsThePlan()
+    {
+        var service = WithACustomPlanRole();
+        await service.OpenAsync(_repo, "feature");
+
+        Script(OneMajor);
+        var plan = Parse(await service.ReviewPlanAsync(_repo, "feature", Scope));
+
+        plan.GetProperty("reviewers").GetString().Should().Contain("2 reviewers",
+            "the shipped plan role and the one this person added");
+
+        // Which two, from the round's own record — the findings cannot answer it, because two
+        // reviewers reporting the same thing are merged into one finding carrying one role.
+        var round = Parse(await service.StatusAsync(_repo, "feature")).GetProperty("rounds")[0];
+        round.GetProperty("reviewerStates").EnumerateArray().Select(r => r.GetProperty("role").GetString())
+            .Should().BeEquivalentTo([RoleCatalog.PlanRole, "Brief"]);
+    }
+
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
 
     private static string AcceptAll(JsonElement answer) =>

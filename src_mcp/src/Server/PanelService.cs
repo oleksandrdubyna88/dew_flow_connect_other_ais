@@ -142,9 +142,20 @@ public sealed partial class PanelService
     /// their own is told to tick the box they can actually see. It was a sentence naming four
     /// constants, which would have listed the shipped four at somebody whose panel showed five.</para>
     /// </remarks>
-    internal string NoCodeRolesRefusal =>
-        "Every code-review role is switched off, so this round would have no reviewers in it. "
-        + $"Tick at least one of {Names(Tickable)} "
+    internal string NoCodeRolesRefusal => NoRolesRefusal(Stage.CodeReview);
+
+    /// <summary>The same sentence for either stage, naming that stage's own roles.</summary>
+    /// <remarks>
+    /// The plan stage needs it since its roster started coming from the catalog: the shipped plan
+    /// role honours no <c>COAI_ENABLED_</c> key, but a <c>COAI_ROLES</c> row saying
+    /// <c>active: false</c> switches it off like any other — and a person who does that with no plan
+    /// role of their own would otherwise get a round with nothing in it, which the session counts as
+    /// unresolved and never lets them retry.
+    /// </remarks>
+    internal string NoRolesRefusal(Stage stage) =>
+        $"Every {(stage == Stage.PlanReview ? "plan" : "code")}-review role is switched off, so this "
+        + "round would have no reviewers in it. "
+        + $"Tick at least one of {Names(Tickable(stage))} "
         + "in the panel — or clear the matching COAI_ENABLED_<ROLE> variable — and ask again.";
 
     /// <summary>
@@ -157,9 +168,10 @@ public sealed partial class PanelService
     /// satisfy a code round, so offering it would leave somebody exactly as blocked as before,
     /// having done what they were told. (codex, on the code round of the story that removed the enum.)
     /// </remarks>
-    private IReadOnlyList<string> Tickable =>
+    private IReadOnlyList<string> Tickable(Stage stage) =>
         [.. _settings.Rounds.Catalog.Roles
-            .Where(r => r.Stage == RoleStages.Result && r.ProgrammingTask)
+            .Where(r => r.Stage == (stage == Stage.PlanReview ? RoleStages.Plan : RoleStages.Result))
+            .Where(r => r.ProgrammingTask)
             .Select(r => r.Id)];
 
     /// <summary>Role ids as a person reads them: their display names, in an English list.</summary>
@@ -355,12 +367,22 @@ public sealed partial class PanelService
     /// buying it back at an order of magnitude in wall-clock is the wrong trade for a gate anybody
     /// is expected to sit through.</para>
     /// </remarks>
-    public Task<string> ReviewPlanAsync(string repoPath, string branch, string planText, CancellationToken ct = default) =>
+    public Task<string> ReviewPlanAsync(string repoPath, string branch, string planText, CancellationToken ct = default)
+    {
+        // The same guard the code stage has had, for the same reason: a round that launches no
+        // reviewer is not an empty round, it is an unresolved one, and it sits open for ever. It
+        // became reachable here when the plan roster started coming from the catalog.
+        if (_settings.Rounds.EnabledRolesOf(Stage.PlanReview).Count == 0)
+        {
+            _log.Warning("review_plan refused: every plan role is switched off");
+            return Task.FromResult(Error(NoRolesRefusal(Stage.PlanReview)));
+        }
+
         // No floor here on purpose. A three-line plan is a BAD plan, and saying so is the reviewers'
         // job — refusing it at the gate does their work for them and takes away the one round that
         // would have told the person why. The floor belongs to the code stage, where the scope has
         // something to be checked against.
-        RunStageAsync(repoPath, branch, planText, new StageRun(RoundMachine.BeginPlanRound, NeedsWorktree: false, IsPlanStage: true,
+        return RunStageAsync(repoPath, branch, planText, new StageRun(RoundMachine.BeginPlanRound, NeedsWorktree: false, IsPlanStage: true,
             (session, workingDir, _) =>
             {
                 // The same sentence the code stage writes, carrying the one number this stage has:
@@ -374,8 +396,16 @@ public sealed partial class PanelService
                 // A plan round skips no role for a RULE's sake: it has one, and there is nothing for
                 // a rule file to decide about it. What BuildWork itself could not ask — a role
                 // whose prompt has no text — travels on the work it returns.
+                //
+                // The roster comes from the CATALOG, as the code stage's has since story B1. It was
+                // a hardcoded `[PlanRole]` here, so a plan-stage role a person added was composed,
+                // given its own budget and its own enable switch — the one the shipped plan role
+                // deliberately does not have — and then never asked anything. (gemini, twice on
+                // story B2's code round.)
                 return Task.FromResult(WithNothingSkippedByRule(
-                    BuildWork([RoleCatalog.PlanRole], workingDir, $"## The plan under review\n\n{planText}",
+                    BuildWork(
+                        _settings.Rounds.RolesForRound(Stage.PlanReview, session.State.RoundsRunThisStage + 1),
+                        workingDir, $"## The plan under review\n\n{planText}",
                         session.State.RoundsRunThisStage + 1,
                         isPlanStage: true,
                         seed: StableSeed(session.State.SessionId, session.State.RoundsRunThisStage + 1),
@@ -383,6 +413,7 @@ public sealed partial class PanelService
                         deal: _settings.DealPlanLenses)));
             }),
             ct);
+    }
 
     /// <summary>
     /// The code gate — three reviewers per provider, over the branch in a read-only tree, and
@@ -691,7 +722,8 @@ public sealed partial class PanelService
             // no credential — and a vendor that cannot run one particular ROLE, which is what a Team
             // server does with a role a person defined. The second is only discovered while the work
             // is built, which is why it travels back on it.
-            var excluded = (IReadOnlyList<string>)[.. ExcludedFrom(stage.IsPlanStage), .. roundWork.Excluded];
+            var excluded = (IReadOnlyList<string>)
+                [.. ExcludedFrom(stage.IsPlanStage), .. roundWork.Excluded.Select(e => e.Sentence)];
             audit.Opening(work, workingDir, _settings.ReviewerTimeout, excluded);
             // The ROUND's own deadline, derived from its shape unless somebody set one. A reviewer
             // is bounded; a round was not, and the round is what a person watches — so a round could
@@ -1142,7 +1174,11 @@ public sealed partial class PanelService
         var items = Items(roles, round, planPrompts);
         var work = new List<ReviewerWork>();
         var notAsked = new List<SkippedRole>();
-        var excluded = new List<string>();
+        var excluded = new List<ExcludedRole>();
+        // Sets beside the lists rather than a scan of them: one round can carry a role per vendor
+        // per lens, and the scan was the round's own quadratic. (codex, story B2's code round.)
+        var skipped = new HashSet<string>(StringComparer.Ordinal);
+        var refused = new HashSet<(string Provider, string Role)>();
         Assemble(runnable, items, deal, seed, Add);
 
         return new RoundWork(work, notAsked, excluded);
@@ -1151,10 +1187,25 @@ public sealed partial class PanelService
         // needs to know the role did not run, not that four vendors each did not run it.
         void Skip(string role, string reason)
         {
-            if (!notAsked.Any(s => s.Role == role))
+            if (!skipped.Add(role))
             {
-                notAsked.Add(new SkippedRole(role, reason));
+                return;
             }
+
+            notAsked.Add(new SkippedRole(role, reason));
+        }
+
+        // And one per (vendor, role), for the same reason one step down: this list is per vendor
+        // because the same Team server runs the shipped roles, but a role dealt four lenses was
+        // refused four times in identical words. (gemini, story B2's code round.)
+        void Exclude(string provider, string role, string reason)
+        {
+            if (!refused.Add((provider, role)))
+            {
+                return;
+            }
+
+            excluded.Add(new ExcludedRole(provider, role, reason));
         }
 
         void Add(ProviderSettings provider, string role, string promptId)
@@ -1166,26 +1217,36 @@ public sealed partial class PanelService
                 return;
             }
 
+            // A prompt with no text at all: a role somebody added and never wrote the prompt for.
+            // The round runs without it and SAYS so, because a reviewer that silently does not run
+            // is a round that reviewed less than it reported. The shipped prompts cannot reach this
+            // — their text is embedded in the binary.
+            //
+            // FIRST, before the vendor question below it. A role with no text has nothing to say to
+            // any vendor, and asking the vendor question first meant a person whose only vendor was
+            // a Team server was told the server did not know their role — true, and not the thing
+            // they could fix. (codex, story B2's code round.)
+            if (!_prompts.Has(choice))
+            {
+                Skip(role, $"its prompt '{choice.Id}' has no text — write it at {_prompts.FileToWrite(choice.Id)}");
+                return;
+            }
+
             // A role a person defined cannot be sent to a Team server: that server validates the
             // name against the catalog IT was compiled with, so the request comes back a 400 naming
             // roles the person never asked for. Said here, before the launch, rather than read out
             // of a refusal afterwards — and said per (vendor, role), because the same vendor runs
             // the shipped roles perfectly well. Widening the server is plan 3 of this feature.
-            if (Remote(provider) && !choice.BuiltIn)
+            //
+            // The question is about the ROLE's provenance and is asked of the CATALOG. Asking the
+            // prompt — `!choice.BuiltIn` — answered the same today only because composition refuses
+            // a custom role a shipped prompt id, which is a second rule holding up the first.
+            // (codex and gemini, story B2's code round.)
+            if (Remote(provider) && catalog.ById(role)?.BuiltIn != true)
             {
-                excluded.Add(
-                    $"{provider.Provider}: '{catalog.ById(role)?.Name ?? role}' is a role this Team "
+                Exclude(provider.Provider, role,
+                    $"'{catalog.ById(role)?.Name ?? role}' is a role this Team "
                     + "server does not know — it accepts the five this product ships");
-                return;
-            }
-
-            // A prompt with no text at all: a role somebody added and never wrote the prompt for.
-            // The round runs without it and SAYS so, because a reviewer that silently does not run
-            // is a round that reviewed less than it reported. The shipped prompts cannot reach this
-            // — their text is embedded in the binary.
-            if (!_prompts.Has(choice))
-            {
-                Skip(role, $"its prompt '{choice.Id}' has no text at {Path.Combine(_settings.DataDir, "prompts")} and none is shipped");
                 return;
             }
 
@@ -1238,7 +1299,17 @@ public sealed partial class PanelService
         int round,
         IReadOnlyList<string>? planPrompts) =>
         planPrompts is { Count: > 0 }
-            ? [.. planPrompts.Select(id => (Role: roles[0], PromptId: id))]
+            // Each lens goes to the role that OWNS it, from the catalog. It went to `roles[0]`,
+            // which was true for exactly as long as a plan round had one role in it — and the round
+            // after a person adds a second plan role, the first role is asked every lens, including
+            // the other role's, whose questions it then answers under its own name. The fallback is
+            // still the first role, for a lens id nothing in the catalog claims.
+            ? [.. planPrompts.Select(id => (
+                Role: _settings.Rounds.Catalog.PromptById(id)?.Role is { Length: > 0 } owner
+                    && roles.Contains(owner, StringComparer.OrdinalIgnoreCase)
+                        ? owner
+                        : roles[0],
+                PromptId: id))]
             : [.. roles.Select(role => (Role: role, PromptId: ChoiceFor(role, round).Id))];
 
     /// <summary>
@@ -1794,21 +1865,33 @@ public sealed partial class PanelService
 /// how a dropped role reached the server's log and never the caller.
 /// </remarks>
 /// <param name="Excluded">
-/// Vendors this round could not give a particular role to, each as <c>name: reason</c> — the same
-/// shape and the same list a vendor excluded for its own sake goes into. It exists because the
-/// exclusion is discovered while the work is BUILT rather than before it: a Team server accepts the
-/// roles it was compiled with, so a role a person defined is refused per (vendor, role) and not per
-/// vendor.
+/// Vendors this round could not give a particular role to. It exists because the exclusion is
+/// discovered while the work is BUILT rather than before it: a Team server accepts the roles it was
+/// compiled with, so a role a person defined is refused per (vendor, role) and not per vendor.
 /// </param>
 internal sealed record RoundWork(
     IReadOnlyList<ReviewerWork> Reviewers,
     IReadOnlyList<SkippedRole> NotAsked,
-    IReadOnlyList<string> Excluded)
+    IReadOnlyList<ExcludedRole> Excluded)
 {
     public RoundWork(IReadOnlyList<ReviewerWork> reviewers, IReadOnlyList<SkippedRole> notAsked)
         : this(reviewers, notAsked, [])
     {
     }
+}
+
+/// <summary>One vendor that could not be given one role, and why.</summary>
+/// <remarks>
+/// Three fields rather than the formatted sentence they used to be. The round needs the PAIR to know
+/// it has already said this — a role dealt four lenses was refused four times in the same words —
+/// and the sentence is a rendering, which belongs at the boundary that renders. It mirrors
+/// <see cref="SkippedRole"/> beside it, which has been a record since it shipped. (codex, on the
+/// code round of the story that introduced this list.)
+/// </remarks>
+internal sealed record ExcludedRole(string Provider, string Role, string Reason)
+{
+    /// <summary>The <c>name: reason</c> line a round summary shows, shaped like every other one.</summary>
+    public string Sentence => $"{Provider}: {Reason}";
 }
 
 internal sealed record StageRun(

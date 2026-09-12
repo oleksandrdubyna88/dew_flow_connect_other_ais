@@ -395,12 +395,12 @@ public sealed record PanelSettings
         // Re-read rather than threaded through from `Catalog`, which is what the neighbour above
         // does with COAI_RETRY_BACKOFF: the diagnostics are one list built in one place, and the
         // value is a few hundred bytes.
-        if (env("COAI_ROLES") is { Length: > 0 } roles && ParseRoles(roles) is null)
+        if (ParseRoles(env("COAI_ROLES")) is { CouldNotBeRead: true } roles)
         {
             unknown.Add(
-                "COAI_ROLES is not JSON this server can read — it is running the roles it shipped "
-                + "with, and nothing you added is in this round. The form is an array of rows: "
-                + """[{"id":"Requirements","name":"...","stage":"result","prompts":[…]}].""");
+                $"COAI_ROLES is not JSON this server can read — {roles.Unreadable} It is running the "
+                + "roles it shipped with, and nothing you added is in this round. The form is an "
+                + """array of rows: [{"id":"Requirements","name":"...","stage":"result","prompts":[…]}].""");
         }
 
         return unknown;
@@ -565,34 +565,69 @@ public sealed record PanelSettings
     /// because a parse that never reached a row has no row to refuse.
     /// </remarks>
     private static RoleCatalog Catalog(Func<string, string?> env) =>
-        RoleComposition.Compose(ParseRoles(env("COAI_ROLES")) ?? []);
+        RoleComposition.Compose(ParseRoles(env("COAI_ROLES")).Rows);
 
-    /// <summary>The rows, or <c>null</c> when this build cannot read the value at all.</summary>
+    /// <summary>
+    /// What <c>COAI_ROLES</c> turned out to be: the rows, and a reason when there are none because
+    /// this build could not read it.
+    /// </summary>
     /// <remarks>
-    /// The two are different answers and only one of them is a mistake: an EMPTY array is somebody
-    /// saying they have no roles of their own, and unreadable text is somebody whose roles are
-    /// about to silently not appear. Folding both into an empty list — which this did until
-    /// <see cref="UnknownValues"/> gained a clause for it — left the second case with no diagnostic
-    /// anywhere, because the row-by-row refusals cannot speak for a parse that never reached a row.
-    /// (gemini, this story's plan round.)
+    /// <para>A record rather than a nullable list, per doctrine 4 and 5: "not captured" and "empty"
+    /// are different facts and must be different states, and an expected failure is a value carrying
+    /// its reason rather than a null somebody has to know the meaning of. The nullable list this
+    /// replaced needed a comment at each of its two call sites to say which null meant what.
+    /// (codex and gemini, story B2's code round.)</para>
+    /// <para><see cref="Unreadable"/> empty is the good case — including for an absent key, which is
+    /// no rows and no complaint.</para>
     /// </remarks>
-    internal static List<RoleEntry>? ParseRoles(string? json)
+    internal sealed record RolesSetting(IReadOnlyList<RoleEntry> Rows, string Unreadable = "")
+    {
+        public bool CouldNotBeRead => Unreadable.Length > 0;
+    }
+
+    /// <summary>The rows a person wrote, or why there are none.</summary>
+    internal static RolesSetting ParseRoles(string? json)
     {
         if (json is not { Length: > 0 })
         {
-            return [];
+            return new RolesSetting([]);
         }
 
         try
         {
-            return System.Text.Json.JsonSerializer.Deserialize(
-                json, SettingsJsonContext.Default.ListRoleEntry);
+            return new RolesSetting(
+                System.Text.Json.JsonSerializer.Deserialize(json, SettingsJsonContext.Default.ListRoleEntry)
+                ?? throw new System.Text.Json.JsonException("it is the JSON value null rather than a list of roles"));
         }
-        catch (System.Text.Json.JsonException)
+        catch (System.Text.Json.JsonException e)
         {
-            return null;
+            // The parser's own message, which carries the line and the character it stopped at. A
+            // person is looking at a screenful of JSON for one comma, and where it went wrong is the
+            // only part of that sentence they cannot work out for themselves — so the template we
+            // add around it must not replace it. (gemini, story B2's code round.)
+            return new RolesSetting([], Detail(e));
         }
     }
+
+    /// <summary>The parser's complaint, with the position counted the way an editor counts.</summary>
+    /// <remarks>
+    /// <c>JsonException</c> numbers lines from zero and already renders them into its message that
+    /// way, so the message is rewritten rather than appended to: telling somebody "line 1" about
+    /// what their editor calls line 2 is worse than not telling them at all.
+    /// </remarks>
+    private static string Detail(System.Text.Json.JsonException e) =>
+        e.LineNumber is { } line
+            ? $"{Sentence(e)} (line {line + 1}, character {(e.BytePositionInLine ?? 0) + 1})"
+            : Sentence(e);
+
+    /// <summary>The parser's own words — without its position, and without its advice.</summary>
+    /// <remarks>
+    /// "Change the reader options" is addressed to whoever wrote the deserializer, and the person
+    /// reading this has a settings file and no reader to change. The DIAGNOSIS is worth every word
+    /// ("the JSON array contains a trailing comma at the end"); the remedy is ours to give.
+    /// </remarks>
+    private static string Sentence(System.Text.Json.JsonException e) =>
+        e.Message.Split(" LineNumber:")[0].Replace("Change the reader options.", string.Empty).Trim();
 
     private static Dictionary<string, RoleGate> RoleGates(Func<string, string?> env, RoleCatalog catalog)
     {

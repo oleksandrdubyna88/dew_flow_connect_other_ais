@@ -74,6 +74,30 @@ public sealed class TheAllRolesOffRefusalTests
     public void APlanRoleIsNotOffered_ForTheSameReason() =>
         Service(RoleCatalog.Builtin).NoCodeRolesRefusal.Should().NotContain("Plan review");
 
+    /// <summary>
+    /// The plan stage has the same sentence, because it became possible to empty it.
+    /// </summary>
+    /// <remarks>
+    /// The shipped plan role honours no <c>COAI_ENABLED_</c> key by the operator's ruling, so this
+    /// state was unreachable while the plan roster was a hardcoded array. Now that the roster comes
+    /// from the catalog, a <c>COAI_ROLES</c> row saying <c>active: false</c> empties it — and a round
+    /// that launches no reviewer is not an empty round, it is one the session counts as unresolved
+    /// and never lets a person retry.
+    /// </remarks>
+    [Fact]
+    public async Task WithThePlanRoleSwitchedOffInTheCatalog_ThePlanRoundRefusesRatherThanRunningEmpty()
+    {
+        var catalog = RoleComposition.Compose([new RoleEntry(RoleCatalog.PlanRole, Active: false)]);
+        var service = Service(catalog);
+
+        service.NoRolesRefusal(Stage.PlanReview).Should().Contain("Plan review")
+            .And.Contain("plan-review role", "the sentence says which stage has nothing in it");
+
+        var answer = await service.ReviewPlanAsync(Directory.CreateTempSubdirectory("coai-noplan-").FullName, "main", "a plan");
+        JsonDocument.Parse(answer).RootElement.GetProperty("error").GetString()
+            .Should().Contain("Plan review", "refused before anything is opened or launched");
+    }
+
     [Fact]
     public void ARoleSwitchedOffInTheCATALOG_IsStillOfferedAsSomethingToTick()
     {
