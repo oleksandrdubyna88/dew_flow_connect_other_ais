@@ -142,10 +142,25 @@ public sealed partial class PanelService
     /// their own is told to tick the box they can actually see. It was a sentence naming four
     /// constants, which would have listed the shipped four at somebody whose panel showed five.</para>
     /// </remarks>
-    private string NoCodeRolesRefusal =>
+    internal string NoCodeRolesRefusal =>
         "Every code-review role is switched off, so this round would have no reviewers in it. "
-        + $"Tick at least one of {Names(_settings.Rounds.Catalog.RolesOf(RoleStages.Result))} "
+        + $"Tick at least one of {Names(Tickable)} "
         + "in the panel — or clear the matching COAI_ENABLED_<ROLE> variable — and ask again.";
+
+    /// <summary>
+    /// The roles this refusal may offer: the code stage's, switched on or NOT.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not <c>RolesOf</c>, which answers with the ACTIVE ones — in the only state this
+    /// sentence is ever read, that can be the empty list, and "tick at least one of a role" is not
+    /// an instruction. A document role is left out for the opposite reason: ticking one cannot
+    /// satisfy a code round, so offering it would leave somebody exactly as blocked as before,
+    /// having done what they were told. (codex, on the code round of the story that removed the enum.)
+    /// </remarks>
+    private IReadOnlyList<string> Tickable =>
+        [.. _settings.Rounds.Catalog.Roles
+            .Where(r => r.Stage == RoleStages.Result && r.ProgrammingTask)
+            .Select(r => r.Id)];
 
     /// <summary>Role ids as a person reads them: their display names, in an English list.</summary>
     private string Names(IReadOnlyList<string> roleIds)
@@ -484,10 +499,7 @@ public sealed partial class PanelService
                 // and a role stops taking part when its rounds are spent, so architecture can be
                 // worth two passes while performance is worth one.
                 var round = session.State.RoundsRunThisStage + 1;
-                var scheduled = _settings.Rounds
-                    .RolesForRound(Stage.CodeReview, round)
-                    
-                    .ToList();
+                var scheduled = _settings.Rounds.RolesForRound(Stage.CodeReview, round);
 
                 var roles = RolesWithRulesInMind(scheduled, rules.HasRules);
                 // Each with the reason its own rule gives it — see `RolesNotAsked`, which is where a
@@ -1025,6 +1037,15 @@ public sealed partial class PanelService
         IReadOnlyList<string>? planPrompts = null,
         bool deal = false)
     {
+        // The CATALOG's spelling, and nothing else, from here on. `RolesForRound` already answers
+        // with catalog ids, so this changes nothing today — it is the boundary the Team server has
+        // at its endpoint and the local path did not: a caller that schedules `architecture` would
+        // otherwise carry that spelling into the invocation, the live round, the usage rows, the
+        // evidence file and the session record, and a later `Architecture` run would be a second
+        // identity for one role. A role the catalog does not know keeps what it was given, which is
+        // what the refusals downstream quote back. (codex, this story's code round.)
+        roles = [.. roles.Select(r => _settings.Rounds.Catalog.ById(r)?.Id ?? r)];
+
         var schemaFile = SchemaFile.Ensure(_settings.DataDir);
         var outputDir = Directory.CreateTempSubdirectory("coai-answers-").FullName;
         PruneOldAnswerDirs();

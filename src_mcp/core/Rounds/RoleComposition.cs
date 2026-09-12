@@ -95,6 +95,13 @@ public static partial class RoleComposition
         "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
     };
 
+    /// <summary>The reserved names, for a test that must walk them rather than retype some of them.</summary>
+    /// <remarks>
+    /// A theory listing five of twenty-two would not notice the twenty-third being added, which is
+    /// the whole reason a list is derived from its source. (codex, on story B1's code round.)
+    /// </remarks>
+    internal static IReadOnlyCollection<string> ReservedPromptNames => ReservedNames;
+
     /// <summary>A row's name in a refusal — what a person looks for in the file they wrote.</summary>
     private static string Label(string? id) =>
         string.IsNullOrWhiteSpace(id) ? "<a row with no id>" : id;
@@ -149,7 +156,7 @@ public static partial class RoleComposition
     }
 
     /// <summary>The rows that name a built-in, keyed by the seed's own spelling; later duplicates are dropped.</summary>
-    private static Dictionary<string, RoleEntry> ById(List<RoleEntry> entries, List<string> dropped)
+    private static Dictionary<string, RoleEntry> ById(IReadOnlyList<RoleEntry> entries, List<string> dropped)
     {
         var found = new Dictionary<string, RoleEntry>(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in entries)
@@ -189,7 +196,7 @@ public static partial class RoleComposition
 
     /// <summary>The rows that name no built-in: a person's own roles, in the order they wrote them.</summary>
     private static IEnumerable<RoleDefinition> Added(
-        List<RoleEntry> entries, List<RoleDefinition> taken, HashSet<string> promptIds, List<string> dropped)
+        IReadOnlyList<RoleEntry> entries, List<RoleDefinition> taken, HashSet<string> promptIds, List<string> dropped)
     {
         var ids = new HashSet<string>(taken.Select(r => r.Id), StringComparer.OrdinalIgnoreCase);
         foreach (var entry in entries)

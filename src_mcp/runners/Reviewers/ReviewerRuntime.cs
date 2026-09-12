@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using System.Text.Json;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Processes;
@@ -203,7 +204,7 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
 
     public ReviewerInvocation Build(string role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings)
     {
-        var outputFile = Path.Combine(outputDir, $"{FileSafe.Part(Provider)}-{FileSafe.Part(role)}.json");
+        var outputFile = Path.Combine(outputDir, $"{FileName.Safe(Provider)}-{FileName.Safe(role)}.json");
         var request = new ProcessRequest(
             Executable(settings, "codex"),
             [

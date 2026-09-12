@@ -142,6 +142,19 @@ public sealed class ACustomRoleReachesAReviewerTests : IDisposable
     }
 
     [Fact]
+    public void ARoleScheduledInAnotherCase_IsCarriedInTheCatalogsSpelling()
+    {
+        // The boundary the Team server has at its endpoint and the local path did not. A round
+        // scheduled as `architecture` would otherwise carry that spelling into the invocation, the
+        // live round, the usage rows and the session record, and a later `Architecture` run would be
+        // a second identity for one role. (codex, this story's code round.)
+        var work = Service(WithRequirements())
+            .BuildWork(["architecture"], Scratch(), "ctx", round: 1, isPlanStage: false);
+
+        work[0].Invocation.Role.Should().Be("Architecture");
+    }
+
+    [Fact]
     public void AShippedRolesAnswerFileIsNamedWithItsHistoricalSpelling()
     {
         // Asserted as a LITERAL rather than through the catalog's constant: an id renamed in the
