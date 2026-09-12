@@ -29,7 +29,7 @@ server holds nothing and is handed the whole thing every single turn, and switch
 next one everything said so far. Ten turns about one subject followed by a question about another
 means the second question arrives wrapped in the first.
 
-The button is on the last answer. Press it and a dashed orange line is drawn under that answer: from
+The button is on the last answer. Press it and a dash-dot orange line is drawn under that answer: from
 then on, a model you switch to and a Team server are given only what is below the line. **Nothing is
 deleted** — the conversation stays where it is, whole, and you can scroll and copy it as before.
 

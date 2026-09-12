@@ -282,14 +282,36 @@ export function reinstructed(draft: string, was: string, now: string): string | 
  * scratch — and the caller is told nothing rather than handed a rewrite of it.</p>
  */
 export function reinstructedHead(draft: string, now: string, language: LanguageCode): string | undefined {
-  const found = [MATERIAL_NOTE, FENCE].map((line) => draft.indexOf(line)).filter((at) => at >= 0);
-  if (found.length === 0) {
+  const at = serviceLineAt(draft);
+  if (at < 0) {
     return undefined;
   }
   const named = ENGLISH_NAME[language] ?? ENGLISH_NAME.en;
   const opening = now.trim().length > 0 ? now.trim() + '\n\n' : '';
 
-  return opening + 'Answer in ' + named + '.' + '\n\n' + draft.slice(Math.min(...found));
+  return opening + 'Answer in ' + named + '.' + '\n\n' + draft.slice(at);
+}
+
+/**
+ * Where the turn THIS SIDE wrote begins, as an offset - or -1 when no line of ours is in the box.
+ *
+ * <p>A WHOLE LINE, never a phrase found inside one. The first version asked `indexOf`, which is also
+ * true of somebody who merely QUOTES the sentence in a question of their own - and the cut would then
+ * have taken everything they wrote above it with the instruction. Our lines always stand alone, so
+ * requiring that they do costs nothing and closes the case. (CodeRabbit, PR #208.)</p>
+ */
+function serviceLineAt(draft: string): number {
+  let at = 0;
+  for (const line of draft.split('\n')) {
+    if (line.trimEnd() === MATERIAL_NOTE || line.trimEnd() === FENCE) {
+      return at;
+    }
+    // The separator the split removed is one character, and the offset has to put it back or every
+    // line after the first is named one character early.
+    at += line.length + 1;
+  }
+
+  return -1;
 }
 
 /**
