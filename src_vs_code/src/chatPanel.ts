@@ -67,6 +67,14 @@ export interface ChatPanelHooks {
    */
   readonly onShowAsked: (id: object) => void;
   /**
+   * The page asked that a handover start here instead of at the beginning.
+   *
+   * <p>The host records it and pushes the transcript back with the rule on it. The page does not
+   * draw the rule because it was pressed — a press that failed to record would otherwise show a line
+   * that is not durable, while the next Team turn quietly re-sent everything above it.</p>
+   */
+  readonly onCarryFrom: (id: object, at: number) => void;
+  /**
    * The person stopped the answer they were waiting for.
    *
    * <p>`turn` is the turn the page believed was running — a whole number counted from 1, never 0.
@@ -141,6 +149,8 @@ export interface ChatPushState {
   readonly marks: TurnMarks;
   /** Which model button is pressed: the preset chosen, which is ahead of the session mid-switch. */
   readonly chosenModelId: string;
+  /** Where a handover starts — the index of the first message carried. Zero carries everything. */
+  readonly carryFrom: number;
   /**
    * How many turns are ahead of this one on a Team server, or 0 for none and for a local model.
    *
@@ -301,6 +311,10 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
       hooks.onShowAsked(id);
 
       return;
+    case 'carryFrom':
+      hooks.onCarryFrom(id, command.at);
+
+      return;
     case 'stop':
       hooks.onStop(id, command.turn);
 
@@ -387,7 +401,7 @@ export function pushChatState(entry: ChatEntry, state: ChatPushState): boolean {
     type: 'state',
     // MARKED like the composer below it: a question that has been sent is the same words, and they
     // stop being readable if the colours go when it moves.
-    messagesHtml: chatMessagesHtml(state.messages, state.marks),
+    messagesHtml: chatMessagesHtml(state.messages, state.marks, state.carryFrom),
     running: state.running,
     capped: state.capped,
     thinkingHtml: chatStatusHtml(state.running, state.queued, state.turn),

@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { ChatMessage } from '../chatPage';
 import { ModelPreset } from '../chatPresets';
 import { ChatProvider } from '../chatModels';
 import { ChatModelChoice, ChatPageState, NO_MARKS, markedTurn, FOLLOW_SLACK_PX, chatCappedHtml, chatMessagesHtml, chatPresetRowsHtml, chatPageHtml, chatPickerHtml, chatStatusHtml, shouldFollow } from '../chatPage';
@@ -39,6 +40,7 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
     chosenModelId: 'antigravity',
     fromSession: true,
     asked: [],
+    carryFrom: 0,
     modelId: 'antigravity',
     running: false,
     capped: false,
@@ -2268,4 +2270,85 @@ test('hiding the arrows actually hides them, against the rule that lays them out
   assert.ok(hide >= 0, 'nothing in the page makes a hidden row of arrows go away');
   assert.match(rules[hide] ?? '', /display: none/, 'the hidden row is still laid out');
   assert.ok(hide > layout, 'the rule that hides the row comes before the one that shows it, so it loses');
+});
+
+test('Carry nothing above sits on the LAST answer, and on no other', () => {
+  // The operator chose the last answer only: marking retroactively in the middle is a different
+  // gesture, and it would have to argue with the marks below it.
+  const html = chatMessagesHtml([
+    { role: 'you', text: 'the first subject' },
+    { role: 'model', text: 'an answer' },
+    { role: 'you', text: 'a follow-up' },
+    { role: 'model', text: 'the newest answer' },
+  ]);
+
+  assert.strictEqual([...html.matchAll(/data-cut=/g)].length, 1, 'the button is on more than one answer');
+  assert.match(html, /data-cut="4"/, 'the button does not name the index a handover would start at');
+  assert.match(html, /Carry nothing above/);
+});
+
+test('the index the button posts is the first message CARRIED, not the answer it sits on', () => {
+  // The one thing the plan did not say and both readings looked right: a rule drawn UNDER an answer
+  // means that answer is above the line. The button on the answer at index 1 posts 2.
+  const html = chatMessagesHtml([
+    { role: 'you', text: 'asked' },
+    { role: 'model', text: 'answered' },
+  ]);
+
+  assert.match(html, /data-cut="2"/, 'the button would carry the answer it is drawn under');
+});
+
+test('a question never carries the button — a handover starts after an ANSWER', () => {
+  const html = chatMessagesHtml([
+    { role: 'you', text: 'answered' },
+    { role: 'model', text: 'an answer' },
+    { role: 'you', text: 'and a question still waiting' },
+  ]);
+
+  // The last message is the person's; the button stays on the last ANSWER above it.
+  assert.match(html, /data-cut="2"/, 'the button moved onto an unanswered question');
+  assert.strictEqual([...html.matchAll(/data-cut=/g)].length, 1);
+});
+
+test('the rule is drawn under the message ABOVE the mark, and only there', () => {
+  const four: readonly ChatMessage[] = [
+    { role: 'you', text: 'asked' },
+    { role: 'model', text: 'the answer the mark is under' },
+    { role: 'you', text: 'asked again' },
+    { role: 'model', text: 'the newest answer' },
+  ];
+
+  const marked = chatMessagesHtml(four, NO_MARKS, 2);
+
+  assert.strictEqual([...marked.matchAll(/hr class="end cut"/g)].length, 1, 'more than one rule was drawn');
+  assert.match(marked, /Nothing above this line is carried to another model\./);
+  // The rule belongs to the answer at index 1 — the one the mark is under — so the text of that
+  // answer comes BEFORE it and the next question comes after.
+  assert.ok(
+    marked.indexOf('the answer the mark is under') < marked.indexOf('hr class="end cut"'),
+    'the rule was drawn under the wrong answer',
+  );
+  assert.ok(marked.indexOf('hr class="end cut"') < marked.indexOf('asked again'));
+});
+
+test('with no mark there is no rule at all, which is every conversation until somebody presses', () => {
+  const html = chatMessagesHtml([
+    { role: 'you', text: 'asked' },
+    { role: 'model', text: 'answered' },
+  ]);
+
+  assert.doesNotMatch(html, /hr class="end cut"/, 'an unmarked conversation was drawn as marked');
+  assert.doesNotMatch(html, /Nothing above this line/);
+});
+
+test('the answer that already carries the mark does not offer to set it again', () => {
+  // Pressing it where it already is would be a press that changes nothing, and the operator asked
+  // for a button that MOVES the point — so where there is no move to make, there is no button.
+  const html = chatMessagesHtml([
+    { role: 'you', text: 'asked' },
+    { role: 'model', text: 'answered' },
+  ], NO_MARKS, 2);
+
+  assert.doesNotMatch(html, /data-cut=/, 'the button offered to set the mark where it already is');
+  assert.match(html, /hr class="end cut"/, 'the rule it already carries is gone');
 });

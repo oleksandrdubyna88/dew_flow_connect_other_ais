@@ -197,6 +197,15 @@ export interface ChatPageState {
   readonly fromSession: boolean;
   /** What the person wrote in that session, once they have asked for it. Empty until then. */
   readonly asked: readonly string[];
+  /**
+   * Where a handed-over conversation begins — the index of the first message carried.
+   *
+   * <p>Zero is every conversation that has not been marked, and zero carries everything. The page
+   * does not decide this: it asks, the host records it, and the page draws the rule the host pushes
+   * back. A press that failed to record therefore draws nothing, rather than showing a line that is
+   * not durable while the next Team turn quietly re-sends everything. (codex, the plan round.)</p>
+   */
+  readonly carryFrom: number;
   readonly uiScale: number;
   /**
    * How far the text is from the theme's own colour: 0 is the theme, up is brighter, down is
@@ -313,10 +322,18 @@ export function markedTurn(text: string, marks: TurnMarks): string {
 }
 
 /** The messages region on its own, so the host can push it without re-rendering the page. */
-export function chatMessagesHtml(messages: readonly ChatMessage[], marks: TurnMarks = NO_MARKS): string {
+export function chatMessagesHtml(
+  messages: readonly ChatMessage[],
+  marks: TurnMarks = NO_MARKS,
+  carryFrom = 0,
+): string {
   if (messages.length === 0) {
     return '<p class="empty">Nothing asked yet.</p>';
   }
+  // The LAST answer, which is the only one the button appears on. Breaking the thread retroactively
+  // in the middle is a different gesture, and the operator chose against it: the mark is never
+  // removed, only moved further down.
+  const lastAnswer = messages.reduce((found, one, at) => (one.role === 'you' ? found : at), -1);
 
   return messages
     .map((message, index) => {
@@ -341,13 +358,27 @@ export function chatMessagesHtml(messages: readonly ChatMessage[], marks: TurnMa
       const copy = mine
         ? ''
         : `<button type="button" class="copy" data-copy="${index}" title="Copy this answer as Markdown">Copy</button>`;
+      // CARRY NOTHING ABOVE. On the last answer only, and it names what it does rather than what it
+      // breaks: nothing is deleted and the conversation stays whole on screen — what changes is where
+      // a HANDOVER starts, to another model or to a Team server that is told everything every turn.
+      const cutHere = index === lastAnswer && index + 1 !== carryFrom
+        ? `<button type="button" class="cutBtn" data-cut="${index + 1}"`
+          + ' title="From here on, a model switch and a Team server are handed only what is below.'
+          + ' Nothing is deleted, and the model you are talking to now keeps all of it.">'
+          + 'Carry nothing above</button>'
+        : '';
       // A rule after an answer, not after a question. The operator asked for a row of asterisks and
       // then settled on the rule, which is also what a row of asterisks BECOMES once markdown is
       // rendered - a thematic break.
-      const end = mine ? '' : '<hr class="end">';
+      // THE RULE, and the mark on it. `carryFrom` is the index of the first message carried, so the
+      // rule that carries the mark is the one under the message before it.
+      const cut = index + 1 === carryFrom;
+      const end = mine
+        ? ''
+        : `<hr class="end${cut ? ' cut' : ''}">${cut ? '<p class="cutSaid">Nothing above this line is carried to another model.</p>' : ''}`;
 
       return `<div class="msg ${mine ? 'you' : 'model'}">`
-        + `<div class="who">${said}${copy}</div>`
+        + `<div class="who">${said}${copy}${cutHere}</div>`
         + `<div class="what">${body}</div>${end}</div>`;
     })
     .join('');
@@ -577,6 +608,14 @@ function chatStyle(
      property set to true — which is exactly what the operator photographed: two dead boxes above a
      sentence explaining there was nothing to step through. */
   .askingHead[hidden] { display: none; }
+  .cutBtn { font: inherit; font-size: .85em; background: none; border: 1px solid var(--vscode-panel-border);
+            border-radius: 3px; padding: 1px 8px; color: var(--vscode-descriptionForeground); cursor: pointer; }
+  .cutBtn:hover { border-color: var(--vscode-charts-orange, var(--vscode-editorWarning-foreground, #d18616)); }
+  /* DASH-DOT and orange, asked for in those words. A solid rule is what every other answer already
+     ends with, so the one that means something has to look unlike them at a glance. */
+  hr.end.cut { border: none; border-top: 2px dashed var(--vscode-charts-orange, var(--vscode-editorWarning-foreground, #d18616)); }
+  .cutSaid { margin: 4px 0 0; font-size: .85em; opacity: .75;
+             color: var(--vscode-charts-orange, var(--vscode-editorWarning-foreground, #d18616)); }
   .askingHead button { min-width: 24px; padding: 2px 6px; font: inherit; }
   .askedAt { min-width: 4em; text-align: center; }
   .askedText { max-height: calc(40vh - 2.5em); overflow-y: auto; white-space: pre-wrap; overflow-wrap: break-word; }
@@ -1299,7 +1338,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     messagesRegion.addEventListener('click', function (event) {
       const target = event.target;
       if (!target || typeof target.closest !== 'function') { return; }
-      const acted = target.closest('[data-open], [data-file], [data-copy]');
+      const acted = target.closest('[data-open], [data-file], [data-copy], [data-cut]');
       if (!acted || !acted.dataset) { return; }
       if (typeof acted.dataset.open === 'string') {
         vscode.postMessage({ type: 'command', command: 'openLink', url: acted.dataset.open });
@@ -1310,6 +1349,11 @@ function chatScript(state: ChatPageState, regions: Regions): string {
         });
       } else if (typeof acted.dataset.copy === 'string') {
         vscode.postMessage({ type: 'command', command: 'copyAnswer', index: Number(acted.dataset.copy) });
+      } else if (typeof acted.dataset.cut === 'string') {
+        // ASKED, not drawn. The host records the mark and pushes the transcript back with the rule
+        // on it — so a press that failed to record shows nothing, rather than a line that is not
+        // durable while the next handover quietly carries everything above it.
+        vscode.postMessage({ type: 'carryFrom', at: Number(acted.dataset.cut) });
       }
     });
   }

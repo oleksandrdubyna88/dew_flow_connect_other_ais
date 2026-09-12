@@ -522,3 +522,18 @@ test('a window with no folder open looks in the home directory, not nowhere', ()
   assert.deepStrictEqual(foldersToSearch(['D:\rsd\app'], 'C:\Users\strug'), ['D:\rsd\app']);
   assert.deepStrictEqual(foldersToSearch(['a', 'b'], 'home'), ['a', 'b']);
 });
+
+test('the page can ask a handover to start somewhere, and cannot ask for a position that is not one', () => {
+  assert.deepStrictEqual(chatCommandOf({ type: 'carryFrom', at: 4 }), { kind: 'carryFrom', at: 4 });
+  assert.deepStrictEqual(chatCommandOf({ type: 'carryFrom', at: 0 }), { kind: 'carryFrom', at: 0 });
+
+  // A NEGATIVE would reach `slice` as an offset from the END and carry the last message instead of
+  // the suffix — this feature as its own inverse — so it is not a position and nothing happens.
+  for (const bad of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, '2', null, undefined]) {
+    assert.deepStrictEqual(
+      chatCommandOf({ type: 'carryFrom', at: bad }),
+      { kind: 'ignore' },
+      `${String(bad)} was accepted as a place to start a handover`,
+    );
+  }
+});
