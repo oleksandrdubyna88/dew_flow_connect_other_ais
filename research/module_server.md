@@ -473,7 +473,20 @@ programmingTask, active, prompts — parsed with the reflex `COAI_VENDORS` and `
 have had since they shipped: JSON this build cannot read is NO custom roles rather than half of them,
 so a malformed setting leaves the product running what it ships. What composition refuses row by row
 joins `Unrecognised`, which the panel already shows, so a person reads why the role they wrote is not
-running. The gates are then built for the roles the catalog HOLDS, so a role somebody added gets its
+running.
+
+*Unreadable is not the same as absent, and the two give different answers.* `ParseRoles` returns
+`null` for a value this build cannot parse and an empty list for a key nobody set, because falling
+back to the shipped five is right in both cases and saying nothing is right in only one: somebody who
+typed a trailing comma would otherwise watch their roles simply not appear, and the row-by-row
+refusals cannot speak for them, since the parse never reached a row. So `UnknownValues` carries a
+sentence for the whole setting, beside the ones it already had for `COAI_RETRY_BACKOFF`,
+`COAI_ON_EXHAUSTED` and `COAI_CODE_WORKSPACE`. It also settles which of the two sources wins when
+both have an opinion: `COAI_ROLES` is one key, so `SettingsFile.Layer` picks the environment's value
+whole, before anything parses it — an unreadable environment value does NOT let the file's roles back
+in, which would leave somebody running roles they had already replaced.
+
+The gates are then built for the roles the catalog HOLDS, so a role somebody added gets its
 own `COAI_ROUNDS_<ID>`, `COAI_THRESHOLD_<ID>` and `COAI_ENABLED_<ID>` like any other — which is why a
 role id is latin, starts with a letter and carries no hyphen. The shipped plan role still honours no
 `COAI_ENABLED_` key, by the operator's ruling that this is code review only; a plan-stage role a
