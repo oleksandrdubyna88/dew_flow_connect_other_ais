@@ -1,5 +1,23 @@
 # Changelog
 
+## Extension 0.37.0 — 2026-09-12
+
+**Carry nothing above.** A long conversation is re-sent in two places, and paid for in one: a Team
+server holds nothing and is handed the whole thing every single turn, and switching model hands the
+next one everything said so far. Ten turns about one subject followed by a question about another
+means the second question arrives wrapped in the first.
+
+The button is on the last answer. Press it and a dashed orange line is drawn under that answer: from
+then on, a model you switch to and a Team server are given only what is below the line. **Nothing is
+deleted** — the conversation stays where it is, whole, and you can scroll and copy it as before.
+
+It is not "forget this", it is "do not carry this onward". The local model you are talking to holds
+the conversation in its own process and keeps every word of it.
+
+Press it again further down and the point moves there; there is nothing to undo, because the mark is
+a position rather than a state, and only the current one is ever drawn. It survives a window reload
+with the conversation — and after one, the first question carries only what is below the line.
+
 ## Extension 0.36.6 — 2026-09-12
 
 **Three right-click items, each named for what it does.** **CoAI: default** asks the model you
