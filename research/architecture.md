@@ -129,6 +129,45 @@ throughout, which is the property this section is about: a seam neither containe
 neither container's tests reach. Recorded, with the fix, in
 [PLAN_team_server_reviewer_never_called.md](PLAN_team_server_reviewer_never_called.md).
 
+### The second one: the review ROLES (2026-09-12)
+
+The same shape, arrived at the same way. `coai-mcp` held five roles and twenty-five prompts as a C#
+array; the extension held the same list as TypeScript literals, because the panel is drawn before any
+server has started and a settings page that must wait for a subprocess shows an empty box on first
+open. What held them level was a test that parsed **C# source with a regular expression** — it broke
+on a reformat, could not see a field it had not been taught, and had already let one drift through.
+
+So `shared/builtin-roles.json` sits beside the URL vectors, owned by neither container. The two halves
+consume it differently, because they can: `coai-mcp` **embeds** it as a manifest resource
+(`RoleCatalog.Builtin`), and the extension **generates** `src/builtinRoles.generated.ts` from it with
+`scripts/generate-builtin-roles.mjs`, deriving its `ROLES` and `PROMPTS` from that. Each half then
+asserts its own LOADER against the file — `BuiltinRoleCatalogTests.cs` and
+`builtinRoleCatalog.test.ts` — so a seed edit either side misses goes red on that side, for the reason
+it actually happened.
+
+Generation adds one failure the token vectors do not have: a generated file can fall behind its
+GENERATOR as well as its input, and that direction is invisible — the committed file still matches
+the seed and every test stays green. So each generator has a `--check` mode that renders and compares
+without writing, and `generatedFilesAreCurrent.test.ts` runs them.
+
+```mermaid
+flowchart LR
+    seed["shared/builtin-roles.json<br/>(owned by neither)"]
+    embed["coai-mcp<br/>EmbeddedResource"]
+    gen["generate-builtin-roles.mjs"]
+    cat["RoleCatalog.Builtin"]
+    ts["builtinRoles.generated.ts<br/>-> ROLES / PROMPTS"]
+    tcs["BuiltinRoleCatalogTests.cs"]
+    tts["builtinRoleCatalog.test.ts"]
+    chk["generatedFilesAreCurrent.test.ts<br/>--check"]
+
+    seed --> embed --> cat
+    seed --> gen --> ts
+    seed -.asserted against.-> tcs --> cat
+    seed -.asserted against.-> tts --> ts
+    gen -.re-rendered and compared.-> chk --> ts
+```
+
 ### A version that rides in both directions (2026-09-09)
 
 The extension↔Team-server seam has a version of its own — `X-Coai-Contract`, an integer on every
