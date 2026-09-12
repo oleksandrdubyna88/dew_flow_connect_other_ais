@@ -213,6 +213,14 @@ export function activate(context: vscode.ExtensionContext): void {
         void vscode.window.showWarningMessage(`The question could not be taken: ${String(reason)}`);
       });
     }),
+    // The same reader, the other verb: ADDED to what the composer already holds rather than put in
+    // its place. Asked for after using the pair — `choose` had just composed a turn and `take` threw
+    // it away, when what was wanted was the question underneath it as more material.
+    vscode.commands.registerCommand('coai.addTheQuestion', () => {
+      takeTheQuestion(chatPanels, context.extensionUri, true).catch((reason: unknown) => {
+        void vscode.window.showWarningMessage(`The question could not be added: ${String(reason)}`);
+      });
+    }),
     // Deactivation is not a tab closing: nobody has told VS Code about these panels, so both the
     // panel and the vendor process behind it have to be ended here or they outlive the extension.
     { dispose: () => chatPanels.closeAll() },
