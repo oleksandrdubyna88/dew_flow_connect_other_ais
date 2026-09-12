@@ -262,15 +262,16 @@ public sealed record PanelSettings
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "coai-mcp");
 
-    public static PanelSettings FromEnvironment(Func<string, string?> env) => new PanelSettings
+    public static PanelSettings FromEnvironment(Func<string, string?> env) =>
+        // Composed ONCE and then read twice — the round configuration is built from it and the
+        // sentences it refused join `Unrecognised`. Calling the composer for each would give the
+        // two halves of one answer two different catalog objects.
+        WithCatalog(env, Catalog(env));
+
+    private static PanelSettings WithCatalog(Func<string, string?> env, RoleCatalog catalog) => new PanelSettings
     {
-        Rounds = new PanelConfig(
-            // Three layers, widest first: a ROLE's own keys, then its stage's, then the legacy
-            // single pair. Somebody who set a threshold once must not have their gate change under
-            // them, and somebody who set a stage must not have to repeat it for three roles.
-            Roles: RoleGates(env),
-            OnExhausted: PolicyOf(env("COAI_ON_EXHAUSTED"))),
-        Unrecognised = UnknownValues(env),
+        Rounds = Config(env, catalog),
+        Unrecognised = [.. UnknownValues(env), .. catalog.Dropped],
         GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),
         PerProviderConcurrency = IntVar(env, "COAI_MAX_PER_PROVIDER", 2),
         LocalConcurrency = IntVar(env, "COAI_LOCAL_CONCURRENCY", 1),
@@ -540,12 +541,44 @@ public sealed record PanelSettings
     /// <c>COAI_ENABLED_ARCHITECTURE</c> switches one CODE role off, and only off — see
     /// <see cref="NotSwitchedOff"/>.
     /// </remarks>
-    private static Dictionary<string, RoleGate> RoleGates(Func<string, string?> env)
+    /// <summary>
+    /// The roles a person configured, composed onto the shipped ones.
+    /// </summary>
+    /// <remarks>
+    /// <c>COAI_ROLES</c> is a JSON array of rows — id, name, stage, programmingTask, active and a
+    /// prompt list — and malformed JSON is NO custom roles rather than a half-applied list, the
+    /// reflex <c>COAI_VENDORS</c> and <c>COAI_PROMPTS_PER_ROUND</c> have had since they shipped.
+    /// What composition refuses row by row comes back in <see cref="RoleCatalog.Dropped"/> and joins
+    /// <see cref="Unrecognised"/>, so a person reads WHY the role they wrote is not running.
+    /// </remarks>
+    private static RoleCatalog Catalog(Func<string, string?> env) =>
+        RoleComposition.Compose(ParseRoles(env("COAI_ROLES")));
+
+    internal static List<RoleEntry> ParseRoles(string? json)
+    {
+        if (json is not { Length: > 0 })
+        {
+            return [];
+        }
+
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize(
+                json, SettingsJsonContext.Default.ListRoleEntry) ?? [];
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return [];
+        }
+    }
+
+    private static Dictionary<string, RoleGate> RoleGates(Func<string, string?> env, RoleCatalog catalog)
     {
         var gates = new Dictionary<string, RoleGate>();
-        foreach (var role in PanelConfig.AllRoles)
+        foreach (var definition in catalog.Roles)
         {
-            var isPlan = role == "PlanCritique";
+            var role = definition.Id;
+            var isPlan = definition.Stage == RoleStages.Plan;
             var stage = isPlan ? "PLAN" : "CODE";
             var shipped = isPlan ? PanelConfig.PlanDefault : PanelConfig.CodeDefault;
             var key = role.ToUpperInvariant();
@@ -556,14 +589,32 @@ public sealed record PanelSettings
             var threshold = CountVar(env, $"COAI_THRESHOLD_{key}",
                 CountVar(env, $"COAI_THRESHOLD_{stage}",
                     CountVar(env, "COAI_GATE_THRESHOLD", shipped.Threshold)));
-            // The plan role carries no switch at all — code review only, by the operator's ruling —
-            // so the boundary refuses to disable it rather than trusting nobody sets the variable.
-            var enabled = isPlan || NotSwitchedOff(env, $"COAI_ENABLED_{key}");
+            // The SHIPPED plan role carries no switch at all — code review only, by the operator's
+            // ruling — so the boundary refuses to disable it rather than trusting nobody sets the
+            // variable. A plan-stage role a person ADDED is theirs to switch: the ruling was about
+            // not turning the one shipped stage off by accident, and a stage with two roles in it
+            // has a second one to keep running.
+            var enabled = (isPlan && definition.BuiltIn) || NotSwitchedOff(env, $"COAI_ENABLED_{key}");
             gates[role] = new RoleGate(rounds, threshold, enabled);
         }
 
         return gates;
     }
+
+    /// <summary>The round configuration: which roles exist, and what each may spend.</summary>
+    /// <remarks>
+    /// Two questions with one answer, and they are asked in that order — the gates are built for the
+    /// roles the catalog holds, so a role a person added gets its own <c>COAI_ROUNDS_&lt;ID&gt;</c> and
+    /// <c>COAI_ENABLED_&lt;ID&gt;</c> keys like any other. Three layers of those, widest first: a ROLE's
+    /// own keys, then its stage's, then the legacy single pair. Somebody who set a threshold once
+    /// must not have their gate change under them, and somebody who set a stage must not have to
+    /// repeat it for three roles.
+    /// </remarks>
+    private static PanelConfig Config(Func<string, string?> env, RoleCatalog catalog) =>
+        new(Roles: RoleGates(env, catalog), OnExhausted: PolicyOf(env("COAI_ON_EXHAUSTED")))
+        {
+            Catalog = catalog,
+        };
 
     private static bool Flag(Func<string, string?> env, string name) =>
         env(name) is "1" or "true" or "TRUE" or "True";

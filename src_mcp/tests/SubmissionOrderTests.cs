@@ -73,7 +73,7 @@ public sealed class SubmissionOrderTests : IDisposable
     {
         var work = Service("alpha", "bravo", "charlie", "delta").BuildWork(
             [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole],
-            Worktree(), "ctx", round: 1, isPlanStage: false, seed: seed);
+            Worktree(), "ctx", round: 1, isPlanStage: false, seed: seed).Reviewers;
 
         return [.. work.Select(w => w.Invocation.Provider).Distinct(StringComparer.OrdinalIgnoreCase)];
     }
@@ -118,7 +118,7 @@ public sealed class SubmissionOrderTests : IDisposable
             var work = Service(vendors).BuildWork(
                 [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole],
                 Worktree(), "ctx", round: 1, isPlanStage: false,
-                seed: PanelService.StableSeed($"session-{i}", 1));
+                seed: PanelService.StableSeed($"session-{i}", 1)).Reviewers;
 
             var order = string.Join(",", work.Select(w => w.Invocation.Provider).Distinct(StringComparer.Ordinal));
             counts[order] = counts.GetValueOrDefault(order) + 1;
@@ -148,7 +148,7 @@ public sealed class SubmissionOrderTests : IDisposable
         {
             var work = Service("alpha", "bravo", "charlie").BuildWork(
                 [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole],
-                Worktree(), "ctx", round: 1, isPlanStage: false, seed: PanelService.StableSeed(id, 1));
+                Worktree(), "ctx", round: 1, isPlanStage: false, seed: PanelService.StableSeed(id, 1)).Reviewers;
 
             work.Select(w => $"{w.Invocation.Provider}|{w.Invocation.Role}")
                 .Order(StringComparer.Ordinal)
@@ -164,7 +164,7 @@ public sealed class SubmissionOrderTests : IDisposable
     {
         var work = Service("only").BuildWork(
             [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole],
-            Worktree(), "ctx", round: 1, isPlanStage: false, seed: 12345);
+            Worktree(), "ctx", round: 1, isPlanStage: false, seed: 12345).Reviewers;
 
         work.Select(w => w.Invocation.Role).Should().Equal(
             [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole],

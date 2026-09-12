@@ -32,5 +32,6 @@ internal sealed record VendorDto(
 
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(List<VendorDto>))]
+[JsonSerializable(typeof(List<CoaiMcp.Core.Rounds.RoleEntry>), TypeInfoPropertyName = "ListRoleEntry")]
 [JsonSerializable(typeof(Dictionary<string, List<string>>), TypeInfoPropertyName = "DictionaryStringListString")]
 internal sealed partial class SettingsJsonContext : JsonSerializerContext;

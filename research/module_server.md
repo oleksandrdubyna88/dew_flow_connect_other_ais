@@ -468,6 +468,28 @@ produces it, rather than inheriting one from a mapping somewhere else.
 any summary exists, so it would otherwise be refused with a sentence about vendors — sending somebody
 to check a configuration that is perfectly correct. Raised twice on the code round.
 
+**`COAI_ROLES` is how a person's own roles arrive.** A JSON array of rows — id, name, stage,
+programmingTask, active, prompts — parsed with the reflex `COAI_VENDORS` and `COAI_PROMPTS_PER_ROUND`
+have had since they shipped: JSON this build cannot read is NO custom roles rather than half of them,
+so a malformed setting leaves the product running what it ships. What composition refuses row by row
+joins `Unrecognised`, which the panel already shows, so a person reads why the role they wrote is not
+running. The gates are then built for the roles the catalog HOLDS, so a role somebody added gets its
+own `COAI_ROUNDS_<ID>`, `COAI_THRESHOLD_<ID>` and `COAI_ENABLED_<ID>` like any other — which is why a
+role id is latin, starts with a letter and carries no hyphen. The shipped plan role still honours no
+`COAI_ENABLED_` key, by the operator's ruling that this is code review only; a plan-stage role a
+person ADDED does, because that ruling was about not turning the one shipped stage off by accident
+and a stage with two roles in it has a second one to keep running.
+
+**Two things only a custom role can fail at, and both are said out loud.** Its prompt may have no
+text — a role somebody added and never wrote the prompt for — and then the round runs without it and
+names it in `NotAsked`, one sentence per role however many vendors would have carried it; without
+that guard the whole round died with `the prompt 'CoaiMcp.prompts.req-general.md' is not embedded in
+this build`, which is a message about our csproj shown to somebody who mistyped an id. And it cannot
+be sent to a Team server, which validates the name against the catalog IT was compiled with: the
+vendor is named in the round's excluded list before the launch rather than after a 400, per
+(vendor, role) rather than per vendor, so the same Team server goes on running the shipped roles.
+Widening that server is plan 3 of this feature.
+
 **A session carries its GATES; the catalog belongs to the server that is running.** `PanelConfig` is
 persisted inside `SessionState`, and when it gained a `Catalog` the whole thing rode along into every
 session file — twenty-five prompts and their prose, and a resumed session read back with the catalog
