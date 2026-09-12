@@ -125,9 +125,11 @@ public sealed record PanelConfig(
     /// has written it a budget yet, so it takes its stage's shipped one.
     /// </remarks>
     public RoleGate For(string role) =>
-        Roles.TryGetValue(role, out var gate)
-            ? gate
-            : Catalog.ById(role)?.Stage == RoleStages.Plan ? PlanDefault : CodeDefault;
+        Roles.TryGetValue(role, out var gate) ? gate : ShippedFor(role);
+
+    /// <summary>The budget a role takes when nobody has written it one: its stage's shipped default.</summary>
+    private RoleGate ShippedFor(string role) =>
+        Catalog.ById(role)?.Stage == RoleStages.Plan ? PlanDefault : CodeDefault;
 
     /// <summary>
     /// The roles of this stage that are switched ON, in the order a round runs them.
