@@ -87,9 +87,20 @@ string test cannot.
 
 ## Definition of Done
 
-- [ ] Test 1 written first and watched fail with the symptom above; then green.
-- [ ] `npm test` green in the worktree; the count reported in the pull request.
-- [ ] The diff through the `coai` code round, every finding resolved.
-- [ ] `research/module_extension.md` — the rounds-log paragraph mentions the toolbar buttons are
-      primary; `CHANGELOG.md` gets its line under the next extension version.
-- [ ] This plan promoted to `research/` with `IMPLEMENTED` and the date.
+- [x] Test 1 written first and watched fail with `#today is not painted secondary: <button
+      type="button" class="secondary" id="today">`; green with the fix; red again with it reverted
+      and green with it restored. The hover assertions and the cascade allow-list were each proved
+      the same way — the rule deleted, and a hostile `.toolbar button { … }` added.
+- [x] `npm test` green in the worktree: **1719 tests, 1718 pass, 0 fail** (1 skipped), reported in
+      the pull request. The count is 1719 rather than the 1701 of the first run because the branch
+      was rebased onto a `main` that had gained 18 tests.
+- [x] The diff through the `coai` code round — `proceed`, 8 gating against a threshold of 5, all 12
+      reviewers answered; 9 findings accepted, 6 rejected with reasons, all recorded via `resolve`.
+- [x] `research/module_extension.md` — the rounds-log paragraph names the toolbar's three primary
+      actions and the pager pair; `CHANGELOG.md` has both paragraphs under `## Unreleased`.
+- [x] This plan promoted to `research/` with `IMPLEMENTED` and the date; its row moved in
+      `todo/README.md` and added to `research/README.md`; `plan-lifecycle` clean.
+
+**Deviation from this list:** the version is deliberately NOT bumped here. This is one of seven
+issues landing before a single extension release, and the release commit at the end of the batch
+renames the `## Unreleased` heading to the version it cuts.
