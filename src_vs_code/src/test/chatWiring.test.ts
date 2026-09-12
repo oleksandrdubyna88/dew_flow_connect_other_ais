@@ -293,7 +293,7 @@ test('EVERY handover goes through the mark, and none builds its own slice', () =
   // event rather than by its line, so this says what broke when it breaks.
   const handovers: Array<readonly [string, RegExp]> = [
     ['a re-ask, which is a switch by another name', /thread\.carry = carriedFrom\(again\.said, thread\.carryFrom\)/],
-    ['a Team server, handed the conversation every turn', /thread\.forgetful[\s\S]{0,300}?thread\.carry = carriedFrom\(/],
+    ['a Team server, handed the conversation every turn', /thread\.forgetful[\s\S]{0,700}?thread\.carry = carriedFrom\(/],
     ['a vendor that lost the conversation', /contextLost === true[\s\S]{0,200}?thread\.carry = carriedFrom\(/],
     ['a model switch', /thread\.carry = carriedFrom\(thread\.messages, thread\.carryFrom\);\s*\n\s*show\(entry, false/],
     ['the first turn after a window reload', /carry: carriedFrom\(saved\.messages, carryMark\(/],
@@ -313,4 +313,45 @@ test('EVERY handover goes through the mark, and none builds its own slice', () =
 
   assert.strictEqual(built - empty - declared, marked,
     `${built - empty - declared - marked} carry site(s) build a conversation without the mark`);
+});
+
+test('a mark set AFTER a switch reaches the conversation that switch had already staged', () => {
+  // The finding that mattered most of the whole round. A switch, a restore and a lost context all
+  // fill `carry` ahead of the next question. Pressing the button after switching and before asking
+  // moved the rule, drew the line, and sent the entire conversation anyway — which is the one case
+  // this feature exists for. (gemini, the code round.)
+  const text = read(join('src', 'chatCommand.ts'));
+
+  assert.match(
+    text,
+    /onCarryFrom[\s\S]{0,1600}?if \(mine\.carry\.length > 0\) \{\s*\n\s*mine\.carry = carriedFrom\(mine\.messages, mine\.carryFrom\);/,
+    'a mark set after a switch leaves the staged conversation whole, and it is sent whole',
+  );
+});
+
+test('the mark only ever moves FORWARD, however the page asks', () => {
+  // The button is offered on the last answer alone, so a real press can never name a position above
+  // the mark already set. A lower one is a stale page or a forged message, and taking it would put
+  // back a conversation somebody deliberately excluded — on a Team server, at a price. (codex, as a
+  // security finding.)
+  const text = read(join('src', 'chatCommand.ts'));
+
+  assert.match(
+    text,
+    /mine\.carryFrom = Math\.max\(\s*\n\s*carryMark\(at, mine\.messages\.length\),\s*\n\s*carryMark\(mine\.carryFrom, mine\.messages\.length\),/,
+    'the host takes whatever position the page names, including one above the mark already set',
+  );
+});
+
+test('a re-ask brings the mark back with the transcript it truncated', () => {
+  // A re-ask drops the rejected answer and its question. Clamping at each use keeps that turn
+  // honest, but the STORED mark would stay past the end and point at an unrelated message once the
+  // conversation grew again. (gemini, the code round.)
+  const text = read(join('src', 'chatCommand.ts'));
+
+  assert.match(
+    text,
+    /thread\.messages = thread\.messages\.slice\(0, -2\);[\s\S]{0,400}?thread\.carryFrom = carryMark\(thread\.carryFrom, thread\.messages\.length\);/,
+    'a re-ask leaves the mark past the end of the transcript it just shortened',
+  );
 });

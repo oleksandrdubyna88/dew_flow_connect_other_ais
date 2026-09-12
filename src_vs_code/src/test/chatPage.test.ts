@@ -2352,3 +2352,29 @@ test('the answer that already carries the mark does not offer to set it again', 
   assert.doesNotMatch(html, /data-cut=/, 'the button offered to set the mark where it already is');
   assert.match(html, /hr class="end cut"/, 'the rule it already carries is gone');
 });
+
+test('the WHOLE page passes the mark, not only a later push', () => {
+  // A reloaded tab drew no rule until some push happened to carry the mark, and offered the button
+  // on an answer that already had one — because the full-page renderer took the default. (gemini,
+  // the code round.)
+  const html = chatPageHtml(state({
+    messages: [{ role: 'you', text: 'asked' }, { role: 'model', text: 'answered' }],
+    carryFrom: 2,
+  }), 'n0nce');
+
+  assert.match(html, /hr class="end cut"/, 'a reloaded tab came back without the rule it was marked with');
+  assert.doesNotMatch(html, /data-cut=/, 'and it offered to set the mark where it already was');
+});
+
+test('the button is not offered while a turn is in flight', () => {
+  // The request on the wire has already been built and sent with the old carry, so a press now would
+  // move the rule while changing nothing about the answer arriving under it. (codex, the code round.)
+  const messages = [{ role: 'you' as const, text: 'asked' }, { role: 'model' as const, text: 'answered' }];
+
+  assert.match(chatPageHtml(state({ messages, running: false }), 'n0nce'), /data-cut=/);
+  assert.doesNotMatch(
+    chatPageHtml(state({ messages, running: true }), 'n0nce'),
+    /data-cut=/,
+    'the button was offered over an answer still being written',
+  );
+});

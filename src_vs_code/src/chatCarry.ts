@@ -1,5 +1,3 @@
-import { ChatMessage } from './chatPage';
-
 /**
  * Where a conversation starts when it is handed to a model that has not heard it.
  *
@@ -46,6 +44,15 @@ export function carryMark(at: unknown, upTo: number): number {
  * <p>One function, called everywhere `carry` is built, so the Team server's every-turn handover and
  * the model switch's one-off cannot disagree about where a conversation begins.</p>
  */
-export function carriedFrom(messages: readonly ChatMessage[], at: number): readonly ChatMessage[] {
-  return messages.slice(carryMark(at, messages.length));
+export function carriedFrom<T>(messages: readonly T[], at: number, upTo = messages.length): readonly T[] {
+  // GENERIC, because nothing here reads a message. It was typed to the page's own `ChatMessage` and
+  // therefore imported the renderer into a decision — policy coupled to HTML. (codex, the code
+  // round.) What this function knows about is positions.
+  //
+  // `upTo` is an exclusive upper bound, so a Team turn takes ONE slice instead of two: it wants
+  // everything below the mark and above the question it is about to ask, and slicing twice allocated
+  // a near-copy of the whole transcript on every single turn. (codex, on the hot path.)
+  const end = Math.min(Math.max(upTo, 0), messages.length);
+
+  return messages.slice(Math.min(carryMark(at, messages.length), end), end);
 }

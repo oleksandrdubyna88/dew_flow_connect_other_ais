@@ -325,7 +325,16 @@ export function markedTurn(text: string, marks: TurnMarks): string {
 export function chatMessagesHtml(
   messages: readonly ChatMessage[],
   marks: TurnMarks = NO_MARKS,
+  // ZERO IS "no mark", which most callers genuinely have — but the default hid a caller that did:
+  // the FULL-PAGE renderer took it silently, so a reloaded tab drew no rule until some later push
+  // happened to carry the mark, and offered the button on an answer that already had one. Removing
+  // the default would have rewritten twenty-two tests to guard one line, so the line is guarded by a
+  // test instead. (gemini, the code round.)
   carryFrom = 0,
+  // A TURN IN FLIGHT has already built and sent its carry, so a press now would move the rule while
+  // changing nothing about the request on the wire — a line saying something untrue about the answer
+  // arriving under it. (codex, the code round.)
+  running = false,
 ): string {
   if (messages.length === 0) {
     return '<p class="empty">Nothing asked yet.</p>';
@@ -361,7 +370,7 @@ export function chatMessagesHtml(
       // CARRY NOTHING ABOVE. On the last answer only, and it names what it does rather than what it
       // breaks: nothing is deleted and the conversation stays whole on screen — what changes is where
       // a HANDOVER starts, to another model or to a Team server that is told everything every turn.
-      const cutHere = index === lastAnswer && index + 1 !== carryFrom
+      const cutHere = index === lastAnswer && index + 1 !== carryFrom && !running
         ? `<button type="button" class="cutBtn" data-cut="${index + 1}"`
           + ' title="From here on, a model switch and a Team server are handed only what is below.'
           + ' Nothing is deleted, and the model you are talking to now keeps all of it.">'
@@ -777,7 +786,7 @@ type Regions = Record<'messages' | 'thinking' | 'capped' | 'failure', string>;
 
 function regionsOf(state: ChatPageState): Regions {
   return {
-    messages: chatMessagesHtml(state.messages, state.marks),
+    messages: chatMessagesHtml(state.messages, state.marks, state.carryFrom, state.running),
     thinking: chatStatusHtml(state.running, 0, state.turn),
     capped: chatCappedHtml(state.capped),
     failure: state.failure.length === 0 ? '' : `<div class="failure">${escapeHtml(state.failure)}</div>`,
