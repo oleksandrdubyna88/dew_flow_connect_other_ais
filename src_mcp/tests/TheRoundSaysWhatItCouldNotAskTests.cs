@@ -57,6 +57,51 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
                 Prompts: [.. promptIds.Select(id => new PromptEntry(id, "General", "Whether the requirement is met."))]),
         ]);
 
+    /// <summary>
+    /// A custom role dealt to the one vendor that cannot run it must still be asked of one that can.
+    /// </summary>
+    /// <remarks>
+    /// Dealing hands each question to ONE vendor. The exclusion was applied after the deal, in the
+    /// leaf that builds a launch, so a custom role whose hand fell to the Team server was dropped
+    /// from the round entirely — with a local vendor sitting there able to run it. The round then
+    /// reported a vendor exclusion for a role that simply did not happen, which is the silent shrink
+    /// this whole story is about. Walked over ten seeds because which vendor gets the hand is the
+    /// seed's business, and one seed proves nothing either way. (gemini, story B2's second code
+    /// round.)
+    /// </remarks>
+    [Fact]
+    public void ACustomRoleDealtToATeamServer_GoesToAVendorThatCanRunIt()
+    {
+        Prompt("req-general", "Whether the requirement is met.");
+        TeamServerAuth.WriteToken(TeamServerAuth.TokenPath(_dataDir, TeamServer), "a-token");
+
+        var service = new PanelService(
+            new PanelSettings
+            {
+                DataDir = _dataDir,
+                CodeWorkspace = "none",
+                Rounds = new PanelConfig(Roles: null, StagePolicy.Human) { Catalog = With("req-general") },
+                Providers =
+                [
+                    new ProviderSettings("local") { Enabled = true, Runtime = "local", Model = "m" },
+                    new ProviderSettings("company-codex")
+                    {
+                        Enabled = true, Runtime = "remote", Model = "m", RemoteVendor = "codex", BaseUrl = TeamServer,
+                    },
+                ],
+            },
+            VaultKeys.None("no vault"), default, new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None);
+
+        foreach (var seed in Enumerable.Range(0, 10))
+        {
+            var work = service.BuildWork(
+                ["Requirements"], Scratch(), "ctx", round: 1, isPlanStage: false, seed: seed, deal: true);
+
+            work.Reviewers.Should().ContainSingle($"seed {seed}: some vendor here can run this role")
+                .Which.Invocation.Provider.Should().Be("local");
+        }
+    }
+
     private PanelService Service(RoleCatalog catalog, bool withTeamServer)
     {
         if (withTeamServer)

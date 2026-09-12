@@ -486,7 +486,10 @@ at, counted the way an editor counts — the one part of the message a person st
 JSON cannot work out for themselves — with the parser's "change the reader options" dropped, since
 they have a settings file and no reader to change. It is a record rather than a nullable list for
 doctrine 4 and 5's reason: "not captured" and "empty" are different facts, and an expected failure is
-a value carrying its reason. It also settles which of the two sources wins when
+a value carrying its reason. The value is read ONCE and threaded to both halves — the catalog is
+composed from it and the complaint is written from it — unlike the neighbouring diagnostics, which
+re-parse a few characters harmlessly: this one decides which roles run, and two reads could describe
+two different settings. It also settles which of the two sources wins when
 both have an opinion: `COAI_ROLES` is one key, so `SettingsFile.Layer` picks the environment's value
 whole, before anything parses it — an unreadable environment value does NOT let the file's roles back
 in, which would leave somebody running roles they had already replaced.
@@ -527,12 +530,25 @@ has had since it shipped.
 **The plan stage takes its roster from the catalog too.** It was a hardcoded `[PlanRole]`, so a
 plan-stage role a person added was composed, given `COAI_ROUNDS_<ID>` and the enable switch the
 shipped plan role deliberately does not have — and then never asked anything, while the code stage
-had been reading `RolesForRound` since story B1. Two things follow it. A dealt plan lens now goes to
-the role the CATALOG says owns it rather than to `roles[0]`, which was true for exactly as long as a
-plan round had one role in it. And `review_plan` gained the refusal `review_code` has always had:
-the shipped plan role honours no `COAI_ENABLED_` key, but a `COAI_ROLES` row saying `active: false`
-switches it off like any other, and a round that launches no reviewer is not an empty round — the
-session counts it unresolved and never lets the person retry.
+had been reading `RolesForRound` since story B1. And `review_plan` gained the refusal `review_code`
+has always had: the shipped plan role honours no `COAI_ENABLED_` key, but a `COAI_ROLES` row saying
+`active: false` switches it off like any other, and a round that launches no reviewer is not an empty
+round — the session counts it unresolved and never lets the person retry.
+
+*Plural plan roles then broke three things that had been true while there was one.* **A dealt lens
+goes to the role the CATALOG says owns it**, and `Lens` has three outcomes rather than two: a lens
+whose owner is in the round goes to that owner; a lens the catalog does not know at all still falls
+back to the first role, because a stale pick must never leave a round with nothing to ask; and a lens
+the catalog knows and gives to a role this round is NOT running is DROPPED, because reassigning it
+has a reviewer answer somebody else's question while the round reports the wrong role as asking it.
+**The unspent-lens pool is read per role**, one lens each before the first role tops the hand up to
+one question per vendor — it was read from `PlanCritique` alone, so a round configured for two plan
+roles dealt every question to one of them and nothing to the other. **And the deal happens WITHIN the
+vendors that can carry each role**: `Assemble` groups items by their carrier set and deals each group
+over its own vendors, because applying the Team-server exclusion after the deal dropped a custom role
+out of the round entirely whenever its hand fell to the Team server, with a local vendor sitting
+beside it able to run it. `CanCarry` is that one rule, asked before the deal and again in the leaf,
+where the non-dealing fan-out still needs it to record why a vendor was not used.
 
 **A session carries its GATES; the catalog belongs to the server that is running.** `PanelConfig` is
 persisted inside `SessionState`, and when it gained a `Catalog` the whole thing rode along into every

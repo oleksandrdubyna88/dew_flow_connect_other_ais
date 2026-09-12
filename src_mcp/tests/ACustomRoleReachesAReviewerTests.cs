@@ -159,6 +159,38 @@ public sealed class ACustomRoleReachesAReviewerTests : IDisposable
             "brief-gaps is the brief role's lens, and the shipped plan role has never heard of it");
     }
 
+    /// <summary>
+    /// A lens whose owner is not in this round is not handed to somebody else.
+    /// </summary>
+    /// <remarks>
+    /// The fallback to the round's first role is right for a lens id the catalog does not know at
+    /// all — a stale pick must not leave a round with nothing. It is wrong for a lens the catalog
+    /// knows perfectly well and assigns to a role that is switched off or out of rounds: that lens
+    /// is then answered by a different reviewer under a different name, and the round reports the
+    /// wrong role as having asked the question. (codex and gemini, story B2's second code round.)
+    /// </remarks>
+    [Fact]
+    public void ALensWhoseRoleIsNotInTheRound_IsDropped_NotReassigned()
+    {
+        var catalog = RoleComposition.Compose([
+            new RoleEntry("Brief", Name: "The brief", Stage: RoleStages.Plan,
+                Prompts:
+                [
+                    new PromptEntry("brief-general", "General", "The whole brief."),
+                    new PromptEntry("brief-gaps", "Gaps", "What it does not say."),
+                ]),
+        ]);
+        var service = Service(catalog);
+        File.WriteAllText(Path.Combine(_dataDir, "prompts", "brief-gaps.md"), "What does it leave out?");
+
+        var work = service.BuildWork(
+            [RoleCatalog.PlanRole], Scratch(), "ctx", round: 1, isPlanStage: true,
+            planPrompts: ["brief-gaps", "plan-critique"]).Reviewers;
+
+        work.Should().ContainSingle().Which.Prompt.Should().Be("plan-critique",
+            "the brief's lens belongs to a role this round is not running");
+    }
+
     [Fact]
     public void APromptIdNobodyKnows_FallsBackToTheRolesOwnGeneralPrompt()
     {
