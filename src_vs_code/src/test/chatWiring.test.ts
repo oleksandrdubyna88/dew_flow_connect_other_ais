@@ -355,3 +355,53 @@ test('a re-ask brings the mark back with the transcript it truncated', () => {
     'a re-ask leaves the mark past the end of the transcript it just shortened',
   );
 });
+
+/**
+ * Every door records ONE invocation, and records it before anything can refuse.
+ *
+ * <p>The other half a unit test cannot see. Every module under the spending page can be right while
+ * one of the five commands never writes a line: the parser, the grouping and the rendering would all
+ * stay green and the count on the page would simply be wrong. A reviewer asked for this by name on
+ * the plan round.</p>
+ *
+ * <p>It also checks the ORDER, which is the finding that moved this recording up here in the first
+ * place: a door that cannot resolve a CLI, or that the person dismisses, returns before it delivers
+ * anything — and an attempt is exactly what the count is about.</p>
+ */
+test('each of the five doors records itself, once, before it does anything that can refuse', () => {
+  const source = read('src/extension.ts');
+  const CALL = "noteChatDoor('";
+  const doors: ReadonlyArray<readonly [string, string, string]> = [
+    ['coai.chatWithOtherAi', 'key', 'chatWithOtherAi('],
+    ['coai.chatNow', 'default', 'chatWithOtherAi('],
+    ['coai.chatChoose', 'choose', 'chatWithOtherAi('],
+    ['coai.takeTheQuestion', 'take', 'takeTheQuestion('],
+    ['coai.addTheQuestion', 'add', 'takeTheQuestion('],
+  ];
+
+  for (const [command, door, work] of doors) {
+    const at = source.indexOf("registerCommand('" + command + "'");
+    assert.notStrictEqual(at, -1, command + ' is not registered at all');
+    const next = source.indexOf('registerCommand(', at + 20);
+    const handler = source.slice(at, next === -1 ? source.length : next);
+    const recorded = handler.split(CALL).slice(1).map((rest) => rest.slice(0, rest.indexOf("'")));
+
+    assert.deepStrictEqual(recorded, [door], command + ' does not record exactly its own door, exactly once');
+    assert.ok(handler.indexOf(CALL) < handler.indexOf(work),
+      command + ' records the invocation after the work that can refuse it, so a refusal goes uncounted');
+  }
+});
+
+test('the doors the page counts are the doors the manifest offers', () => {
+  // A sixth command that opens a chat and records nothing would leave the count quietly short. The
+  // manifest is the list of what a person can press; this is the list of what gets written down.
+  const source = read('src/extension.ts');
+  const opens = ['coai.chatWithOtherAi', 'coai.chatNow', 'coai.chatChoose', 'coai.takeTheQuestion', 'coai.addTheQuestion'];
+
+  for (const command of opens) {
+    assert.ok(MANIFEST.contributes.commands.some((one) => one.command === command),
+      command + ' is registered but the manifest does not offer it');
+  }
+  assert.strictEqual(source.split("noteChatDoor('").length - 1, opens.length,
+    'something records a door that is not one of the five commands, or one of them has stopped');
+});

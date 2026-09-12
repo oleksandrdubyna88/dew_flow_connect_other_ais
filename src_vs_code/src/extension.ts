@@ -7,6 +7,7 @@ import { ChatPanels } from './chatPanels';
 import {
   chatReadsThisSide,
   chatWithOtherAi,
+  noteChatDoor,
   rememberChatsIn,
   restoreConversation,
   takeTheQuestion,
@@ -191,15 +192,21 @@ export function activate(context: vscode.ExtensionContext): void {
     // 'Chat with other AI' item in Claude Code's own right-click menu — and the command tells them
     // apart by what VS Code hands it, because only one of them can copy the selection itself.
     vscode.commands.registerCommand('coai.chatWithOtherAi', (...args: unknown[]) => {
+      // RECORDED FIRST, in every one of these five. The count on the spending page is of how often
+      // the chat was reached for, so a door that then refuses — no CLI, nothing captured — is still
+      // one of them. Nothing waits for the write.
+      noteChatDoor('key');
       void chatWithOtherAi(chatPanels, context.extensionUri, args);
     }),
     // The two menu items, which differ from the chord in one way: each SAYS what it will do, so
     // neither reads `coai.chatAutoSend`. An item whose behaviour depends on a setting in another
     // window is an item nobody can predict from its own label.
     vscode.commands.registerCommand('coai.chatNow', (...args: unknown[]) => {
+      noteChatDoor('default');
       void chatWithOtherAi(chatPanels, context.extensionUri, args, true);
     }),
     vscode.commands.registerCommand('coai.chatChoose', (...args: unknown[]) => {
+      noteChatDoor('choose');
       void chatWithOtherAi(chatPanels, context.extensionUri, args, false);
     }),
     // Take the question Claude Code is asking and hand it to a second model. Its own door, because
@@ -209,6 +216,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // The rejection is CAUGHT rather than dropped: a command that fails silently at the activation
     // boundary is a keypress that does nothing and explains nothing. (CodeRabbit, PR #206.)
     vscode.commands.registerCommand('coai.takeTheQuestion', () => {
+      noteChatDoor('take');
       takeTheQuestion(chatPanels, context.extensionUri).catch((reason: unknown) => {
         // The DETAIL to the console, a short sentence to the person. A stack or a filesystem path in
         // a toast is neither readable nor theirs to act on, and the path rule says so; dropping it
@@ -221,6 +229,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // its place. Asked for after using the pair — `choose` had just composed a turn and `take` threw
     // it away, when what was wanted was the question underneath it as more material.
     vscode.commands.registerCommand('coai.addTheQuestion', () => {
+      noteChatDoor('add');
       takeTheQuestion(chatPanels, context.extensionUri, true).catch((reason: unknown) => {
         console.error('coai.addTheQuestion failed', reason);
         void vscode.window.showWarningMessage('The question could not be added.');

@@ -92,12 +92,19 @@ export function parseUsage(text: string): UsageEntry[] {
 /**
  * The entries inside a window.
  *
+ * <p>Generic over anything with a `utc`, because a second ledger wanted exactly this rule: what
+ * "this week" means must be one answer for both halves of the spending page, not two that drift.</p>
+ *
  * <p><b>"Today" is since local midnight.</b> It was the last 24 hours — "a review at 23:50 and one
  * at 00:10 belong to the same piece of work" — and the operator overruled it on 2026-09-05: what
  * today cost is a question about the calendar day, and a rolling day answers a different one. Week,
  * month and year stay rolling: a quiet Monday morning must still show last week's work.</p>
  */
-export function within(entries: readonly UsageEntry[], window: Window, now: Date): UsageEntry[] {
+export function within<T extends { readonly utc: string }>(
+  entries: readonly T[],
+  window: Window,
+  now: Date,
+): T[] {
   const days = WINDOWS.find((w) => w.id === window)?.days ?? 1;
   const cutoff = window === 'day'
     ? new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()

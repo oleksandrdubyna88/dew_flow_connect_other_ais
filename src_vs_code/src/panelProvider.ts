@@ -23,6 +23,8 @@ import { parseUsage, priceOfLine, UsageEntry, Window } from './usage';
 import { stat } from 'node:fs/promises';
 import { ChatTurnRecord } from './chatUsage';
 import { chatUsagePath, readChatUsage } from './chatUsageFile';
+import { ChatDoorRecord } from './chatDoors';
+import { chatDoorsPath, readChatDoors } from './chatDoorsFile';
 import {
   CliStatus,
   latestCliVersion,
@@ -424,6 +426,28 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    */
   private chatLedger: { stamp: string; records: readonly ChatTurnRecord[] } = { stamp: '', records: [] };
 
+  /** The same, for the ledger of INVOCATIONS - how often the chat was reached for. */
+  private doorLedger: { stamp: string; records: readonly ChatDoorRecord[] } = { stamp: '', records: [] };
+
+  /**
+   * Every door ever opened, on the same stamped cache as the turns.
+   *
+   * <p>Its own file, and the reason is measured against the other one's parser: `parseChatUsageLine`
+   * requires a non-empty `utc` and nothing else, so a door line living in `chat-usage.jsonl` reads as
+   * a turn that cost nothing to every caller that already reads it - a phantom conversation row in
+   * the table on this very page. (codex and gemini, the plan round, independently.)</p>
+   */
+  async doorLines(): Promise<readonly ChatDoorRecord[]> {
+    const stamp = await this.ledgerStamp(chatDoorsPath(this.dataDir.fsPath));
+    if (stamp !== '' && stamp === this.doorLedger.stamp) {
+      return this.doorLedger.records;
+    }
+    const records = await readChatDoors(this.dataDir.fsPath);
+    this.doorLedger = { stamp, records };
+
+    return records;
+  }
+
   async chatLines(): Promise<readonly ChatTurnRecord[]> {
     const path = chatUsagePath(this.dataDir.fsPath);
     // The log page ticks every five seconds while it is open, and it used to re-read and re-parse the
@@ -476,6 +500,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // a number neither of them holds.
       this.teamServerStates(vscode.workspace.getConfiguration('coai')),
       this.usageScope,
+      // THE SECOND LEDGER, which this page has never counted: what the chat cost, and how often it
+      // was reached for. Read on the same stamped caches as everything else here.
+      { turns: await this.chatLines(), doors: await this.doorLines() },
     );
   }
 

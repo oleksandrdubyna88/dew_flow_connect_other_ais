@@ -4,6 +4,9 @@ import {
   teamUsageBlock,
   usageScopeControl,
 } from './teamServerView';
+import { ChatDoorRecord } from './chatDoors';
+import { ChatPriceOf, ChatSpendRow, chatSpendRows, chatSpendTotals } from './chatSpendRows';
+import { ChatTurnRecord } from './chatUsage';
 import { escapeHtml } from './escapeHtml';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
@@ -1256,7 +1259,7 @@ function total(billed: number | null, guessed: number | null): string {
  * through the full repaint — which stats the server binary, probes every vendor CLI, asks GitHub
  * what is published and fetches two price tables — so choosing a window took seconds for a sum.</p>
  */
-export function usageRegion(
+function reviewersRegion(
   usage: readonly UsageEntry[],
   window: Window,
   vendors: readonly Vendor[],
@@ -1311,6 +1314,108 @@ ${team}${scope}`;
 
   return `${cards}
 <div class="hint total">All vendors: ${shortNumber(all.tokens)} tokens · ${total(all.cost, all.guess)} · ${shortDuration(all.seconds)}</div>`;
+}
+
+/** What the chat ledgers hand the page: every turn and every invocation, unfiltered. */
+export interface ChatLedgers {
+  readonly turns: readonly ChatTurnRecord[];
+  readonly doors: readonly ChatDoorRecord[];
+}
+
+/** A number, or a dash — never a zero standing in for "nobody knows". */
+function orDash(value: number | null, write: (one: number) => string): string {
+  return value === null ? '—' : write(value);
+}
+
+/**
+ * One row of the chat table: who answered, on what, for how much, and how often it was reached for.
+ *
+ * <p>A pair with no vendor at all is a real state — a window where nothing is configured, reached
+ * for anyway — and it is NAMED rather than dropped or folded into somebody else's row.</p>
+ */
+function chatSpendRow(row: ChatSpendRow, colour: (provider: string) => string): string {
+  const named = row.provider.length > 0;
+  const rate = (per: number | null): string => orDash(per, (one) => `$${one}`);
+
+  return `<tr>
+  <td class="name" style="color:${named ? colour(row.provider) : 'inherit'}">${escapeHtml(named ? row.provider : 'nothing chosen')}</td>
+  <td>${escapeHtml(row.model.length > 0 ? row.model : '—')}</td>
+  <td class="n">${shortNumber(row.tokensIn)}</td>
+  <td class="n">${shortNumber(row.tokensOut)}</td>
+  <td class="n">${rate(row.inPerMillion)}</td>
+  <td class="n">${rate(row.outPerMillion)}</td>
+  <td class="n">${total(row.costUsd, row.estimatedUsd)}</td>
+  <td class="n">${row.allTimeEstimated ? total(null, row.allTimeUsd) : total(row.allTimeUsd, null)}</td>
+  <td class="n">${row.asked}</td>
+  <td class="n">${row.opened}</td>
+</tr>`;
+}
+
+/**
+ * What the CHAT has cost — the second ledger on this page, and the one it never counted.
+ *
+ * <p>A table rather than the cards above it, because a chat row carries a model and two rates that
+ * a card has no room for, and because the question this section answers is a comparison between
+ * rows rather than a bar next to each one.</p>
+ */
+function chatRegion(
+  chat: ChatLedgers,
+  window: Window,
+  prices: Readonly<Record<string, ModelPrice>>,
+  colour: (provider: string) => string,
+): string {
+  const now = new Date();
+  const priceOf: ChatPriceOf = (model) => prices[model];
+  const rows = chatSpendRows(chat.turns, chat.doors, window, now, priceOf);
+  const sums = chatSpendTotals(chat.turns, chat.doors, window, now, priceOf);
+  if (rows.length === 0) {
+    return '<div class="empty">No conversations in this window. Ask a second model about a passage and'
+      + ' what it costs appears here.</div>';
+  }
+  // The counts come from the LEDGER rather than from adding the rows up, so they go on agreeing with
+  // it whatever the row filter does.
+  const unpriced = sums.unpriced === 0 ? '' : ` · ${sums.unpriced} turn(s) nobody priced`;
+
+  return `<table class="chatSpend">
+<thead><tr>
+  <th>Vendor</th><th>Model</th><th class="n">Tokens in</th><th class="n">Tokens out</th>
+  <th class="n" title="What a million tokens of input costs at the rate in force for this model.">$ in /M</th>
+  <th class="n" title="What a million tokens of output costs at the rate in force for this model.">$ out /M</th>
+  <th class="n">Cost</th>
+  <th class="n" title="What this vendor and model have cost in every conversation ever, whatever window is chosen above.">All time</th>
+  <th class="n" title="How many times the question was taken or added — CoAI: take the question and CoAI: add the question.">Asked</th>
+  <th class="n" title="How many times the chat was opened at all, by any of its five doors.">Opened</th>
+</tr></thead>
+<tbody>
+${rows.map((row) => chatSpendRow(row, colour)).join('\n')}
+</tbody>
+</table>
+<div class="hint total">All chats: ${shortNumber(sums.tokens)} tokens · ${total(sums.costUsd, sums.estimatedUsd)}`
+    + ` · asked ${sums.asked} · opened ${sums.opened}${unpriced}</div>`;
+}
+
+/**
+ * The spending region: two ledgers, named, with a line between them.
+ *
+ * <p>They are written by different programs and they answer different questions — `coai-mcp` appends
+ * a line per REVIEWER while a round runs, and this extension appends a line per chat turn and per
+ * invocation. Adding them up by eye is wrong often enough that the page says which is which and
+ * draws a rule so nobody has to notice.</p>
+ */
+export function usageRegion(
+  usage: readonly UsageEntry[],
+  window: Window,
+  vendors: readonly Vendor[],
+  prices: Readonly<Record<string, ModelPrice>>,
+  teamServers: readonly TeamServerState[] = [],
+  usageScope: 'me' | 'company' = 'me',
+  chat: ChatLedgers = { turns: [], doors: [] },
+): string {
+  return `<h3 class="ledger">Reviewers</h3>
+${reviewersRegion(usage, window, vendors, prices, teamServers, usageScope)}
+<hr class="ledgers">
+<h3 class="ledger">Chat</h3>
+${chatRegion(chat, window, prices, vendorPalette(vendors.map((v) => v.id)))}`;
 }
 
 /**

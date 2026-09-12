@@ -1,6 +1,6 @@
-import { appendFile, mkdir, readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { ChatTurnRecord, chatUsageLine, parseChatUsage } from './chatUsage';
+import { appendLine, flushLedgers, readLedger } from './jsonlLedger';
 
 /**
  * The chat ledger's world-facing half: one file, appended to and read back.
@@ -72,37 +72,16 @@ export function chatUsagePath(dataDir: string): string {
 }
 
 /**
- * Appends, in order, one turn at a time.
- *
- * <p>Two `await`ed appends from one process can be issued in either order — a promise chain is the
- * cheapest thing that makes the file's order the conversation's order. It is not a lock and it does
- * not need to be: the measurement above is what makes several PROCESSES safe, and this is only about
- * this one.</p>
- */
-let queue: Promise<void> = Promise.resolve();
-
-/**
  * Write one turn down. Never rejects, and never delays the caller.
  *
  * <p>Returns the promise so a test can wait for the write it just asked for; the turn path ignores
- * it, because a person's answer must not wait on a disk.</p>
+ * it, because a person's answer must not wait on a disk. The ordering, the directory and the
+ * swallowed failure all live in `jsonlLedger.ts` now, shared with the door ledger — the promise
+ * chain that makes the file's order the conversation's order was the first thing a second ledger
+ * wanted to copy.</p>
  */
 export function recordChatTurn(dataDir: string, record: ChatTurnRecord): Promise<void> {
-  const path = chatUsagePath(dataDir);
-  queue = queue.then(async () => {
-    try {
-      // The directory may genuinely not exist: on a machine where nobody has run a review round, the
-      // extension's chat is the FIRST thing to write anything under the coai data directory.
-      await mkdir(dirname(path), { recursive: true });
-      await appendFile(path, chatUsageLine(record), 'utf8');
-    } catch (reason: unknown) {
-      // Said out loud rather than swallowed, per `coding-style.md`. What is lost is one line of
-      // accounting; what would be lost by throwing is the answer the person is reading.
-      console.error('ConnectOtherAIs: a chat turn could not be written to the usage ledger', reason);
-    }
-  });
-
-  return queue;
+  return appendLine(chatUsagePath(dataDir), chatUsageLine(record), 'a chat turn');
 }
 
 /**
@@ -114,7 +93,7 @@ export function recordChatTurn(dataDir: string, record: ChatTurnRecord): Promise
  * without making anybody wait for it. (codex and the local reviewer, the code round.)</p>
  */
 export function flushChatUsage(): Promise<void> {
-  return queue;
+  return flushLedgers();
 }
 
 /**
@@ -131,14 +110,6 @@ export function flushChatUsage(): Promise<void> {
  * is "not readable". It still returns empty, because a log page must not fail to open over its own
  * second data source; what it no longer does is stay quiet about it. (codex, the code round.)</p>
  */
-export async function readChatUsage(dataDir: string): Promise<readonly ChatTurnRecord[]> {
-  try {
-    return parseChatUsage(await readFile(chatUsagePath(dataDir), 'utf8'));
-  } catch (reason: unknown) {
-    if ((reason as { code?: unknown } | null)?.code !== 'ENOENT') {
-      console.error('ConnectOtherAIs: the chat usage ledger exists but could not be read', reason);
-    }
-
-    return [];
-  }
+export function readChatUsage(dataDir: string): Promise<readonly ChatTurnRecord[]> {
+  return readLedger(chatUsagePath(dataDir), parseChatUsage, 'chat usage');
 }
