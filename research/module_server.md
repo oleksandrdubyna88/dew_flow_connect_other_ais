@@ -46,11 +46,26 @@ reverted**. A consultation runs for minutes while the person works, so a file th
 window may be theirs; two reviewers called an automatic delete Blocking on the plan round and they
 were right.
 
-Two things are deliberately NOT watched, and the reason is a measurement: `.git/index` and the `.git`
-directory's own mtime. `git status` rewrites the index's stat cache — including the invariant's own
-FIRST call — so watching it made every consultation fail closed with nothing wrong. Found the moment
-the scenario test first ran. The named residual: a file changed deep inside an ignored DIRECTORY is
-not seen, because git lists the directory as one entry and walking it would cost seconds per call.
+Three things are deliberately NOT watched, and each is a measurement rather than a preference.
+`.git/index` and the `.git` directory's own mtime: `git status` rewrites the index's stat cache —
+including the invariant's own FIRST call — so watching it made every consultation fail closed with
+nothing wrong, found the moment the scenario test first ran. And an ignored DIRECTORY's mtime: git
+lists such a directory as ONE entry, so its timestamp stood in for everything inside it, and a build,
+a language server or an editor writing one temporary file into `bin/` would have failed every
+consultation on a machine with a watcher running. **That one was found by the CONSULTANT** — asked,
+on this feature's own live check, what the most likely false positive in this invariant was — and
+reproduced as a red test before it was believed. A directory's EXISTENCE is still watched; only its
+timestamp is gone.
+
+The named residual, which is what that gives up: a file changed deep inside an ignored directory is
+not seen. Walking those contents would cost seconds on every call, and an OS-level write audit is out
+of scope.
+
+**The alert says the TREE changed, not that the consultant changed it.** Two snapshots cannot name a
+writer — the person's own editor, a build watcher or a git command of theirs can move a file in the
+same window — and the consultation is withheld either way, because the advice was formed against a
+tree that no longer holds. Claiming the consultant did it would send somebody hunting a vendor for
+their own keystrokes. The consultant's own second point, on the same live check.
 
 **One consultation per repository at a time** (`RepositoryLock`, a held `FileShare.None` handle, the
 `SessionTurn` shape), taken BEFORE the record is read and held to the second snapshot: two
