@@ -112,7 +112,7 @@ if (process.argv.includes('--check')) {
   // it green while the help page changes. (codex, story C1's plan round.)
   const committed = readFileSync(out, 'utf8').replace(/\r\n/g, '\n');
   if (committed !== file.replace(/\r\n/g, '\n')) {
-    console.error(`${out} is not what this script produces — run: node scripts/generate-help-prompts.mjs`);
+    console.error(`${out} is not what this script produces — run: node src_vs_code/scripts/generate-help-prompts.mjs`);
     process.exit(1);
   }
   console.log(`up to date: helpPrompts.ts (${ordered.length} prompts in ${groups.length} groups)`);

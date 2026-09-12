@@ -94,7 +94,16 @@ test('an unset round shows what the server runs, for every role and every round'
   // The roles come from the panel's own catalog rather than a list retyped here: a role the panel
   // gained and this file did not would otherwise go unchecked, which is the second half of the
   // same finding.
+  // Both directions, not just one. Iterating the panel's roles catches a role the panel has and
+  // the seed does not; the count catches the reverse — a role ADDED to the seed that the panel's
+  // generated copy is missing, which would otherwise leave this green while the picker omits it.
+  // (gemini, this story's code round.)
   assert.ok(ROLES.length > 0);
+  assert.strictEqual(
+    ROLES.length,
+    universals.size,
+    'the panel draws a different number of roles from the number the seed ships',
+  );
   for (const { id: role } of ROLES) {
     const server = universals.get(role);
     assert.ok(
@@ -107,7 +116,7 @@ test('an unset round shows what the server runs, for every role and every round'
         selectedFor(role, round, {}),
         server,
         `${role} round ${round}: the panel would show a different prompt from the one the seed gives `
-          + 'this role. If the seed changed, run: node scripts/generate-builtin-roles.mjs',
+          + 'this role. If the seed changed, run: node src_vs_code/scripts/generate-builtin-roles.mjs',
       );
     }
   }

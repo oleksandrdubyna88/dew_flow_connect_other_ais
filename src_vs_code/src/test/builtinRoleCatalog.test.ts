@@ -17,7 +17,7 @@ import { CONVENTIONS_ID, PROMPTS, ROLES, promptsFor, universalFor } from '../pro
  * reason it actually happened.</p>
  *
  * <p>It is therefore also the test that fails when somebody edits the seed and forgets to run
- * <code>node scripts/generate-builtin-roles.mjs</code>.</p>
+ * <code>node src_vs_code/scripts/generate-builtin-roles.mjs</code>.</p>
  */
 
 interface SeedPrompt {
@@ -62,7 +62,7 @@ test('the generated catalog is the seed, field for field', () => {
       programmingTask: r.programmingTask,
       prompts: r.prompts.map((p) => ({ id: p.id, label: p.label, purpose: p.purpose })),
     })),
-    'run `node scripts/generate-builtin-roles.mjs` — the generated file is behind the seed',
+    'run `node src_vs_code/scripts/generate-builtin-roles.mjs` — the generated file is behind the seed',
   );
 });
 
