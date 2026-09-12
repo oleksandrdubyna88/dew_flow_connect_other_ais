@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+**A reviewer in the Active rounds list reads over two lines.** What it is — vendor, role and model — on the first; what it is doing, indented, on the second. Showing the model had made that line about twice as long as the sidebar is wide, and a model id is one long unbreakable word, so the line used to break in the middle of it. A reviewer whose status has not been recorded shows no second line rather than an empty one. The rounds log page is unchanged: there a reviewer is still one line.
+
 **The review roles come from one file now, and nothing you see has changed.** The five roles and
 their twenty-five prompts used to be written out twice — once in the server's source, once in the
 panel's — with a test that read one program's source with a regular expression to check it still

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { costPhrase, elapsed, isRunning, parseSession, reviewerLines, RoundRecord } from '../rounds';
+import { costPhrase, elapsed, isRunning, parseSession, reviewerLines, reviewerRows, RoundRecord } from '../rounds';
 
 /**
  * What `rounds.ts` still guarantees now that the markdown log is gone.
@@ -64,6 +64,63 @@ test('a reviewer row names the model it was launched with', () => {
   assert.deepEqual(reviewerLines(withModel), [
     'remsoftdev-claude/Architecture · claude-haiku-4-5 — done (3 findings)',
   ]);
+});
+
+// ---------- the row has a second seam, for a sidebar that is narrow (#132) ----------
+
+/**
+ * A reviewer row is split twice: at the vendor's name, so the panel can colour that word and the
+ * markdown export cannot — and at the em dash, so the panel can put what a reviewer IS on one line
+ * and what it is DOING on the next. The model name doubled the length of the sentence when it was
+ * added, and a 30-character model id is one unbreakable token: the line wrapped wherever that token
+ * happened to end.
+ *
+ * <p>Both halves are RETURNED by the builder that already holds `role`, the model and the detail
+ * list as separate values. Nothing parses the rendered sentence looking for a dash — which is what
+ * the em-dash-in-a-model-name case below exists to keep true.</p>
+ */
+test('a reviewer row is split into what it is and what it said', () => {
+  const [row] = reviewerRows(round({
+    reviewerStates: [
+      { provider: 'local', role: 'Architecture', status: 'done', findings: 3, note: '', seconds: 30, model: 'Qwen3.5-35B-A3B-Q5_vk128:latest' },
+    ],
+  }));
+
+  assert.equal(row!.provider, 'local');
+  assert.equal(row!.rest, '/Architecture · Qwen3.5-35B-A3B-Q5_vk128:latest', 'what it IS — no status, no dash');
+  assert.equal(row!.said, 'done (3 findings, 30 s)', 'what it is DOING — and it owns no leading dash');
+});
+
+test('a model with an em dash in its name is not mistaken for a separator', () => {
+  // The regression case for a split this code deliberately does NOT do. Raised on the plan round:
+  // splitting the rendered sentence at ' — ' would put `custom` on the second line and lose half the
+  // model from the first. Building both halves from the source fields cannot.
+  const [row] = reviewerRows(round({
+    reviewerStates: [
+      { provider: 'local', role: 'Architecture', status: 'done', findings: 0, note: '', model: 'Qwen — custom' },
+    ],
+  }));
+
+  assert.equal(row!.rest, '/Architecture · Qwen — custom', 'the whole id stays on the identity half');
+  assert.equal(row!.said, 'done (0 findings)', 'and the status half is only the status');
+  assert.deepEqual(reviewerLines(round({
+    reviewerStates: [
+      { provider: 'local', role: 'Architecture', status: 'done', findings: 0, note: '', model: 'Qwen — custom' },
+    ],
+  })), ['local/Architecture · Qwen — custom — done (0 findings)'], 'and the one-line form is unchanged');
+});
+
+test('a reviewer with no status says nothing, rather than a dangling dash', () => {
+  // A session file is JSON somebody else wrote. A blank status used to render `…/Architecture — `
+  // with a trailing dash, and under a two-line row it would add an indented empty line. Raised on
+  // the plan round by two vendors; this is the one case where the one-line form CHANGES, and it
+  // changes from a dangling dash to no dash.
+  const blank = round({
+    reviewerStates: [{ provider: 'local', role: 'Architecture', status: '', findings: 0, note: '', model: '' }],
+  });
+
+  assert.equal(reviewerRows(blank)[0]!.said, '');
+  assert.deepEqual(reviewerLines(blank), ['local/Architecture']);
 });
 
 test('a reviewer launched without a model gets no separator, not an empty one', () => {

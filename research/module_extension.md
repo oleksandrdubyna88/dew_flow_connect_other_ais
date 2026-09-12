@@ -2252,6 +2252,33 @@ a control is `aria-describedby`. That came out of the move's own code round: pro
 row was what tied the note to the input, and a screen reader never had it — so taking the proximity
 away is the moment to say the association out loud.
 
+### A reviewer's row is two lines, split at a seam it already had (2026-09-12)
+
+Issue #132. The model name was added to a reviewer's line on 2026-09-08 and doubled its length:
+`local/Architecture · Qwen3.5-35B-A3B-Q5_vk128:latest — done (3 findings, 30 s)` in a sidebar a few
+hundred pixels wide. A model id is one unbreakable 30-character token, so the wrap landed wherever
+that token happened to end — the same complaint the round card's own head answered when it was split
+into three lines.
+
+`ReviewerRow` is `{ provider, rest, said }` now. It was already split once, at the vendor's name, so
+the panel can colour that word and the markdown export cannot; the second seam is at the em dash, so
+the panel can put what a reviewer **is** on one line and what it is **doing** on the next.
+`reviewerLines` joins all three and the rounds log page is untouched — it shows, searches and exports
+one line.
+
+Three things about it are deliberate:
+
+- **Both halves are BUILT, never parsed back out.** `restOf` already holds the role, the normalised
+  model and the detail list as separate values. A reader that split the finished sentence at ` — `
+  would cut `Qwen — custom` in half and call the remainder a status; the test with a dash inside the
+  model id exists so a later refactor to parsing goes red. The plan round raised this four times,
+  each time assuming the opposite.
+- **One `.reviewer` element holds both lines.** Two sibling rows would make this the only place in
+  the card where a row is not a row.
+- **An empty status renders nothing.** A session file is JSON somebody else wrote; a blank status
+  used to produce a dangling `— ` and, under two lines, an indented empty row. This is the one case
+  where `reviewerLines`' output changed, and it changed from a dangling dash to no dash.
+
 ### Installing a reviewer's CLI from the row (2026-09-01)
 
 A fresh WSL box has none of these CLIs, and the panel is where somebody is standing when they find

@@ -521,9 +521,10 @@ test('a running round shows its status, its reviewers and what it has cost', () 
 
   assert.ok(html.includes('badge running'));
   // The vendor's word now carries its own colour, so the row is a span plus the rest of the
-  // sentence. Same content, and the assertion now also says where the colour stops.
+  // sentence. Same content, and the assertion now also says where the colour stops — and since
+  // #132 the status is a second line inside the same row, so the sentence breaks after the model.
   assert.ok(html.includes(
-    `<span class="who" style="color:${DEFAULT_COLOUR('codex')}">codex</span>/Architecture — done (2 findings)`));
+    `<span class="who" style="color:${DEFAULT_COLOUR('codex')}">codex</span>/Architecture<div class="said">done (2 findings)</div>`));
   assert.ok(html.includes('5.3k in / 260 out'));
   assert.ok(html.includes('no cost reported'));
 });
@@ -561,6 +562,15 @@ test('a reviewer card wears the colour that vendor has in the rounds list', () =
  * so the whole section read as disabled. Nothing was broken and nothing said anything; it just
  * looked switched off.</p>
  */
+test('the status line under a reviewer is indented by a real amount', () => {
+  // Asserted by VALUE, not by the mere presence of the property: a rule setting `margin-left: 0`
+  // would satisfy "there is a margin-left" while the two lines read as one. Raised on the plan
+  // round of #132.
+  const css = panelHtml(state(), 'n0nce').split('</style>')[0] ?? '';
+
+  assert.match(css, /\.reviewer \.said \{[^}]*margin-left:\s*16px/, 'the second line is indented from the row');
+});
+
 test('no two sections define the same class, because the loser is dimmed in silence', () => {
   const html = panelHtml(state(), 'n0nce');
   const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
