@@ -842,6 +842,16 @@ function gateBody(s: CoaiSettings): string {
 </div>`;
 }
 
+/**
+ * The five numeric limits, each a label and a 64px input at opposite ends of a `.inline` flex.
+ *
+ * <p>The round limit's derived note is a SIBLING hint under its row, never a third child of it:
+ * `.inline` is `justify-content: space-between`, so a third item shares the width with the label and
+ * the input and pushes that row's box out of the column the other four make — which is exactly what
+ * it did until issue #118. Every other description in this panel is a sibling hint for the same
+ * reason, and `panelView.test.ts` holds every row to two children so the next one cannot repeat
+ * it.</p>
+ */
 function limitsBody(s: CoaiSettings, enabledVendors: number): string {
   return `<div class="field inline">
   ${labelled('maxConcurrency', 'Reviewers at once', 'maxConcurrency')}
@@ -858,8 +868,8 @@ function limitsBody(s: CoaiSettings, enabledVendors: number): string {
 <div class="field inline">
   ${labelled('roundTimeoutMinutes', 'Round limit, minutes', 'roundTimeout')}
   <input type="number" id="roundTimeoutMinutes" min="0" data-setting="roundTimeoutMinutes" value="${s.roundTimeoutMinutes}">
-  <span class="hint">${escapeHtml(roundLimitNote(s, enabledVendors))}</span>
 </div>
+<div class="hint">${escapeHtml(roundLimitNote(s, enabledVendors))}</div>
 <div class="field inline">
   ${labelled('escalationMinutes', 'Wait for you, minutes', 'escalationMinutes')}
   <input type="number" id="escalationMinutes" min="1" data-setting="escalationMinutes" value="${s.escalationMinutes}">
