@@ -329,7 +329,30 @@ export function composed(rows: readonly RoleRow[]): readonly RoleRow[] {
     } satisfies RoleRow;
   });
 
-  return [...shipped, ...rows.filter((r) => !isBuiltIn(r.id))];
+  return [...shipped, ...rows.filter((r) => !isBuiltIn(r.id)).map(materialised)];
+}
+
+/**
+ * A row with every field the catalog promises, filled in as the server would read it.
+ *
+ * <p>A built-in came out of this function complete and a person's own role came out exactly as it
+ * was STORED — so `role.active` was a boolean on one and `undefined` on the other, and anything
+ * reading it directly would read a live custom role as switched off. Every caller was carrying its
+ * own `?? true` to compensate, which is what a leaky shape looks like from the outside. One shape
+ * now, whoever wrote the role. (gemini, the second code round.)</p>
+ *
+ * <p>The spread comes FIRST, so a field this build does not know is carried through the catalog the
+ * same way `rolesFrom` carries it through the parser.</p>
+ */
+function materialised(row: RoleRow): RoleRow {
+  return {
+    ...row,
+    name: row.name ?? row.id,
+    stage: stageOf(row),
+    programmingTask: row.programmingTask ?? true,
+    active: isActive(row),
+    prompts: row.prompts ?? [],
+  };
 }
 
 function shippedPrompt(role: RoleDefinition, promptId: string): boolean {

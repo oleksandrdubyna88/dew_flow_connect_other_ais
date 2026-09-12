@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { BUILTIN_ROLES } from '../builtinRoles.generated';
 import { escapeHtml } from '../webviewHtml';
-import { PLAN_STAGE, RESULT_STAGE, type RoleRow } from '../roles';
+import { MAX_ACTIVE_PER_STAGE, PLAN_STAGE, RESULT_STAGE, type RoleRow } from '../roles';
 import { CUSTOM_ROLES_SINCE, canActivate, canDeactivate, isShippedPrompt, roleEdit, rolesHtml, tooOldFor, type RolesPageState } from '../rolesPage';
 
 /**
@@ -302,4 +302,21 @@ test('the nonce reaches the policy and the script as one value', () => {
 
   assert.ok(html.includes("script-src 'nonce-aBc123'"), 'the policy names it');
   assert.ok(html.includes('<script nonce="aBc123">'), 'and so does the only script on the page');
+});
+
+test('the page says a new role will arrive switched off when the stage is full', () => {
+  // It does arrive switched off, which is honest — but the person finds that out AFTER clicking,
+  // from a hint on a role they have just created. Saying it beside the button is the same sentence
+  // one step earlier. (local, second code round.)
+  const full = Array.from({ length: MAX_ACTIVE_PER_STAGE }, (_, i) => ({
+    id: `Extra${i}`, stage: RESULT_STAGE, active: true,
+  }));
+  const off = BUILTIN_ROLES.filter((r) => r.stage !== PLAN_STAGE).map((r) => ({ id: r.id, active: false }));
+  const html = rolesHtml(state({ rows: [...off, ...full] }), 'n0nce');
+
+  assert.match(html, /arrive switched off/);
+});
+
+test('the page says nothing of the sort when the stage has room', () => {
+  assert.ok(!rolesHtml(state(), 'n0nce').includes('arrive switched off'));
 });

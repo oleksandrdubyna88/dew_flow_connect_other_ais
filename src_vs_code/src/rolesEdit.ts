@@ -100,6 +100,9 @@ function removed(current: readonly RoleRow[], id: string): RowsOutcome {
   if (mine === undefined) {
     return UNCHANGED;
   }
+  if (lastStanding(mine, current)) {
+    return refused(EMPTY_STAGE);
+  }
 
   return stored(
     current.filter((r) => r.id !== id),
@@ -155,7 +158,7 @@ function changed(
 
 /** One field of a role. Which fields may be set at all depends on whose role it is. */
 function edited(row: RoleRow, field: string, value: string | boolean, all: readonly RoleRow[]): RowsOutcome {
-  if (isBuiltIn(row.id) && FIXED_ON_SHIPPED.includes(field)) {
+  if (fixedOnShipped(row, field)) {
     return refused(
       'A role this product ships keeps its name, its stage and its kind: they key your settings, '
       + 'your open sessions and every round already recorded, and the review server reads none of '
@@ -165,31 +168,80 @@ function edited(row: RoleRow, field: string, value: string | boolean, all: reado
   if (field === 'active') {
     return switched(row, value === true, all);
   }
+  if (field === 'stage') {
+    return restaged(row, String(value), all);
+  }
 
   return stored([{ ...row, [field]: value }]);
+}
+
+function fixedOnShipped(row: RoleRow, field: string): boolean {
+  return isBuiltIn(row.id) && FIXED_ON_SHIPPED.includes(field);
+}
+
+/**
+ * The sentence for a stage with no reviewer in it.
+ *
+ * <p>Said by three commands, because THREE of them change how many roles are active in a stage:
+ * switching one off, removing it, and moving it to the other stage. Only the switch was guarded —
+ * so the page would save an empty stage by either of the other two routes, and the round that
+ * followed would have no reviewer, which the session counts as unresolved and never lets anybody
+ * retry. Found by two reviewers on the second code round.</p>
+ */
+const EMPTY_STAGE =
+  'That is the only role still active in this stage. Switch another one on first — a stage with '
+  + 'nothing in it produces a round with no reviewer at all.';
+
+/** And the sentence for a stage that already has as many as it may run. */
+const STAGE_FULL = 'Five roles are already active in that stage. Switch one off to make room.';
+
+/** Whether this role is the last reviewer its stage has. */
+function lastStanding(row: RoleRow, all: readonly RoleRow[]): boolean {
+  return isActive(row) && activeCount(all, stageOf(row)) <= 1;
 }
 
 /**
  * A role's switch, refused when it would leave a stage with nothing in it or put a sixth role in one.
  *
- * <p>The page disables both of these; this is the twin that catches a webview posting anyway. The
- * empty stage is the one worth naming: a stage with no role produces a round with no reviewer, which
- * the session counts as unresolved and never lets anybody retry.</p>
+ * <p>The page disables both of these; this is the twin that catches a webview posting anyway.</p>
  */
 function switched(row: RoleRow, on: boolean, all: readonly RoleRow[]): RowsOutcome {
-  const stage = stageOf(row);
-  const count = activeCount(all, stage);
-  if (on && !isActive(row) && count >= MAX_ACTIVE_PER_STAGE) {
-    return refused(`Five roles are already active in this stage. Switch one off to make room.`);
+  if (on && !isActive(row) && activeCount(all, stageOf(row)) >= MAX_ACTIVE_PER_STAGE) {
+    return refused('Five roles are already active in this stage. Switch one off to make room.');
   }
-  if (!on && isActive(row) && count <= 1) {
-    return refused(
-      'That is the only role still active in this stage. Switch another one on first — a stage with '
-      + 'nothing in it produces a round with no reviewer at all.',
-    );
+  if (!on && lastStanding(row, all)) {
+    return refused(EMPTY_STAGE);
   }
 
   return stored([{ ...row, active: on }]);
+}
+
+/**
+ * A role moved to the other stage — which is a role leaving one stage and joining another, so both
+ * stages' rules apply to it.
+ *
+ * <p>A role that is switched off moves freely: it is a reviewer in neither stage, so neither count
+ * changes. So does one "moved" to the stage it is already in, which is what a select fires when
+ * somebody opens it and picks the same thing.</p>
+ */
+function restaged(row: RoleRow, to: string, all: readonly RoleRow[]): RowsOutcome {
+  const moved: RoleRow = { ...row, stage: to };
+  if (!isActive(row) || to === stageOf(row)) {
+    return stored([moved]);
+  }
+
+  const why = whyNotMoved(row, to, all);
+
+  return why.length > 0 ? refused(why) : stored([moved]);
+}
+
+/** What is wrong with the move, or nothing at all. */
+function whyNotMoved(row: RoleRow, to: string, all: readonly RoleRow[]): string {
+  if (lastStanding(row, all)) {
+    return EMPTY_STAGE;
+  }
+
+  return activeCount(all, to) >= MAX_ACTIVE_PER_STAGE ? STAGE_FULL : '';
 }
 
 function promptRemoved(row: RoleRow, promptId: string): RowsOutcome {

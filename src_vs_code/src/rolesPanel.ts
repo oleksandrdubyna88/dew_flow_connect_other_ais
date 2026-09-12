@@ -7,6 +7,7 @@ import { composed, isBuiltIn, promptIdsInUse, rolesFrom, type RoleRow } from './
 import { promptBelongsTo, rowsAfter } from './rolesEdit';
 import { roleEdit, rolesHtml, type RolesCommand } from './rolesPage';
 import { promptFile, promptsDir } from './rolesPrompts';
+import { serverOnThisSide } from './installer';
 import { readerFor, saveSetting } from './sideConfig';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
@@ -129,18 +130,44 @@ export function openRoles(extension: vscode.ExtensionContext): void {
     void flush();
   });
   void render().catch((error: unknown) => report('ConnectOtherAIs could not draw the roles page.', error));
+  // Not awaited, and deliberately not fatal: the page is useful without knowing the server, and it
+  // says as much until this answers.
+  void askTheServer().catch((error: unknown) => {
+    console.error('[coai] roles page: the installed server could not be identified', error);
+  });
 }
 
-/** What the panel section shows as the installed server, so the page can warn about an old one. */
+/** The installed server, so the page can warn about one too old to read any of this. */
 let serverVersion = '';
 
 /**
- * The panel telling this page what it found.
+ * What this page knows about the installed server, and how it comes to know it.
  *
- * <p>It REPAINTS when the answer changes. It used to only assign: `coai.editRoles` is on the command
- * palette, so this page can be open before the panel has ever rendered, and the version then arrived
- * into a variable nothing read again — the banner about a server too old to run any of these roles
- * stayed hidden for the whole session.</p>
+ * <p><b>It asks, rather than waiting to be told.</b> The version used to arrive only through
+ * {@link rolesKnowTheServer}, called by the sidebar while it repainted — so a window whose sidebar
+ * was collapsed, or focused on Explorer, never resolved that view, never called this, and left the
+ * page permanently unable to say whether the roles on it would run. `coai.editRoles` is on the
+ * command palette; it does not need the sidebar to have been looked at. (gemini, the second code
+ * round.)</p>
+ *
+ * <p>Once per opening, not once per repaint: the full status runs the binary to ask its version, and
+ * a process per keystroke-settled redraw is the cost that argument is usually about.</p>
+ */
+async function askTheServer(): Promise<void> {
+  const context = side();
+  // The published version is what an UPDATE offer is measured against, and this page offers none —
+  // it only needs to know what is installed. Empty skips the network read the panel does.
+  const status = await serverOnThisSide(context.globalStorageUri, context.globalState, '');
+  rolesKnowTheServer(status.kind === 'absent' ? '' : status.version);
+}
+
+/**
+ * The sidebar telling this page what IT found — a second, cheaper source of the same answer.
+ *
+ * <p>Kept beside {@link askTheServer} rather than replacing it: the sidebar has the status in hand
+ * every time it repaints, so a server installed while this page is open reaches it without another
+ * process. It REPAINTS when the answer changes; it used to only assign, which is how the version
+ * could arrive into a variable nothing read again.</p>
  */
 export function rolesKnowTheServer(version: string): void {
   if (version === serverVersion) {
