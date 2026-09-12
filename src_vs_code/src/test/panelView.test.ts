@@ -1062,3 +1062,65 @@ test('and says nothing at all when the person has added no role of their own', (
 
   assert.ok(!older.includes('does not read roles'));
 });
+
+/**
+ * Two switches reach one role, and the section has to be honest about which one is holding it.
+ *
+ * <p>`roleEnabled` is this section's own tick and becomes `COAI_ENABLED_&lt;ID&gt;`; `active` is the
+ * catalog's, written by the roles page, and becomes a field of `COAI_ROLES`. The server reads both.
+ * What it must never do is draw a tick that cannot be ticked: a box whose `on` is computed from BOTH
+ * switches, but which only writes ONE of them, springs straight back and tells the person nothing.</p>
+ */
+test('a role switched off in the catalog has no tick to fight with', () => {
+  const settings = { ...DEFAULTS, roles: [{ id: 'Architecture', active: false }] };
+  const prompts = promptsSection(panelHtml(state({ settings }), 'n0nce'));
+  const box = prompts.slice(prompts.indexOf('id="role-Architecture"'));
+  const tag = box.slice(0, box.indexOf('>'));
+
+  assert.match(tag, /disabled/, 'the tick would post roleEnabled and come back unticked anyway');
+  assert.match(box, /roles page/, 'and the hint says where the switch that IS holding it lives');
+});
+
+test('a role active in the catalog keeps a tick that works', () => {
+  const prompts = promptsSection(panelHtml(state(), 'n0nce'));
+  const box = prompts.slice(prompts.indexOf('id="role-Architecture"'));
+
+  assert.ok(!box.slice(0, box.indexOf('>')).includes('disabled'));
+});
+
+test('the last role standing counts the roles a person added', () => {
+  // `enabledCodeRoles` walked the SHIPPED five, so a person whose only remaining reviewer was a role
+  // of their own was told they could not untick a shipped one — and the fan-out sentence promised a
+  // round smaller than the one about to run.
+  const off = Object.fromEntries(Object.keys(DEFAULTS.roleEnabled).map((r) => [r, false]));
+  const settings = {
+    ...DEFAULTS,
+    roleEnabled: { ...off, Architecture: true },
+    roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
+              prompts: [{ id: 'requirements-general', label: 'General' }] }],
+  };
+  const prompts = promptsSection(panelHtml(state({ settings }), 'n0nce'));
+  const box = prompts.slice(prompts.indexOf('id="role-Architecture"'));
+
+  assert.ok(!box.slice(0, box.indexOf('>')).includes('disabled'),
+    'Requirements is the second code role still running, so Architecture is not the last');
+});
+
+test('the fan-out sentence counts a role a person added', () => {
+  const settings = {
+    ...DEFAULTS,
+    roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
+              prompts: [{ id: 'requirements-general', label: 'General' }] }],
+  };
+  const html = panelHtml(
+    state({
+      settings,
+      vendors: [
+        { id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
+      ],
+    }),
+    'n0nce',
+  );
+
+  assert.match(html, /1 vendor × up to 5 roles = 5 reviewers/, 'four shipped and one of their own');
+});

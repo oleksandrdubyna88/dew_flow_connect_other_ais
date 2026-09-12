@@ -2342,6 +2342,59 @@ sidebar. They are on the roles page instead: the shipped plan role honours no `C
 the operator's ruling, so only `active` can switch it off — and `active` is what that page writes.
 One switch in one place beats two mechanisms for one concept.
 
+#### What the code round changed
+
+The paragraphs above describe what the page was FOR. The gate read what it actually did, and five of
+its findings were the same two defects seen from different directions.
+
+**`composed()` disagreed with the server about what a row may say.** It applied a row's `name`,
+`stage` and `programmingTask` to a role this product ships; `RoleComposition.Overridden` takes only
+`Active` and the extra prompts, and its own comment says why — *"Id, name, stage and kind are NEVER
+taken from the row. A built-in cannot be renamed."* Nothing failed, which is what made it worth
+finding: the page would draw the person's word for the role and every round would use the shipped
+one. `composed()` mirrors `Overridden` now, the page renders those three controls read-only, and
+`rolesEdit` refuses the command as well, because a page is not a boundary.
+
+**"Remove this role" did nothing at all**, for the whole of the plan. The host's mutation returned
+`RoleRow | undefined`, where `undefined` meant BOTH "refused" and "nothing changed" — so removal,
+which produces no row by definition, took the refusal's behaviour and wrote nothing. Two meanings in
+one absence is how one of them goes missing, which is doctrine 4 exactly.
+
+**`rolesEdit.ts` is the answer to how that survived.** The rule lived inside a webview host, which
+this extension deliberately does not unit-test, so no test could have caught it and four reviewers
+found it by reading. Every row decision moved into a pure module returning a three-way union —
+`rows` (with the prompt-override files that no row points at any more), `refused` (with the sentence
+to show), `unchanged` — and the host kept only what a host can do. The cap, the last-role-standing
+rule, the shipped-role refusals and the prompt rules are each reachable from a test now.
+
+**One count of "which code roles will run", not three.** `enabledCodeRoles` walked the shipped four;
+the fan-out sentence walked `ROLES` separately; the roles page counted the composed catalog. A person
+whose only remaining reviewer was a role of their own was told they could not untick Architecture,
+under a sentence promising four reviewers beside a section drawing five boxes. All of it goes through
+`enabledCodeRoles`, which now reads the composed catalog and honours both switches.
+
+**A sidebar tick that could not be ticked.** A role switched off in the catalog drew an enabled box
+whose `on` was computed from both switches but which only wrote `roleEnabled` — click it and it
+sprang back, silently. It is inert now, with a hint naming the page where its Active switch lives.
+
+**`coai.roles` is a per-side setting and was written globally.** The page said "saved for this side of
+the machine" while `config().update(…, Global)` put the role on every side. The panel's own
+`save` and this one are one function now — `sideConfig.saveSetting` — because two copies of "which
+layer does this belong in" is how the second one came to be wrong.
+
+**Smaller, and each worth a line.** Every keystroke was a read-modify-write of the same setting fired
+concurrently, so a fast typist could have an earlier keystroke's value land last; commands are
+serialized through one chain and text fields settle 300 ms after the last keystroke instead of
+writing per character. A prompt body is written to a neighbouring file and renamed over the
+destination, because `writeFile` truncates first. Removing a role asks, then deletes the prompt files
+with it — left behind, they come back under the next role that generates the same id. A prompt id
+from the webview must belong to the role that claims it. `rolesFrom` carries fields it does not know
+rather than deleting them on the next keystroke, which is how `remoteVendor` was lost by three
+releases. A generated id is capped at `MAX_ROLE_ID_LENGTH`, because it becomes an environment
+variable. The page's nonce comes from `crypto` rather than `Math.random`. And `rolesKnowTheServer`
+repaints when the version changes, so a page opened from the command palette before the panel ever
+rendered stops claiming a silence it had not earned — it says the check has not run.
+
 ### The catalog is generated from a seed neither half owns (2026-09-12)
 
 `prompts.ts` held five roles and twenty-five prompts as hand-written literals, mirroring the same

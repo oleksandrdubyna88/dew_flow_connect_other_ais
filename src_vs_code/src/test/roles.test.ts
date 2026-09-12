@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { BUILTIN_ROLES } from '../builtinRoles.generated';
 import {
   MAX_ACTIVE_PER_STAGE,
+  MAX_ROLE_ID_LENGTH,
   PLAN_STAGE,
   RESULT_STAGE,
   activeCount,
@@ -171,7 +172,10 @@ test('the composed picture is the shipped five, edited, then the ones a person a
     rows.map((r) => r.id),
     [...BUILTIN_ROLES.map((r) => r.id), 'Requirements'],
   );
-  assert.strictEqual(rows.find((r) => r.id === 'Architecture')?.name, 'Our architecture');
+  // The row naming Architecture does NOT rename it: the server takes only the switch and the extra
+  // prompts from a row that names a built-in, so a panel that drew "Our architecture" would be
+  // drawing a role no round has ever heard of. See the test below that states the rule on its own.
+  assert.strictEqual(rows.find((r) => r.id === 'Architecture')?.name, 'Architecture');
   assert.strictEqual(rows.find((r) => r.id === 'Conventions')?.name, 'Conventions', 'untouched by any row');
 });
 
@@ -206,4 +210,92 @@ test('the active count is over the composed picture, which is what the server ca
 
 test('the cap is the number the server caps at', () => {
   assert.strictEqual(MAX_ACTIVE_PER_STAGE, 5);
+});
+
+// ---------- a row naming a built-in is an OVERRIDE, and the SERVER decides what it may override ----------
+
+/**
+ * `RoleComposition.Overridden` takes exactly two things from a row that names a shipped role: its
+ * `Active`, and the prompts it adds. Its own comment says why about the rest — *"Id, name, stage and
+ * kind are NEVER taken from the row. A built-in cannot be renamed — its id keys settings, session
+ * files and every row of the rounds database."*
+ *
+ * <p>So a panel that applied a name anyway would draw "Mine" on a page whose every round then said
+ * "Architecture": the two halves disagreeing about one role, which is the whole defect the shared
+ * wire format exists to prevent. Found on this plan's code round by three reviewers at once.</p>
+ */
+test('a row cannot rename, restage or reclassify a role this product ships', () => {
+  const shipped = BUILTIN_ROLES[0]!;
+  const other = shipped.stage === PLAN_STAGE ? RESULT_STAGE : PLAN_STAGE;
+  const drawn = composed([
+    { id: shipped.id, name: 'Mine', stage: other, programmingTask: !shipped.programmingTask },
+  ])[0]!;
+
+  assert.strictEqual(drawn.name, shipped.name, 'the name is the seed’s, as the server reads it');
+  assert.strictEqual(drawn.stage, shipped.stage, 'and so is the stage');
+  assert.strictEqual(drawn.programmingTask, shipped.programmingTask, 'and so is the kind');
+});
+
+test('the switch is the one field a row may say about a role this product ships', () => {
+  const shipped = BUILTIN_ROLES[0]!;
+
+  assert.strictEqual(isActive(composed([{ id: shipped.id, active: false }])[0]!), false,
+    'the server takes Active from the row, so the panel must draw it');
+});
+
+test('a role a person added keeps every field they wrote', () => {
+  // The refusal above is about SHIPPED ids only: a role of their own is theirs to name and stage.
+  const drawn = composed([{ id: 'Requirements', name: 'Mine', stage: PLAN_STAGE, programmingTask: false }]);
+  const one = drawn.find((r) => r.id === 'Requirements')!;
+
+  assert.strictEqual(one.name, 'Mine');
+  assert.strictEqual(one.stage, PLAN_STAGE);
+  assert.strictEqual(one.programmingTask, false);
+});
+
+// ---------- the setting IS the wire format, so nothing may be dropped on the way back ----------
+
+test('a field this build does not know survives the round trip', () => {
+  // The panel rewrites the whole array on every edit. A field the SERVER gains before the extension
+  // does would be silently deleted by the first keystroke on the roles page — which is exactly how
+  // `remoteVendor` was lost by three releases of this extension, one 400 at a time.
+  const kept = rolesFrom([{ id: 'Requirements', name: 'Mine', kind: 'document' }])[0]!;
+
+  assert.strictEqual((kept as unknown as Record<string, unknown>)['kind'], 'document');
+  assert.strictEqual(kept.name, 'Mine', 'and the fields it does know are still read');
+});
+
+test('a prompt field this build does not know survives too', () => {
+  const kept = rolesFrom([{ id: 'Requirements', prompts: [{ id: 'requirements-general', weight: 3 }] }])[0]!;
+
+  assert.strictEqual((kept.prompts![0] as unknown as Record<string, unknown>)['weight'], 3);
+});
+
+test('a polluting key is not a field, however the row spells it', () => {
+  const row = JSON.parse('{"id":"Requirements","__proto__":{"polluted":"yes"},"constructor":"no"}') as unknown;
+  const kept = rolesFrom([row])[0]!;
+
+  assert.strictEqual(({} as Record<string, unknown>)['polluted'], undefined, 'nothing reached Object.prototype');
+  assert.ok(!Object.prototype.hasOwnProperty.call(kept, '__proto__'), 'and the key was not carried over');
+  assert.ok(!Object.prototype.hasOwnProperty.call(kept, 'constructor'));
+});
+
+// ---------- an id becomes an environment variable, so it has a length ----------
+
+test('a generated id stays short enough to be an environment variable', () => {
+  // A role id becomes `COAI_ROUNDS_<ID>`, and a name pasted from a document is a name a person can
+  // write. An id longer than the variable can be is a budget that reads from the settings file and
+  // never from the block they paste — working in one of the two places, which is worse than neither.
+  const id = idFor('Requirements '.repeat(40), none);
+
+  assert.ok(id.length <= MAX_ROLE_ID_LENGTH, `a ${id.length}-character id`);
+  assert.ok(id.length > 0);
+});
+
+test('two long names that start alike still get two different ids', () => {
+  const first = idFor('Requirements '.repeat(40), none);
+  const second = idFor('Requirements '.repeat(40), new Set([first.toLowerCase()]));
+
+  assert.notStrictEqual(second, first);
+  assert.ok(second.length <= MAX_ROLE_ID_LENGTH, `a ${second.length}-character id`);
 });

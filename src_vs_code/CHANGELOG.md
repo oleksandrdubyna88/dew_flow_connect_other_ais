@@ -15,12 +15,19 @@ and write the question it asks. Add more prompts for narrower questions, and the
 one per round, exactly as it does for the roles that ship.
 
 The five shipped roles are on that page too. You can rewrite the text of any of their prompts and add
-prompts of your own to them. You cannot rename them or delete what they ship with: their names are
-already in your settings, in sessions that are open, and in every round this product has recorded for
-you.
+prompts of your own to them. You cannot rename them, move them to the other stage, or delete what
+they ship with: their names are already in your settings, in sessions that are open, and in every
+round this product has recorded for you — and the review server reads none of those from your
+configuration, so a page that let you change them would be showing you something no round would do.
 
-Everything saves as you type. At most five roles are active per stage, and the last active one in a
-stage cannot be switched off — a stage with nothing in it would produce a review with no reviewer.
+Everything saves itself a moment after you stop typing. At most five roles are active per stage — a
+role you add while five are already active arrives switched off, so what the page shows is what will
+run — and the last active one in a stage cannot be switched off, because a stage with nothing in it
+would produce a review with no reviewer. **Removing a role asks first**, and takes the prompts you
+wrote in it away with the role.
+
+With *This side* on, your roles belong to the side you are on, like your rounds and thresholds. The
+prompt text does not: a question you wrote is one question, wherever you ask it.
 
 **This needs coai-mcp 0.19.0 or later.** An older one never reads roles at all: they would sit in the
 panel and run in nothing. Both the page and the panel say so, naming the version you have.
