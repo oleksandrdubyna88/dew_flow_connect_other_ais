@@ -55,9 +55,34 @@ if (roles.length === 0) {
   throw new Error(`${seedPath} names no roles — a generated empty catalog would draw an empty panel`);
 }
 
+// What a role and a prompt may say. A field added to the seed for the SERVER's loader would
+// otherwise be dropped here in silence: the panel and the server would then disagree about a role
+// while every test stayed green, because each side only compares what it already knows about.
+// Refusing the unknown makes adding a field a deliberate act on both sides. (codex, C2's second
+// code round.)
+const ROLE_FIELDS = ['id', 'name', 'stage', 'programmingTask', 'prompts'];
+const PROMPT_FIELDS = ['id', 'label', 'purpose'];
+
 // A field this script silently renders as `undefined` is a panel drawing a role with no name, which
 // typechecks and looks like a bug in the panel. Refuse at the source instead. (local, plan round.)
 for (const r of roles) {
+  for (const field of Object.keys(r)) {
+    if (!ROLE_FIELDS.includes(field)) {
+      throw new Error(
+        `${seedPath}: role '${r.id}' has a field this generator does not know: '${field}'. `
+        + `Add it to the panel's RoleDefinition and to this script, or take it out of the seed.`,
+      );
+    }
+  }
+  for (const p of r.prompts ?? []) {
+    for (const field of Object.keys(p)) {
+      if (!PROMPT_FIELDS.includes(field)) {
+        throw new Error(
+          `${seedPath}: prompt '${p.id}' has a field this generator does not know: '${field}'.`,
+        );
+      }
+    }
+  }
   for (const field of ['id', 'name', 'stage']) {
     if (typeof r[field] !== 'string' || r[field].length === 0) {
       throw new Error(`${seedPath}: a role has no ${field} — ${JSON.stringify(r).slice(0, 120)}`);

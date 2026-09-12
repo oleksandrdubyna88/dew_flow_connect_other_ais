@@ -109,6 +109,14 @@ for (const [what, role, expected] of [
   ['a role that does not say whether it is a programming task', { id: 'R', name: 'R', stage: 'result' }, /programming task/],
   ['a role with no name', { id: 'R', stage: 'result', programmingTask: true }, /has no name/],
   ['a role with no prompts at all', { id: 'R', name: 'R', stage: 'result', programmingTask: true, prompts: [] }, /no prompts/],
+  // A field added for the SERVER's loader would otherwise be dropped here in silence, and the two
+  // halves would disagree about a role while every test stayed green — each side only compares what
+  // it already knows about. (codex, this story's second code round.)
+  [
+    'a role field this generator has never heard of',
+    { id: 'R', name: 'R', stage: 'result', programmingTask: true, capability: 'x' },
+    /does not know: 'capability'/,
+  ],
 ] as const) {
   test(`the generator refuses ${what}`, () => {
     const dir = mkdtempSync(join(tmpdir(), 'coai-seed-'));
