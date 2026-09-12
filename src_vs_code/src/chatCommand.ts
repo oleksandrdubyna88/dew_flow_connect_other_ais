@@ -44,7 +44,7 @@ import { readToken } from './teamServerAuth';
 import { coaiDataDir } from './dataDir';
 import { ChatOutcome, ReportedUsage, chatTurnRecord } from './chatUsage';
 import { recordChatTurn } from './chatUsageFile';
-import { Door } from './chatDoors';
+import { Door, chatDoorRecord } from './chatDoors';
 import { recordChatDoor } from './chatDoorsFile';
 import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './chatDiscovery';
 import { chatSettingsFrom } from './chatSettings';
@@ -2349,14 +2349,17 @@ async function deliverPassage(
  * nothing configured records empty strings, which the spending page groups as one named bucket
  * rather than inventing a row for.</p>
  */
-export function noteChatDoor(door: Door): void {
+export function noteChatDoor(door: Door, at = new Date()): void {
   const ready = readyForChat();
-  void recordChatDoor(coaiDataDir(), {
-    utc: new Date().toISOString(),
+  // The record is BUILT in the pure module and only written here. The clock is the one thing this
+  // function contributes that a test cannot pin, so it is a parameter with the ambient value as its
+  // default - the shape the UTC rule asks for, at the only boundary that can hold it.
+  void recordChatDoor(coaiDataDir(), chatDoorRecord(
     door,
-    provider: ready.ok ? ready.providerId : '',
-    model: ready.ok ? ready.modelId : '',
-  });
+    ready.ok ? ready.providerId : '',
+    ready.ok ? ready.modelId : '',
+    at,
+  ));
 }
 
 /** Which model answers, resolved the one way both commands resolve it. */

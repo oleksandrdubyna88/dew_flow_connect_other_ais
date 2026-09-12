@@ -100,15 +100,20 @@ export function parseUsage(text: string): UsageEntry[] {
  * today cost is a question about the calendar day, and a rolling day answers a different one. Week,
  * month and year stay rolling: a quiet Monday morning must still show last week's work.</p>
  */
+export function windowStart(window: Window, now: Date): number {
+  const days = WINDOWS.find((w) => w.id === window)?.days ?? 1;
+
+  return window === 'day'
+    ? new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    : now.getTime() - days * 24 * 60 * 60 * 1000;
+}
+
 export function within<T extends { readonly utc: string }>(
   entries: readonly T[],
   window: Window,
   now: Date,
 ): T[] {
-  const days = WINDOWS.find((w) => w.id === window)?.days ?? 1;
-  const cutoff = window === 'day'
-    ? new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-    : now.getTime() - days * 24 * 60 * 60 * 1000;
+  const cutoff = windowStart(window, now);
   return entries.filter((e) => {
     const at = Date.parse(e.utc);
     return Number.isFinite(at) && at >= cutoff;

@@ -1,5 +1,11 @@
 # Changelog
 
+## Extension 0.38.1 — 2026-09-12
+
+**A chat row that is part billed and part not now shows both numbers.** One turn the vendor priced used to make every unpriced turn beside it read as free — the row said $0.50 for $11.50 of work. The bill and the estimate are kept apart and shown as both, the way the reviewers section above already writes them.
+
+**And the section is read in one pass.** It walked the whole ledger once per row and then did the entire sum again for the total, which on a year of history is seconds of a frozen panel on every window button.
+
 ## Extension 0.38.0 — 2026-09-12
 
 **What each AI has used now counts the chat as well as the reviewers.** It read one ledger — the server's, one line per reviewer — so a day spent asking a second model cost nothing on the one page that adds money up. The tab has two named sections with a rule between them: **Reviewers**, the cards as they were, and **Chat**, a row per vendor AND model, since a conversation switches model and a rate belongs to a model. A chat row carries both rates, what it cost in the window, what it has cost **all time** whatever window is chosen above, and two counts. Each section totals itself: the two ledgers are written by different programs and must not be added up by eye.
