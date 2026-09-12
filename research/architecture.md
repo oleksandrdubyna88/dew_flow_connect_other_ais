@@ -94,6 +94,22 @@ lines — was measured rather than believed (`npm run measure:append`): eight pr
 116 MB with 60 KB lines among them, 8000 whole records of 8000 and nothing torn. `O_APPEND` /
 `FILE_APPEND_DATA` is what `appendFile` opens with and what those guarantee.
 
+**And a third thing under that directory, since 2026-09-12: the conversations themselves.** The two
+ledgers above are append-only lines about what a turn COST; `chat-conversations/` holds what was
+SAID. It exists because the transcripts used to live in VS Code's own `workspaceState` — one JSON
+value under one key, rewritten whole on every change, bounded at seven days and twenty records
+because a memento is a bounded thing whose overflow is silent. The feature that needed them (reopen
+the conversation belonging to this tab, two days later) needs ninety days of them, which is not an
+amount to keep in a store the editor writes to SQLite.
+
+One conversation is a record and a metadata file beside it, and the seam worth knowing at this level
+is that **two extension hosts share that directory**. A save is therefore a compare-and-swap on a
+revision, claimed by an exclusive create — one lock per conversation — and a window that is refused
+keeps its words under a NEW id rather than overwriting somebody's turns or losing its own. The
+depth is in `research/module_extension.md`; what belongs here is that the directory is shared, that
+the coordination is the filesystem's rather than a server's, and that no half of this product asks
+the other about a conversation.
+
 **Where the vendor-shaped knowledge lives is the other decision.** `codex` reports a token total that
 counts UP across a thread; the other two price each turn. Normalising that belongs to the SESSION,
 because a session's lifetime is exactly a vendor thread's lifetime — it holds the id it resumes by,

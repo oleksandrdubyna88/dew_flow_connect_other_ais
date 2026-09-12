@@ -18,6 +18,15 @@ export const CONTINUED_ELSEWHERE =
   'This conversation was continued in another window, so this tab is now a copy of it. '
   + 'Everything above is kept here, and what you ask from now on is saved separately.';
 
+/** What is said when the store was busy with this very conversation and could not compare. */
+export const BUSY_ELSEWHERE =
+  'This conversation was being written just now, so this change has not been saved yet. '
+  + 'It will be saved with the next one.';
+
+/** What follows a disk failure, because the reason alone reads as though the words were lost. */
+export const STILL_SAFE =
+  'The conversation is still here and still saved where it was; the next change will try again.';
+
 /**
  * What the page says when the record landed and the list did not.
  *
@@ -38,8 +47,14 @@ export const INDEX_BEHIND =
  */
 export type WriteNext =
   | { readonly kind: 'kept'; readonly rev: number; readonly note?: string }
-  /** Our OWN record was already there at a number we did not know. Take it and save again. */
-  | { readonly kind: 'adopt'; readonly rev: number }
+  /**
+   * Our OWN record was already there, at a number — and a beginning — we did not know.
+   *
+   * <p>`began` is the adopted record's own creation instant. Without carrying it, taking over a
+   * conversation started in January and answered in March would record it as having started in
+   * March, because this side's best guess is when the memento was last written. (codex.)</p>
+   */
+  | { readonly kind: 'adopt'; readonly rev: number; readonly began?: number }
   /** Somebody else is in this conversation, or what is on disk cannot be read: write elsewhere. */
   | { readonly kind: 'fork'; readonly note: string }
   /** The disk would not answer. The conversation is unchanged and the next turn tries again. */
@@ -92,13 +107,24 @@ export function nextAfterSave(
     case 'partial':
       return { kind: 'kept', rev: outcome.rev, note: INDEX_BEHIND };
     case 'refused':
+      // A refusal that says NOTHING about the disk could not be compared, and the reason is almost
+      // always innocent: the store was mid-mutation of this very conversation and never probed it.
+      // Forking there would mint a copy because a lock was held for a few milliseconds, so the
+      // answer is to change nothing and let the next turn try again. (local, A3's code round.)
+      if (outcome.said === undefined) {
+        return { kind: 'said', note: BUSY_ELSEWHERE };
+      }
+
       return baseline === 0 && outcome.diskRev > 0 && containedIn(outcome.said, ours)
-        ? { kind: 'adopt', rev: outcome.diskRev }
+        ? { kind: 'adopt', rev: outcome.diskRev, ...(outcome.began === undefined ? {} : { began: outcome.began }) }
         : { kind: 'fork', note: CONTINUED_ELSEWHERE };
     case 'incompatible':
       return { kind: 'fork', note: CONTINUED_ELSEWHERE };
     default:
-      return { kind: 'said', note: outcome.reason };
+      // What the disk said, and then what it MEANS for the person: a reason on its own reads as
+      // though the conversation had been lost, when it is on screen and in the store of record and
+      // the next change will try again. (codex and gemini, A3's code round.)
+      return { kind: 'said', note: `${outcome.reason} ${STILL_SAFE}` };
   }
 }
 
@@ -111,7 +137,7 @@ export function nextAfterSave(
  * about it and the safe answer is the one that loses nobody's words.</p>
  */
 function containedIn(disk: readonly string[] | undefined, ours: readonly string[]): boolean {
-  if (disk === undefined || disk.length > ours.length) {
+  if (!Array.isArray(disk) || disk.length > ours.length) {
     return false;
   }
 

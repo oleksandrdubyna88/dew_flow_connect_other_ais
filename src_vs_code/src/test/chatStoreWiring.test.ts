@@ -93,8 +93,12 @@ test('the page takes the new id from that message and hands it back after a relo
   const page = source('chatPage.ts');
   const handler = page.slice(page.indexOf("if (data.type === 'note')"));
 
-  assert.match(handler.slice(0, 700), /vscode\.setState\(\{ id: data\.id \}\)/u,
+  assert.match(handler.slice(0, 1_200), /vscode\.setState\(held\)/u,
     'a forked tab would come back after a reload as the conversation it no longer owns');
+  // MERGED rather than replaced: `setState` writes the whole state object, so naming one field
+  // would throw away everything else the page keeps in it. (gemini, A3's code round.)
+  assert.match(handler.slice(0, 1_200), /vscode\.getState\(\)/u,
+    'the page replaces its whole stored state to record one field');
   assert.ok(
     page.indexOf("if (data.type === 'note')") < page.indexOf("if (data.type !== 'state')"),
     'the note is read after the state guard has already returned',

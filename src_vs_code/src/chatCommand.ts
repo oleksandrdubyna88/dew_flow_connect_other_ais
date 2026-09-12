@@ -268,7 +268,7 @@ interface Thread extends ChatMemory {
    * having begun in March — and the picker story B2 draws "started" from exactly that field. All
    * three vendors' reviewers found it on A3's plan round.</p>
    */
-  readonly createdAt: number;
+  createdAt: number;
   /**
    * This conversation's store writes, one after another.
    *
@@ -653,18 +653,32 @@ async function keepOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
   if (store === undefined) {
     return;
   }
-  const ours = thread.messages.map((message) => message.text);
-  const next = nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev, ours);
+  // MAPPED ONLY WHEN IT IS ASKED FOR. The words are needed by one branch of one outcome — the
+  // containment check on a refusal — and `show` runs on every push that changes anything. Building
+  // an array of every message's text before knowing whether a conflict even happened is an
+  // allocation per turn for a comparison that almost never runs. (gemini and local, the code round.)
+  const ours = (): readonly string[] => thread.messages.map((message) => message.text);
+  const next = nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev, ours());
   if (next.kind === 'adopt') {
     // Our own record, from a session before this window ever wrote. Take the number the disk reports
     // and save once more against it; a SECOND refusal has no innocent reading left and forks.
     thread.rev = next.rev;
-    await settle(entry, thread, nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev, ours));
+    // AND WHEN IT BEGAN. The adopted record is this conversation's own earlier session, so its
+    // creation instant is the true one; without taking it, a conversation started in January and
+    // answered in March would be rewritten as having started in March, and the picker draws its
+    // "started" from that field. (codex, the code round.)
+    if (next.began !== undefined) {
+      thread.createdAt = next.began;
+    }
+    await settle(entry, thread, nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev, ours()));
 
     return;
   }
   await settle(entry, thread, next);
 }
+
+/** This conversation's words, for the one comparison that asks for them. */
+const ours0 = (thread: Thread): readonly string[] => thread.messages.map((message) => message.text);
 
 /** What one answer does to the thread and to the page. Never called with `adopt`, which is a retry. */
 async function settle(entry: ChatEntry, thread: Thread, next: WriteNext): Promise<void> {
@@ -698,18 +712,12 @@ async function settle(entry: ChatEntry, thread: Thread, next: WriteNext): Promis
 async function forkOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
   thread.saveId = randomUUID();
   thread.rev = 0;
-  if (store !== undefined) {
-    const next = nextAfterSave(await store.save(recordOf(thread), 0), 0);
-    if (next.kind === 'kept') {
-      thread.rev = next.rev;
-    }
-  }
-  // AND UNDER THE NEW ID IN THE MEMENTO, which is still the source of truth. Without this the fork
-  // exists only on disk and in memory: the memento still holds this conversation under the id it was
-  // refused at, so a reload would restore the tab as the original it no longer owns — and the copy,
-  // which has the person's words in it, would be the one nothing could find. (codex, A3's plan
-  // round.) The dedupe marks are cleared first, because the record being written is the same
-  // transcript under a different name and the guard would otherwise skip it.
+  // THE MEMENTO FIRST, then the store — the same order every other write in this file keeps, and
+  // for the same reason. Written the other way round, a crash in between leaves the fork on disk
+  // under an id the source of truth has never heard of: the tab reloads as the original it no
+  // longer owns, and the copy holding the person's words is orphaned from both the reload and the
+  // migration that is supposed to carry it. Three reviewers, from two vendors. The dedupe marks go
+  // first, because this is the same transcript under a different name and the guard would skip it.
   delete thread.savedMessages;
   delete thread.savedModelId;
   delete thread.savedCarryFrom;
@@ -722,6 +730,19 @@ async function forkOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
     fromSession: thread.fromSession,
     carryFrom: thread.carryFrom,
   });
+  if (store !== undefined) {
+    // Settled like any other answer rather than read for success alone: a fork whose own save then
+    // failed or was refused used to say nothing at all, which is the silent swallow the house rule
+    // forbids. It cannot fork again — the id is new and nobody else holds it — so the only outcomes
+    // left are kept and said, and both are reported. (codex.)
+    await settle(entry, thread, nextAfterSave(await store.save(recordOf(thread), 0), 0, ours0(thread)));
+  }
+  // AND UNDER THE NEW ID IN THE MEMENTO, which is still the source of truth. Without this the fork
+  // exists only on disk and in memory: the memento still holds this conversation under the id it was
+  // refused at, so a reload would restore the tab as the original it no longer owns — and the copy,
+  // which has the person's words in it, would be the one nothing could find. (codex, A3's plan
+  // round.) The dedupe marks are cleared first, because the record being written is the same
+  // transcript under a different name and the guard would otherwise skip it.
   // The new id goes with the sentence: the page hands it back to the serializer after a reload, so a
   // tab that forked and was then reloaded must come back as the copy rather than as the original.
   pushChatNote(entry, thread.saveId, CONTINUED_ELSEWHERE);
