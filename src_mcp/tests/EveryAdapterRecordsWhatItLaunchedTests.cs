@@ -103,4 +103,19 @@ public sealed class EveryAdapterRecordsWhatItLaunchedTests
 
         invocation.Model.Should().BeEmpty();
     }
+
+    /// <summary>A Team-server reviewer records its model too — it is one of the two that always did.</summary>
+    [Fact]
+    public void ARemoteAdapterRecordsTheModelItAskedTheServerFor()
+    {
+        // Named in the plan and missing from the matrix above until the code round noticed. If
+        // RemoteRuntime ever stops copying its model, the round log would omit it for every
+        // Team-server reviewer while every other case here stayed green.
+        var settings = new ReviewerSettings("remsoftdev-codex") { Model = "gpt-5.6-sol", DataDir = OutDir };
+
+        var invocation = new RemoteRuntime("remsoftdev-codex", "https://coai.example.dev", "codex")
+            .Build(RoleCatalog.ArchitectureRole, "review this", Worktree, Schema, OutDir, settings);
+
+        invocation.Model.Should().Be("gpt-5.6-sol");
+    }
 }
