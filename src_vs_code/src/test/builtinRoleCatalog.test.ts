@@ -81,6 +81,17 @@ test('the panel keeps its own word for the result stage', () => {
   );
 });
 
+test('every role in the seed has a prompt to be its general one', () => {
+  // The fact the positional rule RESTS on, asserted where it lives rather than after the derivation
+  // has already assumed it. `universal = index === 0` is a rule about the seed's ORDER, and it is
+  // only true of a role that has a prompt at all — a role with none would derive no universal
+  // prompt, and `universalFor` would silently hand back some other role's. It is also what
+  // `RoleDefinition.General` reads on the server, which refuses such a seed outright.
+  for (const role of SEED) {
+    assert.ok(role.prompts.length > 0, `${role.id} has no prompts in the seed`);
+  }
+});
+
 test('a role’s universal prompt is its first one, and there is exactly one', () => {
   for (const role of ROLES) {
     const mine = promptsFor(role.id);

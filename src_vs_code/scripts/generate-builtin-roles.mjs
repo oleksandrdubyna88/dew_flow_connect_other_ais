@@ -12,7 +12,14 @@
 // it had not been taught, which is how two lists of twenty-five prompts stay level for a while and
 // then quietly do not.
 //
-//   node scripts/generate-builtin-roles.mjs
+//   node scripts/generate-builtin-roles.mjs            writes the file
+//   node scripts/generate-builtin-roles.mjs --check    writes nothing; exits 1 if it is behind
+//
+// `--check` is what `generatedFilesAreCurrent.test.ts` runs. Without it the committed file could
+// only be wrong in one direction: the seed-agreement test catches a file behind the SEED, and
+// nothing caught a file behind the GENERATOR — a changed mapping leaves the committed file matching
+// the seed, every test green, and the next regeneration silently changing the panel's catalog.
+// (codex, this story's plan round.)
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +32,26 @@ const seed = JSON.parse(readFileSync(seedPath, 'utf8'));
 const roles = seed.roles ?? [];
 if (roles.length === 0) {
   throw new Error(`${seedPath} names no roles — a generated empty catalog would draw an empty panel`);
+}
+
+// A field this script silently renders as `undefined` is a panel drawing a role with no name, which
+// typechecks and looks like a bug in the panel. Refuse at the source instead. (local, plan round.)
+for (const r of roles) {
+  for (const field of ['id', 'name', 'stage']) {
+    if (typeof r[field] !== 'string' || r[field].length === 0) {
+      throw new Error(`${seedPath}: a role has no ${field} — ${JSON.stringify(r).slice(0, 120)}`);
+    }
+  }
+  if (!Array.isArray(r.prompts) || r.prompts.length === 0) {
+    throw new Error(`${seedPath}: role '${r.id}' has no prompts, so it has no general prompt either`);
+  }
+  for (const p of r.prompts) {
+    for (const field of ['id', 'label', 'purpose']) {
+      if (typeof p[field] !== 'string' || p[field].length === 0) {
+        throw new Error(`${seedPath}: prompt '${p.id}' of role '${r.id}' has no ${field}`);
+      }
+    }
+  }
 }
 
 /**
@@ -66,5 +93,18 @@ ${roles.map(role).join('\n')}
 ];
 `;
 
-writeFileSync(out, file, 'utf8');
-console.log(`wrote ${out}: ${roles.length} roles, ${roles.reduce((n, r) => n + (r.prompts?.length ?? 0), 0)} prompts`);
+const counts = `${roles.length} roles, ${roles.reduce((n, r) => n + (r.prompts?.length ?? 0), 0)} prompts`;
+
+if (process.argv.includes('--check')) {
+  // Line endings normalised on both sides: the committed file is LF, a Windows checkout may hold
+  // CRLF, and that is not the drift this is looking for.
+  const committed = readFileSync(out, 'utf8').replace(/\r\n/g, '\n');
+  if (committed !== file.replace(/\r\n/g, '\n')) {
+    console.error(`${out} is not what this script produces — run: node scripts/generate-builtin-roles.mjs`);
+    process.exit(1);
+  }
+  console.log(`up to date: ${out} (${counts})`);
+} else {
+  writeFileSync(out, file, 'utf8');
+  console.log(`wrote ${out}: ${counts}`);
+}

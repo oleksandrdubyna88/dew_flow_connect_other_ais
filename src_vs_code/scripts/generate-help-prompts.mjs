@@ -106,5 +106,17 @@ ${groups.map((g) => `  { role: ${JSON.stringify(g.role)}, ids: [${g.ids.map((i) 
 ];
 `;
 
-writeFileSync(out, file, 'utf8');
-console.log(`helpPrompts.ts: ${ordered.length} prompts in ${groups.length} groups`);
+if (process.argv.includes('--check')) {
+  // What `helpPrompts.test.ts` cannot see: it compares each ENTRY against the .md file it came
+  // from, so a changed GROUPING — the order, the labels, which prompts are listed at all — leaves
+  // it green while the help page changes. (codex, story C1's plan round.)
+  const committed = readFileSync(out, 'utf8').replace(/\r\n/g, '\n');
+  if (committed !== file.replace(/\r\n/g, '\n')) {
+    console.error(`${out} is not what this script produces — run: node scripts/generate-help-prompts.mjs`);
+    process.exit(1);
+  }
+  console.log(`up to date: helpPrompts.ts (${ordered.length} prompts in ${groups.length} groups)`);
+} else {
+  writeFileSync(out, file, 'utf8');
+  console.log(`helpPrompts.ts: ${ordered.length} prompts in ${groups.length} groups`);
+}
