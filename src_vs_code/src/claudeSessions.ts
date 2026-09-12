@@ -169,9 +169,10 @@ function where(reason: unknown): string {
  * folder VS Code happened to list first — the exact silent cross-session hand-over the title join
  * exists to prevent. Five reviewers across two vendors, on one round.</p>
  *
- * <p>So: every folder is looked in, and exactly one match is an answer. Two are a refusal that says
- * so. None is the first reason given, because with several roots open the nearest miss is more use
- * than whichever folder happened to be checked last.</p>
+ * <p>So: every folder is looked in. An ambiguity in ANY of them wins first — a root that could not
+ * name its own session does not become answerable because another root could. Then exactly one
+ * match is the answer, two are a refusal saying how many, and none gives the FIRST reason, because
+ * with several roots open the nearest miss is more use than whichever was checked last.</p>
  */
 export function oneAnswerFrom(answers: readonly Asked[]): Asked {
   // AN AMBIGUITY ANYWHERE COUNTS. One root holding a single match and another holding two sessions
@@ -191,10 +192,24 @@ export function oneAnswerFrom(answers: readonly Asked[]): Asked {
       refusal: `${said.length} of the folders open here have a session by this tab's name, so it cannot say which one is its own.`,
     };
   }
+
   return answers[0] ?? {
     kind: 'none',
     refusal: 'This window has no folder open, so there is nowhere to look for a session.',
   };
+}
+
+/**
+ * Whether these answers name ONE session, across every root, with nothing else in doubt.
+ *
+ * <p>It mirrors {@link oneAnswerFrom}, and it has to. Pinning is that decision made ONCE and kept,
+ * so a pin the button would have refused makes the refusal permanent and invisible — one root
+ * holding a single match while another holds two namesakes is three candidates, not one. The two
+ * disagreed when they were written, which is what re-reading the diff against its own rules found.</p>
+ */
+export function pinnable(answers: readonly Found[]): boolean {
+  return !answers.some((answer) => answer.kind === 'several')
+    && answers.filter((answer) => answer.kind === 'one').length === 1;
 }
 
 /**

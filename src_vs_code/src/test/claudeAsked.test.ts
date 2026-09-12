@@ -6,9 +6,11 @@ import { test } from 'node:test';
 import { humanSaid } from '../claudeQuestion';
 import {
   Asked,
+  Found,
   MOST_PER_PROMPT,
   MOST_PROMPTS,
   oneAnswerFrom,
+  pinnable,
   promptsFrom,
   promptsInSession,
   sessionFileIn,
@@ -367,4 +369,20 @@ test('a file that IS there but holds nothing of yours is told apart from one tha
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test('what may be PINNED is exactly what the button would answer', () => {
+  // The pin is that refusal made once and kept, so the two must agree: a pin the button would have
+  // refused makes the refusal permanent and invisible, on a tab nobody will think to suspect. They
+  // disagreed when they were first written — one root with a single match and another with two
+  // namesakes was three candidates to the button and one to the pin.
+  const one = (file: string): Found => ({ kind: 'one', file });
+  const nothing: Found = { kind: 'none', refusal: 'nothing in this one' };
+  const ambiguous: Found = { kind: 'several', refusal: '2 sessions here share the name' };
+
+  assert.strictEqual(pinnable([nothing, one('mine.jsonl')]), true, 'a single match anywhere was not pinnable');
+  assert.strictEqual(pinnable([one('a.jsonl'), ambiguous]), false, 'a namesake elsewhere was pinned over');
+  assert.strictEqual(pinnable([one('a.jsonl'), one('b.jsonl')]), false, 'two roots both matched and one was pinned');
+  assert.strictEqual(pinnable([nothing]), false, 'nothing was pinned as something');
+  assert.strictEqual(pinnable([]), false, 'a window with no folder open pinned a file');
 });
