@@ -354,6 +354,7 @@ function runPage(): {
   readonly onWindow: Record<string, Array<(event: { data: unknown }) => void>>;
   readonly posted: Array<Record<string, unknown>>;
   readonly press: (id: string) => void;
+  readonly clickIn: (id: string, dataset: Record<string, string>) => void;
   readonly push: (data: unknown) => void;
   readonly frame: () => void;
 } {
@@ -413,6 +414,25 @@ function runPage(): {
       fire();
     }
   };
+  /**
+   * A press inside a DELEGATED region, delivered the way a real one arrives.
+   *
+   * <p>The transcript's controls are written into an HTML string and listened for on the region,
+   * because a push replaces the whole of it. So the handler never sees the button — it sees whatever
+   * was under the pointer and walks up with `closest`. A stub that calls the listener with no event
+   * exercises none of that.</p>
+   */
+  const clickIn = (id: string, dataset: Record<string, string>): void => {
+    // `closest` HONOURS THE SELECTOR, because the selector is half of what this is testing. A stub
+    // that hands the element back whatever was asked for made this test hollow: the page's selector
+    // had not in fact been widened to include the new control, and the assertion passed anyway.
+    // Found by breaking it on purpose and watching nothing go red.
+    const closest = (selector: string): { dataset: Record<string, string> } | null =>
+      Object.keys(dataset).some((key) => selector.includes(`data-${key}`)) ? { dataset } : null;
+    for (const fire of listeners[id]?.['click'] ?? []) {
+      (fire as (event: unknown) => void)({ target: { closest } });
+    }
+  };
   const push = (data: unknown): void => {
     for (const fire of onWindow['message'] ?? []) {
       fire({ data });
@@ -420,7 +440,7 @@ function runPage(): {
     frame();
   };
 
-  return { html, rendered, nodes, listeners, onWindow, posted, press, push, frame };
+  return { html, rendered, nodes, listeners, onWindow, posted, press, clickIn, push, frame };
 }
 
 test('the chat page the bundle produces runs, and its Send button sends exactly one turn', () => {
@@ -548,6 +568,27 @@ test('the shipped page says WHY there is nothing, rather than showing an empty b
   // GONE, not merely disabled. On the operator's own screenshot the pair sat above the reason as two
   // empty boxes, which reads as something broken rather than as the answer it was.
   assert.strictEqual(nodes['askingHead']?.['hidden'], true, 'a dead row of arrows was drawn anyway');
+});
+
+test('the shipped Carry-nothing-above button asks the host for the position it names', () => {
+  // Two more names a minifier gets to rewrite: the control is written into the transcript as an HTML
+  // string, and the press is delivered through a DELEGATED listener that walks up with `closest`.
+  // The rounds log has been broken exactly that way twice.
+  const { posted, clickIn } = runPage();
+
+  clickIn('messages', { cut: '4' });
+
+  const asked = posted.filter((message) => message['type'] === 'carryFrom');
+  assert.strictEqual(asked.length, 1, 'the shipped button did not ask the host where to start');
+  assert.strictEqual(asked[0]?.['at'], 4, 'the shipped button named a different position than it carries');
+
+  // And it ASKS — it does not draw. The rule comes back from the host with the transcript, so a
+  // press that failed to record shows nothing rather than a line that will not survive a reload.
+  assert.strictEqual(
+    posted.filter((message) => message['command'] === 'carryFrom').length,
+    0,
+    'the button went through the command channel, where nothing decodes it',
+  );
 });
 
 test('the chat page carries nothing from the host into the webview', () => {

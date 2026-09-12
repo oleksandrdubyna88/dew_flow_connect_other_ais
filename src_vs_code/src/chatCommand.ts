@@ -249,6 +249,8 @@ interface Thread extends ChatMemory {
   /** What was last written to the store, so a push that changed nothing writes nothing. */
   savedMessages?: readonly ChatMessage[];
   savedModelId?: string;
+  /** The mark last written down, so a press that changed only it is still saved. */
+  savedCarryFrom?: number;
   /**
    * A conversation restored from a reload, whose vendor process does not exist yet.
    *
@@ -480,6 +482,7 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
   const config = vscode.workspace.getConfiguration('coai');
   pushChatState(entry, {
     messages: thread.messages,
+    carryFrom: thread.carryFrom,
     running,
     // Built in epic 2 and set for the first time here: a remote conversation stops at three turns
     // and the page offers the local model that has a memory instead.
@@ -521,11 +524,17 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
   // transcripts into one key, which is a lot of JSON on the extension host for a page that said the
   // same words. The comparison is by REFERENCE, because `thread.messages` is replaced rather than
   // mutated, so it is exact and costs nothing. (gemini, the code round.)
-  if (thread.savedMessages === thread.messages && thread.savedModelId === thread.modelId) {
+  // The MARK is compared too. Pressing Carry nothing above changes neither the transcript nor the
+  // model, so a comparison of those two alone skipped the write — and the rule the person had just
+  // drawn would not have survived a reload, silently.
+  if (thread.savedMessages === thread.messages
+    && thread.savedModelId === thread.modelId
+    && thread.savedCarryFrom === thread.carryFrom) {
     return;
   }
   thread.savedMessages = thread.messages;
   thread.savedModelId = thread.modelId;
+  thread.savedCarryFrom = thread.carryFrom;
   memory?.remember({
     id: thread.saveId,
     title: thread.title,
@@ -533,6 +542,7 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
     modelId: thread.modelId,
     messages: thread.messages,
     fromSession: thread.fromSession,
+    carryFrom: thread.carryFrom,
   });
 }
 
@@ -1531,6 +1541,7 @@ function newConversation(
       draft: state.draft,
       fromSession: state.fromSession,
       asked: [],
+      carryFrom: CARRY_EVERYTHING,
       marks: {
         role: roleOf(config, ready.providerId),
         task: taskOf(config, openingPrompt(config), chatSettingsFrom((key) => config.get(key)).prompt),
@@ -1676,6 +1687,21 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
           return;
         }
         chooseModel(found, mine, preset, draft, config);
+      },
+      onCarryFrom: (id, at) => {
+        const mine = threads.get(id);
+        const found = panels.entryOf(id);
+        if (mine === undefined || found === undefined) {
+          return;
+        }
+        // CLAMPED HERE TOO. The page's number is checked for being a position at all; this one is
+        // checked against the conversation it is a position IN, which the page cannot do — the
+        // transcript it rendered may be a turn behind the one the host holds.
+        mine.carryFrom = carryMark(at, mine.messages.length);
+        // `show` writes the tab down and pushes it back, in that order, so the rule the person ends
+        // up looking at is the rule that will survive a reload rather than one the store never
+        // heard about. (codex, the plan round.)
+        show(found, mine.running, '');
       },
       onShowAsked: (id) => {
         const found = panels.entryOf(id);
@@ -1979,6 +2005,7 @@ function restoredPage(
       draft: '',
       fromSession: saved.fromSession === true,
       asked: [],
+      carryFrom: carryMark(saved.carryFrom, saved.messages.length),
       marks: {
         role: presets.modelPresets.find((one) => one.id === (ready.ok ? ready.providerId : restored.providerId))?.startingPrompt ?? '',
         task: mainPrompt(presets.promptPresets)?.text ?? '',

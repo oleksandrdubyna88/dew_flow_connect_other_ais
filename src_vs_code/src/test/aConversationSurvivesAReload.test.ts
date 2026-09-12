@@ -270,9 +270,17 @@ test('a push that changed nothing writes nothing', () => {
   // by reference, which is exact because `thread.messages` is replaced rather than mutated.
   const command = source('chatCommand.ts');
 
-  assert.match(command, /if \(thread\.savedMessages === thread\.messages && thread\.savedModelId === thread\.modelId\) \{\s*\n\s*return;/,
-    'every state push writes the whole store again, transcripts and all');
+  assert.match(
+    command,
+    /if \(thread\.savedMessages === thread\.messages\s*\n\s*&& thread\.savedModelId === thread\.modelId\s*\n\s*&& thread\.savedCarryFrom === thread\.carryFrom\) \{\s*\n\s*return;/,
+    'every state push writes the whole store again, transcripts and all',
+  );
   assert.match(command, /thread\.savedMessages = thread\.messages;/, 'nothing records what was written');
+  // THE MARK COUNTS AS A CHANGE. Pressing Carry nothing above moves neither the transcript nor the
+  // model, so a guard comparing only those two skipped the write — and the rule the person had just
+  // drawn would not have survived a reload, without a word about it.
+  assert.match(command, /thread\.savedCarryFrom = thread\.carryFrom;/,
+    'a press that changes only the mark is not written down');
 });
 
 test('a question refused by a dead conversation comes back to the composer', () => {

@@ -35,6 +35,8 @@ export interface PageMessage {
   readonly line?: unknown;
   readonly index?: unknown;
   readonly data?: unknown;
+  /** Where a handover should start, from the Carry-nothing-above button. */
+  readonly at?: unknown;
 }
 
 export type ChatCommand =
@@ -83,6 +85,8 @@ export type ChatCommand =
   | { readonly kind: 'zoom'; readonly delta: number }
   | { readonly kind: 'tone'; readonly delta: number }
   | { readonly kind: 'showAsked' }
+  /** Carry nothing above: the index of the first message a handover should start at. */
+  | { readonly kind: 'carryFrom'; readonly at: number }
   /**
    * Ask the OTHER model the same thing: the conversation minus the last answer, and the question
    * that answer was given to. It carries nothing else — the host holds the transcript and decides
@@ -236,6 +240,15 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
   // "What did I ask?" — the page has no way to read a session file, so it asks the host to.
   if (message.type === 'showAsked') {
     return { kind: 'showAsked' };
+  }
+  // "Carry nothing above." A whole number that is not negative, or nothing happened: `slice` reads a
+  // negative as an offset from the END and would carry the last message instead of the suffix, which
+  // is this feature as its own inverse. The host clamps it to the transcript as well — this only
+  // refuses what was never a position. (codex, the plan round.)
+  if (message.type === 'carryFrom') {
+    const at = message.at;
+
+    return typeof at === 'number' && Number.isInteger(at) && at >= 0 ? { kind: 'carryFrom', at } : IGNORE;
   }
   if (message.type === 'pageError') {
     const said = text(message.message);
