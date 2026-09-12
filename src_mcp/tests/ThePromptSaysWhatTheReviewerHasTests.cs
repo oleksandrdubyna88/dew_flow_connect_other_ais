@@ -28,11 +28,11 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
     public void NoShippedPrompt_ClaimsACheckoutItCannotKnowIsThere()
     {
         var prompts = new RolePrompts(Path.GetTempPath());
-        var claiming = PromptCatalog.All.Where(c => Claims(prompts.ForChoice(c))).Select(c => c.Id).ToList();
+        var claiming = RoleCatalog.Builtin.Roles.SelectMany(r => r.Prompts).Where(c => Claims(prompts.ForChoice(c))).Select(c => c.Id).ToList();
 
         // The guard on the guard: a typo in the catalog would make the query above pass by finding
         // nothing at all, which is how a test of an emptied collection stays green for ever.
-        PromptCatalog.All.Should().HaveCountGreaterThan(20, "the catalog is what is being searched");
+        RoleCatalog.Builtin.Roles.SelectMany(r => r.Prompts).Should().HaveCountGreaterThan(20, "the catalog is what is being searched");
         claiming.Should().BeEmpty(
             "a prompt file cannot know whether a checkout was mounted — only PanelService does");
     }
@@ -49,7 +49,7 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
             "the search used by the prohibition must actually match the sentence it forbids");
 
         var prompts = new RolePrompts(Path.GetTempPath());
-        foreach (var choice in PromptCatalog.All)
+        foreach (var choice in RoleCatalog.Builtin.Roles.SelectMany(r => r.Prompts))
         {
             prompts.ForChoice(choice).Length.Should().BeGreaterThan(200,
                 $"{choice.Id} must be real text, or the scan over it means nothing");

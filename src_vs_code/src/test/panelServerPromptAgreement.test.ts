@@ -43,43 +43,50 @@ const baseState = (): PanelState => ({
 });
 
 /**
- * What `PromptCatalog.ForRound` returns for an unset round — READ from the C#, not restated here.
+ * What the SERVER runs for an unset round — read from the seed, not restated here.
  *
  * <p><b>It used to be `universalFor(role).id`, and that was worth nothing.</b> `selectedFor` falls
  * back to `universalFor` too, so the assertion below compared a function with itself: the two
  * "programs" could have moved together forever and this file would have stayed green. Caught on
- * this change's own pull request, and it is the same defect this suite exists to prevent — one
+ * that change's own pull request, and it is the same defect this suite exists to prevent — one
  * implementation standing in for two.</p>
  *
- * <p>So the expected ids come out of `PromptCatalog.cs`: the rows whose last argument is `true` are
- * the universal ones, and each names its role through a constant declared in the same file. If the
- * server renames a universal prompt or moves it to another role, this goes red — which is the whole
- * job, and a hand transcription could only do it if somebody remembered to retype the line.</p>
+ * <p>The fix after that read `PromptCatalog.cs` with a regular expression, which held for as long
+ * as the server kept its catalog as a C# array. It keeps it in `shared/builtin-roles.json` now, so
+ * that is what this reads — and the property survives the move intact, because it is still the
+ * OTHER program's answer. The seed is what `RoleCatalog.Builtin` loads and `BuiltinRoleCatalogTests`
+ * asserts it against, field for field; this file asserts the panel against the same file. Neither
+ * side's answer is derived from the other's, which is the whole reason this test exists.</p>
+ *
+ * <p>Not `BUILTIN_ROLES`, deliberately: that is the panel's generated copy, and comparing the panel
+ * with its own copy would be the original defect in a new spelling.</p>
  */
-const promptCatalog = fs.readFileSync(
-  path.join(__dirname, '..', '..', '..', 'src_mcp', 'core', 'Rounds', 'PromptCatalog.cs'), 'utf8');
-
-/** `public const string PlanRole = "PlanCritique";` -> PlanRole: PlanCritique */
-function csharpConstants(): ReadonlyMap<string, string> {
-  const out = new Map<string, string>();
-  for (const m of promptCatalog.matchAll(/const string (\w+)\s*=\s*"([^"]+)"/g)) {
-    out.set(m[1]!, m[2]!);
-  }
-  return out;
+interface SeedRole {
+  readonly id: string;
+  readonly prompts: readonly { readonly id: string }[];
 }
 
-/** The universal prompt id the SERVER ships for each role name. */
+const SEED: readonly SeedRole[] = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '..', '..', '..', 'shared', 'builtin-roles.json'), 'utf8'),
+).roles;
+
+/** The universal prompt id the SERVER ships for each role: its FIRST, which is `General` there. */
 function serverUniversals(): ReadonlyMap<string, string> {
-  const constants = csharpConstants();
-  const resolve = (token: string): string =>
-    token.startsWith('"') ? token.slice(1, -1) : (constants.get(token) ?? token);
-
   const out = new Map<string, string>();
-  for (const m of promptCatalog.matchAll(/new\((("[^"]+")|\w+),\s*(\w+),[^\n]*,\s*true\)/g)) {
-    out.set(resolve(m[3]!), resolve(m[1]!));
+  for (const role of SEED) {
+    if (role.prompts.length > 0) {
+      out.set(role.id, role.prompts[0]!.id);
+    }
   }
+
   return out;
 }
+
+test('the seed actually loaded', () => {
+  // The regular expression this replaced could return an empty map and leave every assertion below
+  // passing over nothing — which is how the vacuous version of this file survived a day.
+  assert.ok(SEED.length >= 5, `the seed has ${SEED.length} roles`);
+});
 
 test('an unset round shows what the server runs, for every role and every round', () => {
   const universals = serverUniversals();

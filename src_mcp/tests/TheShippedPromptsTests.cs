@@ -1,6 +1,4 @@
-using System.Text.RegularExpressions;
 using CoaiMcp.Core.Rounds;
-using CoaiMcp.Runners.Reviewers;
 using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
@@ -8,12 +6,26 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The catalog: which prompts exist, which one a round gets, and the two copies staying honest.
+/// The shipped prompts: which exist, which one a round gets, and that each has text behind it.
 /// </summary>
-public sealed class PromptCatalogTests
+/// <remarks>
+/// <para>Was <c>PromptCatalogTests</c>, over the C# array these rows used to live in. That array is
+/// gone — the rows are <c>shared/builtin-roles.json</c> now, loaded as <see cref="RoleCatalog"/> —
+/// and the behaviour it guarded moved with it rather than being deleted alongside.</para>
+/// <para>One test did NOT move: <c>TheExtensionsCopyOfTheCatalog_ListsTheSamePrompts</c>, which read
+/// <c>prompts.ts</c> with a regular expression to check the panel offered the same ids. There is no
+/// second copy to check any more. Each half now asserts its own LOADER against the seed —
+/// <c>BuiltinRoleCatalogTests</c> here, <c>builtinRoleCatalog.test.ts</c> there — so a seed edit
+/// either side misses goes red on that side, for the reason it actually happened, instead of a
+/// regular expression over somebody else's source going quiet after a reformat.</para>
+/// </remarks>
+public sealed class TheShippedPromptsTests
 {
+    /// <summary>The roles with a universal prompt and five lenses — every shipped role but Conventions.</summary>
     private static readonly string[] Roles =
-        [PromptCatalog.PlanRole, PromptCatalog.ArchitectureRole, PromptCatalog.SecurityRole, PromptCatalog.UxDxRole];
+        [RoleCatalog.PlanRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole];
+
+    private static RoleCatalog Shipped => RoleCatalog.Builtin;
 
     [Fact]
     public void EveryRoleWithLenses_HasOneUniversalPromptAndFiveNarrowOnes()
@@ -24,10 +36,10 @@ public sealed class PromptCatalogTests
         // (research/RESULTS_focused_prompts.md).
         foreach (var role in Roles)
         {
-            var choices = PromptCatalog.For(role).ToList();
+            var choices = Shipped.For(role).ToList();
             choices.Should().HaveCount(6, $"{role} should offer a universal prompt and five lenses");
             choices.Count(c => c.Universal).Should().Be(1, $"{role} needs exactly one default");
-            choices.Should().NotContain(c => c.Id == PromptCatalog.ConventionsId,
+            choices.Should().NotContain(c => c.Id == RoleCatalog.ConventionsId,
                 $"{role} does not offer the conventions prompt — Conventions is a role of its own");
         }
     }
@@ -43,23 +55,23 @@ public sealed class PromptCatalogTests
     [Fact]
     public void TheConventionsRole_HasExactlyOnePrompt_WhichIsItsUniversalOne()
     {
-        var choices = PromptCatalog.For(PromptCatalog.ConventionsRole).ToList();
+        var choices = Shipped.For(RoleCatalog.ConventionsRole).ToList();
 
         choices.Should().ContainSingle();
-        choices[0].Id.Should().Be(PromptCatalog.ConventionsId);
+        choices[0].Id.Should().Be(RoleCatalog.ConventionsId);
         choices[0].Universal.Should().BeTrue();
     }
 
     [Fact]
     public void EveryPromptIdIsUniqueWithinItsRole_AndEveryLabelIsDistinct()
     {
-        // Two entries sharing an id would make the panel's picker ambiguous and `ById` arbitrary;
-        // two sharing a label would make it ambiguous to the person, which is the same defect one
-        // layer up. Twelve entries were added at once, which is exactly when this stops being
-        // obvious by inspection.
+        // Two entries sharing an id would make the panel's picker ambiguous and `PromptById`
+        // arbitrary; two sharing a label would make it ambiguous to the person, which is the same
+        // defect one layer up. Twelve entries were added at once, which is exactly when this stops
+        // being obvious by inspection.
         foreach (var role in Roles)
         {
-            var choices = PromptCatalog.For(role).ToList();
+            var choices = Shipped.For(role).ToList();
             choices.Select(c => c.Id).Should().OnlyHaveUniqueItems($"{role} has a duplicate prompt id");
             choices.Select(c => c.Label).Should().OnlyHaveUniqueItems($"{role} has two lenses with one name");
         }
@@ -69,8 +81,10 @@ public sealed class PromptCatalogTests
     public void EveryPromptInTheCatalog_IsActuallyEmbeddedInTheBinary()
     {
         // A catalog entry with no file behind it is a picker option that fails at review time,
-        // which is the worst possible moment to discover it.
-        foreach (var choice in PromptCatalog.All)
+        // which is the worst possible moment to discover it. The seed carries what a picker SHOWS;
+        // the text a reviewer reads is still an embedded `<id>.md`, and nothing but this holds the
+        // two lists of twenty-five together.
+        foreach (var choice in Shipped.Roles.SelectMany(r => r.Prompts))
         {
             var act = () => new RolePrompts(Path.GetTempPath()).ForChoice(choice);
             act.Should().NotThrow($"{choice.Id}.md must be an EmbeddedResource");
@@ -84,17 +98,14 @@ public sealed class PromptCatalogTests
         {
             foreach (var round in (int[])[1, 2, 3, 7])
             {
-                PromptCatalog.ForRound(role, round, []).Universal.Should().BeTrue();
+                Shipped.ForRound(role, round, []).Universal.Should().BeTrue();
             }
         }
     }
 
     [Fact]
-    public void AnExplicitChoice_WinsOverTheDefault()
-    {
-        PromptCatalog.ForRound(PromptCatalog.SecurityRole, 2, ["", "sec-attack"])
-            .Id.Should().Be("sec-attack");
-    }
+    public void AnExplicitChoice_WinsOverTheDefault() =>
+        Shipped.ForRound(RoleCatalog.SecurityRole, 2, ["", "sec-attack"]).Id.Should().Be("sec-attack");
 
     [Fact]
     public void AnEmptyEntry_IsNotAChoice_SoTheDefaultStillApplies()
@@ -103,18 +114,16 @@ public sealed class PromptCatalogTests
         // round three would freeze rounds one and two — which is exactly what both reviewers of
         // the catalog commit caught. It has to fall THROUGH to the default, not resolve to the
         // empty id and leave the round with no prompt at all.
-        PromptCatalog.ForRound(PromptCatalog.SecurityRole, 2, ["", ""])
-            .Should().Be(PromptCatalog.UniversalFor(PromptCatalog.SecurityRole));
+        Shipped.ForRound(RoleCatalog.SecurityRole, 2, ["", ""])
+            .Should().Be(Shipped.UniversalFor(RoleCatalog.SecurityRole));
     }
 
     [Theory]
     [InlineData("no-such-prompt")]
     [InlineData("architecture")] // a real id, but belonging to another role
-    public void AStaleOrForeignId_FallsThroughInsteadOfLeavingTheRoundWithNoPrompt(string id)
-    {
-        PromptCatalog.ForRound(PromptCatalog.SecurityRole, 1, [id])
-            .Should().Be(PromptCatalog.UniversalFor(PromptCatalog.SecurityRole));
-    }
+    public void AStaleOrForeignId_FallsThroughInsteadOfLeavingTheRoundWithNoPrompt(string id) =>
+        Shipped.ForRound(RoleCatalog.SecurityRole, 1, [id])
+            .Should().Be(Shipped.UniversalFor(RoleCatalog.SecurityRole));
 
     [Fact]
     public void ANullRoundList_IsNotAChoice_AndDoesNotCrashTheRound()
@@ -125,41 +134,9 @@ public sealed class PromptCatalogTests
             name == "COAI_PROMPTS_PER_ROUND" ? """{"Architecture": null}""" : null);
 
         settings.PromptsPerRound.Should().NotContainKey("Architecture");
-        var act = () => PromptCatalog.ForRound(
-            PromptCatalog.ArchitectureRole, 1,
-            settings.PromptsPerRound.GetValueOrDefault(PromptCatalog.ArchitectureRole, []));
+        var act = () => Shipped.ForRound(
+            RoleCatalog.ArchitectureRole, 1,
+            settings.PromptsPerRound.GetValueOrDefault(RoleCatalog.ArchitectureRole, []));
         act.Should().NotThrow();
-    }
-
-    /// <summary>
-    /// The extension mirrors this catalog, and a comment in it promises a test holds the two
-    /// together. This is that test — the promise was written before it existed, which is exactly
-    /// how the two halves of a mirrored list start to drift.
-    /// </summary>
-    [Fact]
-    public void TheExtensionsCopyOfTheCatalog_ListsTheSamePrompts()
-    {
-        var mirror = Path.Combine(RepoRoot(), "src_vs_code", "src", "prompts.ts");
-        File.Exists(mirror).Should().BeTrue($"the mirror should be at {mirror}");
-
-        var ids = Regex.Matches(File.ReadAllText(mirror), @"id:\s*'([a-z0-9-]+)'")
-            .Select(m => m.Groups[1].Value)
-            .ToHashSet();
-
-        foreach (var choice in PromptCatalog.All)
-        {
-            ids.Should().Contain(choice.Id, "the panel cannot offer a prompt it does not know about");
-        }
-    }
-
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "src_vs_code")))
-        {
-            dir = dir.Parent;
-        }
-
-        return dir?.FullName ?? throw new InvalidOperationException("the repository root was not found from the test binary");
     }
 }

@@ -2354,7 +2354,7 @@ is `coai.helpLanguage`, the reading side.
 ### The picker is a claim about another program (2026-09-01)
 
 `selectedFor` decides what the prompt picker SHOWS for a round nobody has set. Every branch in it is
-a claim about what `PromptCatalog.ForRound` will do — so a branch only one of the two has is not a
+a claim about what `RoleCatalog.ForRound` will do — so a branch only one of the two has is not a
 feature, it is a lie with a dropdown around it. That is what the rotation branch had become: fed by
 the panel's dealing switch, unread by the server, naming `arch-boundaries` for a round the server
 would spend on `architecture`.

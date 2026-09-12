@@ -87,9 +87,9 @@ public sealed class SettingsReachTheServerTests : IDisposable
         PanelWrites(("COAI_PROMPTS_PER_ROUND", """{"Architecture":["arch-evolution"]}"""));
 
         var settings = host.Current.Settings;
-        PromptCatalog.ForRound(
-            PromptCatalog.ArchitectureRole, 1,
-            settings.PromptsPerRound.GetValueOrDefault(PromptCatalog.ArchitectureRole, []))
+        RoleCatalog.Builtin.ForRound(
+            RoleCatalog.ArchitectureRole, 1,
+            settings.PromptsPerRound.GetValueOrDefault(RoleCatalog.ArchitectureRole, []))
             .Id.Should().Be("arch-evolution");
     }
 
