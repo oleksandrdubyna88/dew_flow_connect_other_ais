@@ -97,6 +97,8 @@ Five rules, in the order they apply:
 3. **Prompt ids are slugs and they are global.** `RolePrompts` keys text files by prompt id alone,
    so two roles naming `rules` would read one file. The slug rule is also what stops an id being a
    path: `../../secrets` is refused here, not at the moment a file is read into a reviewer's prompt.
+   Windows device basenames (`con`, `aux`, `com1`…) are refused too — `con.md` is the console rather
+   than a file, so the text could be neither written nor read on the platform this is developed on.
 4. **At most five active roles per bucket**, and the trim never reaches a built-in — they come first
    in catalog order, so a person's row can never switch a shipped role off by arriving. Beyond that
    the order is the order they were written, so which role is trimmed is predictable rather than
@@ -106,6 +108,13 @@ Five rules, in the order they apply:
    built-in.
 5. Anything a person added is `BuiltIn = false`, which is what makes it deletable and its text
    restorable-to-nothing rather than restorable-to-shipped.
+
+**A null inside the list is a refusal, not a crash.** Every FIELD of a row was nullable from the
+start; the ROW being null was forgotten, and `[null, {…}]` — which a person can type and a
+deserialiser hands over intact — aborted the whole composition, taking the four shipped roles down
+with one mistyped line. A null list is no rows, a null row is one sentence, a null prompt is one
+sentence, and everything else still composes. The same goes for a row with no id at all, which is
+refused under `<a row with no id>` rather than under an empty string nobody can search for.
 
 `PanelConfig` gained `Catalog` alongside `Roles`: what a role IS, beside how much it may spend. A
 role with no gate of its own falls back to its stage's shipped default, which is what makes a role

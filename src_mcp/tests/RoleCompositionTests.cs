@@ -344,6 +344,114 @@ public sealed class RoleCompositionTests
         catalog.RolesOf(RoleStages.Plan).Should().Equal(RoleCatalog.PlanRole, "Assumptions");
     }
 
+    /// <summary>
+    /// A null INSIDE the list — the one shape that made composition break its own contract.
+    /// </summary>
+    /// <remarks>
+    /// <c>[null, {...}]</c> and <c>"prompts": [null]</c> are both things a person can type and a
+    /// deserialiser will hand over intact. Every field of a row was already nullable; the ROW being
+    /// null was not, and dereferencing it aborted the whole composition — so one mistyped line would
+    /// have taken the four shipped roles down with it, which is exactly what "nothing here throws"
+    /// exists to prevent. Found by codex on this story's code round, in three of its roles at once.
+    /// </remarks>
+    public sealed class ANullInsideTheList
+    {
+        [Fact]
+        public void InsteadOfTheWholeList_ComposesTheShippedCatalog() =>
+            RoleComposition.Compose(null!).Roles.Should().BeEquivalentTo(RoleCatalog.Builtin.Roles,
+                o => o.WithStrictOrdering());
+
+        [Fact]
+        public void InsteadOfARow_IsDroppedAndNamed_AndTheRestStillCompose()
+        {
+            var catalog = RoleComposition.Compose([
+                null!,
+                new RoleEntry("Requirements", Stage: RoleStages.Result,
+                    Prompts: [new PromptEntry("req-general")]),
+            ]);
+
+            catalog.ById("Requirements").Should().NotBeNull("one bad row does not take the others with it");
+            catalog.Dropped.Should().ContainSingle().Which.Should().Contain("empty row");
+        }
+
+        [Fact]
+        public void InsteadOfAPrompt_IsDroppedAndNamed_AndTheOtherPromptsSurvive()
+        {
+            var catalog = RoleComposition.Compose([
+                new RoleEntry("Requirements", Stage: RoleStages.Result,
+                    Prompts: [null!, new PromptEntry("req-general")]),
+            ]);
+
+            catalog.ById("Requirements")!.Prompts.Select(p => p.Id).Should().Equal(["req-general"]);
+            catalog.Dropped.Should().ContainSingle().Which.Should().Contain("Requirements").And.Contain("empty prompt");
+        }
+
+        [Fact]
+        public void InsteadOfEveryPromptOfARow_LeavesTheRoleRefusedRatherThanHalfBuilt()
+        {
+            var catalog = RoleComposition.Compose([
+                new RoleEntry("Requirements", Stage: RoleStages.Result, Prompts: [null!]),
+            ]);
+
+            catalog.ById("Requirements").Should().BeNull();
+            catalog.Dropped.Should().HaveCount(2, "the prompt and then the role it left with nothing to ask");
+        }
+    }
+
+    [Fact]
+    public void ARowWithNoIdAtAll_IsRefusedUnderANameAPersonCanLookFor()
+    {
+        // "": that is not a usable id" names nothing. In a list of six rows a person needs to know
+        // which one to go and look at. (gemini, this story's code round.)
+        var catalog = RoleComposition.Compose([new RoleEntry(Id: null, Stage: RoleStages.Result)]);
+
+        catalog.Dropped.Should().ContainSingle().Which.Should().StartWith("<a row with no id>");
+    }
+
+    [Theory]
+    [InlineData("con")]
+    [InlineData("aux")]
+    [InlineData("com1")]
+    [InlineData("lpt9")]
+    [InlineData("nul")]
+    public void APromptIdThatIsAWindowsDeviceName_IsDroppedAndNamed(string promptId)
+    {
+        // A prompt id becomes <dataDir>/prompts/<id>.md, and Windows still resolves these basenames
+        // to devices whatever the extension — so the text would be unwritable and unreadable on the
+        // platform this product is developed on. (codex, this story's code round.) Spelled in lower
+        // case because an upper-case one never reaches this rule: the slug check refuses it first.
+        var catalog = Composed(Custom("Requirements", RoleStages.Result, promptId, "req-general"));
+
+        catalog.ById("Requirements")!.Prompts.Select(p => p.Id).Should().Equal(["req-general"]);
+        catalog.Dropped.Should().ContainSingle().Which.Should().Contain(promptId).And.Contain("reserves");
+    }
+
+    [Fact]
+    public void ARefusedStage_NamesWhatWasWrittenAndWhatIsAllowed()
+    {
+        var absent = RoleComposition.Compose([
+            new RoleEntry("Whenever", Prompts: [new PromptEntry("whenever-general")]),
+        ]);
+
+        absent.Dropped.Should().ContainSingle().Which.Should()
+            .Contain("no stage", "an absent stage is not the same sentence as a misspelt one")
+            .And.Contain(RoleStages.Plan).And.Contain(RoleStages.Result);
+    }
+
+    [Fact]
+    public void ACappedDocumentRole_SaysWhichBucketItFilled()
+    {
+        // "the result stage" alone would read as a lie to somebody whose four other document roles
+        // are the only ones there. (gemini, this story's code round.)
+        var entries = Enumerable.Range(1, 6)
+            .Select(i => Custom($"Doc{i}", RoleStages.Result, $"doc{i}-general") with { ProgrammingTask = false })
+            .ToArray();
+
+        var catalog = Composed(entries);
+
+        catalog.Dropped.Should().ContainSingle().Which.Should().Contain("Doc6").And.Contain("document");
+    }
+
     [Fact]
     public void EveryRefusal_NamesTheRowItRefused()
     {
