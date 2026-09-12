@@ -70,19 +70,88 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
         settings.Rounds.RolesForRound(Stage.CodeReview, round: 1).Should().NotContain("Requirements");
     }
 
+    /// <summary>
+    /// The compatibility promise, written down as numbers rather than as a comparison with the
+    /// implementation's own constants.
+    /// </summary>
+    /// <remarks>
+    /// Everybody who upgrades has no <c>COAI_ROLES</c>, so this is the configuration nearly every
+    /// round in the world runs under. Asserting it against <c>PlanDefault</c>/<c>CodeDefault</c>
+    /// would restate the code and pass through any change to it; the literals are what a person's
+    /// round did the day before this feature existed. (codex, this story's plan round.)
+    /// </remarks>
     [Fact]
-    public void WithNoKeyAtAll_TheShippedFiveAreWhatRuns()
+    public void WithNoKeyAtAll_TheShippedFiveRunWithTheBudgetsTheyAlwaysHad()
     {
         var settings = From(null);
 
         settings.Rounds.Catalog.Roles.Should().BeEquivalentTo(RoleCatalog.Builtin.Roles, o => o.WithStrictOrdering());
-        settings.Rounds.For(RoleCatalog.ArchitectureRole).Should().Be(PanelConfig.CodeDefault);
+        settings.Rounds.Catalog.Roles.Select(r => r.Id).Should().Equal([
+            RoleCatalog.PlanRole,
+            RoleCatalog.ConventionsRole,
+            RoleCatalog.ArchitectureRole,
+            RoleCatalog.SecurityRole,
+            RoleCatalog.UxDxRole,
+        ]);
+
+        settings.Rounds.For(RoleCatalog.PlanRole).Should().Be(new RoleGate(1, 6));
+        foreach (var role in (string[])
+                 [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole])
+        {
+            settings.Rounds.For(role).Should().Be(new RoleGate(1, 5), $"{role} ran one round at five before this");
+        }
+
+        settings.Rounds.RolesForRound(Stage.PlanReview, round: 1).Should().Equal([RoleCatalog.PlanRole]);
+        settings.Rounds.RolesForRound(Stage.CodeReview, round: 1).Should().Equal([
+            RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole,
+        ]);
+    }
+
+    /// <summary>
+    /// Both places a setting can come from, and what happens when the more specific one is broken.
+    /// </summary>
+    /// <remarks>
+    /// <c>COAI_ROLES</c> is one key, so the layer picks ONE of the two values before anything parses
+    /// it — and the value it picks is the environment's, whether or not that value turns out to be
+    /// readable. The alternative a reviewer was right to ask about is the one where an unreadable
+    /// environment value silently falls back to the FILE's roles: a person would then be running
+    /// roles they had already replaced, which is worse than running the shipped ones, because it
+    /// looks like their edit worked. (codex, this story's plan round.)
+    /// </remarks>
+    [Fact]
+    public void TheEnvironmentWinsOverTheFile_AndWhenItIsUnreadableTheFilesRolesDoNotComeBack()
+    {
+        // Written as a real JSON array, which is how the panel will write it: `SettingsFile.Read`
+        // hands an array through as its raw text, so both shapes reach the parser as one string.
+        File.WriteAllText(
+            SettingsFile.PathFor(_dataDir),
+            $$"""{"COAI_ROLES": {{OneCustomRole}} }""");
+
+        var fromFileAlone = PanelSettings.FromEnvironment(SettingsFile.Layer(_dataDir, _ => null));
+        fromFileAlone.Rounds.Catalog.ById("Requirements").Should().NotBeNull("the file is the base layer");
+
+        var environmentWins = PanelSettings.FromEnvironment(SettingsFile.Layer(
+            _dataDir,
+            name => name == "COAI_ROLES"
+                ? """[{"id":"Instead","name":"Instead","stage":"result","prompts":[{"id":"instead-general"}]}]"""
+                : null));
+        environmentWins.Rounds.Catalog.ById("Requirements").Should().BeNull();
+        environmentWins.Rounds.Catalog.ById("Instead").Should().NotBeNull();
+
+        var broken = PanelSettings.FromEnvironment(SettingsFile.Layer(_dataDir, name => name == "COAI_ROLES" ? "[" : null));
+        broken.Rounds.Catalog.Roles.Should().OnlyContain(r => r.BuiltIn,
+            "the value that won is unreadable, and the one it beat does not get a second turn");
+        broken.Unrecognised.Should().ContainSingle().Which.Should().Contain("COAI_ROLES");
     }
 
     [Theory]
     [InlineData("not json at all")]
     [InlineData("{\"id\":\"Requirements\"}")]
     [InlineData("[")]
+    // Truncated after a row that had begun to look complete — the shape that would tell whether a
+    // parser keeps a prefix. It must not: half a configuration is worse than none, because the half
+    // that survived looks deliberate. (codex, this story's plan round.)
+    [InlineData("[{\"id\":\"Requirements\",\"stage\":\"result\"}")]
     public void MalformedJson_IsNoCustomRolesRatherThanHalfOfThem(string json)
     {
         // The reflex COAI_VENDORS and COAI_PROMPTS_PER_ROUND have had since they shipped: a
@@ -90,7 +159,31 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
         var settings = From(json);
 
         settings.Rounds.Catalog.Roles.Should().BeEquivalentTo(RoleCatalog.Builtin.Roles, o => o.WithStrictOrdering());
+        settings.Rounds.Catalog.Roles.Should().OnlyContain(r => r.BuiltIn, "no half of a role survives either");
     }
+
+    /// <summary>
+    /// Unreadable is not the same as absent, and a person must be told which they have.
+    /// </summary>
+    /// <remarks>
+    /// Falling back to the shipped five is right; doing it SILENTLY is not. Somebody who typed a
+    /// trailing comma sees their roles simply not appear, with nothing anywhere saying why — and the
+    /// row-by-row refusals cannot help, because the parse never got as far as a row. Raised by gemini
+    /// on this story's plan round.
+    /// </remarks>
+    [Fact]
+    public void JsonThisBuildCannotRead_SaysSo()
+    {
+        var settings = From("[{\"id\":\"Requirements\",}]");
+
+        settings.Unrecognised.Should().ContainSingle().Which.Should()
+            .Contain("COAI_ROLES", "the key is what a person searches their settings for")
+            .And.Contain("shipped", "and what it is running instead");
+    }
+
+    [Fact]
+    public void AnAbsentKeyIsNotAComplaint() =>
+        From(null).Unrecognised.Should().BeEmpty("nobody configured anything, which is not a mistake");
 
     [Fact]
     public void ARowThatCompositionRefused_IsASentenceInUnrecognised()

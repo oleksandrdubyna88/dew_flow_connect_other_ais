@@ -392,6 +392,17 @@ public sealed record PanelSettings
                 + "'none' and 'worktree'.");
         }
 
+        // Re-read rather than threaded through from `Catalog`, which is what the neighbour above
+        // does with COAI_RETRY_BACKOFF: the diagnostics are one list built in one place, and the
+        // value is a few hundred bytes.
+        if (env("COAI_ROLES") is { Length: > 0 } roles && ParseRoles(roles) is null)
+        {
+            unknown.Add(
+                "COAI_ROLES is not JSON this server can read — it is running the roles it shipped "
+                + "with, and nothing you added is in this round. The form is an array of rows: "
+                + """[{"id":"Requirements","name":"...","stage":"result","prompts":[…]}].""");
+        }
+
         return unknown;
     }
 
@@ -549,12 +560,23 @@ public sealed record PanelSettings
     /// prompt list — and malformed JSON is NO custom roles rather than a half-applied list, the
     /// reflex <c>COAI_VENDORS</c> and <c>COAI_PROMPTS_PER_ROUND</c> have had since they shipped.
     /// What composition refuses row by row comes back in <see cref="RoleCatalog.Dropped"/> and joins
-    /// <see cref="Unrecognised"/>, so a person reads WHY the role they wrote is not running.
+    /// <see cref="Unrecognised"/>, so a person reads WHY the role they wrote is not running — and a
+    /// value this build cannot parse at ALL joins the same list from <see cref="UnknownValues"/>,
+    /// because a parse that never reached a row has no row to refuse.
     /// </remarks>
     private static RoleCatalog Catalog(Func<string, string?> env) =>
-        RoleComposition.Compose(ParseRoles(env("COAI_ROLES")));
+        RoleComposition.Compose(ParseRoles(env("COAI_ROLES")) ?? []);
 
-    internal static List<RoleEntry> ParseRoles(string? json)
+    /// <summary>The rows, or <c>null</c> when this build cannot read the value at all.</summary>
+    /// <remarks>
+    /// The two are different answers and only one of them is a mistake: an EMPTY array is somebody
+    /// saying they have no roles of their own, and unreadable text is somebody whose roles are
+    /// about to silently not appear. Folding both into an empty list — which this did until
+    /// <see cref="UnknownValues"/> gained a clause for it — left the second case with no diagnostic
+    /// anywhere, because the row-by-row refusals cannot speak for a parse that never reached a row.
+    /// (gemini, this story's plan round.)
+    /// </remarks>
+    internal static List<RoleEntry>? ParseRoles(string? json)
     {
         if (json is not { Length: > 0 })
         {
@@ -564,11 +586,11 @@ public sealed record PanelSettings
         try
         {
             return System.Text.Json.JsonSerializer.Deserialize(
-                json, SettingsJsonContext.Default.ListRoleEntry) ?? [];
+                json, SettingsJsonContext.Default.ListRoleEntry);
         }
         catch (System.Text.Json.JsonException)
         {
-            return [];
+            return null;
         }
     }
 
