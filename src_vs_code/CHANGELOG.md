@@ -1,5 +1,15 @@
 # Changelog
 
+## Extension 0.37.4 — 2026-09-12
+
+**The first prompt press after a model change lights its button again.** Pressing a preset sends the new text of the composer first and the description of it — the marks, the lit button — second, and in between the box held new words under old marks: which is exactly what somebody deleting the instruction looks like. The page reported it gone and the panel un-lit the button it had just lit, so the first press did nothing visible and the second worked. A half of the instruction now counts as edited away only when the PERSON typed — the panel knows what it wrote itself. Emptying the composer still darkens both buttons, because an empty box holds neither half.
+
+## Extension 0.37.3 — 2026-09-12
+
+**A preset button is lit only while its words are the instruction in force.** Choose a model by hand in the two dropdowns and the model button above them goes dark unless it names that exact model — it used to stay lit for a vendor whichever of its models you picked. Edit the instruction out of the composer and the button that put it there goes dark too: the prompt button owns its words, and a model preset owns the role it added.
+
+**A button to empty the composer**, next to Send and a clear gap away from it, and disabled while a turn is running. **And the two steppers have icons** — a magnifier for the size, a sun for the tone — so four identical buttons in a row are no longer a row you have to remember the order of.
+
 ## Extension 0.37.2 — 2026-09-12
 
 **The line under a marked answer is dash-dot**, which is what was asked for — CSS has dashed and dotted and nothing between them, so it is painted rather than bordered. **And the controls above an answer and below it are the same size**: the row above shrinks and dims what it holds, the row below did not, and the two Copy buttons came out visibly different.

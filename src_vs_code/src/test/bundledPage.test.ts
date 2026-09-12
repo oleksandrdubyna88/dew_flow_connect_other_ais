@@ -355,6 +355,7 @@ function runPage(): {
   readonly posted: Array<Record<string, unknown>>;
   readonly press: (id: string) => void;
   readonly clickIn: (id: string, dataset: Record<string, string>) => void;
+  readonly typeIn: (id: string, value: string) => void;
   readonly push: (data: unknown) => void;
   readonly frame: () => void;
 } {
@@ -436,6 +437,21 @@ function runPage(): {
       (fire as (event: unknown) => void)({ target: { closest } });
     }
   };
+  /**
+   * TYPING, as the page hears it: the value set AND the input listeners fired.
+   *
+   * <p>Assigning `nodes.say.value` and calling it typing is how a test of the backdrop first passed
+   * with the repaint removed — nothing had ever painted the layer, so the assertion that it was
+   * empty was true of a thing that had never held anything.</p>
+   */
+  const typeIn = (id: string, value: string): void => {
+    const node = nodes[id] ?? {};
+    node['value'] = value;
+    for (const fire of listeners[id]?.['input'] ?? []) {
+      (fire as (event?: unknown) => void)();
+    }
+    frame();
+  };
   const push = (data: unknown): void => {
     for (const fire of onWindow['message'] ?? []) {
       fire({ data });
@@ -443,7 +459,7 @@ function runPage(): {
     frame();
   };
 
-  return { html, rendered, nodes, listeners, onWindow, posted, press, clickIn, push, frame };
+  return { html, rendered, nodes, listeners, onWindow, posted, press, clickIn, typeIn, push, frame };
 }
 
 test('the chat page the bundle produces runs, and its Send button sends exactly one turn', () => {
@@ -591,6 +607,114 @@ test('the shipped Carry-nothing-above button asks the host for the position it n
     posted.filter((message) => message['command'] === 'carryFrom').length,
     0,
     'the button went through the command channel, where nothing decodes it',
+  );
+});
+
+test('the shipped Clear button empties the composer, and repaints it', () => {
+  // The box draws its own text TRANSPARENT and a layer behind it does the drawing, so emptying the
+  // value without repainting leaves the old words on screen over an empty box. A screenshot of a
+  // full-looking empty composer is where that lesson came from.
+  const { nodes, rendered, press, typeIn, frame } = runPage();
+
+  assert.ok(rendered.has('clear'), 'the shipped page has no way to empty the composer');
+  // TYPED, so the layer behind the box is actually painted with those words — there has to be
+  // something there to fail to clear.
+  typeIn('say', 'half a question nobody wants to finish');
+  assert.notStrictEqual(nodes['backdrop']?.['innerHTML'], '', 'the layer was never painted, so this proves nothing');
+
+  press('clear');
+  // The repaint is DEFERRED to a frame, so the frame has to be run — asserting before it passes
+  // against a layer nothing has written to yet, which is how this test first passed while the
+  // repaint was removed.
+  frame();
+
+  assert.strictEqual(nodes['say']['value'], '', 'the button did not empty the box');
+  assert.strictEqual(nodes['backdrop']?.['innerHTML'], '', 'the words stayed on the layer behind the box');
+});
+
+test('editing the instruction away tells the host which button to un-light', () => {
+  // A preset button is lit because its words are the instruction IN FORCE. The page is the only
+  // side that can see them leave the box - the host hears the composer only when it next asks - so
+  // the page says so once per half and the host clears its own mark. Two halves, two buttons: the
+  // prompt preset owns the task, and a MODEL preset owns the role it puts in front of it.
+  const { nodes, posted, push, typeIn } = runPage();
+  const role = 'You are a careful reviewer.';
+  const task = 'Explain what this diff changes.';
+  const gone = (): Array<Record<string, unknown>> => posted.filter((one) => one['type'] === 'markGone');
+
+  push({ type: 'state', marks: { role, task, service: [] } });
+  // BOTH halves in the box, in the order a preset leaves them: the marks only hold at the front.
+  typeIn('say', role + '\n\n' + task + '\n\nand my own question');
+
+  assert.deepStrictEqual(gone(), [], 'the page called an instruction gone while it was still in the box');
+  // Painted, so there is something to lose. A layer nothing ever wrote to is a layer whose
+  // emptiness proves nothing - the lesson the Clear test above records.
+  assert.ok(
+    String(nodes['backdrop']?.['innerHTML']).includes('<mark class="task">'),
+    'the task half was never marked, so its removal proves nothing',
+  );
+
+  // The prompt edited away, the role left exactly where it was.
+  typeIn('say', role + '\n\nand my own question');
+
+  assert.deepStrictEqual(
+    gone(), [{ type: 'markGone', which: 'task' }],
+    'editing the prompt out of the box did not un-light the prompt button',
+  );
+
+  // And now the role, which is the half a model preset puts there.
+  typeIn('say', 'and my own question');
+
+  assert.deepStrictEqual(
+    gone(), [{ type: 'markGone', which: 'task' }, { type: 'markGone', which: 'role' }],
+    'editing the role out of the box did not un-light the model button',
+  );
+});
+
+test('a preset rewriting the composer is not the person editing the instruction away', () => {
+  // THE ORDER ON THE WIRE IS THE WHOLE BUG. Pressing a prompt preset sends TWO messages: the new
+  // text of the box first (setDraft), and the state that describes it - the marks, the lit button -
+  // second. Between them the page holds the new words and the OLD marks, which is a box whose task
+  // half does not match: exactly what somebody editing it away looks like. The page reported it
+  // gone, the host un-lit the button it had just lit, and the operator saw the first press after a
+  // model change do nothing while the second worked.
+  const { posted, push, typeIn } = runPage();
+  const role = 'You are a careful reviewer.';
+  const first = 'Explain what this diff changes.';
+  const second = 'Rewrite this in plain words.';
+  const gone = (): Array<Record<string, unknown>> => posted.filter((one) => one['type'] === 'markGone');
+
+  push({ type: 'state', marks: { role, task: first, service: [] } });
+  typeIn('say', role + '\n\n' + first);
+
+  // The host swapping one instruction for another, message by message, as the panel really sends it.
+  push({ type: 'state', setDraft: role + '\n\n' + second });
+
+  assert.deepStrictEqual(gone(), [], 'the page called the prompt gone while the host was replacing it');
+
+  push({ type: 'state', marks: { role, task: second, service: [] } });
+
+  assert.deepStrictEqual(gone(), [], 'the marks arriving after the text they describe read as an edit');
+});
+
+test('emptying the composer un-lights both buttons', () => {
+  // Clear is the fastest way to delete the instruction by hand, so it reads as exactly that: an
+  // empty box holds neither half, and a button lit for words nobody is using lies about what the
+  // next question will carry.
+  const { frame, posted, press, push, typeIn } = runPage();
+  const role = 'You are a careful reviewer.';
+  const task = 'Explain what this diff changes.';
+
+  push({ type: 'state', marks: { role, task, service: [] } });
+  typeIn('say', role + '\n\n' + task);
+  press('clear');
+  // The repaint is DEFERRED to a frame, and the report rides on it.
+  frame();
+
+  assert.deepStrictEqual(
+    posted.filter((one) => one['type'] === 'markGone'),
+    [{ type: 'markGone', which: 'task' }, { type: 'markGone', which: 'role' }],
+    'the box was emptied and the two buttons went on claiming an instruction nothing holds',
   );
 });
 

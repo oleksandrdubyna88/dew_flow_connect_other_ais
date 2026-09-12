@@ -2430,3 +2430,25 @@ test('the row above an answer and the row below it are the same row', () => {
   assert.doesNotMatch(ruleFor(css, '.msg .afterRow'), /font-size/, 'the row below took a size of its own again');
   assert.doesNotMatch(ruleFor(css, '.msg .who'), /font-size/, 'the row above took a size of its own again');
 });
+
+test('Send has room before it, and the button beside it empties the box', () => {
+  // Asked for as "a gap of about one to two centimetres": a send is not something to press by
+  // accident on the way past, and the control next to it EMPTIES what you were writing.
+  const html = chatPageHtml(state(), 'n0nce');
+  const css = html.split('<style>')[1].split('</style>')[0];
+
+  assert.ok(html.indexOf('id="clear"') < html.indexOf('id="send"'), 'Send comes before the button that clears');
+  assert.match(ruleFor(css, '.pickerRow #clear'), /margin-left: auto/, 'the pair does not sit at the right-hand end');
+  assert.match(ruleFor(css, '.pickerRow #send'), /margin-left: 18px/, 'there is no room between them');
+});
+
+test('a turn in flight locks the box, the send AND the clear', () => {
+  // A box nobody can type in is a box nobody should be able to empty either: the turn was built from
+  // what is in it, and emptying it mid-turn makes the composer disagree with the question being
+  // answered.
+  const locked = chatPageHtml(state({ running: true }), 'n0nce');
+
+  assert.match(locked, /id="clear"[^>]*disabled/, 'the clear stayed live while a turn was running');
+  assert.match(locked, /id="send"[^>]*disabled/);
+  assert.doesNotMatch(chatPageHtml(state({ running: false }), 'n0nce'), /id="clear"[^>]*disabled/);
+});

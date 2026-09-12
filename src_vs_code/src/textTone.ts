@@ -110,6 +110,7 @@ export function toneStyle(offset: number): string {
 /** The header control: minus, the offset, plus. The zoom's shape, its own field. */
 export function toneControlHtml(offset: number): string {
   return `<span class="toneCtl" title="Text tone: brighter, or dimmer and warmer (every ConnectOtherAIs page)">
+    <span class="ctlIcon" aria-hidden="true">☀</span>
     <button type="button" class="icon" data-tone="-1" aria-label="Dimmer, warmer text">−</button>
     <span id="toneOffset" class="zoomOffset">${escapeHtml(toneLabel(offset))}</span>
     <button type="button" class="icon" data-tone="1" aria-label="Brighter text">+</button>

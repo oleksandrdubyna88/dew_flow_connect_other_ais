@@ -743,7 +743,14 @@ function chatStyle(
      destroy the control and the listener bound to it once at load. */
   .pickerRow { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; flex-wrap: wrap; }
   .pickerRow #pickerBox { flex: 1 1 auto; min-width: 0; }
-  .pickerRow #send { margin-left: auto; }
+  /* The gap before Send, asked for as "about one to two centimetres": a send is not something to
+     press by accident on the way past, and the control beside it EMPTIES the box. */
+  .pickerRow #clear { margin-left: auto; }
+  .pickerRow #send { margin-left: 18px; }
+  .clear { flex: 0 0 auto; font: inherit; font-size: 1.05em; line-height: 1; color: var(--vscode-descriptionForeground);
+           background: none; border: 1px solid transparent; border-radius: 4px; padding: 6px 9px; cursor: pointer; }
+  .clear:hover:not([disabled]) { color: var(--vscode-foreground); border-color: var(--vscode-panel-border); }
+  .clear[disabled] { opacity: .4; cursor: default; }
   .picker select { max-width: 45%; }
   .refused { font-size: .85em; opacity: .75; margin: 0 0 8px; }
   .caption { font-size: .85em; opacity: .7; }
@@ -840,7 +847,7 @@ ${chatPresetRowsHtml(state.promptPresets, state.modelPresets, state.promptId, st
 <div class="pickerRow">
 <div id="pickerBox">${chatPickerHtml({ providers: state.providers, refused: [] }, state.providerId, state.modelId)}</div>
 <span id="spend" class="spend" title="What this conversation has cost so far. A turn carries the whole conversation, so each question is billed for the ones before it.">${escapeHtml(state.spend)}</span>
-<button type="button" id="send"${locked ? ' disabled' : ''}>${state.reask.length > 0 ? `Re-ask · ${escapeHtml(state.reask)}` : 'Send'}</button>
+<button type="button" id="clear" class="clear"${locked ? ' disabled' : ''} title="Empty the box" aria-label="Empty the box">✕</button><button type="button" id="send"${locked ? ' disabled' : ''}>${state.reask.length > 0 ? `Re-ask · ${escapeHtml(state.reask)}` : 'Send'}</button>
 </div>
 ${attachedHtml(state.attached)}
 <div class="compose">
@@ -906,6 +913,17 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   // The newest answer this page has taken. A read started by an earlier press can finish after one
   // started by a later press, and landing second it would replace what was just asked for.
   let askedSeen = 0;
+  // Whether each half of the instruction was in the box the last time it was painted: the task a
+  // PROMPT button put there, and the role a MODEL preset did.
+  let taskWasThere = false;
+  let roleWasThere = false;
+  // WHOSE EDIT THE NEXT PAINT IS ABOUT. Only the person can take a half of the instruction out of
+  // the box behind the host's back; the host knows what it wrote itself, and it sends the marks for
+  // it in the very next message. Those two messages are what broke this: a preset press puts the
+  // new words in the box FIRST and describes them SECOND, so between them the box holds the new
+  // task and the old marks - which is what somebody deleting it looks like, and the host un-lit the
+  // button it had just lit. Reported on a TYPED paint and on no other.
+  let typed = false;
   // The frame a paint is waiting for, declared HERE because the first paint runs at load - before
   // the painter's own place in this script - and a let in the temporal dead zone throws.
   let painting = 0;
@@ -1078,8 +1096,13 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   function lock(locked) {
     const box = document.getElementById('say');
     const button = document.getElementById('send');
+    // AND THE ONE THAT EMPTIES IT. A box nobody can type in is a box nobody should be able to clear
+    // either — the turn in flight was built from what is in it, and emptying it mid-turn would make
+    // the composer disagree with the question being answered.
+    const wipe = document.getElementById('clear');
     if (box) { box.disabled = locked; }
     if (button) { button.disabled = locked; }
+    if (wipe) { wipe.disabled = locked; }
   }
   const say = document.getElementById('say');
   if (say) {
@@ -1090,7 +1113,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     // the drawing, so anything that changes the text and does not repaint makes those words VANISH —
     // which is what typing did, and what a tab opened from a capture did with the whole opening turn
     // in it. The operator sent a screenshot of an empty-looking composer that was not empty.
-    say.addEventListener('input', function () { fitComposer(); paintBackdrop(); });
+    say.addEventListener('input', function () { typed = true; fitComposer(); paintBackdrop(); });
     // The two layers scroll as one or the words drift apart from the caret that is on them.
     say.addEventListener('scroll', function () {
       const layer = document.getElementById('backdrop');
@@ -1132,6 +1155,26 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   if (sendButton) {
     sendButton.addEventListener('click', function () { send(); });
   }
+  const clearButton = document.getElementById('clear');
+  if (clearButton) {
+    clearButton.addEventListener('click', function () {
+      const box = document.getElementById('say');
+      if (!box) { return; }
+      box.value = '';
+      // THE PERSON'S OWN EDIT, and the biggest one there is: an empty box holds neither half of the
+      // instruction, so both buttons stop looking pressed. The same rule as deleting the words by
+      // hand, which is what this is a faster way of doing.
+      typed = true;
+      // REPAINTED, not merely emptied. The box draws its own text transparent and a layer behind it
+      // does the drawing, so setting the value without repainting leaves the old words on screen
+      // over an empty box — which is the defect a screenshot of a full-looking empty composer once
+      // came from. Nothing is posted: the host learns what is in the box when it next asks, through
+      // the draft a pick or a prompt press carries with it.
+      fitComposer();
+      paintBackdrop();
+      if (typeof box.focus === 'function') { box.focus(); }
+    });
+  }
   // The words the model is being instructed with, marked behind the box by the COLOUR OF THEIR
   // TEXT: the role in one colour, the task in another. Which is which comes from the host - the page
   // holds one string, and a role and a task read alike - and a question typed from scratch has
@@ -1166,6 +1209,28 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       html += opens[part.kind] === undefined ? body : opens[part.kind] + body + closes[part.kind];
     }
     behind.innerHTML = html;
+    // THE BUTTON STOPS LOOKING PRESSED when what it put there is gone. A prompt preset is lit
+    // because its words are the instruction in force; edit them away and the button goes on claiming
+    // a prompt nothing is using. The page is the only side that can see this — the host hears the
+    // box only when it next asks — so the page says so, once, and the host decides.
+    const holds = function (kind) {
+      return parts.some(function (one) { return one.kind === kind; });
+    };
+    const hasTask = !!(marks && marks.task && marks.task.length > 0) && holds('task');
+    const hasRole = !!(marks && marks.role && marks.role.length > 0) && holds('role');
+    // Consumed whichever way this paint goes: one keystroke asks one question about one box.
+    const mine = typed;
+    typed = false;
+    if (mine && taskWasThere && !hasTask) {
+      vscode.postMessage({ type: 'markGone', which: 'task' });
+    }
+    // AND THE ROLE, which is what a MODEL preset puts there. Edit it away and that button goes on
+    // claiming a preset whose instruction is not the one in force — the same lie, one button over.
+    if (mine && roleWasThere && !hasRole) {
+      vscode.postMessage({ type: 'markGone', which: 'role' });
+    }
+    taskWasThere = hasTask;
+    roleWasThere = hasRole;
     // BOTH AXES. A word longer than the box scrolls the textarea sideways, and a layer that only
     // follows the vertical scroll then draws the words in the wrong place. (gemini, the code round.)
     behind.scrollTop = box.scrollTop;
@@ -1536,6 +1601,9 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       const box2 = document.getElementById('say');
       if (box2) {
         box2.value = box2.value.length > 0 ? box2.value + '\\n\\n' + data.draft : data.draft;
+        // NOT AN EDIT. The host wrote this, so a keystroke still waiting for its frame is about
+        // the words that were just replaced, and reporting on them names the wrong box.
+        typed = false;
         fitComposer();
         paintBackdrop();
         if (typeof box2.focus === 'function') { box2.focus(); }
@@ -1548,6 +1616,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       const box3 = document.getElementById('say');
       if (box3) {
         box3.value = data.setDraft;
+        typed = false;
         fitComposer();
         paintBackdrop();
         if (typeof box3.focus === 'function') { box3.focus(); }

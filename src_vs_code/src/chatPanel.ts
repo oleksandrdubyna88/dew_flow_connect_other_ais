@@ -74,6 +74,8 @@ export interface ChatPanelHooks {
    * that is not durable, while the next Team turn quietly re-sent everything above it.</p>
    */
   readonly onCarryFrom: (id: object, at: number) => void;
+  /** The page saw half of the instruction leave the box — the prompt's words, or the role. */
+  readonly onMarkGone: (id: object, which: 'role' | 'task') => void;
   /**
    * The person stopped the answer they were waiting for.
    *
@@ -313,6 +315,10 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
       return;
     case 'carryFrom':
       hooks.onCarryFrom(id, command.at);
+
+      return;
+    case 'markGone':
+      hooks.onMarkGone(id, command.which);
 
       return;
     case 'stop':
