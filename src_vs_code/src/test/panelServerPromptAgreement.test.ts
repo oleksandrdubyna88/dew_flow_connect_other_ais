@@ -97,13 +97,17 @@ test('an unset round shows what the server runs, for every role and every round'
   assert.ok(ROLES.length > 0);
   for (const { id: role } of ROLES) {
     const server = universals.get(role);
-    assert.ok(server, `${role} has no universal prompt in PromptCatalog.cs — the panel knows a role the server does not`);
+    assert.ok(
+      server,
+      `${role} is not in shared/builtin-roles.json — the panel knows a role the seed does not`,
+    );
 
     for (const round of [1, 2, 3, 4]) {
       assert.equal(
         selectedFor(role, round, {}),
         server,
-        `${role} round ${round}: the panel and the server disagree`,
+        `${role} round ${round}: the panel would show a different prompt from the one the seed gives `
+          + 'this role. If the seed changed, run: node scripts/generate-builtin-roles.mjs',
       );
     }
   }
