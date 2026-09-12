@@ -3242,7 +3242,7 @@ stay rolling.
 **The totals line says what its duration IS (2026-09-12, issue #116).** It used to end in a bare
 `2.0 h`, which under cards that each read `38 s total · 12 s average` looks like elapsed time for the
 window. It is not — it is every reviewer run summed, so three reviewers in parallel for ten minutes
-contribute thirty. `timeSpent` now writes *summed across N vendors*, the average **per run** (the same
+contribute thirty. `summedTimeSpent` now writes *summed across N vendors*, the average **per run** (the same
 thing `average` means on every card above it, because two averages meaning different things on one
 page is worse than none), and the vendor that spent the longest, by name. Three decisions inside it:
 the longest clause is **computed conditionally** rather than computed and hidden, so one vendor is

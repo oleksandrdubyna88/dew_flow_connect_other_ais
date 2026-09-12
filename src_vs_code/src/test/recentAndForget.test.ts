@@ -204,7 +204,10 @@ test('two vendors tied on time name the same one every time', () => {
   const once = totalsLine(entries);
 
   assert.equal(once, totalsLine(entries), 'the same data renders the same line');
-  assert.match(once, /(codex|local) longest at 1\.0 min/, `one of them is named: ${once}`);
+  // NAMED, not "either of them": `>=` instead of `>` would pick `local` and an either-or regex
+  // would still pass, so the policy this test exists to pin would be gone with the suite green.
+  // `codex` is the first row here — equal tokens, so the sort is stable and keeps insertion order.
+  assert.match(once, /codex longest at 1\.0 min/, `the FIRST tied row is named: ${once}`);
 });
 
 test('the totals line is built from the rows the cards are built from', () => {
