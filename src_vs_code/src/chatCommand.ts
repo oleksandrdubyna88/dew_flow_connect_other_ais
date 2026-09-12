@@ -2125,6 +2125,7 @@ async function deliverPassage(
   passage: { readonly text: string },
   send: boolean,
   fromSession: boolean,
+  append = false,
 ): Promise<void> {
   const config = vscode.workspace.getConfiguration('coai');
   const settings = chatSettingsFrom((key) => config.get(key));
@@ -2168,6 +2169,18 @@ async function deliverPassage(
   }, cli.resolved, remote.session, extensionUri));
 
   opened.entry.panel.reveal();
+  // ADDED, not substituted — but only to a conversation that is already open. `add the question`
+  // is the verb for "this too": the box already holds a turn somebody composed, and the question
+  // belongs under it as more of the material, below the fence the instruction already drew. A tab
+  // that did not exist a moment ago has nothing to add to, so it is built the ordinary way and the
+  // two items are the same thing there.
+  if (append && opened.outcome === 'revealed') {
+    pushChatDraft(opened.entry, passage.text);
+    show(opened.entry, false, '');
+
+    return;
+  }
+
   // WHICH INSTRUCTION THIS CONVERSATION OPENS WITH, in the order the three of them mean something.
   //
   // 1. The prompt button pressed IN THIS TAB. It is a decision about this conversation and it lasts
@@ -2295,6 +2308,7 @@ async function questionWaitingHere(looking: string): Promise<{ text: string; ref
 export async function takeTheQuestion(
   panels: ChatPanels,
   extensionUri: vscode.Uri,
+  append = false,
 ): Promise<void> {
   const ready = readyForChat();
   if (!ready.ok) {
@@ -2325,5 +2339,5 @@ export async function takeTheQuestion(
   // NEVER sent by itself, whatever the auto-send setting says. A question taken off disk is one a
   // person is in the middle of answering; it goes into the composer so they can look at it, add
   // what they think, and press send themselves.
-  await deliverPassage(panels, extensionUri, ready, source, { text: question.text }, false, claude !== undefined);
+  await deliverPassage(panels, extensionUri, ready, source, { text: question.text }, false, claude !== undefined, append);
 }

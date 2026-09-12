@@ -1,5 +1,9 @@
 # Changelog
 
+## Extension 0.36.6 — 2026-09-12
+
+**CoAI: add the question** joins the question to what your composer already holds, instead of replacing it. **CoAI: take the question** still replaces, as it did. Two verbs, two items: after composing a turn with **CoAI: choose**, taking the question threw that turn away, when what was wanted was the question underneath it as more material.
+
 ## Extension 0.36.5 — 2026-09-12
 
 **Three right-click items, each named for what it does.** **CoAI: default** asks the model you
