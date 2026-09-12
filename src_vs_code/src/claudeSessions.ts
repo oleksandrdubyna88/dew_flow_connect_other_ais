@@ -298,10 +298,55 @@ export async function sessionFileIn(
   if (!Array.isArray(files)) {
     return { kind: 'none', refusal: (files as ReadFailure).refusal };
   }
-  // TITLES FIRST, and nothing else. Which file this tab owns is one string per file; the prompts are
-  // the whole conversation. Reading both in one pass meant a folder of fifty sessions was fifty
-  // whole files in memory to answer a question about fifty titles. Two reviewers measured the same
-  // shape at 10x and called it seconds of a blocked extension host.
+  return await theOneCalled(files, looking, 'in this folder');
+}
+
+/**
+ * The session by this name in a window that has NO FOLDER OPEN.
+ *
+ * <p>Claude Code does not need one — it runs with the home directory as its working folder, and the
+ * operator's own window is exactly that: a real session called *Подключение к scoreMeter DB* with
+ * `workspaceFolders` undefined. Scoping the search to the workspace meant there was nothing to
+ * scope by and the button reported that there was nowhere to look, while the session sat on disk.</p>
+ *
+ * <p>So every project Claude Code knows about is searched, and the title join does the work it was
+ * built for: two conversations sharing a name are refused rather than picked between, wherever they
+ * live. Only for a window with no folder — a window that HAS one is scoped to it, because two
+ * projects may legitimately hold a conversation by the same name and the folder tells them apart.</p>
+ */
+export async function sessionFileAnywhere(home: string, looking: string): Promise<Found> {
+  const root = projectsRoot(home);
+  if (looking.length === 0) {
+    return { kind: 'none', refusal: 'This conversation is not named after a Claude Code session.' };
+  }
+  let names: string[];
+  try {
+    names = await fs.readdir(root);
+  } catch (reason) {
+    return missing(reason)
+      ? { kind: 'none', refusal: `Claude Code keeps its sessions in ${root}, and there is nothing there to read.` }
+      : { kind: 'none', refusal: `Claude Code's sessions could not be listed in ${root}: ${where(reason)}` };
+  }
+  const everywhere: string[] = [];
+  for (const name of names) {
+    const found = await sessionFiles(path.join(root, name));
+    if (Array.isArray(found)) {
+      everywhere.push(...found);
+    }
+  }
+
+  return await theOneCalled(everywhere, looking, 'on this machine');
+}
+
+/**
+ * The ONE file among these that calls itself this, or why there is not one.
+ *
+ * <p>TITLES ONLY. Which file a tab owns is one string per file; the prompts are the whole
+ * conversation. Reading both in one pass meant a folder of fifty sessions was fifty whole files in
+ * memory to answer a question about fifty titles — two reviewers measured that shape at 10x and
+ * called it seconds of a blocked extension host.</p>
+ */
+async function theOneCalled(files: readonly string[], looking: string, whereabouts: string): Promise<Found> {
   const matched: string[] = [];
   for (const file of files) {
     if (await titleOf(file) === looking) {
@@ -311,14 +356,14 @@ export async function sessionFileIn(
   if (matched.length > 1) {
     return {
       kind: 'several',
-      refusal: `${matched.length} sessions in this folder are called “${looking}”, so this tab cannot say which one is its own.`,
+      refusal: `${matched.length} sessions ${whereabouts} are called “${looking}”, so this tab cannot say which one is its own.`,
     };
   }
   const only = matched[0];
   if (only === undefined) {
     return {
       kind: 'none',
-      refusal: `No session in this folder is called “${looking}” — Claude Code names a conversation once it has one.`,
+      refusal: `No session ${whereabouts} is called “${looking}” — Claude Code names a conversation once it has one.`,
     };
   }
 

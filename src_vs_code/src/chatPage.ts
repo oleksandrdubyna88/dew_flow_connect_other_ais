@@ -744,7 +744,7 @@ function chatBody(state: ChatPageState, regions: Regions): string {
 ${state.fromSession ? '<button type="button" id="asked" class="asked" aria-expanded="false" aria-controls="asking" title="What you asked in this session, read back from disk">Asked</button>' : ''}
 </header>
 ${state.fromSession ? `<section id="asking" class="asking" aria-live="polite" aria-hidden="true">
-<div class="askingHead">
+<div class="askingHead" id="askingHead">
   <button type="button" id="askedBack" aria-label="The one before">&lsaquo;</button>
   <span id="askedAt" class="askedAt"></span>
   <button type="button" id="askedNext" aria-label="The next one">&rsaquo;</button>
@@ -1104,11 +1104,14 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     const count = asked.length;
     const back = document.getElementById('askedBack');
     const next = document.getElementById('askedNext');
+    const head = document.getElementById('askingHead');
+    // ONE turn needs no arrows, and none needs no row at all. Disabled is not absent: on the
+    // operator's own screenshot the two of them sat above a reason as a pair of empty boxes, which
+    // reads as something broken rather than as the answer it was.
+    if (head) { head.hidden = count < 2; }
     if (count === 0) {
       box.textContent = askedWhy.length > 0 ? askedWhy : 'Reading the session…';
       at.textContent = '';
-      // Nothing to step through. Arrows that look pressable and do nothing are a worse answer than
-      // arrows that say they have nothing to do.
       if (back) { back.disabled = true; }
       if (next) { next.disabled = true; }
 
