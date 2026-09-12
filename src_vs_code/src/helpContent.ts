@@ -174,6 +174,22 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     },
   },
   {
+    id: 'your-own-roles',
+    en: {
+      title: 'Roles of your own: reviewing something that is not code',
+      whatItIs:
+        'A review role is a reviewer with one question. This product ships five — plan critique, conventions, architecture, security and reliability, performance and UX-DX — and **the roles you add are your own**, with names in your own language and the questions you want asked.\n\nThe gate does not change around them. The same rounds, the same threshold, the same findings with the same categories, the same verdict. What changes is what a reviewer is asked, and that is the prompt you write.',
+      why:
+        'The five that ship are the five a programmer wants. Somebody checking requirements against a specification, reading a set of candidate CVs, or going over a product description before it is published wants a different question — and nobody can think of every one of them in advance, which is why it is a list you edit rather than a list we ship.',
+      setup:
+        '**Edit roles…** in *Prompts per round* opens the roles page. Add a role, give it a name, and write its general prompt — the question it asks when nobody has chosen otherwise. Add more prompts for narrower questions; the picker in *Prompts per round* offers them one per round.\n\nThe five shipped roles are on the same page. You can rewrite the text of any of their prompts and add prompts of your own to them; you cannot rename them or delete what they ship with, because their names key settings you already have, sessions that are open, and every round already recorded.\n\n**An id is generated for you** and shown under the name. It is what the setting, the session file and the database call your role, so it never changes afterwards — rename the role as often as you like.\n\n**At most five roles are active per stage.** A sixth cannot be ticked; switch one off first. A role that is switched off stays on this page with everything you wrote in it.',
+      usage:
+        'Everything on the page saves as you type. The prompt TEXT is written to a file beside your other coai data, which is where the server has always read prompt overrides from — so a prompt you rewrite survives an update, and deleting the file restores what this product ships.\n\n**A role for something that is not a programming task** is stored and shown, and takes part in no round yet: the stage that reviews a document rather than a diff is still being built. The page says so on the role.',
+      whatCanGoWrong:
+        '**A `coai-mcp` older than 0.19.0 never reads your roles.** It is the release that learned to: below it, the roles are in the panel and in no round — nothing fails and nothing says so, which is why the page shows a warning naming the version you have. Update the server in **MCP server**.\n\n**A Team server runs only the five that ship.** It checks a role name against the list it was built with, so a role of yours is left out of that vendor and named in the round as excluded — the vendors you run yourself still ask it. Widening that is the next thing being built.\n\n**Two sides, two sets of roles.** With *This side* on, your roles belong to the side you are on, like your rounds and thresholds. The prompt files do not: a question you wrote is one question, wherever you ask it.',
+    },
+  },
+  {
     id: 'limits',
     en: {
       title: 'Limits: how many at once, how long each may take',

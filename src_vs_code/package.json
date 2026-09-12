@@ -487,10 +487,18 @@
           "items": {
             "type": "object",
             "properties": {
-              "id": { "type": "string" },
-              "name": { "type": "string" },
-              "text": { "type": "string" },
-              "main": { "type": "boolean" }
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "main": {
+                "type": "boolean"
+              }
             }
           }
         },
@@ -501,11 +509,21 @@
           "items": {
             "type": "object",
             "properties": {
-              "id": { "type": "string" },
-              "name": { "type": "string" },
-              "provider": { "type": "string" },
-              "model": { "type": "string" },
-              "startingPrompt": { "type": "string" }
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "startingPrompt": {
+                "type": "string"
+              }
             }
           }
         },
@@ -557,6 +575,67 @@
           "type": "string",
           "default": "",
           "markdownDescription": "Which of that provider's models answers. Empty means the model the reviewer row itself is set to, which is what every chat used before the pair existed."
+        },
+        "coai.roles": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "The review roles you have added or edited, as the server reads them. Edit these in the panel (*Prompts per round* → **Edit roles…**) rather than here: the page generates the ids, keeps them unique, and writes each prompt’s TEXT to a file beside your other coai data. A role you add needs `coai-mcp` **0.19.0** or later — an older one never reads this key, so the role would show in the panel and run in no round.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Latin, starts with a letter, no hyphen — it becomes COAI_ROUNDS_<ID>. Generated for you; never change it."
+              },
+              "name": {
+                "type": "string",
+                "description": "What the panel shows. Any language."
+              },
+              "stage": {
+                "type": "string",
+                "enum": [
+                  "plan",
+                  "result"
+                ],
+                "description": "Which stage this role reviews in."
+              },
+              "programmingTask": {
+                "type": "boolean",
+                "description": "A role that reviews a diff. A role that does not is stored and takes part in no round yet."
+              },
+              "active": {
+                "type": "boolean",
+                "description": "Whether the role takes part at all. At most five active per stage."
+              },
+              "prompts": {
+                "type": "array",
+                "description": "Its prompts, the first being its general one.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "A slug: lower-case, digits and hyphens. It names the file the text lives in."
+                    },
+                    "label": {
+                      "type": "string",
+                      "description": "What the picker shows."
+                    },
+                    "purpose": {
+                      "type": "string",
+                      "description": "The picker’s tooltip."
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
