@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+**The review roles come from one file now, and nothing you see has changed.** The five roles and
+their twenty-five prompts used to be written out twice — once in the server's source, once in the
+panel's — with a test that read one program's source with a regular expression to check it still
+matched the other's. That kind of test breaks when somebody reformats a file, is blind to any field
+it was not taught about, and goes quiet rather than red when it stops matching. Two lists of
+twenty-five stay level that way for a while and then quietly do not.
+
+There is one file now, `shared/builtin-roles.json`, belonging to neither half. The server embeds it;
+the panel's copy is generated from it, and a test reads the file itself and fails if the two ever
+differ — including the test that fails when somebody edits the file and forgets to regenerate. The
+help page's prompt list is generated from the same place.
+
+The same file is what lets a coai-mcp from `0.19.0` onward run review roles you define yourself. The
+panel cannot write them yet; that is the next release, with the page to manage them.
+
 ## Extension 0.38.4 — 2026-09-12
 
 **Chat cards are priced now.** The price table was built from the models your REVIEWER rows select, and a chat is switched between model presets that select their own — so a card read "no rate set for this model" for a model the published table prices perfectly well. Both lists are asked now.
@@ -431,7 +448,6 @@ had: the chat was the one thing this extension does that the README did not ment
 which is no help at all when three conversations are open side by side. It carries this product's own
 green glyph now, in a light and a dark version, because a tab icon cannot read your theme.
 
-
 ## Extension 0.31.20 — 2026-09-09
 
 **The prompt you type into the sidebar now stays typed.** *What to ask about the selection* was
@@ -540,7 +556,6 @@ setting you never typed. The name is now derived from the row, and older rows wo
 a slot on the shared account to answer into a window that had gone. It is cancelled now, whichever
 moment you close it in.
 
-
 ## Extension 0.31.14 — 2026-09-09
 
 **The panel can tell when a Team server is older than it is.** The server has been putting its API
@@ -586,7 +601,6 @@ Windows means `codex.cmd`, which is not something a program can simply start: it
 could not be found* before a tab opens, instead of failing at the first question where it reads as
 the model refusing. And `codex` conversations are resumed by their own id rather than by "the last
 one" — which is the last one on the whole MACHINE, so two chat tabs would have answered each other.
-
 
 ## Server 0.18.14 — 2026-09-09
 
@@ -774,7 +788,6 @@ back which model answered, so an escalation or a server-side substitution is not
 gap is the next piece of work, and this entry exists so the number is not read as more than it is.
 
 Rounds recorded before this release name no model, which is the truth about them.
-
 
 ## Extension 0.31.7 — 2026-09-08
 
