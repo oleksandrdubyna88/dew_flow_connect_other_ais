@@ -2,15 +2,27 @@
 
 > Status: **IMPLEMENTED, 2026-09-12.** Three attribute deletions in `src_vs_code/src/roundsLog.ts`;
 > the pager pair keeps `secondary`; two tests in `roundsLogPage.test.ts`, the second of which pins
-> the cascade (the bare `button` rule is the primary colour, and no selector singles the toolbar's
-> buttons out) — the one finding the plan round added.
+> the cascade — the bare `button` rule carries both primary tokens and the pointer, and every
+> selector in the stylesheet that mentions a button must be one of four known forms.
 >
-> Shipped as planned, with no deviation. Of the plan round's eight findings three were accepted
-> (the cascade test, the record edits named in the change, the install prerequisite) and five
-> rejected with reasons: a `primary` utility class would invert the page's idiom, in which the bare
-> rule IS primary and `secondary` is the opt-out; a hover rule for every button is a different
-> change; Clear is a view reset on a read-only page, not a destructive action; a pressed state would
-> describe a toggle these momentary actions are not.
+> **One deviation, and it came from the code round: the page had no `:hover` on anything.** Colour
+> was the only thing saying a control was pressable, which is the one signal a high-contrast theme
+> flattens — so the fix for "these do not look like buttons" was half a fix. `button:hover` and
+> `button.secondary:hover` were added with it. The plan round had been offered the same point and it
+> was rejected there as a different change; seeing the diff, that was wrong — the page's own
+> stylesheet is where the missing affordance lives, and the issue is about affordance.
+>
+> The cascade guard also changed shape under review: a regex naming the selector shapes somebody
+> thought of (`.toolbar button`, `#today`) cannot cover the ones they did not, so the test was
+> inverted into an allow-list of four. Both of its new assertions were proved with teeth — the hover
+> rule deleted, and a hostile `.toolbar button { … }` added — each red, then green again.
+>
+> Of the plan round's eight findings three were accepted and five rejected with reasons; of the code
+> round's fifteen, nine accepted and six rejected. The rejections that still stand: a `primary`
+> utility class would invert the page's idiom, in which the bare rule IS primary and `secondary` is
+> the opt-out; Clear is a view reset on a read-only page, not a destructive action; a pressed state
+> would describe a toggle these momentary actions are not; and `title` attributes would duplicate
+> the visible text that already names each button.
 >
 > Related docs: [module_extension.md](module_extension.md).
 >

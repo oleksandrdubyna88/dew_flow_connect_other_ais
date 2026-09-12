@@ -19,6 +19,8 @@ panel cannot write them yet; that is the next release, with the page to manage t
 
 **Today, All dates and Clear look like the buttons they are.** The three were painted with the secondary button colours, which in a dark theme are the tone of the text beside them — so they read as labels until somebody pressed one by accident. They take the same blue as every other action now. The pager's ◀ Newer / Older ▶ stay subtle on purpose: they move between pages, like the tabs, rather than changing what the table shows.
 
+**And every button on that page answers the pointer.** It had no hover state at all — colour was the only thing saying a thing was pressable, which is exactly the signal a high-contrast theme flattens. Found by the review gate on the change above.
+
 ## Extension 0.38.4 — 2026-09-12
 
 **Chat cards are priced now.** The price table was built from the models your REVIEWER rows select, and a chat is switched between model presets that select their own — so a card read "no rate set for this model" for a model the published table prices perfectly well. Both lists are asked now.
