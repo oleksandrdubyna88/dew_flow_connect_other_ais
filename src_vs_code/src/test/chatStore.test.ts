@@ -7,6 +7,8 @@ import {
   besideMeta,
   expired,
   fromLegacy,
+  idOfMeta,
+  isRecordName,
   isStale,
   metaOf,
   recordFrom,
@@ -272,4 +274,68 @@ test('a migrated record is a record this build can read back', () => {
   const tab: SavedTab = { id: 'l2', savedAt: AT, title: 't', passage: '', modelId: 'm', messages: [] };
 
   assert.notEqual(recordFrom(JSON.parse(JSON.stringify(fromLegacy(tab, '')))), undefined);
+});
+
+// ---------------------------------------------------------------------------------------------
+// What the code round of story A1 found. Each of these is a test before it was a fix.
+// ---------------------------------------------------------------------------------------------
+
+test('an id that is not a safe filename is not a record, however well-formed the rest is', () => {
+  // codex and gemini, independently. An id becomes a PATH — `recordName(id)` is joined to the store's
+  // directory — so a record on disk carrying an escaping id would have the store read and write
+  // outside itself. `randomUUID()` is what mints one today, but what is READ comes from a file, and a
+  // file is not a promise.
+  const escapes = ['../outside', '..', '.', 'a/b', 'a:b', 'a b', 'a*b'];
+
+  for (const id of escapes) {
+    assert.equal(recordFrom({ ...record(), id }), undefined, `an id that escapes the store was accepted: ${id}`);
+    assert.equal(metaFrom({ ...metaOf(record()), id }), undefined, `a metadata id that escapes was accepted: ${id}`);
+  }
+});
+
+test('the names a record lives under refuse an unsafe id rather than building a path', () => {
+  // Belt and braces, deliberately: the validator above is the boundary, and these two are the last
+  // place before a path is handed to the filesystem. A measure applied at one of its sites is the
+  // defect this family keeps writing.
+  assert.throws(() => recordName('../outside'), /id/u);
+  assert.throws(() => besideMeta('../outside'), /id/u);
+  assert.equal(recordName('a1'), 'a1.json');
+});
+
+test('a uuid is a safe id, because a uuid is what mints one', () => {
+  const uuid = '3d301f15-17c6-4788-bf94-ccd35367adc5';
+
+  assert.equal(recordName(uuid), `${uuid}.json`);
+  assert.notEqual(recordFrom({ ...record(), id: uuid }), undefined);
+});
+
+test('only this module own filenames are read as this module files', () => {
+  assert.equal(isRecordName('a1.json'), true);
+  assert.equal(isRecordName('a1.meta.json'), false, 'a metadata file would be read as a record');
+  assert.equal(isRecordName('a1.json.4321.tmp'), false, 'an interrupted write would be read as a record');
+  assert.equal(isRecordName('notes.txt'), false);
+
+  assert.equal(idOfMeta('a1.meta.json'), 'a1');
+  assert.equal(idOfMeta('a1.json'), '', 'a record was read as metadata');
+});
+
+test('metadata carries the version its record was written at, so a bump cannot leave a ghost row', () => {
+  // codex: a future `CONVERSATION_VERSION` makes `recordFrom` reject an old record while `metaFrom`
+  // goes on accepting its metadata — and the picker then offers a row whose transcript this build has
+  // already discarded. The two evolve together or they do not evolve.
+  const meta = metaOf(record());
+
+  assert.equal(meta.version, CONVERSATION_VERSION);
+  assert.equal(metaFrom({ ...meta, version: CONVERSATION_VERSION + 1 }), undefined);
+  assert.equal(metaFrom({ ...meta, version: undefined }), undefined, 'a metadata file of no version was believed');
+});
+
+test('an identity that is empty is no identity, and the constructors say so', () => {
+  // codex: `sourceOfSession` with an empty id produced a `claude` source carrying nothing, and two of
+  // those compared EQUAL. A session that could not be resolved would then have joined every other
+  // unresolved tab — the rule that nothing matches nothing, defeated by the value it excludes.
+  assert.deepEqual(sourceOfSession(''), { kind: 'none' });
+  assert.deepEqual(sourceOfFile(''), { kind: 'none' });
+  assert.equal(sameSource(sourceOfSession(''), sourceOfSession('')), false);
+  assert.equal(sameSource(sourceOfFile(''), sourceOfFile('')), false);
 });

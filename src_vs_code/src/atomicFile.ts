@@ -1,5 +1,5 @@
-import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
-import { mkdir, rename, writeFile } from 'node:fs/promises';
+import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 /**
@@ -27,30 +27,73 @@ import { dirname } from 'node:path';
 export const BESIDE_SUFFIX = '.tmp';
 
 /**
+ * Which write this is, within this process.
+ *
+ * <p>See {@link besideName}: the pid alone is not enough, because one process can have two writes to
+ * one destination in flight.</p>
+ */
+let writes = 0;
+
+/**
  * Where a write goes before it is renamed into place.
  *
- * <p>It carries the WRITING PROCESS, not only the destination. Two extension hosts write the same
- * conversation directory, and a beside-file named for the destination alone would have one window
- * filling the file the other is about to rename — so one of the two renames would move a half-written
- * record into place. It also carries the destination's own name, so a temporary stranded by a crash
- * says which record it belonged to.</p>
+ * <p>Three things go into the name, and each of them was earned:</p>
+ *
+ * <p><b>The destination's own name</b>, so a temporary stranded by a crash says which record it
+ * belonged to rather than being an anonymous file somebody has to guess about.</p>
+ *
+ * <p><b>The writing PROCESS.</b> Two extension hosts write the same conversation directory, and a
+ * beside-file named for the destination alone would have one window filling the file the other is
+ * about to rename — so one of the two renames would move a half-written record into place.</p>
+ *
+ * <p><b>And a counter, because the pid is not enough.</b> Two writes to ONE destination from one
+ * host is an ordinary event — a turn lands while the previous save is still on the disk — and with a
+ * shared name each would write and rename the same temporary: one call truncating what the other is
+ * still writing, and the loser reporting success over content it did not write. Found by two
+ * vendors' reviewers independently on this story's code round. The counter is per process and never
+ * reused, so two names from one host differ even in the same millisecond.</p>
  */
 export function besideName(path: string, pid: number = process.pid): string {
-  return `${path}.${pid}${BESIDE_SUFFIX}`;
+  writes += 1;
+
+  return `${path}.${pid}.${writes}${BESIDE_SUFFIX}`;
 }
 
-/** Write it, atomically, without holding the host. The directory is made if it is not there. */
+/**
+ * Write it, atomically, without holding the host. The directory is made if it is not there.
+ *
+ * <p>A failure is re-thrown — the store turns it into a refusal that keeps the conversation on
+ * screen, the ledger logs it, and neither can if it is swallowed here — but the temporary is removed
+ * first. A `.tmp` left behind by every disk error is a directory that accumulates one per failure,
+ * and a sweep that has to tell those from a write that is genuinely in flight.</p>
+ */
 export async function writeFileAtomically(path: string, text: string): Promise<void> {
   const beside = besideName(path);
   await mkdir(dirname(path), { recursive: true });
-  await writeFile(beside, text, 'utf8');
-  await rename(beside, path);
+  try {
+    await writeFile(beside, text, 'utf8');
+    await rename(beside, path);
+  } catch (reason) {
+    // Best-effort, and deliberately silent: the failure being reported is the one above, and a
+    // cleanup that could not happen must not replace it with a different, less useful sentence.
+    await rm(beside, { force: true }).catch(() => undefined);
+    throw reason;
+  }
 }
 
 /** The same bargain for a caller that cannot wait for a promise. See the note above. */
 export function writeFileAtomicallySync(path: string, text: string): void {
   const beside = besideName(path);
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(beside, text, 'utf8');
-  renameSync(beside, path);
+  try {
+    writeFileSync(beside, text, 'utf8');
+    renameSync(beside, path);
+  } catch (reason) {
+    try {
+      rmSync(beside, { force: true });
+    } catch {
+      // As above.
+    }
+    throw reason;
+  }
 }
