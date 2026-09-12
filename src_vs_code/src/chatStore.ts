@@ -150,14 +150,22 @@ export interface ConversationMeta {
  * mints one today; this is what makes that true of the ones that come back. Found by two vendors'
  * reviewers on this story's code round, from two roles.</p>
  *
- * <p>Letters, digits, dash, underscore and dot, with `.` and `..` excluded by the length-2 cases
- * below — which covers a uuid, and refuses every separator, drive letter, wildcard and space.</p>
+ * <p><b>NO DOTS</b>, and that is the second thing this pattern was taught. The first version allowed
+ * them, and an id of `conv1.meta` then made {@link recordName} produce `conv1.meta.json` — which is
+ * byte-for-byte what {@link besideMeta} produces for `conv1`. Two conversations, one file: writing
+ * either clobbers the other, the record is invisible to a listing that excludes `.meta.json`, and a
+ * directory read parses that transcript as another conversation's metadata. The two namespaces are
+ * disjoint only if an id cannot contain the separator that distinguishes them. (gemini, the second
+ * round of this story's code review, on the fix from the first.)</p>
+ *
+ * <p>Letters, digits, dash and underscore — which covers a uuid, and refuses every separator, drive
+ * letter, wildcard, space and dot, `.` and `..` with them.</p>
  */
-const SAFE_ID = /^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/u;
+const SAFE_ID = /^[A-Za-z0-9_-]+$/u;
 
 /** Whether this id may be turned into a filename. */
 export const isSafeId = (id: string): boolean =>
-  id.length > 0 && id.length <= 200 && SAFE_ID.test(id) && id !== '.' && id !== '..';
+  id.length > 0 && id.length <= 200 && SAFE_ID.test(id);
 
 /**
  * The file a record lives in, named for its id and for nothing else.
@@ -246,6 +254,31 @@ function sourceFrom(value: unknown): ConversationSource | undefined {
 }
 
 /**
+ * Whether a record's two statements about where it came from agree.
+ *
+ * <p>Origin is written down twice — `fromSession`, which decides whether the tab offers to read its
+ * Claude session back, and `source`, which decides what a tab is matched against. Nothing made them
+ * agree, so a record could be FOUND by the source path as a Claude session and treated as a file
+ * chat by everything else: one conversation, both found and refused, depending on which half was
+ * asked. (codex, the second round.)</p>
+ *
+ * <p>They are not redundant, which is why this is a check rather than a deletion: a migrated record
+ * legitimately says `fromSession: true` while naming no source at all, because the memento recorded
+ * which door a conversation came through and never recorded which session. So `none` permits either
+ * answer, and a source that names an identity must agree with it.</p>
+ */
+function agreeOnOrigin(source: ConversationSource, fromSession: boolean): boolean {
+  if (source.kind === 'claude') {
+    return fromSession;
+  }
+  if (source.kind === 'file') {
+    return !fromSession;
+  }
+
+  return true;
+}
+
+/**
  * One record back, or nothing when it is torn, foreign, or of a version this build does not know.
  *
  * <p>Every field is checked because every field is rendered, and what is stored can be edited by
@@ -291,6 +324,9 @@ export function recordFrom(value: unknown): ConversationRecord | undefined {
   }
   const source = row.source === undefined ? { kind: 'none' as const } : sourceFrom(row.source);
   if (source === undefined) {
+    return undefined;
+  }
+  if (!agreeOnOrigin(source, row.fromSession === true)) {
     return undefined;
   }
 
@@ -392,8 +428,14 @@ export function metaOf(record: ConversationRecord): ConversationMeta {
  * way round — a record that failed to be replaced after its metadata was. Either way the two are not
  * one commit and the metadata is not evidence about anything; the record is, and the reader
  * regenerates from it.</p>
+ *
+ * <p>The VERSION counts as well as the revision. A schema bump that migrates a record in place
+ * leaves its metadata at the old version with the same revision, and a test that read only the
+ * revision would call that pair fresh — which is exactly what putting a version on the metadata was
+ * for. (gemini, the second round.)</p>
  */
-export const isStale = (meta: ConversationMeta, record: ConversationRecord): boolean => meta.rev !== record.rev;
+export const isStale = (meta: ConversationMeta, record: ConversationRecord): boolean =>
+  meta.rev !== record.rev || meta.version !== record.version;
 
 /**
  * Whether two sources are the same source.

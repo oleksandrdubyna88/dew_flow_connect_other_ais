@@ -9,6 +9,7 @@ import {
   fromLegacy,
   idOfMeta,
   isRecordName,
+  isSafeId,
   isStale,
   metaOf,
   recordFrom,
@@ -338,4 +339,54 @@ test('an identity that is empty is no identity, and the constructors say so', ()
   assert.deepEqual(sourceOfFile(''), { kind: 'none' });
   assert.equal(sameSource(sourceOfSession(''), sourceOfSession('')), false);
   assert.equal(sameSource(sourceOfFile(''), sourceOfFile('')), false);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Round two of the same code round. The first of these is a defect the FIX of round one created.
+// ---------------------------------------------------------------------------------------------
+
+test('a record file and a metadata file can never be the same file', () => {
+  // gemini, round two, on the id pattern round one introduced: it allowed dots, so an id ending in
+  // `.meta` produced `x.meta.json` from recordName — which is byte-for-byte what besideMeta('x')
+  // produces. Two conversations, one file: writing either clobbers the other, the record is
+  // invisible to a listing that excludes `.meta.json`, and a directory read parses that transcript
+  // as the metadata of a conversation it has nothing to do with.
+  assert.equal(isSafeId('conv1.meta'), false, 'an id whose record file is another id’s metadata file');
+  assert.throws(() => recordName('conv1.meta'), /id/u);
+
+  // The general statement of it, over ids that ARE allowed: no record name is ever a metadata name.
+  for (const id of ['a1', 'conv-2', 'a_b', '3d301f15-17c6-4788-bf94-ccd35367adc5']) {
+    assert.equal(isRecordName(besideMeta(id)), false);
+    assert.equal(idOfMeta(recordName(id)), '');
+  }
+});
+
+test('a record cannot say it came from a session and from a file at the same time', () => {
+  // codex, round two: origin is written down twice — `fromSession` and `source` — and nothing made
+  // them agree. A record claiming a Claude source while saying it did not come from a session is
+  // found by the source-matching path and treated as a file chat by everything else, so one
+  // conversation is both found and refused depending on which half is asked.
+  assert.equal(
+    recordFrom({ ...record(), source: sourceOfSession('uuid-1'), fromSession: false }),
+    undefined,
+    'a record whose two halves disagree about where it came from was read',
+  );
+  assert.equal(
+    recordFrom({ ...record(), source: sourceOfFile('file:///a/README.md'), fromSession: true }),
+    undefined,
+    'a file chat claiming to be a session was read',
+  );
+
+  // And the combination a migration legitimately produces stays readable: no source, either origin.
+  assert.notEqual(recordFrom({ ...record(), source: { kind: 'none' }, fromSession: true }), undefined);
+  assert.notEqual(recordFrom({ ...record(), source: { kind: 'none' }, fromSession: false }), undefined);
+});
+
+test('metadata from another schema version is stale, not merely of another revision', () => {
+  // gemini, round two. A version bump that migrates a record in place leaves its metadata at the old
+  // version with the same rev, and a staleness test that reads only the rev calls that pair fresh —
+  // which is the very thing the version on the metadata was added to prevent.
+  const mine = record({ rev: 4 });
+
+  assert.equal(isStale({ ...metaOf(mine), version: CONVERSATION_VERSION + 1 }, mine), true);
 });
