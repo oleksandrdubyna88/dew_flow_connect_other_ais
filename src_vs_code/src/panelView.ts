@@ -755,19 +755,22 @@ function runtimeFields(vendor: Vendor, id: string, remote: boolean): string {
  * thing.</p>
  */
 function priceFields(vendor: Vendor, id: string, local: boolean, remote: boolean, price: ModelPrice | undefined, plan: string, code: string): string {
-  return remote ? '' : `
+  // The two rows differ in five values and in nothing else, so they are one row rendered twice
+  // rather than two near-identical blocks — which is also what SonarCloud measured as duplication
+  // on the pull request that moved the stage boxes onto them.
+  const rate = (which: 'in' | 'out', listed: number | undefined, typed: number, stage: string): string => `
   <div class="field priced">
-    ${labelled(`price-in-${id}`, '$ / 1M in', 'vendorPrice')}
-    <input type="number" id="price-in-${id}" min="0" step="0.01" data-setting="pricePerMillionIn" data-vendor="${id}"
-           value="${vendor.pricePerMillionIn === 0 ? '' : vendor.pricePerMillionIn}"
-           placeholder="${ratePlaceholder(price?.inPerMillion)}" title="${escapeHtml(local ? HELP.localPrice : rateNote(vendor.model, price))}">${plan}
-  </div>
-  <div class="field priced">
-    ${labelled(`price-out-${id}`, '$ / 1M out', 'vendorPrice')}
-    <input type="number" id="price-out-${id}" min="0" step="0.01" data-setting="pricePerMillionOut" data-vendor="${id}"
-           value="${vendor.pricePerMillionOut === 0 ? '' : vendor.pricePerMillionOut}"
-           placeholder="${ratePlaceholder(price?.outPerMillion)}" title="${escapeHtml(local ? HELP.localPrice : rateNote(vendor.model, price))}">${code}
+    ${labelled(`price-${which}-${id}`, `$ / 1M ${which}`, 'vendorPrice')}
+    <input type="number" id="price-${which}-${id}" min="0" step="0.01"
+           data-setting="pricePerMillion${which === 'in' ? 'In' : 'Out'}" data-vendor="${id}"
+           value="${typed === 0 ? '' : typed}"
+           placeholder="${ratePlaceholder(listed)}" title="${escapeHtml(local ? HELP.localPrice : rateNote(vendor.model, price))}">${stage}
   </div>`;
+
+  return remote
+    ? ''
+    : rate('in', price?.inPerMillion, vendor.pricePerMillionIn, plan)
+      + rate('out', price?.outPerMillion, vendor.pricePerMillionOut, code);
 }
 
 function vendorCard(vendor: Vendor, context: CardContext): string {
