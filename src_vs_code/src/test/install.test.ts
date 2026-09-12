@@ -358,6 +358,10 @@ test('the server smoke asks the binary its version the only way a server can be 
   // the mcp job without adapting it would grep stdout that never comes and pass on the empty
   // string, testing nothing on six runners at once.
   const server = jobBlock(releaseWorkflow(), 'server-binaries');
+  // reads-another-program: the release workflow is asserted AGAINST the endpoint it smokes, which
+  // is a positive claim about that source rather than an expectation derived from it — it fails
+  // loudly when the endpoint moves, which is the property NothingReadsAnotherProgramsSourceTests
+  // requires and the derive-and-compare shape does not have.
   const program = fs.readFileSync(
     path.join(__dirname, '..', '..', '..', 'src_server', 'src', 'Program.cs'),
     'utf8',
@@ -846,6 +850,9 @@ test('the release smoke fails on the message the server actually prints', () => 
     path.join(__dirname, '..', '..', '..', '.github', 'workflows', 'release.yml'),
     'utf8',
   );
+  // reads-another-program: every sentence the release smoke greps for must be a sentence the
+  // server actually prints, so this asserts the workflow against that source positively. A moved
+  // sentence fails here rather than quietly matching nothing.
   const program = fs.readFileSync(
     path.join(__dirname, '..', '..', '..', 'src_mcp', 'src', 'Program.cs'),
     'utf8',

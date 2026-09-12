@@ -158,6 +158,15 @@ and will be reached for again, so a repository-level test refuses it. Its own fi
 defect it guards against — it matched only single-quoted path literals, which C# cannot produce at
 all — which is the argument for the rule in one sentence.
 
+**Not every cross-program read is that defect, so the rule has a marked exemption.** The forbidden
+shape DERIVES an expectation from the other program's source and compares two lists; when it stops
+matching it derives an empty list and passes over nothing. A POSITIVE assertion about that source —
+"this endpoint exists, and the release smoke asks for it", which `install.test.ts` makes twice — fails
+loudly when the source moves, which is the opposite property. No scanner can tell the two apart, so
+the read carries `reads-another-program:` and a reason, and a marker with nothing after the colon is
+refused: an exemption whose reason is blank is a way of turning the rule off. Widening the guard to a
+three-line window is what found those two, invisible to the single-line version.
+
 ```mermaid
 flowchart LR
     seed["shared/builtin-roles.json<br/>(owned by neither)"]

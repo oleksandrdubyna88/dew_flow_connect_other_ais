@@ -32,6 +32,28 @@ public sealed class NothingReadsAnotherProgramsSourceTests
     /// <summary>Directories whose contents are nobody's source.</summary>
     private static readonly string[] NotSource = ["node_modules", "bin", "obj", "out", "dist", ".git"];
 
+    /// <summary>How far past an opening call the path may have been wrapped onto its own line.</summary>
+    private const int WindowLines = 3;
+
+    /// <summary>How far ABOVE a read its exemption may be written — a reason worth reading is a paragraph.</summary>
+    private const int LookBackLines = 8;
+
+    /// <summary>
+    /// The marker that says a cross-program read is deliberate, and why.
+    /// </summary>
+    /// <remarks>
+    /// <para>Not every such read is the defect this guards against. The forbidden shape DERIVES an
+    /// expectation from the other program's source and compares two lists — when it stops matching
+    /// it derives an empty list and passes over nothing. A positive assertion about that source
+    /// ("this endpoint exists, and the release smoke asks for it") fails LOUDLY when the source
+    /// changes, which is the opposite property.</para>
+    /// <para>The distinction is about intent and no scanner can read it, so it is written down: the
+    /// read carries this marker and a reason, and the reason is what a reviewer reads. A marker with
+    /// nothing after the colon is refused, because an exemption whose reason is blank is a way of
+    /// turning the rule off.</para>
+    /// </remarks>
+    private const string Deliberate = "reads-another-program:";
+
     /// <summary>
     /// The retired class's name, assembled rather than written.
     /// </summary>
@@ -117,9 +139,18 @@ public sealed class NothingReadsAnotherProgramsSourceTests
     /// test reading the MCP's source compared <c>src_mcp</c> with <c>src_mcp</c> and was waved
     /// through, while its own internal reads were flagged. (codex and gemini, C2's code round.)
     /// </remarks>
-    private static string ProgramOf(string path) =>
-        Programs.FirstOrDefault(p => path.Contains($"{Path.DirectorySeparatorChar}{p}{Path.DirectorySeparatorChar}"))
-        ?? string.Empty;
+    private static string ProgramOf(string path)
+    {
+        // The FIRST segment of the path relative to the repository root, split on both separators.
+        // Containment of `\src_mcp\` assumed one spelling of a separator and could answer with the
+        // empty string — and an empty owner is the worst answer available here, because every
+        // program then differs from it and a test reading its OWN source is reported.
+        // (gemini, story C2's second code round.)
+        var segments = Path.GetRelativePath(RepoRoot(), path)
+            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        return segments.Length > 0 && Programs.Contains(segments[0]) ? segments[0] : string.Empty;
+    }
 
     /// <summary>
     /// Whether this line names that program as a PATH SEGMENT.
@@ -128,6 +159,20 @@ public sealed class NothingReadsAnotherProgramsSourceTests
     /// Quoted any of the three ways these two languages quote, or spelled inside a path with
     /// separators. The first draft asked for <c>'src_mcp'</c> alone.
     /// </remarks>
+    /// <summary>Whether this window carries the marker AND a reason after it.</summary>
+    private static bool IsDeliberate(string window)
+    {
+        var at = window.IndexOf(Deliberate, StringComparison.Ordinal);
+        if (at < 0)
+        {
+            return false;
+        }
+
+        var rest = window[(at + Deliberate.Length)..];
+
+        return rest.Split('\n')[0].Trim().Length >= 12;
+    }
+
     private static bool Names(string line, string program) =>
         line.Contains($"\"{program}\"", StringComparison.Ordinal)
         || line.Contains($"'{program}'", StringComparison.Ordinal)
@@ -180,10 +225,26 @@ public sealed class NothingReadsAnotherProgramsSourceTests
                     continue;
                 }
 
-                if (Programs.Any(other => other != mine && Names(line, other)))
+                // The path is looked for in a WINDOW rather than on the opening line alone: a
+                // formatter that breaks `readFileSync(join(root, 'src_mcp', …))` across lines would
+                // otherwise leave neither half matching and the guard green. Three lines is what a
+                // call to `join` with four segments wraps into. (codex, C2's second code round.)
+                var window = string.Join('\n', lines.Skip(i).Take(WindowLines));
+                if (!Programs.Any(other => other != mine && Names(window, other)))
                 {
-                    offenders.Add($"{Path.GetRelativePath(root, file)}:{i + 1}: {line.Trim()}");
+                    continue;
                 }
+
+                // The marker may be on the read, or on the comment lines just above it, which is
+                // where a reason long enough to be worth reading actually fits.
+                var from = Math.Max(i - LookBackLines, 0);
+                var around = string.Join('\n', lines.Skip(from).Take(i - from + WindowLines));
+                if (IsDeliberate(around))
+                {
+                    continue;
+                }
+
+                offenders.Add($"{Path.GetRelativePath(root, file)}:{i + 1}: {line.Trim()}");
             }
         }
 
