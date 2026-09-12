@@ -45,7 +45,7 @@ public sealed partial class PanelService
         _vaultReadUtc = vaultReadUtc;
         _launcher = launcher;
         _log = log;
-        _store = new SessionStore(settings.DataDir);
+        _store = new SessionStore(settings.DataDir, settings.Rounds.Catalog);
         _worktrees = new WorktreeManager(launcher, Path.Combine(settings.DataDir, "worktrees"));
         _context = new ContextAssembler(launcher);
         _scheduler = new BoundedScheduler(

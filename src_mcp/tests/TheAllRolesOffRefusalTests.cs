@@ -104,6 +104,38 @@ public sealed class TheAllRolesOffRefusalTests
     /// than the one configured now, so editing a role would not reach a session already open. The
     /// gates are the session's; the catalog is the server's.
     /// </remarks>
+    /// <summary>
+    /// A session read back runs against the catalog configured NOW, not the shipped default.
+    /// </summary>
+    /// <remarks>
+    /// The catalog is not persisted (the test below says why), so a deserialized config carries the
+    /// init default until the store reattaches the live one. It matters quietly: `PanelConfig.For(Stage)`
+    /// asks the catalog which roles a stage HAS, so a session resumed after a restart would take its
+    /// stage budget from the shipped roles alone and miss the rounds a person's own role was given.
+    /// Raised by codex on this story's second code round.
+    /// </remarks>
+    [Fact]
+    public void ASessionReadBack_RunsAgainstTheCatalogTheServerHasNow()
+    {
+        var dir = Directory.CreateTempSubdirectory("coai-resume-").FullName;
+        var catalog = RoleComposition.Compose([
+            new RoleEntry("Requirements", Name: "Requirements", Stage: RoleStages.Result,
+                Prompts: [new PromptEntry("req-general")]),
+        ]);
+
+        // Written by a server that knew the role, read by one configured with the same catalog.
+        new SessionStore(dir).Save(new PersistedSession(
+            new SessionState("s1", "D:/repo", "main", new PanelConfig(
+                catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(3, 5)), StagePolicy.Human)),
+            []));
+
+        var loaded = new SessionStore(dir, catalog).Load("D:/repo", "main")!;
+
+        loaded.State.Config.Catalog.ById("Requirements").Should().NotBeNull();
+        loaded.State.Config.RolesForRound(Stage.CodeReview, round: 3).Should().Contain("Requirements",
+            "a role a person defined keeps the rounds it was given across a restart");
+    }
+
     [Fact]
     public void ASessionFileCarriesTheGates_AndNotTheCatalog()
     {
