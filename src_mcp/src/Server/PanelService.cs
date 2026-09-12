@@ -154,14 +154,22 @@ public sealed partial class PanelService
     /// are fine. (CodeRabbit, this plan's pull request.)</para>
     /// <para>Both clauses name the ROLE first, because that is what somebody reading a round with
     /// nothing in it is trying to find.</para>
+    /// <para><b>And the vendor advice is a CHECK, not a diagnosis.</b> The lead sentence used to
+    /// assert it — "every configured vendor is either disabled, set not to review this stage, or
+    /// missing its CLI or key" — which is one of the two causes and the wrong one exactly when a
+    /// clause below is present: a healthy Team server, serving this stage, rejecting one role a
+    /// person defined. It is last and conditional in wording now, so it stays actionable without
+    /// claiming something the round does not know. (CodeRabbit, on the fix for its own earlier
+    /// finding.)</para>
     /// </remarks>
     internal string NoReviewerRefusal(Stage stage, RoundWork work) =>
-        $"no reviewer serves the {stage} stage — every configured vendor is either disabled, set not "
-        + "to review this stage, or missing its CLI or key. A round with no reviewer would pass the "
-        + "gate having reviewed nothing, so it is refused. Tick a vendor's stage box in the panel, or "
-        + "enable one that can run."
+        $"nothing could review the {stage} stage: no vendor here can run any of the roles this round "
+        + "was going to ask. A round with no reviewer would pass the gate having reviewed nothing, so "
+        + "it is refused."
         + Clause(" Before that, ", work.NotAsked.Select(r => $"{r.Role} was not asked: {r.Reason}"))
-        + Clause(" And ", work.Excluded.Select(e => $"{e.Role} could not go to {e.Provider}: {e.Reason}"));
+        + Clause(" And ", work.Excluded.Select(e => $"{e.Role} could not go to {e.Provider}: {e.Reason}"))
+        + " Otherwise every configured vendor is disabled, set not to review this stage, or missing "
+        + "its CLI or key: tick a vendor's stage box in the panel, or enable one that can run.";
 
     /// <summary>A clause joining what a list holds, or nothing at all when it holds nothing.</summary>
     private static string Clause(string lead, IEnumerable<string> parts) =>

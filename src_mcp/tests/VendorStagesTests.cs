@@ -103,7 +103,10 @@ public sealed class VendorStagesTests
 
         var answer = await service.ReviewPlanAsync(repo, "feature", "PLAN - something to judge");
 
-        answer.Should().Contain("no reviewer serves").And.Contain("reviewed nothing");
+        answer.Should().Contain("nothing could review").And.Contain("reviewed nothing");
+        answer.Should().Contain("Otherwise every configured vendor is disabled",
+            "the vendor advice stays actionable, and is worded as a check rather than a diagnosis: "
+            + "a healthy Team server rejecting one custom role would make the assertion false");
         answer.Should().NotContain("proceed");
     }
 
@@ -135,7 +138,8 @@ public sealed class VendorStagesTests
 
             var code = await plans.ReviewCodeAsync(repo, "feature", "main", CodeScope);
 
-            code.Should().Contain("no reviewer serves").And.Contain("reviewed nothing");
+            code.Should().Contain("nothing could review").And.Contain("reviewed nothing");
+            code.Should().Contain("Otherwise every configured vendor is disabled");
             code.Should().NotContain("\"verdict\"");
         }
         finally

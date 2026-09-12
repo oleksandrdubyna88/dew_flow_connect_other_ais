@@ -338,10 +338,19 @@ public static partial class RoleComposition
             return $"{roleId}: the prompt id '{id}' is a name Windows reserves for a device, so its text could be neither written nor read";
         }
 
-        return promptIds.Add(id)
+        return Claimed(id, roleId, promptIds);
+    }
+
+    /// <summary>Whether this id is already spoken for — and it is TAKEN here if it is not.</summary>
+    /// <remarks>
+    /// A prompt id names one text for the whole catalog: it is the file under
+    /// <c>&lt;dataDir&gt;/prompts/</c>, so two roles claiming one id would be two roles sharing one
+    /// override. Its own method so <see cref="WhyNot"/> stays inside the complexity bound.
+    /// </remarks>
+    private static string? Claimed(string id, string roleId, HashSet<string> promptIds) =>
+        promptIds.Add(id)
             ? null
             : $"{roleId}: the prompt id '{id}' is already in use, and a prompt id names one text for the whole catalog";
-    }
 
     private static bool IsBuiltIn(string roleId) => RoleCatalog.Builtin.ById(roleId) is not null;
 
