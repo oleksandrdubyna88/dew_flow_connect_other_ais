@@ -83,7 +83,7 @@ public sealed class NothingReadsAnotherProgramsSourceTests
     private static bool IsComment(string line) =>
         line.TrimStart() is var start
         && (start.StartsWith("//", StringComparison.Ordinal)
-            || start.StartsWith("*", StringComparison.Ordinal)
+            || start.StartsWith('*')
             || start.StartsWith("/*", StringComparison.Ordinal));
 
     private static string RepoRoot()

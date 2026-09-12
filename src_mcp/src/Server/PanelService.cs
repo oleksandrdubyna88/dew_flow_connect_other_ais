@@ -576,7 +576,7 @@ public sealed partial class PanelService
         var hand = new List<string>();
         foreach (var role in roles)
         {
-            if (Pool(session, role).FirstOrDefault() is { } first)
+            if (Pool(session, role) is [var first, ..])
             {
                 hand.Add(first);
             }

@@ -118,7 +118,7 @@ public sealed class RoleCompositionTests
                 "a built-in cannot be renamed or moved: its id keys settings, sessions and every row of the rounds database");
         role.Prompts.Select(p => p.Id).Should().Equal([.. Architecture.Prompts.Select(p => p.Id), "arch-our-layering"]);
         role.General.Should().BeEquivalentTo(Architecture.General, "an added prompt never becomes the general one");
-        role.Prompts.Last().Universal.Should().BeFalse();
+        role.Prompts[^1].Universal.Should().BeFalse();
         catalog.Dropped.Should().BeEmpty();
     }
 
