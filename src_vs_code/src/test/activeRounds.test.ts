@@ -75,8 +75,52 @@ test('a running round is shown whole — its reviewers are the point', () => {
 
   assert.ok(html.includes('SCOPE — the thing being reviewed'));
   assert.ok(html.includes('class="badge running"'));
-  assert.ok(html.includes('codex</span>/Architecture — done'), 'the reviewer rows are there without a click');
-  assert.ok(html.includes('local</span>/SecurityReliability — running'));
+  // Two lines each since #132: the identity, then the status in its own div under it.
+  assert.ok(html.includes('codex</span>/Architecture<div class="said">done'), 'the reviewer rows are there without a click');
+  assert.ok(html.includes('local</span>/SecurityReliability<div class="said">running'));
+});
+
+/**
+ * The reviewer row is two lines, because the model name made it one long one (#132).
+ *
+ * <p>What a reviewer IS — vendor, role, model — on the first; what it is DOING on the second,
+ * indented. One `.reviewer` element still holds both: a reviewer is one row, and two sibling divs
+ * would make it the only place in this card where a row is not a row (raised on the plan round).</p>
+ */
+test('a reviewer is two lines — what it is, then what it said', () => {
+  const html = roundsBody([session([round({
+    reviewerStates: [
+      { provider: 'local', role: 'Architecture', status: 'done', findings: 3, note: '', seconds: 30, model: 'Qwen3.5-35B-A3B-Q5_vk128:latest' },
+    ],
+  })])], NOW);
+
+  const row = /<div class="reviewer">[\s\S]*?<\/div><\/div>/.exec(html);
+  assert.ok(row, `one .reviewer element holds both lines: ${html}`);
+  assert.ok(row[0].includes('Qwen3.5-35B-A3B-Q5_vk128:latest'), 'the model is on the identity line');
+  assert.match(row[0], /<div class="said">done \(3 findings, 30 s\)<\/div>/, 'and the status is a line of its own inside it');
+  assert.ok(!/<div class="said">[\s\S]*Architecture/.test(row[0]), 'the role stays on the first line');
+  assert.equal((row[0].match(/<div class="reviewer">/g) ?? []).length, 1, 'one row per reviewer, not two siblings');
+});
+
+test('a reviewer with no status gets no second line at all', () => {
+  const html = roundsBody([session([round({
+    reviewerStates: [{ provider: 'local', role: 'Architecture', status: '', findings: 0, note: '', model: '' }],
+  })])], NOW);
+
+  assert.ok(html.includes('local</span>/Architecture'), 'the reviewer is still listed');
+  assert.ok(!html.includes('class="said"'), 'an empty status is no line, not an indented empty one');
+});
+
+test('the vendor colour is on the vendor word and nowhere else', () => {
+  // Raised on the plan round: the markup moves, and an implementation could put the inline style on
+  // the row or carry it onto the second line while every other assertion still passed.
+  const html = roundsBody([session([round({
+    reviewerStates: [{ provider: 'local', role: 'Architecture', status: 'done', findings: 1, note: '', model: 'qwen' }],
+  })])], NOW, ['local']);
+
+  assert.match(html, /<span class="who" style="color:[^"]+">local<\/span>/, 'the vendor word carries it');
+  assert.ok(!/<div class="reviewer" style=/.test(html), 'the row does not');
+  assert.ok(!/<div class="said" style=/.test(html), 'and neither does the status line');
 });
 
 test('a finished round is not in the sidebar at all', () => {

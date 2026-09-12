@@ -139,13 +139,28 @@ export function stageName(stage: string): string {
  */
 export interface ReviewerRow {
   readonly provider: string;
-  /** Everything after the vendor's name, starting at the slash. */
+  /** The role and the model — what this reviewer IS. Starts at the slash, and carries no status. */
   readonly rest: string;
+  /**
+   * The status and its detail — what this reviewer is DOING. Empty when the file records no status.
+   *
+   * <p>No leading dash: whoever joins the halves owns the joiner, because the sidebar puts these on
+   * two lines and has no use for one.</p>
+   */
+  readonly said: string;
 }
 
-/** The reviewers of a running round, as "codex/Architecture — running" lines. */
+/**
+ * The reviewers of a running round, as "codex/Architecture — running" lines.
+ *
+ * <p>ONE line, which is what the rounds log page shows, searches and exports. The second seam is the
+ * sidebar's alone: there the row is two lines, because a model id made one of them long.</p>
+ */
 export function reviewerLines(round: RoundRecord): readonly string[] {
-  return reviewerRows(round).map((row) => `${row.provider}${row.rest}`);
+  // A reviewer whose file records no status used to end in a dangling ` — `. It ends at the model
+  // now; raised on the plan round, and it is the one case where this function's output changed.
+  return reviewerRows(round).map((row) =>
+    `${row.provider}${row.rest}${row.said.length > 0 ? ` — ${row.said}` : ''}`);
 }
 
 /**
@@ -155,11 +170,17 @@ export function reviewerLines(round: RoundRecord): readonly string[] {
  * which had genuinely stopped being readable — the model's separator and the detail's brackets were
  * both conditional inside a literal that was itself inside a literal.</p>
  */
-function restOf(state: ReviewerState, model: string, detail: readonly string[]): string {
+function restOf(state: ReviewerState, model: string, detail: readonly string[]): { rest: string; said: string } {
   const named = model ? ` · ${model}` : '';
-  const said = detail.length > 0 ? ` (${detail.join(', ')})` : '';
+  const brackets = detail.length > 0 ? ` (${detail.join(', ')})` : '';
 
-  return `/${state.role}${named} — ${state.status}${said}`;
+  // Both halves are BUILT from the fields, never split back out of the sentence. A model id is an
+  // arbitrary string — `Qwen — custom` is a legal one — so a reader that looked for the dash would
+  // cut a model in half and call the remainder a status. Raised four times on the plan round, each
+  // time assuming the opposite; the test with a dash in the model id is what keeps this true.
+  const status = `${state.status}${state.status.length > 0 ? brackets : ''}`;
+
+  return { rest: `/${state.role}${named}`, said: status };
 }
 
 /** The model this state names, or empty — anything that is not a usable string is absent. */
@@ -195,7 +216,7 @@ export function reviewerRows(round: RoundRecord): readonly ReviewerRow[] {
       // validation, and a session carrying `model: 42` would reach `.trim()` and throw while the
       // log was being built — blanking a page to render one row. Anything that is not a string is
       // absent. Raised on the code round.
-      rest: restOf(s, modelOf(s), detail),
+      ...restOf(s, modelOf(s), detail),
     };
   });
 }

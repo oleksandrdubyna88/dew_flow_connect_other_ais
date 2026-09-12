@@ -1532,10 +1532,15 @@ export function roundKey(round: RoundRecord & { branch: string }): string {
 function roundCard(round: RoundRecord & { branch: string }, nowMs: number, colour: VendorPalette): string {
   // Only the vendor's WORD carries the colour; the rest of the row is exactly as it was. Both
   // halves come out of a session file somebody else wrote, so both are escaped.
+  // Two lines per reviewer, inside ONE row: what it IS — vendor, role, model — and under it, what
+  // it is DOING. The model name doubled the length of the sentence when it was added (#132) and a
+  // model id is one unbreakable 30-character token, so the wrap landed wherever that token ended.
+  // A reviewer with no recorded status gets no second line rather than an indented empty one.
   const reviewers = reviewerRows(round)
     .map((row) =>
       `<div class="reviewer"><span class="who" style="color:${colour(row.provider)}">`
-      + `${escapeHtml(row.provider)}</span>${escapeHtml(row.rest)}</div>`)
+      + `${escapeHtml(row.provider)}</span>${escapeHtml(row.rest)}`
+      + `${row.said.length > 0 ? `<div class="said">${escapeHtml(row.said)}</div>` : ''}</div>`)
     .join('\n');
   const took = elapsed(round, nowMs);
   // WHAT is being reviewed leads the line; the branch and the round number follow it.
@@ -1767,6 +1772,10 @@ const CSS = `
   /* Shown for the moment between the click and the reviewers arriving. The body is built by the
      provider, so there is always a gap; an empty card during it reads as a card with nothing in it. */
   .reviewer { font-size: 11px; opacity: .85; margin: 1px 0 1px 8px; }
+  /* What a reviewer is DOING, under what it IS. Indented from the row's own 8px, so the status sits
+     about five spaces in from the card edge and a long model id no longer decides where the line
+     breaks. A margin rather than spaces: this is not a monospace surface. */
+  .reviewer .said { margin-left: 16px; }
   .badge { padding: 0 5px; border-radius: 8px; font-size: 10px; font-weight: 600; }
   .badge.running { background: var(--vscode-charts-green); color: var(--vscode-editor-background); }
   /* The editor's own error colour, so it reads as a problem in every theme rather than in one. */
