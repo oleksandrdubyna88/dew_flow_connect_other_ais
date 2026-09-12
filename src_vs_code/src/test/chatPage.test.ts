@@ -2416,3 +2416,17 @@ test('a message with no controls grows no empty row under it', () => {
   // Two answers, two rows — and no row for either of the person's messages.
   assert.strictEqual([...html.matchAll(/class="afterRow"/g)].length, 2, 'a row was drawn for a message with no controls');
 });
+
+test('the row above an answer and the row below it are the same row', () => {
+  // They were two rules and drifted the moment the second existed: `.who` shrinks and dims what it
+  // contains, `.afterRow` had neither, and the two Copy buttons came out visibly different sizes.
+  // Asked about from a screenshot of exactly that.
+  const css = chatPageHtml(state({ fromSession: true }), 'n0nce').split('<style>')[1].split('</style>')[0];
+  const shared = ruleFor(css, '.msg .who, .msg .afterRow');
+
+  assert.match(shared, /font-size: \.85em/, 'the two rows no longer share a size');
+  assert.match(shared, /opacity: \.7/, 'the two rows no longer share their weight on the page');
+  // And nothing sets a size on one of them alone — which is how they came apart.
+  assert.doesNotMatch(ruleFor(css, '.msg .afterRow'), /font-size/, 'the row below took a size of its own again');
+  assert.doesNotMatch(ruleFor(css, '.msg .who'), /font-size/, 'the row above took a size of its own again');
+});

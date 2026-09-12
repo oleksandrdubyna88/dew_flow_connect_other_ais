@@ -626,15 +626,18 @@ function chatStyle(
   .askingHead[hidden] { display: none; }
   /* Under the answer, where the eye already is once one has been read. Right-aligned so it reads as
      a footer rather than as the beginning of the next thing. */
-  .afterRow { display: flex; justify-content: flex-end; gap: 6px; margin: 6px 0 0; }
+  .msg .afterRow { justify-content: flex-end; margin: 6px 0 0; }
   .cutBtn { font: inherit; font-size: .85em; background: none; border: 1px solid var(--vscode-panel-border);
             border-radius: 3px; padding: 1px 8px; color: var(--vscode-descriptionForeground); cursor: pointer; }
-  .cutBtn:hover { border-color: var(--vscode-charts-orange, var(--vscode-editorWarning-foreground, #d18616)); }
+  .cutBtn:hover { border-color: var(--coai-cut); }
   /* DASH-DOT and orange, asked for in those words. A solid rule is what every other answer already
      ends with, so the one that means something has to look unlike them at a glance. */
-  hr.end.cut { border: none; border-top: 2px dashed var(--vscode-charts-orange, var(--vscode-editorWarning-foreground, #d18616)); }
-  .cutSaid { margin: 4px 0 0; font-size: .85em; opacity: .75;
-             color: var(--vscode-charts-orange, var(--vscode-editorWarning-foreground, #d18616)); }
+  /* DASH-DOT, asked for in those words. CSS has dashed and dotted and nothing between
+     them, so the rule is PAINTED rather than bordered: dash, gap, dot, gap, repeating. */
+  hr.end.cut { border: none; height: 2px; background: repeating-linear-gradient(to right,
+               var(--coai-cut) 0 9px, transparent 9px 13px,
+               var(--coai-cut) 13px 15px, transparent 15px 19px); }
+  .cutSaid { margin: 4px 0 0; font-size: .85em; opacity: .75; color: var(--coai-cut); }
   .askingHead button { min-width: 24px; padding: 2px 6px; font: inherit; }
   .askedAt { min-width: 4em; text-align: center; }
   .askedText { max-height: calc(40vh - 2.5em); overflow-y: auto; white-space: pre-wrap; overflow-wrap: break-word; }
@@ -647,7 +650,11 @@ function chatStyle(
      and for the same reason: a wall of filled blocks is harder to read than the text in it. */
   .msg.you { margin-left: auto; border-right: 3px solid var(--vscode-textLink-foreground); padding-right: 10px; text-align: right; }
   .msg.model { border-left: 3px solid var(--vscode-charts-green, var(--vscode-textLink-foreground)); padding-left: 10px; }
-  .msg .who { font-size: .85em; opacity: .7; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  /* THE SAME ROW TWICE, so the pair above an answer and the pair below it cannot differ. They did:
+     this rule shrinks and dims what it contains, the row under the answer had neither, and the two
+     Copy buttons came out visibly different sizes. */
+  .msg .who, .msg .afterRow { font-size: .85em; opacity: .7; display: flex; align-items: center; gap: 8px; }
+  .msg .who { margin-bottom: 4px; }
   .msg.you .who { justify-content: flex-end; }
   /* The PROSE takes the editor's foreground, and only the prose: the chrome around it - the hint,
      the picker, the captions - belongs to --vscode-foreground, and overriding that on body produces
@@ -718,7 +725,8 @@ function chatStyle(
      buttons, so two colours rather than one undifferentiated block of "instruction". */
   /* WHO is answering and WHAT is being asked. Two colours, named once and used wherever either of
      them appears: the words behind the composer, and the stripe on the button that changes them. */
-  body { --coai-role: var(--vscode-charts-purple, #b180d7); --coai-task: var(--vscode-charts-green, #89d185); }
+  body { --coai-role: var(--vscode-charts-purple, #b180d7); --coai-task: var(--vscode-charts-green, #89d185);
+         --coai-cut: var(--vscode-charts-orange, var(--vscode-editorWarning-foreground, #d18616)); }
   mark { background: none; font-weight: 600; }
   mark.role { color: var(--coai-role); }
   mark.task { color: var(--coai-task); }

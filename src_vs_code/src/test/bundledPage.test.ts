@@ -428,7 +428,10 @@ function runPage(): {
     // had not in fact been widened to include the new control, and the assertion passed anyway.
     // Found by breaking it on purpose and watching nothing go red.
     const closest = (selector: string): { dataset: Record<string, string> } | null =>
-      Object.keys(dataset).some((key) => selector.includes(`data-${key}`)) ? { dataset } : null;
+      // The WHOLE attribute name. `includes('data-cut')` is also true of `[data-cutoff]`, so the
+      // stub would have accepted a selector that does not match the button at all — the same
+      // hollowness this helper was written to end, one layer down. (CodeRabbit, PR #208.)
+      Object.keys(dataset).some((key) => selector.includes(`[data-${key}]`)) ? { dataset } : null;
     for (const fire of listeners[id]?.['click'] ?? []) {
       (fire as (event: unknown) => void)({ target: { closest } });
     }

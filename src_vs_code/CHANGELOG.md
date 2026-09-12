@@ -1,5 +1,9 @@
 # Changelog
 
+## Extension 0.37.2 — 2026-09-12
+
+**The line under a marked answer is dash-dot**, which is what was asked for — CSS has dashed and dotted and nothing between them, so it is painted rather than bordered. **And the controls above an answer and below it are the same size**: the row above shrinks and dims what it holds, the row below did not, and the two Copy buttons came out visibly different.
+
 ## Extension 0.37.1 — 2026-09-12
 
 **Copy and Carry nothing above are under the answer as well as above it.** An answer can be a page and a half, and the top of it is not where you are when you finish reading.
