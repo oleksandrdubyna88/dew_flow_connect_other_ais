@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CARRY_BUDGET, DEFAULT_CHAT_PROMPT, REMOTE_CARRY_BUDGET, carriedTurn, openingTurn, chatInstruction, reinstructed, reinstructedHead, stillOurs } from '../chatPrompt';
+import { CARRY_BUDGET, DEFAULT_CHAT_PROMPT, REMOTE_CARRY_BUDGET, carriedTurn, openingTurn, chatInstruction, MATERIAL_NOTE, reinstructed, reinstructedHead, stillOurs } from '../chatPrompt';
 
 /**
  * What a captured passage actually travels in.
@@ -404,4 +404,29 @@ test('an instruction cut away leaves the language line where it belongs', () => 
 
   assert.strictEqual(swapped.startsWith('Answer in English.\n\n'), true,
     'clearing the instruction left an empty paragraph in front of the turn');
+});
+
+test('a question that merely QUOTES one of our lines is not cut into', () => {
+  // The cut looks for a whole LINE of ours, never the phrase inside a sentence. Somebody asking what
+  // that instruction means has written the words without writing one of our turns, and cutting at
+  // them would take everything above - which is all of what they wrote. (CodeRabbit, PR #208.)
+  const asking = 'What does it mean when you tell a model that '
+    + MATERIAL_NOTE
+    + ' Is that a real instruction or a formality?';
+
+  assert.strictEqual(reinstructedHead(asking, 'explain', 'en'), undefined,
+    'a sentence quoting the note was treated as the start of a turn this side wrote');
+  // And the fence, which is the shorter and likelier phrase to appear by accident.
+  assert.strictEqual(reinstructedHead('is --- the text --- a heading?', 'explain', 'en'), undefined,
+    'a sentence quoting the fence was treated as the start of a turn this side wrote');
+});
+
+test('the cut lands on the line, not one character beside it', () => {
+  // An offset computed from split() has to put the separator back, or every line after the first is
+  // named one character early and the swap eats a newline.
+  const box = openingTurn('ask', 'en', 'the captured passage');
+  const swapped = reinstructedHead(box, 'explain instead', 'en') ?? '';
+
+  assert.strictEqual(swapped, openingTurn('explain instead', 'en', 'the captured passage'),
+    'the swapped turn is not byte for byte what an opening turn writes');
 });
