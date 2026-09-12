@@ -1,11 +1,35 @@
 # PLAN — the rounds log names the model, and the one that actually ran
 
-> Status: **step 1 IMPLEMENTED 2026-09-08; steps 2 and 3 are open.** Scope: `ReviewerState` and the panel's rounds
+> Status: **step 1 IMPLEMENTED 2026-09-08 and REPAIRED 2026-09-12; steps 2 and 3 are open.**
+>
+> Step 1 shipped half-done and nothing noticed for four days: only `LocalRuntime` and
+> `RemoteRuntime` passed `Model:` to the invocation, so codex, gemini, claude and antigravity
+> recorded none — the log named no model for exactly the vendors people ask about. Repaired,
+> with the reasoning effort beside it, by
+> [PLAN_the_log_names_every_model_and_its_effort.md](../research/PLAN_the_log_names_every_model_and_its_effort.md)
+> (issue #129), which also replaced the test that could not see it.
+>
+> **What is still open here is unchanged**: which model a Team server ACTUALLY ran. Scope: `ReviewerState` and the panel's rounds
 > log, `ReviewStatusDto` on the Team server, and the client that reads it.
 >
 > Related docs: [module_server.md](../research/module_server.md),
 > [module_extension.md](../research/module_extension.md),
 > [module_team_server.md](../research/module_team_server.md).
+
+## The boundary with the repair plan
+
+Per `planning-docs.md` — a table, not a paragraph, in both documents.
+[PLAN_the_log_names_every_model_and_its_effort.md](../research/PLAN_the_log_names_every_model_and_its_effort.md)
+ran FIRST and is finished; what is left here is disjoint from it.
+
+| Item | Which plan builds it | What the other one's part is |
+|---|---|---|
+| Every adapter puts `Model` on the invocation | the repair plan (shipped 2026-09-12) | this plan's step 1 assumed it and was wrong for four adapters |
+| The reasoning EFFORT, recorded and rendered | the repair plan (shipped) | not in this plan's scope at all |
+| The audit line naming model and effort | the repair plan (shipped) | — |
+| `ReviewStatusDto` gains a `Model` — what a Team server ACTUALLY ran | **this plan, step 2** | the repair plan records what was ASKED for and says so |
+| The round overwriting its guess with the server's answer | **this plan, step 3** | it writes into the `ReviewerState.Model` the repair plan filled |
+| The ledger moving off the CONFIGURED model | **this plan, step 3** | untouched by the repair plan |
 
 ## The symptom
 

@@ -153,6 +153,68 @@ test('a reviewer with no status says nothing, rather than a dangling dash', () =
   assert.deepEqual(reviewerLines(blank), ['local/Architecture']);
 });
 
+// ---------- the effort rides with the model (#129) ----------
+
+/**
+ * A reviewer line names the effort a launch actually APPLIED.
+ *
+ * <p>Only a local engine applies one: `LocalRuntime` puts `--reasoning-effort` on its argv and
+ * records what it passed. No hosted adapter passes a reasoning flag, so none records an effort —
+ * claiming one would say something that did not happen — and antigravity's effort lives inside its
+ * model id (`gemini-3.7-flash-high`) rather than beside it, which is why no line can read
+ * `gemini-3.7-flash-high (effort: high)`.</p>
+ */
+test('a reviewer line names the effort when the launch applied one', () => {
+  const withEffort = round({
+    reviewerStates: [
+      { provider: 'local', role: 'Architecture', status: 'done', findings: 0, note: '', model: 'qwen3.5:latest', effort: 'high' },
+    ],
+  });
+
+  assert.deepEqual(reviewerLines(withEffort), ['local/Architecture · qwen3.5:latest (effort: high) — done (0 findings)']);
+});
+
+test('a reviewer that applied no effort reads exactly as it did', () => {
+  const hosted = round({
+    reviewerStates: [
+      { provider: 'codex', role: 'Architecture', status: 'done', findings: 2, note: '', model: 'gpt-5.6-sol' },
+      { provider: 'codex', role: 'SecurityReliability', status: 'done', findings: 0, note: '', model: 'gpt-5.6-sol', effort: '' },
+    ],
+  });
+
+  assert.deepEqual(reviewerLines(hosted), [
+    'codex/Architecture · gpt-5.6-sol — done (2 findings)',
+    'codex/SecurityReliability · gpt-5.6-sol — done (0 findings)',
+  ]);
+});
+
+test('an effort that is not a usable string is absent, the way a model is', () => {
+  // Same distrust as the model, for the same reason: a session file is JSON somebody else wrote, and
+  // `.trim()` on a number throws while the log is being built — blanking a page to render one row.
+  const nonsense = round({
+    reviewerStates: [
+      { provider: 'local', role: 'A', status: 'done', findings: 0, note: '', model: 'qwen', effort: '   ' },
+      { provider: 'local', role: 'B', status: 'done', findings: 0, note: '', model: 'qwen', effort: 42 as unknown as string },
+    ],
+  });
+
+  assert.deepEqual(reviewerLines(nonsense), [
+    'local/A · qwen — done (0 findings)',
+    'local/B · qwen — done (0 findings)',
+  ]);
+});
+
+test('an effort survives a missing model, because it was still applied', () => {
+  // A local vendor configured with no model — "whatever the engine answers with", which the picker
+  // offers — still runs at an effort. The first version of this hung the effort off the model and
+  // so dropped it for exactly that reviewer; raised on the code round.
+  const noModel = round({
+    reviewerStates: [{ provider: 'local', role: 'Architecture', status: 'done', findings: 0, note: '', model: '', effort: 'high' }],
+  });
+
+  assert.deepEqual(reviewerLines(noModel), ['local/Architecture (effort: high) — done (0 findings)']);
+});
+
 test('a reviewer launched without a model gets no separator, not an empty one', () => {
   // The case the "older round" test below does NOT cover, and a reviewer on the plan round was
   // right to separate them: an old file has no field at all, while a CURRENT round can carry an

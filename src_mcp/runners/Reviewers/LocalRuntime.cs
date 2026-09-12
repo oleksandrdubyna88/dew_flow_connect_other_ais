@@ -167,7 +167,14 @@ public sealed class LocalRuntime(string id, string baseUrl) : IReviewerRuntime
             // Carried so a queued reviewer can be told what the WAIT is likely to be: the history
             // is kept per engine AND model, because one average over a ten-second check and a
             // five-hundred-second analysis is an estimate of neither.
-            Model: settings.Model);
+            Model: settings.Model,
+            // The effort this launch ACTUALLY applied — the `--reasoning-effort` above, not a setting
+            // somebody typed. A hosted adapter passes no such flag and so records none (issue #129).
+            // Trimmed, because whitespace is not an effort: the argv guard above is a bare
+            // length check, so a configured "   " WOULD be passed as a flag, and recording it
+            // verbatim makes the panel and the audit line disagree about whether there is one.
+            // Raised on the code round.
+            Effort: settings.ReasoningEffort.Trim());
     }
 
     /// <summary>

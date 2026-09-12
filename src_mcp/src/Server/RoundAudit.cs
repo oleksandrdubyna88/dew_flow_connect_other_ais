@@ -131,10 +131,47 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
     /// claim that this reviewer was sent an empty prompt, and the whole reason the number is here is
     /// to be believed on exactly that question.
     /// </remarks>
-    private static string Describe(ReviewerWork w) =>
-        w.PromptBytes is { } bytes
-            ? $"{w.Invocation.Provider}/{w.Invocation.Role}[{w.Prompt}, {bytes} bytes]"
-            : $"{w.Invocation.Provider}/{w.Invocation.Role}[{w.Prompt}]";
+    private static string Describe(ReviewerWork w)
+    {
+        // The model and the effort lead the bracket when there are any, because this line is what a
+        // person reads when the panel is closed, and two local runs of one model at different
+        // efforts were writing the same sentence (issue #129, raised on its plan round).
+        //
+        // Each part is CONDITIONAL rather than interpolated empty: `[, promptId, 900 bytes]` is a
+        // descriptor with a hole in it, which is what a later reader of these lines misparses.
+        var parts = new List<string>(4);
+        var model = ForALogLine(w.Invocation.Model);
+        var effort = ForALogLine(w.Invocation.Effort);
+        if (model.Length > 0)
+        {
+            parts.Add(model);
+        }
+        if (effort.Length > 0)
+        {
+            parts.Add($"effort {effort}");
+        }
+        parts.Add(w.Prompt);
+        if (w.PromptBytes is { } bytes)
+        {
+            parts.Add($"{bytes} bytes");
+        }
+
+        return $"{w.Invocation.Provider}/{w.Invocation.Role}[{string.Join(", ", parts)}]";
+    }
+
+    /// <summary>A configured value, fit to sit inside one line of an audit trail.</summary>
+    /// <remarks>
+    /// <para>Trimmed, so that whitespace is absent rather than an empty bracket section — the panel
+    /// and the reviewer line already treat it that way, and two records of one run disagreeing about
+    /// whether a field is present is worse than either answer.</para>
+    /// <para>And stripped of control characters, because this is the line a person reads to find out
+    /// what happened. A model id is configuration: a newline in one would end the entry and let
+    /// whatever follows read as the next one. It cannot be escaped away later — the log is text by
+    /// then — so it is cleaned here, where the value enters the sentence. Raised on the code round by
+    /// two reviewers.</para>
+    /// </remarks>
+    private static string ForALogLine(string value) =>
+        new(value.Trim().Where(c => !char.IsControl(c)).ToArray());
 
     private static string Humanised(TimeSpan span) =>
         span.TotalMinutes >= 1 ? $"{span.TotalMinutes:0} min" : $"{span.TotalSeconds:0}s";

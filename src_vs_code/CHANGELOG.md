@@ -32,6 +32,8 @@ prompt text does not: a question you wrote is one question, wherever you ask it.
 **This needs coai-mcp 0.19.0 or later.** An older one never reads roles at all: they would sit in the
 panel and run in nothing. Both the page and the panel say so, naming the version you have.
 
+**The log names the model for every reviewer, not just two of them.** Codex, Gemini, Claude and Antigravity each passed the model to their CLI and then recorded nothing, so a round could say *who* reviewed but not *with what* — for exactly the vendors people ask about when a review is slow or weak. All six record it now. **And a local reviewer names the reasoning effort it ran at**, beside the model: `local/Architecture · qwen3.5:latest (effort: high)`. A reviewer that applied no effort says nothing rather than claiming one, which is every hosted vendor — none of them takes a reasoning flag here, and Antigravity's effort is part of its model name rather than a setting beside it. The round's own log line carries both as well, for when the panel is closed.
+
 **The review roles come from one file now, and nothing you see has changed.** The five roles and
 their twenty-five prompts used to be written out twice — once in the server's source, once in the
 panel's — with a test that read one program's source with a regular expression to check it still
