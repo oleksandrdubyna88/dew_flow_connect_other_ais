@@ -1,5 +1,11 @@
 # Changelog
 
+## Extension 0.38.0 — 2026-09-12
+
+**What each AI has used now counts the chat as well as the reviewers.** It read one ledger — the server's, one line per reviewer — so a day spent asking a second model cost nothing on the one page that adds money up. The tab has two named sections with a rule between them: **Reviewers**, the cards as they were, and **Chat**, a row per vendor AND model, since a conversation switches model and a rate belongs to a model. A chat row carries both rates, what it cost in the window, what it has cost **all time** whatever window is chosen above, and two counts. Each section totals itself: the two ledgers are written by different programs and must not be added up by eye.
+
+**And two counts nothing recorded before.** *Asked* is how often **CoAI: take the question** and **CoAI: add the question** were used; *Opened* is how often a chat was opened at all, by any of its five doors. Neither could be worked out from what was on disk: a turn is written when a turn FINISHES, and *add the question* normally finishes none — it fills the composer and stops. So an invocation is now written down when the command is used, before anything can refuse it, in a ledger of its own.
+
 ## Extension 0.37.5 — 2026-09-12
 
 **A preset replaces an instruction you edited by hand.** Type over the role or the question in the composer, press a preset, and the preset wins — it used to leave the box exactly as it was and say the box held something you had written. The swap matched the old instruction byte for byte at the front of the box, which is the whole box until somebody writes over it and nothing at all afterwards. It cuts at the service lines instead: everything above the language line is the instruction, whoever wrote it, and everything from there down is kept byte for byte — a passage captured a second time, a question added under the fence, a sentence edited into the material all survive the press.

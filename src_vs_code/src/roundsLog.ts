@@ -1,6 +1,6 @@
 import { asText } from './asText';
 import { Escalation } from './escalations';
-import { roundKey, usageRegion } from './panelView';
+import { ChatLedgers, roundKey, usageRegion } from './panelView';
 import { TeamServerState } from './teamServerView';
 import { ModelPrice } from './modelPrices';
 import { ChatTurnRecord } from './chatUsage';
@@ -806,12 +806,13 @@ export function usageTabHtml(
   prices: Readonly<Record<string, ModelPrice>>,
   teamServers: readonly TeamServerState[] = [],
   usageScope: 'me' | 'company' = 'me',
+  chat: ChatLedgers = { turns: [], doors: [] },
 ): string {
   const buttons = WINDOWS
     .map((w) => `<button type="button" class="tab${w.id === window ? ' on' : ''}" data-command="usageWindow" data-id="${w.id}">${escapeHtml(w.label)}</button>`)
     .join('');
 
-  return `<div class="windows">${buttons}</div>` + '\n' + `<div class="usage-rows">${usageRegion(usage, window, vendors, prices, teamServers, usageScope)}</div>`;
+  return `<div class="windows">${buttons}</div>` + '\n' + `<div class="usage-rows">${usageRegion(usage, window, vendors, prices, teamServers, usageScope, chat)}</div>`;
 }
 
 const COLUMNS: ReadonlyArray<{ key: SortKey; label: string; numeric?: boolean }> = [
@@ -1044,6 +1045,18 @@ export function roundsLogHtml(
   .spend .bar span { display: block; height: 100%; background: var(--vscode-charts-blue); }
   .spend .figures { font-size: .95em; }
   .spend .hint, .total { margin-top: 2px; }
+  /* TWO LEDGERS ON ONE PAGE, and they are written by different programs: coai-mcp appends a line
+     per reviewer, this extension appends one per chat turn. A heading each and a rule between them,
+     so nobody adds them up by eye without noticing which is which. */
+  h3.ledger { font-size: 1.05em; margin: 18px 0 8px; font-weight: 600; }
+  h3.ledger:first-child { margin-top: 4px; }
+  hr.ledgers { border: 0; border-top: 1px solid var(--vscode-panel-border); margin: 20px 0 0; max-width: 640px; }
+  table.chatSpend { border-collapse: collapse; margin: 0 0 6px; font-size: .95em; }
+  table.chatSpend th, table.chatSpend td { padding: 4px 10px 4px 0; text-align: left; white-space: nowrap; }
+  table.chatSpend th { font-weight: 600; opacity: .8; border-bottom: 1px solid var(--vscode-panel-border); }
+  table.chatSpend td.name { font-weight: 600; }
+  /* Numbers line up on their right edge or they cannot be compared down a column. */
+  table.chatSpend th.n, table.chatSpend td.n { text-align: right; font-variant-numeric: tabular-nums; }
   .warn { color: var(--vscode-charts-yellow); }
   .link { background: none; border: none; color: var(--vscode-textLink-foreground); padding: 0 4px; }
   .hint { opacity: .65; font-size: .9em; margin-top: 10px; }

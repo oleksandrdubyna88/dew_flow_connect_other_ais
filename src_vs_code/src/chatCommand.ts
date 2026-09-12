@@ -44,6 +44,8 @@ import { readToken } from './teamServerAuth';
 import { coaiDataDir } from './dataDir';
 import { ChatOutcome, ReportedUsage, chatTurnRecord } from './chatUsage';
 import { recordChatTurn } from './chatUsageFile';
+import { Door } from './chatDoors';
+import { recordChatDoor } from './chatDoorsFile';
 import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './chatDiscovery';
 import { chatSettingsFrom } from './chatSettings';
 import { CARRY_EVERYTHING, carriedFrom, carryMark } from './chatCarry';
@@ -2330,6 +2332,31 @@ async function deliverPassage(
   // that opens with an instruction nothing on screen names is a tab that looks like it ignored the
   // presets.
   show(opened.entry, false, '');
+}
+
+/**
+ * One invocation of one door, written down before anything can refuse it.
+ *
+ * <p>This is the ONLY thing that can answer "how many times did I use take the question", because a
+ * turn is recorded when a turn finishes and `add the question` normally finishes none — it fills the
+ * composer and stops. So invocations are recorded, and they are recorded HERE, at the command,
+ * rather than further down where the passage is delivered: a door that cannot resolve a CLI, or that
+ * the person dismisses, never reaches the delivery, and an attempt is exactly the thing the count is
+ * about. (gemini, the plan round, as the blocking finding.)</p>
+ *
+ * <p>The provider and model are the ones IN FORCE at that moment — who WOULD answer. Not who did: a
+ * door may never be answered at all, and a conversation can switch model afterwards. A window with
+ * nothing configured records empty strings, which the spending page groups as one named bucket
+ * rather than inventing a row for.</p>
+ */
+export function noteChatDoor(door: Door): void {
+  const ready = readyForChat();
+  void recordChatDoor(coaiDataDir(), {
+    utc: new Date().toISOString(),
+    door,
+    provider: ready.ok ? ready.providerId : '',
+    model: ready.ok ? ready.modelId : '',
+  });
 }
 
 /** Which model answers, resolved the one way both commands resolve it. */
