@@ -1,5 +1,11 @@
 # Changelog
 
+## Extension 0.36.4 — 2026-09-12
+
+**The three right-click items are named for the menu they sit in.** **CoAI: default**, **CoAI: choose** and **CoAI: take the question** — the short name first and then the one word that differs, so you read the end of the line rather than the beginning of three.
+
+**And the question you are handed is the one your tab is asking.** When exactly one Claude Code session had an unanswered question, it went to whichever tab asked for it — the name on the tab was consulted only to break a tie between two. So a tab could be handed another conversation’s question, and nothing about it looked wrong. If what is waiting belongs somewhere else, it now says so and names it as somewhere else.
+
 ## Extension 0.36.3 — 2026-09-12
 
 **Take the question to another AI works in a window with no folder open.** It answered *"Open a folder first — a Claude Code session belongs to one"*, which is not true: Claude Code runs without one, in your home directory. If that is how you work, this command had never worked for you. A window that does have a folder — or several, in a workspace — is unchanged, and still scoped to them.

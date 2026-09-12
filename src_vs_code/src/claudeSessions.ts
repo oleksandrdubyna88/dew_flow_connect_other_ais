@@ -124,6 +124,8 @@ export type Waiting =
   | { readonly kind: 'none' }
   | { readonly kind: 'answered'; readonly session: WaitingSession }
   | { readonly kind: 'several'; readonly sessions: readonly WaitingSession[] }
+  /** Something is waiting, but not in the conversation this tab is showing. */
+  | { readonly kind: 'elsewhere'; readonly sessions: readonly WaitingSession[] }
   | { readonly kind: 'failed'; readonly refusal: string };
 
 /**
@@ -137,23 +139,34 @@ export type Waiting =
  */
 export function waitingIn(sessions: readonly WaitingSession[], looking = ''): Waiting {
   const waiting = sessions.filter((one) => !one.asked.answered);
-  if (waiting.length === 1) {
-    return { kind: 'one', session: waiting[0]! };
+  // THE TAB FIRST, and whenever there is one — not only to break a tie.
+  //
+  // It used to hand over a lone waiting session without reading the tab's name at all, and consult
+  // the title only when two were waiting. That is backwards: two waiting is the case where a wrong
+  // pick is at least suspected, and ONE waiting is the case where nobody would ever know. Probed on
+  // the operator's machine with their question on screen — asked for `scoreMeter DB запись в c...`
+  // and handed `Подключение к scoreMeter DB`, because that was the only unanswered one anywhere.
+  //
+  // The shortened-title rule applies here as it does for the Asked button: a tab's name is what
+  // Claude Code put on its panel, and for a long conversation that is not what it wrote to the file.
+  const named = looking.length === 0
+    ? waiting
+    : waiting.filter((one) => namesTheSame(one.asked.title, looking));
+  if (named.length === 1) {
+    return { kind: 'one', session: named[0]! };
   }
-  if (waiting.length > 1) {
-    // TWO WAITING, AND THE TAB SAYS WHICH. There is no window id to ask for — but Claude Code writes
-    // the conversation's title into the session, and that title is what the tab shows. Measured
-    // against a live session before this was built. A title that names exactly one of them is not a
-    // guess; anything else still refuses.
-    const named = looking.length === 0
-      ? []
-      // The same shortened-title rule the Asked button needs: a tab's name is what Claude Code put
-      // on its panel, and for a long conversation that is not what it wrote to the file.
-      : waiting.filter((one) => namesTheSame(one.asked.title, looking));
-
-    return named.length === 1
-      ? { kind: 'one', session: named[0]! }
-      : { kind: 'several', sessions: waiting };
+  if (named.length > 1) {
+    return { kind: 'several', sessions: named };
+  }
+  if (waiting.length > 0) {
+    // Something IS waiting, and this tab does not name it. A different sentence from "nothing is
+    // waiting", because the two ask for different things from the person: one is "answer it where it
+    // was asked", the other is "there is nothing here".
+    //
+    // With no tab to go on — the command run from the palette, or from a file — a single waiting
+    // session is still the answer, because there is nothing to contradict it. That is the `looking`
+    // branch above, and it is the only case where this hands over a conversation it cannot name.
+    return { kind: 'elsewhere', sessions: waiting };
   }
   if (sessions.length === 0) {
     return { kind: 'none' };
