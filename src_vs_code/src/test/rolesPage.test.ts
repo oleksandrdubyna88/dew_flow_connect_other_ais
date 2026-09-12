@@ -230,3 +230,76 @@ test('a message with no id, or no message at all, is ignored', () => {
     assert.deepStrictEqual(roleEdit(raw), { kind: 'ignore' }, JSON.stringify(raw));
   }
 });
+
+// ---------- what a shipped role may NOT be told, on the page as on the server ----------
+
+/** The block of markup one role occupies, so an assertion about it cannot match a neighbour. */
+function roleBlockOf(html: string, id: string): string {
+  const from = html.indexOf(`data-id="${id}"`);
+  assert.ok(from > 0, `${id} is drawn`);
+  const to = html.indexOf('<details class="role', from);
+
+  return html.slice(from, to > from ? to : html.length);
+}
+
+test('a shipped role’s name cannot be typed over', () => {
+  // The page already SAYS the name is fixed — "Its name and its id are fixed, because they key your
+  // settings, your open sessions and every round already recorded". It said that beside an input a
+  // person could type in, whose value the server then ignores: the one arrangement worse than either
+  // rule on its own, because it saves and then does nothing.
+  const shipped = BUILTIN_ROLES[0]!;
+  const block = roleBlockOf(rolesHtml(state(), 'n0nce'), shipped.id);
+  const name = block.slice(block.indexOf('data-field="name"'));
+
+  assert.match(name.slice(0, name.indexOf('>')), /readonly/, 'the name input refuses the keystroke');
+});
+
+test('a shipped role’s kind cannot be unticked', () => {
+  const shipped = BUILTIN_ROLES[0]!;
+  const block = roleBlockOf(rolesHtml(state(), 'n0nce'), shipped.id);
+  const flag = block.slice(block.indexOf('data-field="programmingTask"'));
+
+  assert.match(flag.slice(0, flag.indexOf('>')), /disabled/, 'the server never reads it from a row');
+});
+
+test('a role a person added is theirs to name and to classify', () => {
+  const block = roleBlockOf(rolesHtml(state({ rows: [mine] }), 'n0nce'), mine.id);
+  const name = block.slice(block.indexOf('data-field="name"'));
+  const flag = block.slice(block.indexOf('data-field="programmingTask"'));
+
+  assert.ok(!name.slice(0, name.indexOf('>')).includes('readonly'));
+  assert.ok(!flag.slice(0, flag.indexOf('>')).includes('disabled'));
+});
+
+// ---------- a page that does not know the server yet says so ----------
+
+test('a page opened before the panel has met the server says the check has not run', () => {
+  // `coai.editRoles` is on the command palette, so the page can be the FIRST thing opened in a
+  // window. Until the panel renders, the installed server is unknown — and an unknown server draws
+  // no banner at all, which reads exactly like "checked, and fine". Naming the gap is the honest
+  // shape, and it disappears the moment the version arrives.
+  const html = rolesHtml(state({ serverVersion: '', rows: [mine] }), 'n0nce');
+
+  assert.match(html, /not been checked yet/);
+});
+
+test('a page that knows a new enough server says nothing at all', () => {
+  const html = rolesHtml(state({ serverVersion: CUSTOM_ROLES_SINCE, rows: [mine] }), 'n0nce');
+
+  assert.ok(!html.includes('not been checked yet'));
+  assert.ok(!html.includes('does not read'));
+});
+
+test('a page with no roles of its own says nothing either, known server or not', () => {
+  assert.ok(!rolesHtml(state({ serverVersion: '' }), 'n0nce').includes('not been checked yet'),
+    'there is nothing that could fail to run');
+});
+
+// ---------- the nonce is a nonce ----------
+
+test('the nonce reaches the policy and the script as one value', () => {
+  const html = rolesHtml(state(), 'aBc123');
+
+  assert.ok(html.includes("script-src 'nonce-aBc123'"), 'the policy names it');
+  assert.ok(html.includes('<script nonce="aBc123">'), 'and so does the only script on the page');
+});

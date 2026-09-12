@@ -16,7 +16,7 @@ import { CoaiSettings, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsS
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
-import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, ROLES, promptsFor, selectedFor } from './prompts';
+import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } from './prompts';
 import { composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
 import { CUSTOM_ROLES_SINCE } from './rolesPage';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, within } from './usage';
@@ -1088,11 +1088,16 @@ function fanOut(state: PanelState): string {
   // looking in the worktree. Announcing four where three run is the mismatch a reviewer caught.
   // Only the roles that are switched ON: this sentence is a promise about the round that is about
   // to run, and one that counts a role the operator unticked is describing a different round.
-  const codeRoles = ROLES.filter((r) => r.stage === 'code' && roleIsOn(state.settings, r.id));
+  //
+  // Through `enabledCodeRoles`, which is the ONE answer to "which code roles will run". This walked
+  // the shipped `ROLES` instead, so it knew neither the roles a person added nor the catalog's own
+  // `active` switch — promising four reviewers under a section drawing five boxes. Three places
+  // counted this; there is one now.
+  const codeRoles = enabledCodeRoles(state.settings);
   const reviewers = vendors * codeRoles.length;
   // Derived, not stored: it is the widest CODE role's budget, and a stored copy would be a
   // second source of truth for a number that already exists.
-  const rounds = Math.max(1, ...codeRoles.map((r) => state.settings.rounds[r.id] ?? 1));
+  const rounds = Math.max(1, ...codeRoles.map((id) => state.settings.rounds[id] ?? 1));
 
   return (
     `${vendors} vendor${vendors === 1 ? '' : 's'} × up to ${codeRoles.length} roles = ${reviewers} reviewer${reviewers === 1 ? '' : 's'} ` +
@@ -1172,6 +1177,15 @@ function customRolesSkew(server: ServerStatus, settings: CoaiSettings): string {
     + `below.</div>`;
 }
 
+/** Which of the three things this tick can be is what its tooltip has to explain. */
+function tickHelp(dormant: boolean, last: boolean): string {
+  if (dormant) {
+    return HELP.dormantRole;
+  }
+
+  return last ? HELP.lastRole : HELP.roleEnabled;
+}
+
 function promptsBody(state: PanelState): string {
   const s = state.settings;
   // The COMPOSED catalog rather than the shipped five: a role a person added is drawn here beside
@@ -1210,6 +1224,13 @@ function promptsBody(state: PanelState): string {
     // refusing at round time with an error about a review somebody already waited for — and the
     // server still refuses the all-off round, because a hand-written env block has no checkbox.
     const last = switched && on && enabledCodeRoles(s).length === 1;
+    // Switched off in the CATALOG, by the roles page. This tick writes `roleEnabled`, which is the
+    // OTHER switch — so ticking it would post a setting, recompute `on` as still false, and spring
+    // straight back with nothing said. A control that cannot do anything is worse than one that is
+    // not offered: this one goes inert and its tooltip says where the switch that IS holding the
+    // role lives.
+    const dormant = switched && !isActive(role);
+    const frozen = last || dormant;
     const inactive = !isActive(role) ? ' off' : '';
     const off = switched && !on ? ' off' : '';
 
@@ -1217,10 +1238,11 @@ function promptsBody(state: PanelState): string {
     // asks, how much it may still find, and what it asks each time. One box now.
     return `<div class="role role-${ROLE_TONE[role.id] ?? (stage === 'plan' ? 'plan' : 'arch')}${off}${inactive}">
   <div class="head">${switched
-      ? `<input type="checkbox" id="role-${role.id}" data-setting="roleEnabled" data-role="${role.id}"${on ? ' checked' : ''}${last ? ' disabled' : ''}
-           title="${escapeHtml(last ? HELP.lastRole : HELP.roleEnabled)}">
+      ? `<input type="checkbox" id="role-${role.id}" data-setting="roleEnabled" data-role="${role.id}"${on ? ' checked' : ''}${frozen ? ' disabled' : ''}
+           title="${escapeHtml(tickHelp(dormant, last))}">
     <label class="name" for="role-${role.id}">${escapeHtml(label)}</label>`
       : `<span class="name">${escapeHtml(label)}</span>`}</div>
+${dormant ? `  <div class="hint">Switched off on the roles page, where its Active switch lives — this tick cannot turn it back on.</div>` : ''}
 ${last ? `  <div class="hint">The only role still ticked — tick another one before turning this one off.</div>` : ''}
   <div class="field inline">
     ${labelled(`rounds-${role.id}`, 'Rounds', 'maxRounds')}

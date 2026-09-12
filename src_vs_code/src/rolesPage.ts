@@ -20,7 +20,13 @@ import { escapeHtml } from './webviewHtml';
  * worse than one that is disabled with the reason beside it.</p>
  */
 
-/** A prompt is often a paragraph and sometimes several. Three lines is reading it three lines at a time. */
+/**
+ * How tall a prompt box starts.
+ *
+ * <p>A prompt is often a paragraph and sometimes several, and a box three lines high is reading one
+ * three lines at a time. It is a starting HEIGHT and nothing else — the box scrolls, it is
+ * `resize: vertical`, and what it holds is its value however much of it is on screen.</p>
+ */
 const PROMPT_ROWS = 10;
 
 export interface RolesPageState {
@@ -215,7 +221,7 @@ function roleBlock(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Reco
   </summary>
   <div class="fields">
     <label>Name
-      <input type="text" data-field="name" value="${escapeHtml(role.name ?? role.id)}" placeholder="What this role is called">
+      <input type="text" data-field="name" value="${escapeHtml(role.name ?? role.id)}" placeholder="What this role is called"${shipped ? ' readonly' : ''}>
     </label>
     <label>Stage
       <select data-field="stage"${shipped ? ' disabled' : ''}>
@@ -223,13 +229,13 @@ function roleBlock(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Reco
         <option value="${RESULT_STAGE}"${stage === RESULT_STAGE ? ' selected' : ''}>Code review</option>
       </select>
     </label>
-    <label class="flag"><input type="checkbox" data-field="programmingTask"${role.programmingTask ?? true ? ' checked' : ''}> A programming task</label>
+    <label class="flag"><input type="checkbox" data-field="programmingTask"${role.programmingTask ?? true ? ' checked' : ''}${shipped ? ' disabled' : ''}> A programming task</label>
     <label class="flag"><input type="checkbox" data-field="active"${on ? ' checked' : ''}${may ? '' : ' disabled'}> Active</label>
     ${may ? '' : last
       ? '<p class="hint">The only role still active in this stage — switch another one on before turning this one off, or the stage would have no reviewer in it at all.</p>'
       : `<p class="hint">Five roles are already active in this stage. Switch one off to make room.</p>`}
     ${(role.programmingTask ?? true) ? '' : '<p class="hint">A role that is not a programming task is kept and takes part in no round yet — the stage that reviews a document rather than a diff is still being built.</p>'}
-    ${shipped ? '<p class="hint">A role this product ships. Its name and its id are fixed, because they key your settings, your open sessions and every round already recorded — the prompt text below is yours to rewrite.</p>' : ''}
+    ${shipped ? '<p class="hint">A role this product ships. Its id, its name, its stage and its kind are fixed — they key your settings, your open sessions and every round already recorded, and the review server reads none of them from your configuration. Its switch and its prompt text are yours.</p>' : ''}
   </div>
 ${prompts}
   <button type="button" class="add" data-add-prompt="${escapeHtml(role.id)}">Add a prompt</button>
@@ -253,6 +259,28 @@ export function tooOldFor(serverVersion: string, rows: readonly RoleRow[]): stri
   return `<div class="stale">The coai-mcp you have installed (${escapeHtml(serverVersion)}) does not read `
     + `roles at all, so nothing on this page will run. Update it to ${escapeHtml(CUSTOM_ROLES_SINCE)} `
     + `or later — the <b>MCP server</b> section of the panel.</div>`;
+}
+
+/**
+ * The note for a server this window has not identified yet.
+ *
+ * <p>`coai.editRoles` is on the command palette, so this page can be the FIRST thing opened in a
+ * window — before the panel has rendered, which is what detects the installed server. An unknown
+ * server draws no banner, and no banner reads exactly like "checked, and fine". Saying the check has
+ * not run is the honest shape, and it disappears the moment the version arrives, because the host
+ * repaints when it learns one.</p>
+ *
+ * <p>Only when there is something that could fail to run: a machine with no roles of its own has
+ * nothing at stake in the answer.</p>
+ */
+export function unknownServerNote(serverVersion: string, rows: readonly RoleRow[]): string {
+  if (serverVersion.length > 0 || rows.length === 0) {
+    return '';
+  }
+
+  return `<div class="stale">Whether the coai-mcp you have installed can read these roles has `
+    + `<b>not been checked yet</b> — it needs ${escapeHtml(CUSTOM_ROLES_SINCE)} or later. Open the `
+    + `ConnectOtherAIs panel and this line will answer itself.</div>`;
 }
 
 /** The first `coai-mcp` that reads `COAI_ROLES`. Below it, this page writes into a void. */
@@ -293,7 +321,7 @@ ${styles(state.uiScale)}
 <body>
 <header><h1>Review roles</h1>${zoomControlHtml(state.uiScale)}</header>
 <p class="lead">The question each reviewer asks. Everything here is saved as you type${state.perSide ? ', for this side of the machine' : ''}.</p>
-${tooOldFor(state.serverVersion, state.rows)}
+${tooOldFor(state.serverVersion, state.rows)}${unknownServerNote(state.serverVersion, state.rows)}
 
 <h2>Plan review</h2>
 <p class="note">Roles that read the plan, before any code exists.</p>

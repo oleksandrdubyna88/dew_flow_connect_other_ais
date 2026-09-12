@@ -34,8 +34,8 @@ import {
   versionSourceFor,
 } from './cliVersions';
 import { askVersion, capture } from './versionProbe';
-import { seedIfEmpty, writeOverlay } from './sideSettings';
-import { readerFor } from './sideConfig';
+import { seedIfEmpty } from './sideSettings';
+import { readerFor, saveSetting } from './sideConfig';
 import { hostPlatform, Platform } from './hostSide';
 import { thisSide } from './installer';
 import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
@@ -57,7 +57,6 @@ import {
 } from './modelPrices';
 import {
   ConfigReader,
-  OVERLAID_SETTINGS,
   roleRecordUpdate,
   SettingMessage,
   settingsFrom,
@@ -1362,20 +1361,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * the fix; this is what makes the NEXT one loud instead of silent.</p>
    */
   private async save(config: vscode.WorkspaceConfiguration, key: string, value: unknown): Promise<void> {
-    // A setting this side keeps to itself never reaches settings.json: that file is the CLIENT's, and
-    // VS Code hands it to every extension host, which is the whole reason the per-side switch exists.
-    if (this.perSide(config) && OVERLAID_SETTINGS.includes(key)) {
-      await writeOverlay(this.context.globalState, thisSide(this.context.globalStorageUri), key, value);
-
-      return;
-    }
-
-    try {
-      await config.update(key, value, vscode.ConfigurationTarget.Global);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      void vscode.window.showErrorMessage(`ConnectOtherAIs could not save "coai.${key}": ${detail}`);
-    }
+    // Both halves of this — the per-side branch and the report when VS Code refuses — moved to
+    // `sideConfig.saveSetting` when the roles page needed them too. A second copy of "which layer
+    // does this belong in" is how the roles page came to write a per-side setting globally.
+    await saveSetting(this.context, config, key, value);
   }
 
   /**

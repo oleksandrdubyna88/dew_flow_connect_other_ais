@@ -11,7 +11,7 @@
  */
 
 import { DEFAULT_VENDORS, Vendor, vendorsEnv } from './vendors';
-import { rolesFrom, type RoleRow } from './roles';
+import { PLAN_STAGE, composed, isActive, rolesFrom, stageOf, type RoleRow } from './roles';
 
 export type OnExhausted = 'continue' | 'escalate' | 'human' | 'good_enough';
 
@@ -470,7 +470,18 @@ export function roleIsOn(settings: CoaiSettings, role: string): boolean {
  * reviewers" while two roles are switched off is not describing this round.</p>
  */
 export function enabledCodeRoles(settings: CoaiSettings): readonly string[] {
-  return Object.keys(DEFAULTS.roleEnabled).filter((role) => roleIsOn(settings, role));
+  // The COMPOSED catalog, not the shipped four. Until a person could write `coai.roles` those were
+  // the same list; now a role they added is a reviewer this round will launch, and a count taken
+  // from the shipped names alone both under-promises the fan-out and miscounts "the last role
+  // standing" — telling somebody they cannot untick Architecture while a role of their own is still
+  // running. Off by EITHER switch: `roleEnabled` is the sidebar's tick, `active` the catalog's, and
+  // the server reads both.
+  return composed(settings.roles)
+    .filter((role) => stageOf(role) !== PLAN_STAGE
+      && (role.programmingTask ?? true)
+      && isActive(role)
+      && roleIsOn(settings, role.id))
+    .map((role) => role.id);
 }
 
 /**

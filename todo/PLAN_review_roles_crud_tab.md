@@ -219,6 +219,36 @@ clean, the automatic comments read and answered, and `/promote-plan` on merge.
 - [ ] `npm test` green with `out/` removed; both C# suites green and unedited.
 - [ ] Every new control has a tooltip and the page has a help article, in English.
 
+## What the code round changed, recorded
+
+The gate's code round returned 34 gating findings over this branch. Five of them were one defect seen
+from different directions and two were worth the whole round:
+
+- **`composed()` applied a row's `name`, `stage` and `programmingTask` to a role this product ships.**
+  `RoleComposition.Overridden` takes only `Active` and the extra prompts. Nothing failed — the page
+  drew the person's word for the role, the round used the shipped one, and the two never met. The
+  page now renders those three controls read-only, `composed()` mirrors the server, and `rolesEdit`
+  refuses the command as well.
+- **"Remove this role" did nothing**, because the host's mutation used `undefined` for both "refused"
+  and "nothing changed". Doctrine 4, exactly.
+- **`rolesEdit.ts` is new, and is the answer to how that survived.** Every row decision moved out of
+  the untested host into a pure module returning a three-way union, with the prompt-override files to
+  delete carried on the success case. The plan's *Constraints* said the host has no unit test
+  anywhere and the structural scans cover its obligations; that was true and it was not enough.
+- **`enabledCodeRoles` is the one count of "which code roles will run".** There were three.
+- **`coai.roles` is per-side and was written globally.** `sideConfig.saveSetting` is now the single
+  write path, shared with the panel.
+- Smaller: commands serialized and text fields settled rather than a write per keystroke; the prompt
+  body written and renamed rather than truncated in place; removal confirmed and its files deleted; a
+  prompt id from the webview checked against the role that claims it; unknown fields carried through
+  `rolesFrom` instead of deleted on the next keystroke; a length cap on a generated id; the nonce from
+  `crypto`; the sidebar's tick inert for a role the catalog has switched off; and the page saying so
+  when it has not yet learned which server is installed.
+
+Eighteen findings were rejected with reasons, the largest group being four claims of script injection
+through `JSON.stringify` inside a `<script>` — there is none in the file, and no page state reaches
+the script block at all.
+
 ## Parallelism
 
 Stories 1–2 are one unit — the model and the setting, no UI. Story 3–4 are the page and cannot start

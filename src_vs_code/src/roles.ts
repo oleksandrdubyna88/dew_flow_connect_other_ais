@@ -44,6 +44,21 @@ export const RESULT_STAGE = 'result';
  */
 export const MAX_ACTIVE_PER_STAGE = 5;
 
+/**
+ * The longest id this will generate.
+ *
+ * <p>An id becomes `COAI_ROUNDS_&lt;ID&gt;`, `COAI_THRESHOLD_&lt;ID&gt;` and `COAI_ENABLED_&lt;ID&gt;`. A
+ * name pasted out of a document is a name a person can write, and the id made from it used to be as
+ * long as they made it — a variable no shell would carry, so the role's budget would read from the
+ * settings file and never from the block they paste into an MCP client. Working in one of the two
+ * places a setting can come from is worse than working in neither, because only one of those is
+ * noticed.</p>
+ */
+export const MAX_ROLE_ID_LENGTH = 48;
+
+/** Room left under the cap for what {@link unique} appends when an id is already spoken for. */
+const ID_SUFFIX_ROOM = 14;
+
 /** A prompt id is a FILE NAME under `<dataDir>/prompts/`, so it is a slug and nothing else. */
 const PROMPT_ID = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -113,6 +128,7 @@ function roleRow(raw: unknown, taken: ReadonlySet<string>): RoleRow | undefined 
   }
 
   return {
+    ...unknownFields(row, ROW_FIELDS),
     id,
     ...(typeof row['name'] === 'string' ? { name: row['name'] } : {}),
     ...(typeof row['stage'] === 'string' ? { stage: row['stage'] } : {}),
@@ -120,6 +136,41 @@ function roleRow(raw: unknown, taken: ReadonlySet<string>): RoleRow | undefined 
     ...(typeof row['active'] === 'boolean' ? { active: row['active'] } : {}),
     ...(Array.isArray(row['prompts']) ? { prompts: promptRows(row['prompts']) } : {}),
   };
+}
+
+/** The fields of a row THIS build knows about. Everything else is carried, not understood. */
+const ROW_FIELDS: ReadonlySet<string> = new Set(['id', 'name', 'stage', 'programmingTask', 'active', 'prompts']);
+
+/** The fields of a prompt row this build knows about. */
+const PROMPT_FIELDS: ReadonlySet<string> = new Set(['id', 'label', 'purpose']);
+
+/** Keys that are not data, whatever a hand-written settings file or a JSON payload calls them. */
+const NOT_A_FIELD: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Whatever else the row was carrying.
+ *
+ * <p><b>The setting IS the wire format, and this is what makes that true in both directions.</b> The
+ * panel rewrites the whole array on every edit, so a field the SERVER gains before this extension
+ * does would be deleted by the first keystroke on the roles page — the person's configuration
+ * quietly losing a feature they had set up, with nothing anywhere saying so. That is not a
+ * hypothetical: `remoteVendor` was dropped by three releases of this extension exactly that way, one
+ * unexplained 400 at a time.</p>
+ *
+ * <p>Carried, never interpreted. A misspelt field survives too, which is the price — and the cheaper
+ * of the two mistakes, because the server names what it refused and the panel shows that sentence.
+ * `__proto__` and its family are not carried at all: `JSON.parse` makes one an OWN property, so
+ * spreading a parsed row is a prototype write nobody wrote.</p>
+ */
+function unknownFields(row: Record<string, unknown>, known: ReadonlySet<string>): Record<string, unknown> {
+  const kept: Record<string, unknown> = {};
+  for (const key of Object.getOwnPropertyNames(row)) {
+    if (!known.has(key) && !NOT_A_FIELD.has(key)) {
+      kept[key] = row[key];
+    }
+  }
+
+  return kept;
 }
 
 function promptRows(raw: readonly unknown[]): readonly PromptRow[] {
@@ -136,6 +187,7 @@ function promptRows(raw: readonly unknown[]): readonly PromptRow[] {
     }
 
     rows.push({
+      ...unknownFields(row, PROMPT_FIELDS),
       id,
       ...(typeof row['label'] === 'string' ? { label: row['label'] } : {}),
       ...(typeof row['purpose'] === 'string' ? { purpose: row['purpose'] } : {}),
@@ -164,7 +216,8 @@ export function idFor(name: string, taken: ReadonlySet<string>): string {
     .filter((word) => word.length > 0)
     .map((word) => word[0]!.toUpperCase() + word.slice(1))
     .join('');
-  const base = ROLE_ID.test(camel) ? camel : '';
+  const short = camel.slice(0, MAX_ROLE_ID_LENGTH - ID_SUFFIX_ROOM);
+  const base = ROLE_ID.test(short) ? short : '';
 
   return unique(base, taken);
 }
@@ -248,6 +301,18 @@ export function activeCount(rows: readonly RoleRow[], stage: string): number {
 /**
  * Every role that exists: the shipped five with any row's edits applied, then the rows a person
  * added, in that order — which is the order the server composes and the panel draws.
+ *
+ * <p><b>A row naming a shipped role may say exactly two things, and this takes exactly those two.</b>
+ * Its switch, and the prompts it adds. `RoleComposition.Overridden` on the server is the boundary
+ * that decides, and its own comment says why about the rest: <i>"Id, name, stage and kind are NEVER
+ * taken from the row. A built-in cannot be renamed — its id keys settings, session files and every
+ * row of the rounds database."</i></p>
+ *
+ * <p>This used to take the name, the stage and the kind as well. Nothing failed, which is the
+ * interesting part: the page would draw the person's word for the role, the round would use the
+ * shipped one, and the only place the two met was a log nobody reads next to a panel nobody
+ * doubted. A panel that shows what the server will NOT do is worse than one that shows nothing —
+ * found on this plan's code round by three reviewers at once.</p>
  */
 export function composed(rows: readonly RoleRow[]): readonly RoleRow[] {
   const byId = new Map(rows.map((r) => [r.id.toLowerCase(), r]));
@@ -256,9 +321,9 @@ export function composed(rows: readonly RoleRow[]): readonly RoleRow[] {
 
     return {
       id: role.id,
-      name: row?.name ?? role.name,
-      stage: row?.stage ?? role.stage,
-      programmingTask: row?.programmingTask ?? role.programmingTask,
+      name: role.name,
+      stage: role.stage,
+      programmingTask: role.programmingTask,
       active: row?.active ?? true,
       prompts: [...role.prompts, ...(row?.prompts ?? []).filter((p) => !shippedPrompt(role, p.id))],
     } satisfies RoleRow;
