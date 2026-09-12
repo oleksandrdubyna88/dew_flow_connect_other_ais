@@ -2251,6 +2251,34 @@ to `codex`, so `▶` on an Antigravity row opened a different vendor's CLI under
 the wrong-model defect again, on the button whose whole purpose is signing that vendor in. Every
 runtime this build knows is now a row in one table.
 
+### The catalog is generated from a seed neither half owns (2026-09-12)
+
+`prompts.ts` held five roles and twenty-five prompts as hand-written literals, mirroring the same
+list in the server's `PromptCatalog.cs`. What held the two level was a test that parsed **C# source
+with a regular expression** — it broke on a reformat, was blind to any field it had not been taught,
+and had already let one real drift through. Two lists of twenty-five prompts stay level that way for
+a while and then quietly do not.
+
+`shared/builtin-roles.json` is the seed now, owned by neither half. coai-mcp EMBEDS it as a manifest
+resource; the panel cannot embed anything, because it is drawn before any server has started — a
+settings page that cannot list its own choices until a subprocess answers shows an empty box on first
+open. So `scripts/generate-builtin-roles.mjs` writes `src/builtinRoles.generated.ts`, and `ROLES` and
+`PROMPTS` became derivations of it with the shapes they already had: `stage` mapped from the seed's
+`result` to the panel's `code`, and a role's universal prompt being its FIRST, which is the rule
+`RoleDefinition.General` applies on the server side. `panelView.ts` and the five test files that
+import them did not change.
+
+**Three tests, because each catches a different direction of drift.**
+`builtinRoleCatalog.test.ts` reads the seed itself and asserts the generated file matches it, so it
+is what fails when somebody edits the seed and forgets to regenerate.
+`generatedFilesAreCurrent.test.ts` runs each generator in a `--check` mode that renders and compares
+without writing, which catches the other direction: a changed MAPPING leaves the committed file still
+matching the seed, every test green, and the next regeneration silently changing the panel. And
+`helpPrompts.test.ts` compares each entry against the `.md` file it came from — which is why the
+`--check` matters for the help page too: a changed grouping, order or label leaves that test green
+while the page changes. `generate-help-prompts.mjs` reads the seed for its grouping and its labels
+now, having read `prompts.ts` with a regular expression that a derivation parses to nothing.
+
 ### Two frames, four colours, and a stage each (2026-09-01)
 
 The Prompts section is two frames: the plan role alone, and the code roles together — three of them
