@@ -315,7 +315,11 @@ function plainly(said: string): string {
   // there replaced everything they actually wrote with the quotation. Matching the two halves
   // separately had the same hole in the middle: a message that OPENED with a command name and went
   // on to quote a command-args tag further down came back as neither. (gemini, then codex.)
-  const envelope = /^\s*<command-name>([^<]*)<\/command-name>\s*(?:<command-message>[^<]*<\/command-message>\s*)?(?:<command-args>([^<]*)<\/command-args>)?\s*$/
+  //
+  // The CLOSING TAG delimits the arguments, not "anything but a left angle bracket". A person whose
+  // command arguments mention `Array<T>` or `x < limit` wrote those, and `[^<]*` refused the whole
+  // envelope over them — so their prompt came back wearing its tags. (CodeRabbit, PR #207.)
+  const envelope = /^\s*<command-name>([\s\S]*?)<\/command-name>\s*(?:<command-message>[\s\S]*?<\/command-message>\s*)?(?:<command-args>([\s\S]*?)<\/command-args>)?\s*$/
     .exec(said);
   if (envelope !== null) {
     // The tag already carries its slash — measured on this machine's own session files, where every
