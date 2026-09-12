@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Processes;
 
@@ -273,7 +274,7 @@ public sealed class ReviewerExecutor(
             Directory.CreateDirectory(directory);
             var file = Path.Combine(
                 directory,
-                $"{FileSafe.Part(invocation.Provider)}-{FileSafe.Part(invocation.Role)}"
+                $"{FileName.Safe(invocation.Provider)}-{FileName.Safe(invocation.Role)}"
                     + $"-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.txt");
             pending = file + ".writing";
             File.WriteAllText(pending, Bounded(raw));

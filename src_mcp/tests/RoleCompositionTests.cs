@@ -408,12 +408,20 @@ public sealed class RoleCompositionTests
         catalog.Dropped.Should().ContainSingle().Which.Should().StartWith("<a row with no id>");
     }
 
+    /// <summary>Every reserved name, walked from the list the implementation owns.</summary>
+    public static TheoryData<string> ReservedNames()
+    {
+        var data = new TheoryData<string>();
+        foreach (var name in RoleComposition.ReservedPromptNames)
+        {
+            data.Add(name.ToLowerInvariant());
+        }
+
+        return data;
+    }
+
     [Theory]
-    [InlineData("con")]
-    [InlineData("aux")]
-    [InlineData("com1")]
-    [InlineData("lpt9")]
-    [InlineData("nul")]
+    [MemberData(nameof(ReservedNames))]
     public void APromptIdThatIsAWindowsDeviceName_IsDroppedAndNamed(string promptId)
     {
         // A prompt id becomes <dataDir>/prompts/<id>.md, and Windows still resolves these basenames

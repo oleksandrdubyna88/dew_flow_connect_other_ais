@@ -100,10 +100,18 @@ public sealed record PanelConfig(
     /// Which roles exist for this session — the shipped five, plus whatever a person configured.
     /// </summary>
     /// <remarks>
-    /// Separate from <see cref="Roles"/> on purpose: that one is how much each role may SPEND, this
-    /// one is what a role IS. A config built before custom roles existed, or by a test that cares
-    /// about budgets only, gets the shipped catalog and behaves exactly as it always did.
+    /// <para>Separate from <see cref="Roles"/> on purpose: that one is how much each role may SPEND,
+    /// this one is what a role IS. A config built before custom roles existed, or by a test that
+    /// cares about budgets only, gets the shipped catalog and behaves exactly as it always did.</para>
+    /// <para><b>Never persisted.</b> `PanelConfig` is written into every session file as part of
+    /// `SessionState`, and without this attribute the catalog rode along — twenty-five prompts and
+    /// their prose in every session, and a resumed session read back with the catalog it was OPENED
+    /// with rather than the one configured now, so editing a role would not reach a session already
+    /// open. The gates belong to the session; the catalog belongs to the server that is running.
+    /// Found by this story's own code round, and pinned by
+    /// `TheAllRolesOffRefusalTests.ASessionFileCarriesTheGates_AndNotTheCatalog`.</para>
     /// </remarks>
+    [System.Text.Json.Serialization.JsonIgnore]
     public RoleCatalog Catalog { get; init; } = RoleCatalog.Builtin;
 
     public IReadOnlyDictionary<string, RoleGate> Roles { get; init; } = Roles ?? Defaults();

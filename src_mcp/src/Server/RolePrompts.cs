@@ -36,10 +36,21 @@ public sealed class RolePrompts(string dataDir)
     /// </summary>
     public string ForChoice(PromptChoice choice) => Text(choice.Id);
 
+    /// <summary>
+    /// One prompt's text: the override file if there is one, else what the binary ships.
+    /// </summary>
+    /// <remarks>
+    /// The id becomes a FILE NAME, and since roles became data it is a person's text rather than a
+    /// compiled constant. Composition refuses an id that is not <c>^[a-z0-9][a-z0-9-]*$</c> and
+    /// refuses the basenames Windows reserves for devices, so nothing shaped like a path should
+    /// arrive — this is the second lock, in the place that actually opens the file. Raised on the
+    /// code round of the story that removed the enum, alongside the same guard in the adapters.
+    /// </remarks>
     private string Text(string promptId)
     {
-        var file = $"{promptId}.md";
+        var file = $"{FileName.Safe(promptId)}.md";
         var overridePath = Path.Combine(OverrideDir, file);
+
         return File.Exists(overridePath) ? File.ReadAllText(overridePath) : Embedded(file);
     }
 

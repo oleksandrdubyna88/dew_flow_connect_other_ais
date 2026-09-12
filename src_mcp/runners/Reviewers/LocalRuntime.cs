@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using System.Text.Json;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Processes;
@@ -116,8 +117,8 @@ public sealed class LocalRuntime(string id, string baseUrl) : IReviewerRuntime
         ReviewerSettings settings)
     {
         Directory.CreateDirectory(outputDir);
-        var promptFile = Path.Combine(outputDir, $"local-{FileSafe.Part(role)}-{Guid.NewGuid():N}.prompt");
-        var answerFile = Path.Combine(outputDir, $"local-{FileSafe.Part(role)}-{Guid.NewGuid():N}.json");
+        var promptFile = Path.Combine(outputDir, $"local-{FileName.Safe(role)}-{Guid.NewGuid():N}.prompt");
+        var answerFile = Path.Combine(outputDir, $"local-{FileName.Safe(role)}-{Guid.NewGuid():N}.json");
         File.WriteAllText(promptFile, prompt);
 
         var endpoint = OpenAiBaseOf(baseUrl.Length > 0 ? baseUrl : DefaultEndpoint);

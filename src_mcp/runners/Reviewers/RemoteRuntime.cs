@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using System.Text.Json;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Processes;
@@ -53,7 +54,7 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
         ReviewerSettings settings)
     {
         Directory.CreateDirectory(outputDir);
-        var stem = $"remote-{FileSafe.Part(role)}-{Guid.NewGuid():N}";
+        var stem = $"remote-{FileName.Safe(role)}-{Guid.NewGuid():N}";
         var promptFile = Path.Combine(outputDir, stem + ".prompt");
         var answerFile = Path.Combine(outputDir, stem + ".json");
         var jobFile = Path.Combine(outputDir, stem + ".job");

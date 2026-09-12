@@ -21,15 +21,49 @@ public sealed class RolePromptsTests
 {
     private readonly string _data = Directory.CreateTempSubdirectory("coai-prompts-").FullName;
 
-    /// <summary>The general prompt of each shipped role, and a line only that prompt carries.</summary>
+    /// <summary>
+    /// A line only that prompt carries, for each role whose text says something unmistakable.
+    /// </summary>
+    /// <remarks>
+    /// The markers cannot be derived — they are facts about the prose — but WHICH roles are checked
+    /// can be, and is: the theory walks the catalog's roles and looks each one's general prompt up
+    /// here, so a shipped role added without a marker fails rather than going unchecked. (codex, on
+    /// story B1's code round.)
+    /// </remarks>
+    private static readonly Dictionary<string, string> Markers = new(StringComparer.Ordinal)
+    {
+        ["PlanCritique"] = "PLAN",
+        // Never checked before this theory walked the catalog: the enum it used to walk had five
+        // values mapping onto four files, and Conventions was the one that fell through.
+        ["Conventions"] = "CONVENTIONS reviewer",
+        ["Architecture"] = "ARCHITECTURE reviewer",
+        ["SecurityReliability"] = "SECURITY AND RELIABILITY",
+        ["UxDxPerformance"] = "CODE ONLY: no browser",
+    };
+
+    public static TheoryData<string> ShippedRoles()
+    {
+        var data = new TheoryData<string>();
+        foreach (var role in RoleCatalog.Builtin.Roles)
+        {
+            data.Add(role.Id);
+        }
+
+        return data;
+    }
+
     [Theory]
-    [InlineData("plan-critique", "PLAN")]
-    [InlineData("architecture", "ARCHITECTURE reviewer")]
-    [InlineData("security-reliability", "SECURITY AND RELIABILITY")]
-    [InlineData("uxdx-performance", "CODE ONLY: no browser")]
-    public void ShippedDefault_ComesFromTheAssembly_NotTheFilesystem(string promptId, string marker) =>
+    [MemberData(nameof(ShippedRoles))]
+    public void ShippedDefault_ComesFromTheAssembly_NotTheFilesystem(string roleId)
+    {
+        Markers.Should().ContainKey(roleId,
+            "a shipped role needs a line of its own text here, or this theory checks nothing about it");
+
         // Embedded, so this holds for a binary installed ALONE from a release asset.
-        RolePrompts.ShippedDefaultFor(promptId).Should().Contain(marker);
+        var text = RolePrompts.ShippedDefaultFor(RoleCatalog.Builtin.UniversalFor(roleId).Id);
+
+        OneLine(text).Should().Contain(Markers[roleId], $"{roleId}'s own general prompt");
+    }
 
     /// <summary>
     /// Every prompt the catalog names, not every value of an enum.
