@@ -37,6 +37,8 @@ public sealed class ScenarioCoverageTests
             + "reads a real document through the public tool, and its summary comes back",
         ["resolve"] = "EndToEndTests + RoundAuditTests (a decision is recorded for every finding)",
         ["status"] = "McpContractTests + CallerSessionsTests",
+        ["consult"] = "ConsultScenarioTests — two turns over the fake CLI as codex: a thread opened, "
+            + "resumed by its own id, the cap closing it, the ledger and the record written",
     };
 
     /// <summary>

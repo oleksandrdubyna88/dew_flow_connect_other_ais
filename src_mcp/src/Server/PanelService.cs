@@ -38,6 +38,7 @@ public sealed partial class PanelService
     private readonly CallerSessions _callers;
     private readonly Runners.Processes.ProcessTracking _tracking;
     private readonly RemoteProbe _remote;
+    private readonly ConsultationService _consultations;
 
     public PanelService(PanelSettings settings, VaultKeys keys, DateTime vaultReadUtc, IProcessLauncher launcher, Serilog.ILogger log)
     {
@@ -74,6 +75,8 @@ public sealed partial class PanelService
         _escalations = new Escalations(settings.DataDir);
         _ledger = new UsageLedger(settings.DataDir);
         _callers = new CallerSessions(settings.DataDir);
+        _consultations = new ConsultationService(
+            settings, launcher, _executor, _context, _prompts, _ledger, log, Environment.GetEnvironmentVariable);
 
         // One client for every Team server this configuration names. A probe and a cancellation are
         // both short requests to the same handful of hosts, so a shared handler is the whole point.
@@ -86,6 +89,14 @@ public sealed partial class PanelService
         if (swept > 0)
         {
             _log.Warning("swept {Count} round(s) abandoned by a dead process", swept);
+        }
+
+        // The same sweep for consultations: one left `asking` by a dead server, one left open past
+        // its idle budget, one finished long ago. Same pid rule, same reason.
+        var consultationsSwept = _consultations.Sweep(ProcessIsAlive);
+        if (consultationsSwept > 0)
+        {
+            _log.Warning("swept {Count} consultation(s): interrupted by a dead process, idle past their budget, or expired", consultationsSwept);
         }
 
         // And the reviewers those rounds left RUNNING, which is the more expensive half of the
@@ -2416,6 +2427,13 @@ public sealed partial class PanelService
     /// worth more unmediated than rendered into another language by a third model.
     /// </remarks>
     private static HumanAnswer AnswerFor(string answer) => new("answered", answer, answer, string.Empty);
+
+    /// <summary>
+    /// The eighth tool: another vendor's model, consulted about the LIVE working tree — a thin
+    /// delegation, the way the review half's vendor questions are delegations since 2026-09-05.
+    /// </summary>
+    public Task<string> ConsultAsync(string repoPath, string problem, string suspectedFiles, string consultationId, CancellationToken ct = default) =>
+        _consultations.AskAsync(repoPath, problem, suspectedFiles, consultationId, ct);
 
 
     // ---------- plumbing ----------

@@ -106,8 +106,8 @@ public sealed class McpContractTests : IDisposable
 
             names.Should().BeEquivalentTo(
                 ["providers", "open", "review_plan", "review_code", "review_document", "resolve",
-                 "status", "ask_human"],
-                "the eight tools, unprefixed — the client's `coai` namespace is the only one");
+                 "status", "ask_human", "consult"],
+                "the nine tools, unprefixed — the client's `coai` namespace is the only one");
         }
         finally
         {

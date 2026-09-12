@@ -23,8 +23,23 @@ public static class UsageKinds
     public const string Review = "review";
     public const string Chat = "chat";
 
+    /// <summary>
+    /// The AGENT asking another vendor's model about the working tree, mid-task, on a consultant the
+    /// operator configured. A third question beside the other two — "what did my agent spend getting
+    /// unstuck" — and the one the phase-2 decision about an automatic consultation is made on, which
+    /// is why it is not folded into <see cref="Chat"/>.
+    /// </summary>
+    public const string Consult = "consult";
+
     /// <summary>Every kind this build knows how to name. Order is the order a report reads best in.</summary>
-    public static IReadOnlyList<string> Known { get; } = [Review, Chat];
+    public static IReadOnlyList<string> Known { get; } = [Review, Chat, Consult];
+
+    /// <summary>
+    /// Kinds the Team server never produces: a consultation runs on this machine only. The server's
+    /// wire vocabulary is therefore <see cref="Known"/> minus these, and the test that holds the two
+    /// vocabularies level says so rather than asserting a false equality.
+    /// </summary>
+    public static IReadOnlyList<string> LocalOnly { get; } = [Consult];
 
     /// <summary>Whether a non-empty kind is one this build knows. Empty is "not said", which is fine.</summary>
     public static bool IsKnown(string kind) =>
@@ -138,13 +153,17 @@ public sealed class UsageLedger(string dataDir)
         long tokensIn,
         long tokensOut,
         double? costUsd = null,
-        string kind = "") =>
+        string kind = "",
+        // The Team server's stage by default, because that was this method's only caller for a
+        // week; a consultation on this machine names its own, so a local run is not filed under a
+        // server that never saw it.
+        string stage = "TeamServer") =>
         Append(new UsageEntry(
             DateTime.UtcNow.ToString("O"),
             provider,
             model,
             role,
-            "TeamServer",
+            stage,
             Math.Round(elapsed.TotalSeconds, 1),
             tokensIn,
             tokensOut,

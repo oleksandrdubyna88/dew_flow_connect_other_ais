@@ -30,8 +30,13 @@ internal sealed record VendorDto(
     /// <summary>For a `remote` row: the vendor id the TEAM SERVER knows, which is not this row's id.</summary>
     string? RemoteVendor = null);
 
+/// <summary>One entry of `COAI_CONSULTANTS`: which vendor row consults for one caller kind, and on which model.</summary>
+/// <param name="Model">Empty means the vendor row's own model — the ordinary case configures nothing here.</param>
+internal sealed record ConsultantDto(string? Vendor, string? Model = null);
+
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(List<VendorDto>))]
+[JsonSerializable(typeof(Dictionary<string, ConsultantDto>), TypeInfoPropertyName = "DictionaryStringConsultantDto")]
 [JsonSerializable(typeof(List<CoaiMcp.Core.Rounds.RoleEntry>), TypeInfoPropertyName = "ListRoleEntry")]
 [JsonSerializable(typeof(Dictionary<string, List<string>>), TypeInfoPropertyName = "DictionaryStringListString")]
 internal sealed partial class SettingsJsonContext : JsonSerializerContext;

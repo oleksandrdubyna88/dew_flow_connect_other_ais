@@ -16,6 +16,89 @@
 | `resolve` | `ResolveAsync` — reasoned decisions by finding index | bad index; reject without a reason |
 | `status` | persisted session + round trail | no session |
 | `ask_human` | `Escalations` — a question FILE the extension watches | only an empty question; otherwise it WAITS the budget, then answers `no_answer_yet` telling the model to ask in the chat |
+| `consult` | `ConsultationService` — another vendor's model over the LIVE working tree | eleven ways, each a sentence naming its cure — see below |
+
+## The consultant — the eighth tool (2026-09-12)
+
+The first seven tools are the GATE: other vendors judging a plan and a diff. `consult` is the other
+direction — the calling AI, stuck, asking one of them a question. Design record:
+[../todo/PLAN_consultant.md](../todo/PLAN_consultant.md); story 1 (codex only) shipped 2026-09-12.
+
+**It shares nothing with the round machine, on purpose.** `RoundMachine` refuses a round while a
+human gate is set or a round awaits `resolve` — exactly the moments an agent is stuck — and half the
+triggers happen before `open` exists. So a consultation is its own entity, keyed by the CALLER
+(`CallerIdentity`), referencing a session only when there is one. `open` is unchanged and not required.
+
+**The consultant sees the tree, not the agent's story.** The server runs `git diff HEAD` and
+`ls-files --others` itself (`ContextAssembler.CollectWorkingTreeAsync`) and puts the shaped result in
+the prompt; the caller hands over a problem statement and the files it suspects, never a diff. An
+agent that is stuck has a blind spot by definition, and its own account of the repository is written
+through that blind spot. The diff is budgeted at 64 KB (a third of a review's) because turn 1 carries
+it and one vendor has no prompt cache; an untracked file over 16 KB, or with a NUL in its first 8 KB,
+is NAMED rather than inlined.
+
+**It runs in the LIVE checkout, read-only — and the flags are the VENDOR's promise, so there is an
+invariant.** `FilesystemInvariant` fingerprints the tree before the launch and after it: every
+tracked, untracked and IGNORED path `git status` lists, each listed file's size and mtime, and
+`.git/HEAD`, `.git/config` and every hook. Any difference fails the consultation CLOSED — the advice
+is withheld, every path is named with what happened to it, and **nothing is deleted and nothing is
+reverted**. A consultation runs for minutes while the person works, so a file that appeared in that
+window may be theirs; two reviewers called an automatic delete Blocking on the plan round and they
+were right.
+
+Two things are deliberately NOT watched, and the reason is a measurement: `.git/index` and the `.git`
+directory's own mtime. `git status` rewrites the index's stat cache — including the invariant's own
+FIRST call — so watching it made every consultation fail closed with nothing wrong. Found the moment
+the scenario test first ran. The named residual: a file changed deep inside an ignored DIRECTORY is
+not seen, because git lists the directory as one entry and walking it would cost seconds per call.
+
+**One consultation per repository at a time** (`RepositoryLock`, a held `FileShare.None` handle, the
+`SessionTurn` shape), held from the first snapshot to the second: two consultations on one tree would
+each see the other's work as a breach. Thirty seconds of waiting, then a named refusal.
+
+**A conversation, resumed through the vendor's own store.** The reply carries a `consultationId`; a
+follow-up passes it and the vendor resumes its own thread. The server holds no long-lived child —
+only the handle, validated where it is read off the stream and again where it enters an argv
+(`ConsultantHandle`, the C# twin of the extension's `codexAdapter` guard). **A turn that dies after
+the vendor accepted it becomes `interrupted` rather than failed**: the handle is read off whatever
+output was captured, the turn is NOT counted against the cap, and the next call picks the
+conversation up — otherwise the caller pays twice for work already done. A vendor that has dropped
+the thread says so in its own words and is reported as that, not as a generic exit code.
+
+**Both directions are fenced.** The diff goes to the consultant as material between nonce-marked
+lines with the problem LAST; the advice comes back inside
+`<consultant_advice … status="advisory_only" nonce=…>` with any copy of the tag inside the text
+neutralised, followed by the IMPORTANT note. A convention, not a boundary — the caller runs under its
+own permission system — and the plan says so.
+
+**The circuit breakers**: turns per consultation (`COAI_CONSULT_TURNS`, 5), consult calls per caller
+session (`COAI_CONSULT_CALLS_PER_SESSION`, 10), an idle close (`COAI_CONSULT_IDLE_MINUTES`, 15) that
+drops the vendor's handle so no zombie session is kept, and the per-turn deadline, which is the
+reviewer timeout rather than a second number to keep in step. The call counter **never fails open**:
+when its file cannot be written the cap is enforced in memory for this server's lifetime and the reply
+says so — the opposite of `CallerSessions`' split-order claim, because a repeated instruction is cheap
+and a runaway agent on a paid vendor is not.
+
+**Every turn is one ledger row of `kind: consult`, `stage: Consultation`** — a third kind beside
+`review` and `chat`, because the phase-2 question ("should an automatic consultation fire when a
+finding survives two rounds?") is a cost question about consultations specifically, and filing them as
+chats would mix them with the person's own conversations. The Team server's wire vocabulary is
+unchanged: `UsageKinds.LocalOnly` names the difference, and `src_server`'s test now asserts
+*known == wire ∪ local-only* rather than an equality that stopped being true of this ledger.
+
+**Which consultant a caller gets** is `COAI_CONSULTANTS`, a map from caller kind to vendor+model.
+`CallerIdentity.KindFrom` answers the kind from the VENDOR variables alone — `COAI_CALLER_SESSION` is
+an identity override with no vendor meaning and is deliberately not consulted. Shipped: Claude Code →
+codex, Codex → claude, Gemini → codex, other → codex; a different vendor by default, the same vendor
+allowed as an explicit choice for a stronger model. A malformed map is the shipped one plus a sentence
+in `Unrecognised`, never half a map. Story 1 ships `codex` as the only consulting runtime; every other
+row is refused BY NAME (`ConsultantResolution.CannotConsult`), never substituted.
+
+**The consultant's prompt** is `src_mcp/src/consultant/consult.md`, embedded as
+`CoaiMcp.prompts.consult.md` and served by `RolePrompts.For("consult")` — override-first, so it is
+editable and restorable like any role prompt. It lives OUTSIDE `src/prompts/` because the extension's
+`generate-help-prompts.mjs` walks that folder and refuses any file the role seed does not name, and a
+consultation has no role.
 
 ## Flow of one stage
 

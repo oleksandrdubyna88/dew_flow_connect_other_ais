@@ -63,6 +63,92 @@ public sealed record CollectedDiff(IReadOnlyList<FileDiff> Files, string Compare
 /// </summary>
 public sealed class ContextAssembler(IProcessLauncher launcher)
 {
+    /// <summary>
+    /// The checkout a path belongs to, or git's own words for why it belongs to none.
+    /// </summary>
+    /// <remarks>
+    /// A consultant runs in the LIVE tree, so the tool takes any path inside it and resolves the top
+    /// level here — before anything is snapshotted, locked or launched. A refusal names git's sentence
+    /// rather than ours: "not a git repository" is what the person will type into a search box.
+    /// </remarks>
+    public async Task<(string TopLevel, string Refusal)> TopLevelAsync(string path, CancellationToken ct = default)
+    {
+        if (!Directory.Exists(path))
+        {
+            return (string.Empty, $"'{path}' is not a directory on this machine — repoPath must be a path inside the checkout you are working in");
+        }
+
+        var result = await launcher.RunAsync(new ProcessRequest("git", ["rev-parse", "--show-toplevel"], path), ct);
+        return result.ExitCode == 0
+            ? (Path.GetFullPath(result.StdOut.Trim()), string.Empty)
+            : (string.Empty, $"'{path}' is not inside a git checkout ({result.StdErr.Trim()}) — repoPath must be a path inside the repository you are working in");
+    }
+
+    /// <summary>The commit and branch the working tree stands on — for the record and the prompt.</summary>
+    public async Task<(string Sha, string Branch)> HeadAsync(string repoPath, CancellationToken ct = default)
+    {
+        var sha = await launcher.RunAsync(new ProcessRequest("git", ["rev-parse", "HEAD"], repoPath), ct);
+        var branch = await launcher.RunAsync(new ProcessRequest("git", ["branch", "--show-current"], repoPath), ct);
+
+        return (
+            sha.ExitCode == 0 ? sha.StdOut.Trim() : string.Empty,
+            branch.ExitCode == 0 && branch.StdOut.Trim().Length > 0 ? branch.StdOut.Trim() : "(detached)");
+    }
+
+    /// <summary>
+    /// What is uncommitted in the LIVE tree: every change against HEAD, and every untracked file
+    /// that is not ignored, as the same <see cref="FileDiff"/> list a review is shaped from.
+    /// </summary>
+    /// <remarks>
+    /// <para>The consultant sees the tree, not the agent's story — so this is collected by the SERVER
+    /// and never handed in by the caller. <c>diff HEAD</c> covers staged and unstaged alike; untracked
+    /// files come from <c>ls-files --others --exclude-standard</c> and are rendered by the pure
+    /// <see cref="UntrackedDiff"/>, which names a binary or an oversized file rather than inlining it.</para>
+    /// <para>Nothing here touches the index — no <c>git add -N</c> — because the consultant is
+    /// read-only and so must the collection be.</para>
+    /// </remarks>
+    public async Task<IReadOnlyList<FileDiff>> CollectWorkingTreeAsync(
+        string repoPath, IReadOnlyList<string>? exclusions = null, CancellationToken ct = default)
+    {
+        var excludes = (exclusions ?? DiffExclusions.Default).Select(e => $":(exclude,glob){e}").ToArray();
+        var files = new List<FileDiff>();
+
+        var numstat = await Git(repoPath, ct, ["diff", "--numstat", "-z", "HEAD", "--", ".", .. excludes]);
+        foreach (var change in NumstatReader.Read(numstat))
+        {
+            files.Add(change.IsBinary
+                ? new FileDiff(change.Path, string.Empty, IsBinary: true, BinaryBytes: SizeOnDisk(repoPath, change.Path))
+                : new FileDiff(change.Path, await Git(repoPath, ct, ["diff", "HEAD", "--", .. change.Pathspecs])));
+        }
+
+        var untracked = await Git(repoPath, ct, ["ls-files", "--others", "--exclude-standard", "-z", "--", ".", .. excludes]);
+        foreach (var path in untracked.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            files.Add(Untracked(repoPath, path));
+        }
+
+        return files;
+    }
+
+    private static FileDiff Untracked(string repoPath, string path)
+    {
+        try
+        {
+            return UntrackedDiff.For(path, File.ReadAllBytes(Path.Combine(repoPath, path)));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Listed a moment ago and unreadable now: named, so the consultant knows it exists.
+            return new FileDiff(path, $"new file (untracked): {path} — could not be read ({e.Message})\n");
+        }
+    }
+
+    private static long SizeOnDisk(string repoPath, string path)
+    {
+        var full = Path.Combine(repoPath, path);
+        return File.Exists(full) ? new FileInfo(full).Length : 0;
+    }
+
     public async Task<CollectedDiff> CollectAsync(
         string repoPath,
         string baseRef,

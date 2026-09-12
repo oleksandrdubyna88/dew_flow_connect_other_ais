@@ -252,6 +252,43 @@ Both cost a whole run each; see [RESULTS_first_real_run.md](RESULTS_first_real_r
   npm's extensionless shell script and fails. `ExecutableResolver` tries the executable extensions
   first and the bare name last, and never rewrites an explicit path.
 
+## A consultation is a conversation, so it is a second adapter family (2026-09-12)
+
+`IReviewerRuntime` describes ONE review: a findings schema, a role, an answer read once. A
+consultation is a conversation with the same CLIs — different argv per TURN, a handle carried between
+turns, prose instead of findings. `IConsultantRuntime` (`runners/Consultation/`) is that seam, the C#
+twin of the extension's `ChatAdapter`.
+
+**Composed from a reviewer adapter, not replacing it.** `CodexConsultant` holds a `CodexRuntime` and
+hands it to the launch as `ReviewerInvocation.Adapter`, so the answer envelope and the token
+arithmetic keep their single copy — `module_runners`' own rule about a second copy being a silent
+factor of two. Only the argv is the consultant's own, and the launch then goes through
+`ReviewerExecutor.LaunchAsync` **unchanged**: since roles became strings, `Role = "consult"` is legal,
+`TrackAs` becomes `codex/consult`, and the outcome classification, the evidence and the usage reading
+come for free.
+
+**Deliberately NOT through `BoundedScheduler`.** Its caps bound a ROUND; queueing a consultation
+behind nine reviewers would stall it at the one moment the agent is stuck. The cost, stated: a consult
+during a round is one more process on the machine, bounded by the per-session call cap.
+
+**Two flags differ from the review argv, both measured on 2026-09-12** (`todo/PLAN_consultant.md`,
+phase 0b):
+
+| | review | consult | why |
+|---|---|---|---|
+| `--ephemeral` | yes | **no** | with it the thread cannot be resumed — `thread/resume failed: no rollout found`, in 0.7 s. The price is real and is said out loud: a consultation LEAVES a codex thread, holding this repository's uncommitted diff, in the person's own codex store. We cannot delete it. |
+| `--output-schema` | yes | no | a consultant answers prose. All three CLIs do so with no schema flag at all. |
+
+A RESUMED codex turn is a third shape again: `exec resume <id>` accepts neither `-s` nor `-C`, so the
+sandbox rides `-c sandbox_mode="read-only"` and the process must run in the directory the thread was
+started in — which is the repository, for every turn.
+
+**`ReviewerLaunch` now carries its `ProcessResult`.** A reviewer's answer is the whole story; a
+consultation's is not. The vendor's conversation id has to be read off the stream even when the launch
+ended in a TIMEOUT or a kill, because the vendor may have accepted the turn before the kill and that
+handle is what stops the caller paying for it twice. Trailing and defaulted, so no existing caller
+changes.
+
 ## The launcher's two ceilings, and why the write is a task (2026-09-10)
 
 Found by the product audit of 2026-09-09 (finding 3), and both halves are the same mistake in two
