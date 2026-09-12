@@ -74,8 +74,20 @@ export type ConversationSource =
   /** Nothing this build can match a tab to: a migrated record, or a tab whose identity was ambiguous. */
   | { readonly kind: 'none' };
 
-export const sourceOfSession = (sessionId: string): ConversationSource => ({ kind: 'claude', sessionId });
-export const sourceOfFile = (uri: string): ConversationSource => ({ kind: 'file', uri });
+/**
+ * A source, built — and an EMPTY identity is not one.
+ *
+ * <p>`sourceOfSession('')` used to produce a `claude` source carrying nothing, and two of those
+ * compared equal: every tab whose session could not be resolved would have joined every other. That
+ * is precisely the rule below — nothing matches nothing — defeated by the value it exists to
+ * exclude. A caller with no identity gets `none`, which is the honest answer and the one that
+ * matches nothing. (codex, this story's code round.)</p>
+ */
+export const sourceOfSession = (sessionId: string): ConversationSource =>
+  sessionId.length === 0 ? { kind: 'none' } : { kind: 'claude', sessionId };
+
+export const sourceOfFile = (uri: string): ConversationSource =>
+  uri.length === 0 ? { kind: 'none' } : { kind: 'file', uri };
 
 /** The whole of one conversation, as it is written to disk. */
 export interface ConversationRecord {
@@ -108,6 +120,15 @@ export interface ConversationRecord {
 
 /** What a picker row is drawn from, and the whole of what the index holds in memory. */
 export interface ConversationMeta {
+  /**
+   * The version of the RECORD this was derived from, so the pair evolves together.
+   *
+   * <p>Without it, a future {@link CONVERSATION_VERSION} makes `recordFrom` reject an old record
+   * while `metaFrom` goes on accepting its metadata — and the picker then offers a row whose
+   * transcript this build has already discarded, which opens onto nothing. (codex, this story's code
+   * round.)</p>
+   */
+  readonly version: number;
   readonly id: string;
   readonly rev: number;
   readonly title: string;
@@ -120,18 +141,65 @@ export interface ConversationMeta {
   readonly closedAt?: number;
 }
 
-/** The file a record lives in, named for its id and for nothing else. */
-export const recordName = (id: string): string => `${id}.json`;
+/**
+ * What an id may be, and it is deliberately narrow: a filename component and nothing else.
+ *
+ * <p><b>An id becomes a PATH.</b> {@link recordName} is joined to the store's directory, so a record
+ * on disk carrying `../../somewhere` would have the store read and write outside itself — and what
+ * is read comes from a file, which is not a promise about its own contents. `randomUUID()` is what
+ * mints one today; this is what makes that true of the ones that come back. Found by two vendors'
+ * reviewers on this story's code round, from two roles.</p>
+ *
+ * <p>Letters, digits, dash, underscore and dot, with `.` and `..` excluded by the length-2 cases
+ * below — which covers a uuid, and refuses every separator, drive letter, wildcard and space.</p>
+ */
+const SAFE_ID = /^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/u;
 
-/** And the metadata beside it. */
-export const besideMeta = (id: string): string => `${id}.meta.json`;
+/** Whether this id may be turned into a filename. */
+export const isSafeId = (id: string): boolean =>
+  id.length > 0 && id.length <= 200 && SAFE_ID.test(id) && id !== '.' && id !== '..';
 
-/** Whether an id is one this module wrote, rather than something else in the directory. */
-export const isRecordName = (name: string): boolean => name.endsWith('.json') && !name.endsWith('.meta.json');
+/**
+ * The file a record lives in, named for its id and for nothing else.
+ *
+ * <p>It THROWS on an id that is not safe rather than building the path. The validator on the way in
+ * is the boundary and this is the last place before a path reaches the filesystem; a measure applied
+ * at one of its sites is the defect this family keeps writing down.</p>
+ */
+export function recordName(id: string): string {
+  if (!isSafeId(id)) {
+    throw new Error(`a conversation id that is not a safe filename: ${id}`);
+  }
+
+  return `${id}.json`;
+}
+
+/** And the metadata beside it, on the same terms. */
+export function besideMeta(id: string): string {
+  if (!isSafeId(id)) {
+    throw new Error(`a conversation id that is not a safe filename: ${id}`);
+  }
+
+  return `${id}.meta.json`;
+}
+
+/** Whether a filename is one this module wrote, rather than something else in the directory. */
+export function isRecordName(name: string): boolean {
+  if (!name.endsWith('.json') || name.endsWith('.meta.json')) {
+    return false;
+  }
+
+  return isSafeId(name.slice(0, -'.json'.length));
+}
 
 /** The id a metadata file belongs to, or empty when the name is not one of ours. */
 export function idOfMeta(name: string): string {
-  return name.endsWith('.meta.json') ? name.slice(0, -'.meta.json'.length) : '';
+  if (!name.endsWith('.meta.json')) {
+    return '';
+  }
+  const id = name.slice(0, -'.meta.json'.length);
+
+  return isSafeId(id) ? id : '';
 }
 
 const isText = (value: unknown): value is string => typeof value === 'string';
@@ -197,7 +265,7 @@ export function recordFrom(value: unknown): ConversationRecord | undefined {
   if (row === null || typeof row !== 'object' || row.version !== CONVERSATION_VERSION) {
     return undefined;
   }
-  if (!isRev(row.rev) || !isText(row.id) || row.id.length === 0) {
+  if (!isRev(row.rev) || !isText(row.id) || !isSafeId(row.id)) {
     return undefined;
   }
   if (!isText(row.title) || !isText(row.passage) || !isText(row.modelId)) {
@@ -247,10 +315,10 @@ export function recordFrom(value: unknown): ConversationRecord | undefined {
 /** One metadata file back, on the same terms. */
 export function metaFrom(value: unknown): ConversationMeta | undefined {
   const row = value as Partial<Record<keyof ConversationMeta, unknown>> | null;
-  if (row === null || typeof row !== 'object') {
+  if (row === null || typeof row !== 'object' || row.version !== CONVERSATION_VERSION) {
     return undefined;
   }
-  if (!isRev(row.rev) || !isText(row.id) || row.id.length === 0) {
+  if (!isRev(row.rev) || !isText(row.id) || !isSafeId(row.id)) {
     return undefined;
   }
   if (!isText(row.title) || !isText(row.modelId) || !isText(row.lastLine)) {
@@ -271,6 +339,7 @@ export function metaFrom(value: unknown): ConversationMeta | undefined {
   }
 
   return {
+    version: CONVERSATION_VERSION,
     id: row.id,
     rev: row.rev,
     title: row.title,
@@ -302,6 +371,7 @@ export function metaOf(record: ConversationRecord): ConversationMeta {
   const last = record.messages[record.messages.length - 1];
 
   return {
+    version: record.version,
     id: record.id,
     rev: record.rev,
     title: record.title,

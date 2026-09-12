@@ -90,3 +90,71 @@ test('a write that cannot happen throws rather than reporting success', async ()
   await assert.rejects(() => writeFileAtomically(asDirectory, 'x'));
   assert.throws(() => writeFileAtomicallySync(asDirectory, 'x'));
 });
+
+// ---------------------------------------------------------------------------------------------
+// What the code round of story A1 found. Each of these is a test before it was a fix.
+// ---------------------------------------------------------------------------------------------
+
+test('two writes to one destination from ONE process do not share a temporary', async () => {
+  // codex and gemini, independently: the beside-name carried the pid and nothing else, so two
+  // overlapping saves of the same conversation in one window wrote and renamed the same temporary.
+  // One call can truncate what the other is still writing, and the loser reports success over
+  // content it did not write.
+  const dir = tempDir();
+  const file = path.join(dir, 'record.json');
+
+  const first = writeFileAtomically(file, 'a'.repeat(120_000));
+  const second = writeFileAtomically(file, 'b'.repeat(120_000));
+  await Promise.all([first, second]);
+
+  const landed = fs.readFileSync(file, 'utf8');
+  assert.ok(
+    landed === 'a'.repeat(120_000) || landed === 'b'.repeat(120_000),
+    'the file is a mixture of two writes, which is the tear this module exists to prevent',
+  );
+  assert.deepEqual(fs.readdirSync(dir), ['record.json'], 'a temporary survived a concurrent write');
+});
+
+test('two beside-names from one process differ, so overlapping writes cannot collide', () => {
+  const path1 = besideName('/data/abc.json');
+  const path2 = besideName('/data/abc.json');
+
+  assert.notEqual(path1, path2, 'one process reuses a temporary name for two writes in flight');
+});
+
+test('a write that fails leaves no temporary behind, and still says it failed', async () => {
+  // Otherwise every failed save leaves a `.tmp` for the sweep to find, and a directory accumulates
+  // one per disk error. The throw is what the store turns into a refusal, so it must survive.
+  const dir = tempDir();
+  const file = path.join(dir, 'sub', 'record.json');
+  fs.mkdirSync(path.join(dir, 'sub'));
+  fs.mkdirSync(file); // the destination is a directory: the rename cannot happen
+
+  await assert.rejects(() => writeFileAtomically(file, 'x'));
+
+  const left = fs.readdirSync(path.join(dir, 'sub')).filter((name) => name.endsWith('.tmp'));
+  assert.deepEqual(left, [], `a failed write left ${left.join(', ')} behind`);
+});
+
+test('the synchronous form cleans up after itself too', () => {
+  const dir = tempDir();
+  const file = path.join(dir, 'record.json');
+  fs.mkdirSync(file);
+
+  assert.throws(() => writeFileAtomicallySync(file, 'x'));
+  assert.deepEqual(fs.readdirSync(dir).filter((name) => name.endsWith('.tmp')), []);
+});
+
+test('a rename over an existing file replaces it — measured here, not assumed', () => {
+  // gemini's round said a POSIX rename over an existing destination is not atomic on Windows and
+  // throws EPERM/EEXIST. Node's rename goes through MoveFileEx with MOVEFILE_REPLACE_EXISTING, so
+  // it replaces; this test is the measurement, and it runs on whatever this suite runs on. The
+  // orphan ledger has shipped on exactly this call for months.
+  const dir = tempDir();
+  const file = path.join(dir, 'record.json');
+
+  writeFileAtomicallySync(file, 'first');
+  writeFileAtomicallySync(file, 'second');
+
+  assert.equal(fs.readFileSync(file, 'utf8'), 'second', 'a rename over an existing file did not replace it');
+});
