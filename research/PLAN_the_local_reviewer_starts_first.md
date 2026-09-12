@@ -133,8 +133,15 @@ host here.
 - [x] Tests 1 and 2 written first and watched fail — `Expected order[0] to start with "local" ... but
       "bravo" differs near "bra"` and `Expected ...[0] to be "local" ... but "charlie" has a length of
       7` — then green; then red again (2 of 4) with the one expression reverted, and green restored.
-- [x] The whole C# suite green: **1303 tests, 1302 pass, 1 skipped, 0 fail**.
-- [ ] The diff through the `coai` code round — **pending**, run immediately after this commit.
+- [x] The whole C# suite green in **both configurations**, since this change touches ordering:
+      Debug **1304 tests, 1303 pass, 1 skipped, 0 fail**; Release the same. Running only the
+      configuration one happens to build is the overstatement `testing.md` names.
+- [x] The diff through the `coai` code round — `proceed`, 12 gating against a threshold of 5, all
+      12 reviewers answered; 5 findings accepted, 13 rejected with reasons. It found a real
+      defect: the transform reordered PROVIDERS, and the role expansion is vendor-major, so a
+      local vendor's four roles led as four rows and filled every machine slot. Moved to the
+      flattened rows, and the test now reads rows rather than distinct providers — which is
+      what had hidden it.
 - [x] `research/module_server.md` records the rule and the slot-holding trap; `CHANGELOG.md` under
       `## Unreleased`.
 - [x] This plan promoted to `research/` with `IMPLEMENTED` and the date.

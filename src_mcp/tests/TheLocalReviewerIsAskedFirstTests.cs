@@ -50,10 +50,17 @@ public sealed class TheLocalReviewerIsAskedFirstTests : IDisposable
     }
 
     /// <summary>A vendor list where `local*` names are local engines and the rest are hosted.</summary>
-    private static PanelService Service(params string[] vendors) =>
+    /// <remarks>
+    /// The data directory lives under this class's own <c>_root</c>, so the teardown sweeps it. A
+    /// fresh GUID directory under the system temp path — which is what this took first, copying a
+    /// sibling test — is a new store per service that nothing ever deletes, and the rule against
+    /// minting a per-run identity in a store runs share is about exactly that litter. Raised on the
+    /// code round.
+    /// </remarks>
+    private PanelService Service(params string[] vendors) =>
         new(new PanelSettings
         {
-            DataDir = Path.Combine(Path.GetTempPath(), $"coai-local-first-{Guid.NewGuid():N}"),
+            DataDir = Path.Combine(_root, $"data-{Guid.NewGuid():N}"),
             CodeWorkspace = "none",
             Providers = [.. vendors.Select(v => v.StartsWith("local", StringComparison.Ordinal)
                 ? new ProviderSettings(v) { Enabled = true, Runtime = "local", Model = "m", BaseUrl = "http://127.0.0.1:11434/v1" }
@@ -61,14 +68,29 @@ public sealed class TheLocalReviewerIsAskedFirstTests : IDisposable
         }, VaultKeys.None("no vault"), default,
         new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None);
 
-    /// <summary>The vendors in the order this round offers them, first appearance first.</summary>
-    private List<string> Order(PanelService service, int seed) =>
+    /// <summary>
+    /// Every reviewer ROW in the order this round submits them — one per (vendor, role).
+    /// </summary>
+    /// <remarks>
+    /// Rows, not distinct vendors. The first version of this helper deduplicated by provider, and
+    /// that is precisely what hid the defect the code round found: reordering the PROVIDER list puts
+    /// a local vendor's four roles at the head as four consecutive rows, which fills every machine
+    /// slot with reviewers that cannot run. Through <c>Distinct()</c> that reads as "local is first",
+    /// which is true and useless.
+    /// </remarks>
+    private List<string> Rows(PanelService service, int seed) =>
         [.. service.BuildWork(
                 [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole],
                 Worktree(), "ctx", round: 1, isPlanStage: false, seed: seed)
             .Reviewers
-            .Select(w => w.Invocation.Provider)
-            .Distinct(StringComparer.OrdinalIgnoreCase)];
+            .Select(w => w.Invocation.Provider)];
+
+    /// <summary>The vendors in the order this round first mentions them.</summary>
+    private List<string> Order(PanelService service, int seed) =>
+        [.. Rows(service, seed).Distinct(StringComparer.OrdinalIgnoreCase)];
+
+    /// <summary>How many machine slots a round opens with — the window that matters.</summary>
+    private const int MachineSlots = 3;
 
     /// <summary>Several seeds, so a pass cannot be the shuffle agreeing by accident.</summary>
     private static readonly int[] Seeds =
@@ -84,6 +106,29 @@ public sealed class TheLocalReviewerIsAskedFirstTests : IDisposable
         {
             Order(service, seed)[0].Should().Be("local",
                 $"the slowest reviewer starts the round (seed {seed})");
+        }
+    }
+
+    /// <summary>
+    /// EXACTLY one local row is in the slots a round opens with, however many roles it serves.
+    /// </summary>
+    /// <remarks>
+    /// The assertion the provider-level test could not make, and the defect it missed: with one local
+    /// vendor and four roles, reordering providers puts four local rows at the head — two of them
+    /// holding machine slots while blocked on a card only one can have.
+    /// </remarks>
+    [Fact]
+    public void OnlyOneLocalRow_IsInTheSlotsTheRoundOpensWith()
+    {
+        var service = Service("local", "alpha", "bravo");
+
+        foreach (var seed in Seeds)
+        {
+            var rows = Rows(service, seed);
+
+            rows[0].Should().StartWith("local", $"the slowest reviewer leads (seed {seed})");
+            rows.Take(MachineSlots).Count(v => v.StartsWith("local", StringComparison.Ordinal))
+                .Should().Be(1, $"a second local row would hold a slot it cannot use (seed {seed})");
         }
     }
 
