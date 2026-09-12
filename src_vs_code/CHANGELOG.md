@@ -34,6 +34,8 @@ panel and run in nothing. Both the page and the panel say so, naming the version
 
 **Each stage box now sits beside the price it pays for.** *reviews plans* is next to the in rate and *reviews code* next to the out rate, instead of the two sharing a line directly under the model — four lines below the vendor's own checkbox, where all three read as one group of three although the top one is a different kind of decision. A Team-server reviewer has no prices here (its CLI runs on the server, on the company's subscription), so its two boxes keep a line of their own.
 
+**The spending tab's total says what its time actually is.** It used to end in a bare duration, which — read under cards that each say *38 s total · 12 s average* — looks like it might be how long the window lasted. It is not: it is every reviewer run added together, so three reviewers running at once for ten minutes put thirty minutes into it. The line now says it is a sum and across how many vendors, gives the average per run, and names the vendor that spent the longest. With one vendor there is no "longest" to name, so it is left out.
+
 **The review roles come from one file now, and nothing you see has changed.** The five roles and
 their twenty-five prompts used to be written out twice — once in the server's source, once in the
 panel's — with a test that read one program's source with a regular expression to check it still
