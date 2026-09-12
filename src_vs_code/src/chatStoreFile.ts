@@ -116,7 +116,21 @@ import { claimConversation } from './chatStoreLock';
 export type SaveOutcome =
   | { readonly kind: 'ok'; readonly rev: number }
   | { readonly kind: 'partial'; readonly rev: number; readonly reason: string }
-  | { readonly kind: 'refused'; readonly diskRev: number }
+  | {
+    readonly kind: 'refused';
+    readonly diskRev: number;
+    /**
+     * What the record on disk SAYS, when it could be read — every message's text, in order.
+     *
+     * <p>A revision alone cannot tell a caller which refusal it has met. Two windows can both hold
+     * a conversation at baseline 0 — both restored it, neither has written — and the second, refused
+     * after the first saved, would take the number on faith and write over turns it has never seen.
+     * What separates our own earlier session from somebody else's is not the number, it is whether
+     * what is on disk is contained in what we hold. Absent when the record could not be read, and
+     * then nothing may be assumed about it. (gemini and local, A3's plan round.)</p>
+     */
+    readonly said?: readonly string[];
+  }
   | { readonly kind: 'incompatible'; readonly reason: string }
   | { readonly kind: 'failed'; readonly reason: string };
 
@@ -302,6 +316,8 @@ export class ChatStoreFile {
       return { kind: 'failed', reason: claim.reason };
     }
     if (claim.kind === 'held') {
+      // Held by another mutation, so nothing was probed and nothing may be said about the disk's
+      // words — `said` stays absent, and a caller that cannot compare does not adopt.
       return { kind: 'refused', diskRev: await this.revSeen(record.id, expectedRev) };
     }
     try {
@@ -322,7 +338,13 @@ export class ChatStoreFile {
     }
     const conflict = conflictOf(seen, base);
     if (conflict !== undefined) {
-      return { kind: 'refused', diskRev: conflict };
+      // The record was probed under the claim, so its words can be reported — which is what lets a
+      // window tell its own earlier session from a rival before it decides to adopt or to fork.
+      return {
+        kind: 'refused',
+        diskRev: conflict,
+        ...(seen.kind === 'record' ? { said: seen.record.messages.map((message) => message.text) } : {}),
+      };
     }
     try {
       await writeFileAtomically(this.recordPath(written.id), JSON.stringify(written));

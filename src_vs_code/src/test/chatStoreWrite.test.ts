@@ -74,13 +74,15 @@ test('the sentence a half-committed tab would show is about the LIST, never abou
 // Meeting its OWN record: the case that would otherwise fork every conversation a person reopens.
 // ---------------------------------------------------------------------------------------------
 
-test('a window that has never saved ADOPTS the record already under its own id', () => {
+test('a window that has never saved ADOPTS the record it can see is its own earlier self', () => {
   // The case a fork would get wrong every time. A conversation restored into a tab has an id it has
-  // held since it was minted, and the record on disk under that id is its own previous session — not
-  // a rival. Forking there would mint a second copy of a conversation on every reload, for ever.
-  // Having never written, this window has nothing to lose by taking the disk's number and saving
-  // again against it.
-  const next = nextAfterSave({ kind: 'refused', diskRev: 5 }, 0);
+  // held since it was minted, and the record on disk under that id is usually the session it was
+  // restored FROM — not a rival. Forking there would mint a second copy on every reload, for ever.
+  //
+  // This test asked for adoption on the REVISION alone when it was first written, which A3's plan
+  // round refused: two windows can both be at baseline 0, and the second would then overwrite the
+  // first. What it asserts now is the corrected rule — the disk's words must be contained in ours.
+  const next = nextAfterSave({ kind: 'refused', diskRev: 5, said: ['why'] }, 0, ['why', 'because']);
 
   assert.deepEqual(next, { kind: 'adopt', rev: 5 });
 });
@@ -89,13 +91,61 @@ test('adoption is offered ONCE, and a window that has saved forks instead', () =
   // After this window's own write has landed, a disk that has moved on is somebody else — there is
   // no innocent explanation left. The baseline is what tells the two apart, and it is the only thing
   // that does.
-  assert.equal(nextAfterSave({ kind: 'refused', diskRev: 5 }, 1).kind, 'fork');
-  assert.equal(nextAfterSave({ kind: 'refused', diskRev: 9 }, 8).kind, 'fork');
+  assert.equal(nextAfterSave({ kind: 'refused', diskRev: 5, said: ['why'] }, 1, ['why', 'because']).kind, 'fork');
+  assert.equal(nextAfterSave({ kind: 'refused', diskRev: 9, said: [] }, 8, ['why']).kind, 'fork');
 });
 
 test('a record this build cannot read is never adopted, whatever the baseline', () => {
   // Adoption means "that is my own record, at a number I did not know". A torn one, or one a newer
   // build wrote, is not readable and so is not claimable: taking its revision would be volunteering
   // to overwrite it on the next turn, which is the downgrade the store refuses.
-  assert.equal(nextAfterSave({ kind: 'incompatible', reason: 'newer version' }, 0).kind, 'fork');
+  assert.equal(nextAfterSave({ kind: 'incompatible', reason: 'newer version' }, 0, ['why']).kind, 'fork');
+});
+
+// ---------------------------------------------------------------------------------------------
+// What A3's plan round found. Adoption cannot be decided by a number alone.
+// ---------------------------------------------------------------------------------------------
+
+test('a window adopts only a record its own transcript CONTAINS — never one that has moved on', () => {
+  // gemini and local, independently, and it is the hole that would have defeated the whole swap.
+  // TWO windows can both be at baseline 0 for one conversation: both restored it, neither has
+  // written. A saves and the disk goes to revision 1; B, still at 0, is refused — and adoption by
+  // number alone would have B take revision 1 and write over A's turns, which is exactly what the
+  // revision exists to prevent.
+  //
+  // What tells the innocent case from that one is not the number, it is the WORDS: our own previous
+  // session is a prefix of what we hold, because we restored it and added to it. A disk that has
+  // turns we have never seen is somebody else, whatever its revision says.
+  const ours = ['why', 'because', 'and'];
+
+  assert.deepEqual(
+    nextAfterSave({ kind: 'refused', diskRev: 5, said: ['why', 'because'] }, 0, ours),
+    { kind: 'adopt', rev: 5 },
+    'a window would not reclaim the record it restored from, and forks on every reopen',
+  );
+  assert.equal(
+    nextAfterSave({ kind: 'refused', diskRev: 5, said: ['why', 'a different answer'] }, 0, ours).kind,
+    'fork',
+    'a window overwrote turns it had never seen, which is the lost update the swap exists to stop',
+  );
+  assert.equal(
+    nextAfterSave({ kind: 'refused', diskRev: 5, said: ['why', 'because', 'and', 'more'] }, 0, ours).kind,
+    'fork',
+    'a disk AHEAD of this window was adopted, so the turns it holds beyond ours would be replaced',
+  );
+});
+
+test('an identical transcript is adopted: it is our own record, unchanged', () => {
+  const ours = ['why', 'because'];
+
+  assert.deepEqual(
+    nextAfterSave({ kind: 'refused', diskRev: 3, said: [...ours] }, 0, ours),
+    { kind: 'adopt', rev: 3 },
+  );
+});
+
+test('a refusal that says nothing about what is on disk is never adopted', () => {
+  // The store reports what it read; if it could not, there is nothing to compare against and the
+  // safe answer is the one that loses nobody's words.
+  assert.equal(nextAfterSave({ kind: 'refused', diskRev: 5 }, 0, ['why']).kind, 'fork');
 });

@@ -260,6 +260,25 @@ interface Thread extends ChatMemory {
    * one.</p>
    */
   rev: number;
+  /**
+   * When this conversation began, as opposed to when it was last written.
+   *
+   * <p>Stamped once, where the thread is built. `recordOf` used to put the current instant into BOTH
+   * fields on every save, so a conversation started in January and answered in March was recorded as
+   * having begun in March — and the picker story B2 draws "started" from exactly that field. All
+   * three vendors' reviewers found it on A3's plan round.</p>
+   */
+  readonly createdAt: number;
+  /**
+   * This conversation's store writes, one after another.
+   *
+   * <p>The same shape as `turns` above and for a sharper reason. A save carries the revision this
+   * window last had accepted, so two writes issued before the first answers BOTH carry the old one:
+   * the second is refused, and a refusal is read as another window — a tab would fork itself, and
+   * tell the person it had become a copy of a conversation nobody else was in. Two reviewers found
+   * it independently. `show` runs on every push, and pushes are not rare.</p>
+   */
+  writes: Promise<unknown>;
   /** The tab's heading, kept here because what is written down has to name the conversation. */
   readonly title: string;
   /** What was last written to the store, so a push that changed nothing writes nothing. */
@@ -579,9 +598,19 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
   // filling for a version. Detached on purpose — nobody waits for a disk to see their own words —
   // and therefore ending in a catch of its own, which `reliability.md` requires of every edge
   // nothing is above.
-  void keepOnDisk(entry, thread).catch((reason: unknown) => {
+  // CHAINED, not fired. Two writes issued before the first answers would both carry the revision
+  // this window last had accepted, so the second would be refused — and a refusal reads as another
+  // window, so a tab would fork itself and say it had become a copy of a conversation nobody else
+  // was in. The chain also recovers from a rejection instead of staying poisoned, which is the
+  // bargain `chatTabs.ts` already makes for the memento's queue.
+  const step = (): Promise<void> => keepOnDisk(entry, thread).catch((reason: unknown) => {
+    // The outer edge of a detached call, and therefore a catch that SAYS something: the store
+    // answers in outcomes and never rejects, so anything arriving here is a defect rather than a
+    // disk, and the page is told as well as the console.
     console.error('ConnectOtherAIs: a conversation could not be written to the store', reason);
+    pushChatNote(entry, thread.saveId, 'This conversation could not be written to disk just now.');
   });
+  thread.writes = thread.writes.then(step, step);
 }
 
 /**
@@ -604,7 +633,10 @@ function recordOf(thread: Thread, at = Date.now()): ConversationRecord {
     carryFrom: thread.carryFrom,
     source: { kind: 'none' },
     workspace: whereToLook()[0] ?? '',
-    createdAt: at,
+    // WHEN IT BEGAN, not when it was last written. The two were the same instant here until A3's
+    // plan round; a conversation answered three months after it started was recorded as having
+    // started that day, and the picker draws its "started" from this field.
+    createdAt: thread.createdAt,
     updatedAt: at,
   };
 }
@@ -621,12 +653,13 @@ async function keepOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
   if (store === undefined) {
     return;
   }
-  const next = nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev);
+  const ours = thread.messages.map((message) => message.text);
+  const next = nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev, ours);
   if (next.kind === 'adopt') {
     // Our own record, from a session before this window ever wrote. Take the number the disk reports
     // and save once more against it; a SECOND refusal has no innocent reading left and forks.
     thread.rev = next.rev;
-    await settle(entry, thread, nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev));
+    await settle(entry, thread, nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev, ours));
 
     return;
   }
@@ -671,6 +704,24 @@ async function forkOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
       thread.rev = next.rev;
     }
   }
+  // AND UNDER THE NEW ID IN THE MEMENTO, which is still the source of truth. Without this the fork
+  // exists only on disk and in memory: the memento still holds this conversation under the id it was
+  // refused at, so a reload would restore the tab as the original it no longer owns — and the copy,
+  // which has the person's words in it, would be the one nothing could find. (codex, A3's plan
+  // round.) The dedupe marks are cleared first, because the record being written is the same
+  // transcript under a different name and the guard would otherwise skip it.
+  delete thread.savedMessages;
+  delete thread.savedModelId;
+  delete thread.savedCarryFrom;
+  memory?.remember({
+    id: thread.saveId,
+    title: thread.title,
+    passage: thread.passage,
+    modelId: thread.modelId,
+    messages: thread.messages,
+    fromSession: thread.fromSession,
+    carryFrom: thread.carryFrom,
+  });
   // The new id goes with the sentence: the page hands it back to the serializer after a reload, so a
   // tab that forked and was then reloaded must come back as the copy rather than as the original.
   pushChatNote(entry, thread.saveId, CONTINUED_ELSEWHERE);
@@ -1739,6 +1790,8 @@ function newConversation(
     // Nothing of this conversation is on disk yet, and 0 is what says so to the store's swap — the
     // only baseline allowed to create a record rather than replace one.
     rev: 0,
+    createdAt: Date.now(),
+    writes: Promise.resolve(),
     title: state.title,
     reopen: false,
   });
@@ -2289,6 +2342,11 @@ export function restoreConversation(
     // than forking, which is precisely the case that rule exists for. Story A4 retires the memento,
     // and this becomes the record's own revision, read back with it.
     rev: 0,
+    // A restored conversation began before this window did. The memento does not record when, so the
+    // best available answer is when it was last written down, which `savedAt` is — story A4 reads a
+    // record that carries the real one and hands it over instead.
+    createdAt: saved.savedAt,
+    writes: Promise.resolve(),
     title: saved.title,
     reopen: true,
   });

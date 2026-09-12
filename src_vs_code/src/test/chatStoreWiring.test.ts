@@ -24,22 +24,27 @@ test('a conversation is written to the store, and to the memento it has not repl
   const command = source('chatCommand.ts');
 
   assert.match(command, /memory\?\.remember\(/u, 'the memento is no longer written, a version too early');
-  assert.match(command, /void keepOnDisk\(entry, thread\)/u, 'nothing writes a conversation to the store');
+  assert.match(command, /keepOnDisk\(entry, thread\)/u, 'nothing writes a conversation to the store');
   assert.ok(
-    command.indexOf('memory?.remember(') < command.indexOf('void keepOnDisk('),
+    command.indexOf('memory?.remember(') < command.indexOf('keepOnDisk(entry, thread)'),
     'the store is written before the memento, so a crash between them loses the authoritative copy',
   );
 });
 
-test('the store write is detached, and a detached edge ends in a catch that says something', () => {
-  // `reliability.md`: a fire-and-forget whose fault nobody observes is a defect that reports nothing
-  // while the process looks healthy. Nobody waits for a disk to see their own words, so the write is
-  // detached — which makes the catch mandatory rather than optional.
+test('the store writes of ONE conversation are chained, and the chain survives a rejection', () => {
+  // Two reviewers, independently, on A3's plan round: a save carries the revision this window last
+  // had accepted, so two writes issued before the first answers both carry the old one — the second
+  // is refused, a refusal reads as another window, and the tab forks ITSELF and says it has become a
+  // copy of a conversation nobody else was in. `show` runs on every push, and pushes are not rare.
   const command = source('chatCommand.ts');
-  const detached = command.slice(command.indexOf('void keepOnDisk('));
+  const chained = command.slice(command.indexOf('const step = ('));
 
-  assert.match(detached.slice(0, 400), /\.catch\(/u, 'a detached store write has no owner for its failure');
-  assert.match(detached.slice(0, 400), /console\.error/u, 'a failed store write says nothing anywhere');
+  assert.match(chained.slice(0, 900), /thread\.writes = thread\.writes\.then\(step, step\)/u,
+    'the store writes of one conversation race each other, so a tab can fork itself');
+  assert.match(chained.slice(0, 900), /\.catch\(/u, 'a detached store write has no owner for its failure');
+  assert.match(chained.slice(0, 900), /console\.error/u, 'a failed store write says nothing anywhere');
+  assert.match(chained.slice(0, 900), /pushChatNote\(/u,
+    'a store write that rejected told the console and left the person looking at a tab that said nothing');
 });
 
 test('the extension gives the chat a store to write to, under the coai data directory', () => {
@@ -57,11 +62,16 @@ test('a conversation another window took over is kept under a NEW id, never over
   // The whole point of the swap. The transcript is on the thread, so a fork loses nothing: what it
   // costs is one id, and what it buys is that neither window's turns are destroyed by the other's.
   const command = source('chatCommand.ts');
-  const fork = command.slice(command.indexOf('async function forkOnDisk'));
+  const fork = command.slice(command.indexOf('async function forkOnDisk'), command.indexOf('async function forkOnDisk') + 2_600);
 
-  assert.match(fork.slice(0, 900), /thread\.saveId = randomUUID\(\)/u, 'a fork keeps the id it was refused under');
-  assert.match(fork.slice(0, 900), /thread\.rev = 0/u, 'a forked conversation would swap against a revision that is not its own');
-  assert.match(fork.slice(0, 900), /pushChatNote\(entry, thread\.saveId/u, 'the tab is not told it has become a copy');
+  assert.match(fork, /thread\.saveId = randomUUID\(\)/u, 'a fork keeps the id it was refused under');
+  assert.match(fork, /thread\.rev = 0/u, 'a forked conversation would swap against a revision that is not its own');
+  assert.match(fork, /pushChatNote\(entry, thread\.saveId/u, 'the tab is not told it has become a copy');
+  // And the memento, which is still the source of truth: without it the fork lives only on disk and
+  // in memory, so a reload restores the tab as the original it no longer owns and the copy holding
+  // the person's words is the one nothing can find. (codex, A3's plan round.)
+  assert.match(fork, /memory\?\.remember\(/u,
+    'a forked conversation is not written to the store of record, so a reload loses it');
 });
 
 test('the page is told through a message of its OWN, never through the state channel', () => {
