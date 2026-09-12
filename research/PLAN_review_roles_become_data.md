@@ -380,7 +380,8 @@ owns, held by both suites — and `architecture.md` gains a paragraph saying so.
 ## What this plan deliberately does not do
 
 - **No CRUD tab, no `coai.roles` setting, no writer for `<dataDir>/prompts/<id>.md`** — plan 2,
-  *PLAN_review_roles_crud_tab*. Until it lands, a custom role is a hand-written `COAI_ROLES` in the
+  [PLAN_review_roles_crud_tab.md](PLAN_review_roles_crud_tab.md), **shipped 2026-09-12**. Until it
+  landed, a custom role was a hand-written `COAI_ROLES` in the
   server's `settings.json` plus a hand-placed `.md`, which is how `COAI_VENDORS` was driven before
   the panel knew vendors. Plan 2 also owns `CUSTOM_ROLES_SINCE` (= the version this plan ships as)
   and the skew banner, because it is plan 2 that starts *writing* the key.

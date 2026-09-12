@@ -1,15 +1,24 @@
 # PLAN — the roles page, where a person writes a review role (2 of 5)
 
-> Status: **plan only, nothing implemented yet, 2026-09-12.** Scope: `src_vs_code` almost entirely —
+> Status: **IMPLEMENTED, 2026-09-12.** Shipped as PR #216. Scope: `src_vs_code` almost entirely —
 > a new page module and its host, `settingsShape.ts` (`coai.roles` and `COAI_ROLES`), `panelView.ts`
 > (the button, the plan-stage switches, the custom roles in *Prompts per round*, the skew banner),
 > `prompts.ts` (`CUSTOM_ROLES_SINCE`), `package.json`, the help, and the tests for all of it. One
 > file on the server side: nothing, if the design below holds.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [module_server.md](../research/module_server.md),
-> [architecture.md](../research/architecture.md);
-> plan 1 of 5, now shipped: [PLAN_review_roles_become_data.md](../research/PLAN_review_roles_become_data.md).
+> Related docs: [module_extension.md](module_extension.md),
+> [module_server.md](module_server.md),
+> [architecture.md](architecture.md);
+> plan 1 of 5, now shipped: [PLAN_review_roles_become_data.md](PLAN_review_roles_become_data.md).
+>
+> **Deviations from the plan, all recorded below in their own sections.** One was deliberate and
+> known before the build — the plan-stage switches are on the roles page rather than in the sidebar.
+> The rest came out of the gate's two code rounds: `rolesEdit.ts` is a module the plan did not
+> foresee, extracted because the plan's own *Constraints* said the host has no unit test anywhere and
+> that turned out not to be good enough; `enabledCodeRoles` became the single count of which code
+> roles run, where the plan had assumed there was one already; and `composed()` had to be corrected
+> twice — once to stop overriding what the server never reads, once to stop returning two shapes.
+> Two items were declined as decisions rather than defects and are in *The open tail*.
 
 ## The symptom
 
@@ -83,7 +92,7 @@ The page enforces this by rendering the id read-only and the shipped prompts wit
 data — `Has`, `Text` and `FileToWrite` all name it, and `Override`/`RestoreDefault` on the C# side
 already write it and are tested. The extension writes the same path itself, as it already writes the
 Team-server token file into the same directory: this is the *one interface neither container owns*
-pattern that [architecture.md](../research/architecture.md) records twice. Keeping the body OUT of the
+pattern that [architecture.md](architecture.md) records twice. Keeping the body OUT of the
 setting matters for a reason a person feels: twenty-five prompts of prose in `settings.json` would be
 copied into every `mcpServers` block and every settings mirror, and VS Code's settings UI would show
 a person a wall of JSON with their prompts inside it.
