@@ -401,7 +401,9 @@ export function pushChatState(entry: ChatEntry, state: ChatPushState): boolean {
     type: 'state',
     // MARKED like the composer below it: a question that has been sent is the same words, and they
     // stop being readable if the colours go when it moves.
-    messagesHtml: chatMessagesHtml(state.messages, state.marks, state.carryFrom),
+    // RUNNING too. The full-page render was given it and this one was not, so every push during a
+    // turn redrew the button the full render had just withheld. (CodeRabbit, PR #208.)
+    messagesHtml: chatMessagesHtml(state.messages, state.marks, state.carryFrom, state.running),
     running: state.running,
     capped: state.capped,
     thinkingHtml: chatStatusHtml(state.running, state.queued, state.turn),
