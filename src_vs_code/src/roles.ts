@@ -53,6 +53,14 @@ export const MAX_ACTIVE_PER_STAGE = 5;
  * settings file and never from the block they paste into an MCP client. Working in one of the two
  * places a setting can come from is worse than working in neither, because only one of those is
  * noticed.</p>
+ *
+ * <p><b>This is a POLICY cap, not a measured platform number, and the difference matters.</b>
+ * `common/platform-limits.md` requires a kernel limit to come from a probe that was run — there is no
+ * single such number here: POSIX sets no maximum on a variable NAME, Windows allows far more than
+ * this, and the shells and MCP clients in between disagree. So this is a bound chosen to be
+ * comfortably under all of them and still readable in a settings file, held in one constant that
+ * every check and every message derives from. If a platform is ever found that refuses something
+ * shorter, THAT number is probed and replaces this one.</p>
  */
 export const MAX_ROLE_ID_LENGTH = 48;
 
