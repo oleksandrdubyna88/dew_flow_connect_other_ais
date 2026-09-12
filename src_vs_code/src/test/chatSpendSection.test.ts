@@ -79,25 +79,52 @@ test('each ledger carries its own total, and they are not one number', () => {
   assert.match(html, /All chats: [^<]*asked 2 · opened 3/, 'the two counts are not in the chat total');
 });
 
-test('a chat row names the vendor, the model, both rates and what it has cost', () => {
+test('a chat card is the shape of a reviewer card, with what a reviewer has no equivalent of below', () => {
+  // Asked for in those words after the first version shipped as a table: *"выглядеть должно так же
+  // как ревьюверы, с полосочкой"*. One question about two ledgers, so one layout.
   const html = page();
+  const card = /<div class="spend">[\s\S]*?<\/div>\s*<\/div>/.exec(html.slice(html.indexOf('>Chat<')))?.[0] ?? '';
 
-  assert.match(html, /<td class="name"[^>]*>antigravity<\/td>/, 'the chat row does not name the vendor');
-  assert.match(html, /<td>gemini-3\.8-flash<\/td>/, 'the chat row does not name the model that answered');
+  assert.notStrictEqual(card, '', 'the chat section draws no card at all');
+  assert.match(card, /<span class="name"[^>]*>antigravity<\/span>/, 'the card does not name the vendor');
+  assert.match(card, /<span class="model">gemini-3\.8-flash<\/span>/, 'the card does not name the model');
+  assert.match(card, /<div class="bar"><span style="width:100%">/, 'the card has no bar, which is what was asked for');
+  assert.match(card, /<div class="figures">2.0M in · 1.0M out · 1 turn\(s\)<\/div>/, 'the figures line is not the reviewer shape');
   // 2M in at $1 and 1M out at $10 is $12, and nobody billed it, so it is marked as worked out.
-  assert.match(html, /~\$12/, 'the row does not price the turn from the rate in force');
-  assert.match(html, /\$1<\/td>/, 'the input rate is not shown');
-  assert.match(html, /\$10<\/td>/, 'the output rate is not shown');
+  assert.match(card, /<span class="cost">~\$12.00<\/span>/, 'the card does not price the turn from the rate in force');
+  assert.match(card, /\$1 in · \$10 out per million · ~\$12.00 all time/, 'the rates and the all-time total are not below');
+  assert.match(card, /asked 2 · opened 3/, 'the two counts are not on their own line below');
 });
 
-test('the counts are in the row as well as in the total', () => {
-  const html = page();
-  const row = /<td class="name"[^>]*>antigravity<\/td>[\s\S]*?<\/tr>/.exec(html)?.[0] ?? '';
+test('a model nobody prices says so, rather than drawing three dashes', () => {
+  const html = usageTabHtml([REVIEW], 'day', [], {}, [], 'me', { turns: [TURN], doors: DOORS });
 
-  assert.notStrictEqual(row, '', 'there is no chat row to read');
-  // take + add is two; all three doors is three. The last two cells of the row.
-  assert.match(row, /<td class="n">2<\/td>\s*<td class="n">3<\/td>\s*<\/tr>/,
-    'Asked and Opened are not the last two cells of the row');
+  assert.match(html, /no rate set for this model/, 'a card with no rate said nothing a reader can act on');
+});
+
+test('the vendor named is the VENDOR, not the preset the chat recorded', () => {
+  // A chat records the id of the model preset in force, which is a generated string nobody
+  // recognises - and the section above this one is per vendor, so the page named the same vendors
+  // two different ways until this resolved one to the other.
+  const html = usageTabHtml([REVIEW], 'day', [], PRICES, [], 'me', {
+    turns: [{ ...TURN, provider: 'preset-mtwxbymp-4' }],
+    doors: [],
+    vendorOf: (provider) => (provider === 'preset-mtwxbymp-4' ? 'antigravity' : provider),
+  });
+
+  assert.match(html, /<span class="name"[^>]*>antigravity<\/span>/, 'the preset id was not resolved to its vendor');
+  assert.doesNotMatch(html, /preset-mtwxbymp-4/, 'the generated preset id reached the page');
+});
+
+test('one line under BOTH ledgers adds them up', () => {
+  // "What has this cost me" is one question whichever half of the product spent it - and the bill
+  // and the estimate stay apart across the join, as they do inside each half.
+  const html = page();
+
+  assert.match(html, /<div class="hint total everything">Reviewers and chat together: 4\.2M tokens · ~\$12.00<\/div>/,
+    'the two ledgers are not added up under a rule of their own');
+  assert.strictEqual(html.match(/<hr class="ledgers">/g)?.length, 2,
+    'there is no second rule, so the joint total reads as part of the chat section');
 });
 
 test('a tab with no conversations still shows the chat section, and says why it is empty', () => {

@@ -46,6 +46,24 @@ export interface PromptPreset {
  * *Team servers* section — which is its own configuration and has nothing to do with reviewers
  * either.</p>
  */
+/**
+ * Which VENDOR a recorded chat provider id belongs to.
+ *
+ * <p>A chat records the id of the model PRESET in force, because a preset is what a conversation is
+ * switched between — and a preset id is a generated string (`preset-mtwxbymp-4`) that means nothing
+ * to a person reading a spending page beside a list of vendors. The preset knows its runtime, which
+ * IS the vendor; this is the lookup, built once so a ledger of a hundred thousand records does not
+ * search a list per line.</p>
+ *
+ * <p>An id no preset claims is returned UNCHANGED. A preset can be deleted, and the honest answer
+ * for a row recorded under one that is gone is the id that was written down.</p>
+ */
+export function vendorOfPreset(presets: readonly ModelPreset[]): (provider: string) => string {
+  const byId = new Map<string, string>(presets.map((one) => [one.id, one.runtime]));
+
+  return (provider) => byId.get(provider) ?? provider;
+}
+
 export interface ModelPreset {
   readonly id: string;
   readonly name: string;

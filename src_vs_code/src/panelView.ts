@@ -5,7 +5,7 @@ import {
   usageScopeControl,
 } from './teamServerView';
 import { ChatDoorRecord } from './chatDoors';
-import { ChatPriceOf, ChatSpendRow, chatSpend } from './chatSpendRows';
+import { ChatPriceOf, ChatSpendRow, ChatVendorOf, chatSpend } from './chatSpendRows';
 import { ChatTurnRecord } from './chatUsage';
 import { escapeHtml } from './escapeHtml';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
@@ -1252,6 +1252,18 @@ function total(billed: number | null, guessed: number | null): string {
   return billed === null ? estimated(guessed) : `${money(billed)} + ${estimated(guessed)}`;
 }
 
+/** One ledger's half of the page: what it draws, and what it spent — so the page can add them up. */
+interface Half {
+  readonly html: string;
+  readonly totals: {
+    readonly tokens: number;
+    readonly cost: number | null;
+    readonly guess: number | null;
+    /** Reviewers only: a chat card carries no duration, and the joint line shows none. */
+    readonly seconds: number;
+  };
+}
+
 /**
  * The spending region on its own — what the provider patches when the window changes.
  *
@@ -1266,7 +1278,7 @@ function reviewersRegion(
   prices: Readonly<Record<string, ModelPrice>>,
   teamServers: readonly TeamServerState[] = [],
   usageScope: 'me' | 'company' = 'me',
-): string {
+): Half {
   // What each Team server says was spent ON IT, under this machine's own totals. The server keeps
   // that ledger — a review that ran there left no line in this machine's — so the two are shown
   // beside each other rather than summed into a number neither of them holds.
@@ -1279,8 +1291,11 @@ function reviewersRegion(
   const colour = vendorPalette(vendors.map((v) => v.id));
   const rows = totalsByVendor(within(usage, window, new Date()), vendors, (modelId) => prices[modelId]);
   if (rows.length === 0) {
-    return `<div class="empty">Nothing recorded on this machine in this window yet.</div>
-${team}${scope}`;
+    return {
+      html: `<div class="empty">Nothing recorded on this machine in this window yet.</div>
+${team}${scope}`,
+      totals: { tokens: 0, cost: null, guess: null, seconds: 0 },
+    };
   }
 
   const busiest = Math.max(...rows.map((r) => r.tokensIn + r.tokensOut));
@@ -1312,14 +1327,25 @@ ${team}${scope}`;
     { tokens: 0, cost: null as number | null, guess: null as number | null, seconds: 0 },
   );
 
-  return `${cards}
-<div class="hint total">All vendors: ${shortNumber(all.tokens)} tokens · ${total(all.cost, all.guess)} · ${shortDuration(all.seconds)}</div>`;
+  return {
+    html: `${cards}
+<div class="hint total">All vendors: ${shortNumber(all.tokens)} tokens · ${total(all.cost, all.guess)} · ${shortDuration(all.seconds)}</div>`,
+    totals: all,
+  };
 }
 
 /** What the chat ledgers hand the page: every turn and every invocation, unfiltered. */
 export interface ChatLedgers {
   readonly turns: readonly ChatTurnRecord[];
   readonly doors: readonly ChatDoorRecord[];
+  /**
+   * A recorded id, turned into the vendor whose row it belongs in.
+   *
+   * <p>The ledgers hold the id of the model PRESET in force, because a preset is what a chat is
+   * switched between - and a preset id is a generated string nobody recognises. Resolved here rather
+   * than at write time, so that every line already on disk is named correctly too.</p>
+   */
+  readonly vendorOf?: ChatVendorOf;
 }
 
 /** A number, or a dash — never a zero standing in for "nobody knows". */
@@ -1328,79 +1354,89 @@ function orDash(value: number | null, write: (one: number) => string): string {
 }
 
 /**
- * One row of the chat table: who answered, on what, for how much, and how often it was reached for.
+ * One chat card — deliberately the shape of a reviewer's card above it.
  *
- * <p>A pair with no vendor at all is a real state — a window where nothing is configured, reached
- * for anyway — and it is NAMED rather than dropped or folded into somebody else's row.</p>
+ * <p>It was a table first, on the grounds that a chat row carries a model and two rates that a card
+ * has no room for. The operator looked at the two halves and said the second should read like the
+ * first: *"выглядеть должно так же как ревьюверы, с полосочкой"*. They are one question about two
+ * ledgers, and two layouts make them look like two questions.</p>
+ *
+ * <p>So the card is the reviewer's card, and what a reviewer has no equivalent of goes UNDER it in
+ * the same quiet line the durations use there — the two rates, what this pair has cost altogether,
+ * and how often it was reached for.</p>
+ *
+ * <p>A pair with no vendor at all is a real state — a window where nothing was configured, reached
+ * for anyway — and it is NAMED rather than dropped or folded into somebody else's card.</p>
  */
-function chatSpendRow(row: ChatSpendRow, colour: (provider: string) => string): string {
+function chatSpendCard(row: ChatSpendRow, busiest: number, colour: (provider: string) => string): string {
   const named = row.provider.length > 0;
   const rate = (per: number | null): string => orDash(per, (one) => `$${one}`);
+  const model = row.model.length > 0 ? row.model : '—';
+  // A line of three dashes says nothing anybody can act on. Nothing prices this model is a FACT, and
+  // it is the one that explains why the money beside it is empty, so it is said in words.
+  const rates = row.inPerMillion === null && row.outPerMillion === null
+    ? 'no rate set for this model'
+    : `${rate(row.inPerMillion)} in · ${rate(row.outPerMillion)} out per million`;
+  const ever = total(row.allTimeUsd, row.allTimeEstimatedUsd);
+  const allTime = ever === '—' ? '' : ` · ${ever} all time`;
 
-  return `<tr>
-  <td class="name" style="color:${named ? colour(row.provider) : 'inherit'}">${escapeHtml(named ? row.provider : 'nothing chosen')}</td>
-  <td>${escapeHtml(row.model.length > 0 ? row.model : '—')}</td>
-  <td class="n">${shortNumber(row.tokensIn)}</td>
-  <td class="n">${shortNumber(row.tokensOut)}</td>
-  <td class="n">${rate(row.inPerMillion)}</td>
-  <td class="n">${rate(row.outPerMillion)}</td>
-  <td class="n">${total(row.costUsd, row.estimatedUsd)}</td>
-  <td class="n">${total(row.allTimeUsd, row.allTimeEstimatedUsd)}</td>
-  <td class="n">${row.asked}</td>
-  <td class="n">${row.opened}</td>
-</tr>`;
+  return `<div class="spend">
+  <div class="head"><span class="name" style="color:${named ? colour(row.provider) : 'inherit'}">${escapeHtml(named ? row.provider : 'nothing chosen')}</span><span class="model">${escapeHtml(model)}</span><span class="cost">${total(row.costUsd, row.estimatedUsd)}</span></div>
+  <div class="bar"><span style="width:${barWidth(row.tokensIn + row.tokensOut, busiest)}%"></span></div>
+  <div class="figures">${shortNumber(row.tokensIn)} in · ${shortNumber(row.tokensOut)} out · ${row.turns} turn(s)</div>
+  <div class="hint">${rates}${allTime}</div>
+  <div class="hint">asked ${row.asked} · opened ${row.opened}</div>
+</div>`;
 }
 
-/**
- * What the CHAT has cost — the second ledger on this page, and the one it never counted.
- *
- * <p>A table rather than the cards above it, because a chat row carries a model and two rates that
- * a card has no room for, and because the question this section answers is a comparison between
- * rows rather than a bar next to each one.</p>
- */
+/** What the CHAT has cost — the second ledger on this page, and the one it never counted. */
 function chatRegion(
   chat: ChatLedgers,
   window: Window,
   prices: Readonly<Record<string, ModelPrice>>,
   colour: (provider: string) => string,
-): string {
-  // ONE pass over each ledger, for the rows and the total together - the second call used to redo
+): Half {
+  // ONE pass over each ledger, for the cards and the total together - the second call used to redo
   // the whole aggregation. (Four reviewers of the code round, independently.)
   const priceOf: ChatPriceOf = (model) => prices[model];
-  const { rows, totals: sums } = chatSpend(chat.turns, chat.doors, window, new Date(), priceOf);
+  const { rows, totals: sums } = chatSpend(chat.turns, chat.doors, window, new Date(), priceOf, chat.vendorOf);
+  const totals = { tokens: sums.tokens, cost: sums.costUsd, guess: sums.estimatedUsd, seconds: 0 };
   if (rows.length === 0) {
-    return '<div class="empty">No conversations in this window. Ask a second model about a passage and'
-      + ' what it costs appears here.</div>';
+    return {
+      html: '<div class="empty">No conversations in this window. Ask a second model about a passage and'
+        + ' what it costs appears here.</div>',
+      totals,
+    };
   }
-  // The counts come from the LEDGER rather than from adding the rows up, so they go on agreeing with
-  // it whatever the row filter does.
+  const busiest = Math.max(...rows.map((row) => row.tokensIn + row.tokensOut));
+  // The counts come from the LEDGER rather than from adding the cards up, so they go on agreeing
+  // with it whatever the row filter does.
   const unpriced = sums.unpriced === 0 ? '' : ` · ${sums.unpriced} turn(s) nobody priced`;
 
-  return `<table class="chatSpend">
-<thead><tr>
-  <th>Vendor</th><th>Model</th><th class="n">Tokens in</th><th class="n">Tokens out</th>
-  <th class="n" title="What a million tokens of input costs at the rate in force for this model.">$ in /M</th>
-  <th class="n" title="What a million tokens of output costs at the rate in force for this model.">$ out /M</th>
-  <th class="n">Cost</th>
-  <th class="n" title="What this vendor and model have cost in every conversation ever, whatever window is chosen above.">All time</th>
-  <th class="n" title="How many times the question was taken or added — CoAI: take the question and CoAI: add the question.">Asked</th>
-  <th class="n" title="How many times the chat was opened at all, by any of its five doors.">Opened</th>
-</tr></thead>
-<tbody>
-${rows.map((row) => chatSpendRow(row, colour)).join('\n')}
-</tbody>
-</table>
+  return {
+    html: `${rows.map((row) => chatSpendCard(row, busiest, colour)).join('\n')}
 <div class="hint total">All chats: ${shortNumber(sums.tokens)} tokens · ${total(sums.costUsd, sums.estimatedUsd)}`
-    + ` · asked ${sums.asked} · opened ${sums.opened}${unpriced}</div>`;
+      + ` · asked ${sums.asked} · opened ${sums.opened}${unpriced}</div>`,
+    totals,
+  };
+}
+
+/** Two halves of one number, with a bill and a guess kept apart to the end. */
+function bothHalves(one: number | null, two: number | null): number | null {
+  return one === null && two === null ? null : Math.round(((one ?? 0) + (two ?? 0)) * 10_000) / 10_000;
 }
 
 /**
- * The spending region: two ledgers, named, with a line between them.
+ * The spending region: two ledgers, named, with a line between them — and one line under both.
  *
  * <p>They are written by different programs and they answer different questions — `coai-mcp` appends
  * a line per REVIEWER while a round runs, and this extension appends a line per chat turn and per
  * invocation. Adding them up by eye is wrong often enough that the page says which is which and
- * draws a rule so nobody has to notice.</p>
+ * draws a rule so nobody has to.</p>
+ *
+ * <p>And then adds them up ITSELF, under a second rule, because "what has this cost me" is one
+ * question whichever half of the product spent it. The bill and the estimate stay apart across that
+ * join, for the same reason they stay apart inside each half.</p>
  */
 export function usageRegion(
   usage: readonly UsageEntry[],
@@ -1411,11 +1447,21 @@ export function usageRegion(
   usageScope: 'me' | 'company' = 'me',
   chat: ChatLedgers = { turns: [], doors: [] },
 ): string {
+  const reviewers = reviewersRegion(usage, window, vendors, prices, teamServers, usageScope);
+  const chats = chatRegion(chat, window, prices, vendorPalette(vendors.map((v) => v.id)));
+  const tokens = reviewers.totals.tokens + chats.totals.tokens;
+  const money = total(
+    bothHalves(reviewers.totals.cost, chats.totals.cost),
+    bothHalves(reviewers.totals.guess, chats.totals.guess),
+  );
+
   return `<h3 class="ledger">Reviewers</h3>
-${reviewersRegion(usage, window, vendors, prices, teamServers, usageScope)}
+${reviewers.html}
 <hr class="ledgers">
 <h3 class="ledger">Chat</h3>
-${chatRegion(chat, window, prices, vendorPalette(vendors.map((v) => v.id)))}`;
+${chats.html}
+<hr class="ledgers">
+<div class="hint total everything">Reviewers and chat together: ${shortNumber(tokens)} tokens · ${money}</div>`;
 }
 
 /**

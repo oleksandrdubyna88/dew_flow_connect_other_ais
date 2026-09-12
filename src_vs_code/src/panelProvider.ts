@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { DISCOVERY_KEY } from './chatDiscovery';
 import { chatSettingsFrom, clearedByWriting } from './chatSettings';
+import { chatModelPresetsFrom, vendorOfPreset } from './chatPresets';
 import { ViewHandle, isDisposedRejection } from './viewHandle';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { discoverEngine, LocalEngine, openAiBaseOf, probeEngine } from './localEngines';
@@ -502,7 +503,17 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       this.usageScope,
       // THE SECOND LEDGER, which this page has never counted: what the chat cost, and how often it
       // was reached for. Read on the same stamped caches as everything else here.
-      { turns: await this.chatLines(), doors: await this.doorLines() },
+      //
+      // `vendorOf` turns the id a chat recorded - the model PRESET in force - into the vendor whose
+      // row it belongs in, so both halves of the page name the same three vendors the same way.
+      // Resolved on the way OUT rather than on the way in, which names every line already on disk.
+      {
+        turns: await this.chatLines(),
+        doors: await this.doorLines(),
+        vendorOf: vendorOfPreset(chatModelPresetsFrom(
+          vscode.workspace.getConfiguration('coai').get('chatModelPresets'),
+        )),
+      },
     );
   }
 
