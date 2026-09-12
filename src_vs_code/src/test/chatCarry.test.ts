@@ -71,3 +71,25 @@ test('a mark is clamped to the conversation it is in', () => {
   // A length that is somehow negative cannot produce a negative mark.
   assert.strictEqual(carryMark(2, -1), 0);
 });
+
+test('an upper bound cuts the question off the end, in ONE slice', () => {
+  // A Team server is handed everything below the mark and above the question it is about to ask. It
+  // used to take two slices — one to drop the question, one to apply the mark — which allocated a
+  // near-copy of the whole transcript on every single turn, and a Team conversation is handed one
+  // every time. (codex, the code round, on the hot path.)
+  assert.deepStrictEqual(carriedFrom(CONVERSATION, 2, CONVERSATION.length - 1), [
+    said('a follow-up'),
+    answered('another answer'),
+  ]);
+  // The bound is exclusive, and it cannot reach past the conversation or below its own start.
+  assert.deepStrictEqual(carriedFrom(CONVERSATION, 0, 99), CONVERSATION);
+  assert.deepStrictEqual(carriedFrom(CONVERSATION, 4, 2), []);
+  assert.deepStrictEqual(carriedFrom(CONVERSATION, 0, -5), []);
+});
+
+test('the slice knows nothing about what a message IS', () => {
+  // It was typed to the page's own ChatMessage and imported the renderer into a decision — policy
+  // coupled to HTML. What this function knows about is positions. (codex, the code round.)
+  assert.deepStrictEqual(carriedFrom([1, 2, 3, 4], 2), [3, 4]);
+  assert.deepStrictEqual(carriedFrom(['a', 'b'], 1), ['b']);
+});

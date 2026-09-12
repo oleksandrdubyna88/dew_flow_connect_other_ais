@@ -656,6 +656,10 @@ async function oneReask(entry: ChatEntry, thread: Thread): Promise<void> {
   // The rejected answer and its question leave the transcript: the question comes back as this
   // turn's own, and keeping the answer would show it twice in a conversation that has moved past it.
   thread.messages = thread.messages.slice(0, -2);
+  // The MARK comes back with it. Clamping at each use keeps this turn honest, but the STORED value
+  // would stay past the end and point at an unrelated message once the conversation grew again.
+  // (gemini, the code round.)
+  thread.carryFrom = carryMark(thread.carryFrom, thread.messages.length);
   // What the NEXT model is handed. `carry` is what `oneTurn` sends ahead of the question, and it is
   // exactly the conversation before the answer nobody wanted.
   // A re-ask is a switch by another name — the same question, a different model — so the mark
@@ -707,7 +711,10 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   // a number. This is also why such a conversation is capped — the bill for turn N is the bill for
   // everything before it.
   if (thread.forgetful && thread.messages.length > 1) {
-    thread.carry = carriedFrom(thread.messages.slice(0, -1), thread.carryFrom);
+    // ONE slice, not two: everything below the mark and above the question being asked. Slicing
+    // twice allocated a near-copy of the whole transcript on every single turn, and a Team
+    // conversation is handed one every time. (codex, on the hot path.)
+    thread.carry = carriedFrom(thread.messages, thread.carryFrom, thread.messages.length - 1);
   }
 
   // What is SHOWN is what the person typed; what is SENT may carry the whole conversation with it,
@@ -1694,10 +1701,25 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         if (mine === undefined || found === undefined) {
           return;
         }
-        // CLAMPED HERE TOO. The page's number is checked for being a position at all; this one is
-        // checked against the conversation it is a position IN, which the page cannot do — the
-        // transcript it rendered may be a turn behind the one the host holds.
-        mine.carryFrom = carryMark(at, mine.messages.length);
+        // CLAMPED HERE TOO, and FORWARD ONLY. The page's number is checked for being a position at
+        // all; this one is checked against the conversation it is a position IN, which the page
+        // cannot do — the transcript it rendered may be a turn behind the one the host holds.
+        //
+        // And never backwards. The button is offered on the last answer alone, so a real press can
+        // never name a position above the mark already set; a lower one is a stale page or a forged
+        // message, and taking it would put back a conversation somebody deliberately excluded — on
+        // a Team server, at a price. (codex, the code round, as a security finding.)
+        mine.carryFrom = Math.max(
+          carryMark(at, mine.messages.length),
+          carryMark(mine.carryFrom, mine.messages.length),
+        );
+        // AND THE CARRY ALREADY STAGED. A switch, a restore and a lost context all fill `carry`
+        // ahead of the next question — so pressing the button after switching and before asking
+        // moved the rule and sent the whole conversation anyway, which is the one case this feature
+        // was built for. (gemini, the code round.)
+        if (mine.carry.length > 0) {
+          mine.carry = carriedFrom(mine.messages, mine.carryFrom);
+        }
         // `show` writes the tab down and pushes it back, in that order, so the rule the person ends
         // up looking at is the rule that will survive a reload rather than one the store never
         // heard about. (codex, the plan round.)
@@ -2074,6 +2096,9 @@ export function restoreConversation(
     // Restored with the transcript it belongs to: without it, a reload would put the whole
     // conversation back on the wire and the next Team turn would quietly cost what it used to.
     carryFrom: carryMark(saved.carryFrom, saved.messages.length),
+    // What the store already holds, so the first push after a reload does not rewrite the tab to say
+    // exactly what it already said. (gemini, the code round.)
+    savedCarryFrom: carryMark(saved.carryFrom, saved.messages.length),
     // A reload loses it, and the first press resolves it again — by a name that may by then have
     // moved on. Nothing better is available: the file is not in the store, and putting it there
     // would be a path to somebody's home directory living in workspace state.
