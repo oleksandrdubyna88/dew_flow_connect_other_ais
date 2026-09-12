@@ -26,6 +26,17 @@ namespace CoaiMcp.Server;
 /// `PLAN_the_log_names_the_model` records what step 2 needs. Naming that limit here rather than
 /// letting the log imply more than it knows.</para>
 /// </remarks>
+/// <param name="Effort">
+/// The reasoning effort this launch APPLIED, or empty where it applied none.
+/// </param>
+/// <remarks>
+/// <para>Trailing and defaulted, like <c>Model</c>, so sessions already on disk stay valid.</para>
+/// <para>Empty is the normal case and is not a gap: no hosted adapter in this product puts a
+/// reasoning flag on its CLI's command line, so recording an effort for one would claim something
+/// that did not happen. <c>LocalRuntime</c> passes <c>--reasoning-effort</c> and records what it
+/// passed. Antigravity's effort lives inside its model id (<c>gemini-3.7-flash-high</c>) and is not
+/// a separate switch — which is why no line reads <c>gemini-3.7-flash-high (effort: high)</c>.</para>
+/// </remarks>
 public sealed record ReviewerState(
     string Provider,
     string Role,
@@ -33,7 +44,8 @@ public sealed record ReviewerState(
     int Findings = 0,
     string Note = "",
     double Seconds = 0,
-    string Model = "")
+    string Model = "",
+    string Effort = "")
 {
     public const string Queued = "queued";
     public const string Running = "running";

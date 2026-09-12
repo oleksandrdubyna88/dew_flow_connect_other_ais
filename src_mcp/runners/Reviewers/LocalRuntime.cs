@@ -167,7 +167,10 @@ public sealed class LocalRuntime(string id, string baseUrl) : IReviewerRuntime
             // Carried so a queued reviewer can be told what the WAIT is likely to be: the history
             // is kept per engine AND model, because one average over a ten-second check and a
             // five-hundred-second analysis is an estimate of neither.
-            Model: settings.Model);
+            Model: settings.Model,
+            // The effort this launch ACTUALLY applied — the `--reasoning-effort` above, not a setting
+            // somebody typed. A hosted adapter passes no such flag and so records none (issue #129).
+            Effort: settings.ReasoningEffort);
     }
 
     /// <summary>

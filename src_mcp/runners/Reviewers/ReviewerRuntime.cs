@@ -93,7 +93,8 @@ public sealed record ReviewerInvocation(
     IReviewerRuntime? Adapter = null,
     string SharedResource = "",
     string Model = "",
-    string JobFile = "");
+    string JobFile = "",
+    string Effort = "");
 
 /// <summary>
 /// THE vendor adapter: everything one AI vendor needs to plug into the panel, in one interface —
@@ -234,7 +235,7 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
             StdIn = prompt,
             Timeout = settings.Timeout,
         };
-        return new ReviewerInvocation(Provider, role, request, outputFile, this);
+        return new ReviewerInvocation(Provider, role, request, outputFile, this, Model: settings.Model);
     }
 
     private protected static string Executable(ReviewerSettings settings, string fallback) =>
@@ -301,7 +302,7 @@ public sealed class GeminiRuntime(string id = "gemini") : IReviewerRuntime
             StdIn = prompt,
             Timeout = settings.Timeout,
         };
-        return new ReviewerInvocation(Provider, role, request, OutputFile: string.Empty, this);
+        return new ReviewerInvocation(Provider, role, request, OutputFile: string.Empty, this, Model: settings.Model);
     }
 }
 
