@@ -45,6 +45,7 @@ import { ChatOutcome, ReportedUsage, chatTurnRecord } from './chatUsage';
 import { recordChatTurn } from './chatUsageFile';
 import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './chatDiscovery';
 import { chatSettingsFrom } from './chatSettings';
+import { CARRY_EVERYTHING, carriedFrom, carryMark } from './chatCarry';
 import { chatTextTone, chatUiScale, createChatPanel, pushChatDraft, pushChatState, setChatDraft } from './chatPanel';
 import { captureSelection, COPY_SCRIPT, RunOutcome, argvFor, ran } from './selectionCapture';
 import { windowsReach } from './hostSide';
@@ -179,6 +180,20 @@ interface Thread extends ChatMemory {
    * to a session by its title, and a chat opened from a `.md` has no session behind it at all.</p>
    */
   fromSession: boolean;
+  /**
+   * Where a handed-over conversation begins — the index of the first message carried.
+   *
+   * <p>0 until somebody presses *Carry nothing above*, and 0 is the behaviour this tab has always
+   * had. It narrows HANDOVERS only: a Team server, which is given the conversation every turn; a
+   * model switch; a re-ask, which is a switch by another name; and the first turn after a reload,
+   * where the process behind the tab died with the window and what comes back is a new model being
+   * told a conversation it never heard.</p>
+   *
+   * <p>An ordinary local turn carries nothing at all — `oneTurn` sends the question alone when
+   * `carry` is empty — so the model being spoken to right now is untouched by this. That is the
+   * whole promise, and it holds by construction rather than by a special case.</p>
+   */
+  carryFrom: number;
   /**
    * The session file this tab belongs to, once it has been found. Empty until then, and empty
    * forever for a chat opened from a file.
@@ -633,7 +648,9 @@ async function oneReask(entry: ChatEntry, thread: Thread): Promise<void> {
   thread.messages = thread.messages.slice(0, -2);
   // What the NEXT model is handed. `carry` is what `oneTurn` sends ahead of the question, and it is
   // exactly the conversation before the answer nobody wanted.
-  thread.carry = [...again.said];
+  // A re-ask is a switch by another name — the same question, a different model — so the mark
+  // applies to it exactly as it applies to one.
+  thread.carry = carriedFrom(again.said, thread.carryFrom);
   await oneTurn(entry, again.question);
 }
 
@@ -680,7 +697,7 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
   // a number. This is also why such a conversation is capped — the bill for turn N is the bill for
   // everything before it.
   if (thread.forgetful && thread.messages.length > 1) {
-    thread.carry = thread.messages.slice(0, -1);
+    thread.carry = carriedFrom(thread.messages.slice(0, -1), thread.carryFrom);
   }
 
   // What is SHOWN is what the person typed; what is SENT may carry the whole conversation with it,
@@ -752,7 +769,7 @@ async function oneTurn(entry: ChatEntry, text: string): Promise<void> {
     // per-turn vendor resuming by id and a server that never remembered anything say nothing. Set
     // after the line above, so what is carried is the transcript a reader would recognise.
     if (result.contextLost === true) {
-      thread.carry = [...thread.messages];
+      thread.carry = carriedFrom(thread.messages, thread.carryFrom);
     }
     // The carry is NOT cleared here. A turn that failed carried nothing anywhere, and clearing it
     // would mean the retry — the same question, one keypress later — reaches the new model with no
@@ -1453,7 +1470,7 @@ async function switchNow(entry: ChatEntry, providerId: string, modelId: string):
   // for a conversation they moved and then never continued. Taken HERE rather than when the switch
   // was asked for, because this runs after the turn queue has drained — so an answer that was still
   // arriving when the person changed their mind is in the transcript by now. (codex, the plan round.)
-  thread.carry = [...thread.messages];
+  thread.carry = carriedFrom(thread.messages, thread.carryFrom);
   show(entry, false, '');
   // Said out loud: the next question costs more than the last one, because it carries everything
   // above it. A person who is not told reads the first answer as a model that mysteriously knows.
@@ -1547,6 +1564,7 @@ function newConversation(
     presses: 0,
     ourDraft: state.draft,
     fromSession: state.fromSession,
+    carryFrom: CARRY_EVERYTHING,
     sessionFile: '',
     running: false,
     // Counted from 1 by the first turn, so 0 is "this conversation has not asked anything yet" and
@@ -2026,6 +2044,9 @@ export function restoreConversation(
     // the one outcome this whole join exists to prevent, and it outranks a button that is missing
     // from stored tabs until they are opened again. (codex, twice, from two roles.)
     fromSession: saved.fromSession === true,
+    // Restored with the transcript it belongs to: without it, a reload would put the whole
+    // conversation back on the wire and the next Team turn would quietly cost what it used to.
+    carryFrom: carryMark(saved.carryFrom, saved.messages.length),
     // A reload loses it, and the first press resolves it again — by a name that may by then have
     // moved on. Nothing better is available: the file is not in the store, and putting it there
     // would be a path to somebody's home directory living in workspace state.
@@ -2039,7 +2060,7 @@ export function restoreConversation(
     asked: 0,
     // The whole transcript, ready to travel with the first question — the same handover a model
     // switch performs, and the reason nothing has to resume a vendor thread.
-    carry: [...saved.messages],
+    carry: carriedFrom(saved.messages, carryMark(saved.carryFrom, saved.messages.length)),
     messages: [...saved.messages],
     turns: Promise.resolve(),
     saveId: saved.id,
