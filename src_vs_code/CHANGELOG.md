@@ -2,34 +2,19 @@
 
 ## Extension 0.36.5 — 2026-09-12
 
-**A question you interrupted is still a question.** Pressing Esc while Claude Code is asking writes the same kind of record an answer does, so **CoAI: take the question** treated it as settled — and told you nothing was waiting while the question sat on your screen with its Submit button. It reads the difference now. Of several questions in one session it still takes the newest one that is still open, never simply the newest.
-
-## Extension 0.36.4 — 2026-09-12
-
-**The three right-click items are named for the menu they sit in.** **CoAI: default**, **CoAI: choose** and **CoAI: take the question** — the short name first and then the one word that differs, so you read the end of the line rather than the beginning of three.
-
-**And the question you are handed is the one your tab is asking.** When exactly one Claude Code session had an unanswered question, it went to whichever tab asked for it — the name on the tab was consulted only to break a tie between two. So a tab could be handed another conversation’s question, and nothing about it looked wrong. If what is waiting belongs somewhere else, it now says so and names it as somewhere else.
-
-## Extension 0.36.3 — 2026-09-12
-
-**Take the question to another AI works in a window with no folder open.** It answered *"Open a folder first — a Claude Code session belongs to one"*, which is not true: Claude Code runs without one, in your home directory. If that is how you work, this command had never worked for you. A window that does have a folder — or several, in a workspace — is unchanged, and still scoped to them.
-
-## Extension 0.36.2 — 2026-09-12
-
-**Two right-click items that say what they do.** There was one, **Chat with other AI**, and whether
-it asked at once or waited depended on a setting in another window. Now there are two: **Chat with
-other AI: default** asks the model you ticked as main straight away, and **Chat with other AI:
-choose** puts the turn in the composer so you can change the model or the prompt and press Enter
-yourself. Neither consults **When to send** — each says in its own name what it will do. The
-keyboard shortcut keeps that setting, where its name promises nothing either way.
+**Three right-click items, each named for what it does.** **CoAI: default** asks the model you
+ticked as main straight away. **CoAI: choose** puts the turn in the composer, so you can change the
+model or the prompt and press Enter yourself. **CoAI: take the question** hands the question Claude
+Code is asking YOU to a second model. None of the three consults **When to send** — each says in its
+own name what it will do. The keyboard shortcut keeps that setting, where its name promises nothing
+either way.
 
 **A chat tab knows which session it came from.** Claude Code writes the conversation's name into its
-own session file, and that name is what you see on the tab — so the two can be joined. Two sessions
-waiting for an answer in one folder used to be a flat refusal; now the one your tab is showing wins.
-It still refuses everything it genuinely cannot tell apart, and says which: a name that matches
-neither session, a name that matches two, two workspace folders that each have a session by that
-name, and no tab at all. A long name is matched by its beginning, because the tab shows a shortened
-form of it.
+own session file, and a shortened form of that name is what you see on the tab — so the two can be
+joined. Two sessions waiting for an answer in one folder used to be a flat refusal; now the one your
+tab is showing wins. It still refuses everything it genuinely cannot tell apart, and says which: a
+name that matches neither session, a name that matches two, and two workspace folders that each
+have a session by that name.
 
 **Asked — the button that remembers what you asked.** After a few hours a chat tab has lost the
 thing it is about: the question that started the work has scrolled far above, and you end up asking
@@ -50,7 +35,15 @@ found. It reads afresh every time you open it, because the window this is for is
 into. What it shows is your own words as you wrote them — a turn an extension prefilled is still
 yours, and a slash command is unwrapped to what you typed.
 
-It works in a window with **no folder open** too, where Claude Code runs in your home directory.
+**Both work in a window with no folder open**, where Claude Code runs in your home directory.
+**Take the question** used to answer *"Open a folder first — a Claude Code session belongs to one"*,
+which is not true; if that is how you work, it had never worked for you.
+
+**And the question you are handed is the one your tab is asking.** When exactly one session had an
+unanswered question it went to whichever tab asked, and a question you had INTERRUPTED counted as
+answered — so you could be told nothing was waiting while the question sat on your screen with its
+Submit button, and be handed another conversation's question instead. Of several questions in one
+session it takes the newest one still open, never simply the newest.
 
 **It stays out of the way while it works.** The session is streamed rather than read whole, and only
 the file your tab belongs to is read past its name — a folder holding weeks of sessions is not
