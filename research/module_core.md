@@ -36,6 +36,7 @@ flowchart LR
 | `SessionState`, `PanelConfig`, `SessionKey` | `Rounds/SessionState.cs` | immutable session; key = normalised repo path + branch |
 | `RoundMachine`, `RoundVerdict`, `Decision`, `Transition` | `Rounds/RoundMachine.cs` | ordering by refusal; the escalation ladder; resolve feeds rejections forward |
 | `RoleDefinition`, `RoleCatalog`, `RoleStages` | `Rounds/RoleCatalog.cs` | which roles exist and which prompt a round of one gets; `Builtin` is the embedded seed |
+| `RoleEntry`, `PromptEntry`, `RoleComposition` | `Rounds/RoleComposition.cs` | a person's `COAI_ROLES` rows composed onto the seed; every refusal is a sentence, never an exception |
 
 ### The catalog is data, and the seed belongs to neither half (2026-09-12)
 
@@ -68,6 +69,41 @@ Four properties are worth knowing before touching it:
   stage, two roles sharing an id case-insensitively, one prompt id under two roles — each throws
   naming the file and the offender. All five are reachable only by shipping a bad binary, which is
   why they are exceptions rather than values.
+
+### What a person adds, and what it is refused for (2026-09-12)
+
+`RoleComposition.Compose(entries)` puts a person's `COAI_ROLES` rows onto the seed. **Nothing in it
+throws** — the mirror image of `FromSeed`, and for a reason worth keeping straight: a seed is ours
+and a bad one is a bad build, while an entry is a person's and a mistake in it must not stop the
+four roles that are still fine from reviewing. Every refusal is a `"<row>: why"` sentence in
+`Dropped`, which `PanelSettings.Unrecognised` carries to the panel.
+
+Five rules, in the order they apply:
+
+1. **A row whose id matches a built-in — without case — is an OVERRIDE, never a new role.** Id, name,
+   stage and kind come from the seed whatever the row says: an id keys settings, session files and
+   every row of the rounds database, and a name the row could change would only disagree with the
+   help. What the row may contribute is `active` and extra prompts, **each only when present** —
+   which is why every field of `RoleEntry` but the id is nullable. A non-nullable `active` would read
+   an omitted one as `false` and switch Architecture off for somebody who only wanted to add a
+   prompt to it.
+2. **Every other row is a role of the person's own.** Its id becomes `COAI_ROUNDS_<ID>`, so it is
+   latin and starts with a letter; its stage is `plan` or `result`; it must carry prompts, because
+   it has no shipped general one to fall back on. Absent `active` is on, absent kind is a
+   programming task.
+3. **Prompt ids are slugs and they are global.** `RolePrompts` keys text files by prompt id alone,
+   so two roles naming `rules` would read one file. The slug rule is also what stops an id being a
+   path: `../../secrets` is refused here, not at the moment a file is read into a reviewer's prompt.
+4. **At most five active roles per bucket**, and the trim never reaches a built-in — they come first
+   in catalog order, so a person's row can never switch a shipped role off by arriving. The
+   consequence, said out loud: with all four shipped result roles on, one custom result role fits,
+   and the way to make room is to untick a built-in.
+5. Anything a person added is `BuiltIn = false`, which is what makes it deletable and its text
+   restorable-to-nothing rather than restorable-to-shipped.
+
+`PanelConfig` gained `Catalog` alongside `Roles`: what a role IS, beside how much it may spend. A
+role with no gate of its own falls back to its stage's shipped default, which is what makes a role
+somebody just created work with no further settings at all.
 - **Ids are permanent.** `COAI_ROUNDS_ARCHITECTURE`, `coai.rounds`, every session file and every
   `coai.db` row is keyed by the role id, so a rename in the seed is a migration and not an edit.
   `PromptChoice.BuiltIn` marks a prompt the binary ships a text for: it can be overridden and
