@@ -148,6 +148,11 @@
         "category": "ConnectOtherAIs"
       },
       {
+        "command": "coai.editRoles",
+        "title": "Edit review roles",
+        "category": "ConnectOtherAIs"
+      },
+      {
         "command": "coai.help",
         "title": "Help",
         "category": "ConnectOtherAIs",

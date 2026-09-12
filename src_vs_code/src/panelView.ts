@@ -1231,6 +1231,10 @@ ${roleSwitchSkew(state.server, s)}
   <div class="hint"><b>Architecture</b> round 1 defaults to <b>Conventions</b>: it judges the diff against the rules this project has written down \u2014 <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>GEMINI.md</code>, <code>.claude/rules</code> \u2014 and nothing else. The other two roles spend their round on their own subject; pick <b>Conventions</b> for them if you want the rules read again. Anything you pick wins.</div>
 ${conventionsSkew(state.server)}
 ${code}
+</div>
+<div class="field">
+  <button type="button" class="run" data-command="editRoles">Edit roles…</button>
+  <div class="hint">Add a review role of your own — a question this product does not ship — or rewrite the text of one it does. The five above are on that page too.</div>
 </div>`;
 }
 
@@ -1917,6 +1921,8 @@ export const PANEL_COMMANDS = [
   // The way into the presets tab. `coai.editChatPresets` shipped registered, in no menu and named in
   // no view, so the only way to reach the CRUD the chat section points at was the command palette.
   'editChatPresets',
+  // And the way into the roles tab, which the Prompts section points at the same way.
+  'editRoles',
 ] as const;
 
 export type PanelCommand = (typeof PANEL_COMMANDS)[number];
@@ -1932,6 +1938,7 @@ export type PanelCommand = (typeof PANEL_COMMANDS)[number];
 export const VSCODE_COMMAND_FOR = {
   installServer: 'coai.installServer',
   editChatPresets: 'coai.editChatPresets',
+  editRoles: 'coai.editRoles',
 } as const satisfies Partial<Record<PanelCommand, string>>;
 
 export function isPanelCommand(value: string | undefined): value is PanelCommand {

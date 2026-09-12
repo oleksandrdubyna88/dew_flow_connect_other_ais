@@ -43,7 +43,8 @@ import { DbLog, EMPTY_LOG } from './roundsDb';
 import { ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
 import { Found, MAX_LIMIT, readFindings, readLog } from './roundsDbRead';
-import { sideKey, sideLabel } from './coaiInstall';
+import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
+import { rolesKnowTheServer } from './rolesPanel';
 import {
   fetchTable,
   LITELLM_PRICES,
@@ -610,7 +611,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       vendors,
       codexModels: this.codexModels,
       agyModels: this.agyModels,
-      server: await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published),
+      server: this.told(await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published)),
       side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),
       perSide: this.perSide(config),
       questions: this.watcher.openQuestions,
@@ -1300,6 +1301,19 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  /**
+   * The server status, passed through — and told to the roles tab on the way.
+   *
+   * <p>That tab draws its own version-skew banner and has no way to ask for the answer: it is a
+   * panel of its own, opened by a command, with no reference to this provider. Told here, where the
+   * answer is already in hand and every repaint passes through.</p>
+   */
+  private told(server: ServerStatus): ServerStatus {
+    rolesKnowTheServer(server.kind === 'absent' ? '' : server.version);
+
+    return server;
+  }
+
   /** Whether this side keeps its own settings. Shared by every side, deliberately: one switch. */
   private perSide(config: vscode.WorkspaceConfiguration): boolean {
     return config.get<boolean>('perSideSettings') === true;
@@ -1444,6 +1458,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // owns its own panel. Without this the section could name the presets it picks from and
         // offer no way to reach them — which is the state it shipped in.
         await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.editChatPresets);
+        break;
+      case 'editRoles':
+        // The same shape again: the roles tab owns its own panel and is opened by a registered
+        // command, so the Prompts section can point at the roles it draws.
+        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.editRoles);
         break;
       case 'addTeamServer':
         await this.addTeamServer();

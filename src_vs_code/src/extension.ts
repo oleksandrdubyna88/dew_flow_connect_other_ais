@@ -3,6 +3,7 @@ import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { openChatPresets, presetsReadDiscoveriesFrom } from './chatPresetsPanel';
+import { openRoles } from './rolesPanel';
 import { ChatPanels } from './chatPanels';
 import {
   chatReadsThisSide,
@@ -187,6 +188,7 @@ export function activate(context: vscode.ExtensionContext): void {
     watcher,
     vscode.window.registerWebviewViewProvider(PanelProvider.viewType, panel),
     vscode.commands.registerCommand('coai.editChatPresets', () => { openChatPresets(); }),
+    vscode.commands.registerCommand('coai.editRoles', () => { openRoles(); }),
     vscode.commands.registerCommand('coai.help', showHelp),
     // Chat with another vendor about a passage. Two doors reach it — this keybinding and the
     // 'Chat with other AI' item in Claude Code's own right-click menu — and the command tells them
