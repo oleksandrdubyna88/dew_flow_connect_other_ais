@@ -1,6 +1,7 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { readFile, readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { writeFileAtomically, writeFileAtomicallySync } from './atomicFile';
 import {
   ChildRecord,
   KillOutcome,
@@ -87,24 +88,15 @@ export function ledgerPath(storageDir: string, ownerPid = process.pid): string {
   return join(storageDir, ledgerName(ownerPid));
 }
 
-/**
- * Write a ledger file so that a crash cannot leave half of one.
- *
- * <p>A plain write truncates first, and a force-kill in that window leaves a file that parses to
- * nothing — losing the very record it exists to keep. Written beside it and renamed over it instead;
- * a rename within one directory is atomic on both filesystems this ships to. (codex, the code round.)</p>
- */
-function writeAtomically(path: string, text: string): void {
-  const beside = `${path}.${process.pid}.tmp`;
-  writeFileSync(beside, text, 'utf8');
-  renameSync(beside, path);
-}
-
 /** Say what went wrong rather than swallow it: a ledger that cannot be written is a child nobody can clean up. */
 function saved(): void {
   try {
-    mkdirSync(home, { recursive: true });
-    writeAtomically(ledgerPath(home), ledgerText(mine));
+    // Atomically, and SYNCHRONOUSLY. A plain write truncates first, and a force-kill in that window
+    // leaves a file that parses to nothing — losing the very record it exists to keep. The rule and
+    // the beside-name now live in `atomicFile.ts`, because the conversation store needs the same
+    // bargain and a second copy of it would be the duplicate the reuse rule forbids; what stays here
+    // is the choice of the SYNCHRONOUS form, which is this module's own and is the note above.
+    writeFileAtomicallySync(ledgerPath(home), ledgerText(mine));
   } catch (reason) {
     console.warn(`[coai] the chat ledger could not be written: ${reason instanceof Error ? reason.message : reason}`);
   }
@@ -434,7 +426,10 @@ async function tidy(path: string, now: number, until: number, killed: string[]):
     if (afterSweep(kept, asked) === 'remove') {
       await rm(path, { force: true });
     } else {
-      writeAtomically(path, ledgerText(kept));
+      // The ASYNCHRONOUS form here, unlike `saved()` above, and the difference is the reason the two
+      // exist: that one races a force-kill of this host, while this is activation tidying a DEAD
+      // host's ledger — already inside an awaited sweep, with nothing to lose by yielding.
+      await writeFileAtomically(path, ledgerText(kept));
     }
   } catch (reason) {
     console.warn(`[coai] a chat ledger could not be tidied: ${reason instanceof Error ? reason.message : reason}`);
