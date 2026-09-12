@@ -55,29 +55,44 @@ export type WriteNext =
  * on it would mint one every time a save failed and scatter a single conversation across the store,
  * while the transcript is in memory and the next turn will try the same place again.</p>
  *
- * <p><b>Except on the very first save, where a refusal is usually not a rival at all.</b> A
- * conversation restored into a tab has held its id since it was minted, so the record under that id
- * is its own previous session — and this window, having written nothing yet, has nothing of its own
- * to lose by taking the number the disk reports and saving against it. Forking there would mint a
- * second copy of a conversation every time somebody reopened one, for ever. `baseline` is what tells
- * the two cases apart, and it is the only thing that can: 0 means this window has never had a save
- * accepted, and after one has, a disk that has moved on has no innocent explanation left.</p>
+ * <p><b>Except where the record on disk is this conversation's own earlier self.</b> A conversation
+ * restored into a tab has held its id since it was minted, so the record under that id is very often
+ * the session it was restored FROM — and forking there would mint a second copy every time somebody
+ * reopened one, for ever. Such a record may be adopted: its revision taken, and the save tried once
+ * more against it.</p>
  *
- * <p>An `incompatible` record is never adopted, at any baseline. Adoption means *that is my own
- * record, at a number I did not know*; a torn one or one a newer build wrote cannot be read, so it
- * cannot be claimed, and taking its revision would be volunteering to overwrite it on the next turn
- * — the downgrade the store refuses on purpose.</p>
+ * <p><b>But never on the strength of the revision alone, which is what the first version did and
+ * what A3's plan round refused.</b> Two windows can BOTH be at baseline 0 for one conversation —
+ * both restored it, neither has written. The first saves and the disk moves to revision 1; the
+ * second is refused, and adoption by number would have it take that revision and write over turns it
+ * has never seen. That is the lost update this whole mechanism exists to prevent, re-entering
+ * through the door that was meant to make reopening painless.</p>
+ *
+ * <p>So what is compared is the WORDS. Our own earlier session is CONTAINED in what we hold, because
+ * we restored it and then added to it; a disk that has said anything we have not is somebody else,
+ * whatever its number. A refusal that reports nothing about the disk — the record was held by
+ * another mutation and never read — cannot be compared and is therefore never adopted.</p>
+ *
+ * <p>An `incompatible` record is never adopted either, at any baseline: adoption means *that is my
+ * own record, at a number I did not know*, and a torn one or one a newer build wrote cannot be read,
+ * so it cannot be claimed. Taking its revision would be volunteering to overwrite it on the next
+ * turn — the downgrade the store refuses on purpose.</p>
  *
  * @param baseline the revision this window last had accepted, 0 before its first
+ * @param ours every message this window holds, in order, as text
  */
-export function nextAfterSave(outcome: SaveOutcome, baseline: number): WriteNext {
+export function nextAfterSave(
+  outcome: SaveOutcome,
+  baseline: number,
+  ours: readonly string[] = [],
+): WriteNext {
   switch (outcome.kind) {
     case 'ok':
       return { kind: 'kept', rev: outcome.rev };
     case 'partial':
       return { kind: 'kept', rev: outcome.rev, note: INDEX_BEHIND };
     case 'refused':
-      return baseline === 0 && outcome.diskRev > 0
+      return baseline === 0 && outcome.diskRev > 0 && containedIn(outcome.said, ours)
         ? { kind: 'adopt', rev: outcome.diskRev }
         : { kind: 'fork', note: CONTINUED_ELSEWHERE };
     case 'incompatible':
@@ -85,4 +100,20 @@ export function nextAfterSave(outcome: SaveOutcome, baseline: number): WriteNext
     default:
       return { kind: 'said', note: outcome.reason };
   }
+}
+
+/**
+ * Whether what is on disk is the beginning of what we hold.
+ *
+ * <p>A prefix, in order, and never longer: a disk AHEAD of this window holds turns that adopting
+ * would replace, which is the case that matters most and the one a length check alone would miss.
+ * `undefined` — a record nobody could read — is not contained in anything, because nothing is known
+ * about it and the safe answer is the one that loses nobody's words.</p>
+ */
+function containedIn(disk: readonly string[] | undefined, ours: readonly string[]): boolean {
+  if (disk === undefined || disk.length > ours.length) {
+    return false;
+  }
+
+  return disk.every((said, at) => said === ours[at]);
 }
