@@ -151,6 +151,7 @@ test('a reviewer with no status says nothing, rather than a dangling dash', () =
 
   assert.equal(reviewerRows(blank)[0]!.said, '');
   assert.deepEqual(reviewerLines(blank), ['local/Architecture']);
+});
 
 // ---------- the effort rides with the model (#129) ----------
 
