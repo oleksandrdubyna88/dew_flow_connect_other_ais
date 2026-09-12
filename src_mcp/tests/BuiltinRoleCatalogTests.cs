@@ -109,38 +109,6 @@ public sealed class BuiltinRoleCatalogTests
                 "every shipped role but the plan one reviews a diff");
     }
 
-    /// <summary>
-    /// The seed says what the CATALOG will run; `PromptCatalog` is what the round runs today. While
-    /// both exist, they must be the same thing.
-    /// </summary>
-    /// <remarks>
-    /// Without this, a transcription slip in a label, a purpose, an order or an id would be
-    /// invisible: the loader and its own test read the same seed and would agree with each other
-    /// about the wrong text, while `PanelService` went on asking the old question. The error would
-    /// surface as an observable change in the picker or the review on the day a later story
-    /// switched the runtime over — a long way from the commit that caused it. Raised by codex on
-    /// A1's second code round; it goes when `PromptCatalog` goes, in story B1, and the seed is
-    /// the only copy left.
-    /// </remarks>
-    [Fact]
-    public void TheSeed_IsWhatPromptCatalogStillRuns_RowForRow()
-    {
-        RoleCatalog.Builtin.Roles.Select(r => r.Id).Should().Equal(PanelConfig.AllRoles,
-            "the catalog runs the roles the round machine already knows, in its order");
-
-        foreach (var role in RoleCatalog.Builtin.Roles)
-        {
-            RoleCatalog.Builtin.For(role.Id).Select(p => (p.Id, p.Role, p.Label, p.Purpose, p.Universal))
-                .Should().Equal(
-                    PromptCatalog.For(role.Id).Select(p => (p.Id, p.Role, p.Label, p.Purpose, p.Universal)),
-                    $"{role.Id}: the seed is a transcription of the catalog the round still uses");
-        }
-
-        RoleCatalog.Builtin.Roles.SelectMany(r => r.Prompts).Select(p => p.Id)
-            .Should().BeEquivalentTo(PromptCatalog.All.Select(p => p.Id),
-                "no prompt gained or lost on the way into the seed");
-    }
-
     [Fact]
     public void EveryRole_HasItsGeneralPromptFirst_AndEveryPromptIdIsUnique()
     {

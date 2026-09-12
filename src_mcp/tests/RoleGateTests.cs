@@ -29,13 +29,13 @@ public sealed class RoleGateTests
     public void EachRole_ReadsItsOwnBudget()
     {
         var config = Config(
-            (PromptCatalog.ArchitectureRole, 2, 3),
-            (PromptCatalog.SecurityRole, 3, 1),
-            (PromptCatalog.UxDxRole, 1, 5));
+            (RoleCatalog.ArchitectureRole, 2, 3),
+            (RoleCatalog.SecurityRole, 3, 1),
+            (RoleCatalog.UxDxRole, 1, 5));
 
-        config.For(PromptCatalog.ArchitectureRole).Should().Be(new RoleGate(2, 3));
-        config.For(PromptCatalog.SecurityRole).MaxRounds.Should().Be(3);
-        config.For(PromptCatalog.UxDxRole).MaxRounds.Should().Be(1);
+        config.For(RoleCatalog.ArchitectureRole).Should().Be(new RoleGate(2, 3));
+        config.For(RoleCatalog.SecurityRole).MaxRounds.Should().Be(3);
+        config.For(RoleCatalog.UxDxRole).MaxRounds.Should().Be(1);
     }
 
     [Fact]
@@ -44,9 +44,9 @@ public sealed class RoleGateTests
         // The stage still counts rounds once; a role simply stops taking part when its own budget is
         // spent. So the stage runs as long as its most patient role.
         var config = Config(
-            (PromptCatalog.ArchitectureRole, 2, 3),
-            (PromptCatalog.SecurityRole, 3, 3),
-            (PromptCatalog.UxDxRole, 1, 3));
+            (RoleCatalog.ArchitectureRole, 2, 3),
+            (RoleCatalog.SecurityRole, 3, 3),
+            (RoleCatalog.UxDxRole, 1, 3));
 
         config.For(Stage.CodeReview).MaxRounds.Should().Be(3);
     }
@@ -55,20 +55,20 @@ public sealed class RoleGateTests
     public void ARoleWithNoBudgetLeft_DoesNotTakePartInTheRound()
     {
         var config = Config(
-            (PromptCatalog.ArchitectureRole, 2, 3),
-            (PromptCatalog.SecurityRole, 3, 3),
-            (PromptCatalog.UxDxRole, 1, 3));
+            (RoleCatalog.ArchitectureRole, 2, 3),
+            (RoleCatalog.SecurityRole, 3, 3),
+            (RoleCatalog.UxDxRole, 1, 3));
 
         // Conventions is not in the config above and takes part anyway, on its DEFAULT gate — an
         // unconfigured role is a role nobody changed, not a role nobody wants. This assertion used
         // to be a bare `HaveCount(3)` and went red the day Conventions became a role; naming the
         // roles is what makes the next addition read as a decision instead of an off-by-one.
         config.RolesForRound(Stage.CodeReview, round: 1).Should().BeEquivalentTo(
-            [PromptCatalog.ConventionsRole, PromptCatalog.ArchitectureRole, PromptCatalog.SecurityRole, PromptCatalog.UxDxRole]);
+            [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole]);
         config.RolesForRound(Stage.CodeReview, round: 2).Should().BeEquivalentTo(
-            [PromptCatalog.ArchitectureRole, PromptCatalog.SecurityRole],
+            [RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole],
             "performance had one round, and conventions defaults to one");
-        config.RolesForRound(Stage.CodeReview, round: 3).Should().BeEquivalentTo([PromptCatalog.SecurityRole]);
+        config.RolesForRound(Stage.CodeReview, round: 3).Should().BeEquivalentTo([RoleCatalog.SecurityRole]);
     }
 
     // ---------- a finding is counted against ITS role's threshold ----------
@@ -77,34 +77,34 @@ public sealed class RoleGateTests
     public void EachRolesFindings_AreCountedAgainstThatRolesThreshold()
     {
         var config = Config(
-            (PromptCatalog.ArchitectureRole, 2, 2),
-            (PromptCatalog.SecurityRole, 2, 0),
-            (PromptCatalog.UxDxRole, 2, 2));
+            (RoleCatalog.ArchitectureRole, 2, 2),
+            (RoleCatalog.SecurityRole, 2, 0),
+            (RoleCatalog.UxDxRole, 2, 2));
 
         var gate = GateRule.Evaluate(
             [
-                From(PromptCatalog.ArchitectureRole, "a layer reaches around another"),
-                From(PromptCatalog.ArchitectureRole, "two implementations of one thing"),
-                From(PromptCatalog.SecurityRole, "token compared with =="),
+                From(RoleCatalog.ArchitectureRole, "a layer reaches around another"),
+                From(RoleCatalog.ArchitectureRole, "two implementations of one thing"),
+                From(RoleCatalog.SecurityRole, "token compared with =="),
             ],
             [],
             role => config.For(role).Threshold);
 
         gate.Passed.Should().BeFalse("security allows none and has one");
-        gate.OverThreshold.Should().BeEquivalentTo([PromptCatalog.SecurityRole],
+        gate.OverThreshold.Should().BeEquivalentTo([RoleCatalog.SecurityRole],
             "architecture is at its threshold of two, which passes");
     }
 
     [Fact]
     public void EveryRoleUnderItsOwnThreshold_Passes()
     {
-        var config = Config((PromptCatalog.ArchitectureRole, 2, 2), (PromptCatalog.SecurityRole, 2, 1));
+        var config = Config((RoleCatalog.ArchitectureRole, 2, 2), (RoleCatalog.SecurityRole, 2, 1));
 
         var gate = GateRule.Evaluate(
             [
-                From(PromptCatalog.ArchitectureRole, "one"),
-                From(PromptCatalog.ArchitectureRole, "two"),
-                From(PromptCatalog.SecurityRole, "one"),
+                From(RoleCatalog.ArchitectureRole, "one"),
+                From(RoleCatalog.ArchitectureRole, "two"),
+                From(RoleCatalog.SecurityRole, "one"),
             ],
             [],
             role => config.For(role).Threshold);
@@ -140,9 +140,9 @@ public sealed class RoleGateTests
         };
         var settings = PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name));
 
-        settings.Rounds.For(PromptCatalog.SecurityRole).MaxRounds.Should().Be(3);
-        settings.Rounds.For(PromptCatalog.ArchitectureRole).MaxRounds.Should().Be(2, "the stage key fills in");
-        settings.Rounds.For(PromptCatalog.UxDxRole).Threshold.Should().Be(0);
+        settings.Rounds.For(RoleCatalog.SecurityRole).MaxRounds.Should().Be(3);
+        settings.Rounds.For(RoleCatalog.ArchitectureRole).MaxRounds.Should().Be(2, "the stage key fills in");
+        settings.Rounds.For(RoleCatalog.UxDxRole).Threshold.Should().Be(0);
     }
 
     [Fact]
@@ -151,10 +151,10 @@ public sealed class RoleGateTests
         var env = new Dictionary<string, string> { ["COAI_ENABLED_ARCHITECTURE"] = "false" };
         var settings = PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name));
 
-        settings.Rounds.For(PromptCatalog.ArchitectureRole).Enabled.Should().BeFalse();
-        settings.Rounds.For(PromptCatalog.SecurityRole).Enabled.Should().BeTrue();
+        settings.Rounds.For(RoleCatalog.ArchitectureRole).Enabled.Should().BeFalse();
+        settings.Rounds.For(RoleCatalog.SecurityRole).Enabled.Should().BeTrue();
         settings.Rounds.EnabledRolesOf(Stage.CodeReview).Should().BeEquivalentTo(
-            [PromptCatalog.ConventionsRole, PromptCatalog.SecurityRole, PromptCatalog.UxDxRole]);
+            [RoleCatalog.ConventionsRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole]);
     }
 
     [Fact]
@@ -169,7 +169,7 @@ public sealed class RoleGateTests
             var env = new Dictionary<string, string> { ["COAI_ENABLED_UXDXPERFORMANCE"] = value };
             var settings = PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name));
 
-            settings.Rounds.For(PromptCatalog.UxDxRole).Enabled.Should().BeTrue($"'{value}' does not say off");
+            settings.Rounds.For(RoleCatalog.UxDxRole).Enabled.Should().BeTrue($"'{value}' does not say off");
         }
 
         foreach (var value in new[] { "0", "false", "FALSE", "False" })
@@ -177,7 +177,7 @@ public sealed class RoleGateTests
             var env = new Dictionary<string, string> { ["COAI_ENABLED_UXDXPERFORMANCE"] = value };
             var settings = PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name));
 
-            settings.Rounds.For(PromptCatalog.UxDxRole).Enabled.Should().BeFalse($"'{value}' says off");
+            settings.Rounds.For(RoleCatalog.UxDxRole).Enabled.Should().BeFalse($"'{value}' says off");
         }
     }
 
@@ -187,7 +187,7 @@ public sealed class RoleGateTests
         var settings = PanelSettings.FromEnvironment(_ => null);
 
         settings.Rounds.EnabledRolesOf(Stage.CodeReview).Should().HaveCount(4);
-        settings.Rounds.For(PromptCatalog.PlanRole).Enabled.Should().BeTrue();
+        settings.Rounds.For(RoleCatalog.PlanRole).Enabled.Should().BeTrue();
     }
 
     [Fact]
@@ -197,7 +197,7 @@ public sealed class RoleGateTests
         var env = new Dictionary<string, string> { ["COAI_ENABLED_PLANCRITIQUE"] = "false" };
         var settings = PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name));
 
-        settings.Rounds.For(PromptCatalog.PlanRole).Enabled.Should().BeTrue();
+        settings.Rounds.For(RoleCatalog.PlanRole).Enabled.Should().BeTrue();
         settings.Rounds.RolesForRound(Stage.PlanReview, round: 1).Should().ContainSingle();
     }
 
@@ -211,9 +211,9 @@ public sealed class RoleGateTests
         // reads these constants out of the C# and fails when they drift again.
         var config = new PanelConfig();
 
-        config.For(PromptCatalog.PlanRole).Should().Be(new RoleGate(1, 6));
-        config.For(PromptCatalog.ArchitectureRole).Should().Be(new RoleGate(1, 5));
-        config.For(PromptCatalog.ConventionsRole).Should().Be(new RoleGate(1, 5),
+        config.For(RoleCatalog.PlanRole).Should().Be(new RoleGate(1, 6));
+        config.For(RoleCatalog.ArchitectureRole).Should().Be(new RoleGate(1, 5));
+        config.For(RoleCatalog.ConventionsRole).Should().Be(new RoleGate(1, 5),
             "a role nobody configured runs on the code default like every other code role");
     }
 
@@ -227,15 +227,15 @@ public sealed class RoleGateTests
         var settings = PanelSettings.FromEnvironment(
             name => name == "COAI_GATE_THRESHOLD" ? "0" : null);
 
-        settings.Rounds.For(PromptCatalog.ArchitectureRole).Threshold.Should().Be(0);
-        settings.Rounds.For(PromptCatalog.PlanRole).Threshold.Should().Be(0);
+        settings.Rounds.For(RoleCatalog.ArchitectureRole).Threshold.Should().Be(0);
+        settings.Rounds.For(RoleCatalog.PlanRole).Threshold.Should().Be(0);
     }
 
     [Fact]
     public void ARoundBudgetOfZero_IsStillRefused_BecauseItWouldGateNothing()
     {
         PanelSettings.FromEnvironment(name => name == "COAI_MAX_ROUNDS" ? "0" : null)
-            .Rounds.For(PromptCatalog.ArchitectureRole).MaxRounds.Should().Be(
+            .Rounds.For(RoleCatalog.ArchitectureRole).MaxRounds.Should().Be(
                 PanelConfig.CodeDefault.MaxRounds, "zero rounds would run no review at all");
     }
 
@@ -261,7 +261,7 @@ public sealed class RoleGateTests
         };
 
         var gate = GateRule.Evaluate(
-            [From(PromptCatalog.UxDxRole, "a list grows without bound")],
+            [From(RoleCatalog.UxDxRole, "a list grows without bound")],
             [],
             role => config.For(role).Threshold);
 
@@ -283,7 +283,7 @@ public sealed class RoleGateTests
         var state = new SessionState("s", "D:/r", "main", config) with { Stage = Stage.CodeReview };
 
         var gate = GateRule.Evaluate(
-            [From(PromptCatalog.SecurityRole, "token compared with ==")],
+            [From(RoleCatalog.SecurityRole, "token compared with ==")],
             [],
             role => config.For(role).Threshold);
 
@@ -304,17 +304,17 @@ public sealed class RoleGateTests
         var config = new PanelConfig(
             new Dictionary<string, RoleGate>
             {
-                [PromptCatalog.ConventionsRole] = new(2, 3),
-                [PromptCatalog.ArchitectureRole] = new(2, 3, Enabled: false),
-                [PromptCatalog.SecurityRole] = new(2, 3),
-                [PromptCatalog.UxDxRole] = new(2, 3),
+                [RoleCatalog.ConventionsRole] = new(2, 3),
+                [RoleCatalog.ArchitectureRole] = new(2, 3, Enabled: false),
+                [RoleCatalog.SecurityRole] = new(2, 3),
+                [RoleCatalog.UxDxRole] = new(2, 3),
             },
             StagePolicy.Human);
 
-        config.RolesForRound(Stage.CodeReview, round: 1).Should().NotContain(PromptCatalog.ArchitectureRole);
-        config.RolesForRound(Stage.CodeReview, round: 2).Should().NotContain(PromptCatalog.ArchitectureRole);
+        config.RolesForRound(Stage.CodeReview, round: 1).Should().NotContain(RoleCatalog.ArchitectureRole);
+        config.RolesForRound(Stage.CodeReview, round: 2).Should().NotContain(RoleCatalog.ArchitectureRole);
         config.RolesForRound(Stage.CodeReview, round: 1).Should().BeEquivalentTo(
-            [PromptCatalog.ConventionsRole, PromptCatalog.SecurityRole, PromptCatalog.UxDxRole]);
+            [RoleCatalog.ConventionsRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole]);
     }
 
     [Fact]
@@ -325,10 +325,10 @@ public sealed class RoleGateTests
         var config = new PanelConfig(
             new Dictionary<string, RoleGate>
             {
-                [PromptCatalog.ConventionsRole] = new(1, 2),
-                [PromptCatalog.ArchitectureRole] = new(5, 9, Enabled: false),
-                [PromptCatalog.SecurityRole] = new(2, 3),
-                [PromptCatalog.UxDxRole] = new(1, 2),
+                [RoleCatalog.ConventionsRole] = new(1, 2),
+                [RoleCatalog.ArchitectureRole] = new(5, 9, Enabled: false),
+                [RoleCatalog.SecurityRole] = new(2, 3),
+                [RoleCatalog.UxDxRole] = new(1, 2),
             },
             StagePolicy.Human);
 
@@ -356,11 +356,11 @@ public sealed class RoleGateTests
         // Code review only, by the operator's ruling. A plan stage with one role and a switch that
         // turns it off is a different feature nobody asked for.
         var config = new PanelConfig(
-            new Dictionary<string, RoleGate> { [PromptCatalog.PlanRole] = new(1, 6) },
+            new Dictionary<string, RoleGate> { [RoleCatalog.PlanRole] = new(1, 6) },
             StagePolicy.Human);
 
-        config.For(PromptCatalog.PlanRole).Enabled.Should().BeTrue();
-        config.RolesForRound(Stage.PlanReview, round: 1).Should().BeEquivalentTo([PromptCatalog.PlanRole]);
+        config.For(RoleCatalog.PlanRole).Enabled.Should().BeTrue();
+        config.RolesForRound(Stage.PlanReview, round: 1).Should().BeEquivalentTo([RoleCatalog.PlanRole]);
     }
 
     [Fact]
@@ -369,10 +369,10 @@ public sealed class RoleGateTests
         // Absent means ON, everywhere: an older stored record, a config written before the switch
         // existed, a role nobody has touched. The one thing that must never happen is a role
         // silently not reviewing because a key was missing.
-        var config = Config((PromptCatalog.ArchitectureRole, 2, 3));
+        var config = Config((RoleCatalog.ArchitectureRole, 2, 3));
 
-        config.For(PromptCatalog.SecurityRole).Enabled.Should().BeTrue();
-        config.RolesForRound(Stage.CodeReview, round: 1).Should().Contain(PromptCatalog.SecurityRole);
+        config.For(RoleCatalog.SecurityRole).Enabled.Should().BeTrue();
+        config.RolesForRound(Stage.CodeReview, round: 1).Should().Contain(RoleCatalog.SecurityRole);
     }
 
     /// <summary>
@@ -402,11 +402,11 @@ public sealed class RoleGateTests
     public void ACustomRoleSwitchedOffInTheCatalog_IsInNoRound()
     {
         var catalog = RoleComposition.Compose([
-            new RoleEntry(PromptCatalog.ArchitectureRole, Active: false),
+            new RoleEntry(RoleCatalog.ArchitectureRole, Active: false),
         ]);
         var config = new PanelConfig(Roles: null, StagePolicy.Human) { Catalog = catalog };
 
-        config.RolesForRound(Stage.CodeReview, round: 1).Should().NotContain(PromptCatalog.ArchitectureRole);
-        config.EnabledRolesOf(Stage.CodeReview).Should().NotContain(PromptCatalog.ArchitectureRole);
+        config.RolesForRound(Stage.CodeReview, round: 1).Should().NotContain(RoleCatalog.ArchitectureRole);
+        config.EnabledRolesOf(Stage.CodeReview).Should().NotContain(RoleCatalog.ArchitectureRole);
     }
 }

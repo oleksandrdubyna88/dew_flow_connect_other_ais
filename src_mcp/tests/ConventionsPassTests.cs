@@ -29,13 +29,13 @@ public sealed class ConventionsPassTests
     [Fact]
     public void TheConventionsPrompt_BelongsToItsOwnRole_AndToNoOther()
     {
-        PromptCatalog.For(PromptCatalog.ConventionsRole)
-            .Should().ContainSingle(p => p.Id == PromptCatalog.ConventionsId,
+        RoleCatalog.Builtin.For(RoleCatalog.ConventionsRole)
+            .Should().ContainSingle(p => p.Id == RoleCatalog.ConventionsId,
                 "the Conventions role has exactly one prompt, which is therefore its universal one");
 
-        foreach (var role in (string[])[PromptCatalog.ArchitectureRole, PromptCatalog.SecurityRole, PromptCatalog.UxDxRole, PromptCatalog.PlanRole])
+        foreach (var role in (string[])[RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole, RoleCatalog.PlanRole])
         {
-            PromptCatalog.For(role).Should().NotContain(p => p.Id == PromptCatalog.ConventionsId,
+            RoleCatalog.Builtin.For(role).Should().NotContain(p => p.Id == RoleCatalog.ConventionsId,
                 $"{role} no longer offers the conventions prompt — that was the point of the role");
         }
     }
@@ -47,8 +47,8 @@ public sealed class ConventionsPassTests
         // question asked twice rather than a substitution that only happens once.
         foreach (var round in (int[])[1, 2, 3])
         {
-            PromptCatalog.ForRound(PromptCatalog.ConventionsRole, round, NoChoice)
-                .Id.Should().Be(PromptCatalog.ConventionsId);
+            RoleCatalog.Builtin.ForRound(RoleCatalog.ConventionsRole, round, NoChoice)
+                .Id.Should().Be(RoleCatalog.ConventionsId);
         }
     }
 
@@ -64,13 +64,13 @@ public sealed class ConventionsPassTests
     [Fact]
     public void RoundOne_IsNoLongerSpecial_ForAnyRole()
     {
-        foreach (var role in (string[])[PromptCatalog.ArchitectureRole, PromptCatalog.SecurityRole, PromptCatalog.UxDxRole, PromptCatalog.PlanRole])
+        foreach (var role in (string[])[RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole, RoleCatalog.PlanRole])
         {
-            var universal = PromptCatalog.For(role).First(p => p.Universal).Id;
+            var universal = RoleCatalog.Builtin.For(role).First(p => p.Universal).Id;
 
-            PromptCatalog.ForRound(role, 1, NoChoice).Id.Should().Be(universal,
+            RoleCatalog.Builtin.ForRound(role, 1, NoChoice).Id.Should().Be(universal,
                 $"{role} round 1 is {role}'s own question now");
-            PromptCatalog.ForRound(role, 2, NoChoice).Id.Should().Be(universal);
+            RoleCatalog.Builtin.ForRound(role, 2, NoChoice).Id.Should().Be(universal);
         }
     }
 
@@ -134,7 +134,7 @@ public sealed class ConventionsPassTests
     public void AnExplicitChoice_StillWins()
     {
         // A default, not a lock — the rule that survived every reshaping of this pass.
-        PromptCatalog.ForRound(PromptCatalog.ArchitectureRole, 1, ["arch-boundaries"])
+        RoleCatalog.Builtin.ForRound(RoleCatalog.ArchitectureRole, 1, ["arch-boundaries"])
             .Id.Should().Be("arch-boundaries");
     }
 
@@ -151,10 +151,10 @@ public sealed class ConventionsPassTests
     [Fact]
     public void AStoredConventionsChoice_UnderARoleThatNoLongerOffersIt_FallsBackToThatRolesOwnQuestion()
     {
-        foreach (var role in (string[])[PromptCatalog.ArchitectureRole, PromptCatalog.SecurityRole, PromptCatalog.UxDxRole])
+        foreach (var role in (string[])[RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole])
         {
-            PromptCatalog.ForRound(role, 1, [PromptCatalog.ConventionsId])
-                .Id.Should().Be(PromptCatalog.For(role).First(p => p.Universal).Id,
+            RoleCatalog.Builtin.ForRound(role, 1, [RoleCatalog.ConventionsId])
+                .Id.Should().Be(RoleCatalog.Builtin.For(role).First(p => p.Universal).Id,
                     $"{role} no longer offers the conventions prompt, so a saved choice of it is stale");
         }
     }
@@ -162,14 +162,14 @@ public sealed class ConventionsPassTests
     [Fact]
     public void AnUnknownChoice_FallsBackRatherThanLeavingTheRoundWithNothing()
     {
-        PromptCatalog.ForRound(PromptCatalog.SecurityRole, 1, ["a-prompt-that-was-renamed"])
-            .Id.Should().Be(PromptCatalog.For(PromptCatalog.SecurityRole).First(p => p.Universal).Id);
+        RoleCatalog.Builtin.ForRound(RoleCatalog.SecurityRole, 1, ["a-prompt-that-was-renamed"])
+            .Id.Should().Be(RoleCatalog.Builtin.For(RoleCatalog.SecurityRole).First(p => p.Universal).Id);
     }
 
     [Fact]
     public void ThePlanStage_IsUntouched_BecauseAPlanIsNotADiff()
     {
-        PromptCatalog.ForRound(PromptCatalog.PlanRole, 1, NoChoice)
+        RoleCatalog.Builtin.ForRound(RoleCatalog.PlanRole, 1, NoChoice)
             .Id.Should().Be("plan-critique");
     }
 
