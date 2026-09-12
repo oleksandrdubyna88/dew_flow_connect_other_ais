@@ -21,18 +21,19 @@ import { ChatMessage } from '../chatPage';
  *
  * <p>`chatStore.ts` decides what a record MEANS and is tested without a disk. This is the other half:
  * that the two files land in the order one commit needs, that a metadata file torn away from its
- * record is regenerated rather than believed, that a second window holding a stale revision is
- * refused instead of overwriting the first — under a real exclusive create, not a read-then-rename —
- * and that a store which cannot be READ is told apart from one that is simply empty. None of that can
- * be asserted against a fake filesystem, because the things it guards against — a rename's order, a
- * partial write, an `O_EXCL` race, a directory that is really a file — are the filesystem's own
- * behaviour. (The plan's test rule: "against a REAL temporary directory.")</p>
+ * record is regenerated rather than believed — under the conversation's lock, against the disk as it
+ * is then — that a second window holding a stale revision is refused instead of overwriting the first,
+ * that a delete cannot race a save, and that a store which cannot be READ is told apart from one that
+ * is simply empty. None of that can be asserted against a fake filesystem, because the things it
+ * guards against — a rename's order, a partial write, an `O_EXCL` race, a directory that is really a
+ * file — are the filesystem's own behaviour. (The plan's test rule: "against a REAL temporary
+ * directory.")</p>
  *
  * <p>Every fixture goes through the store's own writer and reader, never a hand-typed JSON cast: a
  * record is {@link ChatStoreFile.save}d and {@link ChatStoreFile.read} back, so the real validator in
  * `chatStore.ts` runs on the way in and the way out. The exceptions are where a test SIMULATES a
  * crash or a rival — a hand-written stale metadata file, a metadata deleted from under a record, a
- * lock left by a dead writer — which is exactly the disk state those leave and cannot be produced
+ * lock held by another window — which is exactly the disk state those leave and cannot be produced
  * through the happy path.</p>
  */
 
@@ -78,8 +79,13 @@ async function capturing<T>(run: () => Promise<T>): Promise<{ readonly value: T;
   }
 }
 
-/** Every name in the directory that is a lock — a save must never leave one, whatever it came to. */
+/** Every name in the directory that is a lock — a mutation must never leave one, whatever it came to. */
 const locksIn = (dir: string): readonly string[] => readdirSync(dir).filter((name) => name.endsWith('.lock'));
+
+/** A lock as another, live window would leave it: fresh, and not ours. */
+const rivalLock = (dir: string, id: string, doing: string): void => {
+  writeFileSync(join(dir, lockName(id)), JSON.stringify({ pid: 1, at: new Date(AT).toISOString(), token: 'rival:1', doing }), 'utf8');
+};
 
 // ---------------------------------------------------------------------------------------------
 // The round trip, and the atomic write it rests on.
@@ -93,7 +99,7 @@ test('a record saved comes back through read exactly as it went in, at its new r
 
     const saved = await store.save(mine, 0);
     assert.equal(saved.kind, 'ok', 'a first save was not accepted');
-    assert.equal(revOf(saved), 1, 'a first write, with no expected rev, must land at rev 1');
+    assert.equal(revOf(saved), 1, 'a first write, at baseline 0, must land at rev 1');
 
     assert.deepEqual(await store.read(mine.id), { ...mine, rev: 1 }, 'the conversation did not round-trip');
   } finally {
@@ -206,15 +212,15 @@ test('a second writer holding a stale rev is REFUSED, and the first writer\u2019
   }
 });
 
-test('a first write needs no expected rev; a SECOND with the same stale expectation is refused', async () => {
-  // `expectedRev` of 0/undefined means "I have not read this record". It is honest exactly once: the
-  // second time it is a claim the record is not there, which the disk contradicts.
+test('a first write is baseline 0; a SECOND at baseline 0 over what it created is refused', async () => {
+  // Baseline 0 means "I have not read this record". It is honest exactly once: the second time it is a
+  // claim the record is not there, which the disk contradicts.
   const dir = home();
   try {
     const store = new ChatStoreFile(dir);
 
-    const first = await store.save(record(), undefined);
-    assert.equal(first.kind, 'ok', 'a first write with no expected rev was refused');
+    const first = await store.save(record(), 0);
+    assert.equal(first.kind, 'ok', 'a first write at baseline 0 was refused');
     assert.equal(revOf(first), 1);
 
     const again = await store.save(record({ passage: 'a second, blind write' }), 0);
@@ -243,6 +249,7 @@ test('a record whose metadata is MISSING is still readable, and the metadata is 
 
     const rebuilt = metaFrom(JSON.parse(readFileSync(join(dir, besideMeta('a1')), 'utf8')));
     assert.deepEqual(rebuilt, metaOf(back!), 'the metadata was not regenerated from the record on read');
+    assert.deepEqual(locksIn(dir), [], 'the reconciliation left its lock behind');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -273,15 +280,36 @@ test('a metadata file at an OLDER rev than its record is reconciled on read, not
   }
 });
 
+test('a TORN metadata file is said out loud with its path before it is written over', async () => {
+  // Accepted on the second round: turning a torn index silently into "absent" and regenerating it
+  // hides the fact from whoever is debugging why rows kept disappearing. It is still regenerated.
+  const dir = home();
+  try {
+    const store = new ChatStoreFile(dir);
+    await store.save(record(), 0);
+    const path = join(dir, besideMeta('a1'));
+    writeFileSync(path, '{ not json', 'utf8');
+
+    const { value: back, lines } = await capturing(() => store.read('a1'));
+
+    assert.ok(back !== undefined);
+    assert.ok(lines.some((line) => line.includes('torn') && line.includes(path)), `a torn index was not said with its path: ${lines.join(' | ')}`);
+    assert.deepEqual(metaFrom(JSON.parse(readFileSync(path, 'utf8'))), metaOf(back!), 'the torn index was not regenerated');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // ---------------------------------------------------------------------------------------------
 // Deletion — the order, and forget.
 // ---------------------------------------------------------------------------------------------
 
-test('a delete interrupted after the metadata leaves NO listable row', async () => {
+test('a delete interrupted after the metadata leaves NO listable row — and an id that cannot be reused', async () => {
   // forget deletes the metadata first, then the record. A crash between the two leaves a transcript
   // with no metadata — a file nobody can see rather than a row that opens onto nothing. It must not
-  // appear in the listing, because the listing is metadata only. (Reclaiming that file is story B1's
-  // sweep, deliberately not this listing's.)
+  // appear in the listing, because the listing is metadata only; and a baseline-0 save meets it and is
+  // refused, so the id stays taken until story B1's sweep collects the file. That is the shape the
+  // header documents, and it is deliberately not repaired here.
   const dir = home();
   try {
     const store = new ChatStoreFile(dir);
@@ -289,21 +317,23 @@ test('a delete interrupted after the metadata leaves NO listable row', async () 
     rmSync(join(dir, besideMeta('a1'))); // the metadata is gone; the record lingers
 
     assert.deepEqual([...(await store.listMeta())], [], 'a half-deleted conversation still shows a row');
+    const reuse = await store.save(record({ passage: 'a new conversation under the old id' }), 0);
+    assert.equal(reuse.kind, 'refused', 'an orphaned transcript was written over by a new conversation');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('forget removes both files of a conversation', async () => {
+test('forget removes both files of a conversation and says so', async () => {
   const dir = home();
   try {
     const store = new ChatStoreFile(dir);
     await store.save(record(), 0);
     assert.equal(readdirSync(dir).length, 2, 'the setup did not write the pair');
 
-    await store.forget('a1');
+    assert.deepEqual(await store.forget('a1'), { kind: 'ok' }, 'a completed deletion did not report itself completed');
 
-    assert.deepEqual(readdirSync(dir), [], 'a forgotten conversation left a file behind');
+    assert.deepEqual(readdirSync(dir), [], 'a forgotten conversation left a file — or its lock — behind');
     assert.equal(await store.read('a1'), undefined, 'a forgotten conversation is still readable');
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -388,7 +418,7 @@ test('a file in the directory that is not one of ours — a lock included — is
     writeFileSync(join(dir, 'notes.txt'), 'personal notes', 'utf8');
     writeFileSync(join(dir, 'x.json'), '{"unsafe":true}', 'utf8'); // a transcript-shaped stranger
     writeFileSync(join(dir, 'bad id.meta.json'), '{"has":"a space in its id"}', 'utf8'); // unsafe id
-    writeFileSync(join(dir, lockName('mine', 2)), '{"pid":1}', 'utf8'); // a claim in flight
+    rivalLock(dir, 'mine', 'save 2'); // a claim in flight
 
     assert.deepEqual((await store.listMeta()).map((m) => m.id), ['mine'], 'a stranger was read as a conversation');
   } finally {
@@ -422,11 +452,27 @@ test('one torn metadata file does not empty the whole listing', async () => {
     await store.save(record({ id: 'second' }), 0);
     writeFileSync(join(dir, besideMeta('third')), '{ this is not json', 'utf8');
 
-    assert.deepEqual(
-      (await store.listMeta()).map((m) => m.id).sort(),
-      ['first', 'second'],
-      'a torn index entry took the readable ones down with it',
-    );
+    const { value: listed } = await capturing(async () => (await store.listMeta()).map((m) => m.id).sort());
+    assert.deepEqual(listed, ['first', 'second'], 'a torn index entry took the readable ones down with it');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a listing wider than the read window returns every row, in directory order', async () => {
+  // The metadata files are read eight at a time, not serially and not all at once; what must not
+  // change is the answer. Twenty conversations is two and a half windows.
+  const dir = home();
+  try {
+    const store = new ChatStoreFile(dir);
+    const ids = Array.from({ length: 20 }, (_, at) => `c${String(at).padStart(2, '0')}`);
+    for (const id of ids) {
+      assert.equal((await store.save(record({ id }), 0)).kind, 'ok');
+    }
+
+    const listed = (await store.listMeta()).map((m) => m.id);
+
+    assert.deepEqual(listed, ids, 'a bounded-concurrency listing lost or reordered rows');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -478,14 +524,33 @@ test('a save whose directory cannot even be created fails cleanly, with no path 
   }
 });
 
+test('a baseline that is not a whole number of zero or more is a typed failure, never quietly floored', async () => {
+  // Accepted on the second round: an update whose baseline the caller forgot — or garbled — must not
+  // silently become a creation attempt, or a swap against a number the caller never read.
+  const dir = home();
+  try {
+    const store = new ChatStoreFile(dir);
+
+    for (const bad of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const outcome = await store.save(record(), bad);
+      assert.equal(outcome.kind, 'failed', `a baseline of ${bad} was acted on`);
+      assert.ok(outcome.kind === 'failed' && outcome.reason.length > 0, 'an invalid baseline gave no reason');
+    }
+    assert.deepEqual(readdirSync(dir), [], 'an invalid baseline wrote something, or took a lock');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // ---------------------------------------------------------------------------------------------
-// What the code round of story A2 found. Each of these is a test before it was a fix.
+// What the code rounds of story A2 found. Each of these is a test before it was a fix.
 // ---------------------------------------------------------------------------------------------
 
 test('two writers with ONE baseline racing for one id: exactly one lands, whole, and the other is refused', async () => {
-  // codex, Blocking: "read the rev, then rename" is not a compare-and-swap. Two windows that both
-  // read 5 both see 5, both choose 6, both rename, and the second silently replaces the first. The
-  // fix is an exclusive create of the transition (`chatStoreLock.ts`); this is the race, run for real.
+  // codex, Blocking, round one: "read the rev, then rename" is not a compare-and-swap. Two windows that
+  // both read 5 both see 5, both choose 6, both rename, and the second silently replaces the first.
+  // The fix is an exclusive create of the conversation (`chatStoreLock.ts`); this is the race, run
+  // for real. The loser either finds the lock held or, having waited it out, finds rev 1 on disk.
   const dir = home();
   try {
     const store = new ChatStoreFile(dir);
@@ -506,18 +571,17 @@ test('two writers with ONE baseline racing for one id: exactly one lands, whole,
   }
 });
 
-test('a transition another window is performing right now is refused — the lock is the swap', async () => {
+test('a conversation another window holds right now is refused — the lock is the swap', async () => {
   const dir = home();
   try {
     const store = new ChatStoreFile(dir);
-    const rival = { pid: 1, at: new Date(AT).toISOString(), token: 'rival:1' };
-    writeFileSync(join(dir, lockName('a1', 1)), JSON.stringify(rival), 'utf8');
+    rivalLock(dir, 'a1', 'save 1');
 
     const outcome = await store.save(record(), 0, AT);
 
-    assert.equal(outcome.kind, 'refused', 'a save proceeded over a transition somebody else holds');
+    assert.equal(outcome.kind, 'refused', 'a save proceeded over a conversation somebody else holds');
     assert.equal(existsSync(join(dir, recordName('a1'))), false, 'a refused save wrote its record anyway');
-    assert.equal(JSON.parse(readFileSync(join(dir, lockName('a1', 1)), 'utf8')).token, 'rival:1', 'the rival\u2019s lock was removed');
+    assert.equal(JSON.parse(readFileSync(join(dir, lockName('a1')), 'utf8')).token, 'rival:1', 'the rival\u2019s lock was removed');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -527,8 +591,8 @@ test('a lock left by a dead writer is broken after the window and the save goes 
   const dir = home();
   try {
     const store = new ChatStoreFile(dir);
-    const dead = { pid: 1, at: new Date(AT - LOCK_STALE_MS - 1_000).toISOString(), token: 'dead:1' };
-    writeFileSync(join(dir, lockName('a1', 1)), JSON.stringify(dead), 'utf8');
+    const dead = { pid: 1, at: new Date(AT - LOCK_STALE_MS - 1_000).toISOString(), token: 'dead:1', doing: 'save 1' };
+    writeFileSync(join(dir, lockName('a1')), JSON.stringify(dead), 'utf8');
 
     const { value: outcome } = await capturing(() => store.save(record(), 0, AT));
 
@@ -596,7 +660,7 @@ test('a file this build cannot read at an id is INCOMPATIBLE — refused untouch
     assert.equal(readFileSync(join(dir, recordName('a1')), 'utf8'), newer);
 
     // And `forget` is the built-in way out.
-    await store.forget('a1');
+    assert.deepEqual(await store.forget('a1'), { kind: 'ok' });
     assert.equal((await store.save(record(), 0)).kind, 'ok', 'the id could not be reused after the quarantined file was cleared');
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -612,7 +676,7 @@ test('a save with a baseline above zero over an ABSENT record is refused — it 
     const store = new ChatStoreFile(dir);
     const born = await store.save(record(), 0);
     assert.equal(revOf(born), 1);
-    await store.forget('a1'); // the other window trashes it
+    assert.deepEqual(await store.forget('a1'), { kind: 'ok' }); // the other window trashes it
 
     const resurrect = await store.save(record({ passage: 'from the grave' }), 1);
 
@@ -641,6 +705,54 @@ test('a record REPLACED under a writer — present, but at a lower rev than it r
     assert.equal(splice.kind, 'refused', 'a writer wrote over a record that was not the one it read');
     assert.equal(splice.kind === 'refused' ? splice.diskRev : -1, 1);
     assert.equal((await store.read('a1'))?.passage, 'a new lineage', 'the re-created conversation was overwritten');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('forget takes the conversation\u2019s lock: a conversation another window is changing is not deleted, and says so', async () => {
+  // codex, round two: with a per-revision lock, `forget` raced `save` into either resurrecting a
+  // deleted conversation or leaving a row that opens onto nothing. Under one lock per conversation the
+  // delete waits, and if the holder is still there it reports `failed` for the sweep to retry.
+  const dir = home();
+  try {
+    const store = new ChatStoreFile(dir);
+    await store.save(record(), 0);
+    rivalLock(dir, 'a1', 'save 2');
+
+    const outcome = await store.forget('a1', AT);
+
+    assert.equal(outcome.kind, 'failed', 'a conversation another window holds was deleted under it');
+    assert.ok(outcome.kind === 'failed' && outcome.reason.length > 0, 'a refused delete gave no reason');
+    assert.equal(existsSync(join(dir, recordName('a1'))), true, 'the transcript was deleted under a live writer');
+    assert.equal(existsSync(join(dir, besideMeta('a1'))), true, 'the index was deleted under a live writer');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a read\u2019s reconciliation takes the conversation\u2019s lock, and writes nothing while another window holds it', async () => {
+  // Two races the second round found: a `forget` that has just unlinked the metadata has its deletion
+  // undone by a reader regenerating the row; and a read that captured rev 1 while another window
+  // committed rev 2 writes a rev-1 index beside a rev-2 transcript. Both are closed by the same rule —
+  // the index is written only under the lock — and this is the observable half of it: with the lock
+  // held by somebody else, the read still returns the record and leaves the index alone.
+  const dir = home();
+  try {
+    const store = new ChatStoreFile(dir);
+    await store.save(record(), 0);
+    rmSync(join(dir, besideMeta('a1'))); // the index is gone — a forget mid-flight, say
+    rivalLock(dir, 'a1', 'forget');
+
+    const held = await store.read('a1', AT);
+
+    assert.ok(held !== undefined, 'a read returned nothing because it could not reconcile');
+    assert.equal(existsSync(join(dir, besideMeta('a1'))), false, 'a reader regenerated a row while another window was deleting the conversation');
+
+    rmSync(join(dir, lockName('a1'))); // the other window finishes
+    await store.read('a1', AT);
+    assert.equal(existsSync(join(dir, besideMeta('a1'))), true, 'with the lock free, the index was not reconciled after all');
+    assert.deepEqual(locksIn(dir), [], 'the reconciliation left its lock behind');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

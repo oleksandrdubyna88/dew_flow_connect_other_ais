@@ -207,13 +207,31 @@ conversation:
 - **Two windows writing ONE conversation cannot lose each other's turns.** The per-file rename makes
   a file whole; it does nothing about two windows that both reopened the same record, which is
   reachable (two windows on one workspace, *go to* pressed in each). So a write is a
-  compare-and-swap: the writer holds the `rev` it last read, and a record on disk carrying a higher
-  one means somebody else is in this conversation. The write is then **refused, not overwritten** —
-  this window re-mints its conversation under a NEW id, keeps the transcript it holds, says so in the
-  page (*this conversation was continued in another window; this tab is now a copy*), and writes
-  there. Nothing is lost on either side, and there is no lock to leak. The atomic operation this
-  rests on is still the single rename; the `rev` is what makes a lost update detectable rather than
-  silent.
+  compare-and-swap: the writer holds the `rev` it last read, and a record on disk carrying anything
+  else means somebody else has been in this conversation. The write is then **refused, not
+  overwritten** — this window re-mints its conversation under a NEW id, keeps the transcript it
+  holds, says so in the page (*this conversation was continued in another window; this tab is now a
+  copy*), and writes there. Nothing is lost on either side.
+
+  **What that rests on, corrected by A2's rounds.** The first draft of this paragraph said "there is
+  no lock to leak" and named the rename as the atomic operation. A code round showed that reading the
+  `rev` and then renaming is a check-then-act, not a swap: two windows both holding baseline 5 both
+  observe 5, both choose 6, and the second silently replaces the first. So the transition to a
+  revision is **claimed** — one `<id>.lock` per conversation, created exclusively (`wx`), which is
+  the one operation a filesystem offers as an atomic test-and-set — and the disk is probed only under
+  the claim. Every mutating operation takes it: a save, a delete, and the metadata regeneration a
+  read performs. Release is fenced by a token, a claim older than thirty seconds is broken once so a
+  killed writer cannot wedge a conversation for ever, and the residual window that leaves is stated
+  in the module's own header rather than in this plan.
+
+- **The vocabulary a save answers in**, because A3 and B3 are written against it: `ok` · `partial`
+  (the record committed, its index did not — advance the baseline, the index self-heals on the next
+  read) · `refused` (somebody else is in this conversation, with the revision on disk) ·
+  `incompatible` (the record on disk is torn or of a version this build does not know; **nothing is
+  written**, so an older build cannot replace a newer one after a downgrade) · `failed` (a disk that
+  would not answer, with a sentence a person can read and no path in it — the path goes to the
+  console). A conversation deleted in one window cannot be resurrected by another window saving the
+  copy it still holds: an absent record under a non-zero baseline is a refusal, not a creation.
 - **A store that cannot be READ is unavailable, not empty.** `ENOENT` on the directory is an ordinary
   state — nobody has chatted yet — and reads as an empty store. `EACCES`, a full disk, a directory
   where a file should be: those mean history EXISTS and could not be read, and answering "no
@@ -411,7 +429,8 @@ under it).
 
 | What | Projected size | Who retires it | Interrupted |
 |---|---|---|---|
-| `<coaiDataDir>/chat-conversations/*.json` | a transcript is bounded in practice by the carry budget's order of magnitude — 20–60 KB; at 30 conversations a day × 90 days ≈ 2 700 files ≈ 80 MB worst case, ≈ 5 a day ≈ 13 MB typical | the activation sweep: `updatedAt` older than **90 days** deletes both files; the trash button deletes one on request. The sweep does NOT run while the store reads `unavailable` — a directory that would not answer must not be interpreted as a directory full of expired things | a `.tmp` beside a record is a crash mid-write; the sweep removes any `.tmp` older than an hour, and a reader never sees it because it was never renamed |
+| `<coaiDataDir>/chat-conversations/*.json` | a transcript is bounded in practice by the carry budget's order of magnitude — 20–60 KB; at 30 conversations a day × 90 days ≈ 2 700 files ≈ 80 MB worst case, ≈ 5 a day ≈ 13 MB typical. **The whole record is rewritten on every save**, which a code round questioned and which is deliberate: one file replaced atomically is what keeps a reader from ever seeing half a conversation, and the carry budget is what keeps the file small enough for that to be free. If a transcript ever stops being bounded, an append-and-compact log is the tail to take | the activation sweep: `updatedAt` older than **90 days** deletes both files; the trash button deletes one on request. The sweep does NOT run while the store reads `unavailable` — a directory that would not answer must not be interpreted as a directory full of expired things | a `.tmp` beside a record is a crash mid-write; the sweep removes any `.tmp` older than an hour, and a reader never sees it because it was never renamed |
+| `<coaiDataDir>/chat-conversations/*.lock` | one per conversation being written, ~80 B, alive for the length of two file writes | its own writer, in a `finally`; a claim older than thirty seconds is broken by the next writer, and B1's sweep collects one whose owner died before either | a lock left by a killed writer is what the stale window exists for; the residual race it leaves is stated in `chatStoreLock.ts`'s header rather than here |
 | `*.meta.json` | ≈ 300 B each, the same count | with its record; a metadata file whose record is gone is removed by the same sweep | a `rev` lower than its record's means the pair was interrupted: the reader regenerates it from the record rather than trusting it |
 | the metadata cache in memory | one entry per meta file, ≈ 300 B; at 2 700 records ≈ 800 KB, bounded by the sweep | built in the background at activation, refreshed against the directory's filename set and by `mtime` | a failed refresh keeps the last good cache and logs; a record deleted by another window leaves the cache on the next reconcile |
 | `workspaceState['coai.chatTabs']` | today ≤ 20 records | emptied by the migration on the first activation of this build | a migration interrupted after some files and before the key is emptied re-runs; a record already on disk is skipped by id |
@@ -463,7 +482,7 @@ Everything else reads or writes it, and it holds the only migration.
 | Story | What it lands | Tests |
 |---|---|---|
 | **A1** *Atomic write, and the store's pure shapes* | `atomicFile.ts` (sync + async), `chatOrphans.ts` calling it, `chatStore.ts`: the record, `ConversationSource`, `isRecord`, `metaOf`, `isStale` by `rev`, `expired`, `fromLegacy` | `atomicFile.test.ts`, `chatStore.test.ts` — round trip, a record without the new fields, wrong `version`, damaged dropped, meta derivation, 90 days on a pinned clock, the legacy mapping |
-| **A2** *The file protocol* ⚠ | `chatStoreFile.ts`: `save(record, expectedRev)` → ok \| refused \| failed, `read`, `forget`, `listMeta`, `state()` — record then meta under one `rev`, delete meta then record, stale meta regenerated, `ENOENT` empty vs `unavailable(reason)` | `chatStoreFile.test.ts` against a real directory — order, torn `.tmp`, reconciliation, interrupted delete, a refused stale writer, missing vs unreadable |
+| **A2** *The file protocol* ⚠ | `chatStoreFile.ts` + `chatStoreLock.ts`: `save(record, expectedRev)` → ok \| partial \| refused \| incompatible \| failed, `read`, `forget`, `listMeta`, `state()` — record then meta under one `rev`, claimed by an exclusive-create lock per conversation, delete meta then record, stale meta regenerated under the claim, `ENOENT` empty vs `unavailable(reason)` | `chatStoreFile.test.ts` and `chatStoreLock.test.ts` against a real directory — order, torn `.tmp`, reconciliation, interrupted delete, a refused stale writer, racers on one lock, a lock broken at the stale boundary, the downgrade case, missing vs unreadable |
 | **A3** *Dual write, and the re-key message* ⚠ | `show()` writes the store beside the memento; `Thread.rev`, `saveId` mutable; a refused write re-mints under a new id, keeps the transcript, and tells the page | reload-suite source guards, `chatPage.test.ts` for the re-key, a store test that both transcripts survive a fork |
 | **A4** *Cut-over: read from the store, import, retire the memento* ⚠⚠ | the serializer reads the store; `coai.chatTabs` imported only where no `<id>.json` exists; the key emptied once, after every record is confirmed; `ChatTabMemory` and the `KEEP_*` constants go; the serializer's behaviour when the store is `unavailable` is decided and tested — today an absent record disposes the panel, and disposing over a permissions error would throw a tab away | `chatStoreImport.test.ts` incl. the interrupted case; the reload suite re-pointed |
 
@@ -471,7 +490,7 @@ Everything else reads or writes it, and it holds the only migration.
 
 | Story | What it lands | Tests |
 |---|---|---|
-| **B1** *Housekeeping and the index* ⚠ | `chatStoreSweep.ts` (90 days, `.tmp` over an hour, orphan meta, stale meta) and `chatStoreCache.ts` (build in the background at activation, `refresh()` reconciling the filename set and `mtime ≥ last load`, `bySource`, `entries(scope)`); neither runs while the store is `unavailable` | sweep and cache tests on a real directory with a pinned clock |
+| **B1** *Housekeeping and the index* ⚠ | `chatStoreSweep.ts` (90 days, `.tmp` over an hour, orphan meta, stale meta, **an orphaned TRANSCRIPT with no metadata beside it** — left by a crash between A2's two deletes, invisible to the listing and holding its id against reuse — and a quarantined `incompatible` record, which A2 deliberately writes nothing over) and `chatStoreCache.ts` (build in the background at activation, `refresh()` reconciling the filename set and `mtime ≥ last load`, `bySource`, `entries(scope)`); neither runs while the store is `unavailable`; a stale `<id>.lock` older than its window is collected here too | sweep and cache tests on a real directory with a pinned clock |
 | **B2** *The picker's rows, pure* | `conversationPicker.ts` — *Open* then *Recent*, ordering, row text, the workspace filter, open ids excluded, newest 100 rendered, an `unavailable` notice row | `conversationPicker.test.ts` |
 | **B3** *The command* | `conversationPickerCommand.ts` (`createQuickPick`), `openConversations(panels)`, `restoreConversation` with `panel` optional — its first caller without one; `Door` gains `switch`; manifest, help ×5, README, CHANGELOG | `chatWiring.test.ts` (derived door, a gone record reported not restored), `chatDoors.test.ts`, `helpCoverage` |
 | **B4** *Forget and scope* | the trash button and `coai.forgetPickedConversation` on `Alt+Delete` scoped by `inQuickOpen && coai.conversationsPickerOpen`, rebuilding without hiding; the all-workspaces toggle | the wiring test learns that a keybinding scoped to our own picker is NOT a door, and says why |
