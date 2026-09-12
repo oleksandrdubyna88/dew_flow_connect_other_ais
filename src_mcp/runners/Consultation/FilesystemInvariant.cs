@@ -81,11 +81,23 @@ public sealed class FilesystemInvariant(IProcessLauncher launcher)
     };
 
     /// <summary>The file's content hash where that is affordable, and its stat pair otherwise.</summary>
+    /// <remarks>
+    /// <b>A DIRECTORY fingerprints as its existence and nothing more.</b> git lists an ignored
+    /// directory as ONE entry, so its mtime was standing in for everything inside it — and a build,
+    /// a language server or an editor writing one temporary file into <c>bin/</c> or
+    /// <c>node_modules/</c> between the two snapshots moves that mtime while the contents end up
+    /// exactly as they were. Every consultation on a machine with a watcher running would have failed
+    /// closed over it. Found by the CONSULTANT, asked on this feature's own live check where this
+    /// invariant's most likely false positive was, and reproduced as a red test before it was
+    /// believed. What is kept is the entry itself: a directory that appears or disappears is still a
+    /// change. What is given up is child churn inferred from a timestamp, which was never a fact
+    /// about the consultant — see the residual named in the class remarks.
+    /// </remarks>
     private static string Fingerprint(string full)
     {
         if (Directory.Exists(full))
         {
-            return $"dir|{Directory.GetLastWriteTimeUtc(full).Ticks}";
+            return "dir";
         }
 
         if (!File.Exists(full))

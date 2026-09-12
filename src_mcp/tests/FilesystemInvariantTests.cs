@@ -207,6 +207,47 @@ public sealed class FilesystemInvariantTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ChurnInsideAnIgnoredDIRECTORY_IsNotABreach()
+    {
+        // FOUND BY THE CONSULTANT ITSELF, on the feature's own live check (2026-09-12), and verified
+        // here before it was believed: git lists an ignored DIRECTORY as ONE entry, so the fingerprint
+        // was that directory's mtime — and a build or an editor writing a temp file into `bin/` or
+        // `node_modules/` between the two snapshots moved it. Every consultation on a machine with a
+        // watcher running would have failed closed with the tree in exactly the state it started in.
+        await File.WriteAllTextAsync(Path.Combine(_repo, ".gitignore"), ".env\nbuild/\n", TestContext.Current.CancellationToken);
+        var build = Directory.CreateDirectory(Path.Combine(_repo, "build")).FullName;
+        await File.WriteAllTextAsync(Path.Combine(build, "already-here.o"), "old\n", TestContext.Current.CancellationToken);
+
+        var changes = await AcrossAsync(async () =>
+        {
+            var temp = Path.Combine(build, "a-watcher-wrote-this.tmp");
+            await File.WriteAllTextAsync(temp, "transient\n", TestContext.Current.CancellationToken);
+            File.Delete(temp);
+            Directory.SetLastWriteTimeUtc(build, DateTime.UtcNow.AddSeconds(5));
+        });
+
+        changes.Should().NotContain(c => c.Path.StartsWith("build", StringComparison.Ordinal),
+            "the directory's contents are back as they were, and its mtime is not something the consultant can be judged on");
+    }
+
+    [Fact]
+    public async Task AnIgnoredDirectoryThatAPPEARS_IsStillSeen()
+    {
+        // The other half: the mtime is dropped, the ENTRY is not. A directory that was not there
+        // before is a change, and dropping the timestamp must not drop that too.
+        await File.WriteAllTextAsync(Path.Combine(_repo, ".gitignore"), ".env\nbuild/\n", TestContext.Current.CancellationToken);
+
+        var changes = await AcrossAsync(() =>
+        {
+            Directory.CreateDirectory(Path.Combine(_repo, "build"));
+            File.WriteAllText(Path.Combine(_repo, "build", "out.o"), "new\n");
+            return Task.CompletedTask;
+        });
+
+        changes.Should().Contain(c => c.Path.StartsWith("build", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task TheSnapshotNeverChangesTheTreeItself()
     {
         var before = await Status();
