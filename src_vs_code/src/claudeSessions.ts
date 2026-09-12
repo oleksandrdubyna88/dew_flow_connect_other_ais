@@ -233,6 +233,10 @@ export type Asked =
 /**
  * Everything the person wrote in the session THIS TAB is showing, oldest first.
  *
+ * <p>Two halves, called separately by the host: {@link sessionFileIn} to find the file, which a tab
+ * does ONCE and remembers, and {@link promptsFrom} to read it, which it does on every press. They
+ * were one function until the host started keeping the file between presses.</p>
+ *
  * <p>Found by the same join the waiting question uses: Claude Code writes the conversation's title
  * into its own session file, and that title is what VS Code puts on the tab.</p>
  *
@@ -247,17 +251,6 @@ export type Asked =
  * different situations, and a person looking at an empty box deserves to know which. (codex, on a
  * protocol with no failure result.)</p>
  */
-export async function promptsInSession(
-  home: string,
-  cwd: string,
-  caseBlind: boolean,
-  looking: string,
-): Promise<Asked> {
-  const found = await sessionFileIn(home, cwd, caseBlind, looking);
-
-  return found.kind === 'one' ? await promptsFrom(found.file) : found;
-}
-
 /** Which file a tab's name belongs to, or why it belongs to none. */
 export type Found =
   | { readonly kind: 'one'; readonly file: string }

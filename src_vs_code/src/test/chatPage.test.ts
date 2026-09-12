@@ -2228,3 +2228,25 @@ test('the region opens over half a second, because that is what was asked for', 
   assert.match(asking, /overflow: hidden/, 'a closed region would spill its text over the conversation');
   assert.match(ruleFor(css, '.askedText'), /overflow-y: auto/, 'a long question would push the conversation away');
 });
+
+test('a folded region is out of the keyboard tab order, not merely out of sight', () => {
+  // max-height, opacity and overflow hide a region from the EYE and leave its buttons focusable and
+  // its text on a screen reader — folded away and still reachable, which is the worst of both.
+  // (CodeRabbit, PR #207.)
+  const html = chatPageHtml(state({ fromSession: true }), 'n0nce');
+  const css = html.split('<style>')[1].split('</style>')[0];
+
+  assert.match(ruleFor(css, '.asking'), /visibility: hidden/, 'a folded region kept its buttons in the tab order');
+  assert.match(ruleFor(css, '.asking.open'), /visibility: visible/, 'an open region stayed hidden from the keyboard');
+  // Discretely animated, so it is visible the instant it opens and hidden only once the fold ends.
+  assert.match(ruleFor(css, '.asking'), /transition:[^;]*visibility/, 'the region vanished before it had folded');
+});
+
+test('the button says what it controls and whether it is open', () => {
+  const html = chatPageHtml(state({ fromSession: true }), 'n0nce');
+  const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+
+  assert.match(header, /aria-expanded="false"/, 'a screen reader is not told the region can open');
+  assert.match(header, /aria-controls="asking"/, 'the button does not say what it opens');
+  assert.match(html, /id="asking"[^>]*aria-hidden="true"/, 'a folded region is still announced');
+});

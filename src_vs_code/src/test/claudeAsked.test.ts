@@ -12,7 +12,6 @@ import {
   oneAnswerFrom,
   pinnable,
   promptsFrom,
-  promptsInSession,
   sessionFileIn,
 } from '../claudeSessions';
 import { chatCommandOf } from '../chatMessages';
@@ -25,6 +24,18 @@ import { chatCommandOf } from '../chatMessages';
  * Code writes every one of them to its own session file. These tests fix the two halves of getting
  * them back — which rows count as a person speaking, and which session belongs to this tab.</p>
  */
+
+/** The two halves, composed exactly as the host composes them: find the file, then read it. */
+const promptsInSession = async (
+  home: string,
+  cwd: string,
+  caseBlind: boolean,
+  looking: string,
+): Promise<Asked> => {
+  const found = await sessionFileIn(home, cwd, caseBlind, looking);
+
+  return found.kind === 'one' ? await promptsFrom(found.file) : found;
+};
 
 /** What the shipping reader would take from these lines: it is fed one at a time, off a stream. */
 const humanPrompts = (lines: readonly string[]): readonly string[] =>
@@ -248,6 +259,15 @@ test('the envelope is unwrapped in the shape a real session file has', () => {
   assert.deepStrictEqual(humanPrompts([real]), [
     '/feature-dev:feature-dev проект стал сильно большой.\nхочу структурировать.',
   ]);
+});
+
+test('command arguments may contain the angle brackets a person typed', () => {
+  // `[^<]*` refused the whole envelope over a `<` the PERSON wrote, and their prompt came back
+  // wearing its tags. The closing tag delimits the arguments; nothing else does. (CodeRabbit, #207.)
+  const code = said('<command-name>/explain</command-name>\n<command-args>why is Array<T> not '
+    + 'assignable when x < limit?</command-args>');
+
+  assert.deepStrictEqual(humanPrompts([code]), ['/explain why is Array<T> not assignable when x < limit?']);
 });
 
 test('a message that merely OPENS with the tags is not an envelope', () => {

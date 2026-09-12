@@ -557,10 +557,15 @@ function chatStyle(
   .asked.on { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-focusBorder); }
   /* It OPENS: a height and an opacity that take half a second, because a block of text appearing
      under your eyes with no warning is a jolt. Asked for in those words. */
-  .asking { flex: 0 0 auto; max-height: 0; opacity: 0; overflow: hidden; padding: 0 20px;
-            transition: max-height .5s ease, opacity .5s ease, padding .5s ease;
+  /* VISIBILITY, not only height and opacity. Those three hide a region from the eye and leave its
+     buttons in the tab order and its text on a screen reader — folded away and still reachable, which
+     is the worst of both. The visibility property animates discretely: visible the instant it opens, hidden only
+     once the fold has finished, which is exactly the behaviour wanted. (CodeRabbit, PR #207.) */
+  .asking { flex: 0 0 auto; max-height: 0; opacity: 0; overflow: hidden; padding: 0 20px; visibility: hidden;
+            transition: max-height .5s ease, opacity .5s ease, padding .5s ease, visibility .5s ease;
             border-bottom: 1px solid transparent; }
-  .asking.open { max-height: 40vh; opacity: 1; padding: 0 20px 10px; border-bottom-color: var(--vscode-panel-border); }
+  .asking.open { max-height: 40vh; opacity: 1; padding: 0 20px 10px; visibility: visible;
+                 border-bottom-color: var(--vscode-panel-border); }
   .askingHead { display: flex; align-items: center; gap: 6px; opacity: .75; font-size: .85em; }
   .askingHead button { min-width: 24px; padding: 2px 6px; font: inherit; }
   .askedAt { min-width: 4em; text-align: center; }
@@ -736,9 +741,9 @@ function chatBody(state: ChatPageState, regions: Regions): string {
 
   return `<header>
 <h1>${escapeHtml(state.title)}</h1>${zoomControlHtml(state.uiScale)}${toneControlHtml(state.textTone)}
-${state.fromSession ? '<button type="button" id="asked" class="asked" title="What you asked in this session, read back from disk">Asked</button>' : ''}
+${state.fromSession ? '<button type="button" id="asked" class="asked" aria-expanded="false" aria-controls="asking" title="What you asked in this session, read back from disk">Asked</button>' : ''}
 </header>
-${state.fromSession ? `<section id="asking" class="asking" aria-live="polite">
+${state.fromSession ? `<section id="asking" class="asking" aria-live="polite" aria-hidden="true">
 <div class="askingHead">
   <button type="button" id="askedBack" aria-label="The one before">&lsaquo;</button>
   <span id="askedAt" class="askedAt"></span>
@@ -1121,7 +1126,13 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     const button = document.getElementById('asked');
     if (!region) { return; }
     region.classList.toggle('open', open);
-    if (button) { button.classList.toggle('on', open); }
+    // Said out loud, not merely drawn: a person on a screen reader is told the button is expanded
+    // and the region is there, and while it is folded the region is not announced at all.
+    region.setAttribute('aria-hidden', open ? 'false' : 'true');
+    if (button) {
+      button.classList.toggle('on', open);
+      button.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
   }
   const askedButton = document.getElementById('asked');
   if (askedButton) {

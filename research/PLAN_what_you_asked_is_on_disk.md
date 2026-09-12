@@ -144,16 +144,16 @@ slash — measured on this machine's own session files, where every one reads
   four more names a minifier can rewrite, and the rounds log has been broken exactly that way twice.
   The DOM harness the Send test built is extracted rather than copied.
 
-## Definition of Done
+## Definition of Done — every line of it met on 2026-09-12
 
-- [ ] Two menu items in both menus, neither reading the auto-send setting.
-- [ ] Two waiting sessions in one folder are told apart by the tab's title; the genuinely ambiguous
+- [x] Two menu items in both menus, neither reading the auto-send setting.
+- [x] Two waiting sessions in one folder are told apart by the tab's title; the genuinely ambiguous
       cases still refuse, by name.
-- [ ] The button shows what the person wrote, pinned above the scroll, with arrows and a half-second
+- [x] The button shows what the person wrote, pinned above the scroll, with arrows and a half-second
       fold.
-- [ ] A chat opened from a file has no button.
-- [ ] Help updated in English, Russian, Ukrainian, German and Spanish in the same commit.
-- [ ] `npm run typecheck` clean, the whole suite green, and the bundled-page test watched red before
+- [x] A chat opened from a file has no button.
+- [x] Help updated in English, Russian, Ukrainian, German and Spanish in the same commit.
+- [x] `npm run typecheck` clean, the whole suite green, and the bundled-page test watched red before
       it was watched green.
 
 ## What shipped differently

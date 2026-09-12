@@ -66,11 +66,11 @@ import { LanguageCode } from './settingsShape';
 import { isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
 import { askedAsText } from './claudeQuestion';
 import {
+  Asked,
   Found,
   oneAnswerFrom,
   pinnable,
   promptsFrom,
-  promptsInSession,
   sessionFileIn,
   waitingQuestion,
 } from './claudeSessions';
@@ -258,6 +258,33 @@ async function everyFolder<T>(ask: (folder: string, caseBlind: boolean) => Promi
   const caseBlind = process.platform === 'win32' || process.platform === 'darwin';
 
   return await Promise.all(folders.map((folder) => ask(folder, caseBlind)));
+}
+
+/**
+ * Find this conversation's session by name, keep the file, and read it.
+ *
+ * <p>The path a tab takes when it has no pin — because it was restored from a reload, or because the
+ * background walk at open time found nothing yet. What it resolves it keeps, on the same terms
+ * `pinSession` uses: exactly one session, across every root, with nothing else in doubt.</p>
+ */
+async function resolveAndPin(id: object, title: string): Promise<Asked> {
+  const found = await everyFolder((folder, caseBlind) => sessionFileIn(os.homedir(), folder, caseBlind, title));
+  if (!pinnable(found)) {
+    // Nothing to keep, and the reason is the one the refusal would give anyway.
+    return oneAnswerFrom(found.map(asAsked));
+  }
+  const file = found.find((answer) => answer.kind === 'one')!.file;
+  const mine = threads.get(id);
+  if (mine !== undefined) {
+    mine.sessionFile = file;
+  }
+
+  return await promptsFrom(file);
+}
+
+/** A lookup answer as an answer about prompts — the refusals are word for word the same ones. */
+function asAsked(found: Found): Asked {
+  return found.kind === 'one' ? { kind: 'said', said: [] } : found;
 }
 
 /**
@@ -1630,10 +1657,14 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
         void (async () => {
           // THE FILE FIRST, when this tab has one. It was resolved as the tab opened, while its name
           // still matched — and a name is what goes stale here, never a path.
+          //
+          // A RESTORED tab has none: the reload lost it, so the first press resolves by name and
+          // KEEPS what it found. Without that it resolved afresh every time, by a name that is
+          // exactly as stale on the second press as on the first — so a conversation Claude renamed
+          // after the reload would never be found again. (CodeRabbit, PR #207.)
           const answer = mine.sessionFile.length > 0
             ? await promptsFrom(mine.sessionFile)
-            : oneAnswerFrom(await everyFolder((folder, caseBlind) =>
-              promptsInSession(os.homedir(), folder, caseBlind, mine.title)));
+            : await resolveAndPin(id, mine.title);
           // A REASON, never a blank region. Four situations look identical from an empty box — no
           // session file, no folder, a namesake it refuses to pick between, and a conversation the
           // person has not spoken in yet — and the box is the only place they are looking.
