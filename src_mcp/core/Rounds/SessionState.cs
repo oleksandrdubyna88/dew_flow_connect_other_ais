@@ -181,9 +181,6 @@ public sealed record PanelConfig(
     /// </summary>
     public static PanelConfig Uniform(int maxRounds, int threshold, StagePolicy onExhausted = StagePolicy.Human) =>
         new(AllRoles.ToDictionary(r => r, _ => new RoleGate(maxRounds, threshold)), onExhausted);
-
-    /// <summary>The same config over a catalog that carries a person's own roles as well.</summary>
-    public PanelConfig With(RoleCatalog catalog) => this with { Catalog = catalog };
 }
 
 public enum Stage

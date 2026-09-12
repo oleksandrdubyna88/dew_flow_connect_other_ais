@@ -78,6 +78,27 @@ public static partial class RoleComposition
     [GeneratedRegex("^[a-z0-9][a-z0-9-]*$")]
     private static partial Regex PromptId { get; }
 
+    /// <summary>
+    /// The basenames Windows still resolves to DEVICES, whatever extension follows them.
+    /// </summary>
+    /// <remarks>
+    /// A prompt id becomes <c>&lt;dataDir&gt;/prompts/&lt;id&gt;.md</c>, and on the platform this product is
+    /// developed on, <c>con.md</c> is the console rather than a file: the text could be neither
+    /// written by the panel nor read back by a round, and the failure would arrive as an IO error
+    /// about a path that looks perfectly ordinary. Cheaper to refuse the five letters than to explain
+    /// them later. (codex, on story A2's code round.)
+    /// </remarks>
+    private static readonly HashSet<string> ReservedNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "con", "prn", "aux", "nul",
+        "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
+        "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+    };
+
+    /// <summary>A row's name in a refusal — what a person looks for in the file they wrote.</summary>
+    private static string Label(string? id) =>
+        string.IsNullOrWhiteSpace(id) ? "<a row with no id>" : id;
+
     /// <summary>The shipped catalog with a person's rows composed onto it.</summary>
     /// <param name="entries">
     /// What <c>COAI_ROLES</c> parsed to. Empty — absent, <c>[]</c>, or JSON the parser refused — is
@@ -90,17 +111,45 @@ public static partial class RoleComposition
             RoleCatalog.Builtin.Roles.SelectMany(r => r.Prompts).Select(p => p.Id),
             StringComparer.OrdinalIgnoreCase);
 
-        var overrides = ById(entries, dropped);
+        var rows = Rows(entries, dropped);
+        var overrides = ById(rows, dropped);
         var roles = new List<RoleDefinition>(
             RoleCatalog.Builtin.Roles.Select(r => Overridden(r, overrides.GetValueOrDefault(r.Id), promptIds, dropped)));
 
-        roles.AddRange(Added(entries, roles, promptIds, dropped));
+        roles.AddRange(Added(rows, roles, promptIds, dropped));
 
         return RoleCatalog.From(Capped(roles, dropped), dropped);
     }
 
+    /// <summary>
+    /// The rows that are actually rows — a null list is none, and a null row is one refusal.
+    /// </summary>
+    /// <remarks>
+    /// <c>[null, {...}]</c> is a thing a person can type and a deserialiser hands over intact. Every
+    /// FIELD of a row was nullable from the start; the row itself had been forgotten, and
+    /// dereferencing it aborted the whole composition — one mistyped line taking the four shipped
+    /// roles down with it, which is the failure "nothing here throws" exists to prevent. Found by
+    /// codex on story A2's code round, in three of its roles at once.
+    /// </remarks>
+    private static List<RoleEntry> Rows(IReadOnlyList<RoleEntry>? entries, List<string> dropped)
+    {
+        var rows = new List<RoleEntry>();
+        foreach (var entry in entries ?? [])
+        {
+            if (entry is null)
+            {
+                dropped.Add("<an empty row>: there is nothing in it to make a role out of");
+                continue;
+            }
+
+            rows.Add(entry);
+        }
+
+        return rows;
+    }
+
     /// <summary>The rows that name a built-in, keyed by the seed's own spelling; later duplicates are dropped.</summary>
-    private static Dictionary<string, RoleEntry> ById(IReadOnlyList<RoleEntry> entries, List<string> dropped)
+    private static Dictionary<string, RoleEntry> ById(List<RoleEntry> entries, List<string> dropped)
     {
         var found = new Dictionary<string, RoleEntry>(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in entries)
@@ -140,7 +189,7 @@ public static partial class RoleComposition
 
     /// <summary>The rows that name no built-in: a person's own roles, in the order they wrote them.</summary>
     private static IEnumerable<RoleDefinition> Added(
-        IReadOnlyList<RoleEntry> entries, List<RoleDefinition> taken, HashSet<string> promptIds, List<string> dropped)
+        List<RoleEntry> entries, List<RoleDefinition> taken, HashSet<string> promptIds, List<string> dropped)
     {
         var ids = new HashSet<string>(taken.Select(r => r.Id), StringComparer.OrdinalIgnoreCase);
         foreach (var entry in entries)
@@ -153,7 +202,7 @@ public static partial class RoleComposition
 
             if (Refusal(entry) is { } reason)
             {
-                dropped.Add($"{id}: {reason}");
+                dropped.Add($"{Label(id)}: {reason}");
                 continue;
             }
 
@@ -188,6 +237,14 @@ public static partial class RoleComposition
             return "that is not a usable id — it becomes the environment variable COAI_ROUNDS_<ID>, so it is latin, starts with a letter, and holds only letters, digits and '_' (a hyphen is fine in a prompt id, which names a file, and not in this one, which names a variable)";
         }
 
+        // Absent and misspelt are two different mistakes and get two different sentences: one person
+        // forgot a field, the other typed it wrong, and telling them apart is the difference between
+        // a fix and a hunt. (gemini, story A2's code round.)
+        if (string.IsNullOrWhiteSpace(entry.Stage))
+        {
+            return $"it names no stage — it is '{RoleStages.Plan}' or '{RoleStages.Result}'";
+        }
+
         if (entry.Stage is not (RoleStages.Plan or RoleStages.Result))
         {
             return $"'{entry.Stage}' is not a stage — it is '{RoleStages.Plan}' or '{RoleStages.Result}'";
@@ -214,10 +271,22 @@ public static partial class RoleComposition
         var prompts = new List<PromptChoice>();
         foreach (var prompt in row.Prompts ?? [])
         {
+            if (prompt is null)
+            {
+                dropped.Add($"{roleId}: one of its prompts is an empty prompt — there is nothing in it to ask");
+                continue;
+            }
+
             var id = prompt.Id ?? string.Empty;
             if (!PromptId.IsMatch(id))
             {
-                dropped.Add($"{roleId}: the prompt id '{id}' is not a usable one — it names a file, so it is lower-case letters, digits and '-'");
+                dropped.Add($"{roleId}: the prompt id '{id}' is not a usable one — it names a file, so it starts with a lower-case letter or a digit and then holds only those and '-'");
+                continue;
+            }
+
+            if (ReservedNames.Contains(id))
+            {
+                dropped.Add($"{roleId}: the prompt id '{id}' is a name Windows reserves for a device, so its text could be neither written nor read");
                 continue;
             }
 
@@ -264,7 +333,10 @@ public static partial class RoleComposition
 
             if (count >= MaxActivePerBucket)
             {
-                dropped.Add($"{role.Id}: it is over the limit of {MaxActivePerBucket} roles switched on at once for the {role.Stage} stage, so it is in the list and switched off");
+                // The BUCKET, not the stage alone: a person whose five document roles filled it would
+                // otherwise read a sentence about a stage where their code roles are not the ones in
+                // the way. (gemini, story A2's code round.)
+                dropped.Add($"{role.Id}: it is over the limit of {MaxActivePerBucket} roles switched on at once for the {role.Stage} stage's {(role.ProgrammingTask ? "code" : "document")} roles, so it is in the list and switched off");
                 capped.Add(role with { Active = false });
                 continue;
             }
