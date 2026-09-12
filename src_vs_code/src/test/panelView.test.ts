@@ -6,7 +6,7 @@ import { roundsLogHtml, usageTabHtml } from '../roundsLog';
 import { escapeHtml, panelHtml, PanelState } from '../panelView';
 import { DEFAULTS } from '../settingsShape';
 import { vendorPalette } from '../vendorColour';
-import { DEFAULT_VENDORS } from '../vendors';
+import { DEFAULT_VENDORS, Vendor } from '../vendors';
 
 /**
  * The palette the page builds for this fixture — from the vendors it configures, which is the same
@@ -742,7 +742,79 @@ test('a vendor that is off leaves its stage boxes readable but inert', () => {
 
   assert.match(html, /data-setting="plan" data-vendor="codex" checked disabled/);
   assert.match(html, /data-setting="code" data-vendor="codex" disabled/);
-  assert.match(html, /class="field stages off"/);
+});
+
+// ---------- each stage box sits with the price it belongs to (#124) ----------
+
+/**
+ * The vendor's master switch and the two stage boxes used to stack within four lines of each other,
+ * with a select between them — three checkboxes reading as one group of three, although the master
+ * switch is a different KIND of decision from the two stage boxes. Issue #124, which also says where
+ * they should go: onto the price rows, which had empty card in the middle of them.
+ *
+ * <p>A Team-server row is the case that makes this interesting: it renders no price fields at all —
+ * its CLI runs on the server and its price is the company's subscription — so it has nothing to hang
+ * a stage box on and keeps the standalone row. Moving them unconditionally would have deleted both
+ * controls from every remote reviewer.</p>
+ */
+function card(over: Partial<Vendor>): string {
+  const html = panelHtml(state({
+    vendors: [{ id: 'v1', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0, ...over }],
+  }), 'n0nce');
+  const from = html.indexOf('<div class="vendor"');
+  const to = html.indexOf('data-command="addVendor"');
+  assert.ok(from > 0 && to > from, 'the card is bounded by the button after the list');
+  return html.slice(from, to);
+}
+
+test('each stage box sits on the row of the price it belongs to', () => {
+  const html = card({});
+
+  for (const [kind, price, label] of [['plan', 'price-in-v1', 'reviews plans'], ['code', 'price-out-v1', 'reviews code']]) {
+    const row = new RegExp(`<div class="field priced">(?:(?!</div>)[\\s\\S])*</div>`, 'g');
+    const rows = [...html.matchAll(row)].map((m) => m[0]);
+    const mine = rows.find((r) => r.includes(`id="${price}"`));
+    assert.ok(mine, `the ${price} row exists`);
+    assert.ok(mine.includes(`data-setting="${kind}"`), `${label} rides with ${price}: ${mine}`);
+    assert.ok(mine.indexOf(`id="${price}"`) < mine.indexOf(`data-setting="${kind}"`), `${label} comes AFTER its price`);
+  }
+
+  // Exactly one of each control, and no standalone row left behind. Raised on the plan round: an
+  // implementation that ADDS the new boxes without removing the old row passes every assertion
+  // above while the card still reads as a group of three.
+  for (const kind of ['plan', 'code']) {
+    assert.equal(html.split(`data-setting="${kind}" data-vendor="v1"`).length - 1, 1, `one ${kind} control`);
+  }
+  assert.ok(!html.includes('class="field stages'), 'the standalone stages row is gone where there are prices');
+});
+
+test('a Team-server row keeps its stages row, having no prices to put them on', () => {
+  const html = card({ runtime: 'remote', id: 'v1' });
+
+  assert.ok(!html.includes('id="price-in-v1"') && !html.includes('id="price-out-v1"'), 'a remote row prices nothing here');
+  assert.equal(html.split('class="field stages').length - 1, 1, 'exactly one standalone stages row');
+  const row = /<div class="field stages[^"]*">(?:(?!<\/div>)[\s\S])*<\/div>/.exec(html);
+  assert.ok(row, 'the stages row is there');
+  assert.ok(row[0].includes('data-setting="plan"') && row[0].includes('data-setting="code"'), 'carrying both controls');
+});
+
+test('a vendor that is off has its stage boxes dimmed in both card shapes', () => {
+  // The dimming is one rule, `.vendor .stages.off`. When the boxes left the `.stages` container for
+  // the price rows they left that rule behind — a switched-off hosted vendor's boxes stayed bright
+  // while a remote vendor's dimmed. Raised on the plan round by two vendors independently, and the
+  // reason every stage box is wrapped in a `.stages` span whichever row it sits on.
+  for (const runtime of ['codex', 'remote'] as const) {
+    const html = card({ runtime, enabled: false });
+    const boxes = [...html.matchAll(/<span class="stages([^"]*)">(?:(?!<\/span>)[\s\S])*?data-setting="(plan|code)"/g)];
+    const standalone = [...html.matchAll(/<div class="field stages([^"]*)">((?:(?!<\/div>)[\s\S])*)<\/div>/g)];
+    const dimmed = [...boxes.map((m) => m[1]), ...standalone.filter((m) => /data-setting="(plan|code)"/.test(m[2])).map((m) => m[1])];
+
+    assert.ok(dimmed.length > 0, `${runtime}: the stage controls are inside something that can be dimmed`);
+    for (const classes of dimmed) {
+      assert.ok(/\boff\b/.test(classes), `${runtime}: a switched-off vendor's stage boxes are dimmed — got class="stages${classes}"`);
+    }
+    assert.match(html, /data-setting="plan" data-vendor="v1"[^>]*disabled/, `${runtime}: and inert`);
+  }
 });
 
 /**

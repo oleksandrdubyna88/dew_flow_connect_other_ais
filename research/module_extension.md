@@ -2279,6 +2279,34 @@ Three things about it are deliberate:
   used to produce a dangling `— ` and, under two lines, an indented empty row. This is the one case
   where `reviewerLines`' output changed, and it changed from a dangling dash to no dash.
 
+### A stage box rides with the price it pays for (2026-09-12)
+
+Issue #124. A reviewer card put the vendor's master checkbox in its head and the two stage boxes —
+*reviews plans*, *reviews code* — in a row of their own four lines below it, with only a select
+between. Three checkboxes in four lines read as one group of three, although the master switch
+answers a different question (does this vendor review at all) from the two stages (which ones).
+Meanwhile each price row was a label and a 64px number with empty card between them.
+
+The boxes moved onto the price rows: *reviews plans* after the in rate, *reviews code* after the out
+rate. Two things about the implementation are load-bearing, and both came from the plan round:
+
+- **Every stage box is wrapped in `<span class="stages">` wherever it lands.** The rule that dims a
+  switched-off vendor's boxes is one selector, `.vendor .stages.off`. Moving the boxes out of the
+  `.stages` container without carrying the class would have left a hosted card's boxes bright and a
+  remote card's dim — the same defect in two halves of one panel. `stageBox` is the one function that
+  renders either, so the two call sites cannot drift.
+- **The standalone row survives where there are no prices, and the condition is the real one.** A
+  Team-server row renders no price fields — its CLI runs on the server, its price is the company's
+  subscription — so it has nothing to hang a box on and keeps the row. The code asks whether the
+  price rows came back EMPTY rather than whether the runtime is `remote`, so the condition in the
+  source is the condition that matters rather than a proxy for it.
+
+The priced row is its own class rather than a third child of `.inline`: that row's label is
+`flex: 1 1 auto` and would absorb the slack, bunching the number against the box at the right edge
+instead of leaving it between them. `.priced` gives the label and the stage box equal weight around
+the fixed number, and its basis widths decide what wraps — label with its own number first, stage box
+to the next line — because a price separated from its label belongs to neither.
+
 ### Installing a reviewer's CLI from the row (2026-09-01)
 
 A fresh WSL box has none of these CLIs, and the panel is where somebody is standing when they find

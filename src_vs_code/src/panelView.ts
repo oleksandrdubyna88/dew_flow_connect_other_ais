@@ -736,23 +736,31 @@ ${local ? remoteNotice(vendor.baseUrl) : ''}
   // missing Linux binary, and until this field existed nothing could point at the native one.
 }
 
-function runtimeFields(vendor: Vendor, id: string, local: boolean, remote: boolean, price: ModelPrice | undefined): string {
+function runtimeFields(
+  vendor: Vendor,
+  id: string,
+  local: boolean,
+  remote: boolean,
+  price: ModelPrice | undefined,
+  plan: string,
+  code: string,
+): string {
   return remote ? '' : `
   <div class="field">
     <input type="text" data-setting="executablePath" data-vendor="${id}" title="${escapeHtml(HELP.vendorExecutablePath)}"
            placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(vendor.executablePath)}">
   </div>
-  <div class="field inline">
+  <div class="field priced">
     ${labelled(`price-in-${id}`, '$ / 1M in', 'vendorPrice')}
     <input type="number" id="price-in-${id}" min="0" step="0.01" data-setting="pricePerMillionIn" data-vendor="${id}"
            value="${vendor.pricePerMillionIn === 0 ? '' : vendor.pricePerMillionIn}"
-           placeholder="${ratePlaceholder(price?.inPerMillion)}" title="${escapeHtml(local ? HELP.localPrice : rateNote(vendor.model, price))}">
+           placeholder="${ratePlaceholder(price?.inPerMillion)}" title="${escapeHtml(local ? HELP.localPrice : rateNote(vendor.model, price))}">${plan}
   </div>
-  <div class="field inline">
+  <div class="field priced">
     ${labelled(`price-out-${id}`, '$ / 1M out', 'vendorPrice')}
     <input type="number" id="price-out-${id}" min="0" step="0.01" data-setting="pricePerMillionOut" data-vendor="${id}"
            value="${vendor.pricePerMillionOut === 0 ? '' : vendor.pricePerMillionOut}"
-           placeholder="${ratePlaceholder(price?.outPerMillion)}" title="${escapeHtml(local ? HELP.localPrice : rateNote(vendor.model, price))}">
+           placeholder="${ratePlaceholder(price?.outPerMillion)}" title="${escapeHtml(local ? HELP.localPrice : rateNote(vendor.model, price))}">${code}
   </div>`;
 }
 
@@ -766,7 +774,21 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
   const remote = vendor.runtime === 'remote';
   const models = modelsFor(vendor.runtime, codexModels, vendor.model, localEngine, agyModels, allowedRemote.models);
   const endpoint = endpointField(vendor, id, local, remote);
-  const executable = runtimeFields(vendor, id, local, remote, price);
+  // The two stage boxes ride with the prices — `reviews plans` after the in rate, `reviews code`
+  // after the out one (issue #124). They used to sit in a row of their own directly under the model,
+  // four lines from the vendor's own checkbox, and the three read as one group of three although the
+  // master switch is a different kind of decision from the two stages.
+  const plan = stageBox('plan', id, vendor.plan, vendor.enabled, 'reviews plans', help('vendorStages'));
+  const code = stageBox('code', id, vendor.code, vendor.enabled, 'reviews code');
+  const executable = runtimeFields(vendor, id, local, remote, price, plan, code);
+  // Keyed off whether the price rows came back EMPTY rather than off `remote`, so the condition in
+  // the code is the condition that matters: a card with nothing to hang the boxes on keeps the row.
+  // A Team server's CLI runs on the server and its price is the company's subscription, so it has no
+  // price fields here — and moving the boxes unconditionally would have left every remote reviewer
+  // with no way to say which stages it serves.
+  const stages = executable.length > 0
+    ? ''
+    : `<div class="field stages${vendor.enabled ? '' : ' off'}">${plan}${code}</div>`;
 
   return `<div class="vendor" style="border-left-color:${colour}">
   <div class="head">
@@ -792,11 +814,24 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
     </select>
     <div class="hint">${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(vendor.runtime, codexModels, localEngine, agyModels, allowedRemote))}</div>
   </div>
-  <div class="field stages${vendor.enabled ? '' : ' off'}">
-    <label class="check"><input type="checkbox" data-setting="plan" data-vendor="${id}"${vendor.plan ? ' checked' : ''}${vendor.enabled ? '' : ' disabled'}> reviews plans${help('vendorStages')}</label>
-    <label class="check"><input type="checkbox" data-setting="code" data-vendor="${id}"${vendor.code ? ' checked' : ''}${vendor.enabled ? '' : ' disabled'}> reviews code</label>
-  </div>${endpoint}${executable}
+  ${stages}${endpoint}${executable}
 </div>`;
+}
+
+/**
+ * One stage box — `reviews plans` or `reviews code` — wrapped in the class that dims it.
+ *
+ * <p>The wrapper is what makes this one function rather than two pieces of markup. A stage box rides
+ * on its own price row in a priced card and sits in a row of its own in a Team-server card, and the
+ * rule that dims a switched-off vendor's boxes is a single selector, `.vendor .stages.off`. Wrapping
+ * each box in `.stages` wherever it lands is what lets one rule reach both layouts — without it, the
+ * hosted card's boxes stay bright while the remote card's dim, which is what two reviewers caught on
+ * the plan round of issue #124.</p>
+ */
+function stageBox(kind: 'plan' | 'code', id: string, on: boolean, enabled: boolean, text: string, tip = ''): string {
+  return `<span class="stages${enabled ? '' : ' off'}"><label class="check">`
+    + `<input type="checkbox" data-setting="${kind}" data-vendor="${id}"${on ? ' checked' : ''}${enabled ? '' : ' disabled'}>`
+    + ` ${text}${tip}</label></span>`;
 }
 
 
@@ -1711,6 +1746,17 @@ const CSS = `
   .sec-side      > summary { color: var(--tone-keys); }
   /* The two stage boxes sit on one line under the model: they are one decision about this vendor. */
   .vendor .stages { display: flex; gap: 12px; flex-wrap: wrap; }
+  /* A price and the stage it pays for, on one row: label, the number, then the box (issue #124).
+     NOT .inline — that row's label grows (flex: 1 1 auto) and would absorb the slack, bunching the
+     number against the box at the right edge instead of leaving it between them. Two flexible
+     children of equal weight around a fixed number is what puts the price in the middle.
+     What WRAPS is decided rather than left to chance: the basis widths keep the label with its own
+     number on the first line and send the stage box to the next one, because a price separated from
+     its label reads as belonging to neither. */
+  .vendor .priced { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .vendor .priced > label { flex: 1 1 6rem; min-width: 0; margin-bottom: 0; }
+  .vendor .priced > input[type="number"] { flex: 0 0 64px; width: 64px; }
+  .vendor .priced > .stages { flex: 1 1 8rem; min-width: 0; }
   /* A vendor that is off everywhere: the boxes stay visible, so their state is readable, and go
      inert, so nobody ticks one expecting it to mean something. The gate said the contradiction was
      the defect - not the boxes themselves. */

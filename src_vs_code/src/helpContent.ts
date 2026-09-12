@@ -96,7 +96,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'Then: choose who reviews',
       whatItIs:
-        'The **Reviewers** section is the panel of other vendors\' models that will read your plan and your code. Each row is one vendor: a checkbox to include it, a model picker, a ▶ to open its CLI in a terminal, a ⤓ to install that CLI, a ⟳ that goes green when a newer version is published, its price per million tokens, and **remove**.',
+        'The **Reviewers** section is the panel of other vendors\' models that will read your plan and your code. Each row is one vendor: a checkbox to include it, a model picker, a ▶ to open its CLI in a terminal, a ⤓ to install that CLI, a ⟳ that goes green when a newer version is published, its two prices per million tokens — and beside each price, the stage it pays for: **reviews plans** next to the in rate, **reviews code** next to the out rate. Then **remove**.\n\nA Team-server row has no prices to put them on, because its CLI runs on the server and its price is the company\'s subscription — so its two stage boxes sit on a line of their own.',
       why:
         'The whole point is that the reviewer is not the author. A second opinion from the same model that wrote the code is worth less than a first opinion from a different one — and two vendors agreeing on a finding is the strongest signal this product produces.',
       setup:

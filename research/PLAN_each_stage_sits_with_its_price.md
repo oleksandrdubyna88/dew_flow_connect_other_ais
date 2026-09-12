@@ -1,7 +1,24 @@
 # PLAN — each stage box sits with the price it belongs to
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/panelView.ts` — the
-> reviewer card's markup and the panel stylesheet — and `src_vs_code/src/test/panelView.test.ts`.
+> Status: **IMPLEMENTED, 2026-09-12.** `reviews plans` rides with the in rate and `reviews code`
+> with the out rate; a Team-server row, having no prices here, keeps the standalone row. One
+> `stageBox` renders either, `.priced` is its own layout, and the whole change is the card's markup
+> plus four CSS rules.
+>
+> **The plan round earned its keep twice.** The first draft would have shipped a real defect: moving
+> the boxes out of the `.stages` container takes them out of reach of `.vendor .stages.off`, the one
+> rule that dims them, so a switched-off hosted vendor's boxes would have stayed bright while a
+> remote vendor's dimmed. Two vendors caught it independently. Every box is wrapped in a `.stages`
+> span now, and the test that pins it was watched going red with the wrapper removed. The second was
+> the layout: the draft said a third child would "fall out of the existing rule", and it would not —
+> `.inline`'s growing label absorbs the slack and bunches the number against the box.
+>
+> Two smaller deviations: the standalone row is keyed off whether the price rows came back empty
+> rather than off `runtime === 'remote'`, so the code asks the question that matters; and the four
+> help translations were rewritten in the same commit as the English, because `bodyFor` marks a
+> MISSING translation and says nothing about a stale one.
+>
+> Related docs: [module_extension.md](module_extension.md).
 >
 > Issue [#124](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/124): *"Right
 > now `reviews plans` and `reviews code` are in a row and it runs together with the model's own
@@ -101,9 +118,19 @@ as CI uses): `cd src_vs_code && npm test` — the whole suite; `settingsAreDecla
 
 ## Definition of Done
 
-- [ ] Tests 1 and 2 written first and watched fail/pass as stated; then green; then red again with
-      the fix reverted, and green with it restored.
-- [ ] `npm test` green in the worktree; the count reported in the pull request.
-- [ ] The diff through the `coai` code round, every finding resolved.
-- [ ] `research/module_extension.md`, `helpContent.ts` and `CHANGELOG.md` updated as named above.
-- [ ] This plan promoted to `research/` with `IMPLEMENTED` and the date.
+- [x] Test 1 written first and watched fail with `the price-in-v1 row exists`; green after the move;
+      red again with the whole fix reverted. Test 3, the dimming guard, was proved separately by
+      deleting the `.stages` wrapper from `stageBox` and watching it go red with *a switched-off
+      vendor's stage boxes are dimmed* — the exact defect the plan round predicted — then green with
+      the wrapper restored. Test 2 is green before and after by design: it is the guard against the
+      damaging implementation, not a symptom of the bug.
+- [x] `npm test` green in the worktree: **1720 tests, 1719 pass, 0 fail** (1 skipped).
+- [ ] The diff through the `coai` code round — **pending**, run immediately after this commit.
+- [x] `research/module_extension.md` has the decision and both traps; `helpContent.ts` names where
+      the boxes are and why a Team-server row differs; **and all four translations were rewritten in
+      the same commit**, since `bodyFor` cannot mark a stale one; `CHANGELOG.md` under `## Unreleased`.
+- [x] This plan promoted to `research/` with `IMPLEMENTED` and the date; indexes updated both sides.
+
+**Deviation from this list:** the version is deliberately NOT bumped here. This is one of seven
+issues landing before a single extension release, and the release commit at the end of the batch
+renames the `## Unreleased` heading to the version it cuts.
