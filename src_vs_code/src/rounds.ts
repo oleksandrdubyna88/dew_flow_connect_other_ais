@@ -170,17 +170,30 @@ export function reviewerLines(round: RoundRecord): readonly string[] {
  * which had genuinely stopped being readable — the model's separator and the detail's brackets were
  * both conditional inside a literal that was itself inside a literal.</p>
  */
+/**
+ * One reviewer's row, in its two halves — never one string that is split back apart.
+ *
+ * <p>Both are BUILT from the fields. A model id is arbitrary text and `Qwen — custom` is a legal
+ * one, so a reader that looked for the dash would cut a model in half and call the remainder a
+ * status. The plan round raised that four times, each time assuming the opposite; the test with a
+ * dash in the model id is what keeps it true.</p>
+ *
+ * <p>Returns a fresh `{ rest, said }` — what the reviewer IS, and what it is DOING. `said` is empty
+ * when the session file records neither a status nor any detail, and the callers then write neither
+ * a dangling dash nor an indented empty line.</p>
+ */
 function restOf(state: ReviewerState, model: string, detail: readonly string[]): { rest: string; said: string } {
   const named = model ? ` · ${model}` : '';
   const brackets = detail.length > 0 ? ` (${detail.join(', ')})` : '';
+  // Normalised exactly as `modelOf` normalises the model, and for the same reason: an interface is
+  // not runtime validation. A session file that omits `status`, or carries a number, reached
+  // `.length` here and threw while the panel was being built — one malformed reviewer blanking the
+  // whole Active rounds view. Whitespace is not a status either. Raised on the code round.
+  const status = typeof state.status === 'string' ? state.status.trim() : '';
 
-  // Both halves are BUILT from the fields, never split back out of the sentence. A model id is an
-  // arbitrary string — `Qwen — custom` is a legal one — so a reader that looked for the dash would
-  // cut a model in half and call the remainder a status. Raised four times on the plan round, each
-  // time assuming the opposite; the test with a dash in the model id is what keeps this true.
-  const status = `${state.status}${state.status.length > 0 ? brackets : ''}`;
-
-  return { rest: `/${state.role}${named}`, said: status };
+  // The detail survives a missing status: findings and a duration are facts the file still records,
+  // and suppressing them because the status is blank hides information rather than tidying it.
+  return { rest: `/${state.role}${named}`, said: `${status}${brackets}`.trim() };
 }
 
 /** The model this state names, or empty — anything that is not a usable string is absent. */
