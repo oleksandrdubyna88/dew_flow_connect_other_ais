@@ -184,12 +184,13 @@ public sealed class ConsultantResolutionTests
     }
 
     [Theory]
-    [InlineData("local", "local", "http://127.0.0.1:11434/v1")]
     [InlineData("remsoftdev-codex", "remote", "https://coai.remsoft.dev")]
     [InlineData("deepseek", "codex", "https://api.deepseek.com")]
-    [InlineData("claude", "claude", "")]
-    public void EverythingElse_IsRefusedByNameRatherThanSubstituted(string provider, string runtime, string baseUrl)
+    public void ARowThisBuildCannotConsultWith_IsRefusedByNameRatherThanSubstituted(string provider, string runtime, string baseUrl)
     {
+        // A Team server row and a custom endpoint riding the codex CLI. `claude`, `antigravity` and
+        // `local` were here until story 2 gave each of them an adapter; their coverage moved to
+        // ConsultantResolutionAfterStoryTwoTests, which asserts they DO consult.
         var identity = new VendorIdentity(provider, runtime, baseUrl);
 
         ConsultantResolution.For(identity).Should().BeNull();

@@ -56,6 +56,36 @@ public sealed class ConsultationStoreTests : IDisposable
     }
 
     [Fact]
+    public void AJsonFileThatIsNotAConsultation_IsNotOne()
+    {
+        // FOUND BY THE LIVE CHECK of story 2: the local consultant writes its answer schema, and the
+        // first version of it wrote the file into this very directory — where `All()` enumerated
+        // every `*.json` and handed the schema back as a record with a null id and no status. The
+        // sweep would then have written and deleted files named after nothing at all. The name is the
+        // guard: a consultation file is named by a consultation id, and nothing else in this
+        // directory is.
+        Directory.CreateDirectory(_store.Directory);
+        File.WriteAllText(Path.Combine(_store.Directory, "consult-answer-schema.json"), """{"type":"object"}""");
+        File.WriteAllText(Path.Combine(_store.Directory, "notes.json"), """{"id":"not-an-id","status":"open"}""");
+        var real = Record();
+        _store.Write(real);
+
+        _store.All().Should().ContainSingle().Which.Id.Should().Be(real.Id);
+    }
+
+    [Fact]
+    public void ASweepOverForeignFilesChangesAndDeletesNothing()
+    {
+        Directory.CreateDirectory(_store.Directory);
+        File.WriteAllText(Path.Combine(_store.Directory, "consult-answer-schema.json"), """{"type":"object"}""");
+
+        _store.Sweep(_ => false, DateTime.UtcNow.AddYears(1), TimeSpan.FromMinutes(15), TimeSpan.FromDays(7))
+            .Should().Be(0);
+
+        File.Exists(Path.Combine(_store.Directory, "consult-answer-schema.json")).Should().BeTrue();
+    }
+
+    [Fact]
     public void ATornFileIsNotAConsultation()
     {
         var record = Record();

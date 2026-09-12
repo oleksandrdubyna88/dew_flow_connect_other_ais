@@ -29,24 +29,10 @@ public sealed class CodexConsultant(IReviewerRuntime inner, string vendor = "cod
 
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
-        if (launch.Handle.Length > 0 && !ConsultantHandle.IsWellFormed(launch.Handle))
-        {
-            // The service refuses this before any launch; a handle reaching here malformed is a
-            // contract violation, and the one place it must never reach is an argv.
-            throw new ArgumentException("a consultation handle must be validated before it is launched", nameof(launch));
-        }
-
+        ConsultantLaunches.MustBeLaunchable(launch);
         var outputFile = Path.Combine(launch.OutputDir, $"{FileName.Safe(vendor)}-consult-{Guid.NewGuid():N}.txt");
         var argv = (string[])[.. Argv(launch, outputFile)];
-        // The delivery rule the first real run wrote, asserted over EVERY value rather than only the
-        // prompt: cmd.exe parses each npm `.cmd` shim on Windows and truncates an argument at its
-        // first newline, silently. A repository path, an output path or a configured model name is
-        // somebody else's string too. (codex, code round.)
-        if (Array.Find(argv, a => a.Contains('\n') || a.Contains('\r')) is { } broken)
-        {
-            throw new ArgumentException(
-                $"a consultation argument contains a line break and would be truncated by a Windows shim: '{broken}'", nameof(launch));
-        }
+        ConsultantLaunches.MustCarryNoLineBreak(argv);
 
         var request = new ProcessRequest(Executable(launch.Settings), argv, launch.RepoPath)
         {
@@ -91,10 +77,8 @@ public sealed class CodexConsultant(IReviewerRuntime inner, string vendor = "cod
     }
 
     public bool DroppedTheConversation(ProcessResult result) =>
-        Mentions(result.StdErr, "no rollout found") || Mentions(result.StdOut, "no rollout found")
-        || Mentions(result.StdErr, "thread/resume failed") || Mentions(result.StdOut, "thread/resume failed");
-
-    private static bool Mentions(string text, string phrase) => text.Contains(phrase, StringComparison.OrdinalIgnoreCase);
+        ConsultantLaunches.Mentions(result, "no rollout found")
+        || ConsultantLaunches.Mentions(result, "thread/resume failed");
 
     private static string? ThreadIdIn(string line)
     {
