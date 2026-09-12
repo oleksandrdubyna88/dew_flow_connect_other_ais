@@ -132,6 +132,78 @@ test('every vendor with recorded spending offers to forget it', () => {
   }
 });
 
+// ---------- the totals line says what its time IS (#116) ----------
+
+/**
+ * The spending tab ended with a bare duration: `All vendors: 1.2M tokens · $4.05 · 2.0 h`.
+ *
+ * <p>That 2.0 h is the sum of every reviewer run in the window across every vendor, and nothing said
+ * so — read beside the per-vendor cards, each ending `38 s total · 12 s average`, it looks like it
+ * could be elapsed wall-clock time for the window. It is not: three reviewers running in parallel
+ * for ten minutes contribute thirty minutes to it. Issue #116 asked for the three things that make
+ * it unambiguous — say it is a sum, give the average, name the vendor with the most.</p>
+ */
+function spent(provider: string, seconds: number, runs: number): UsageEntry[] {
+  return Array.from({ length: runs }, () => ({
+    utc: new Date().toISOString(), provider, model: 'm', role: 'PlanCritique', stage: 'PlanReview',
+    seconds: seconds / runs, tokensIn: 1000, tokensOut: 100, costUsd: null, outcome: 'ok',
+  } as UsageEntry));
+}
+
+function totalsLine(entries: readonly UsageEntry[]): string {
+  const page = usageTabHtml(entries, 'day', [], {});
+  const at = page.indexOf('class="hint total"');
+  assert.ok(at > 0, `the totals line is rendered: ${page.slice(0, 200)}`);
+  return page.slice(at, page.indexOf('</div>', at));
+}
+
+test('the totals line says its time is a sum across vendors, and gives an average per run', () => {
+  // codex 90 s over 3 runs, local 30 s over 1 → 120 s summed, 4 runs, 30 s average per run.
+  const line = totalsLine([...spent('codex', 90, 3), ...spent('local', 30, 1)]);
+
+  assert.match(line, /2\.0 min summed across 2 vendors/, `the sum says what it is: ${line}`);
+  assert.match(line, /30 s average per run/, `and the average is per run: ${line}`);
+});
+
+test('the totals line names the vendor with the most time, and only that one', () => {
+  const line = totalsLine([...spent('codex', 90, 3), ...spent('local', 30, 1)]);
+
+  assert.match(line, /codex longest at 1\.5 min/, `the busiest vendor is named: ${line}`);
+  assert.ok(!line.includes('local longest'), 'and the other one is not');
+});
+
+test('one vendor is never "the longest"', () => {
+  // Proved with teeth rather than assumed: this test was watched going red with the clause made
+  // unconditional. Raised on the plan round — an expected symptom of "green before and after"
+  // cannot catch the regression it names.
+  const line = totalsLine(spent('codex', 90, 3));
+
+  assert.match(line, /summed across 1 vendor\b/, `still says what the time is: ${line}`);
+  assert.ok(!line.includes('longest'), `naming the only vendor as the longest is noise: ${line}`);
+});
+
+test('two vendors tied on time name the same one every time', () => {
+  // `>` keeps the FIRST row of equal value and the row order is the page's own (busiest by tokens),
+  // so the same data always names the same vendor. Not a policy anybody would guess from the line.
+  const entries = [...spent('codex', 60, 2), ...spent('local', 60, 2)];
+  const once = totalsLine(entries);
+
+  assert.equal(once, totalsLine(entries), 'the same data renders the same line');
+  assert.match(once, /(codex|local) longest at 1\.0 min/, `one of them is named: ${once}`);
+});
+
+test('the totals line is built from the rows the cards are built from', () => {
+  // The guarantee behind "same window, same forget-marks": the marks are applied by panelProvider
+  // BEFORE this function is called, so a unit test cannot set one — what it can pin is that there is
+  // one source. If the cards and the total ever read different rows, these numbers stop agreeing.
+  const page = usageTabHtml([...spent('codex', 90, 3), ...spent('local', 30, 1)], 'day', [], {});
+  const perCard = [...page.matchAll(/<div class="hint">([\d.]+ (?:s|min|h)) total/g)].map((m) => m[1]);
+
+  assert.deepEqual(perCard, ['1.5 min', '30 s'], 'the cards show their own durations');
+  assert.match(totalsLine([...spent('codex', 90, 3), ...spent('local', 30, 1)]), /2\.0 min summed/,
+    'and the total is their sum, from the same rows');
+});
+
 test('forgetting is a command the provider must handle', () => {
   assert.ok(PANEL_COMMANDS.includes('forgetUsage'));
 });

@@ -3237,7 +3237,19 @@ window buttons and the same `usageRegion` rows the sidebar rendered — one rend
 row — and `RoundsLogPanel` routes the two commands the tab posts (`usageWindow`, `forgetUsage`)
 back to the sidebar's provider, which still owns the window choice, the price cache and the forget
 marks. `within('day')` is since local midnight now, by the operator's ruling; week, month and year
-stay rolling. The page also traps its own errors (`window.onerror` and a guarded first render) and
+stay rolling.
+
+**The totals line says what its duration IS (2026-09-12, issue #116).** It used to end in a bare
+`2.0 h`, which under cards that each read `38 s total · 12 s average` looks like elapsed time for the
+window. It is not — it is every reviewer run summed, so three reviewers in parallel for ten minutes
+contribute thirty. `timeSpent` now writes *summed across N vendors*, the average **per run** (the same
+thing `average` means on every card above it, because two averages meaning different things on one
+page is worse than none), and the vendor that spent the longest, by name. Three decisions inside it:
+the longest clause is **computed conditionally** rather than computed and hidden, so one vendor is
+never "the longest" and an empty list never reaches a seedless `reduce`; a tie keeps the FIRST row,
+which is deterministic because `totalsByVendor` orders busiest-by-tokens; and the word is **vendor**,
+not agent — every row here is a vendor and the line opens `All vendors:`, so introducing a second
+noun would invent a level this data does not have. The page also traps its own errors (`window.onerror` and a guarded first render) and
 writes them into a region at the top — its first release came up empty in the webview and said
 nothing — and filters by an inclusive date range on the UTC day a round started.
 
