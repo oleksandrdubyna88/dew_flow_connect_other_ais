@@ -1049,7 +1049,18 @@ export function roundsLogHtml(
      per reviewer, this extension appends one per chat turn. A heading each and a rule between them,
      so nobody adds them up by eye without noticing which is which. */
   h3.ledger { font-size: 1.05em; margin: 18px 0 8px; font-weight: 600; }
-  h3.ledger:first-child { margin-top: 4px; }
+  .ledger-half > h3.ledger:first-child { margin-top: 4px; }
+  /* ONE COLUMN by default, TWO when the window is wide enough to hold both at the width the cards
+     already have. Asked for in those words. The columns are capped rather than fractional: a 1fr
+     column on a wide screen stretches the halves apart and leaves each card floating in its own
+     empty third, which is a different page rather than the same one side by side. */
+  .ledgers-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 36px; align-items: start; justify-content: start; }
+  @media (min-width: 1360px) {
+    .ledgers-grid { grid-template-columns: repeat(2, minmax(0, 660px)); }
+    /* The rule between the halves is the STACKED separator. Side by side the gap separates them, and
+       a horizontal rule in a grid cell would be a line drawn across nothing. */
+    .ledgers-grid > hr.ledgers { display: none; }
+  }
   hr.ledgers { border: 0; border-top: 1px solid var(--vscode-panel-border); margin: 20px 0 0; max-width: 640px; }
   /* The model a chat card is about, beside the vendor that ran it: quieter than the name, because
      the vendor is what the eye is scanning for down a column of cards. */

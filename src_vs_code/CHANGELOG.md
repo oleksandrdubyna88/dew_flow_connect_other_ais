@@ -1,5 +1,9 @@
 # Changelog
 
+## Extension 0.38.3 — 2026-09-12
+
+**The spending tab uses the width it has.** Reviewers and Chat sit side by side when the panel is wide enough to hold both at the width the cards already had, and stack when it is not. The page decides, so dragging the panel narrow and wide again needs nobody to redraw it — and the rule between the two halves belongs to the stacked layout, since side by side the gap is the separator.
+
 ## Extension 0.38.2 — 2026-09-12
 
 **The chat section reads like the reviewers above it.** It shipped as a table; it is cards now, with the same bar, and what a reviewer card has no equivalent of — the two rates, what the pair has cost all time, and the two counts — sits under it in the same quiet line the durations use there.
