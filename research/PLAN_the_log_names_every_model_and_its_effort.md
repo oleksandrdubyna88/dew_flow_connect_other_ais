@@ -33,6 +33,20 @@
 > [PLAN_the_log_names_the_model.md](../todo/PLAN_the_log_names_the_model.md), whose step 1 this repairs —
 > its steps 2 and 3 (what a Team server ACTUALLY ran) stay open there and are **not** in scope here.
 
+## The boundary with the companion plan
+
+Per `planning-docs.md` — a table, not a paragraph, in both documents. **This plan runs first**; the
+two are disjoint, and nothing here waits on anything there.
+
+| Item | Which plan builds it | What the other one's part is |
+|---|---|---|
+| Every adapter puts `Model` on the invocation | **this plan** | — (its step 1 assumed this was already true) |
+| The reasoning EFFORT, recorded and rendered | **this plan** | — (not in its scope at all) |
+| The audit line naming model and effort | **this plan** | — |
+| `ReviewStatusDto` gains a `Model` — what a Team server ACTUALLY ran | [PLAN_the_log_names_the_model.md](../todo/PLAN_the_log_names_the_model.md), step 2 | this plan records what was ASKED for, and its docstring says so |
+| The round overwriting its own guess with the server's answer | that plan, step 3 | this plan's `ReviewerState.Model` is the field it would overwrite |
+| The ledger moving off the CONFIGURED model | that plan, step 3 | untouched here |
+
 ## What the check found
 
 **The model is blank for four of the six adapters.** `ReviewerInvocation.Model` is a trailing
@@ -114,7 +128,8 @@ is on no record, in no ledger, in no log line. The only trace is a Debug-level a
 | 4 | `rounds.test.ts`: an effort that is not a usable string — absent, blank, whitespace, a number — renders as none, the way a model does | `.trim()` on a number throws while the log is built |
 | 5 | the existing `LiveRoundTests` model assertions stay green, and the one whose docstring claims the adapters always carried the model has that sentence corrected | green, with an honest comment |
 
-Run: `dotnet build dew_flow_connect_other_ais.slnx -c Debug` then
+Run: `dotnet build dew_flow_connect_other_ais.slnx -c Debug -m:4` (the `-m:N` bound is mandatory
+for every MSBuild command here — `csharp/dotnet-build.md`) then
 `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --filter-class "*ReviewerRuntime*"` for the
 fast loop, and the whole executable before the commit — **never `dotnet test`**, which has no VSTest
 host here and aborts. Extension side: `cd src_vs_code && npm test`.
@@ -128,7 +143,8 @@ host here and aborts. Extension side: `cd src_vs_code && npm test`.
       applied one* go red, and restoring it.
 - [x] Both suites green: **C# 1312 tests, 1311 pass, 1 skipped, 0 fail**; **extension 1725 tests,
       1724 pass, 0 fail**.
-- [ ] The diff through the `coai` code round — **pending**, run immediately after this commit.
+- [x] The diff through the `coai` code round — `good_enough`, 18 gating against a threshold of 5,
+      all 12 reviewers answered; 8 findings accepted, 21 rejected with reasons.
 - [x] `module_runners.md`, `module_server.md` and `CHANGELOG.md` updated. `module_extension.md` was
       NOT — the reviewer line's own description there is about its two-line shape, which this change
       does not alter; the effort is one more thing riding with the model it already documents.

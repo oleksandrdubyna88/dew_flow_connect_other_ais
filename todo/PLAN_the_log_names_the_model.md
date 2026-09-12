@@ -16,6 +16,21 @@
 > [module_extension.md](../research/module_extension.md),
 > [module_team_server.md](../research/module_team_server.md).
 
+## The boundary with the repair plan
+
+Per `planning-docs.md` — a table, not a paragraph, in both documents.
+[PLAN_the_log_names_every_model_and_its_effort.md](../research/PLAN_the_log_names_every_model_and_its_effort.md)
+ran FIRST and is finished; what is left here is disjoint from it.
+
+| Item | Which plan builds it | What the other one's part is |
+|---|---|---|
+| Every adapter puts `Model` on the invocation | the repair plan (shipped 2026-09-12) | this plan's step 1 assumed it and was wrong for four adapters |
+| The reasoning EFFORT, recorded and rendered | the repair plan (shipped) | not in this plan's scope at all |
+| The audit line naming model and effort | the repair plan (shipped) | — |
+| `ReviewStatusDto` gains a `Model` — what a Team server ACTUALLY ran | **this plan, step 2** | the repair plan records what was ASKED for and says so |
+| The round overwriting its guess with the server's answer | **this plan, step 3** | it writes into the `ReviewerState.Model` the repair plan filled |
+| The ledger moving off the CONFIGURED model | **this plan, step 3** | untouched by the repair plan |
+
 ## The symptom
 
 A round in the log says `remsoftdev-claude / Architecture — 84.8 s`. It does not say which model

@@ -203,14 +203,15 @@ test('an effort that is not a usable string is absent, the way a model is', () =
   ]);
 });
 
-test('an effort with no model has nowhere to go, and says nothing', () => {
-  // The effort rides WITH the model. A launch that recorded one and no model is not a shape any
-  // adapter produces, and inventing `· (effort: high)` for it would be a separator with no subject.
-  const orphan = round({
+test('an effort survives a missing model, because it was still applied', () => {
+  // A local vendor configured with no model — "whatever the engine answers with", which the picker
+  // offers — still runs at an effort. The first version of this hung the effort off the model and
+  // so dropped it for exactly that reviewer; raised on the code round.
+  const noModel = round({
     reviewerStates: [{ provider: 'local', role: 'Architecture', status: 'done', findings: 0, note: '', model: '', effort: 'high' }],
   });
 
-  assert.deepEqual(reviewerLines(orphan), ['local/Architecture — done (0 findings)']);
+  assert.deepEqual(reviewerLines(noModel), ['local/Architecture (effort: high) — done (0 findings)']);
 });
 
 test('a reviewer launched without a model gets no separator, not an empty one', () => {
