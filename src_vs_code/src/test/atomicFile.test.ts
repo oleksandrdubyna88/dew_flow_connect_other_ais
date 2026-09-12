@@ -158,3 +158,27 @@ test('a rename over an existing file replaces it — measured here, not assumed'
 
   assert.equal(fs.readFileSync(file, 'utf8'), 'second', 'a rename over an existing file did not replace it');
 });
+
+test('many writes racing for one destination all succeed — Windows EPERM is retried, not reported', async () => {
+  // MEASURED, and it is why the retry exists. Two renames aiming at one destination at the same
+  // moment fail on Windows with `EPERM: operation not permitted, rename` — the destination is held
+  // for an instant by the other rename. It surfaced in this suite's own parallel run, on the test
+  // above, after that test had passed on its own a dozen times: the classic "passes alone, fails in
+  // the suite", which is never a flake.
+  //
+  // It matters because the store saves a record and its metadata on every turn, and a turn landing
+  // while the previous save is in flight is ordinary. Without the retry a person would see a save
+  // refused for a reason that has nothing to do with their conversation.
+  const dir = tempDir();
+  const file = path.join(dir, 'record.json');
+
+  const racers = Array.from({ length: 24 }, (_, at) => writeFileAtomically(file, `write-${at}`));
+  await Promise.all(racers);
+
+  assert.ok(fs.readFileSync(file, 'utf8').startsWith('write-'), 'the destination holds no whole write');
+  assert.deepEqual(
+    fs.readdirSync(dir),
+    ['record.json'],
+    'a temporary survived: a retry that gave up must still clean up after itself',
+  );
+});
