@@ -17,7 +17,8 @@ import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, ROLES, promptsFor, selectedFor } from './prompts';
-import { composed, isActive, stageOf, type RoleRow } from './roles';
+import { composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
+import { CUSTOM_ROLES_SINCE } from './rolesPage';
 import { barWidth, estimated, money, shortDuration, shortNumber, totalsByVendor, UsageEntry, Window, within } from './usage';
 import { costPhrase, elapsed, isRunning, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
@@ -1149,6 +1150,28 @@ function roleSwitchSkew(server: ServerStatus, settings: CoaiSettings): string {
     + `<b>MCP server</b> section below.</div>`;
 }
 
+/**
+ * The `coai-mcp` that reads a person's own roles at all.
+ *
+ * <p>The third skew of this shape, and the quietest of the three. Below this version `COAI_ROLES` is
+ * never read: the roles are drawn in this section and on the roles page, and they run in no round —
+ * nothing fails, nothing errors, and nothing anywhere would say so. Same rule as its two neighbours:
+ * only when the server is KNOWN and strictly older, naming the version that is installed and the
+ * roles that will not run.</p>
+ */
+function customRolesSkew(server: ServerStatus, settings: CoaiSettings): string {
+  const known = server.kind !== 'absent' && server.version.length > 0;
+  const own = settings.roles.filter((r) => !isBuiltIn(r.id)).map((r) => r.name ?? r.id);
+  if (!known || own.length === 0 || compareVersions(CUSTOM_ROLES_SINCE, server.version) <= 0) {
+    return '';
+  }
+
+  return `  <div class="stale">The coai-mcp you have installed (${escapeHtml(server.version)}) does not `
+    + `read roles you added, so ${escapeHtml(own.join(', '))} will not run — whatever these boxes `
+    + `say. Update it to ${escapeHtml(CUSTOM_ROLES_SINCE)} or later — the <b>MCP server</b> section `
+    + `below.</div>`;
+}
+
 function promptsBody(state: PanelState): string {
   const s = state.settings;
   // The COMPOSED catalog rather than the shipped five: a role a person added is drawn here beside
@@ -1244,6 +1267,7 @@ ${roleSwitchSkew(state.server, s)}
   </div>
   <div class="hint"><b>Architecture</b> round 1 defaults to <b>Conventions</b>: it judges the diff against the rules this project has written down \u2014 <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>GEMINI.md</code>, <code>.claude/rules</code> \u2014 and nothing else. The other two roles spend their round on their own subject; pick <b>Conventions</b> for them if you want the rules read again. Anything you pick wins.</div>
 ${conventionsSkew(state.server)}
+${customRolesSkew(state.server, s)}
 ${code}
 </div>
 <div class="field">
