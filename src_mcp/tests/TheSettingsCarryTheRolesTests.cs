@@ -181,6 +181,26 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
             .And.Contain("shipped", "and what it is running instead");
     }
 
+    /// <summary>
+    /// And it says WHERE, because a person is looking at a screenful of JSON.
+    /// </summary>
+    /// <remarks>
+    /// A sentence that only restates the expected form sends somebody back to proof-read forty lines
+    /// by eye for a comma. The parser knows the line and the character it stopped at; throwing that
+    /// away and keeping a template is throwing away the only part of the message they cannot work
+    /// out for themselves. (gemini, this story's code round.)
+    /// </remarks>
+    [Fact]
+    public void AndItSaysWhereTheJsonStopsMakingSense()
+    {
+        var settings = From("[\n  {\"id\":\"Requirements\"},\n]");
+
+        settings.Unrecognised.Should().ContainSingle().Which.Should()
+            .Contain("line 3", "counted the way an editor counts, not from zero — the parser stops "
+                + "at the bracket after the stray comma")
+            .And.Contain("trailing comma", "the parser's own words about what is wrong");
+    }
+
     [Fact]
     public void AnAbsentKeyIsNotAComplaint() =>
         From(null).Unrecognised.Should().BeEmpty("nobody configured anything, which is not a mistake");
@@ -311,8 +331,11 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
             .Should().Equal(["local"], "the custom role goes to the vendors this machine runs itself");
         work.Reviewers.Where(w => w.Invocation.Role == RoleCatalog.ArchitectureRole)
             .Should().HaveCount(2, "a shipped role goes to the Team server as it always did");
-        work.Excluded.Should().ContainSingle().Which.Should()
-            .Contain("company-codex").And.Contain("Requirements");
+        var excluded = work.Excluded.Should().ContainSingle().Which;
+        excluded.Provider.Should().Be("company-codex");
+        excluded.Role.Should().Be("Requirements");
+        excluded.Sentence.Should().Contain("company-codex").And.Contain("Requirements we wrote",
+            "the sentence a person reads names the role the way THEY named it");
     }
 
     private string Prompts()
@@ -326,7 +349,9 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
     private static PanelConfig Composed(string id)
     {
         var catalog = RoleComposition.Compose([
-            new RoleEntry(id, Name: id, Stage: RoleStages.Result,
+            // A display name deliberately unlike the id: what a person reads must be the name they
+            // chose, and an id doubling as a name would hide a sentence that quoted the wrong one.
+            new RoleEntry(id, Name: $"{id} we wrote", Stage: RoleStages.Result,
                 Prompts: [new PromptEntry("req-general", "General", "Whether the requirement is met.")]),
         ]);
 

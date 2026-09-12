@@ -475,13 +475,18 @@ so a malformed setting leaves the product running what it ships. What compositio
 joins `Unrecognised`, which the panel already shows, so a person reads why the role they wrote is not
 running.
 
-*Unreadable is not the same as absent, and the two give different answers.* `ParseRoles` returns
-`null` for a value this build cannot parse and an empty list for a key nobody set, because falling
-back to the shipped five is right in both cases and saying nothing is right in only one: somebody who
-typed a trailing comma would otherwise watch their roles simply not appear, and the row-by-row
-refusals cannot speak for them, since the parse never reached a row. So `UnknownValues` carries a
-sentence for the whole setting, beside the ones it already had for `COAI_RETRY_BACKOFF`,
-`COAI_ON_EXHAUSTED` and `COAI_CODE_WORKSPACE`. It also settles which of the two sources wins when
+*Unreadable is not the same as absent, and the two give different answers.* `ParseRoles` returns a
+`RolesSetting` — the rows, plus the reason there are none — because falling back to the shipped five
+is right in both cases and saying nothing is right in only one: somebody who typed a trailing comma
+would otherwise watch their roles simply not appear, and the row-by-row refusals cannot speak for
+them, since the parse never reached a row. So `UnknownValues` carries a sentence for the whole
+setting, beside the ones it already had for `COAI_RETRY_BACKOFF`, `COAI_ON_EXHAUSTED` and
+`COAI_CODE_WORKSPACE`. That sentence carries the PARSER's own diagnosis and the position it stopped
+at, counted the way an editor counts — the one part of the message a person staring at forty lines of
+JSON cannot work out for themselves — with the parser's "change the reader options" dropped, since
+they have a settings file and no reader to change. It is a record rather than a nullable list for
+doctrine 4 and 5's reason: "not captured" and "empty" are different facts, and an expected failure is
+a value carrying its reason. It also settles which of the two sources wins when
 both have an opinion: `COAI_ROLES` is one key, so `SettingsFile.Layer` picks the environment's value
 whole, before anything parses it — an unreadable environment value does NOT let the file's roles back
 in, which would leave somebody running roles they had already replaced.
@@ -502,6 +507,32 @@ be sent to a Team server, which validates the name against the catalog IT was co
 vendor is named in the round's excluded list before the launch rather than after a 400, per
 (vendor, role) rather than per vendor, so the same Team server goes on running the shipped roles.
 Widening that server is plan 3 of this feature.
+
+*Both guards were then wrong at their edges, and the code round said so.* **The prompt question is
+about TEXT, not about a file:** `RolePrompts.Has` asked `File.Exists`, so somebody who creates the
+file before writing it got a reviewer launched with an empty prompt — the exact silent-shrink the
+guard exists to prevent. It now reads the override and answers on non-whitespace, and `Text` falls
+back to the shipped default for an empty override rather than handing back the empty file, which for
+a shipped prompt is what deleting it already means. **The prompt question is asked FIRST**, because
+a role with no text has nothing to say to any vendor: asking the vendor question first told a person
+whose only vendor was a Team server that the server did not know their role, which is true and not
+the thing they can fix. **The vendor question is about the ROLE's provenance and is asked of the
+catalog** (`catalog.ById(role)?.BuiltIn`), not of the prompt's — the two agree today only because
+composition refuses a custom role a shipped prompt id, and a rule held up by another rule is one
+rename away from neither. **And a role is refused once per vendor**, not once per lens it would have
+been dealt: `RoundWork.Excluded` is `ExcludedRole(Provider, Role, Reason)` with the sentence rendered
+at the boundary that shows it, so the round can tell it has already said this — the shape `NotAsked`
+has had since it shipped.
+
+**The plan stage takes its roster from the catalog too.** It was a hardcoded `[PlanRole]`, so a
+plan-stage role a person added was composed, given `COAI_ROUNDS_<ID>` and the enable switch the
+shipped plan role deliberately does not have — and then never asked anything, while the code stage
+had been reading `RolesForRound` since story B1. Two things follow it. A dealt plan lens now goes to
+the role the CATALOG says owns it rather than to `roles[0]`, which was true for exactly as long as a
+plan round had one role in it. And `review_plan` gained the refusal `review_code` has always had:
+the shipped plan role honours no `COAI_ENABLED_` key, but a `COAI_ROLES` row saying `active: false`
+switches it off like any other, and a round that launches no reviewer is not an empty round — the
+session counts it unresolved and never lets the person retry.
 
 **A session carries its GATES; the catalog belongs to the server that is running.** `PanelConfig` is
 persisted inside `SessionState`, and when it gained a `Catalog` the whole thing rode along into every

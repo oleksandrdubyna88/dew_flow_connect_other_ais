@@ -127,6 +127,38 @@ public sealed class ACustomRoleReachesAReviewerTests : IDisposable
         Handed(work[0]).Should().Contain("What does it leave out?");
     }
 
+    /// <summary>
+    /// A dealt lens goes to the role that owns it, not to whichever role happened to be first.
+    /// </summary>
+    /// <remarks>
+    /// <c>Items</c> paired every dealt prompt with <c>roles[0]</c>, which was true for as long as a
+    /// plan round had exactly one role in it. The moment a person adds a second plan role, the first
+    /// role is asked every lens — including the ones belonging to the other role, whose text it then
+    /// reviews under its own name. (Found while fixing the hardcoded plan roster this story's code
+    /// round raised.)
+    /// </remarks>
+    [Fact]
+    public void ADealtPlanLens_GoesToTheRoleThatOwnsIt()
+    {
+        var catalog = RoleComposition.Compose([
+            new RoleEntry("Brief", Name: "The brief", Stage: RoleStages.Plan,
+                Prompts:
+                [
+                    new PromptEntry("brief-general", "General", "The whole brief."),
+                    new PromptEntry("brief-gaps", "Gaps", "What it does not say."),
+                ]),
+        ]);
+        var service = Service(catalog);
+        File.WriteAllText(Path.Combine(_dataDir, "prompts", "brief-gaps.md"), "What does it leave out?");
+
+        var work = service.BuildWork(
+            [RoleCatalog.PlanRole, "Brief"], Scratch(), "ctx", round: 1, isPlanStage: true,
+            planPrompts: ["brief-gaps"]).Reviewers;
+
+        work.Should().ContainSingle().Which.Invocation.Role.Should().Be("Brief",
+            "brief-gaps is the brief role's lens, and the shipped plan role has never heard of it");
+    }
+
     [Fact]
     public void APromptIdNobodyKnows_FallsBackToTheRolesOwnGeneralPrompt()
     {
