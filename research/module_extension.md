@@ -3249,7 +3249,11 @@ the longest clause is **computed conditionally** rather than computed and hidden
 never "the longest" and an empty list never reaches a seedless `reduce`; a tie keeps the FIRST row,
 which is deterministic because `totalsByVendor` orders busiest-by-tokens; and the word is **vendor**,
 not agent — every row here is a vendor and the line opens `All vendors:`, so introducing a second
-noun would invent a level this data does not have. The page also traps its own errors (`window.onerror` and a guarded first render) and
+noun would invent a level this data does not have, however the request was worded.
+
+`summedTimeSpent` takes the rows and derives the seconds and the runs itself rather than accepting a
+total beside them, so a caller cannot hand it filtered rows with an unfiltered aggregate and produce
+a line whose vendor count and its duration describe different windows. The page also traps its own errors (`window.onerror` and a guarded first render) and
 writes them into a region at the top — its first release came up empty in the webview and said
 nothing — and filters by an inclusive date range on the UTC day a round started.
 

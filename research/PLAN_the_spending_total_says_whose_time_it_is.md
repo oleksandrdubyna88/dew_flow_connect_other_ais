@@ -64,7 +64,7 @@ the average, and name the agent with the most.
   ```
 
   **"vendors", not "agents".** The line already opens `All vendors:` and every card above it is a
-  vendor; the operator's word for the same thing is *агент*, and using both on one line would invent
+  vendor; the request used the word "agent" for the same thing, and using both on one line would invent
   a distinction this data does not have (raised on the plan round). A row IS the unit — `codex`,
   `local`, `remsoftdev-claude` — and a reviewer run belongs to exactly one.
 - **The longest clause is computed conditionally, not computed and then hidden**:

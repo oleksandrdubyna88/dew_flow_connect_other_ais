@@ -1409,7 +1409,7 @@ ${team}${scope}`,
 
   return {
     html: `${cards}
-<div class="hint total">All vendors: ${shortNumber(all.tokens)} tokens · ${total(all.cost, all.guess)} · ${timeSpent(rows, all)}</div>`,
+<div class="hint total">All vendors: ${shortNumber(all.tokens)} tokens · ${total(all.cost, all.guess)} · ${summedTimeSpent(rows)}</div>`,
     totals: all,
   };
 }
@@ -1425,17 +1425,21 @@ ${team}${scope}`,
  * none — and names the vendor that spent the most.</p>
  *
  * <p>"vendors", not "agents": every card here is a vendor and the line already opens `All vendors:`.
- * The operator's word for the same thing is *агент*, and using both would invent a second level this
+ * The request used the word "agent" for the same thing, and using both would invent a second level this
  * data does not have.</p>
  */
-function timeSpent(
-  rows: readonly VendorTotals[],
-  all: { readonly seconds: number; readonly runs: number },
-): string {
-  const named = `${shortDuration(all.seconds)} summed across ${rows.length} vendor${rows.length === 1 ? '' : 's'}`;
+function summedTimeSpent(rows: readonly VendorTotals[]): string {
+  // Derived HERE, from the rows the cards are drawn from, rather than taken as a second argument
+  // beside them: a caller could otherwise hand this function filtered rows and an unfiltered total,
+  // and the line would count its vendors from one window and its seconds from another. Raised on the
+  // code round, and it is the plan's "same window, same forget-marks" made structural.
+  const seconds = rows.reduce((t, r) => t + r.seconds, 0);
+  const runs = rows.reduce((t, r) => t + r.runs, 0);
+
+  const named = `${shortDuration(seconds)} summed across ${rows.length} vendor${rows.length === 1 ? '' : 's'}`;
   // Cannot be zero for a vendor that has a row — a row IS at least one run — but an unguarded
   // division renders `Infinity` on a page rather than throwing anywhere anybody would see it.
-  const average = all.runs === 0 ? '' : ` · ${shortDuration(all.seconds / all.runs)} average per run`;
+  const average = runs === 0 ? '' : ` · ${shortDuration(seconds / runs)} average per run`;
 
   // Computed only when there is something to compare, rather than computed and then hidden: with one
   // row there is no "longest", and asking for one over an empty list is a reduce with no seed.
