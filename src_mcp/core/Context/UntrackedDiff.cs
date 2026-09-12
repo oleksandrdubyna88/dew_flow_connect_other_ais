@@ -29,11 +29,21 @@ public static class UntrackedDiff
 
         if (bytes.Length > InlineCap)
         {
-            return new FileDiff(path, $"new file (untracked): {path} — {bytes.Length} bytes, not shown (over {InlineCap} bytes)\n");
+            return TooBig(path, bytes.Length);
         }
 
         return new FileDiff(path, Hunk(path, Encoding.UTF8.GetString(bytes)));
     }
+
+    /// <summary>
+    /// A file too large to show, named with its size — decided from the LENGTH alone.
+    /// </summary>
+    /// <remarks>
+    /// Public so the collector can answer without reading the bytes at all: the cap bounds what the
+    /// consultant sees, and it must bound what is allocated to decide that too.
+    /// </remarks>
+    public static FileDiff TooBig(string path, long bytes) =>
+        new(path, $"new file (untracked): {path} — {bytes} bytes, not shown (over {InlineCap} bytes)\n");
 
     private static bool LooksBinary(ReadOnlySpan<byte> bytes) =>
         bytes[..Math.Min(bytes.Length, BinaryProbe)].IndexOf((byte)0) >= 0;

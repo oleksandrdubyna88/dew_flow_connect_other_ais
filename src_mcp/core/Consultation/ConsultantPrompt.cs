@@ -44,6 +44,83 @@ public static class ConsultantPrompt
     /// </remarks>
     public const int DiffBudget = 64 * 1024;
 
+    /// <summary>
+    /// The caller's own text is bounded too — it is the one part of the prompt nothing else caps.
+    /// </summary>
+    /// <remarks>
+    /// A problem statement is a paragraph or two; an agent that pastes a whole log into it buys a
+    /// vendor bill rather than an answer, and the diff it would crowd out is the part the consultant
+    /// was asked here for. Sixteen kilobytes is generous for prose and small beside the diff budget.
+    /// The list is capped for the same reason, and by COUNT as well as length: "the files I suspect"
+    /// stops meaning anything past a couple of dozen. (codex, code round.)
+    /// </remarks>
+    public const int ProblemBudget = 16 * 1024;
+
+    public const int SuspectedFileCap = 25;
+
+    private const int PathBudget = 400;
+
+    private const int TranscriptBudget = 20 * 1024;
+
+    /// <summary>The caller's problem, trimmed to its budget with the cut SAID rather than silent.</summary>
+    public static string BoundedProblem(string problem)
+    {
+        var text = problem.Trim();
+
+        return text.Length <= ProblemBudget
+            ? text
+            : text[..ProblemBudget] + $"\n… (the caller's problem statement was cut here at {ProblemBudget} characters)";
+    }
+
+    /// <summary>The suspected files, bounded in count and in length, with the count said when it was cut.</summary>
+    public static IReadOnlyList<string> BoundedFiles(IReadOnlyList<string> files)
+    {
+        var kept = files
+            .Where(f => !string.IsNullOrWhiteSpace(f))
+            .Select(f => f.Trim() is { Length: > PathBudget } long_ ? long_[..PathBudget] + "…" : f.Trim())
+            .Take(SuspectedFileCap)
+            .ToList();
+
+        if (files.Count > SuspectedFileCap)
+        {
+            kept.Add($"… and {files.Count - SuspectedFileCap} more the caller named (not listed)");
+        }
+
+        return kept;
+    }
+
+    /// <summary>
+    /// The conversation so far, for a vendor that keeps none — newest turns first, bounded, and the
+    /// trimming SAID inside the text.
+    /// </summary>
+    /// <remarks>
+    /// Built from the record's own turns. Without it the <c>WeRemember</c> arm is a shape with no
+    /// behaviour behind it, and the first vendor to use it would silently answer every follow-up with
+    /// no memory of the one before. (codex, code round — before any such vendor exists, which is the
+    /// only cheap moment to fix it.)
+    /// </remarks>
+    public static string Transcript(IReadOnlyList<(string Problem, string Advice)> turns)
+    {
+        var kept = new List<string>();
+        var spent = 0;
+        for (var i = turns.Count - 1; i >= 0; i--)
+        {
+            var block = $"The caller asked:\n  {Indent(turns[i].Problem)}\nYou answered:\n  {Indent(turns[i].Advice)}";
+            if (spent + block.Length > TranscriptBudget)
+            {
+                kept.Insert(0, $"(the earlier {i + 1} turn(s) of this conversation are not carried — the budget was reached)");
+                break;
+            }
+
+            kept.Insert(0, block);
+            spent += block.Length;
+        }
+
+        return string.Join("\n\n", kept);
+    }
+
+    private static string Indent(string text) => text.Trim().Replace("\n", "\n  ");
+
     public static string Compose(ConsultantPromptInput input)
     {
         var text = new StringBuilder();

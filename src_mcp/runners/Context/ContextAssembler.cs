@@ -114,11 +114,23 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
         var files = new List<FileDiff>();
 
         var numstat = await Git(repoPath, ct, ["diff", "--numstat", "-z", "HEAD", "--", ".", .. excludes]);
-        foreach (var change in NumstatReader.Read(numstat))
+        var changes = NumstatReader.Read(numstat);
+        // ONE git process for every text file, not one per file. A review's collector can afford the
+        // per-file loop — it runs inside a round somebody expects to take minutes — but a consultation
+        // blocks an agent that is already stuck, and on Windows a process start is 30-50 ms: a fifty
+        // file refactor paid two to three seconds before the consultant was even launched.
+        // (gemini Blocking + codex, code round.) The whole diff is taken once and split on its own
+        // `diff --git` boundaries, which is the same text the per-file calls produced.
+        var whole = changes.Any(c => !c.IsBinary)
+            ? await Git(repoPath, ct, ["diff", "HEAD", "--", .. changes.Where(c => !c.IsBinary).SelectMany(c => c.Pathspecs)])
+            : string.Empty;
+        var perFile = DiffSplitter.ByFile(whole);
+
+        foreach (var change in changes)
         {
             files.Add(change.IsBinary
                 ? new FileDiff(change.Path, string.Empty, IsBinary: true, BinaryBytes: SizeOnDisk(repoPath, change.Path))
-                : new FileDiff(change.Path, await Git(repoPath, ct, ["diff", "HEAD", "--", .. change.Pathspecs])));
+                : new FileDiff(change.Path, perFile.TryGetValue(change.Path, out var text) ? text : string.Empty));
         }
 
         var untracked = await Git(repoPath, ct, ["ls-files", "--others", "--exclude-standard", "-z", "--", ".", .. excludes]);
@@ -130,11 +142,25 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
         return files;
     }
 
+    /// <summary>
+    /// One untracked file, read only as far as it can be used.
+    /// </summary>
+    /// <remarks>
+    /// The LENGTH is asked first. Reading the whole file and then discarding it against the 16 KB cap
+    /// allocates a gigabyte for a stray database dump somebody forgot to ignore — the cap exists to
+    /// bound what the consultant SEES, and it has to bound what we read as well. (gemini + codex,
+    /// code round.)
+    /// </remarks>
     private static FileDiff Untracked(string repoPath, string path)
     {
+        var full = Path.Combine(repoPath, path);
         try
         {
-            return UntrackedDiff.For(path, File.ReadAllBytes(Path.Combine(repoPath, path)));
+            var length = new FileInfo(full).Length;
+
+            return length > UntrackedDiff.InlineCap
+                ? UntrackedDiff.TooBig(path, length)
+                : UntrackedDiff.For(path, File.ReadAllBytes(full));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

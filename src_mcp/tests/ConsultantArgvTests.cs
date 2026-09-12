@@ -53,7 +53,7 @@ public sealed class ConsultantArgvTests
         var args = invocation.Request.Arguments;
 
         args.Should().ContainInOrder("exec", "resume", "0198f2c1-aaaa-bbbb-cccc-0123456789ab");
-        args.Should().ContainInOrder("-c", "sandbox_mode=\"read-only\"");
+        args.Should().ContainInOrder("-c", "sandbox_mode=read-only");
         args.Should().NotContain("-s").And.NotContain("-C");
         invocation.Request.WorkingDirectory.Should().Be(Repo);
     }

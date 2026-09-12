@@ -37,7 +37,18 @@ public sealed class CodexConsultant(IReviewerRuntime inner, string vendor = "cod
         }
 
         var outputFile = Path.Combine(launch.OutputDir, $"{FileName.Safe(vendor)}-consult-{Guid.NewGuid():N}.txt");
-        var request = new ProcessRequest(Executable(launch.Settings), [.. Argv(launch, outputFile)], launch.RepoPath)
+        var argv = (string[])[.. Argv(launch, outputFile)];
+        // The delivery rule the first real run wrote, asserted over EVERY value rather than only the
+        // prompt: cmd.exe parses each npm `.cmd` shim on Windows and truncates an argument at its
+        // first newline, silently. A repository path, an output path or a configured model name is
+        // somebody else's string too. (codex, code round.)
+        if (Array.Find(argv, a => a.Contains('\n') || a.Contains('\r')) is { } broken)
+        {
+            throw new ArgumentException(
+                $"a consultation argument contains a line break and would be truncated by a Windows shim: '{broken}'", nameof(launch));
+        }
+
+        var request = new ProcessRequest(Executable(launch.Settings), argv, launch.RepoPath)
         {
             Environment = launch.Settings.ApiKey.Length > 0
                 ? new Dictionary<string, string?> { ["OPENAI_API_KEY"] = launch.Settings.ApiKey }
@@ -52,7 +63,12 @@ public sealed class CodexConsultant(IReviewerRuntime inner, string vendor = "cod
     private static IEnumerable<string> Argv(ConsultantLaunch launch, string outputFile) =>
         launch.Handle.Length == 0
             ? ["exec", "-s", "read-only", "--skip-git-repo-check", "--color", "never", "-C", launch.RepoPath, "--json", "-o", outputFile, .. Model(launch.Settings), "-"]
-            : ["exec", "resume", launch.Handle, "-c", "sandbox_mode=\"read-only\"", "--skip-git-repo-check", "--json", "-o", outputFile, .. Model(launch.Settings), "-"];
+            // UNQUOTED, and measured: `-c` parses its value as TOML and falls back to the raw string,
+            // so `sandbox_mode=read-only` arrives as the string this wants. The quoted form worked
+            // too, but an embedded double quote inside an argument that reaches cmd.exe through an
+            // npm shim is a re-tokenisation waiting for the wrong input. Verified 2026-09-12:
+            // a thread resumed with this exact form returned the number planted in turn 1. (gemini, code round.)
+            : ["exec", "resume", launch.Handle, "-c", "sandbox_mode=read-only", "--skip-git-repo-check", "--json", "-o", outputFile, .. Model(launch.Settings), "-"];
 
     private static IEnumerable<string> Model(ReviewerSettings settings) =>
         settings.Model.Length > 0 ? ["-m", settings.Model] : [];

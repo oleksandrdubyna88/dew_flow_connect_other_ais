@@ -8,7 +8,7 @@ namespace CoaiMcp.Server;
 /// One JSON file per consultation in the data directory both halves share — the escalation channel's
 /// shape: written whole under the turn, read without forbidding a writer, a torn file is nothing.
 /// </summary>
-public sealed partial class ConsultationStore(string dataDir)
+public sealed partial class ConsultationStore(string dataDir, Action<string>? warn = null)
 {
     /// <summary>How long a finished consultation is kept for the log and the card before its file goes.</summary>
     public static readonly TimeSpan Retention = TimeSpan.FromDays(7);
@@ -113,8 +113,14 @@ public sealed partial class ConsultationStore(string dataDir)
         {
             File.Delete(PathFor(record.Id));
         }
-        catch (IOException) { /* next sweep */ }
-        catch (UnauthorizedAccessException) { }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Retried on the next sweep — but SAID, because a retention that silently never runs is
+            // a directory that grows for ever with nothing anywhere reporting it. (codex, code round.)
+            warn?.Invoke($"consultation {record.Id} is past retention and could not be removed: {e.Message}");
+
+            return false;
+        }
 
         return true;
     }
