@@ -1,5 +1,46 @@
 # Changelog
 
+## Extension 0.36.0 — 2026-09-12
+
+**Two right-click items that say what they do.** There was one, **Chat with other AI**, and whether
+it asked at once or waited depended on a setting in another window. Now there are two: **Chat with
+other AI: default** asks the model you ticked as main straight away, and **Chat with other AI:
+choose** puts the turn in the composer so you can change the model or the prompt and press Enter
+yourself. Neither consults **When to send** — each says in its own name what it will do. The
+keyboard shortcut keeps that setting, where its name promises nothing either way.
+
+**A chat tab knows which session it came from.** Claude Code writes the conversation's name into its
+own session file, and that name is what you see on the tab — so the two can be joined. Two sessions
+waiting for an answer in one folder used to be a flat refusal; now the one your tab is showing wins.
+It still refuses everything it genuinely cannot tell apart, and says which: a name that matches
+neither session, a name that matches two, two workspace folders that each have a session by that
+name, and no tab at all.
+
+**Asked — the button that remembers what you asked.** After a few hours a chat tab has lost the
+thing it is about: the question that started the work has scrolled far above, and you end up asking
+your assistant what it is working on. The words never went anywhere — Claude Code keeps every one of
+them.
+
+**Asked** is at the top right, beside the ± controls. Press it and what you wrote opens above the
+conversation, pinned outside the scrolling part, so it stays where it is no matter where you are in
+the thread. `‹` and `›` step through every turn you typed, oldest first. Press it again and it folds
+away over half a second rather than all at once. A chat opened from a file has no session behind it,
+so it has no button.
+
+It says why when there is nothing, rather than showing you an empty box: no session file, no folder
+open, two sessions here sharing your tab's name, a conversation you have not written in yet, or a
+session file that has since been deleted are five different situations and it names the one it
+found. It reads afresh every time you open it, because the window this is for is still being typed
+into. What it shows is your own words as you wrote them — a turn an extension prefilled is still
+yours, and a slash command is unwrapped to what you typed.
+
+**It stays out of the way while it works.** The session is streamed rather than read whole, and only
+the file your tab belongs to is read past its name — a folder holding weeks of sessions is not
+loaded into memory to compare a title. The two hundred earliest turns cross to the page, each cut at
+eight thousand characters and saying where it was cut. Your tab finds its session file once, while
+its name still matches, and keeps it: Claude renames a conversation as it goes on, and a file does
+not move.
+
 ## Extension 0.35.0 — 2026-09-11
 
 **The chat opens from any file.** `Ctrl+Alt+A` and the right-click item used to work only inside
