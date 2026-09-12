@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -161,13 +161,52 @@ test('a lock INSIDE the window is not broken, however tempting — a live writer
   const dir = home();
   try {
     const path = join(dir, lockName('a1'));
-    const takenAt = NOW - 1_000;
-    writeFileSync(path, JSON.stringify({ pid: 1, at: new Date(takenAt).toISOString(), token: 'live:1', doing: 'save 2' }), 'utf8');
+    writeFileSync(path, JSON.stringify({ pid: 1, at: new Date(NOW - 1_000).toISOString(), token: 'live:1', doing: 'save 2' }), 'utf8');
 
     assert.equal((await claimConversation(dir, 'a1', 'save 2', NOW)).kind, 'held', 'a one-second-old lock was broken');
-    // Exactly AT the window is still inside it: the window is "older than", not "as old as".
-    assert.equal((await claimConversation(dir, 'a1', 'save 2', takenAt + LOCK_STALE_MS)).kind, 'held', 'a lock exactly at the window was broken');
     assert.equal(note(path).token, 'live:1', 'a live lock was replaced');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a lock that becomes stale DURING the wait is broken, not reported held — the clock runs', async () => {
+  // gemini, the third round: the loop aged a rival's lock against the instant the claim began, so a
+  // lock 29.95 seconds old — genuinely abandoned by the end of a 120 ms wait — was still "fresh" on
+  // every attempt, and the caller re-minted a conversation as a copy for nothing. Fifty milliseconds
+  // short of the window at the start; well past it before the wait is out.
+  const dir = home();
+  try {
+    const path = join(dir, lockName('a1'));
+    const almost = { pid: 1, at: new Date(NOW - LOCK_STALE_MS + 50).toISOString(), token: 'almost:1', doing: 'save 2' };
+    writeFileSync(path, JSON.stringify(almost), 'utf8');
+
+    const { value: claim } = await capturing(() => claimConversation(dir, 'a1', 'save 2', NOW));
+
+    assert.equal(claim.kind, 'claimed', 'a lock that went stale during the wait was reported held against a frozen clock');
+    assert.notEqual(note(path).token, 'almost:1');
+    await letGo(claim);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a DIRECTORY left at the lock path, older than the window, is broken rather than wedging the conversation', async () => {
+  // The third round: `rm` without `recursive` throws on a directory, and the throw read as "not stale"
+  // — a permanent wedge, against a one-word fix. Nothing we write puts a directory there; this is the
+  // defence, and it needs the ageing to work on a path that will not READ as a file at all.
+  const dir = home();
+  try {
+    const path = join(dir, lockName('a1'));
+    mkdirSync(path);
+    const long = new Date(Date.now() - LOCK_STALE_MS - 60_000);
+    utimesSync(path, long, long);
+
+    const { value: claim } = await capturing(() => claimConversation(dir, 'a1', 'save 1', Date.now()));
+
+    assert.equal(claim.kind, 'claimed', 'a stale directory at the lock path wedged the conversation for good');
+    assert.equal(statSync(path).isFile(), true, 'the lock path is not our lock file after the break');
+    await letGo(claim);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

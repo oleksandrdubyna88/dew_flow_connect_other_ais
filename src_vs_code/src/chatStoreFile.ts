@@ -85,7 +85,13 @@ import { claimConversation } from './chatStoreLock';
  * history and is not answering. {@link ChatStoreFile.state} is the one place that distinction is
  * reported, because reporting "no conversations" for a store that could not be read is this module
  * lying about the world, and a later story's sweep must delete nothing while the store is
- * unavailable.</p>
+ * unavailable. <b>The same three-way honesty holds at every boundary</b>: {@link ChatStoreFile.read}
+ * answers `absent`, `incompatible` or `unavailable` rather than one `undefined` for all three — the
+ * reload serializer disposes a panel over "no record", and it must not do that over a permissions
+ * error or a record a newer build wrote — and {@link ChatStoreFile.listMeta} answers `unavailable`
+ * rather than an empty list for a directory it could not read, because the index cache of story B1
+ * keeps its last good rows when a refresh fails and cannot tell "nothing here" from "could not look"
+ * if both are `[]`. (codex, the third round.)</p>
  *
  * <p><b>Nothing here throws.</b> A filesystem failure becomes a typed outcome, an empty listing, or
  * `undefined`. Every such failure is also said on the console — never swallowed, per
@@ -136,21 +142,36 @@ export type StoreState =
   | { readonly kind: 'unavailable'; readonly reason: string };
 
 /**
- * What is at `<id>.json`, as four facts the save and the read both branch on.
+ * What is at `<id>.json`, as four facts — the save branches on them, and the read HANDS THEM ON.
  *
- * <p>`absent` is the only state a first write may create over. `incompatible` is a file that parses
- * to nothing this build trusts; `unreadable` is a file the disk would not hand over at all. The two
- * are kept apart because they mean different things to a save — refuse and fail respectively — and
- * collapsing them was one of the first draft's defects.</p>
+ * <p>`absent` is the only state a first write may create over, and the only one a caller may treat
+ * as "no such conversation". `incompatible` is a file that parses to nothing this build trusts — torn,
+ * foreign, or written by a newer build — and a caller that disposed a tab over it would be throwing
+ * away a conversation a later build could read. `unavailable` is a file the disk would not hand over at
+ * all. They are kept apart because they mean different things to a save (refuse, and fail) and to the
+ * serializer (preserve, and preserve), and collapsing all three into `undefined` was the third round's
+ * finding. Every `reason` is a short sentence for a person, with no path in it.</p>
  */
-type Probe =
-  | { readonly kind: 'absent' }
+export type ReadOutcome =
   | { readonly kind: 'record'; readonly record: ConversationRecord }
-  | { readonly kind: 'incompatible' }
-  | { readonly kind: 'unreadable'; readonly reason: string };
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'incompatible'; readonly reason: string }
+  | { readonly kind: 'unavailable'; readonly reason: string };
+
+/**
+ * What a listing came to: the rows, or a directory that would not answer.
+ *
+ * <p>An empty `metas` means the directory was READ and held nothing — or is not there at all, which
+ * is the ordinary "nobody has chatted yet" that {@link ChatStoreFile.state} calls `empty`, and which a
+ * cache should reflect as empty rather than preserve stale rows over. `unavailable` is a directory that
+ * exists and could not be read, and is the answer that lets a cache keep its last good rows.</p>
+ */
+export type Listing =
+  | { readonly kind: 'listed'; readonly metas: readonly ConversationMeta[] }
+  | { readonly kind: 'unavailable'; readonly reason: string };
 
 /** A probe that came back with something a swap can be judged against. */
-type Present = Extract<Probe, { kind: 'absent' | 'record' }>;
+type Present = Extract<ReadOutcome, { kind: 'absent' | 'record' }>;
 
 /**
  * How many metadata files are read at once when the directory is listed.
@@ -285,11 +306,11 @@ export class ChatStoreFile {
   /** The swap itself, with the claim held: probe, compare, then the two writes in order. */
   private async saveClaimed(written: ConversationRecord, base: number): Promise<SaveOutcome> {
     const seen = await this.probe(written.id);
-    if (seen.kind === 'unreadable') {
+    if (seen.kind === 'unavailable') {
       return { kind: 'failed', reason: seen.reason };
     }
     if (seen.kind === 'incompatible') {
-      return { kind: 'incompatible', reason: INCOMPATIBLE };
+      return { kind: 'incompatible', reason: seen.reason };
     }
     const conflict = conflictOf(seen, base);
     if (conflict !== undefined) {
@@ -319,11 +340,11 @@ export class ChatStoreFile {
   /**
    * What is at `<id>.json`, without judging it — the validator does that.
    *
-   * <p>Only `ENOENT` is `absent`. Anything else the disk refuses is `unreadable`, and a file the disk
+   * <p>Only `ENOENT` is `absent`. Anything else the disk refuses is `unavailable`, and a file the disk
    * hands over that {@link recordFrom} will not accept is `incompatible` — never mistaken for absence,
-   * for the reasons in the header.</p>
+   * for the reasons in the header. Both faults are said on the console with the path.</p>
    */
-  private async probe(id: string): Promise<Probe> {
+  private async probe(id: string): Promise<ReadOutcome> {
     const path = this.recordPath(id);
     let text: string;
     try {
@@ -334,13 +355,13 @@ export class ChatStoreFile {
       }
       console.error(`ConnectOtherAIs: a conversation exists but could not be read: ${path}`, reason);
 
-      return { kind: 'unreadable', reason: withCode('the conversation could not be read from disk', codeOf(reason)) };
+      return { kind: 'unavailable', reason: withCode('the conversation could not be read from disk', codeOf(reason)) };
     }
     const record = recordFrom(parsed(text));
     if (record === undefined) {
       console.error(`ConnectOtherAIs: a conversation file is not one this build can read: ${path}`);
 
-      return { kind: 'incompatible' };
+      return { kind: 'incompatible', reason: INCOMPATIBLE };
     }
 
     return { kind: 'record', record };
@@ -369,14 +390,16 @@ export class ChatStoreFile {
   }
 
   /**
-   * One conversation back, or nothing — and the metadata reconciled against it on the way.
+   * One conversation back — or WHICH of three reasons there is none — with the metadata reconciled on
+   * the way.
    *
-   * <p>Missing is nothing, an ordinary "no such conversation". Unreadable and incompatible are also
-   * nothing to the caller — a read must not throw over one record — but each is SAID first, with the
-   * path, because a permissions error and a file this build cannot parse are not the same fact as an
-   * absence. A present-but-torn record is dropped, never repaired: a transcript with a hole in it
-   * reads as a conversation the person recognises with pieces missing, which is worse than one that
-   * is not there.</p>
+   * <p>`absent` is the ordinary "no such conversation", and the only answer a caller may act on as
+   * one; an id that cannot be a filename is `absent` too, because nothing could ever have been written
+   * under it. `unavailable` and `incompatible` are said on the console with the path, and are handed on
+   * rather than folded into absence: the reload serializer DISPOSES a panel over a missing record, and
+   * disposing over a permissions error or a record a newer build wrote would throw a person's tab away.
+   * A present-but-torn record is never repaired — a transcript with a hole in it reads as a
+   * conversation the person recognises with pieces missing — so it is reported, not rendered.</p>
    *
    * <p>The record returned is the one this read saw. If the reconciliation under the lock finds the
    * disk has moved on, the caller still gets what it read — its next save is then refused by the swap,
@@ -384,17 +407,16 @@ export class ChatStoreFile {
    *
    * @param now the clock, for the lock the reconciliation may take; a test pins it.
    */
-  public async read(id: string, now = Date.now()): Promise<ConversationRecord | undefined> {
+  public async read(id: string, now = Date.now()): Promise<ReadOutcome> {
     if (!isSafeId(id)) {
-      return undefined;
+      return { kind: 'absent' };
     }
     const seen = await this.probe(id);
-    if (seen.kind !== 'record') {
-      return undefined;
+    if (seen.kind === 'record') {
+      await this.reconcileMeta(seen.record, now);
     }
-    await this.reconcileMeta(seen.record, now);
 
-    return seen.record;
+    return seen;
   }
 
   /**
@@ -516,21 +538,27 @@ export class ChatStoreFile {
    * stray `notes.txt` are all skipped before a byte is read. An unreadable or torn entry is dropped
    * rather than allowed to fail the whole listing — one corrupt index file must not empty a person's
    * picker. The files are read {@link LIST_WIDTH} at a time, in directory order, and come back in that
-   * order. A directory that cannot be read lists as empty here; {@link state} is what tells a caller
-   * that empty means "unavailable" rather than "nothing", which is the distinction it must check
-   * first. A transcript with no metadata beside it is invisible here BY DESIGN and is the sweep's to
-   * reclaim, not this listing's to hunt for.</p>
+   * order.</p>
+   *
+   * <p><b>A directory that cannot be read is `unavailable`, not an empty list.</b> `state()` does not
+   * cover this: a permission change between a state call and the listing is exactly the race the
+   * cache's "keep the last good rows when a refresh fails" rule exists for, and it cannot keep them if
+   * "could not look" and "nothing here" are both `[]`. A directory that is not there is `listed` with
+   * nothing — the ordinary state of a machine nobody has chatted on, and one a cache should reflect.
+   * A transcript with no metadata beside it is invisible here BY DESIGN and is the sweep's to reclaim,
+   * not this listing's to hunt for.</p>
    */
-  public async listMeta(): Promise<readonly ConversationMeta[]> {
+  public async listMeta(): Promise<Listing> {
     let names: readonly string[];
     try {
       names = await readdir(this.dir);
     } catch (reason) {
-      if (codeOf(reason) !== 'ENOENT') {
-        console.error(`ConnectOtherAIs: the conversation store could not be listed: ${this.dir}`, reason);
+      if (codeOf(reason) === 'ENOENT') {
+        return { kind: 'listed', metas: [] };
       }
+      console.error(`ConnectOtherAIs: the conversation store could not be listed: ${this.dir}`, reason);
 
-      return [];
+      return { kind: 'unavailable', reason: withCode('the conversation store could not be listed', codeOf(reason)) };
     }
     const ids = names.map(idOfMeta).filter((id) => id.length > 0);
     const found: (ConversationMeta | undefined)[] = new Array<ConversationMeta | undefined>(ids.length);
@@ -544,7 +572,7 @@ export class ChatStoreFile {
     };
     await Promise.all(Array.from({ length: Math.min(LIST_WIDTH, ids.length) }, worker));
 
-    return found.filter((meta): meta is ConversationMeta => meta !== undefined);
+    return { kind: 'listed', metas: found.filter((meta): meta is ConversationMeta => meta !== undefined) };
   }
 
   /** One listed entry, dropped when it is torn, unreadable, or names an id its filename does not. */
