@@ -1,5 +1,9 @@
 # Changelog
 
+## Extension 0.37.1 — 2026-09-12
+
+**Copy and Carry nothing above are under the answer as well as above it.** An answer can be a page and a half, and the top of it is not where you are when you finish reading.
+
 ## Extension 0.37.0 — 2026-09-12
 
 **Carry nothing above.** A long conversation is re-sent in two places, and paid for in one: a Team

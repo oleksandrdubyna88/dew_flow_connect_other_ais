@@ -386,9 +386,16 @@ export function chatMessagesHtml(
         ? ''
         : `<hr class="end${cut ? ' cut' : ''}">${cut ? '<p class="cutSaid">Nothing above this line is carried to another model.</p>' : ''}`;
 
+      // THE SAME TWO CONTROLS AGAIN, under the answer. An answer can be a page and a half, and the
+      // operator was scrolling back to the top of one to press a button about its bottom. The pair
+      // is identical, index and all, so whichever is nearer is the one to use.
+      const again = mine || (copy.length === 0 && cutHere.length === 0)
+        ? ''
+        : `<div class="afterRow">${copy}${cutHere}</div>`;
+
       return `<div class="msg ${mine ? 'you' : 'model'}">`
         + `<div class="who">${said}${copy}${cutHere}</div>`
-        + `<div class="what">${body}</div>${end}</div>`;
+        + `<div class="what">${body}</div>${again}${end}</div>`;
     })
     .join('');
 }
@@ -617,6 +624,9 @@ function chatStyle(
      property set to true — which is exactly what the operator photographed: two dead boxes above a
      sentence explaining there was nothing to step through. */
   .askingHead[hidden] { display: none; }
+  /* Under the answer, where the eye already is once one has been read. Right-aligned so it reads as
+     a footer rather than as the beginning of the next thing. */
+  .afterRow { display: flex; justify-content: flex-end; gap: 6px; margin: 6px 0 0; }
   .cutBtn { font: inherit; font-size: .85em; background: none; border: 1px solid var(--vscode-panel-border);
             border-radius: 3px; padding: 1px 8px; color: var(--vscode-descriptionForeground); cursor: pointer; }
   .cutBtn:hover { border-color: var(--vscode-charts-orange, var(--vscode-editorWarning-foreground, #d18616)); }
