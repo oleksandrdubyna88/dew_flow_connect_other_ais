@@ -1,7 +1,22 @@
 # PLAN — the local reviewer takes the first slot, because it is the slowest
 
-> Status: **plan only, nothing implemented yet.** Scope: one expression in
-> `src_mcp/src/Server/PanelService.cs` (`BuildWork`'s ordering) and its tests.
+> Status: **IMPLEMENTED, 2026-09-12.** `OneLocalFirstTheRestLast` runs over the seeded shuffle's
+> output in `BuildWork`: the first local vendor leads, every other local vendor goes to the tail, and
+> the hosted vendors keep the shuffle's relative order.
+>
+> **The plan round found a hole in this plan's own mitigation.** The first draft promoted one local
+> row and left the others where the shuffle put them — which leaves a second local row free to land
+> inside the first `MaxConcurrency` rows, take a machine slot and then block on a card it cannot
+> have: the exact trap the plan spends a section describing. Every other local row goes to the back
+> now, where waiting is free.
+>
+> Two smaller ones from the same round: the method is named for what it does rather than for half of
+> it (`LocalFirst` reads as "all the local ones first", the opposite of the rule), and what the change
+> promises is stated as the order reviewers are SUBMITTED in rather than as a start time — if another
+> round holds the engine lease, the promoted row waits for the card like anything else.
+>
+> Related docs: [module_server.md](module_server.md),
+> [PLAN_one_gpu_one_reviewer.md](PLAN_one_gpu_one_reviewer.md).
 >
 > Issue [#155](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/155): *"I was
 > watching. Local starts when its turn comes round. We respect the settings, but if there is a local
@@ -115,8 +130,20 @@ host here.
 
 ## Definition of Done
 
-- [ ] Tests 1 and 2 written first and watched fail; then green; then red again with the fix reverted.
-- [ ] The whole C# suite green, count reported in the pull request.
-- [ ] The diff through the `coai` code round, every finding resolved.
-- [ ] `research/module_server.md` records the rule and the slot-holding trap; `CHANGELOG.md`.
-- [ ] This plan promoted to `research/` with `IMPLEMENTED` and the date.
+- [x] Tests 1 and 2 written first and watched fail — `Expected order[0] to start with "local" ... but
+      "bravo" differs near "bra"` and `Expected ...[0] to be "local" ... but "charlie" has a length of
+      7` — then green; then red again (2 of 4) with the one expression reverted, and green restored.
+- [x] The whole C# suite green: **1303 tests, 1302 pass, 1 skipped, 0 fail**.
+- [ ] The diff through the `coai` code round — **pending**, run immediately after this commit.
+- [x] `research/module_server.md` records the rule and the slot-holding trap; `CHANGELOG.md` under
+      `## Unreleased`.
+- [x] This plan promoted to `research/` with `IMPLEMENTED` and the date.
+
+**Deviation from this list:** test 4 — the mixed case for `SubmissionOrderTests` — was NOT added
+there. That file's own fixture makes every vendor local, and the property it is named for (two
+clients do not ask the same vendor first) is about the shuffle, which this change leaves alone. The
+mixed coverage it asked for lives in `TheLocalReviewerIsAskedFirstTests` instead, where every case IS
+mixed — putting it in both would be one property asserted twice. The concern the plan round raised —
+that an all-local fixture would silently stop covering anything — does not arise: with every vendor
+local, `OneLocalFirstTheRestLast` promotes one and demotes the rest, so those tests still exercise a
+real reordering rather than an identity.
