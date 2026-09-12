@@ -570,7 +570,7 @@ function chatStyle(
      with a hex fallback, like every other colour here, so a theme that redefines the palette moves
      this with it. */
   .asking.open { max-height: 40vh; opacity: 1; padding: 0 20px 10px; visibility: visible;
-                 border-bottom-color: var(--vscode-charts-orange, #d18616); }
+                 border-bottom-color: var(--vscode-charts-orange, var(--vscode-editorWarning-foreground, #d18616)); }
   .askingHead { display: flex; align-items: center; gap: 6px; opacity: .75; font-size: .85em; }
   /* AFTER the rule above and no weaker than it. The browser's own [hidden] is a bare attribute
      selector, so a class that sets display beats it and the element stays on screen with its hidden

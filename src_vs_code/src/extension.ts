@@ -210,7 +210,11 @@ export function activate(context: vscode.ExtensionContext): void {
     // boundary is a keypress that does nothing and explains nothing. (CodeRabbit, PR #206.)
     vscode.commands.registerCommand('coai.takeTheQuestion', () => {
       takeTheQuestion(chatPanels, context.extensionUri).catch((reason: unknown) => {
-        void vscode.window.showWarningMessage(`The question could not be taken: ${String(reason)}`);
+        // The DETAIL to the console, a short sentence to the person. A stack or a filesystem path in
+        // a toast is neither readable nor theirs to act on, and the path rule says so; dropping it
+        // altogether would leave a keypress that does nothing and explains nothing. (CodeRabbit.)
+        console.error('coai.takeTheQuestion failed', reason);
+        void vscode.window.showWarningMessage('The question could not be taken.');
       });
     }),
     // The same reader, the other verb: ADDED to what the composer already holds rather than put in
@@ -218,7 +222,8 @@ export function activate(context: vscode.ExtensionContext): void {
     // it away, when what was wanted was the question underneath it as more material.
     vscode.commands.registerCommand('coai.addTheQuestion', () => {
       takeTheQuestion(chatPanels, context.extensionUri, true).catch((reason: unknown) => {
-        void vscode.window.showWarningMessage(`The question could not be added: ${String(reason)}`);
+        console.error('coai.addTheQuestion failed', reason);
+        void vscode.window.showWarningMessage('The question could not be added.');
       });
     }),
     // Deactivation is not a tab closing: nobody has told VS Code about these panels, so both the
