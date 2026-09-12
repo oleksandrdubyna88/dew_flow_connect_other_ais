@@ -263,15 +263,20 @@ public sealed record PanelSettings
         "coai-mcp");
 
     public static PanelSettings FromEnvironment(Func<string, string?> env) =>
-        // Composed ONCE and then read twice — the round configuration is built from it and the
-        // sentences it refused join `Unrecognised`. Calling the composer for each would give the
-        // two halves of one answer two different catalog objects.
-        WithCatalog(env, Catalog(env));
+        // READ once, composed once, then read twice — the round configuration is built from the
+        // catalog and the sentences it refused join `Unrecognised`. Calling the parser or the
+        // composer again for the second half would let the two halves of one answer describe two
+        // different values of the setting. (codex, story B2's second code round.)
+        WithCatalog(env, ParseRoles(env("COAI_ROLES")));
 
-    private static PanelSettings WithCatalog(Func<string, string?> env, RoleCatalog catalog) => new PanelSettings
+    private static PanelSettings WithCatalog(Func<string, string?> env, RolesSetting roles) =>
+        WithCatalog(env, roles, RoleComposition.Compose(roles.Rows));
+
+    private static PanelSettings WithCatalog(
+        Func<string, string?> env, RolesSetting roles, RoleCatalog catalog) => new PanelSettings
     {
         Rounds = Config(env, catalog),
-        Unrecognised = [.. UnknownValues(env), .. catalog.Dropped],
+        Unrecognised = [.. UnknownValues(env, roles), .. catalog.Dropped],
         GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),
         PerProviderConcurrency = IntVar(env, "COAI_MAX_PER_PROVIDER", 2),
         LocalConcurrency = IntVar(env, "COAI_LOCAL_CONCURRENCY", 1),
@@ -360,7 +365,7 @@ public sealed record PanelSettings
             : Runners.Reviewers.RetryLadder.Default;
     }
 
-    private static IReadOnlyList<string> UnknownValues(Func<string, string?> env)
+    private static IReadOnlyList<string> UnknownValues(Func<string, string?> env, RolesSetting roles)
     {
         var unknown = new List<string>();
         if (env("COAI_RETRY_BACKOFF") is { Length: > 0 } backoff
@@ -392,10 +397,11 @@ public sealed record PanelSettings
                 + "'none' and 'worktree'.");
         }
 
-        // Re-read rather than threaded through from `Catalog`, which is what the neighbour above
-        // does with COAI_RETRY_BACKOFF: the diagnostics are one list built in one place, and the
-        // value is a few hundred bytes.
-        if (ParseRoles(env("COAI_ROLES")) is { CouldNotBeRead: true } roles)
+        // Threaded in rather than re-read, unlike the neighbours above: they parse a few characters
+        // twice and nothing can come of it, while this one decides which roles RUN — and one read
+        // for the catalog and another for the complaint could describe two different values of the
+        // setting. (codex, story B2's second code round.)
+        if (roles.CouldNotBeRead)
         {
             unknown.Add(
                 $"COAI_ROLES is not JSON this server can read — {roles.Unreadable} It is running the "
@@ -564,9 +570,6 @@ public sealed record PanelSettings
     /// value this build cannot parse at ALL joins the same list from <see cref="UnknownValues"/>,
     /// because a parse that never reached a row has no row to refuse.
     /// </remarks>
-    private static RoleCatalog Catalog(Func<string, string?> env) =>
-        RoleComposition.Compose(ParseRoles(env("COAI_ROLES")).Rows);
-
     /// <summary>
     /// What <c>COAI_ROLES</c> turned out to be: the rows, and a reason when there are none because
     /// this build could not read it.

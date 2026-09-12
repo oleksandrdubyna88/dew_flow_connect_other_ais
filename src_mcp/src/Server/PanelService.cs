@@ -402,14 +402,15 @@ public sealed partial class PanelService
                 // given its own budget and its own enable switch — the one the shipped plan role
                 // deliberately does not have — and then never asked anything. (gemini, twice on
                 // story B2's code round.)
+                var round = session.State.RoundsRunThisStage + 1;
+                var roles = _settings.Rounds.RolesForRound(Stage.PlanReview, round);
+
                 return Task.FromResult(WithNothingSkippedByRule(
                     BuildWork(
-                        _settings.Rounds.RolesForRound(Stage.PlanReview, session.State.RoundsRunThisStage + 1),
-                        workingDir, $"## The plan under review\n\n{planText}",
-                        session.State.RoundsRunThisStage + 1,
+                        roles, workingDir, $"## The plan under review\n\n{planText}", round,
                         isPlanStage: true,
-                        seed: StableSeed(session.State.SessionId, session.State.RoundsRunThisStage + 1),
-                        planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session) : null,
+                        seed: StableSeed(session.State.SessionId, round),
+                        planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session, roles) : null,
                         deal: _settings.DealPlanLenses)));
             }),
             ct);
@@ -563,16 +564,39 @@ public sealed partial class PanelService
     /// <para>When the pool is empty the whole list comes back: a fourth round asks the universal
     /// question again rather than nothing at all.</para>
     /// </remarks>
-    private IReadOnlyList<string> UnspentPlanLenses(PersistedSession session)
+    private IReadOnlyList<string> UnspentPlanLenses(PersistedSession session, IReadOnlyList<string> roles)
     {
-        var all = _settings.Rounds.Catalog.For(RoleCatalog.PlanRole)
+        // Every role in the round contributes, and the pool was read from the shipped plan role
+        // alone — which was the whole plan stage until a person could add a second role to it. With
+        // dealing switched on, every question in the hand then belonged to PlanCritique, so a round
+        // configured for two plan roles asked one of them twice and the other nothing.
+        //
+        // One lens each first, so no role is starved by the take below; then the first role tops the
+        // hand up to one question per vendor, which is what the take has always been for.
+        var hand = new List<string>();
+        foreach (var role in roles)
+        {
+            if (Pool(session, role).FirstOrDefault() is { } first)
+            {
+                hand.Add(first);
+            }
+        }
+
+        var vendors = Math.Max(_settings.Providers.Count(p => p.Enabled), 1);
+
+        return [.. hand, .. roles.Count > 0 ? Pool(session, roles[0]).Skip(1).Take(Math.Max(vendors - hand.Count, 0)) : []];
+    }
+
+    /// <summary>One role's lenses, the unspent ones first and its general prompt first of those.</summary>
+    private IReadOnlyList<string> Pool(PersistedSession session, string role)
+    {
+        var all = _settings.Rounds.Catalog.For(role)
             .OrderByDescending(p => p.Universal)
             .Select(p => p.Id)
             .ToList();
         var unspent = all.Where(id => !session.UsedPrompts.Contains(id)).ToList();
-        var pool = unspent.Count > 0 ? unspent : all;
-        var vendors = _settings.Providers.Count(p => p.Enabled);
-        return [.. pool.Take(Math.Max(vendors, 1))];
+
+        return unspent.Count > 0 ? unspent : all;
     }
 
     /// <summary>
@@ -1179,7 +1203,7 @@ public sealed partial class PanelService
         // per lens, and the scan was the round's own quadratic. (codex, story B2's code round.)
         var skipped = new HashSet<string>(StringComparer.Ordinal);
         var refused = new HashSet<(string Provider, string Role)>();
-        Assemble(runnable, items, deal, seed, Add);
+        Assemble(runnable, items, deal, seed, Add, CanCarry);
 
         return new RoundWork(work, notAsked, excluded);
 
@@ -1242,7 +1266,7 @@ public sealed partial class PanelService
             // prompt — `!choice.BuiltIn` — answered the same today only because composition refuses
             // a custom role a shipped prompt id, which is a second rule holding up the first.
             // (codex and gemini, story B2's code round.)
-            if (Remote(provider) && catalog.ById(role)?.BuiltIn != true)
+            if (!CanCarry(provider, role))
             {
                 Exclude(provider.Provider, role,
                     $"'{catalog.ById(role)?.Name ?? role}' is a role this Team "
@@ -1298,19 +1322,33 @@ public sealed partial class PanelService
         IReadOnlyList<string> roles,
         int round,
         IReadOnlyList<string>? planPrompts) =>
-        planPrompts is { Count: > 0 }
-            // Each lens goes to the role that OWNS it, from the catalog. It went to `roles[0]`,
-            // which was true for exactly as long as a plan round had one role in it — and the round
-            // after a person adds a second plan role, the first role is asked every lens, including
-            // the other role's, whose questions it then answers under its own name. The fallback is
-            // still the first role, for a lens id nothing in the catalog claims.
-            ? [.. planPrompts.Select(id => (
-                Role: _settings.Rounds.Catalog.PromptById(id)?.Role is { Length: > 0 } owner
-                    && roles.Contains(owner, StringComparer.OrdinalIgnoreCase)
-                        ? owner
-                        : roles[0],
-                PromptId: id))]
+        planPrompts is { Count: > 0 } && roles.Count > 0
+            ? [.. planPrompts.SelectMany(id => Lens(roles, id))]
             : [.. roles.Select(role => (Role: role, PromptId: ChoiceFor(role, round).Id))];
+
+    /// <summary>One dealt lens, under the role that owns it — or nothing.</summary>
+    /// <remarks>
+    /// <para>It went to <c>roles[0]</c>, which was true for exactly as long as a plan round had one
+    /// role in it. The round after a person adds a second plan role, the first role is asked every
+    /// lens, including the other role's, whose questions it then answers under its own name.</para>
+    /// <para>Three outcomes, not two. A lens the catalog gives to a role this round IS running goes
+    /// to that role. A lens the catalog does not know at all falls back to the first role, because a
+    /// stale pick must never leave a round with nothing to ask. A lens the catalog knows and gives
+    /// to a role this round is NOT running is DROPPED — reassigning it would have a reviewer answer
+    /// a question written for somebody else and the round report the wrong role as having asked it.
+    /// (codex and gemini, story B2's second code round.)</para>
+    /// </remarks>
+    private IEnumerable<(string Role, string PromptId)> Lens(IReadOnlyList<string> roles, string promptId)
+    {
+        if (_settings.Rounds.Catalog.PromptById(promptId)?.Role is not { Length: > 0 } owner)
+        {
+            return [(roles[0], promptId)];
+        }
+
+        return roles.FirstOrDefault(r => string.Equals(r, owner, StringComparison.OrdinalIgnoreCase)) is { } scheduled
+            ? [(scheduled, promptId)]
+            : [];
+    }
 
     /// <summary>
     /// Who is asked what: every vendor every question, or one hand dealt across them.
@@ -1329,7 +1367,8 @@ public sealed partial class PanelService
         IReadOnlyList<(string Role, string PromptId)> items,
         bool deal,
         int seed,
-        Action<ProviderSettings, string, string> add)
+        Action<ProviderSettings, string, string> add,
+        Func<ProviderSettings, string, bool> canCarry)
     {
         if (!deal)
         {
@@ -1341,15 +1380,56 @@ public sealed partial class PanelService
             return;
         }
 
-        foreach (var hand in PromptDeal.Deal(
-            [.. items.Select(i => $"{i.Role}|{i.PromptId}")],
-            [.. runnable.Select(p => p.Provider)],
-            seed))
+        // Dealt WITHIN the vendors that can carry the role, and the grouping is by that set rather
+        // than per item, so items every vendor can take are still spread across all of them.
+        // Dealing before asking cost a custom role its whole round: the hand fell to the Team
+        // server, the leaf that builds a launch excluded it there, and the local vendor sitting
+        // beside it was never offered the work. (gemini, story B2's second code round.)
+        foreach (var group in items.GroupBy(i => Carriers(runnable, i.Role, canCarry), StringComparer.Ordinal))
         {
-            var parts = hand.Item.Split('|', 2);
-            add(runnable.First(p => p.Provider == hand.Vendor), parts[0], parts[1]);
+            var vendors = group.Key.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (vendors.Length == 0)
+            {
+                // Nobody can run it. Every vendor is offered it anyway, so the leaf records why each
+                // of them could not — a round that says nothing about a role is the defect, and a
+                // deal is no excuse for one.
+                foreach (var (provider, item) in runnable.SelectMany(p => group.Select(i => (p, i))))
+                {
+                    add(provider, item.Role, item.PromptId);
+                }
+
+                continue;
+            }
+
+            foreach (var hand in PromptDeal.Deal([.. group.Select(i => $"{i.Role}|{i.PromptId}")], vendors, seed))
+            {
+                var parts = hand.Item.Split('|', 2);
+                add(runnable.First(p => p.Provider == hand.Vendor), parts[0], parts[1]);
+            }
         }
     }
+
+    /// <summary>
+    /// Whether this vendor may be given this role at all.
+    /// </summary>
+    /// <remarks>
+    /// One rule, asked in two places: before the deal, so a role is dealt only among the vendors
+    /// that can run it, and inside the leaf, so the non-dealing fan-out — where every vendor is
+    /// offered everything — still records why one of them was not used. The question is about the
+    /// ROLE's provenance, from the catalog: a Team server validates the name against the catalog IT
+    /// was compiled with, and a role a person defined is not in it.
+    /// </remarks>
+    private bool CanCarry(ProviderSettings provider, string role) =>
+        !Remote(provider) || _settings.Rounds.Catalog.ById(role)?.BuiltIn == true;
+
+    /// <summary>The vendors that can carry this role, as one key so items group by capability.</summary>
+    /// <remarks>
+    /// Joined on NUL because a provider name is a person's own word and may hold any punctuation a
+    /// separator could have been.
+    /// </remarks>
+    private static string Carriers(
+        IReadOnlyList<ProviderSettings> runnable, string role, Func<ProviderSettings, string, bool> canCarry) =>
+        string.Join(' ', runnable.Where(p => canCarry(p, role)).Select(p => p.Provider));
 
     /// <summary>
     /// The roles a code round runs, once the repository has been asked whether it wrote any rules.
