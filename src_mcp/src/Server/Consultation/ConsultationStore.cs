@@ -79,7 +79,48 @@ public sealed partial class ConsultationStore(string dataDir, Action<string>? wa
             changed += SweepOne(record, isAlive, nowUtc, idle, retention) ? 1 : 0;
         }
 
-        return changed;
+        return changed + SweepAnswers(nowUtc, retention);
+    }
+
+    /// <summary>
+    /// The prompt and answer files a launch leaves behind, once they are older than any record.
+    /// </summary>
+    /// <remarks>
+    /// <para>Every turn writes at least one: codex its <c>-o</c> answer, the local shim a
+    /// <c>.prompt</c> and a <c>.json</c>. They hold the working-tree diff and the caller's problem —
+    /// somebody's source code — and nothing was deleting them. Named as a growth surface here rather
+    /// than discovered as a full disk: one turn is kilobytes, a busy week is a few hundred of them,
+    /// and they go on the same clock as the record they belong to. (gemini, this story's plan round.)</para>
+    /// <para>Deleted by AGE rather than by owner: a file cannot say which consultation it came from,
+    /// and one older than the retention window belongs to a record that is itself gone. A file a
+    /// running turn is still writing is younger than the window by definition.</para>
+    /// </remarks>
+    private int SweepAnswers(DateTime nowUtc, TimeSpan retention)
+    {
+        var answers = Path.Combine(Directory, "answers");
+        if (!System.IO.Directory.Exists(answers))
+        {
+            return 0;
+        }
+
+        var removed = 0;
+        foreach (var path in System.IO.Directory.EnumerateFiles(answers))
+        {
+            try
+            {
+                if (nowUtc - File.GetLastWriteTimeUtc(path) > retention)
+                {
+                    File.Delete(path);
+                    removed++;
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                warn?.Invoke($"a consultation answer file at {path} is past retention and could not be removed: {e.Message}");
+            }
+        }
+
+        return removed;
     }
 
     /// <summary>

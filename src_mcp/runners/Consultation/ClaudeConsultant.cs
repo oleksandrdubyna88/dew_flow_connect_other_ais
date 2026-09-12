@@ -17,13 +17,32 @@ namespace CoaiMcp.Runners.Consultation;
 /// one, which is tempting — and would make <c>Build</c> impure, since a fresh GUID per call is a
 /// launch no test can assert. The CLI reports the id either way, so every consultant here has the
 /// same shape: run, read the handle off what the process said, resume with it.</para>
-/// <para>The write tools stay denied, as they are for a reviewer; the read tools stay ALLOWED,
-/// because reading the tree is what a consultant was asked here to do. <c>ReviewerSettings.Confined</c>
-/// is therefore never set on this path — that flag is the Team server's case, where the prompt is
-/// the whole world.</para>
+/// <para><b>What it may do, and the line between the two.</b> A consultant is asked here to READ the
+/// tree, so <c>Read</c>, <c>Glob</c> and <c>Grep</c> stay allowed — denying them as a CONFINED
+/// reviewer does would leave it judging the prompt alone, which is the one thing it exists not to do.
+/// Everything that can WRITE is denied, and that list includes <c>Bash</c>: `--permission-mode plan`
+/// is the CLI's promise and a shell is a way around it, since `rm`, `mv` and `sed -i` change a tree
+/// no edit tool was ever asked for. The gate's security reviewer named exactly that on this story's
+/// plan round. <c>WebFetch</c> and <c>WebSearch</c> go with them — not because they write, but
+/// because a consultant reading an unreviewed tree has no reason to reach the network, and the
+/// cheapest way to not exfiltrate a secret is to have no tool that could.</para>
+/// <para>The filesystem invariant remains the check behind all of this: a flag is the vendor's
+/// promise, and the invariant is ours.</para>
 /// </remarks>
 public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "claude") : IConsultantRuntime
 {
+    /// <summary>
+    /// Denied to a consultant: everything that can change the tree, and everything that reaches the
+    /// network. <c>Read</c>, <c>Glob</c> and <c>Grep</c> are deliberately absent from this list.
+    /// </summary>
+    /// <remarks>
+    /// <c>Task</c> and <c>Agent</c> are both named because the sub-agent tool has carried both names
+    /// across CLI versions and an unknown name here is inert — listing the one the CLI does not use
+    /// costs nothing, and omitting the one it does would leave a way to run a shell through a child.
+    /// </remarks>
+    private static readonly string[] Denied =
+        ["Edit", "Write", "NotebookEdit", "Bash", "WebFetch", "WebSearch", "Task", "Agent"];
+
     public string Vendor => vendor;
 
     public ConsultantMemory Memory => new ConsultantMemory.VendorRemembers();
@@ -37,7 +56,7 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
                 "-p",
                 "--output-format", "json",
                 "--permission-mode", "plan",
-                "--disallowedTools", "Edit", "Write", "NotebookEdit",
+                "--disallowedTools", .. Denied,
                 "--add-dir", launch.RepoPath,
                 .. launch.Handle.Length > 0 ? (string[])["--resume", launch.Handle] : [],
                 .. launch.Settings.Model.Length > 0 ? (string[])["--model", launch.Settings.Model] : [],

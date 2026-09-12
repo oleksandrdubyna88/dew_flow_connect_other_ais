@@ -124,6 +124,22 @@ it is bound to an ANSWER schema (`{"answer": string}`) because its shim refuses 
 and it takes the cross-process engine lease, so one card serves one caller however many rounds and
 consultations are in flight.
 
+**A consultant may READ, and may not run a shell.** `Read`, `Glob` and `Grep` stay allowed — denying
+them as a confined REVIEWER does would leave the consultant judging the prompt alone, which is the one
+thing it exists not to do. Everything that can WRITE is denied, and that list includes `Bash`:
+`--permission-mode plan` is the CLI's promise, and a shell is the way around it, since `rm`, `mv` and
+`sed -i` change a tree no edit tool was ever asked for. `WebFetch` and `WebSearch` go with them, not
+because they write but because a model reading an unreviewed tree has no reason to reach the network.
+The filesystem invariant stays the check behind all of it: a flag is the vendor's promise, the
+invariant is ours.
+
+**Antigravity reports its usage CUMULATIVELY**, and a consultation is the first thing here to run one
+conversation twice, so it is the first place that shows: turn 1 said 14 138 input tokens and turn 2
+said 30 843, which is turn 1 plus turn 2. The adapter DECLARES it (`UsageIsCumulative`) and the
+service subtracts the record's running total, because only the caller holds that total. The arithmetic
+is `ConsultationUsage` in the core, floored at zero. Left alone, the ledger would have counted turn 1
+again on every later turn.
+
 **A consultation file is recognised by its NAME.** Story 2's live check found the local route's answer
 schema, written into the consultations directory, coming back from `All()` as a record with a null id
 — after which the sweep would have written and deleted files named after nothing. The schema moved to

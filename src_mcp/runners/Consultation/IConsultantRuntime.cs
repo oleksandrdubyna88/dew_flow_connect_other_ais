@@ -69,4 +69,16 @@ public interface IConsultantRuntime
 
     /// <summary>The vendor no longer holds this conversation: a resume that cannot be honoured.</summary>
     bool DroppedTheConversation(ProcessResult result);
+
+    /// <summary>
+    /// This vendor reports what the WHOLE conversation has consumed, not what this turn did.
+    /// </summary>
+    /// <remarks>
+    /// True for antigravity, measured: turn 1 reported 14 138 input tokens and turn 2 reported
+    /// 30 843, which is turn 1 plus turn 2. Recorded as a property of the ADAPTER rather than fixed
+    /// inside it, because only the caller holds the running total to subtract — and a spending record
+    /// that counts turn 1 twice is the one thing a spending record must not do. False everywhere
+    /// else, which is why it is a defaulted member: a vendor that reports per turn says nothing.
+    /// </remarks>
+    bool UsageIsCumulative => false;
 }
