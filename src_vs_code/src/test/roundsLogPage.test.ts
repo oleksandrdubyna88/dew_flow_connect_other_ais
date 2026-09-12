@@ -158,16 +158,26 @@ test('the three date buttons are painted as buttons, not as secondary text', () 
 });
 
 test('what the three are painted with is the one primary rule, and nothing later repaints them', () => {
-  // Raised on the plan round (codex): a test that only checks the class is gone would stay green
-  // while a later, more specific rule painted the toolbar's buttons grey again. So the cascade is
-  // pinned too — the bare rule carries the primary colour and the pointer, and no selector in the
-  // stylesheet singles the toolbar's buttons or the three ids out.
+  // Raised on the plan round and again on the code round: a test that only checks the class is gone
+  // would stay green while a LATER, more specific rule painted the toolbar's buttons grey again —
+  // `.toolbar button`, `.date-controls button`, `body .toolbar button`, `button:not(.secondary)`.
+  // A regex naming the shapes somebody thought of cannot cover the ones they did not, so the guard
+  // is inverted: every selector in this stylesheet that mentions a button at all must be one of the
+  // four known forms. A fifth is a red test, whatever it is called.
   const html = roundsLogHtml([], [], 'n');
   const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
 
-  assert.match(css, /\n\s*button \{[^}]*var\(--vscode-button-background\)/, 'the bare rule is the primary colour');
+  assert.match(css, /\n\s*button \{[^}]*var\(--vscode-button-background\)/, 'the bare rule is the primary background');
+  assert.match(css, /\n\s*button \{[^}]*var\(--vscode-button-foreground\)/, 'and the primary foreground with it');
   assert.match(css, /\n\s*button \{[^}]*cursor: pointer/, 'and says it is pressable');
-  assert.doesNotMatch(css, /\.toolbar\s*>?\s*button|#today|#alldates|#clear/, 'no rule singles them out');
+  // Colour is one signal. The pointer and a hover are the two that survive a high-contrast theme.
+  assert.match(css, /\n\s*button:hover \{[^}]*var\(--vscode-button-hoverBackground\)/, 'a button answers the pointer');
+  assert.match(css, /\n\s*button\.secondary:hover \{/, 'and so does a secondary one, in its own tone');
+
+  const allowed = new Set(['button', 'button:hover', 'button.secondary', 'button.secondary:hover']);
+  const selectors = [...css.matchAll(/(?:^|\n)\s*([^\s{][^{\r\n]*?)\s*\{/g)].map((m) => m[1]!.trim());
+  const aimedAtButtons = selectors.filter((s) => /\bbutton\b|#today|#alldates|#clear/.test(s) && !allowed.has(s));
+  assert.deepEqual(aimedAtButtons, [], `only the four known button rules may exist: ${aimedAtButtons.join(' · ')}`);
 
   // The pager pair is the case that must NOT change: navigation, painted secondary on purpose.
   for (const id of ['prev', 'next']) {

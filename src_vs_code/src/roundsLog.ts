@@ -1007,6 +1007,13 @@ export function roundsLogHtml(
   #count { opacity: .75; margin-left: auto; font-size: .92em; }
   button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 2px; padding: 4px 10px; font: inherit; cursor: pointer; }
   button.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+  /* The bare rule IS the primary button here and \`secondary\` is the opt-out, which is why an action
+     is painted by taking no class at all. Actions on the current view — Today, All dates, Clear,
+     Answer… — are primary; the pager and the tab strip are navigation and stay quiet. And every
+     button answers the pointer: colour alone is one signal, and in a dark theme it was not enough
+     to tell these three from the text beside them (issue #126). */
+  button:hover { background: var(--vscode-button-hoverBackground); }
+  button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
   .wrap { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-size: .95em; }
   th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--vscode-panel-border); white-space: nowrap; vertical-align: top; }
