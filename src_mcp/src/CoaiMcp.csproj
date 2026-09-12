@@ -37,6 +37,11 @@
          release asset carries one file, and tests never noticed because a project reference copies
          content into the test output. A default that can go missing is not a default. -->
     <EmbeddedResource Include="prompts\*.md" LogicalName="CoaiMcp.prompts.%(Filename)%(Extension)" />
+    <!-- The consultant's prompt is served by RolePrompts under the same logical name family — so it
+         is editable and restorable like every role prompt — but lives OUTSIDE prompts\: the
+         extension's generate-help-prompts.mjs walks that folder and refuses any file the role seed
+         does not name, and a consultation has no role. -->
+    <EmbeddedResource Include="consultant\consult.md" LogicalName="CoaiMcp.prompts.consult.md" />
   </ItemGroup>
 
   <ItemGroup>

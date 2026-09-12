@@ -632,17 +632,17 @@ public sealed class ReviewerExecutor(
             // shim never reached its own polite DELETE.
             await AbandonAsync(invocation);
 
-            return new ReviewerLaunch(new ReviewerOutcome.TimedOut(), null, Usage.None, string.Empty);
+            return new ReviewerLaunch(new ReviewerOutcome.TimedOut(), null, Usage.None, string.Empty, result);
         }
 
         if (RateLimit.Hit(result))
         {
-            return new ReviewerLaunch(new ReviewerOutcome.RateLimited(RateLimit.Reason(result)), null, Usage.None, string.Empty);
+            return new ReviewerLaunch(new ReviewerOutcome.RateLimited(RateLimit.Reason(result)), null, Usage.None, string.Empty, result);
         }
 
         if (result.ExitCode != 0)
         {
-            return new ReviewerLaunch(new ReviewerOutcome.NonZeroExit(result.ExitCode, TailOf(result.StdErr)), null, Usage.None, string.Empty);
+            return new ReviewerLaunch(new ReviewerOutcome.NonZeroExit(result.ExitCode, TailOf(result.StdErr)), null, Usage.None, string.Empty, result);
         }
 
         // Both reads go through the vendor's own adapter: where the answer lands and how the run
@@ -651,7 +651,7 @@ public sealed class ReviewerExecutor(
         var usage = invocation.Adapter?.ReadUsage(invocation, result) ?? UsageParser.Parse(result.StdOut);
         var (answer, evidence) = Read(invocation, result);
 
-        return new ReviewerLaunch(null, answer, usage, evidence);
+        return new ReviewerLaunch(null, answer, usage, evidence, result);
     }
 
     /// <summary>What the vendor said, and what is left to show when it said nothing.</summary>
@@ -710,8 +710,15 @@ public sealed class ReviewerExecutor(
 /// The answer, or the process transcript when the envelope came back empty — the diagnosis, for the
 /// one failure whose raw text is the whole story.
 /// </param>
+/// <param name="Process">
+/// What the process itself said and how it ended — null only when it never started. Carried for the
+/// caller whose answer is not the whole story: a consultation reads the vendor's conversation id off
+/// this stream, and reads it on a TIMED-OUT run too, because the vendor may have accepted the turn
+/// before the kill and that handle is the only way not to pay for it twice.
+/// </param>
 public sealed record ReviewerLaunch(
     ReviewerOutcome? Terminal,
     string? Answer,
     Usage Usage,
-    string Evidence);
+    string Evidence,
+    ProcessResult? Process = null);

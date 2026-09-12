@@ -251,7 +251,21 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
     /// measurement is the READER taking the turn — this side is symmetry, and it is what protects
     /// the file from a reader that is not this code.
     /// </remarks>
-    private static void WriteAtomic(string path, string content)
+    private static void WriteAtomic(string path, string content) => AtomicJson.Write(path, content);
+}
+
+/// <summary>
+/// A file in the data directory, written whole or not at all, under the turn every reader takes.
+/// </summary>
+/// <remarks>
+/// Extracted from <see cref="Escalations"/> the day a second writer needed it — the consultation
+/// record — rather than copied there: the measurement behind it (382 of 400 plain writes refused
+/// under a hot reader, 2026-09-05) belongs to one method with two callers, not to two methods that
+/// will drift.
+/// </remarks>
+internal static class AtomicJson
+{
+    public static void Write(string path, string content)
     {
         using var turn = SessionTurn.Take(path);
         var temp = path + ".tmp";

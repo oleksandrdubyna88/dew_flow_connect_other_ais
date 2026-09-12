@@ -29,6 +29,7 @@ C4Container
   System_Ext(creds, "CredsForDevs", "config entry holding vendor keys")
   Rel(main, mcp, "MCP tools over stdio")
   Rel(mcp, codex, "spawn, read-only sandbox")
+  Rel(mcp, codex, "consult — one turn in the LIVE checkout, read-only, resumable")
   Rel(mcp, gem, "spawn, approval-mode plan")
   Rel(mcp, creds, "creds config <key>, at startup")
   Rel(mcp, ext, "loopback: settings, round events, escalation")
@@ -105,6 +106,29 @@ with a friendly name.
 | Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [PLAN_team_server.md](PLAN_team_server.md) | **epics 1–3 complete, 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots, `login`, the job queue with the review endpoints, and per-person usage with the admin company view; every route has an `http/` contract. The client runtime (`remote`, `--ask-remote`) and the panel's *Team servers* section, add-a-reviewer and spending block are in; a sign-in belongs to a SIDE of the machine, and the *Server* section shows the address read-only with the server's version beside it. The container, the host edge and the release are epic 4 — and since 2026-09-08 a `server-v*` tag publishes six Native AOT binaries on a GitHub Release beside the image, with [deploy-server.yml](../.github/workflows/deploy-server.yml) driving `deploy/systemd-release.sh` on the host; the per-PERSON spending view is [../todo/PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md) |
 | Measurement bench (`coai-bench`) | [module_bench.md](module_bench.md) · [../src_bench/README.md](../src_bench/README.md) | **shipped 2026-09-04** — drives the published server over stdio, records whole, judges separately |
 | Tests: the harness, its flows, its gaps | [module_tests.md](module_tests.md) | **recorded 2026-09-06** — three suites in-repo, the flow catalogue derived from the tool registry, and the two gaps named (no extension host, no real vendor in CI) |
+| The consultant (`consult`, the eighth tool) | [module_server.md](module_server.md) · [../todo/PLAN_consultant.md](../todo/PLAN_consultant.md) | **story 1 shipped 2026-09-12** — codex only, server-side: the tool, the consultation record and its sweep, the filesystem invariant, the per-repository lock, the caps, the ledger kind. Stories 2–6 (the other vendors, the panel section, the live card and log row, the triggers, the phase-2 counter) are open |
+
+## The gate has an opposite: the agent asking, rather than being judged (2026-09-12)
+
+Every arrow before this one points the same way — the main AI submits work and other vendors judge
+it. `consult` is the first that points the other way: the calling AI, stuck, asks one of those vendors
+a question and gets ADVICE it must verify, rather than a verdict it must resolve.
+
+Three properties make it a different shape from a round rather than a variation on one, each recorded
+in [module_server.md](module_server.md):
+
+- **No session and no state machine.** The round machine refuses a round in precisely the states an
+  agent is stuck in — a human gate set, a round awaiting `resolve` — and half the triggers happen
+  before `open` exists. So a consultation is keyed by the CALLER and requires no session at all.
+- **It runs in the LIVE working tree**, read-only, where every other vendor launch in this product is
+  pinned to a SHA in a throwaway worktree. A deliberate trade: the consultant must see what the person
+  actually has, including what is uncommitted, and the agent's own account of it is written through
+  the blind spot that got it stuck. It is also why the filesystem invariant exists — three read-only
+  flags are the VENDOR's promise, and the invariant is ours. It never deletes and never reverts; it
+  names every changed path and withholds the advice.
+- **It leaves a trace in a vendor's own store.** Dropping `--ephemeral` is what makes a conversation
+  resumable, and the price is a codex thread holding this repository's uncommitted diff on disk
+  outside our control. Said in the tool description rather than hidden.
 
 ## The extension gained two arrows of its own (2026-09-09)
 

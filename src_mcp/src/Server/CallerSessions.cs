@@ -64,6 +64,33 @@ public readonly record struct CallerIdentity(string Vendor = CallerIdentity.Unkn
     }
 
     public static CallerIdentity Current() => From(Environment.GetEnvironmentVariable);
+
+    /// <summary>The caller kinds a consultant can be configured for.</summary>
+    public const string Claude = "claude";
+    public const string Codex = "codex";
+    public const string Gemini = "gemini";
+    public const string Other = "other";
+
+    public static IReadOnlyList<string> Kinds { get; } = [Claude, Codex, Gemini, Other];
+
+    /// <summary>
+    /// WHICH vendor is calling — decided by the vendor variables alone.
+    /// </summary>
+    /// <remarks>
+    /// <para>A second question beside <see cref="From"/>, not an index into its array:
+    /// <c>COAI_CALLER_SESSION</c> is an identity override with no vendor meaning, and reading the
+    /// kind off it would call every scripted client "other" while it names a Claude session.</para>
+    /// <para>Sound because this server is a stdio child of exactly ONE client per process, which
+    /// exports its own session variable to it — the same fact <see cref="From"/> rests on. (The plan
+    /// round asked for per-request identity; there is no request-level caller on stdio.)</para>
+    /// </remarks>
+    public static string KindFrom(Func<string, string?> read) =>
+        Set(read, "CLAUDE_CODE_SESSION_ID") ? Claude
+        : Set(read, "CODEX_SESSION_ID") ? Codex
+        : Set(read, "GEMINI_CLI_SESSION_ID") ? Gemini
+        : Other;
+
+    private static bool Set(Func<string, string?> read, string name) => !string.IsNullOrWhiteSpace(read(name));
 }
 
 /// <summary>

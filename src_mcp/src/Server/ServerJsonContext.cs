@@ -109,6 +109,13 @@ public sealed record HumanAnswer(string Status, string Answer, string AnswerOrig
 /// <summary>The wire shape of one decision passed to `resolve`.</summary>
 public sealed record DecisionDto(int Finding, string Action, string Reason = "");
 
+/// <summary>
+/// What `consult` returns: the fenced advice and where the consultation stands. Ascetic on purpose —
+/// tokens live in the ledger and the log, and a refusal is an <see cref="ErrorAnswer"/>.
+/// </summary>
+/// <param name="CostUsd">Only when the vendor priced its own run; null for codex and agy.</param>
+public sealed record ConsultAnswer(string ConsultationId, int TurnIndex, int MaxTurns, string Advice, double? CostUsd);
+
 [JsonSourceGenerationOptions(
     PropertyNameCaseInsensitive = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
@@ -123,7 +130,9 @@ public sealed record DecisionDto(int Finding, string Action, string Reason = "")
 [JsonSerializable(typeof(ResolveAnswer))]
 [JsonSerializable(typeof(ErrorAnswer))]
 [JsonSerializable(typeof(HumanAnswer))]
+[JsonSerializable(typeof(ConsultAnswer))]
 [JsonSerializable(typeof(List<DecisionDto>))]
+[JsonSerializable(typeof(List<string>), TypeInfoPropertyName = "ListString")]
 [JsonSerializable(typeof(Store.LoggedLog))]
 [JsonSerializable(typeof(Store.LoggedRoundFindings))]
 internal sealed partial class ServerJsonContext : JsonSerializerContext;

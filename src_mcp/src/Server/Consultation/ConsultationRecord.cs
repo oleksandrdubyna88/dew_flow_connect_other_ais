@@ -1,0 +1,93 @@
+using System.Text.Json.Serialization;
+using CoaiMcp.Core.Consultation;
+
+namespace CoaiMcp.Server;
+
+/// <summary>The states a consultation moves through. Strings on disk, a closed set here.</summary>
+public static class ConsultationStatuses
+{
+    /// <summary>A turn is running — written BEFORE the launch, with the pid that owns it.</summary>
+    public const string Asking = "asking";
+
+    /// <summary>Answered; a follow-up may come.</summary>
+    public const string Open = "open";
+
+    /// <summary>The process ended without an answer but the vendor's handle is known: resumable, and the turn is not counted.</summary>
+    public const string Interrupted = "interrupted";
+
+    /// <summary>Over — the budget was spent, or it sat idle past its budget. <see cref="ConsultationRecord.Reason"/> says which.</summary>
+    public const string Closed = "closed";
+
+    /// <summary>Over, because something went wrong. <see cref="ConsultationRecord.Reason"/> says what.</summary>
+    public const string Failed = "failed";
+}
+
+/// <summary>One answered turn, as the record keeps it.</summary>
+public sealed record ConsultationTurn(
+    string Utc,
+    string Problem,
+    string Advice,
+    double Seconds,
+    long TokensIn,
+    long TokensOut,
+    double? CostUsd);
+
+/// <summary>
+/// One consultation, as it sits in <c>&lt;dataDir&gt;/consultations/&lt;id&gt;.json</c>.
+/// </summary>
+/// <remarks>
+/// <para>Its own entity, keyed by the CALLER and referencing a review session only when one exists:
+/// the moments an agent is stuck are the moments the round machine refuses a round, and half the
+/// triggers happen before <c>open</c>.</para>
+/// <para>The cap, the vendor and the model are FROZEN here at creation, so a panel edit
+/// mid-consultation neither strands an open one nor extends it — the <c>memoryOf</c> lesson from the
+/// extension's chat. Every collection normalises null in its accessor because the source-generated
+/// deserializer skips initialisers for absent members (the <c>PersistedSession</c> precedent).</para>
+/// </remarks>
+public sealed record ConsultationRecord(
+    string Id,
+    string Caller,
+    string CallerKind,
+    string SessionId,
+    string RepoPath,
+    string Branch,
+    string HeadSha,
+    string Vendor,
+    string Model,
+    string Runtime,
+    string Memory,
+    int MaxTurns,
+    string StartedUtc)
+{
+    /// <summary>The vendor's own conversation id — guarded before it is ever reused.</summary>
+    public string Handle { get; init; } = string.Empty;
+
+    public IReadOnlyList<ConsultationTurn> Turns { get => field ?? []; init; } = [];
+
+    public string Status { get; init; } = ConsultationStatuses.Asking;
+
+    public string UpdatedUtc { get; init; } = string.Empty;
+
+    public string EndedUtc { get; init; } = string.Empty;
+
+    public string Reason { get; init; } = string.Empty;
+
+    public int RunnerPid { get; init; }
+
+    /// <summary>The filesystem invariant's sentence, when it fired. The one field a person must read.</summary>
+    public string Alert { get; init; } = string.Empty;
+
+    [JsonIgnore]
+    public TurnBudget Budget => new(MaxTurns, Turns.Count);
+
+    [JsonIgnore]
+    public bool IsOver => Status is ConsultationStatuses.Closed or ConsultationStatuses.Failed;
+}
+
+[JsonSourceGenerationOptions(
+    PropertyNameCaseInsensitive = true,
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    WriteIndented = true,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
+[JsonSerializable(typeof(ConsultationRecord))]
+internal sealed partial class ConsultationJsonContext : JsonSerializerContext;

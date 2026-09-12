@@ -106,8 +106,13 @@ public sealed class JobKindTests
         // spending row means — and the reader mapping anything it does not know to "review" would
         // HIDE that disagreement rather than report it. The ledger lives in src_mcp, which cannot
         // see this enum, so the two are held together here. (codex, the code round.)
+        // Known == wire ∪ local-only: the ledger is the SUPERSET, because it records runs this
+        // server has no path for — a consultation happens on the developer's machine and nowhere
+        // else. The equality this asserted before 2026-09-12 was stronger than its own stated
+        // reason; what must hold is that every kind the server can send, the ledger can name.
         Enum.GetValues<JobKind>().Select(JobKinds.Wire)
-            .Should().BeEquivalentTo(UsageKinds.Known);
+            .Should().BeEquivalentTo(UsageKinds.Known.Except(UsageKinds.LocalOnly));
+        UsageKinds.Known.Should().Contain(UsageKinds.LocalOnly);
 
         foreach (var kind in Enum.GetValues<JobKind>())
         {

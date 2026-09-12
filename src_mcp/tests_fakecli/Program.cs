@@ -48,6 +48,7 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 //   FAKECLI_OUTFILE_TEXT — text for the file after `-o` in argv (the codex path)
 //   FAKECLI_STDERR / FAKECLI_EXIT — failure steering
 //   FAKECLI_SLEEP_MS     — answer only after this long (the probe's timeout arm)
+//   FAKECLI_SIDE_EFFECT  — write a file at this path: a vendor breaking its own read-only promise
 //   FAKECLI_RECORD_DIR   — write each launch's full argv into <guid>.argv there
 if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor")
 {
@@ -105,6 +106,14 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor")
     if (Environment.GetEnvironmentVariable("FAKECLI_STDOUT") is { Length: > 0 } stdoutText)
     {
         Console.Out.Write(stdoutText);
+    }
+
+    // A vendor that writes where it was told not to. A consultant runs in the LIVE working tree
+    // behind three read-only flags that are the VENDOR's promise rather than ours, so the filesystem
+    // invariant has to be testable against a child that actually breaks one.
+    if (Environment.GetEnvironmentVariable("FAKECLI_SIDE_EFFECT") is { Length: > 0 } sideEffect)
+    {
+        File.WriteAllText(sideEffect, "written by a CLI that promised to be read-only\n");
     }
 
     return int.TryParse(Environment.GetEnvironmentVariable("FAKECLI_EXIT"), out var exit) ? exit : 0;

@@ -258,6 +258,21 @@ public sealed record PanelSettings
     /// </remarks>
     public IReadOnlyList<string> Unrecognised { get; init; } = [];
 
+    /// <summary>
+    /// Which vendor and model consult for each CALLER kind (<c>claude</c>, <c>codex</c>, <c>gemini</c>,
+    /// <c>other</c>) — see <see cref="ConsultantRouting"/> for the shipped map and its rule.
+    /// </summary>
+    public IReadOnlyDictionary<string, ConsultantChoice> Consultants { get; init; } = ConsultantRouting.Shipped;
+
+    /// <summary>Turns one consultation may take. Frozen on the record at creation.</summary>
+    public int ConsultTurns { get; init; } = 5;
+
+    /// <summary>Consult calls one caller session may make in a day, across all its consultations.</summary>
+    public int ConsultCallsPerSession { get; init; } = 10;
+
+    /// <summary>How long an open consultation may sit unasked before it is closed and its handle dropped.</summary>
+    public TimeSpan ConsultIdle { get; init; } = TimeSpan.FromMinutes(15);
+
     public static string DefaultDataDir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "coai-mcp");
@@ -438,25 +453,32 @@ public sealed record PanelSettings
 
     private static PanelSettings WithCatalog(
         Func<string, string?> env, RolesSetting roles, RoleCatalog catalog) =>
-        WithCatalog(env, roles, catalog, ResolveDataDir(env));
+        WithCatalog(env, roles, catalog, ResolveDataDir(env), ConsultantRouting.Parse(env("COAI_CONSULTANTS")));
 
     /// <remarks>
     /// The resolution is passed IN rather than computed twice. It was called once for `DataDir` and
     /// once for the notes, which meant two round trips to a NAS on every settings read and, worse,
     /// two answers: a directory created between the two calls made `DataDir` and `Unrecognised`
-    /// describe different states. Raised four times on the code round.
+    /// describe different states. Raised four times on the code round. The consultant routing is
+    /// passed in beside it for the same reason: it is parsed once and read twice, for the map and
+    /// for its complaints.
     /// </remarks>
     private static PanelSettings WithCatalog(
         Func<string, string?> env,
         RolesSetting roles,
         RoleCatalog catalog,
-        string dataDir) => new PanelSettings
+        string dataDir,
+        ConsultantsSetting consultants) => new PanelSettings
     {
         Rounds = Config(env, catalog),
         // The data directory's own notes ride here rather than in a channel of their own: this list
         // is already "things said out loud at startup, because silence made a working configuration
         // look broken", and a database left behind in a shared root is exactly that.
-        Unrecognised = [.. UnknownValues(env, roles), .. catalog.Dropped],
+        Unrecognised = [.. UnknownValues(env, roles), .. catalog.Dropped, .. consultants.Complaints],
+        Consultants = consultants.Map,
+        ConsultTurns = IntVar(env, "COAI_CONSULT_TURNS", 5),
+        ConsultCallsPerSession = IntVar(env, "COAI_CONSULT_CALLS_PER_SESSION", 10),
+        ConsultIdle = TimeSpan.FromMinutes(IntVar(env, "COAI_CONSULT_IDLE_MINUTES", 15)),
         GlobalConcurrency = IntVar(env, "COAI_MAX_CONCURRENCY", 3),
         PerProviderConcurrency = IntVar(env, "COAI_MAX_PER_PROVIDER", 2),
         LocalConcurrency = IntVar(env, "COAI_LOCAL_CONCURRENCY", 1),
