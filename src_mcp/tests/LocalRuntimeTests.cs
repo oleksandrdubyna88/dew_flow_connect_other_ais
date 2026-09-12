@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using Xunit;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Reviewers;
@@ -31,7 +32,7 @@ public class LocalRuntimeTests
     {
         var runtime = new LocalRuntime("local", "http://127.0.0.1:11434/v1");
 
-        var invocation = runtime.Build(ReviewRole.Architecture, "the prompt", "/tmp/wt",
+        var invocation = runtime.Build(RoleCatalog.ArchitectureRole, "the prompt", "/tmp/wt",
             "/tmp/schema.json", "/tmp/out", Settings());
 
         invocation.Request.Arguments.Should().Contain("--ask-local");
@@ -71,7 +72,7 @@ public class LocalRuntimeTests
     {
         var runtime = new LocalRuntime("local", "http://127.0.0.1:11434/v1");
 
-        var arguments = runtime.Build(ReviewRole.Architecture, "p", "/tmp/wt", "/tmp/s.json",
+        var arguments = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/tmp/wt", "/tmp/s.json",
             "/tmp/out", Settings()).Request.Arguments.ToList();
 
         var askLocal = arguments.IndexOf("--ask-local");
@@ -87,7 +88,7 @@ public class LocalRuntimeTests
         var runtime = new LocalRuntime("local", "http://127.0.0.1:11434/v1");
         var settings = new ReviewerSettings("local") { ExecutablePath = "/opt/coai/coai-mcp" };
 
-        var invocation = runtime.Build(ReviewRole.Architecture, "p", "/tmp/wt", "/tmp/s.json",
+        var invocation = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/tmp/wt", "/tmp/s.json",
             "/tmp/out", settings);
 
         invocation.Request.Executable.Should().Be("/opt/coai/coai-mcp");
@@ -99,7 +100,7 @@ public class LocalRuntimeTests
     {
         var runtime = new LocalRuntime("local", "http://box:8000/v1");
 
-        var invocation = runtime.Build(ReviewRole.SecurityReliability, "p", "/tmp/wt",
+        var invocation = runtime.Build(RoleCatalog.SecurityRole, "p", "/tmp/wt",
             "/tmp/schema.json", "/tmp/out", Settings("mixtral:latest"));
 
         invocation.Request.Arguments.Should().ContainInOrder("--endpoint", "http://box:8000/v1");
@@ -113,7 +114,7 @@ public class LocalRuntimeTests
         // Every one of today's four shell-quoting failures came from text on a command line.
         var runtime = new LocalRuntime("local", "http://127.0.0.1:11434/v1");
 
-        var invocation = runtime.Build(ReviewRole.PlanCritique, "a prompt\nwith \"quotes\" and `ticks`",
+        var invocation = runtime.Build(RoleCatalog.PlanRole, "a prompt\nwith \"quotes\" and `ticks`",
             "/tmp/wt", "/tmp/schema.json", "/tmp/out", Settings());
 
         var promptFlag = invocation.Request.Arguments.ToList().IndexOf("--prompt-file");
@@ -126,7 +127,7 @@ public class LocalRuntimeTests
     public void TheAnswerIsReadFromTheNamedFile()
     {
         var runtime = new LocalRuntime("local", "http://127.0.0.1:11434/v1");
-        var invocation = runtime.Build(ReviewRole.UxDxPerformance, "p", "/tmp/wt",
+        var invocation = runtime.Build(RoleCatalog.UxDxRole, "p", "/tmp/wt",
             "/tmp/schema.json", Path.GetTempPath(), Settings());
 
         invocation.OutputFile.Should().NotBeEmpty("the shim writes where the executor already looks");
@@ -147,7 +148,7 @@ public class LocalRuntimeTests
         // only port Ollama is ever on unless somebody moved it.
         var runtime = new LocalRuntime("local", "");
 
-        var invocation = runtime.Build(ReviewRole.Architecture, "p", "/tmp/wt", "/tmp/s.json",
+        var invocation = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/tmp/wt", "/tmp/s.json",
             "/tmp/out", Settings());
 
         invocation.Request.Arguments.Should().ContainInOrder("--endpoint", "http://127.0.0.1:11434/v1");
@@ -160,7 +161,7 @@ public class LocalRuntimeTests
         // `usage: {prompt_tokens, completion_tokens, total_tokens}`. So a local round is counted like
         // any other, and the spending chart shows tokens rather than a dash.
         var runtime = new LocalRuntime("local", "http://127.0.0.1:11434/v1");
-        var invocation = runtime.Build(ReviewRole.Architecture, "p", "/tmp/wt", "/tmp/s.json",
+        var invocation = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/tmp/wt", "/tmp/s.json",
             "/tmp/out", Settings());
 
         var usage = runtime.ReadUsage(invocation, new Runners.Processes.ProcessResult(
@@ -177,7 +178,7 @@ public class LocalRuntimeTests
         // product can see. Reporting 0 would read as free, and free and unpriced are different
         // facts — the same rule the spending chart already follows for codex and antigravity.
         var runtime = new LocalRuntime("local", "http://127.0.0.1:11434/v1");
-        var invocation = runtime.Build(ReviewRole.Architecture, "p", "/tmp/wt", "/tmp/s.json",
+        var invocation = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/tmp/wt", "/tmp/s.json",
             "/tmp/out", Settings());
 
         runtime.ReadUsage(invocation, new Runners.Processes.ProcessResult(
@@ -308,7 +309,7 @@ public class LocalRuntimeTests
         var runtime = new LocalRuntime("local", "http://127.0.0.1:11434/v1");
         var settings = new ReviewerSettings("local") { Timeout = TimeSpan.FromMinutes(7) };
 
-        var arguments = runtime.Build(ReviewRole.Architecture, "p", "/tmp/wt", "/tmp/s.json",
+        var arguments = runtime.Build(RoleCatalog.ArchitectureRole, "p", "/tmp/wt", "/tmp/s.json",
             "/tmp/out", settings).Request.Arguments.ToList();
 
         // 410, not 420: the margin is the point. The shim must reach its own deadline BEFORE

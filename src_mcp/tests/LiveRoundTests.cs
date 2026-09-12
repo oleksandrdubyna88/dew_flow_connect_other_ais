@@ -21,7 +21,7 @@ public sealed class LiveRoundTests
     private static PersistedSession Session() =>
         new(new SessionState("s-live", "D:/repo", "feature/x", new PanelConfig()), []);
 
-    private static ReviewerWork Work(string provider, ReviewRole role) =>
+    private static ReviewerWork Work(string provider, string role) =>
         new(new ReviewerInvocation(provider, role, new ProcessRequest("cli", [], ".")));
 
     /// <summary>The same JSON with one property name removed, wherever it appears.</summary>
@@ -82,11 +82,11 @@ public sealed class LiveRoundTests
         store.Save(session);
 
         _ = new LiveRound(store, session, [
-            Work("codex", ReviewRole.Architecture) with
+            Work("codex", RoleCatalog.ArchitectureRole) with
             {
-                Invocation = Work("codex", ReviewRole.Architecture).Invocation with { Model = "gpt-5-codex" },
+                Invocation = Work("codex", RoleCatalog.ArchitectureRole).Invocation with { Model = "gpt-5-codex" },
             },
-            Work("local", ReviewRole.SecurityReliability),
+            Work("local", RoleCatalog.SecurityRole),
         ]);
 
         var states = store.Load("D:/repo", "feature/x")!.Rounds.Single().ReviewerStates;
@@ -109,8 +109,8 @@ public sealed class LiveRoundTests
         var session = Session();
         store.Save(session);
 
-        var codex = Work("codex", ReviewRole.Architecture);
-        var local = Work("local", ReviewRole.SecurityReliability);
+        var codex = Work("codex", RoleCatalog.ArchitectureRole);
+        var local = Work("local", RoleCatalog.SecurityRole);
         _ = new LiveRound(store, session, [
             codex with { Invocation = codex.Invocation with { Model = null! } },
             local with { Invocation = local.Invocation with { Model = "   " } },
@@ -128,7 +128,7 @@ public sealed class LiveRoundTests
         var store = new SessionStore(_dir);
         var session = Session();
         store.Save(session);
-        _ = new LiveRound(store, session, [Work("codex", ReviewRole.Architecture)]);
+        _ = new LiveRound(store, session, [Work("codex", RoleCatalog.ArchitectureRole)]);
 
         // Removed STRUCTURALLY, not by string surgery. The first draft replaced `"model": "",`
         // — and `Model` is the trailing property, so there is no comma after it, so the replacement
@@ -162,7 +162,7 @@ public sealed class LiveRoundTests
         var session = Session();
         store.Save(session);
 
-        _ = new LiveRound(store, session, [Work("codex", ReviewRole.Architecture), Work("claude", ReviewRole.Architecture)]);
+        _ = new LiveRound(store, session, [Work("codex", RoleCatalog.ArchitectureRole), Work("claude", RoleCatalog.ArchitectureRole)]);
 
         var round = store.Load("D:/repo", "feature/x")!.Rounds.Should().ContainSingle().Subject;
         round.Status.Should().Be(RoundRecord.Running);
@@ -177,14 +177,14 @@ public sealed class LiveRoundTests
         var store = new SessionStore(_dir);
         var session = Session();
         store.Save(session);
-        var live = new LiveRound(store, session, [Work("codex", ReviewRole.Architecture), Work("gemini", ReviewRole.Architecture)]);
+        var live = new LiveRound(store, session, [Work("codex", RoleCatalog.ArchitectureRole), Work("gemini", RoleCatalog.ArchitectureRole)]);
 
-        live.Report(new ReviewerProgress("codex", ReviewRole.Architecture, "running"));
+        live.Report(new ReviewerProgress("codex", RoleCatalog.ArchitectureRole, "running"));
 
         StateOf(store, "codex").Status.Should().Be(ReviewerState.Running);
         StateOf(store, "gemini").Status.Should().Be(ReviewerState.Queued, "one reviewer's progress is not another's");
 
-        live.Report(new ReviewerProgress("codex", ReviewRole.Architecture, "done",
+        live.Report(new ReviewerProgress("codex", RoleCatalog.ArchitectureRole, "done",
             new ReviewerOutcome.Ok(Review(3), Repaired: false, new Usage(1000, 100, 0.02))));
 
         var done = StateOf(store, "codex");
@@ -207,14 +207,14 @@ public sealed class LiveRoundTests
         var store = new SessionStore(_dir);
         var session = Session();
         store.Save(session);
-        var live = new LiveRound(store, session, [Work("codex", ReviewRole.Architecture)]);
+        var live = new LiveRound(store, session, [Work("codex", RoleCatalog.ArchitectureRole)]);
 
-        live.Report(new ReviewerProgress("codex", ReviewRole.Architecture, "running"));
+        live.Report(new ReviewerProgress("codex", RoleCatalog.ArchitectureRole, "running"));
         StateOf(store, "codex").Seconds.Should().Be(0, "a running reviewer has no duration yet");
 
         live.Report(new ReviewerProgress(
             "codex",
-            ReviewRole.Architecture,
+            RoleCatalog.ArchitectureRole,
             "done",
             new ReviewerOutcome.Ok(Review(3), Repaired: false, new Usage(1000, 100, 0.02)),
             TimeSpan.FromSeconds(38.7)));
@@ -230,10 +230,10 @@ public sealed class LiveRoundTests
         var store = new SessionStore(_dir);
         var session = Session();
         store.Save(session);
-        var live = new LiveRound(store, session, [Work("gemini", ReviewRole.Architecture)]);
+        var live = new LiveRound(store, session, [Work("gemini", RoleCatalog.ArchitectureRole)]);
 
-        live.Report(new ReviewerProgress("gemini", ReviewRole.Architecture, "done", null, TimeSpan.FromSeconds(12.5)));
-        live.Report(new ReviewerProgress("gemini", ReviewRole.Architecture, "running"));
+        live.Report(new ReviewerProgress("gemini", RoleCatalog.ArchitectureRole, "done", null, TimeSpan.FromSeconds(12.5)));
+        live.Report(new ReviewerProgress("gemini", RoleCatalog.ArchitectureRole, "running"));
 
         StateOf(store, "gemini").Seconds.Should().Be(12.5);
     }
@@ -244,9 +244,9 @@ public sealed class LiveRoundTests
         var store = new SessionStore(_dir);
         var session = Session();
         store.Save(session);
-        var live = new LiveRound(store, session, [Work("gemini", ReviewRole.PlanCritique)]);
+        var live = new LiveRound(store, session, [Work("gemini", RoleCatalog.PlanRole)]);
 
-        live.Report(new ReviewerProgress("gemini", ReviewRole.PlanCritique, "failed", new ReviewerOutcome.TimedOut()));
+        live.Report(new ReviewerProgress("gemini", RoleCatalog.PlanRole, "failed", new ReviewerOutcome.TimedOut()));
 
         var state = StateOf(store, "gemini");
         state.Status.Should().Be(ReviewerState.Failed);
@@ -259,7 +259,7 @@ public sealed class LiveRoundTests
         var store = new SessionStore(_dir);
         var session = Session();
         store.Save(session);
-        var work = new[] { Work("codex", ReviewRole.Architecture), Work("claude", ReviewRole.Architecture) };
+        var work = new[] { Work("codex", RoleCatalog.ArchitectureRole), Work("claude", RoleCatalog.ArchitectureRole) };
         var live = new LiveRound(store, session, work);
 
         var record = live.Finish("revise", 4, "all 2 reviewers answered",
@@ -280,7 +280,7 @@ public sealed class LiveRoundTests
         var store = new SessionStore(_dir);
         var session = Session();
         store.Save(session);
-        _ = new LiveRound(store, session, [Work("codex", ReviewRole.Architecture)]);
+        _ = new LiveRound(store, session, [Work("codex", RoleCatalog.ArchitectureRole)]);
 
         var swept = store.SweepOrphanedRounds(_ => false);
 
@@ -298,7 +298,7 @@ public sealed class LiveRoundTests
         var store = new SessionStore(_dir);
         var session = Session();
         store.Save(session);
-        _ = new LiveRound(store, session, [Work("codex", ReviewRole.Architecture)]);
+        _ = new LiveRound(store, session, [Work("codex", RoleCatalog.ArchitectureRole)]);
 
         store.SweepOrphanedRounds(_ => true).Should().Be(0);
         store.Load("D:/repo", "feature/x")!.Rounds.Single().Status.Should().Be(RoundRecord.Running);

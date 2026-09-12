@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using System.Diagnostics;
 using System.Net;
 using System.Text;
@@ -131,7 +132,7 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         TimeSpan timeout)
     {
         var invocation = new RemoteRuntime("codex", _prefix).Build(
-            ReviewRole.Architecture,
+            RoleCatalog.ArchitectureRole,
             "review this",
             _outputDir,
             Path.Combine(_outputDir, "schema.json"),
@@ -281,7 +282,7 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
             : (200, """{"id":"job-77","status":"queued","position":1}""");
 
         var invocation = new RemoteRuntime("codex", _prefix).Build(
-            ReviewRole.Architecture, "review this", _outputDir,
+            RoleCatalog.ArchitectureRole, "review this", _outputDir,
             Path.Combine(_outputDir, "schema.json"), _outputDir,
             new ReviewerSettings("codex") { Model = "m", DataDir = _dataDir, Timeout = TimeSpan.FromMinutes(5) });
 
@@ -357,7 +358,7 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         for (var attempt = 0; attempt < 6; attempt++)
         {
             var invocation = new RemoteRuntime("codex", _prefix).Build(
-                ReviewRole.Architecture, "review this", _outputDir,
+                RoleCatalog.ArchitectureRole, "review this", _outputDir,
                 Path.Combine(_outputDir, "schema.json"), _outputDir,
                 new ReviewerSettings("codex") { Model = "m", DataDir = _dataDir, Timeout = TimeSpan.FromMinutes(5) });
 

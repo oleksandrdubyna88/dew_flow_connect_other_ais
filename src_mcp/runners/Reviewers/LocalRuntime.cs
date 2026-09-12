@@ -108,7 +108,7 @@ public sealed class LocalRuntime(string id, string baseUrl) : IReviewerRuntime
     }
 
     public ReviewerInvocation Build(
-        ReviewRole role,
+        string role,
         string prompt,
         string worktreePath,
         string schemaFilePath,

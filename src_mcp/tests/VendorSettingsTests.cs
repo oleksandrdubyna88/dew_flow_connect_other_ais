@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using Xunit;
 using CoaiMcp.Runners.Reviewers;
 using CoaiMcp.Server;
@@ -62,7 +63,7 @@ public sealed class VendorSettingsTests
     public void ACustomVendor_GetsItsOwnProviderOverrides_AndItsOwnKeyVariable()
     {
         var invocation = new CustomCodexRuntime("mistral", "https://api.mistral.ai/v1").Build(
-            ReviewRole.Architecture, "review", "D:/wt", "D:/schema.json", "D:/out",
+            RoleCatalog.ArchitectureRole, "review", "D:/wt", "D:/schema.json", "D:/out",
             new ReviewerSettings("mistral") { ApiKey = "sk-mistral" });
 
         invocation.Request.Arguments.Should().Contain("model_provider=mistral");

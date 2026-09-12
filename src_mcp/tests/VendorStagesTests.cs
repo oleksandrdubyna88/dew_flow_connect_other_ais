@@ -53,7 +53,7 @@ public sealed class VendorStagesTests
     public void AVendorNarrowedToPlans_IsNotLaunchedForACodeRound()
     {
         var work = Service(Local(plan: true, code: false))
-            .BuildWork([ReviewRole.Architecture], Scratch(), "ctx", round: 1, isPlanStage: false);
+            .BuildWork([RoleCatalog.ArchitectureRole], Scratch(), "ctx", round: 1, isPlanStage: false);
 
         work.Should().BeEmpty("the only vendor configured does not review code");
     }
@@ -62,7 +62,7 @@ public sealed class VendorStagesTests
     public void TheSameVendor_IsLaunchedForAPlanRound()
     {
         var work = Service(Local(plan: true, code: false))
-            .BuildWork([ReviewRole.PlanCritique], Scratch(), "ctx", round: 1, isPlanStage: true);
+            .BuildWork([RoleCatalog.PlanRole], Scratch(), "ctx", round: 1, isPlanStage: true);
 
         work.Should().NotBeEmpty("it reviews plans, which is the whole point of the setting");
     }
@@ -71,7 +71,7 @@ public sealed class VendorStagesTests
     public void AVendorNarrowedToCode_IsNotLaunchedForAPlanRound()
     {
         var work = Service(Local(plan: false, code: true))
-            .BuildWork([ReviewRole.PlanCritique], Scratch(), "ctx", round: 1, isPlanStage: true);
+            .BuildWork([RoleCatalog.PlanRole], Scratch(), "ctx", round: 1, isPlanStage: true);
 
         work.Should().BeEmpty();
     }
@@ -84,9 +84,9 @@ public sealed class VendorStagesTests
         // true, so an old configuration reviews exactly what it reviewed yesterday.
         var both = new ProviderSettings("local") { Enabled = true, Runtime = "local", Model = "qwen" };
 
-        Service(both).BuildWork([ReviewRole.Architecture], Scratch(), "ctx", round: 1, isPlanStage: false)
+        Service(both).BuildWork([RoleCatalog.ArchitectureRole], Scratch(), "ctx", round: 1, isPlanStage: false)
             .Should().NotBeEmpty();
-        Service(both).BuildWork([ReviewRole.PlanCritique], Scratch(), "ctx", round: 1, isPlanStage: true)
+        Service(both).BuildWork([RoleCatalog.PlanRole], Scratch(), "ctx", round: 1, isPlanStage: true)
             .Should().NotBeEmpty();
     }
 

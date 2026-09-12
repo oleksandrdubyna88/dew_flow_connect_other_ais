@@ -89,17 +89,17 @@ public sealed class ConventionsPassTests
     [Fact]
     public void WithNoWrittenRules_TheConventionsReviewersAreDropped_AndNobodyElseIs()
     {
-        ReviewRole[] scheduled =
-            [ReviewRole.Conventions, ReviewRole.Architecture, ReviewRole.SecurityReliability, ReviewRole.UxDxPerformance];
+        string[] scheduled =
+            [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole];
 
         PanelService.RolesWithRulesInMind(scheduled, hasRules: false)
-            .Should().Equal([ReviewRole.Architecture, ReviewRole.SecurityReliability, ReviewRole.UxDxPerformance]);
+            .Should().Equal([RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole]);
     }
 
     [Fact]
     public void WithWrittenRules_TheRoundIsExactlyWhatWasScheduled()
     {
-        ReviewRole[] scheduled = [ReviewRole.Conventions, ReviewRole.Architecture];
+        string[] scheduled = [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole];
 
         PanelService.RolesWithRulesInMind(scheduled, hasRules: true).Should().Equal(scheduled);
     }
@@ -109,7 +109,7 @@ public sealed class ConventionsPassTests
     {
         // The plan stage, and any code round whose Conventions budget is spent. Dropping nothing
         // must not be spelled as a special case anywhere.
-        ReviewRole[] scheduled = [ReviewRole.Architecture, ReviewRole.SecurityReliability];
+        string[] scheduled = [RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole];
 
         PanelService.RolesWithRulesInMind(scheduled, hasRules: false).Should().Equal(scheduled);
         PanelService.RolesWithRulesInMind(scheduled, hasRules: true).Should().Equal(scheduled);
@@ -241,14 +241,14 @@ public sealed class ConventionsPassTests
         // The code round's finding, and the trap it names: mapping the DIFFERENCE onto one reason
         // works while there is one rule, and tells the caller the wrong thing with complete
         // confidence the day there are two. The pairing lives beside the rule that produces it.
-        IReadOnlyList<ReviewRole> scheduled =
-            [ReviewRole.Conventions, ReviewRole.Architecture, ReviewRole.SecurityReliability];
+        IReadOnlyList<string> scheduled =
+            [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole];
 
         PanelService.RolesNotAsked(scheduled, hasRules: true).Should().BeEmpty();
 
         var skipped = PanelService.RolesNotAsked(scheduled, hasRules: false);
         skipped.Should().ContainSingle();
-        skipped[0].Role.Should().Be(nameof(ReviewRole.Conventions));
+        skipped[0].Role.Should().Be(RoleCatalog.ConventionsRole);
         skipped[0].Reason.Should().Be(PanelService.NoWrittenRules);
         // Derived from the filter, never written out beside it: what is not asked and what ran are
         // the same decision read twice.

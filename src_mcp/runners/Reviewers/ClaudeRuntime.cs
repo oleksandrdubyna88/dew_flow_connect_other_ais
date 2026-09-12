@@ -61,7 +61,7 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
         settings.Confined ? [.. WriteTools, .. ReachTools] : WriteTools;
 
     public ReviewerInvocation Build(
-        ReviewRole role,
+        string role,
         string prompt,
         string worktreePath,
         string schemaFilePath,

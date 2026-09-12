@@ -164,7 +164,7 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
     {
         var policy = Confinement.OfEveryJob;
         var built = runtime.Build(
-            RoleOf(job.Role),
+            job.Role,
             job.Prompt,
             work,
             SchemaFile.Ensure(work),
@@ -204,10 +204,6 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
             ["TMP"] = work,
             ["TEMP"] = work,
         };
-
-    /// <summary>The role a client named. Validated at the endpoint, so a bad one cannot arrive here.</summary>
-    private static ReviewRole RoleOf(string role) =>
-        Enum.TryParse<ReviewRole>(role, ignoreCase: true, out var parsed) ? parsed : default;
 
     private void Delete(string directory)
     {

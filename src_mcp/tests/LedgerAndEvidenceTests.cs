@@ -26,7 +26,7 @@ public sealed class LedgerAndEvidenceTests : IDisposable
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 
     private static ReviewerInvocation Invocation(string provider = "antigravity") =>
-        new(provider, ReviewRole.Architecture, new ProcessRequest("x", [], "."));
+        new(provider, RoleCatalog.ArchitectureRole, new ProcessRequest("x", [], "."));
 
     /// <summary>
     /// Reads the ledger the way anything else would have to while a server is writing it.

@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Reviewers;
 using CoaiMcp.Server;
 using FluentAssertions;
@@ -91,7 +92,7 @@ public class CodeWorkspaceTests
     {
         var worktree = Worktree();
 
-        var work = Service("none").BuildWork([ReviewRole.Architecture], worktree, "ctx", round: 1, isPlanStage: false);
+        var work = Service("none").BuildWork([RoleCatalog.ArchitectureRole], worktree, "ctx", round: 1, isPlanStage: false);
 
         work.Should().NotBeEmpty();
         work[0].Invocation.Request.WorkingDirectory.Should().NotBe(worktree,
@@ -106,7 +107,7 @@ public class CodeWorkspaceTests
     {
         var worktree = Worktree();
 
-        var work = Service("worktree").BuildWork([ReviewRole.Architecture], worktree, "ctx", round: 1, isPlanStage: false);
+        var work = Service("worktree").BuildWork([RoleCatalog.ArchitectureRole], worktree, "ctx", round: 1, isPlanStage: false);
 
         work[0].Invocation.Request.WorkingDirectory.Should().Be(worktree);
     }
@@ -124,7 +125,7 @@ public class CodeWorkspaceTests
         // code says the opposite: the repair never has one.
         var worktree = Worktree();
 
-        var work = Service("worktree").BuildWork([ReviewRole.Architecture], worktree, "ctx", round: 1, isPlanStage: false);
+        var work = Service("worktree").BuildWork([RoleCatalog.ArchitectureRole], worktree, "ctx", round: 1, isPlanStage: false);
 
         Sent(work[0].Repair!).Should().Contain("no tool you can call",
             "the repair launch runs in an empty temp directory whatever the review got");
@@ -148,7 +149,7 @@ public class CodeWorkspaceTests
             + "repository checkout read-only and the diff below. Review the change, not the whole codebase.\n");
 
         var work = Service("none", dataDir)
-            .BuildWork([ReviewRole.Architecture], Worktree(), "ctx", round: 1, isPlanStage: false);
+            .BuildWork([RoleCatalog.ArchitectureRole], Worktree(), "ctx", round: 1, isPlanStage: false);
 
         Sent(work[0].Invocation).Should().NotContain("checkout read-only",
             "a person's own copy of a prompt cannot know which mode is running either");
@@ -180,7 +181,7 @@ public class CodeWorkspaceTests
         // The setting must not reach into it and hand it a second, different empty directory.
         var scratch = Worktree();
 
-        var work = Service("none").BuildWork([ReviewRole.PlanCritique], scratch, "ctx", round: 1, isPlanStage: true,
+        var work = Service("none").BuildWork([RoleCatalog.PlanRole], scratch, "ctx", round: 1, isPlanStage: true,
             planPrompts: ["plan-critique"]);
 
         work[0].Invocation.Request.WorkingDirectory.Should().Be(scratch);

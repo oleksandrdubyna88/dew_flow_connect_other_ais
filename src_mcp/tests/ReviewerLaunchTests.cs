@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
 using FluentAssertions;
@@ -83,7 +84,7 @@ public sealed class ReviewerLaunchTests
     {
         var missing = new ReviewerInvocation(
             "codex",
-            ReviewRole.Architecture,
+            RoleCatalog.ArchitectureRole,
             new ProcessRequest(Path.Combine(_dir, "no-such-cli.exe"), ["--version"], _dir));
 
         var launch = await _executor.LaunchAsync(missing, TestContext.Current.CancellationToken);

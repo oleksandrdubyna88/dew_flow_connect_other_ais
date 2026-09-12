@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Reviewers;
 using FluentAssertions;
 using Xunit;
@@ -54,7 +55,7 @@ public sealed class ClaudeRuntimeTests
     private static List<string> Denied(ReviewerSettings settings)
     {
         var args = new ClaudeRuntime()
-            .Build(ReviewRole.Architecture, "review this", Worktree, Schema, OutDir, settings)
+            .Build(RoleCatalog.ArchitectureRole, "review this", Worktree, Schema, OutDir, settings)
             .Request.Arguments;
 
         args.Should().ContainSingle(a => a == Flag,

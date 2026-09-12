@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Reviewers;
 using FluentAssertions;
 using Xunit;
@@ -254,7 +255,7 @@ public sealed class RemoteRuntimeTests
         var output = Path.Combine(Path.GetTempPath(), "coai-remote-" + Guid.NewGuid().ToString("N"));
 
         return new RemoteRuntime("codex", "https://coai.example.com/").Build(
-            ReviewRole.Architecture,
+            RoleCatalog.ArchitectureRole,
             "review this",
             output,
             Path.Combine(output, "schema.json"),
@@ -284,7 +285,7 @@ public sealed class RemoteRuntimeTests
         // which reads exactly like a typo.
         var output = Path.Combine(Path.GetTempPath(), "coai-remote-" + Guid.NewGuid().ToString("N"));
         var invocation = new RemoteRuntime("remsoft-dev-codex", "https://coai.example.com", "codex").Build(
-            ReviewRole.Architecture, "review this", output, Path.Combine(output, "s.json"), output,
+            RoleCatalog.ArchitectureRole, "review this", output, Path.Combine(output, "s.json"), output,
             new ReviewerSettings("remsoft-dev-codex") { Model = "m", DataDir = "/data" });
 
         var args = invocation.Request.Arguments.ToList();

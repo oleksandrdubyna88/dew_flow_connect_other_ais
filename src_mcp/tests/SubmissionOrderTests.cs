@@ -72,7 +72,7 @@ public sealed class SubmissionOrderTests : IDisposable
     private List<string> ProviderOrder(int seed)
     {
         var work = Service("alpha", "bravo", "charlie", "delta").BuildWork(
-            [ReviewRole.Conventions, ReviewRole.Architecture, ReviewRole.SecurityReliability, ReviewRole.UxDxPerformance],
+            [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole],
             Worktree(), "ctx", round: 1, isPlanStage: false, seed: seed);
 
         return [.. work.Select(w => w.Invocation.Provider).Distinct(StringComparer.OrdinalIgnoreCase)];
@@ -116,7 +116,7 @@ public sealed class SubmissionOrderTests : IDisposable
         for (var i = 0; i < 100; i++)
         {
             var work = Service(vendors).BuildWork(
-                [ReviewRole.Conventions, ReviewRole.Architecture],
+                [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole],
                 Worktree(), "ctx", round: 1, isPlanStage: false,
                 seed: PanelService.StableSeed($"session-{i}", 1));
 
@@ -147,7 +147,7 @@ public sealed class SubmissionOrderTests : IDisposable
         foreach (var id in Sessions)
         {
             var work = Service("alpha", "bravo", "charlie").BuildWork(
-                [ReviewRole.Conventions, ReviewRole.Architecture],
+                [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole],
                 Worktree(), "ctx", round: 1, isPlanStage: false, seed: PanelService.StableSeed(id, 1));
 
             work.Select(w => $"{w.Invocation.Provider}|{w.Invocation.Role}")
@@ -163,11 +163,11 @@ public sealed class SubmissionOrderTests : IDisposable
     public void ARoundWithOneVendor_IsNotReorderedIntoAnything()
     {
         var work = Service("only").BuildWork(
-            [ReviewRole.Conventions, ReviewRole.Architecture],
+            [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole],
             Worktree(), "ctx", round: 1, isPlanStage: false, seed: 12345);
 
         work.Select(w => w.Invocation.Role).Should().Equal(
-            [ReviewRole.Conventions, ReviewRole.Architecture],
+            [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole],
             "the roles of one vendor keep the order the round asked for them in");
     }
 }

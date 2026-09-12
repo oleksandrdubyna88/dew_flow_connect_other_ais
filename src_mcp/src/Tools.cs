@@ -72,13 +72,14 @@ internal static class Tools
             new McpServerToolCreateOptions
             {
                 Name = "review_code",
-                Title = "Three independent reviewers per provider over the branch diff",
+                Title = "One independent reviewer per configured role, per provider, over the branch diff",
                 Description = """
                     The code gate — REFUSES until a plan round reached `proceed`, and REFUSES a
-                    bare diff. Per enabled provider, three reviewers (architecture /
-                    security+reliability / UX-DX & code performance) read the SCOPE, the shaped diff
-                    of `branch` over `baseRef` (lock files and build output excluded, binaries named
-                    not inlined), and a read-only worktree pinned to one SHA.
+                    bare diff. Per enabled provider, one reviewer per role configured for this
+                    stage — conventions / architecture / security+reliability / UX-DX & code
+                    performance as shipped, plus any role the operator has added — reads the SCOPE,
+                    the shaped diff of `branch` over `baseRef` (lock files and build output
+                    excluded, binaries named not inlined), and a read-only worktree pinned to one SHA.
 
                     `planText` IS that scope: what this change was supposed to achieve — the
                     symptom or goal, what must be true when it is done, the constraints. Not a

@@ -45,7 +45,7 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
     public string ServerUrl => TeamServerAuth.Normalise(serverUrl);
 
     public ReviewerInvocation Build(
-        ReviewRole role,
+        string role,
         string prompt,
         string worktreePath,
         string schemaFilePath,

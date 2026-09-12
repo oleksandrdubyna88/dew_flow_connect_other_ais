@@ -4,23 +4,6 @@ using CoaiMcp.Runners.Processes;
 
 namespace CoaiMcp.Runners.Reviewers;
 
-/// <summary>The three code roles and the plan critique. The third is code-only on purpose —
-/// called "UI", a model tries to picture the page it cannot see.</summary>
-public enum ReviewRole
-{
-    PlanCritique,
-
-    /// <summary>
-    /// The written rules and nothing else. First among the code roles, and a role since
-    /// 2026-09-08: before that it was a PROMPT the other code roles could be given, so it had to
-    /// borrow one of their rounds and its findings counted against their threshold.
-    /// </summary>
-    Conventions,
-    Architecture,
-    SecurityReliability,
-    UxDxPerformance,
-}
-
 /// <summary>How one provider is configured. The key travels in env, never argv.</summary>
 public sealed record ReviewerSettings(string Provider)
 {
@@ -103,7 +86,7 @@ public sealed record ReviewerSettings(string Provider)
 /// </param>
 public sealed record ReviewerInvocation(
     string Provider,
-    ReviewRole Role,
+    string Role,
     ProcessRequest Request,
     string OutputFile = "",
     IReviewerRuntime? Adapter = null,
@@ -126,7 +109,7 @@ public interface IReviewerRuntime
 {
     string Provider { get; }
 
-    ReviewerInvocation Build(ReviewRole role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings);
+    ReviewerInvocation Build(string role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings);
 
     /// <summary>
     /// Clean up after a run this machine ABANDONED — killed on its timeout, or cancelled.
@@ -218,7 +201,7 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
 
     private protected virtual IEnumerable<string> ProviderOverrides => [];
 
-    public ReviewerInvocation Build(ReviewRole role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings)
+    public ReviewerInvocation Build(string role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings)
     {
         var outputFile = Path.Combine(outputDir, $"{Provider}-{role}.json");
         var request = new ProcessRequest(
@@ -290,7 +273,7 @@ public sealed class GeminiRuntime(string id = "gemini") : IReviewerRuntime
 {
     public string Provider => id;
 
-    public ReviewerInvocation Build(ReviewRole role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings)
+    public ReviewerInvocation Build(string role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings)
     {
         var request = new ProcessRequest(
             settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : "gemini",

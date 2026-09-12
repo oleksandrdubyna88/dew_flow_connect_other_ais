@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Reviewers;
 using CoaiMcp.Server;
@@ -70,7 +71,7 @@ public class LocalReasoningEffortTests
     {
         var settings = new ReviewerSettings("local") { Model = "gemma4", ReasoningEffort = "none" };
         var invocation = new LocalRuntime("local", string.Empty)
-            .Build(ReviewRole.PlanCritique, "prompt", Path.GetTempPath(), "schema.json", Path.GetTempPath(), settings);
+            .Build(RoleCatalog.PlanRole, "prompt", Path.GetTempPath(), "schema.json", Path.GetTempPath(), settings);
 
         var args = invocation.Request.Arguments;
         var at = args.ToList().IndexOf("--reasoning-effort");
@@ -83,7 +84,7 @@ public class LocalReasoningEffortTests
     {
         var settings = new ReviewerSettings("local") { Model = "gemma4" };
         var invocation = new LocalRuntime("local", string.Empty)
-            .Build(ReviewRole.PlanCritique, "prompt", Path.GetTempPath(), "schema.json", Path.GetTempPath(), settings);
+            .Build(RoleCatalog.PlanRole, "prompt", Path.GetTempPath(), "schema.json", Path.GetTempPath(), settings);
 
         invocation.Request.Arguments.Should().NotContain("--reasoning-effort");
     }

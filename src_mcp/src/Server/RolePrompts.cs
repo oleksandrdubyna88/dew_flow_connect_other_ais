@@ -21,21 +21,30 @@ public sealed class RolePrompts(string dataDir)
 {
     private string OverrideDir => Path.Combine(dataDir, "prompts");
 
-    public string For(ReviewRole role) => ForChoice(PromptCatalog.UniversalFor(role.ToString()));
+    /// <summary>The text of one prompt by its id — override first, then the shipped default.</summary>
+    /// <remarks>
+    /// Keyed by PROMPT id rather than by role since 2026-09-12. A role used to have exactly one
+    /// prompt whose file name this class knew by a switch statement; a role a person defines has
+    /// prompts this build has never heard of, and the file it wants is named by the prompt, which
+    /// is what <see cref="ForChoice"/> always did underneath.
+    /// </remarks>
+    public string For(string promptId) => Text(promptId);
 
     /// <summary>
     /// One prompt from the catalog, override-first — the same layering as the role default,
     /// because a narrow lens somebody edited must survive the next release too.
     /// </summary>
-    public string ForChoice(PromptChoice choice)
+    public string ForChoice(PromptChoice choice) => Text(choice.Id);
+
+    private string Text(string promptId)
     {
-        var file = $"{choice.Id}.md";
+        var file = $"{promptId}.md";
         var overridePath = Path.Combine(OverrideDir, file);
         return File.Exists(overridePath) ? File.ReadAllText(overridePath) : Embedded(file);
     }
 
     /// <summary>The text compiled into this binary. Static: it depends on nothing on disk.</summary>
-    public static string ShippedDefaultFor(ReviewRole role) => Embedded(FileFor(role));
+    public static string ShippedDefaultFor(string promptId) => Embedded($"{promptId}.md");
 
     private static string Embedded(string file)
     {
@@ -47,26 +56,18 @@ public sealed class RolePrompts(string dataDir)
         return reader.ReadToEnd();
     }
 
-    public void Override(ReviewRole role, string text)
+    public void Override(string promptId, string text)
     {
         Directory.CreateDirectory(OverrideDir);
-        File.WriteAllText(Path.Combine(OverrideDir, FileFor(role)), text);
+        File.WriteAllText(Path.Combine(OverrideDir, $"{promptId}.md"), text);
     }
 
-    public void RestoreDefault(ReviewRole role)
+    public void RestoreDefault(string promptId)
     {
-        var overridePath = Path.Combine(OverrideDir, FileFor(role));
+        var overridePath = Path.Combine(OverrideDir, $"{promptId}.md");
         if (File.Exists(overridePath))
         {
             File.Delete(overridePath);
         }
     }
-
-    internal static string FileFor(ReviewRole role) => role switch
-    {
-        ReviewRole.PlanCritique => "plan-critique.md",
-        ReviewRole.Architecture => "architecture.md",
-        ReviewRole.SecurityReliability => "security-reliability.md",
-        _ => "uxdx-performance.md",
-    };
 }

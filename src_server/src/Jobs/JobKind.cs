@@ -1,4 +1,4 @@
-using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Core.Rounds;
 
 namespace CoaiServer;
 
@@ -16,7 +16,7 @@ namespace CoaiServer;
 /// made a claim, and a claim can be checked. Defaulting would collapse them and refuse the field.
 /// </para>
 /// <para><b>A chat exists because the alternative was a role that cannot review.</b> A
-/// <see cref="ReviewRole"/> carries a shipped prompt, a threshold and a round budget, and a test in
+/// A review ROLE carries a shipped prompt, a threshold and a round budget, and a test in
 /// <c>src_mcp</c> walks every value of that enum asserting each one asks for an honest empty findings
 /// list. So the server refuses <c>role: "Chat"</c> — correctly — and what it accepted instead was a
 /// job with no role at all. That worked, and it was an ABSENCE being read as a statement: the day
@@ -123,7 +123,7 @@ public static class JobKinds
                 + $"'{Wire(JobKind.Chat)}' with no role, or drop the kind to send a review.",
             (JobKind.Review, false) =>
                 $"a job sent as kind '{Wire(JobKind.Review)}' needs a role. Allowed: "
-                + string.Join(", ", Enum.GetNames<ReviewRole>()),
+                + string.Join(", ", RoleCatalog.Builtin.Roles.Select(r => r.Id)),
             _ => null,
         };
     }

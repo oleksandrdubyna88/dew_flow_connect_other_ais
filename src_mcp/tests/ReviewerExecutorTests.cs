@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using System.Diagnostics;
 using Xunit;
 using CoaiMcp.Runners.Processes;
@@ -29,7 +30,7 @@ internal static class FakeCliInvocations
         string outputFile = "")
         => new(
             provider,
-            ReviewRole.Architecture,
+            RoleCatalog.ArchitectureRole,
             new ProcessRequest(Exe, verbArgs, AppContext.BaseDirectory)
             {
                 Timeout = timeout ?? TimeSpan.FromMinutes(1),

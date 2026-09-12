@@ -29,9 +29,9 @@ public sealed class SharedEngineTests
         var scheduler = new BoundedScheduler(globalCap: 4, perProviderCap: 3, sharedResourceCap: 1);
         var work = new[]
         {
-            OnEngine("local", ReviewRole.Architecture, "http://127.0.0.1:11434/v1"),
-            OnEngine("local", ReviewRole.SecurityReliability, "http://127.0.0.1:11434/v1"),
-            OnEngine("local", ReviewRole.UxDxPerformance, "http://127.0.0.1:11434/v1"),
+            OnEngine("local", RoleCatalog.ArchitectureRole, "http://127.0.0.1:11434/v1"),
+            OnEngine("local", RoleCatalog.SecurityRole, "http://127.0.0.1:11434/v1"),
+            OnEngine("local", RoleCatalog.UxDxRole, "http://127.0.0.1:11434/v1"),
         };
 
         await scheduler.RunAllAsync(work, Executor());
@@ -48,8 +48,8 @@ public sealed class SharedEngineTests
         var scheduler = new BoundedScheduler(globalCap: 4, perProviderCap: 3, sharedResourceCap: 1);
         var work = new[]
         {
-            OnEngine("local", ReviewRole.Architecture, "http://127.0.0.1:11434/v1"),
-            OnEngine("second", ReviewRole.Architecture, "http://127.0.0.1:8000/v1"),
+            OnEngine("local", RoleCatalog.ArchitectureRole, "http://127.0.0.1:11434/v1"),
+            OnEngine("second", RoleCatalog.ArchitectureRole, "http://127.0.0.1:8000/v1"),
         };
 
         await scheduler.RunAllAsync(work, Executor());
@@ -66,8 +66,8 @@ public sealed class SharedEngineTests
         var scheduler = new BoundedScheduler(globalCap: 4, perProviderCap: 3, sharedResourceCap: 1);
         var work = new[]
         {
-            OnEngine("qwen", ReviewRole.Architecture, "http://127.0.0.1:11434/v1"),
-            OnEngine("llama", ReviewRole.SecurityReliability, "http://127.0.0.1:11434/v1"),
+            OnEngine("qwen", RoleCatalog.ArchitectureRole, "http://127.0.0.1:11434/v1"),
+            OnEngine("llama", RoleCatalog.SecurityRole, "http://127.0.0.1:11434/v1"),
         };
 
         await scheduler.RunAllAsync(work, Executor());
@@ -82,9 +82,9 @@ public sealed class SharedEngineTests
         var scheduler = new BoundedScheduler(globalCap: 4, perProviderCap: 3, sharedResourceCap: 1);
         var work = new[]
         {
-            Hosted("codex", ReviewRole.Architecture),
-            Hosted("codex", ReviewRole.SecurityReliability),
-            Hosted("codex", ReviewRole.UxDxPerformance),
+            Hosted("codex", RoleCatalog.ArchitectureRole),
+            Hosted("codex", RoleCatalog.SecurityRole),
+            Hosted("codex", RoleCatalog.UxDxRole),
         };
 
         await scheduler.RunAllAsync(work, Executor());
@@ -101,9 +101,9 @@ public sealed class SharedEngineTests
         // against this plan; the fix is that the engine limiter outlives one run.
         var scheduler = new BoundedScheduler(globalCap: 4, perProviderCap: 3, sharedResourceCap: 1);
         var first = scheduler.RunAllAsync(
-            [OnEngine("local", ReviewRole.Architecture, "http://127.0.0.1:11434/v1")], Executor(50));
+            [OnEngine("local", RoleCatalog.ArchitectureRole, "http://127.0.0.1:11434/v1")], Executor(50));
         var second = scheduler.RunAllAsync(
-            [OnEngine("local", ReviewRole.SecurityReliability, "http://127.0.0.1:11434/v1")], Executor(50));
+            [OnEngine("local", RoleCatalog.SecurityRole, "http://127.0.0.1:11434/v1")], Executor(50));
 
         await Task.WhenAll(first, second);
 
@@ -121,9 +121,9 @@ public sealed class SharedEngineTests
         var scheduler = new BoundedScheduler(globalCap: 4, perProviderCap: 3, sharedResourceCap: 3);
         var work = new[]
         {
-            OnEngine("local", ReviewRole.Architecture, "http://127.0.0.1:11434/v1"),
-            OnEngine("local", ReviewRole.SecurityReliability, "http://127.0.0.1:11434/v1"),
-            OnEngine("local", ReviewRole.UxDxPerformance, "http://127.0.0.1:11434/v1"),
+            OnEngine("local", RoleCatalog.ArchitectureRole, "http://127.0.0.1:11434/v1"),
+            OnEngine("local", RoleCatalog.SecurityRole, "http://127.0.0.1:11434/v1"),
+            OnEngine("local", RoleCatalog.UxDxRole, "http://127.0.0.1:11434/v1"),
         };
 
         await scheduler.RunAllAsync(work, Executor(60));
@@ -138,7 +138,7 @@ public sealed class SharedEngineTests
         // settings file — and a semaphore of zero is a reviewer that never runs and never reports.
         var scheduler = new BoundedScheduler(globalCap: 2, perProviderCap: 2, sharedResourceCap: 0);
         var run = scheduler.RunAllAsync(
-            [OnEngine("local", ReviewRole.Architecture, "http://127.0.0.1:11434/v1")], Executor(10));
+            [OnEngine("local", RoleCatalog.ArchitectureRole, "http://127.0.0.1:11434/v1")], Executor(10));
 
         var finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(5)));
 
@@ -171,8 +171,8 @@ public sealed class SharedEngineTests
         var scheduler = new BoundedScheduler(globalCap: 1, perProviderCap: 1, sharedResourceCap: 1);
         var work = new[]
         {
-            OnEngine("local", ReviewRole.Architecture, "http://127.0.0.1:11434/v1"),
-            OnEngine("local", ReviewRole.SecurityReliability, "http://127.0.0.1:11434/v1"),
+            OnEngine("local", RoleCatalog.ArchitectureRole, "http://127.0.0.1:11434/v1"),
+            OnEngine("local", RoleCatalog.SecurityRole, "http://127.0.0.1:11434/v1"),
         };
 
         var run = scheduler.RunAllAsync(work, Executor(400), cancel.Token);
@@ -191,14 +191,14 @@ public sealed class SharedEngineTests
                 "the sentence says what happened to it");
     }
 
-    private static ReviewerWork OnEngine(string provider, ReviewRole role, string engine) =>
+    private static ReviewerWork OnEngine(string provider, string role, string engine) =>
         new(new ReviewerInvocation(
             provider,
             role,
             new ProcessRequest("dotnet", ["--version"], "."),
             SharedResource: engine));
 
-    private static ReviewerWork Hosted(string provider, ReviewRole role) =>
+    private static ReviewerWork Hosted(string provider, string role) =>
         new(new ReviewerInvocation(provider, role, new ProcessRequest("dotnet", ["--version"], ".")));
 
     /// <summary>An executor whose reviewers all "answer" after a beat, so overlap is observable.</summary>

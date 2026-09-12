@@ -127,7 +127,7 @@ public class RoundNamesTheExcludedTests
         var worktree = Path.Combine(Path.GetTempPath(), $"coai-wt-{Guid.NewGuid():N}");
         Directory.CreateDirectory(worktree);
 
-        var asked = service.BuildWork([ReviewRole.PlanCritique], worktree, "ctx", round: 1, isPlanStage: true)
+        var asked = service.BuildWork([RoleCatalog.PlanRole], worktree, "ctx", round: 1, isPlanStage: true)
             .Select(w => w.Invocation.Provider).Distinct().ToList();
         var excluded = service.ExcludedFrom(isPlanStage: true).Select(e => e.Split(':')[0]).ToList();
 
@@ -160,7 +160,7 @@ public class RoundNamesTheExcludedTests
     public void AReviewerThatWasAskedAndFailedIsAFailure_NotAnExclusion()
     {
         var summary = ReviewerSummaryFactory.From(
-            [(new ReviewerInvocation("codex", ReviewRole.PlanCritique,
+            [(new ReviewerInvocation("codex", RoleCatalog.PlanRole,
                 new Runners.Processes.ProcessRequest("codex", [], "D:/wt")),
               new ReviewerOutcome.TimedOut())],
             excluded: ["remsoftdev-claude: not signed in"]);

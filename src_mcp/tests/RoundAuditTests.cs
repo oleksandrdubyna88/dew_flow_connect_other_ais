@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using System.Collections.Immutable;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Processes;
@@ -92,7 +93,7 @@ public sealed class RoundAuditTests
     public RoundAuditTests() =>
         _log = new LoggerConfiguration().MinimumLevel.Debug().WriteTo.Sink(_sink).CreateLogger();
 
-    private static ReviewerWork Work(string provider, ReviewRole role, params string[] args) =>
+    private static ReviewerWork Work(string provider, string role, params string[] args) =>
         new(new ReviewerInvocation(
             provider,
             role,
@@ -111,7 +112,7 @@ public sealed class RoundAuditTests
     public void AnEnabledReviewerTheRoundCouldNotRunIsNamed_OnItsOwnLine()
     {
         new RoundAudit(_log, "PlanReview", 1).Opening(
-            [Work("codex", ReviewRole.PlanCritique)],
+            [Work("codex", RoleCatalog.PlanRole)],
             "D:/wt",
             TimeSpan.FromMinutes(10),
             ["remsoftdev-claude: not signed in to the Team server at https://coai.example.com"]);
@@ -126,7 +127,7 @@ public sealed class RoundAuditTests
     {
         // The exceptional case pays for itself; every other round reads exactly as it did.
         new RoundAudit(_log, "PlanReview", 1).Opening(
-            [Work("codex", ReviewRole.PlanCritique)], "D:/wt", TimeSpan.FromMinutes(10));
+            [Work("codex", RoleCatalog.PlanRole)], "D:/wt", TimeSpan.FromMinutes(10));
 
         _sink.Lines.Should().NotContain(l => l.Contains("left out"));
     }
@@ -138,7 +139,7 @@ public sealed class RoundAuditTests
 
         audit.Moved(new ReviewerProgress(
             "codex",
-            ReviewRole.PlanCritique,
+            RoleCatalog.PlanRole,
             ReviewerState.Failed,
             new ReviewerOutcome.NonZeroExit(1, "stream error: the frobnicator is out of widgets"),
             TimeSpan.FromSeconds(42)));
@@ -156,7 +157,7 @@ public sealed class RoundAuditTests
 
         audit.Moved(new ReviewerProgress(
             "claude",
-            ReviewRole.SecurityReliability,
+            RoleCatalog.SecurityRole,
             ReviewerState.Done,
             new ReviewerOutcome.Ok(review, Repaired: false, new Usage(14200, 15, 0.0489)),
             TimeSpan.FromSeconds(63.4)));
@@ -170,7 +171,7 @@ public sealed class RoundAuditTests
         var audit = new RoundAudit(_log, "CodeReview", 1);
 
         audit.Opening(
-            [Work("codex", ReviewRole.Architecture, "exec", "--json"), Work("gemini", ReviewRole.Architecture, "-p")],
+            [Work("codex", RoleCatalog.ArchitectureRole, "exec", "--json"), Work("gemini", RoleCatalog.ArchitectureRole, "-p")],
             "D:/wt",
             TimeSpan.FromMinutes(6));
 
