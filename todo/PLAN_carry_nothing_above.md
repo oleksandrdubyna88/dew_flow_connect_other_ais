@@ -66,12 +66,61 @@ POSITION and a slice.
 - The page posts `{ type: 'carryFrom', at }` when the button is pressed; the host records it and
   pushes the transcript back with the mark on it.
 
+### What the mark IS, exactly
+
+`carryFrom` is **the index of the first message that IS carried** — not the index of the marked
+answer. The button on an answer at index *n* posts *n + 1*. Stated because the plan round found the
+plan did not say, and both readings look right in prose: a rule drawn under an answer means that
+answer is above the line, so it is not carried.
+
+**A raw index is safe here, and that was measured rather than assumed.** Three reviewers asked for a
+stable message id instead. `thread.messages` is only ever appended to (three sites) or truncated
+FROM THE END (one site: the re-ask, which drops the rejected answer and its question). Nothing
+mutates the middle, so an index keeps naming the same message as the conversation grows. What a raw
+index does need is a BOUND, which is the next paragraph.
+
+**Clamped everywhere, and validated on the way in.** `carryFrom` is used as
+`messages.slice(clamp(carryFrom, 0, messages.length))`. A re-ask that truncates past the mark leaves
+it beyond the end; `slice` would then carry nothing, which is the safe direction, but a NEGATIVE value
+would carry the last message instead of the suffix — so only a finite non-negative integer is
+accepted, from the page and from the store alike, and anything else is dropped with the rest of the
+malformed record.
+
+### The host owns the mark
+
+The page does not draw the rule because it was pressed. It ASKS; the host records the mark, and the
+page draws what the host pushes back. So a press that fails to record draws nothing, rather than
+showing a line that is not durable while the next Team turn quietly re-sends everything.
+
+### Why the local CLI is untouched — the mechanism, not the promise
+
+`thread.carry` is EMPTY on an ordinary local turn: `oneTurn` sends `carrying.length > 0 ?
+carriedTurn(...) : asked`, and nothing fills `carry` for a persistent local session. It is filled
+only where a conversation is HANDED OVER:
+
+| filled by | when |
+|---|---|
+| `thread.carry = messages.slice(0, -1)` | every turn of a `forgetful` Team server |
+| `switchNow` | a model switch |
+| `thread.carry = [...again.said]` | a re-ask, which is a switch by another name |
+| `reopen` | the first turn after a window reload |
+
+So the slice narrows handovers and never the ordinary local turn. The promise holds by construction.
+
+**The reload is a handover too, and this plan treats it as one.** The operator named two cases — a
+Team server and a model switch. A reload is a third, and the process behind the tab died with the
+window: what comes back is a NEW model instance being handed a conversation it never heard, which is
+the same event as a switch. Assumed rather than asked, and said here so it can be contradicted.
+
 ## Build order
 
-1. `carryFrom` on the thread and the slice at every `carry` site — the behaviour, with no UI.
-2. The page: the button on the last model answer, the dash-dot rule, and the message.
-3. The store: the optional field, absent reading as `0`.
-4. The help, in all five languages, in the same commit.
+1. `carryFrom` on the thread, the clamp, and the slice at every `carry` site — the behaviour, with
+   no UI — **together with** the store's optional field and its validation. The two were separate
+   steps until the plan round pointed out that a page which can write the mark before the store can
+   read it is a window where a saved tab deserialises into a value nothing validates.
+2. The page: the button on the last model answer, the dash-dot rule with a line saying what it means,
+   and the message that asks for it.
+3. The help, in all five languages, in the same commit.
 
 ## Test plan
 
@@ -84,6 +133,13 @@ POSITION and a slice.
 - The passage is excluded by the slice without being named anywhere — the test that proves there is
   no special case.
 - The shipped bundle, pressed: the button posts, the rule appears, a second press moves it.
+- **The index the page posts is the index the carry starts at** — the button on answer *n* produces a
+  carry beginning at *n + 1*, asserted against the exact payload rather than against the mark alone.
+- **Both consumers actually use it**: one model switch and one Team-server turn after a mark, with
+  the exact outbound arrays asserted. Every other test here can pass while one consumer still builds
+  its own `slice(0, -1)` — and that consumer would re-send the earlier subject and cost exactly what
+  this was built to stop.
+- A negative, a fractional and an out-of-range mark, from the page and from the store.
 
 ## Definition of Done
 

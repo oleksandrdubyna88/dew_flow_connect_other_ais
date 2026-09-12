@@ -192,7 +192,7 @@ test('a stopped turn is written into the transcript before the conversation is c
   );
   assert.match(
     text,
-    /result\.stopped === true[\s\S]{0,900}?thread\.carry = \[\.\.\.thread\.messages\]/,
+    /result\.stopped === true[\s\S]{0,900}?thread\.carry = carriedFrom\(thread\.messages,/,
     'the carry is taken BEFORE the stop is recorded, so it carries the dangling question',
   );
 });
@@ -281,4 +281,36 @@ test('the server settings file is fed this side’s settings, not only the share
     'the server is handed the shared vendors, whatever this side has configured',
   );
   assert.match(text, /readerFor\(/, 'nothing here builds a per-side reader');
+});
+
+test('EVERY handover goes through the mark, and none builds its own slice', () => {
+  // The finding that this file exists for, in its newest shape: a slice unit test proves the
+  // function is right, and proves nothing about whether the Team server calls it. A consumer left
+  // behind re-sends the subject the person marked away from, and is billed for it every turn.
+  const text = read(join('src', 'chatCommand.ts'));
+
+  // The five places a conversation is handed to a model that has not heard it. Each is named by the
+  // event rather than by its line, so this says what broke when it breaks.
+  const handovers: Array<readonly [string, RegExp]> = [
+    ['a re-ask, which is a switch by another name', /thread\.carry = carriedFrom\(again\.said, thread\.carryFrom\)/],
+    ['a Team server, handed the conversation every turn', /thread\.forgetful[\s\S]{0,300}?thread\.carry = carriedFrom\(/],
+    ['a vendor that lost the conversation', /contextLost === true[\s\S]{0,200}?thread\.carry = carriedFrom\(/],
+    ['a model switch', /thread\.carry = carriedFrom\(thread\.messages, thread\.carryFrom\);\s*\n\s*show\(entry, false/],
+    ['the first turn after a window reload', /carry: carriedFrom\(saved\.messages, carryMark\(/],
+  ];
+  for (const [what, shape] of handovers) {
+    assert.match(text, shape, `the handover for ${what} does not go through the mark`);
+  }
+
+  // And NOTHING builds a carry of its own. A sixth site added later, spelled the old way, is the
+  // way this regresses — so the count is the assertion, not the list above.
+  const built = [...text.matchAll(/\bcarry(?:: | = )/g)].length;
+  const marked = [...text.matchAll(/carry(?:: | = )carriedFrom\(/g)].length;
+  // An EMPTY carry hands over nothing and needs no mark; the interface's own line declares the
+  // field rather than filling it. Neither is a handover, and both would otherwise read as one.
+  const empty = [...text.matchAll(/carry(?:: | = )\[\]/g)].length;
+  const declared = [...text.matchAll(/carry: readonly /g)].length;
+
+  assert.strictEqual(built - empty - declared, marked,
+    `${built - empty - declared - marked} carry site(s) build a conversation without the mark`);
 });

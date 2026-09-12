@@ -260,7 +260,7 @@ test('the first question after a restore carries the whole transcript', () => {
   // is widened when that function grows rather than dropped. It grew when a restored tab started
   // carrying its prompt, its role and the words this side last wrote.
   // It grew again when a restored tab started remembering which door it came through.
-  assert.match(restore.slice(0, 4_500), /carry: \[\.\.\.saved\.messages\]/,
+  assert.match(restore.slice(0, 4_500), /carry: carriedFrom\(saved\.messages,/,
     'a restored conversation hands the next model nothing, so it answers a follow-up it never heard');
 });
 

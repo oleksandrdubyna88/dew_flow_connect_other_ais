@@ -38,6 +38,19 @@ export interface SavedTab {
    * carry one boolean. Absent reads as `true`, which every tab was when it was written.</p>
    */
   readonly fromSession?: boolean;
+  /**
+   * Where a handed-over conversation begins — the index of the first message carried.
+   *
+   * <p>OPTIONAL for the same reason `fromSession` is: absent means 0, and 0 is exactly what every
+   * record written before this field did — carry the whole conversation. So nothing needs migrating
+   * and no stored conversation is discarded to introduce it.</p>
+   *
+   * <p>Validated on the way in as a whole number that is not negative. `slice` reads a negative as an
+   * offset from the END and would carry the last message instead of the suffix, turning the feature
+   * into its own inverse — and this value can be hand-edited in a JSON file. (codex, the plan
+   * round.)</p>
+   */
+  readonly carryFrom?: number;
 }
 
 /** The `globalState`/`workspaceState` key, in the dotted form `coai.usageForgottenBefore` set. */
@@ -81,7 +94,9 @@ const isTab = (value: unknown): value is SavedTab => {
     && Array.isArray(tab.messages) && tab.messages.every(isMessage)
     // Absent is legitimate — an older record. Present and not a boolean is a record this build
     // cannot trust, and it is dropped with the rest of them rather than half-read.
-    && (tab.fromSession === undefined || typeof tab.fromSession === 'boolean');
+    && (tab.fromSession === undefined || typeof tab.fromSession === 'boolean')
+    && (tab.carryFrom === undefined
+      || (typeof tab.carryFrom === 'number' && Number.isInteger(tab.carryFrom) && tab.carryFrom >= 0));
 };
 
 /**
