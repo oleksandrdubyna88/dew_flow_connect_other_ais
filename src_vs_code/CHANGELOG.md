@@ -1,5 +1,9 @@
 # Changelog
 
+## Extension 0.36.3 — 2026-09-12
+
+**Take the question to another AI works in a window with no folder open.** It answered *"Open a folder first — a Claude Code session belongs to one"*, which is not true: Claude Code runs without one, in your home directory. If that is how you work, this command had never worked for you. A window that does have a folder — or several, in a workspace — is unchanged, and still scoped to them.
+
 ## Extension 0.36.2 — 2026-09-12
 
 **Two right-click items that say what they do.** There was one, **Chat with other AI**, and whether

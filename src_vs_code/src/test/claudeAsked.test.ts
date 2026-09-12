@@ -9,6 +9,7 @@ import {
   Found,
   MOST_PER_PROMPT,
   MOST_PROMPTS,
+  foldersToSearch,
   namesTheSame,
   oneAnswerFrom,
   pinnable,
@@ -507,4 +508,17 @@ test('the shortened title reaches the whole session, not just its name', async (
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test('a window with no folder open looks in the home directory, not nowhere', () => {
+  // Both readers used to answer that there was nowhere to look, and Take the question said it in a
+  // sentence confident enough that nobody went behind it: "Open a folder first — a Claude Code
+  // session belongs to one." It does not. For an operator who works without a folder — which is how
+  // the one who found this works — that command had never once worked.
+  assert.deepStrictEqual(foldersToSearch([], 'C:\Users\strug'), ['C:\Users\strug']);
+
+  // And a window that HAS folders is scoped to them: two projects may legitimately hold a
+  // conversation by the same name, and the folder is what tells them apart.
+  assert.deepStrictEqual(foldersToSearch(['D:\rsd\app'], 'C:\Users\strug'), ['D:\rsd\app']);
+  assert.deepStrictEqual(foldersToSearch(['a', 'b'], 'home'), ['a', 'b']);
 });

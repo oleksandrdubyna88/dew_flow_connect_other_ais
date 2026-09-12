@@ -68,6 +68,7 @@ import { askedAsText } from './claudeQuestion';
 import {
   Asked,
   Found,
+  foldersToSearch,
   oneAnswerFrom,
   pinnable,
   promptsFrom,
@@ -256,12 +257,21 @@ const threads = new WeakMap<object, Thread>();
 async function everyFolder<T>(ask: (folder: string, caseBlind: boolean) => Promise<T>): Promise<readonly T[]> {
   const caseBlind = process.platform === 'win32' || process.platform === 'darwin';
 
-  return await Promise.all(openFolders().map((folder) => ask(folder, caseBlind)));
+  return await Promise.all(whereToLook().map((folder) => ask(folder, caseBlind)));
 }
 
-/** The workspace's folders, which a window opened on no folder at all simply does not have. */
-function openFolders(): readonly string[] {
-  return (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
+/**
+ * The folders a session may be in — the workspace's, or the home directory when it has none.
+ *
+ * <p>`foldersToSearch` is where the decision lives, in the module with no `vscode` in it, because a
+ * decision inside this file is one no unit test can reach — and this one was wrong in two readers at
+ * once until an operator with no folder open found it.</p>
+ */
+function whereToLook(): readonly string[] {
+  return foldersToSearch(
+    (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+    os.homedir(),
+  );
 }
 
 /**
@@ -278,11 +288,7 @@ function openFolders(): readonly string[] {
  * window whose Claude Code was started somewhere else says where it did look rather than hunting.</p>
  */
 async function findSession(title: string): Promise<readonly Found[]> {
-  const caseBlind = process.platform === 'win32' || process.platform === 'darwin';
-
-  return openFolders().length === 0
-    ? [await sessionFileIn(os.homedir(), os.homedir(), caseBlind, title)]
-    : await everyFolder((folder, blind) => sessionFileIn(os.homedir(), folder, blind, title));
+  return await everyFolder((folder, caseBlind) => sessionFileIn(os.homedir(), folder, caseBlind, title));
 }
 
 /**
@@ -2230,10 +2236,10 @@ function readyForChat(): Ready {
  * code round.)</p>
  */
 async function questionWaitingHere(looking: string): Promise<{ text: string; refusal: string }> {
-  const folders = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
-  if (folders.length === 0) {
-    return { text: '', refusal: 'Open a folder first — a Claude Code session belongs to one.' };
-  }
+  // A WINDOW WITH NO FOLDER still runs Claude Code, in the home directory. This used to answer "Open
+  // a folder first — a Claude Code session belongs to one", which is untrue, and meant the command
+  // had never once worked for an operator who works that way.
+  const folders = whereToLook();
   // Case-blindness is the FILESYSTEM's, not the platform's in general: Windows and macOS treat two
   // names differing only in case as one, and Linux does not.
   const caseBlind = process.platform === 'win32' || process.platform === 'darwin';

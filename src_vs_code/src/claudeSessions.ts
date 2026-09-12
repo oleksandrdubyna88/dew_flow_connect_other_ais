@@ -69,6 +69,23 @@ export function projectDirIn(
 }
 
 /**
+ * The folders to look for a session in, given what the window has open.
+ *
+ * <p>A window with NO FOLDER still runs Claude Code — in the home directory, which is where a VS
+ * Code terminal with none starts. Both readers used to answer that there was nowhere to look, and
+ * *Take the question* said it in a sentence confident enough that nobody went behind it: *"Open a
+ * folder first — a Claude Code session belongs to one."* It does not, and for an operator who works
+ * without a folder that command had never once worked.</p>
+ *
+ * <p>Not every project on the machine: that was tried and was worse than the bug, at 77 directories
+ * and a gigabyte of transcript read to compare titles. One decision, in one place, because the two
+ * readers drifting apart is how this was wrong in two of them at once.</p>
+ */
+export function foldersToSearch(open: readonly string[], home: string): readonly string[] {
+  return open.length === 0 ? [home] : open;
+}
+
+/**
  * Whether a tab's name and a session's name are the same name.
  *
  * <p><b>A tab wears a SHORTENED title.</b> Claude Code truncates what it puts on its own panel and
