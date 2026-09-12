@@ -467,7 +467,11 @@ produces it, rather than inheriting one from a mapping somewhere else.
 any summary exists, so it would otherwise be refused with a sentence about vendors — sending somebody
 to check a configuration that is perfectly correct. Raised twice on the code round.
 
-**`COAI_ROLES` is how a person's own roles arrive.** A JSON array of rows — id, name, stage,
+**`COAI_ROLES` is how a person's own roles arrive, and since 2026-09-12 the PANEL writes it.** The
+roles page (`rolesPage.ts`, see [module_extension.md](module_extension.md)) stores exactly the rows
+this key carries, so nothing translates between the halves, and a prompt's text goes to
+`<dataDir>/prompts/<id>.md` — the override layer `RolePrompts` has read since before roles were data.
+A JSON array of rows — id, name, stage,
 programmingTask, active, prompts — parsed with the reflex `COAI_VENDORS` and `COAI_PROMPTS_PER_ROUND`
 have had since they shipped: JSON this build cannot read is NO custom roles rather than half of them,
 so a malformed setting leaves the product running what it ships. What composition refuses row by row

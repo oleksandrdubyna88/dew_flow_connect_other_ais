@@ -2298,6 +2298,50 @@ to `codex`, so `▶` on an Antigravity row opened a different vendor's CLI under
 the wrong-model defect again, on the button whose whole purpose is signing that vendor in. Every
 runtime this build knows is now a row in one table.
 
+### The roles page: a person writes a review role (2026-09-12)
+
+`coai-mcp` 0.19.0 reads `COAI_ROLES` and nothing wrote it, so a person who wanted the gate to check
+a CV or a set of requirements had to hand-write JSON into `settings.json` and hand-place a markdown
+file beside it. **`rolesPage.ts` + `rolesPanel.ts`** is the fourth page of the shape this extension
+already had three times — a pure module and a thin host — and the shape the operator named when they
+asked for it. `coai.editRoles` opens it; *Prompts per round* carries the button.
+
+**The setting IS the wire format.** `coai.roles` holds exactly the rows `COAI_ROLES` carries, so
+`envBlock` is a `JSON.stringify` and nothing translates. Empty emits no key, which is what makes a
+server older than 0.19.0 a non-event for everybody who has added no role of their own. It is in
+`OVERLAID_SETTINGS`, beside `rounds` and `thresholds`: a person's roles belong to the work, which is
+what a side is.
+
+**A prompt's TEXT is a FILE.** `<dataDir>/prompts/<id>.md`, where `RolePrompts` has read overrides
+since before roles were data — so a prompt somebody rewrites survives an update, and emptying the
+box deletes the file, which is what restore has always meant to a prompt whose default is embedded.
+Keeping the body out of the setting matters for a reason a person feels: twenty-five prompts of prose
+in `settings.json` would be copied into every `mcpServers` block they paste and shown to them in the
+settings editor as a wall of JSON with their own writing inside it. `promptFile` REFUSES an id that
+is not a slug rather than sanitising one — a caller holding a refused id is a caller whose id came
+from somewhere it should not have, and writing `....escaped.md` would hide that.
+
+**What the page will not offer**, each with a twin in `RoleComposition` because a page is not a
+boundary: a shipped role cannot be renamed, removed, or have a shipped prompt deleted (its id keys
+settings, open sessions and every recorded round; its text is embedded, so there would be nothing to
+restore); a sixth active role in a stage cannot be ticked; and the last active role in a stage cannot
+be unticked, which is the rule the sidebar's code ticks always had, now covering the plan stage too.
+
+**An id is generated and never changes.** From the name where the letters allow it, `Role2` where
+they do not — a name in Cyrillic is a name, not a mistake — and fixed at creation, because by then it
+may key a stored value, an open session and rows already written. The page shows it under the name.
+
+**Two switches reach one role.** This section's `roleEnabled` tick and the catalog's `active`, which
+the page writes. The server reads both, so *Prompts per round* draws a role as off when either says
+off. A role stored as not a programming task is left out of the code stage entirely: it takes part in
+no round until the stage that reviews a document exists, and drawing it with rounds and a threshold
+would offer settings that do nothing.
+
+**One deviation from the plan, recorded.** It said the plan stage would gain checkboxes in the
+sidebar. They are on the roles page instead: the shipped plan role honours no `COAI_ENABLED_` key by
+the operator's ruling, so only `active` can switch it off — and `active` is what that page writes.
+One switch in one place beats two mechanisms for one concept.
+
 ### The catalog is generated from a seed neither half owns (2026-09-12)
 
 `prompts.ts` held five roles and twenty-five prompts as hand-written literals, mirroring the same
