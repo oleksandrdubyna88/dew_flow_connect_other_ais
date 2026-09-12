@@ -124,13 +124,7 @@ public static class ReviewEndpoints
         // Its shape was checked by `Refusal` before anything reached here, so this cannot fail.
         JobKinds.TryRead(request.Kind, out var kind);
 
-        // The CATALOG's spelling, not the client's. `Enum.TryParse(ignoreCase: true)` used to
-        // canonicalise this on its way in, so a job sent as `architecture` was recorded, billed and
-        // answered as `Architecture`; keeping that is what stops one role becoming two rows in the
-        // usage view the day two clients spell it differently.
-        var role = RoleCatalog.Builtin.ById(request.Role ?? string.Empty)?.Id
-            ?? request.Role
-            ?? string.Empty;
+        var role = CanonicalRole(request.Role);
 
         return new JobRecord(
             JobId.New(),
@@ -151,6 +145,21 @@ public static class ReviewEndpoints
                     caller.Email, request.Vendor, request.Model, role, request.Prompt, kind,
                     request.TimeoutSeconds));
     }
+
+    /// <summary>
+    /// The CATALOG's spelling of a role a client named, or what they sent when it names none.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>Enum.TryParse(role, ignoreCase: true)</c> did two jobs at once until the enum was
+    /// retired: it ACCEPTED a spelling in any case, and it CANONICALISED it. Losing either half is
+    /// invisible until it is expensive — a case-sensitive check would refuse every client that
+    /// lower-cases its roles, and a spelling passed straight through would make one role two rows in
+    /// the usage view the day two clients disagree about it.</para>
+    /// <para>Its own method so a test can hold it without running a vendor: the recorded role
+    /// reaches nothing a request can read back, only the ledger a finished run writes.</para>
+    /// </remarks>
+    internal static string CanonicalRole(string? said) =>
+        RoleCatalog.Builtin.ById(said ?? string.Empty)?.Id ?? said ?? string.Empty;
 
     /// <summary>
     /// What the STORE refused, as an answer — or null when it refused nothing.

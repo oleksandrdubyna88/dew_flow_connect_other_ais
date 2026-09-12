@@ -273,7 +273,7 @@ public sealed class ReviewerExecutor(
             Directory.CreateDirectory(directory);
             var file = Path.Combine(
                 directory,
-                $"{Safe(invocation.Provider)}-{Safe(invocation.Role.ToString())}"
+                $"{FileSafe.Part(invocation.Provider)}-{FileSafe.Part(invocation.Role)}"
                     + $"-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.txt");
             pending = file + ".writing";
             File.WriteAllText(pending, Bounded(raw));
@@ -303,15 +303,6 @@ public sealed class ReviewerExecutor(
             return null;
         }
     }
-
-    /// <summary>A path component that cannot escape its directory or refuse to be a file name.</summary>
-    /// <remarks>
-    /// `Provider` is operator-configured text and `Role` is an enum today, so nothing observed has
-    /// ever carried a separator. That is a fact about today's callers rather than about this
-    /// function, and it is the callers that change.
-    /// </remarks>
-    private static string Safe(string part) =>
-        string.Concat(part.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
 
     /// <summary>
     /// The cap on ONE kept answer.

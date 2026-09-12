@@ -203,7 +203,7 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
 
     public ReviewerInvocation Build(string role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings)
     {
-        var outputFile = Path.Combine(outputDir, $"{Provider}-{role}.json");
+        var outputFile = Path.Combine(outputDir, $"{FileSafe.Part(Provider)}-{FileSafe.Part(role)}.json");
         var request = new ProcessRequest(
             Executable(settings, "codex"),
             [

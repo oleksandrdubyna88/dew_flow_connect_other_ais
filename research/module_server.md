@@ -468,6 +468,18 @@ produces it, rather than inheriting one from a mapping somewhere else.
 any summary exists, so it would otherwise be refused with a sentence about vendors — sending somebody
 to check a configuration that is perfectly correct. Raised twice on the code round.
 
+**A role's name reaches a PATH, so it is made safe where the path is built.** `FileSafe.Part`
+replaces every character the platform refuses, and the answer file, the local engine's prompt file,
+the remote job file and the kept evidence all go through it. Composition already refuses an id that
+is not `^[A-Za-z][A-Za-z0-9_]*$`, so nothing shaped like a path should reach an adapter at all —
+this is the second lock, and it is here because the two are far apart: the rule lives in the core,
+the file name is built in a vendor adapter, and a caller assembling an invocation by hand passes
+neither. It was a private helper inside `ReviewerExecutor` whose own remark predicted this: *"`Role`
+is an enum today, so nothing observed has ever carried a separator. That is a fact about today's
+callers rather than about this function, and it is the callers that change."* Measured on the way
+in: a role named `../../../escaped` put the prompt file in the system temp directory instead of the
+round's own, and the guard is what stops it.
+
 **The role travels as a string, and since 2026-09-12 there is nothing else for it to be.** Three
 reviewers once asked for `ReviewRole` here instead, quoting the rule against primitive obsession;
 the answer then was the ring — the enum lived in `CoaiMcp.Runners` and `ReviewerSummary` lives in
