@@ -573,3 +573,24 @@ this plan reads but does not change — a textual conflict at worst.
 The four plans that follow — the CRUD tab, the Team server's role allowlist, `review_document`, the
 Team server's document upload — each branch from this one once it is on `main`; the first three are
 independent of each other and may run in parallel; the fourth needs two of them.
+
+## The open tail, carried into plan 2
+
+Recorded here so promotion moves it rather than losing it. Neither item blocks this plan.
+
+- **`PanelService.BuildWork` takes eight parameters**, which this repository's own
+  `StageRun` comment calls the point where a signature stops being readable — and SonarCloud
+  names it on the pull request. The count PREDATES this branch: nothing here added a parameter,
+  and the analyser reports it as new only because the lines moved. The fix is the one `StageRun`
+  already demonstrates: group `seed`, `planPrompts` and `deal` into a record, since they are one
+  answer to "how is this round dealt" rather than three independent knobs. Left undone because a
+  signature change across a dozen call sites, made after the last gate round closed, is exactly
+  the change nothing would have reviewed.
+- **Two test methods compile a regular expression at run time** where `[GeneratedRegex]` would do
+  it at build time (`BuiltinRoleCatalogTests`, `RolePromptsTests`). Declined here: the attribute
+  needs its class to be `partial`, which is a change to two test classes for a pattern each of them
+  matches once.
+
+Two of SonarCloud's suggestions are refused rather than deferred: returning `List<T>` instead of
+`IReadOnlyList<T>` "for improved performance" contradicts doctrine 7, and an allocation nobody has
+measured is not a reason to widen a boundary type.
