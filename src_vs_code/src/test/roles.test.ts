@@ -299,3 +299,41 @@ test('two long names that start alike still get two different ids', () => {
   assert.notStrictEqual(second, first);
   assert.ok(second.length <= MAX_ROLE_ID_LENGTH, `a ${second.length}-character id`);
 });
+
+// ---------- the composed catalog is one shape, not two ----------
+
+/**
+ * A built-in came out of `composed()` with every field filled in and a person's own role came out
+ * exactly as it was stored — so `role.active` was a boolean on one and `undefined` on the other, and
+ * anything reading it directly would read a live custom role as switched off. Every caller was
+ * carrying its own `?? true`, which is the definition of a leaky shape. (gemini, second code round.)
+ */
+test('a role a person added comes out of the catalog as complete as a shipped one', () => {
+  const bare = composed([{ id: 'Requirements' }]).find((r) => r.id === 'Requirements')!;
+
+  assert.strictEqual(bare.active, true);
+  assert.strictEqual(bare.stage, RESULT_STAGE);
+  assert.strictEqual(bare.programmingTask, true);
+  assert.strictEqual(bare.name, 'Requirements', 'named by its id when it has no name');
+  assert.deepStrictEqual(bare.prompts, []);
+});
+
+test('the catalog fills nothing in that the row already said', () => {
+  const said = composed([
+    { id: 'Brief', name: 'The brief', stage: PLAN_STAGE, programmingTask: false, active: false,
+      prompts: [{ id: 'brief-general', label: 'General' }] },
+  ]).find((r) => r.id === 'Brief')!;
+
+  assert.strictEqual(said.name, 'The brief');
+  assert.strictEqual(said.stage, PLAN_STAGE);
+  assert.strictEqual(said.programmingTask, false);
+  assert.strictEqual(said.active, false);
+  assert.deepStrictEqual(said.prompts, [{ id: 'brief-general', label: 'General' }]);
+});
+
+test('a field the catalog does not know survives being composed', () => {
+  const kept = composed(rolesFrom([{ id: 'Requirements', kind: 'document' }]))
+    .find((r) => r.id === 'Requirements')!;
+
+  assert.strictEqual((kept as unknown as Record<string, unknown>)['kind'], 'document');
+});

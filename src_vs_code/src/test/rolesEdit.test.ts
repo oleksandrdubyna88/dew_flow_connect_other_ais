@@ -243,3 +243,66 @@ test('a prompt id nothing has at all belongs to nobody', () => {
   assert.ok(!promptBelongsTo(composed([mine]), mine.id, 'invented'));
   assert.ok(!promptBelongsTo(composed([mine]), 'NoSuchRole', 'requirements-general'));
 });
+
+// ---------- the stage invariants hold for every way OUT of a stage, not only the switch ----------
+
+/**
+ * The switch was guarded and the other two doors were not.
+ *
+ * <p>A stage's rules are about how many roles are ACTIVE in it, and three commands change that
+ * number: switching one off, removing it, and moving it to the other stage. Only the first was
+ * checked — so the page would happily save an empty stage or a sixth active role by a different
+ * route, and the server would then cap it or produce a round with no reviewer that the session
+ * counts as unresolved. Raised by two reviewers on the second code round.</p>
+ */
+test('the only role active in a stage cannot be removed either', () => {
+  const others = code.slice(1).map((r) => ({ id: r.id, active: false }));
+  const only: RoleRow = { id: 'Only', stage: RESULT_STAGE, active: true };
+  const off = code.map((r) => ({ id: r.id, active: false }));
+  const outcome = rowsAfter([...off, only], { kind: 'remove', id: 'Only' });
+
+  assert.strictEqual(outcome.kind, 'refused', JSON.stringify(others.length));
+  assert.match((outcome as { why: string }).why, /no reviewer|only/i);
+});
+
+test('a role that is switched off is removable whatever else is in its stage', () => {
+  const off = code.map((r) => ({ id: r.id, active: false }));
+  const sleeping: RoleRow = { id: 'Sleeping', stage: RESULT_STAGE, active: false };
+  const awake: RoleRow = { id: 'Awake', stage: RESULT_STAGE, active: true };
+
+  assert.strictEqual(rowsAfter([...off, awake, sleeping], { kind: 'remove', id: 'Sleeping' }).kind, 'rows',
+    'removing it takes no reviewer out of the stage');
+});
+
+test('the only role active in a stage cannot be moved out of it', () => {
+  const off = code.map((r) => ({ id: r.id, active: false }));
+  const only: RoleRow = { id: 'Only', stage: RESULT_STAGE, active: true };
+  const outcome = rowsAfter([...off, only], { kind: 'edit', id: 'Only', field: 'stage', value: PLAN_STAGE });
+
+  assert.strictEqual(outcome.kind, 'refused');
+  assert.match((outcome as { why: string }).why, /no reviewer|only/i);
+});
+
+test('a role cannot be moved into a stage that is already full', () => {
+  const rows = [...fullStage(), { id: 'Elsewhere', stage: PLAN_STAGE, active: true }];
+  const outcome = rowsAfter(rows, { kind: 'edit', id: 'Elsewhere', field: 'stage', value: RESULT_STAGE });
+
+  assert.strictEqual(outcome.kind, 'refused');
+  assert.match((outcome as { why: string }).why, /five/i);
+});
+
+test('a role that is switched off may move into a full stage', () => {
+  // It adds no reviewer to the stage, so neither rule has anything to say about it.
+  const rows = [...fullStage(), { id: 'Elsewhere', stage: PLAN_STAGE, active: false }];
+  const after = rowsOf(rowsAfter(rows, { kind: 'edit', id: 'Elsewhere', field: 'stage', value: RESULT_STAGE }));
+
+  assert.strictEqual(after.find((r) => r.id === 'Elsewhere')!.stage, RESULT_STAGE);
+});
+
+test('a role moved to the stage it is already in is not moving', () => {
+  const off = code.map((r) => ({ id: r.id, active: false }));
+  const only: RoleRow = { id: 'Only', stage: RESULT_STAGE, active: true };
+  const after = rowsOf(rowsAfter([...off, only], { kind: 'edit', id: 'Only', field: 'stage', value: RESULT_STAGE }));
+
+  assert.strictEqual(after.find((r) => r.id === 'Only')!.stage, RESULT_STAGE);
+});

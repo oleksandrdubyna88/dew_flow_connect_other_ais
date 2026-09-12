@@ -2395,6 +2395,31 @@ variable. The page's nonce comes from `crypto` rather than `Math.random`. And `r
 repaints when the version changes, so a page opened from the command palette before the panel ever
 rendered stops claiming a silence it had not earned — it says the check has not run.
 
+**The second round, 9 gating findings, five of them true.** The best of them is a shape defect the
+first round had not reached: **a stage's rules were enforced on one of the three doors into it.** How
+many roles are active in a stage is changed by the switch, by removal, and by a stage MOVE — and only
+the switch was checked, so the page would save an empty stage or a sixth active role by either of the
+other two routes. `lastStanding()` is one predicate used by all three now, and a move is validated
+against BOTH stages: the source cannot be emptied, the destination cannot go past five. An inactive
+role moves and is removed freely, because it is a reviewer in neither.
+
+**`composed()` returned two shapes and callers were compensating.** A built-in came out fully
+populated; a person's own role came out exactly as stored, so `role.active` was a boolean on one and
+`undefined` on the other — anything reading it directly would read a live custom role as switched
+off, and every caller carried its own `?? true`. `materialised()` fills the optional fields for a
+custom row with the spread first, so a field this build does not know is still carried through.
+
+**And the page asks about the server instead of waiting to be told.** A window whose sidebar is
+collapsed never resolves that view, so `rolesKnowTheServer` was never called and the page could not
+say whether its roles would run. It reads `serverOnThisSide` itself when it opens. The sidebar's
+push is kept beside that rather than replaced — the full status runs the binary to ask its version,
+so making it the per-repaint source would spawn a process on every structural edit.
+
+Two things were declined as decisions rather than defects, and are in the plan's open tail: prompt
+bodies are global while role rows are per-side, so two sides creating a role of the same name share
+one body file; and `stage !== PLAN_STAGE` is still what "a code role" means, which is what plan 4 has
+to replace when a third stage exists.
+
 ### The catalog is generated from a seed neither half owns (2026-09-12)
 
 `prompts.ts` held five roles and twenty-five prompts as hand-written literals, mirroring the same

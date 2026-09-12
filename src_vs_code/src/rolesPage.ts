@@ -304,6 +304,17 @@ function older(version: string, since: string): boolean {
   return false;
 }
 
+/**
+ * Whether a role added now would arrive switched off.
+ *
+ * <p>It does arrive switched off, which is honest — but the person found that out AFTER clicking,
+ * from a hint on a role they had just created. Said beside the button, it is the same sentence one
+ * step earlier. A new role always joins the code stage, so that is the only count to take.</p>
+ */
+function stageIsFull(all: readonly RoleRow[]): boolean {
+  return activeCount(all, RESULT_STAGE) >= MAX_ACTIVE_PER_STAGE;
+}
+
 export function rolesHtml(state: RolesPageState, nonce: string): string {
   const all = composed(state.rows);
   const plan = all.filter((r) => stageOf(r) === PLAN_STAGE);
@@ -332,6 +343,7 @@ ${plan.map((r) => roleBlock(all, r, state.texts)).join('\n')}
 ${code.map((r) => roleBlock(all, r, state.texts)).join('\n')}
 
 <button type="button" class="add role" data-add="role">Add a role</button>
+${stageIsFull(all) ? '<p class="hint">Five roles are already active in the code stage, so a new one will arrive switched off. Switch one of them off to make room for it.</p>' : ''}
 ${script(nonce)}
 </body>
 </html>`;

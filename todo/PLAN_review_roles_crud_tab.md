@@ -245,9 +245,39 @@ from different directions and two were worth the whole round:
   `crypto`; the sidebar's tick inert for a role the catalog has switched off; and the page saying so
   when it has not yet learned which server is installed.
 
-Eighteen findings were rejected with reasons, the largest group being four claims of script injection
+Fifteen findings were rejected with reasons, the largest group being four claims of script injection
 through `JSON.stringify` inside a `<script>` — there is none in the file, and no page state reaches
 the script block at all.
+
+**The second round took it from 34 gating to 9**, and five of those nine were true:
+
+- **A stage's rules were enforced on ONE of the three doors.** How many roles are active in a stage
+  is changed by the switch, by REMOVAL, and by a stage MOVE — only the switch was checked. So the
+  page would save an empty stage, or a sixth active role, by either of the other two routes.
+  `lastStanding()` is one predicate used by all three now, and a move is checked against both stages.
+- **`composed()` returned two shapes.** A built-in came out with every field filled in; a person's
+  own role came out exactly as stored, so `role.active` was a boolean on one and `undefined` on the
+  other — and anything reading it directly would read a live custom role as switched off. Every
+  caller was carrying its own `?? true`. One shape now, unknown fields still carried through.
+- **The page waited to be told the server version.** A window whose sidebar is collapsed never
+  resolves that view, so it never learned. It asks now, when it opens; the sidebar's cheaper update
+  is kept beside that rather than replacing it, because the full status runs the binary.
+- **"Add a role" said nothing about arriving switched off** until after the click.
+
+## The open tail
+
+- **Prompt bodies are global while role rows are per-side.** Two sides that independently create a
+  role of the same name generate the same role id, the same prompt id, and therefore share one
+  `<dataDir>/prompts/<id>.md`. That is the stated design — *"a question you wrote is one question,
+  wherever you ask it"* — but it was written for one person's two sides asking the same question, not
+  for two unrelated roles colliding. Namespacing the files by side would change what `RolePrompts`
+  reads, which is a wire change rather than a panel one. **An operator decision, not taken here.**
+- **`stage !== PLAN_STAGE` is the discriminator for "this is a code role"**, in `enabledCodeRoles`
+  and on the page, which offers Plan and Code only. Plan 4 adds a third stage and has to replace it
+  with a stage catalog; a catalog built now would be an abstraction over one real member and one
+  imagined one.
+- Carried from plan 1, still open: `BuildWork`'s eight parameters, and `[GeneratedRegex]` in two test
+  methods.
 
 ## Parallelism
 
