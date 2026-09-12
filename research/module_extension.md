@@ -1063,6 +1063,44 @@ Three more about not guessing. The case-insensitive directory match happens only
 
 **A shape this build cannot read is NAMED.** An `AskUserQuestion` whose questions will not parse is a third answer beside "a question" and "nothing" — if Anthropic moves a field, the command says the format changed instead of reporting that Claude is asking nothing while a question sits on screen.
 
+### Carry nothing above (2026-09-12)
+
+A long conversation is re-sent in two places, and paid for in one: a **Team server** holds nothing
+and is handed the whole transcript every turn, and a **model switch** hands the next model everything
+said so far. Ten turns about one subject followed by a question about another means the second
+question arrives wrapped in the first.
+
+**Carry nothing above** is a button on the LAST answer. It draws a dashed orange rule under that
+answer, and from then on every HANDOVER starts below it. The conversation is untouched: nothing is
+deleted, and it stays on screen whole.
+
+`carryFrom` is **the index of the first message CARRIED**, not of the marked answer — so the button
+on answer *n* posts *n + 1*. `chatCarry.ts` holds both halves of the decision, in a module with no
+`vscode` in it: `carryMark` turns anything into a usable position, `carriedFrom` slices. A raw index
+is safe here and that was measured rather than assumed — `thread.messages` is only appended to or
+truncated FROM THE END (the re-ask, dropping the rejected answer and its question), so nothing
+mutates the middle. What it does need is a BOUND: past the end carries nothing, and a NEGATIVE would
+reach `slice` as an offset from the end and carry the LAST message instead of the suffix, which is
+the feature as its own inverse. Only a finite non-negative integer is a mark, from the page and from
+the store alike.
+
+**Five handovers, one function**, and a test that COUNTS them rather than trusting any: a Team server
+every turn, a model switch, a re-ask, a vendor that lost the thread, and the first turn after a
+reload. Every slice test can pass while one consumer still builds its own — and that consumer
+re-sends the subject the person marked away from, billed every turn.
+
+**The local CLI is untouched, by construction rather than by a special case.** `carry` is EMPTY on an
+ordinary local turn — `oneTurn` sends the question alone — so the model being spoken to right now
+keeps every word. This is "do not carry this onward", never "forget this", confirmed with the
+operator in those words. A reload counts as a handover: the process died with the window, so what
+comes back is a new model instance being told a conversation it never heard.
+
+**The page asks; the host draws.** A press posts `{type:'carryFrom', at}`; the host clamps it against
+the transcript it holds, writes the tab down and pushes it back with the rule on it. A press that
+failed to record therefore shows nothing, rather than a line that will not survive a reload. `show`'s
+store dedupe compares the mark too — a press changes neither transcript nor model, so a guard on
+those two alone skipped the write.
+
 ### The tab knows its own session, and can show what you asked (2026-09-12)
 
 **A tab is joined to a session by its TITLE.** Asked as *"по айди окна разве не можем определить

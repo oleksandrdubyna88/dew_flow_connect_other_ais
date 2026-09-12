@@ -1,11 +1,11 @@
 # PLAN — Carry nothing above
 
-> Status: **plan only, nothing implemented yet.** Scope: the chat page's transcript and the thread's
+> Status: **IMPLEMENTED, 2026-09-12.** Scope: the chat page's transcript and the thread's
 > `carry` — `src_vs_code/src/chatPage.ts`, `chatCommand.ts`, `chatPanel.ts`, `chatMessages.ts`,
 > `chatTabs.ts`, and the five help catalogs.
 >
-> Related docs: [PLAN_what_you_asked_is_on_disk.md](../research/PLAN_what_you_asked_is_on_disk.md),
-> [module_extension.md](../research/module_extension.md).
+> Related docs: [PLAN_what_you_asked_is_on_disk.md](PLAN_what_you_asked_is_on_disk.md),
+> [module_extension.md](module_extension.md).
 
 ## The symptom
 
@@ -150,3 +150,34 @@ the same event as a switch. Assumed rather than asked, and said here so it can b
 - [ ] It survives a reload.
 - [ ] Help updated in English, Russian, Ukrainian, German and Spanish in the same commit.
 - [ ] `npm run typecheck` clean, the whole suite green, the bundled-page test watched red first.
+
+## What shipped differently
+
+Everything above shipped, and the plan round changed four things before a line of it was built —
+each recorded in the sections above rather than here, because they are part of the design now:
+the mark is the first index CARRIED and not the marked answer's; it is clamped and validated at both
+ends; the store's field arrives WITH the model change rather than after it; and the host, not the
+page, decides when the rule is drawn.
+
+Two things the building itself taught.
+
+**The store's dedupe had to learn about the mark.** `show` skips the write when neither the
+transcript nor the model changed — which is exactly what pressing this button does. The rule would
+have been drawn and never saved, and a reload would have put the whole conversation back on the wire
+without a word. Caught by writing the test for "it survives a reload" before believing it did.
+
+**A bundled-page test can be hollow, and this one was.** The DOM stub replaced `closest` with a
+function that handed back the button whatever selector was asked for — so it never exercised the
+page's own selector, which had NOT been widened to include the new control. The test passed against
+a button that could not have been pressed. Found by breaking it on purpose and watching nothing go
+red; the stub honours the selector now.
+
+## The open tail
+
+- The mark only travels FORWARD. The operator chose that ("не снимается, обновляется точка откуда
+  брать историю"), and the consequence is that including something above it again means pressing the
+  button on an earlier answer — which the button is not offered on. Re-opens if anybody asks to move
+  it back.
+- A reload is treated as a handover, so a marked conversation restored after one hands the new local
+  process only the suffix. Assumed rather than asked: the operator named a Team server and a model
+  switch, and the process behind the tab genuinely died with the window.
