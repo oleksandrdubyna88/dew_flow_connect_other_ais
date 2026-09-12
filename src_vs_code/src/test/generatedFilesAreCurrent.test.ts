@@ -56,7 +56,10 @@ test('--check writes nothing, so running the suite cannot repair the drift it is
     );
 
     assert.strictEqual(run.status, 1, 'a stale file is a failure');
-    assert.match(run.stderr, /run: node scripts\/generate-builtin-roles\.mjs/);
+    // The command it suggests must name the file it actually checked. Suggesting the DEFAULT
+    // regeneration here would leave this target exactly as stale as it was. (codex, C2's code round.)
+    assert.match(run.stderr, /run: node src_vs_code\/scripts\/generate-builtin-roles\.mjs/);
+    assert.ok(run.stderr.includes(`--out=${target}`), `the command ignored --out: ${run.stderr}`);
     assert.strictEqual(
       readFileSync(target, 'utf8'),
       '// nothing like the real thing\n',
@@ -75,7 +78,21 @@ test('--check on a file that is not there says so, rather than a stack trace', (
   );
 
   assert.strictEqual(run.status, 1);
-  assert.match(run.stderr, /does not exist — run: node scripts\/generate-builtin-roles\.mjs/);
+  assert.match(run.stderr, /does not exist — run: node src_vs_code\/scripts\/generate-builtin-roles\.mjs/);
+});
+
+test('a seed that is not there is named, rather than thrown as a path', () => {
+  // The one failure a fresh or half-deleted checkout actually produces. ENOENT names the path and
+  // not what it was for, which is the half a person cannot work out. (local, C2's code round.)
+  const run = spawnSync(
+    process.execPath,
+    [join(scriptsDir, SCRIPTS[0]), `--seed=${join(tmpdir(), 'coai-no-such-seed-4c7b.json')}`],
+    { encoding: 'utf8' },
+  );
+
+  assert.strictEqual(run.status, 1);
+  assert.match(run.stderr, /is not there — this script generates the panel's catalog from it/);
+  assert.doesNotMatch(run.stderr, /ENOENT/, 'a stack trace is what this replaced');
 });
 
 /**

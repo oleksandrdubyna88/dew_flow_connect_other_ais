@@ -150,6 +150,14 @@ GENERATOR as well as its input, and that direction is invisible — the committe
 the seed and every test stays green. So each generator has a `--check` mode that renders and compares
 without writing, and `generatedFilesAreCurrent.test.ts` runs them.
 
+**And `NothingReadsAnotherProgramsSourceTests` keeps the seam from being un-made.** What this replaced
+was two regular expressions, each parsing the other program's SOURCE, and the reason they had to go
+is that such a test goes QUIET rather than red: it breaks on a reformat, is blind to a field it was
+not taught, and returns an empty list that every assertion below passes over. The shape is tempting
+and will be reached for again, so a repository-level test refuses it. Its own first draft had the
+defect it guards against — it matched only single-quoted path literals, which C# cannot produce at
+all — which is the argument for the rule in one sentence.
+
 ```mermaid
 flowchart LR
     seed["shared/builtin-roles.json<br/>(owned by neither)"]

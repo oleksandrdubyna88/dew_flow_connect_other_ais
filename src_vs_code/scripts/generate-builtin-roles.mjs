@@ -20,7 +20,7 @@
 // nothing caught a file behind the GENERATOR — a changed mapping leaves the committed file matching
 // the seed, every test green, and the next regeneration silently changing the panel's catalog.
 // (codex, this story's plan round.)
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -34,11 +34,20 @@ const flag = (name, fallback) => {
   return found === undefined ? fallback : found.slice(name.length + 3);
 };
 
-const seedPath = flag('seed', join(here, '..', '..', 'shared', 'builtin-roles.json'));
-const out = flag('out', join(here, '..', 'src', 'builtinRoles.generated.ts'));
+const defaultSeed = join(here, '..', '..', 'shared', 'builtin-roles.json');
+const defaultOut = join(here, '..', 'src', 'builtinRoles.generated.ts');
+const seedPath = flag('seed', defaultSeed);
+const out = flag('out', defaultOut);
 
 /** The stages the seed may name. A third one is a deliberate change here, not a silent remapping. */
 const STAGES = ['plan', 'result'];
+
+// A missing seed is the one failure a fresh or half-deleted checkout actually produces, and
+// readFileSync's ENOENT stack trace says the path without saying what it was for.
+if (!existsSync(seedPath)) {
+  console.error(`${seedPath} is not there — this script generates the panel's catalog from it`);
+  process.exit(1);
+}
 
 const seed = JSON.parse(readFileSync(seedPath, 'utf8'));
 const roles = seed.roles ?? [];
@@ -121,24 +130,34 @@ ${roles.map(role).join('\n')}
 
 const counts = `${roles.length} roles, ${roles.reduce((n, r) => n + (r.prompts?.length ?? 0), 0)} prompts`;
 
+// The command to run when the file is behind — carrying the paths actually in use, because a
+// --check over a fixture that suggests regenerating the DEFAULT file leaves the checked target
+// exactly as it was. (codex, story C2's code round.)
+const rerun = [
+  'node src_vs_code/scripts/generate-builtin-roles.mjs',
+  ...(seedPath === defaultSeed ? [] : [`--seed=${seedPath}`]),
+  ...(out === defaultOut ? [] : [`--out=${out}`]),
+].join(' ');
+
 if (process.argv.includes('--check')) {
   // A file that is not there is behind by definition, and saying so beats a readFileSync stack
   // trace on a fresh checkout. (codex, this story's code round.)
   if (!existsSync(out)) {
-    console.error(`${out} does not exist — run: node scripts/generate-builtin-roles.mjs`);
+    console.error(`${out} does not exist — run: ${rerun}`);
     process.exit(1);
   }
   // Line endings normalised on both sides: the committed file is LF, a Windows checkout may hold
   // CRLF, and that is not the drift this is looking for.
   const committed = readFileSync(out, 'utf8').replace(/\r\n/g, '\n');
   if (committed !== file.replace(/\r\n/g, '\n')) {
-    console.error(`${out} is not what this script produces — run: node scripts/generate-builtin-roles.mjs`);
+    console.error(`${out} is not what this script produces — run: ${rerun}`);
     process.exit(1);
   }
   console.log(`up to date: ${out} (${counts})`);
 } else {
   // Written beside the target and renamed over it: a process killed mid-write would otherwise leave
   // a truncated file that every build imports, with the last good copy already gone.
+  mkdirSync(dirname(out), { recursive: true });
   const staging = `${out}.tmp`;
   writeFileSync(staging, file, 'utf8');
   renameSync(staging, out);
