@@ -35,6 +35,35 @@ flowchart LR
 | `TextSimilarity` | `Gate/TextSimilarity.cs` | token Jaccard ≥ 0.5 = "same remark" — deterministic, arguable-with |
 | `SessionState`, `PanelConfig`, `SessionKey` | `Rounds/SessionState.cs` | immutable session; key = normalised repo path + branch |
 | `RoundMachine`, `RoundVerdict`, `Decision`, `Transition` | `Rounds/RoundMachine.cs` | ordering by refusal; the escalation ladder; resolve feeds rejections forward |
+| `RoleDefinition`, `RoleCatalog`, `RoleStages` | `Rounds/RoleCatalog.cs` | which roles exist and which prompt a round of one gets; `Builtin` is the embedded seed |
+
+### The catalog is data, and the seed belongs to neither half (2026-09-12)
+
+The roles used to be a closed list in four places at once: a CLR `enum ReviewRole`, five
+`const string`s, a 25-row `PromptChoice` array, and a hand-typed mirror of the same rows in the
+extension — held level by a test that regexed this project's own C# source. A manager who wants the
+gate to check a CV against their own rules cannot be served by any of that without a rebuild of both
+halves.
+
+So the built-in catalog is **one file, `shared/builtin-roles.json`**, owned by neither container:
+this assembly embeds it (`CoaiMcp.Core.csproj`) and loads it once as `RoleCatalog.Builtin`; the
+extension generates its copy from the same file. Each half asserts its own LOADER against the file
+— `BuiltinRoleCatalogTests` here, `builtinRoleCatalog.test.ts` there — rather than against the other
+half's source, which is the same shape as `shared/team-server-url-vectors.json` and for the same
+reason: two self-consistent implementations cannot notice that they disagree.
+
+Three properties are worth knowing before touching it:
+
+- **A role's first prompt is its general one.** `Universal` used to be a flag that a test had to
+  check was set exactly once per role; it is now a position, so the invariant holds by construction
+  and `RoleDefinition.General` is `Prompts[0]`.
+- **`Prompts` is never empty** — the record throws on an empty list rather than letting `General`
+  become an `IndexOutOfRangeException` reached from a configuration file. Only the seed loader and
+  (from the next story) the composition construct one, and both validate first.
+- **Ids are permanent.** `COAI_ROUNDS_ARCHITECTURE`, `coai.rounds`, every session file and every
+  `coai.db` row is keyed by the role id, so a rename in the seed is a migration and not an edit.
+  `PromptChoice.BuiltIn` marks a prompt the binary ships a text for: it can be overridden and
+  restored, never deleted.
 
 ## The decisions a reader needs
 
@@ -60,5 +89,8 @@ flowchart LR
 ## Tests
 
 `CoaiMcp.Tests`: ReviewParserTests, GeminiPayloadTests, FindingDedupTests, GateRuleTests,
-RoundMachineTests, ArchitectureTests. Teeth proven red for: the balanced-brace scan (naive
-first-to-last), the standing-rejection discount (disabled), the ladder order (reversed).
+RoundMachineTests, ArchitectureTests, BuiltinRoleCatalogTests. Teeth proven red for: the
+balanced-brace scan (naive first-to-last), the standing-rejection discount (disabled), the ladder
+order (reversed), and the catalog loader (written before `RoleCatalog` existed, watched failing to
+compile, then watched failing on the prompt COUNT — the plan said 26 and the seed has 25, which is
+why the number is pinned rather than the shape).

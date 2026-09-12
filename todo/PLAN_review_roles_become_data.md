@@ -44,7 +44,7 @@ rules" cannot be expressed without recompiling both halves:
 | Where | What it is |
 |---|---|
 | [ReviewerRuntime.cs:9-22](../src_mcp/runners/Reviewers/ReviewerRuntime.cs#L9-L22) | `enum ReviewRole { PlanCritique, Conventions, Architecture, SecurityReliability, UxDxPerformance }` — a CLR enum; it cannot hold a name a person typed |
-| [PromptCatalog.cs:36-93](../src_mcp/core/Rounds/PromptCatalog.cs#L36-L93) | five `const string` role names and a static `ImmutableArray` of 26 `PromptChoice` rows |
+| [PromptCatalog.cs:36-93](../src_mcp/core/Rounds/PromptCatalog.cs#L36-L93) | five `const string` role names and a static `ImmutableArray` of 25 `PromptChoice` rows |
 | [SessionState.cs:87-93](../src_mcp/core/Rounds/SessionState.cs#L87-L93) | `PanelConfig.AllRoles` / `CodeRoleNames`, two `static readonly string[]`; [`RolesOf(stage)`](../src_mcp/core/Rounds/SessionState.cs#L150-L151) picks between them |
 | [prompts.ts:22-66](../src_vs_code/src/prompts.ts#L22-L66) | the panel's hand-typed mirror of both lists — `ROLES` and `PROMPTS` |
 | [ReviewEndpoints.cs:209-213](../src_server/src/Jobs/ReviewEndpoints.cs#L209-L213), [JobKind.cs:124-126](../src_server/src/Jobs/JobKind.cs#L124-L126), [ReviewLauncher.cs:209-210](../src_server/src/Jobs/ReviewLauncher.cs#L209-L210) | the Team server validates a role by `Enum.TryParse<ReviewRole>`, lists `Enum.GetNames<ReviewRole>()` in its refusal, and `RoleOf` parses the name back into the enum — **falling back to `default`, which is `PlanCritique`, for anything it does not know** |
@@ -75,7 +75,7 @@ either (that is plan 2); it re-keys them by prompt id so that plan 2 can.
 
 ## What must be true when this is done
 
-1. The five roles and their 26 prompts are loaded from **one file**, `shared/builtin-roles.json`, on
+1. The five roles and their 25 prompts are loaded from **one file**, `shared/builtin-roles.json`, on
    both halves — embedded into `CoaiMcp.Core`, generated into the extension — and each half's loader
    is tested against that file, not against the other half's source code.
 2. `ReviewRole` the enum no longer exists. A role is a `string` id from the adapter's `Build` to the
@@ -400,7 +400,7 @@ owns, held by both suites — and `architecture.md` gains a paragraph saying so.
 1. **RED tests first** (§ Test plan): `BuiltinRoleCatalogTests`, `RoleCatalogComposeTests`, the
    `RolePromptsTests` addition, the `PanelServiceTests` custom-role round, `builtinRoleCatalog.test.ts`.
    They fail to compile or fail on a missing file — watched, with the message recorded.
-2. `shared/builtin-roles.json` — the 26 rows transcribed from `PromptCatalog.cs:62-93` and
+2. `shared/builtin-roles.json` — the 25 rows transcribed from `PromptCatalog.cs:62-93` and
    `prompts.ts:33-66` (they are the same rows; the transcription is checked by both loaders).
 3. `src_mcp/core`: `RoleCatalog.cs` (record, catalog, `Compose`, the constants), `CoreJsonContext`
    gains the seed shape, `CoaiMcp.Core.csproj` embeds the file; `PromptCatalog.cs` deleted;
@@ -447,7 +447,7 @@ existing suites, unedited beyond renames.
 
 - `BuiltinRoleCatalogTests`
   - `TheEmbeddedSeed_IsTheFileInShared_FieldForField` — the vectors locator; deep equality.
-  - `TheCatalog_IsTodaysFiveRolesAndTwentySixPrompts_InTodaysOrder` — ids and order pinned; this
+  - `TheCatalog_IsTodaysFiveRolesAndTwentyFivePrompts_InTodaysOrder` — ids and order pinned; this
     is the characterization of what `PromptCatalog.All` was.
   - `EveryRole_HasItsGeneralPromptFirst_AndEveryPromptIdIsUnique`.
   - `EveryShippedPrompt_IsEmbeddedInTheBinary` — over the seed, replacing the fixed list

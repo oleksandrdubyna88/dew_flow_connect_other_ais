@@ -8,7 +8,13 @@ namespace CoaiMcp.Core.Rounds;
 /// True for the broad prompt of a role. Exactly one per role, and it is what a round uses when
 /// nobody has chosen otherwise: a narrow lens is a deliberate act, never a default.
 /// </param>
-public sealed record PromptChoice(string Id, string Role, string Label, string Purpose, bool Universal);
+/// <param name="BuiltIn">
+/// Shipped in the seed and embedded in the binary — so it has a default text to restore, and it
+/// cannot be deleted. A prompt a person added has neither. Trailing with a default so every
+/// construction site written before the catalog was data keeps compiling and keeps meaning what it
+/// meant.
+/// </param>
+public sealed record PromptChoice(string Id, string Role, string Label, string Purpose, bool Universal, bool BuiltIn = false);
 
 /// <summary>
 /// Which prompts exist, and which one a given round gets.
