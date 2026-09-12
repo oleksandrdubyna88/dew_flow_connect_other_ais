@@ -9,10 +9,10 @@ import {
   Found,
   MOST_PER_PROMPT,
   MOST_PROMPTS,
+  namesTheSame,
   oneAnswerFrom,
   pinnable,
   promptsFrom,
-  sessionFileAnywhere,
   sessionFileIn,
 } from '../claudeSessions';
 import { chatCommandOf } from '../chatMessages';
@@ -408,62 +408,102 @@ test('what may be PINNED is exactly what the button would answer', () => {
   assert.strictEqual(pinnable([]), false, 'a window with no folder open pinned a file');
 });
 
-test('a window with NO FOLDER open still finds its session, wherever Claude ran', async () => {
+test('a window with NO FOLDER open looks where Claude Code actually ran — the home directory', async () => {
   // Measured on the operator's machine, with the button open beside a live conversation it could not
   // see: the tab read "Подключение к scoreMeter DB" and `workspaceFolders` was undefined, so the
-  // search was scoped to a workspace that did not exist and reported there was nowhere to look.
-  // Claude Code does not need a folder — it runs with the home directory as its working folder.
+  // search was scoped to a workspace that did not exist. Claude Code does not need a folder — a VS
+  // Code terminal with none starts in the home directory, and the session is filed under it.
   const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
   try {
-    const dir = join(home, '.claude', 'projects', 'C--Users-strug');
+    // The project directory home itself would have: every separator becomes a dash.
+    const dir = join(home, '.claude', 'projects', home.replace(/[\\/:]/g, '-'));
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'one.jsonl'), `${titled('Подключение к scoreMeter DB')}\n${said('мой вопрос')}\n`, 'utf8');
-    // And another project entirely, which must not confuse it.
+    // And another project entirely — 77 of them on the machine this was found on, a gigabyte in all.
+    // Reading them to compare titles was the first attempt and was worse than the bug it fixed.
     const other = join(home, '.claude', 'projects', 'D--rsd-something');
     mkdirSync(other, { recursive: true });
     writeFileSync(join(other, 'two.jsonl'), `${titled('Something else')}\n${said('not yours')}\n`, 'utf8');
 
-    const found = await sessionFileAnywhere(home, 'Подключение к scoreMeter DB');
+    const found = await sessionFileIn(home, home, true, 'Подключение к scoreMeter DB');
 
     assert.strictEqual(found.kind, 'one', 'a window with no folder open could not find a session that exists');
     const read = await promptsFrom(found.kind === 'one' ? found.file : '');
     assert.deepStrictEqual(read.kind === 'said' ? read.said : [], ['мой вопрос']);
+
+    // And a name that is in ANOTHER project is not this window's, however real it is.
+    assert.strictEqual((await sessionFileIn(home, home, true, 'Something else')).kind, 'none');
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('searching everywhere still refuses two conversations that share a name', async () => {
-  // The title join does the work it was built for, wherever the sessions live: a wider search must
-  // not become a looser one.
+test('a refusal names the directory it looked in, so a window can tell where it went wrong', async () => {
   const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
   try {
-    for (const project of ['C--Users-strug', 'D--rsd-app']) {
-      const dir = join(home, '.claude', 'projects', project);
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, 'one.jsonl'), `${titled('Same name')}\n${said('one of two')}\n`, 'utf8');
-    }
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'one.jsonl'), `${titled('One conversation')}\n`, 'utf8');
 
-    const found = await sessionFileAnywhere(home, 'Same name');
+    const missed = await sessionFileIn(home, 'D:\\work\\app', true, 'Another');
 
-    assert.strictEqual(found.kind, 'several', 'a wider search picked between namesakes');
-    assert.match(found.kind === 'several' ? found.refusal : '', /on this machine/, 'the refusal says the wrong place');
+    assert.strictEqual(missed.kind, 'none');
+    assert.match(missed.kind === 'none' ? missed.refusal : '', /D--work-app/, 'the refusal does not say where it looked');
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('searching everywhere and finding nothing says so, naming what it looked for', async () => {
+test('a tab wearing a SHORTENED title still finds its session', () => {
+  // The defect the operator found on the shipped build, in the two strings that caused it: Claude
+  // Code truncates the title on its own panel and writes the whole thing to the session file. An
+  // exact comparison matched short conversations and never long ones — and said so, correctly and
+  // uselessly, with the ellipsis still in the refusal.
+  assert.strictEqual(namesTheSame('Подключение к scoreMeter DB', 'Подключение к scoreMeter...'), true);
+  assert.strictEqual(namesTheSame('Подключение к scoreMeter DB', 'Подключение к scoreMeter…'), true,
+    'the single-character ellipsis is the same truncation');
+
+  // A whole name is still matched whole. Nothing is loosened where nothing was truncated.
+  assert.strictEqual(namesTheSame('Пул с несколькими PR', 'Пул с несколькими PR'), true);
+  assert.strictEqual(namesTheSame('Пул с несколькими PR', 'Пул с несколькими'), false,
+    'a name that was not truncated became a prefix anyway');
+
+  // A prefix is a prefix, not a substring, and an ellipsis alone names everything — so it names nothing.
+  assert.strictEqual(namesTheSame('Подключение к scoreMeter DB', 'scoreMeter...'), false);
+  assert.strictEqual(namesTheSame('Anything at all', '...'), false, 'an ellipsis alone matched a session');
+  assert.strictEqual(namesTheSame('Anything at all', ''), false);
+});
+
+test('a shortened title that fits TWO sessions is still a refusal', async () => {
+  // What keeps the prefix from becoming a licence to guess: the ambiguity rule does not care why two
+  // names matched.
   const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
   try {
-    mkdirSync(join(home, '.claude', 'projects'), { recursive: true });
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'one.jsonl'), `${titled('Подключение к scoreMeter DB')}\n${said('the first')}\n`, 'utf8');
+    writeFileSync(join(dir, 'two.jsonl'), `${titled('Подключение к scoreMeter API')}\n${said('the second')}\n`, 'utf8');
 
-    const found = await sessionFileAnywhere(home, 'Никогда такого не было');
+    const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'Подключение к scoreMeter...');
 
-    assert.strictEqual(found.kind, 'none');
-    assert.match(found.kind === 'none' ? found.refusal : '', /Никогда такого не было/);
-    // And a tab with no name never looks at all.
-    assert.strictEqual((await sessionFileAnywhere(home, '')).kind, 'none');
+    assert.strictEqual(answer.kind, 'several', 'a shortened title picked between two conversations');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('the shortened title reaches the whole session, not just its name', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'D--work-app');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'one.jsonl'), `${titled('Подключение к scoreMeter DB')}\n${said('мой вопрос')}\n`, 'utf8');
+
+    const found = await sessionFileIn(home, 'D:\\work\\app', true, 'Подключение к scoreMeter...');
+    assert.strictEqual(found.kind, 'one');
+
+    const read = await promptsFrom(found.kind === 'one' ? found.file : '');
+    assert.deepStrictEqual(read.kind === 'said' ? read.said : [], ['мой вопрос']);
   } finally {
     rmSync(home, { recursive: true, force: true });
   }

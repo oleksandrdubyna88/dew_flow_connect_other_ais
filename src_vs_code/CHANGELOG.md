@@ -1,5 +1,26 @@
 # Changelog
 
+## Extension 0.36.2 — 2026-09-12
+
+**The line under what you asked is orange.** It was the editor's own border colour, which is the
+colour every other rule on the page is, so the boundary between your question and the answers below
+it read as one more division among many.
+
+## Extension 0.36.1 — 2026-09-12
+
+**Asked finds your session when VS Code has no folder open.** It said there was nowhere to look,
+which was true of the workspace and not of the machine: Claude Code does not need a folder, and with
+none it runs in your home directory. That is where this looks now.
+
+**And it finds a conversation with a long name.** Claude Code shortens the title it puts on its own
+tab — *Подключение к scoreMeter…* — and writes the whole of it to the session file. Comparing the two
+as written matched short conversations and never long ones. A shortened name is now read as the
+beginning of a name; two conversations that both start that way are refused, exactly as two with the
+same name always were.
+
+**The arrows are gone when there is nothing to step through**, instead of sitting there as two boxes
+that do nothing.
+
 ## Extension 0.36.0 — 2026-09-12
 
 **Two right-click items that say what they do.** There was one, **Chat with other AI**, and whether
