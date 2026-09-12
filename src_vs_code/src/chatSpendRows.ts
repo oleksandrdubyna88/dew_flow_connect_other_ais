@@ -119,7 +119,9 @@ export function chatSpendRows(
   const inWindow = within(turns, window, now);
   const doorsInWindow = within(doors, window, now);
   const byKey = new Map<string, { provider: string; model: string }>();
-  for (const record of [...inWindow, ...doorsInWindow, ...turns]) {
+  // Only what is IN the window can start a row - a pair with nothing here is dropped by the filter
+  // below whatever its history, so collecting keys from the whole ledger builds rows to throw away.
+  for (const record of [...inWindow, ...doorsInWindow]) {
     byKey.set(keyOf(record.provider, record.model), { provider: record.provider, model: record.model });
   }
 
