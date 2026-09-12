@@ -262,7 +262,7 @@ public sealed class ConsultationService(
     {
         var sentence = FilesystemSnapshot.Sentence(changes);
         log.Error("consultation {Id}: {Alert}", record.Id, sentence);
-        _store.Write(Ended(record, ConsultationStatuses.Failed, "the consultant's process changed the working tree") with
+        _store.Write(Ended(record, ConsultationStatuses.Failed, "the working tree changed while the consultant was running") with
         {
             Alert = sentence,
             Handle = HandleOf(consultant, launched, record.Handle),

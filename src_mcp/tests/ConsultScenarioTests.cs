@@ -315,7 +315,8 @@ public sealed class ConsultScenarioTests : IAsyncLifetime
             var refused = await Consult(Service(), "why is the count wrong");
 
             var sentence = Refusal(refused);
-            sentence.Should().Contain("changed the working tree").And.Contain("the-consultant-wrote-this.txt");
+            sentence.Should().Contain("the working tree changed").And.Contain("the-consultant-wrote-this.txt");
+            sentence.Should().Contain("cannot say who wrote", "two snapshots cannot name a writer, and the person's own editor is in the same window");
             sentence.Should().Contain("nothing was touched");
             sentence.Should().NotContain(Advice, "advice from a run that broke the invariant is not handed over");
             File.Exists(written).Should().BeTrue("nothing is deleted — that file may be the person's");

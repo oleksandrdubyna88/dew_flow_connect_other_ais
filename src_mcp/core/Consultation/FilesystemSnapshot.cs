@@ -50,9 +50,17 @@ public sealed record FilesystemSnapshot(ImmutableSortedDictionary<string, TreeEn
     }
 
     /// <summary>The alert, one sentence, every path with its verb.</summary>
+    /// <remarks>
+    /// It says the tree CHANGED, not that the consultant changed it. Two snapshots cannot name a
+    /// writer: the person's own editor, a build watcher or a git command of their own can move a file
+    /// in the same window, and the consultation is withheld either way because the advice was formed
+    /// against a tree that no longer holds. Claiming the consultant did it would send somebody hunting
+    /// a vendor for their own keystrokes. (The consultant's own second point, on this feature's live
+    /// check.)
+    /// </remarks>
     public static string Sentence(IReadOnlyList<TreeChange> changes)
     {
-        var text = new StringBuilder("the consultant's run changed the working tree, so its advice was withheld and nothing was touched: ");
+        var text = new StringBuilder("the working tree changed while the consultant was running, so its advice was withheld and nothing was touched (these snapshots cannot say who wrote): ");
         text.AppendJoin("; ", changes.Select(c => $"{c.Path} ({c.What})"));
         text.Append(". A deleted tracked file comes back with `git checkout -- <path>`; an added file is yours to inspect and remove.");
 
