@@ -69,6 +69,7 @@ public sealed class NothingReadsAnotherProgramsSourceTests
     private static readonly string[] Reads =
     [
         "File.ReadAllText", "File.ReadAllLines", "File.ReadAllBytes", "File.OpenRead", "File.OpenText",
+        "FileStream", "StreamReader",
         "readFileSync", "readFile", "createReadStream", "openSync",
     ];
 
@@ -174,11 +175,15 @@ public sealed class NothingReadsAnotherProgramsSourceTests
     }
 
     private static bool Names(string line, string program) =>
-        line.Contains($"\"{program}\"", StringComparison.Ordinal)
-        || line.Contains($"'{program}'", StringComparison.Ordinal)
-        || line.Contains($"`{program}`", StringComparison.Ordinal)
-        || line.Contains($"/{program}/", StringComparison.Ordinal)
-        || line.Contains($"\\{program}\\", StringComparison.Ordinal);
+        Quotes.Any(q => line.Contains($"{q}{program}{q}", StringComparison.Ordinal))
+        || Separators.Any(s => line.Contains($"{s}{program}{s}", StringComparison.Ordinal))
+        || Quotes.Any(q => Separators.Any(s => line.Contains($"{q}{program}{s}", StringComparison.Ordinal)));
+
+    /// <summary>The three ways these two languages open a string.</summary>
+    private static readonly char[] Quotes = ['"', '\'', '`'];
+
+    /// <summary>And the two ways either of them spells a path.</summary>
+    private static readonly char[] Separators = ['/', '\\'];
 
     /// <summary>Every test file of every program, with the program that owns it.</summary>
     private static IEnumerable<(string File, string Mine)> TestFiles()
@@ -209,6 +214,36 @@ public sealed class NothingReadsAnotherProgramsSourceTests
         return false;
     }
 
+    /// <summary>Every line of one file that opens another program's source without saying why.</summary>
+    /// <remarks>
+    /// The path is looked for in a WINDOW rather than on the opening line alone: a formatter that
+    /// breaks <c>readFileSync(join(root, 'src_mcp', …))</c> across lines would otherwise leave
+    /// neither half matching and the guard green. Three lines is what a call to <c>join</c> with
+    /// four segments wraps into. The MARKER is looked for further back, because a reason worth
+    /// reading is a paragraph above the call rather than a clause beside it.
+    /// </remarks>
+    private static IEnumerable<(string Line, int Number)> OffendingLines(string[] lines, string mine)
+    {
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var window = string.Join('\n', lines.Skip(i).Take(WindowLines));
+            var from = Math.Max(i - LookBackLines, 0);
+            if (Opens(lines[i]) && Foreign(window, mine)
+                && !IsDeliberate(string.Join('\n', lines.Skip(from).Take(i - from + WindowLines))))
+            {
+                yield return (lines[i], i + 1);
+            }
+        }
+    }
+
+    /// <summary>Whether this line opens a file at all.</summary>
+    private static bool Opens(string line) =>
+        !IsComment(line) && Reads.Any(r => line.Contains(r, StringComparison.Ordinal));
+
+    /// <summary>Whether this window names a program that is not the one whose test this is.</summary>
+    private static bool Foreign(string window, string mine) =>
+        Programs.Any(other => other != mine && Names(window, other));
+
     [Fact]
     public void NoTest_ReachesIntoAnotherProgramsSourceFiles()
     {
@@ -216,36 +251,8 @@ public sealed class NothingReadsAnotherProgramsSourceTests
         var offenders = new List<string>();
         foreach (var (file, mine) in TestFiles())
         {
-            var lines = File.ReadAllLines(file);
-            for (var i = 0; i < lines.Length; i++)
-            {
-                var line = lines[i];
-                if (IsComment(line) || !Reads.Any(r => line.Contains(r, StringComparison.Ordinal)))
-                {
-                    continue;
-                }
-
-                // The path is looked for in a WINDOW rather than on the opening line alone: a
-                // formatter that breaks `readFileSync(join(root, 'src_mcp', …))` across lines would
-                // otherwise leave neither half matching and the guard green. Three lines is what a
-                // call to `join` with four segments wraps into. (codex, C2's second code round.)
-                var window = string.Join('\n', lines.Skip(i).Take(WindowLines));
-                if (!Programs.Any(other => other != mine && Names(window, other)))
-                {
-                    continue;
-                }
-
-                // The marker may be on the read, or on the comment lines just above it, which is
-                // where a reason long enough to be worth reading actually fits.
-                var from = Math.Max(i - LookBackLines, 0);
-                var around = string.Join('\n', lines.Skip(from).Take(i - from + WindowLines));
-                if (IsDeliberate(around))
-                {
-                    continue;
-                }
-
-                offenders.Add($"{Path.GetRelativePath(root, file)}:{i + 1}: {line.Trim()}");
-            }
+            offenders.AddRange(OffendingLines(File.ReadAllLines(file), mine)
+                .Select(at => $"{Path.GetRelativePath(root, file)}:{at.Number}: {at.Line.Trim()}"));
         }
 
         offenders.Should().BeEmpty(

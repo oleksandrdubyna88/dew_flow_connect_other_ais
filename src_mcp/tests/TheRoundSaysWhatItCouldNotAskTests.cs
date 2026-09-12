@@ -214,6 +214,31 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
     }
 
     /// <summary>
+    /// A round emptied by role exclusions says so, instead of blaming the vendors.
+    /// </summary>
+    /// <remarks>
+    /// Every vendor a Team server and every scheduled role one a person defined: the vendors are
+    /// configured perfectly, every role has its text, and the round still has nobody in it. The
+    /// refusal carried the roles it could not ASK and not the roles a vendor could not TAKE, so the
+    /// person was sent to check a configuration with nothing wrong with it. (CodeRabbit, this plan's
+    /// pull request.)
+    /// </remarks>
+    [Fact]
+    public void ARoundEmptiedByAVendorThatCannotTakeTheRole_SaysWhichRole()
+    {
+        Prompt("req-general", "Whether the requirement is met.");
+        var service = Service(With("req-general"), withTeamServer: true);
+
+        var work = service.BuildWork(["Requirements"], Scratch(), "ctx", round: 1, isPlanStage: false);
+        work.Reviewers.Should().BeEmpty("the only vendor here cannot take this role");
+
+        var refusal = service.NoReviewerRefusal(Stage.CodeReview, work);
+
+        refusal.Should().Contain("Requirements", "the role is what a person is looking for")
+            .And.Contain("company-codex", "and the vendor that could not take it");
+    }
+
+    /// <summary>
     /// One role refused once, however many questions it was going to be asked.
     /// </summary>
     /// <remarks>

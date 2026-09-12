@@ -82,7 +82,7 @@ internal sealed record SeedPrompt(string Id, string Label, string Purpose);
 /// the role's general prompt — <see cref="ForRound"/> is the rule <c>PromptCatalog.ForRound</c> had,
 /// word for word, and the panel's <c>selectedFor</c> is still a claim about it.</para>
 /// </remarks>
-public sealed class RoleCatalog
+public sealed record RoleCatalog
 {
     public const string PlanRole = "PlanCritique";
 

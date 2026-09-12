@@ -365,52 +365,56 @@ public sealed record PanelSettings
             : Runners.Reviewers.RetryLadder.Default;
     }
 
-    private static IReadOnlyList<string> UnknownValues(Func<string, string?> env, RolesSetting roles)
-    {
-        var unknown = new List<string>();
-        if (env("COAI_RETRY_BACKOFF") is { Length: > 0 } backoff
-            && Runners.Reviewers.RetryLadder.Parse(backoff).Count == 0)
-        {
-            unknown.Add(
-                $"COAI_RETRY_BACKOFF is '{backoff}', which this server cannot read as a list of "
-                + "seconds — it is using the waits it would have used anyway. The form is "
-                + "'5,30,60,120', and one number means one retry at that interval.");
-        }
+    /// <summary>Every setting whose VALUE this build could not use, as one sentence each.</summary>
+    /// <remarks>
+    /// One clause per key, each its own method, so this one only assembles them: the family's C#
+    /// doctrine bounds a method at four decisions and four diagnostics was already past it.
+    /// (CodeRabbit, this plan's pull request.)
+    /// </remarks>
+    private static IReadOnlyList<string> UnknownValues(Func<string, string?> env, RolesSetting roles) =>
+        [.. new[] { WhyBackoff(env), WhyExhausted(env), WhyWorkspace(env), WhyRoles(roles) }.OfType<string>()];
 
-        if (env("COAI_ON_EXHAUSTED") is { Length: > 0 } policy
-            && PolicyOf(policy) == StagePolicy.Human
-            && !string.Equals(policy, "human", StringComparison.OrdinalIgnoreCase))
-        {
-            unknown.Add(
-                $"COAI_ON_EXHAUSTED is '{policy}', which this server does not know — it is asking a "
-                + "person instead. The panel is probably newer than this server: update it in the "
-                + "panel's Server section.");
-        }
+    private static string? WhyBackoff(Func<string, string?> env) =>
+        env("COAI_RETRY_BACKOFF") is { Length: > 0 } backoff
+        && Runners.Reviewers.RetryLadder.Parse(backoff).Count == 0
+            ? $"COAI_RETRY_BACKOFF is '{backoff}', which this server cannot read as a list of "
+              + "seconds — it is using the waits it would have used anyway. The form is "
+              + "'5,30,60,120', and one number means one retry at that interval."
+            : null;
 
-        if (env("COAI_CODE_WORKSPACE") is { Length: > 0 } workspace
-            && !string.Equals(workspace.Trim(), "none", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(workspace.Trim(), "worktree", StringComparison.OrdinalIgnoreCase))
-        {
-            unknown.Add(
-                $"COAI_CODE_WORKSPACE is '{workspace}', which this server does not know — code "
-                + "reviewers are getting the diff alone, as they do by default. The values are "
-                + "'none' and 'worktree'.");
-        }
+    private static string? WhyExhausted(Func<string, string?> env) =>
+        env("COAI_ON_EXHAUSTED") is { Length: > 0 } policy
+        && PolicyOf(policy) == StagePolicy.Human
+        && !string.Equals(policy, "human", StringComparison.OrdinalIgnoreCase)
+            ? $"COAI_ON_EXHAUSTED is '{policy}', which this server does not know — it is asking a "
+              + "person instead. The panel is probably newer than this server: update it in the "
+              + "panel's Server section."
+            : null;
 
-        // Threaded in rather than re-read, unlike the neighbours above: they parse a few characters
-        // twice and nothing can come of it, while this one decides which roles RUN — and one read
-        // for the catalog and another for the complaint could describe two different values of the
-        // setting. (codex, story B2's second code round.)
-        if (roles.CouldNotBeRead)
-        {
-            unknown.Add(
-                $"COAI_ROLES is not JSON this server can read — {roles.Unreadable} It is running the "
-                + "roles it shipped with, and nothing you added is in this round. The form is an "
-                + """array of rows: [{"id":"Requirements","name":"...","stage":"result","prompts":[…]}].""");
-        }
+    private static string? WhyWorkspace(Func<string, string?> env) =>
+        env("COAI_CODE_WORKSPACE") is { Length: > 0 } workspace && !AWorkspaceWeKnow(workspace)
+            ? $"COAI_CODE_WORKSPACE is '{workspace}', which this server does not know — code "
+              + "reviewers are getting the diff alone, as they do by default. The values are "
+              + "'none' and 'worktree'."
+            : null;
 
-        return unknown;
-    }
+    private static bool AWorkspaceWeKnow(string workspace) =>
+        string.Equals(workspace.Trim(), "none", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(workspace.Trim(), "worktree", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The whole <c>COAI_ROLES</c> value, when this build could not parse it at all.</summary>
+    /// <remarks>
+    /// Threaded in rather than re-read, unlike the neighbours above: they parse a few characters
+    /// twice and nothing can come of it, while this one decides which roles RUN — and one read for
+    /// the catalog and another for the complaint could describe two different values of the setting.
+    /// (codex, story B2's second code round.)
+    /// </remarks>
+    private static string? WhyRoles(RolesSetting roles) =>
+        roles.CouldNotBeRead
+            ? $"COAI_ROLES is not JSON this server can read — {roles.Unreadable} It is running the "
+              + "roles it shipped with, and nothing you added is in this round. The form is an "
+              + """array of rows: [{"id":"Requirements","name":"...","stage":"result","prompts":[…]}]."""
+            : null;
 
     /// <summary>
     /// <c>{"Architecture":["architecture","arch-boundaries"],...}</c> — the panel's per-round
@@ -637,28 +641,40 @@ public sealed record PanelSettings
         var gates = new Dictionary<string, RoleGate>();
         foreach (var definition in catalog.Roles)
         {
-            var role = definition.Id;
-            var isPlan = definition.Stage == RoleStages.Plan;
-            var stage = isPlan ? "PLAN" : "CODE";
-            var shipped = isPlan ? PanelConfig.PlanDefault : PanelConfig.CodeDefault;
-            var key = role.ToUpperInvariant();
-
-            var rounds = IntVar(env, $"COAI_ROUNDS_{key}",
-                IntVar(env, $"COAI_MAX_ROUNDS_{stage}",
-                    IntVar(env, "COAI_MAX_ROUNDS", shipped.MaxRounds)));
-            var threshold = CountVar(env, $"COAI_THRESHOLD_{key}",
-                CountVar(env, $"COAI_THRESHOLD_{stage}",
-                    CountVar(env, "COAI_GATE_THRESHOLD", shipped.Threshold)));
-            // The SHIPPED plan role carries no switch at all — code review only, by the operator's
-            // ruling — so the boundary refuses to disable it rather than trusting nobody sets the
-            // variable. A plan-stage role a person ADDED is theirs to switch: the ruling was about
-            // not turning the one shipped stage off by accident, and a stage with two roles in it
-            // has a second one to keep running.
-            var enabled = (isPlan && definition.BuiltIn) || NotSwitchedOff(env, $"COAI_ENABLED_{key}");
-            gates[role] = new RoleGate(rounds, threshold, enabled);
+            gates[definition.Id] = GateFor(env, definition);
         }
 
         return gates;
+    }
+
+    /// <summary>
+    /// One role's budget: its own keys, then its stage's, then the shipped default.
+    /// </summary>
+    /// <remarks>
+    /// <para>Split out of <see cref="RoleGates"/> so the loop and the three-deep fallback are
+    /// separate methods, each inside the complexity the family's C# doctrine allows. (CodeRabbit,
+    /// this plan's pull request.)</para>
+    /// <para>The SHIPPED plan role carries no switch at all — code review only, by the operator's
+    /// ruling — so the boundary refuses to disable it rather than trusting nobody sets the variable.
+    /// A plan-stage role a person ADDED is theirs to switch: the ruling was about not turning the one
+    /// shipped stage off by accident, and a stage with two roles in it has a second one to keep
+    /// running.</para>
+    /// </remarks>
+    private static RoleGate GateFor(Func<string, string?> env, RoleDefinition definition)
+    {
+        var isPlan = definition.Stage == RoleStages.Plan;
+        var stage = isPlan ? "PLAN" : "CODE";
+        var shipped = isPlan ? PanelConfig.PlanDefault : PanelConfig.CodeDefault;
+        var key = definition.Id.ToUpperInvariant();
+
+        return new RoleGate(
+            IntVar(env, $"COAI_ROUNDS_{key}",
+                IntVar(env, $"COAI_MAX_ROUNDS_{stage}",
+                    IntVar(env, "COAI_MAX_ROUNDS", shipped.MaxRounds))),
+            CountVar(env, $"COAI_THRESHOLD_{key}",
+                CountVar(env, $"COAI_THRESHOLD_{stage}",
+                    CountVar(env, "COAI_GATE_THRESHOLD", shipped.Threshold))),
+            (isPlan && definition.BuiltIn) || NotSwitchedOff(env, $"COAI_ENABLED_{key}"));
     }
 
     /// <summary>The round configuration: which roles exist, and what each may spend.</summary>

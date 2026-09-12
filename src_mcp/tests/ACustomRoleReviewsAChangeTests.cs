@@ -226,8 +226,12 @@ public sealed class ACustomRoleReviewsAChangeTests : IAsyncLifetime
         await service.ReviewPlanAsync(_repo, "feature", Scope);
 
         var round = Parse(await service.StatusAsync(_repo, "feature")).GetProperty("rounds")[0];
+        // Both, and each ONCE: a hand that gave one role two lenses and the other none would satisfy
+        // "contains Brief" while being the very defect this test is about. (CodeRabbit, this plan's
+        // pull request.)
         round.GetProperty("reviewerStates").EnumerateArray().Select(r => r.GetProperty("role").GetString())
-            .Should().Contain("Brief", "a hand dealt from one role's lenses is not a round of two roles");
+            .Should().BeEquivalentTo([RoleCatalog.PlanRole, "Brief"],
+                "a hand dealt from one role's lenses is not a round of two roles");
     }
 
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
