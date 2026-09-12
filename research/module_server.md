@@ -53,8 +53,20 @@ the scenario test first ran. The named residual: a file changed deep inside an i
 not seen, because git lists the directory as one entry and walking it would cost seconds per call.
 
 **One consultation per repository at a time** (`RepositoryLock`, a held `FileShare.None` handle, the
-`SessionTurn` shape), held from the first snapshot to the second: two consultations on one tree would
-each see the other's work as a breach. Thirty seconds of waiting, then a named refusal.
+`SessionTurn` shape), taken BEFORE the record is read and held to the second snapshot: two
+consultations on one tree would each see the other's work as a breach, and two follow-ups that both
+read an `open` record before either locked would let the second write its turn over the first one's
+answer. Nothing about a consultation is decided outside the lock. Thirty seconds of waiting, then a
+named refusal. The startup sweep asks for the same lock with a zero wait before closing an idle
+record, so it cannot end a consultation another server is in the middle of.
+
+**A consultation is bound to its repository, its vendor and its model.** A follow-up that names a
+different `repoPath` is refused by name — the id would otherwise launch that vendor thread in a
+checkout it had never seen while the record went on describing the first one's branch. And a resumed
+turn runs on the vendor, model and memory mode FROZEN on the record rather than on what the panel
+says now: the record claims they are frozen, and a settings change or a server upgrade between turns
+would otherwise hand one vendor's handle to another, or make an open conversation silently stop
+carrying its transcript.
 
 **A conversation, resumed through the vendor's own store.** The reply carries a `consultationId`; a
 follow-up passes it and the vendor resumes its own thread. The server holds no long-lived child —

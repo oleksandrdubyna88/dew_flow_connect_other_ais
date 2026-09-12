@@ -181,9 +181,16 @@ public sealed class ConsultationService(
             consultant.Row.Provider,
             consultant.Model,
             RuntimeResolution.NameOf(consultant.Row.Identity()),
-            consultant.Runtime.Memory is ConsultantMemory.VendorRemembers ? "vendorRemembers" : "weRemember",
+            consultant.Runtime.Memory is ConsultantMemory.VendorRemembers
+                ? ConsultationMemories.VendorRemembers
+                : ConsultationMemories.WeRemember,
             settings.ConsultTurns,
-            ConsultationStore.Stamp(now));
+            ConsultationStore.Stamp(now))
+        {
+            // Frozen with the rest: the budget the adapter declared when this conversation opened is
+            // what every turn of it carries, whatever a later build declares.
+            CarryBudget = consultant.Runtime.Memory is ConsultantMemory.WeRemember carried ? carried.CarryBudget : 0,
+        };
     }
 
     // ---------- the turn ----------
@@ -226,7 +233,10 @@ public sealed class ConsultationService(
     private async Task<string> PromptAsync(Consultant consultant, ConsultationRecord record, string problem, IReadOnlyList<string> files, string nonce, string repo, CancellationToken ct)
     {
         var resuming = record.Turns.Count > 0 || record.Status == ConsultationStatuses.Interrupted;
-        var remembers = consultant.Runtime.Memory is ConsultantMemory.VendorRemembers;
+        // The RECORD's frozen mode, not the runtime's current one. An upgrade that changed an
+        // adapter's memory mode would otherwise make an open consultation stop carrying its
+        // transcript — or start carrying one to a vendor that already holds it.
+        var remembers = !record.WeCarryTheConversation;
 
         return ConsultantPrompt.Compose(new ConsultantPromptInput(
             prompts.For(PromptId),
@@ -243,7 +253,7 @@ public sealed class ConsultationService(
             // this, the first forgetful vendor would answer every follow-up with no memory of the one
             // before, and nothing would say so.
             CarriedTranscript: resuming && !remembers
-                ? ConsultantPrompt.Transcript([.. record.Turns.Select(t => (t.Problem, t.Advice))])
+                ? ConsultantPrompt.Transcript([.. record.Turns.Select(t => (t.Problem, t.Advice))], record.CarryBudget)
                 : string.Empty,
             PreviousAnswerLost: record.Status == ConsultationStatuses.Interrupted));
     }

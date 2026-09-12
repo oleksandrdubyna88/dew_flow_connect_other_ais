@@ -69,6 +69,23 @@ public sealed partial class ConsultationStore(string dataDir, Action<string>? wa
         return changed;
     }
 
+    /// <summary>
+    /// Whether this repository is free for the sweep to decide anything about.
+    /// </summary>
+    /// <remarks>
+    /// The one decision the pid check does not already cover: another server can be holding the
+    /// repository lock, having READ an open record and be preparing its next turn, while this sweep
+    /// closes that record and clears its handle — after which the other server's write resurrects a
+    /// consultation the sweep had ended. A held lock means somebody is deciding about this repository
+    /// right now, and the sweep's decision can wait for the next startup. (codex, second code round.)
+    /// </remarks>
+    private bool NobodyIsWorkingIn(string repoPath)
+    {
+        using var held = RepositoryLock.TryTakeAsync(dataDir, repoPath, TimeSpan.Zero).GetAwaiter().GetResult();
+
+        return held is not null;
+    }
+
     private bool SweepOne(ConsultationRecord record, Func<int, bool> isAlive, DateTime nowUtc, TimeSpan idle, TimeSpan retention)
     {
         if (record.IsOver)
@@ -85,7 +102,7 @@ public sealed partial class ConsultationStore(string dataDir, Action<string>? wa
             return true;
         }
 
-        if (record.Status != ConsultationStatuses.Asking && IdleFor(record, nowUtc) > idle)
+        if (record.Status != ConsultationStatuses.Asking && IdleFor(record, nowUtc) > idle && NobodyIsWorkingIn(record.RepoPath))
         {
             Write(record with
             {

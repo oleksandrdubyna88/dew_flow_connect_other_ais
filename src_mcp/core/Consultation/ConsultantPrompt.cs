@@ -60,7 +60,8 @@ public static class ConsultantPrompt
 
     private const int PathBudget = 400;
 
-    private const int TranscriptBudget = 20 * 1024;
+    /// <summary>What a carry budget falls back to when a caller does not state one.</summary>
+    public const int DefaultCarryBudget = 20 * 1024;
 
     /// <summary>The caller's problem, trimmed to its budget with the cut SAID rather than silent.</summary>
     public static string BoundedProblem(string problem)
@@ -94,19 +95,23 @@ public static class ConsultantPrompt
     /// trimming SAID inside the text.
     /// </summary>
     /// <remarks>
-    /// Built from the record's own turns. Without it the <c>WeRemember</c> arm is a shape with no
+    /// <para>Built from the record's own turns. Without it the <c>WeRemember</c> arm is a shape with no
     /// behaviour behind it, and the first vendor to use it would silently answer every follow-up with
     /// no memory of the one before. (codex, code round — before any such vendor exists, which is the
-    /// only cheap moment to fix it.)
+    /// only cheap moment to fix it.)</para>
+    /// <para>The budget is the one the ADAPTER declared, not a constant here: <c>WeRemember</c> carries
+    /// a <c>CarryBudget</c>, and a private number that ignored it would be a second field with no
+    /// reader — the same defect one layer down. (codex and gemini, second code round.)</para>
     /// </remarks>
-    public static string Transcript(IReadOnlyList<(string Problem, string Advice)> turns)
+    public static string Transcript(IReadOnlyList<(string Problem, string Advice)> turns, int carryBudget = DefaultCarryBudget)
     {
+        var budget = carryBudget > 0 ? carryBudget : DefaultCarryBudget;
         var kept = new List<string>();
         var spent = 0;
         for (var i = turns.Count - 1; i >= 0; i--)
         {
             var block = $"The caller asked:\n  {Indent(turns[i].Problem)}\nYou answered:\n  {Indent(turns[i].Advice)}";
-            if (spent + block.Length > TranscriptBudget)
+            if (spent + block.Length > budget)
             {
                 kept.Insert(0, $"(the earlier {i + 1} turn(s) of this conversation are not carried — the budget was reached)");
                 break;
