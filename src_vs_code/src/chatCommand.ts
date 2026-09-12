@@ -61,6 +61,7 @@ import {
   chatInstruction,
   openingTurn,
   reinstructed,
+  reinstructedHead,
   serviceLines,
   stillOurs,
 } from './chatPrompt';
@@ -990,7 +991,13 @@ function writeInstruction(
   // knows what is really in it, so keeping everything after the instruction byte for byte is both
   // the safest thing to do with somebody's words and the only version of this that cannot drift out
   // of step with the conversation's memory of the passage.
-  const swapped = draft === undefined ? undefined : reinstructed(draft, was, now);
+  // AND THE SAME SWAP when the instruction in the box is not the one this side wrote, because
+  // somebody typed over it. That is ordinary — edit the role, press a preset, and the preset has to
+  // win — and it used to fall through to the rebuild below, which refused and left the box alone
+  // with a message about it. Cut at the service lines, everything below them kept byte for byte.
+  const swapped = draft === undefined
+    ? undefined
+    : reinstructed(draft, was, now) ?? reinstructedHead(draft, now, chatLanguage());
   if (swapped !== undefined) {
     thread.ourDraft = swapped;
     setChatDraft(entry, swapped);

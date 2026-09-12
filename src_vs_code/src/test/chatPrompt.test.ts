@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CARRY_BUDGET, DEFAULT_CHAT_PROMPT, REMOTE_CARRY_BUDGET, carriedTurn, openingTurn, chatInstruction, reinstructed, stillOurs } from '../chatPrompt';
+import { CARRY_BUDGET, DEFAULT_CHAT_PROMPT, REMOTE_CARRY_BUDGET, carriedTurn, openingTurn, chatInstruction, reinstructed, reinstructedHead, stillOurs } from '../chatPrompt';
 
 /**
  * What a captured passage actually travels in.
@@ -357,4 +357,51 @@ test('an instruction that is not at the front is not swapped at all', () => {
     'a swap was made in the middle of somebody\'s words');
   assert.strictEqual(reinstructed(box, '', 'C'), undefined, 'an empty instruction matched the front of everything');
   assert.strictEqual(reinstructed('', chatInstruction('A', 'b'), 'C'), undefined, 'an empty box was swapped');
+});
+
+test('a preset replaces an instruction somebody edited by hand', () => {
+  // THE OPERATOR'S OWN SEQUENCE. Type over the role in the box, press a preset: the preset has to
+  // win. The byte-for-byte swap above cannot see an instruction it did not write, so the press fell
+  // through to the rebuild, and the rebuild refused - the box came back untouched with a message
+  // saying it held something they had written.
+  const was = chatInstruction('You are an architect', 'explain');
+  const box = openingTurn(was, 'ru', 'the captured passage');
+  const edited = box.replace('You are an architect', 'You are an architect of distributed systems');
+
+  assert.strictEqual(reinstructed(edited, was, 'C'), undefined,
+    'the byte-for-byte swap matched an instruction it did not write, so this proves nothing');
+
+  const swapped = reinstructedHead(edited, chatInstruction('You are an architect', 'what would you answer?'), 'ru') ?? '';
+
+  assert.strictEqual(swapped.startsWith('You are an architect\n\nwhat would you answer?\n\n'), true,
+    'the preset did not replace the instruction somebody had edited');
+  assert.strictEqual(swapped.includes('Answer in Russian.'), true, 'the language line went with the instruction');
+  assert.strictEqual(swapped.endsWith('the captured passage'), true, 'the material below the fence did not survive');
+});
+
+test('what the person added under the fence survives the press, byte for byte', () => {
+  // The whole reason this is a cut rather than a rebuild: the box is the only place that knows what
+  // is really in it. A rebuild puts the conversation own passage back and drops the rest.
+  const box = openingTurn('ask', 'en', 'the captured passage') + '\n\nand one more thing I typed';
+  const swapped = reinstructedHead(box, 'explain instead', 'en') ?? '';
+
+  assert.strictEqual(swapped.endsWith('and one more thing I typed'), true, 'the sentence they added was thrown away');
+  assert.strictEqual(swapped.startsWith('explain instead\n\nAnswer in English.\n\n'), true,
+    'the head was not rebuilt the way an opening turn writes it');
+});
+
+test('a question typed from scratch is not cut into', () => {
+  // No note and no fence is no turn of ours, so there is no instruction at the front of it to find.
+  assert.strictEqual(reinstructedHead('what does this function do?', 'explain', 'en'), undefined,
+    'a question somebody typed was rewritten around an instruction they never asked for');
+});
+
+test('an instruction cut away leaves the language line where it belongs', () => {
+  // An empty instruction is a real state - no role, no prompt - and it must not leave the turn
+  // opening with a blank line in front of the language.
+  const box = openingTurn('ask', 'en', 'the captured passage');
+  const swapped = reinstructedHead(box, '   ', 'en') ?? '';
+
+  assert.strictEqual(swapped.startsWith('Answer in English.\n\n'), true,
+    'clearing the instruction left an empty paragraph in front of the turn');
 });
