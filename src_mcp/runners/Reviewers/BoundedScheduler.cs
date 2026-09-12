@@ -42,7 +42,7 @@ public sealed record ReviewerWork(
 /// </param>
 public sealed record ReviewerProgress(
     string Provider,
-    ReviewRole Role,
+    string Role,
     string Status,
     ReviewerOutcome? Outcome = null,
     TimeSpan Elapsed = default,

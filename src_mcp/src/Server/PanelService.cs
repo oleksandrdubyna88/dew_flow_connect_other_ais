@@ -130,22 +130,35 @@ public sealed partial class PanelService
     /// </summary>
     public PanelSettings Settings => _settings;
 
-    private static readonly ImmutableArray<ReviewRole> CodeRoles =
-        [ReviewRole.Conventions, ReviewRole.Architecture, ReviewRole.SecurityReliability, ReviewRole.UxDxPerformance];
-
     /// <summary>
     /// What a caller is told when every code-review role has been switched off.
     /// </summary>
     /// <remarks>
-    /// It names the four boxes rather than the setting alone, because the person reading it is
-    /// looking at a panel with four titled sections and not at a JSON key. The environment variable
-    /// is named too: a Team server or a hand-written `mcpServers` block is the other way this state
-    /// is reachable, and there is no checkbox to look at there.
+    /// <para>It names the boxes rather than the setting alone, because the person reading it is
+    /// looking at a panel with titled sections and not at a JSON key. The environment variable is
+    /// named too: a Team server or a hand-written `mcpServers` block is the other way this state is
+    /// reachable, and there is no checkbox to look at there.</para>
+    /// <para>The names come from the CATALOG since roles became data, so a person who added one of
+    /// their own is told to tick the box they can actually see. It was a sentence naming four
+    /// constants, which would have listed the shipped four at somebody whose panel showed five.</para>
     /// </remarks>
-    internal const string NoCodeRolesRefusal =
+    private string NoCodeRolesRefusal =>
         "Every code-review role is switched off, so this round would have no reviewers in it. "
-        + "Tick at least one of Conventions, Architecture, Security & reliability or Performance & UX-DX "
+        + $"Tick at least one of {Names(_settings.Rounds.Catalog.RolesOf(RoleStages.Result))} "
         + "in the panel — or clear the matching COAI_ENABLED_<ROLE> variable — and ask again.";
+
+    /// <summary>Role ids as a person reads them: their display names, in an English list.</summary>
+    private string Names(IReadOnlyList<string> roleIds)
+    {
+        var names = roleIds.Select(id => _settings.Rounds.Catalog.ById(id)?.Name ?? id).ToList();
+
+        return names.Count switch
+        {
+            0 => "a role",
+            1 => names[0],
+            _ => $"{string.Join(", ", names[..^1])} or {names[^1]}",
+        };
+    }
 
     // ---------- providers ----------
 
@@ -346,7 +359,7 @@ public sealed partial class PanelService
                 // A plan round skips no role: it has one, and there is nothing for a rule file to
                 // decide about it.
                 return Task.FromResult(new RoundWork(
-                    BuildWork([ReviewRole.PlanCritique], workingDir, $"## The plan under review\n\n{planText}",
+                    BuildWork([RoleCatalog.PlanRole], workingDir, $"## The plan under review\n\n{planText}",
                         session.State.RoundsRunThisStage + 1,
                         isPlanStage: true,
                         seed: StableSeed(session.State.SessionId, session.State.RoundsRunThisStage + 1),
@@ -473,7 +486,7 @@ public sealed partial class PanelService
                 var round = session.State.RoundsRunThisStage + 1;
                 var scheduled = _settings.Rounds
                     .RolesForRound(Stage.CodeReview, round)
-                    .Select(Enum.Parse<ReviewRole>)
+                    
                     .ToList();
 
                 var roles = RolesWithRulesInMind(scheduled, rules.HasRules);
@@ -509,7 +522,7 @@ public sealed partial class PanelService
     /// </remarks>
     private IReadOnlyList<string> UnspentPlanLenses(PersistedSession session)
     {
-        var all = PromptCatalog.For(PromptCatalog.PlanRole)
+        var all = _settings.Rounds.Catalog.For(RoleCatalog.PlanRole)
             .OrderByDescending(p => p.Universal)
             .Select(p => p.Id)
             .ToList();
@@ -926,11 +939,20 @@ public sealed partial class PanelService
     private string ModelOf(string provider) =>
         _settings.Providers.FirstOrDefault(p => p.Provider == provider)?.Model ?? string.Empty;
 
-    private PromptChoice ChoiceFor(ReviewRole role, int round) =>
-        PromptCatalog.ForRound(
-            role.ToString(),
+    /// <summary>
+    /// The prompt this round of this role gets — from the session's CATALOG, not from the compiled
+    /// list this product used to have.
+    /// </summary>
+    /// <remarks>
+    /// The rule is unchanged and deliberately so: the person's explicit choice for that round, else
+    /// the role's general prompt. What changed is where the roles come from, which is what lets a
+    /// role somebody defined be asked anything at all.
+    /// </remarks>
+    private PromptChoice ChoiceFor(string role, int round) =>
+        _settings.Rounds.Catalog.ForRound(
+            role,
             round,
-            _settings.PromptsPerRound.GetValueOrDefault(role.ToString(), []));
+            _settings.PromptsPerRound.GetValueOrDefault(role, []));
 
     /// <summary>
     /// A <c>call_human</c> verdict reaches the PERSON, not only the AI that asked.
@@ -990,7 +1012,7 @@ public sealed partial class PanelService
     /// </remarks>
     /// <remarks>Internal so a test can read the working directory a reviewer is actually given.</remarks>
     internal IReadOnlyList<ReviewerWork> BuildWork(
-        IReadOnlyList<ReviewRole> roles,
+        IReadOnlyList<string> roles,
         string worktreePath,
         string context,
         int round,
@@ -1078,9 +1100,10 @@ public sealed partial class PanelService
 
         return work;
 
-        void Add(ProviderSettings provider, ReviewRole role, string promptId)
+        void Add(ProviderSettings provider, string role, string promptId)
         {
-            var choice = PromptCatalog.ById(promptId) ?? PromptCatalog.UniversalFor(role.ToString());
+            var catalog = _settings.Rounds.Catalog;
+            var choice = catalog.PromptById(promptId) ?? catalog.UniversalFor(role);
             if (RuntimeFor(provider) is not { } runtime)
             {
                 return;
@@ -1130,8 +1153,8 @@ public sealed partial class PanelService
     /// for exceeding the doctrine's complexity ceiling. This half was always a value rather than a
     /// step, and reading it as one makes the method above shorter by a branch.
     /// </remarks>
-    private List<(ReviewRole Role, string PromptId)> Items(
-        IReadOnlyList<ReviewRole> roles,
+    private List<(string Role, string PromptId)> Items(
+        IReadOnlyList<string> roles,
         int round,
         IReadOnlyList<string>? planPrompts) =>
         planPrompts is { Count: > 0 }
@@ -1152,10 +1175,10 @@ public sealed partial class PanelService
     /// </remarks>
     private static void Assemble(
         IReadOnlyList<ProviderSettings> runnable,
-        IReadOnlyList<(ReviewRole Role, string PromptId)> items,
+        IReadOnlyList<(string Role, string PromptId)> items,
         bool deal,
         int seed,
-        Action<ProviderSettings, ReviewRole, string> add)
+        Action<ProviderSettings, string, string> add)
     {
         if (!deal)
         {
@@ -1173,7 +1196,7 @@ public sealed partial class PanelService
             seed))
         {
             var parts = hand.Item.Split('|', 2);
-            add(runnable.First(p => p.Provider == hand.Vendor), Enum.Parse<ReviewRole>(parts[0]), parts[1]);
+            add(runnable.First(p => p.Provider == hand.Vendor), parts[0], parts[1]);
         }
     }
 
@@ -1201,10 +1224,10 @@ public sealed partial class PanelService
     internal const string NoWrittenRules =
         "this repository has no written rules to judge against";
 
-    internal static IReadOnlyList<ReviewRole> RolesWithRulesInMind(
-        IReadOnlyList<ReviewRole> scheduled,
+    internal static IReadOnlyList<string> RolesWithRulesInMind(
+        IReadOnlyList<string> scheduled,
         bool hasRules) =>
-        hasRules ? scheduled : [.. scheduled.Where(r => r != ReviewRole.Conventions)];
+        hasRules ? scheduled : [.. scheduled.Where(r => r != RoleCatalog.ConventionsRole)];
 
     /// <summary>The roles this round will not ask for, each carrying ITS OWN reason.</summary>
     /// <remarks>
@@ -1217,14 +1240,14 @@ public sealed partial class PanelService
     /// actually ran cannot disagree — a list written out by hand could.</para>
     /// </remarks>
     internal static IReadOnlyList<SkippedRole> RolesNotAsked(
-        IReadOnlyList<ReviewRole> scheduled,
+        IReadOnlyList<string> scheduled,
         bool hasRules)
     {
         var kept = RolesWithRulesInMind(scheduled, hasRules);
 
         return [.. scheduled
             .Where(r => !kept.Contains(r))
-            .Select(r => new SkippedRole(r.ToString(), NoWrittenRules))];
+            .Select(r => new SkippedRole(r, NoWrittenRules))];
     }
 
     /// <summary>

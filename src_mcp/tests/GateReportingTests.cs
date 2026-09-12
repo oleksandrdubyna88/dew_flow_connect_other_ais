@@ -17,7 +17,7 @@ namespace CoaiMcp.Tests;
 public sealed class GateReportingTests
 {
     private static ReviewerInvocation Invocation(string provider = "codex") =>
-        new(provider, ReviewRole.PlanCritique, new ProcessRequest("codex", [], "."));
+        new(provider, RoleCatalog.PlanRole, new ProcessRequest("codex", [], "."));
 
     private static string Sentence(ReviewerOutcome outcome) =>
         ReviewerSummaryFactory.From([(Invocation(), outcome)]).Sentence;

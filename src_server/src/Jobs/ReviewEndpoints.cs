@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Reviewers;
 
 namespace CoaiServer;
@@ -122,7 +123,14 @@ public static class ReviewEndpoints
     {
         // Its shape was checked by `Refusal` before anything reached here, so this cannot fail.
         JobKinds.TryRead(request.Kind, out var kind);
-        var role = request.Role ?? string.Empty;
+
+        // The CATALOG's spelling, not the client's. `Enum.TryParse(ignoreCase: true)` used to
+        // canonicalise this on its way in, so a job sent as `architecture` was recorded, billed and
+        // answered as `Architecture`; keeping that is what stops one role becoming two rows in the
+        // usage view the day two clients spell it differently.
+        var role = RoleCatalog.Builtin.ById(request.Role ?? string.Empty)?.Id
+            ?? request.Role
+            ?? string.Empty;
 
         return new JobRecord(
             JobId.New(),
@@ -207,10 +215,10 @@ public static class ReviewEndpoints
         // Silently substituting a role means a reviewer runs with instructions nobody asked for and
         // the answer looks like an ordinary one. (Two reviewers, code round.)
         if (!string.IsNullOrWhiteSpace(request.Role)
-            && !Enum.TryParse<ReviewRole>(request.Role, ignoreCase: true, out _))
+            && RoleCatalog.Builtin.ById(request.Role) is null)
         {
             return $"'{request.Role}' is not a review role. Allowed: "
-                + string.Join(", ", Enum.GetNames<ReviewRole>());
+                + string.Join(", ", RoleCatalog.Builtin.Roles.Select(r => r.Id));
         }
 
         // What this job IS, checked against the role it carries. The whole table is in `JobKinds`,

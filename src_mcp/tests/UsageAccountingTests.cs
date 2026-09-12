@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
@@ -20,7 +21,7 @@ public sealed class UsageAccountingTests
     private static ProcessResult Out(string stdout) => new(0, stdout, string.Empty, false);
 
     private static ReviewerInvocation Invocation(IReviewerRuntime runtime, string outputFile = "") =>
-        new("v", ReviewRole.PlanCritique, new ProcessRequest("x", [], "."), outputFile, runtime);
+        new("v", RoleCatalog.PlanRole, new ProcessRequest("x", [], "."), outputFile, runtime);
 
     // Captured: `codex exec --json` after a multi-turn run (list files, read one, answer).
     private const string CodexStream = """

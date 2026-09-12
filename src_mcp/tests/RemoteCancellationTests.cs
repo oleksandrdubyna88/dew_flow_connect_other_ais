@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using System.Net;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Processes;
@@ -131,7 +132,7 @@ public sealed class RemoteCancellationTests : IDisposable
         // Every reviewer launch reaches the abandon hook, including the ones that never claimed
         // anything — a remote review refused before the server accepted it, for instance.
         var invocation = new ReviewerInvocation(
-            "codex", ReviewRole.Architecture, new ProcessRequest("x", [], "."),
+            "codex", RoleCatalog.ArchitectureRole, new ProcessRequest("x", [], "."),
             Adapter: new RemoteRuntime("codex", "https://s"));
 
         var abandon = async () => await invocation.Adapter!.AbandonAsync(invocation);
@@ -145,7 +146,7 @@ public sealed class RemoteCancellationTests : IDisposable
         // The shim prints its usage line on stdout; a shim that died before printing leaves whatever
         // it managed to write. The round must still get its answer.
         var invocation = new ReviewerInvocation(
-            "codex", ReviewRole.Architecture, new ProcessRequest("x", [], "."));
+            "codex", RoleCatalog.ArchitectureRole, new ProcessRequest("x", [], "."));
 
         var usage = new RemoteRuntime("codex", "https://s").ReadUsage(
             invocation, new ProcessResult(0, "not json at all", "", false));
@@ -158,7 +159,7 @@ public sealed class RemoteCancellationTests : IDisposable
     public void UsageIsReadOffTheShimsOwnLine()
     {
         var invocation = new ReviewerInvocation(
-            "codex", ReviewRole.Architecture, new ProcessRequest("x", [], "."));
+            "codex", RoleCatalog.ArchitectureRole, new ProcessRequest("x", [], "."));
 
         var usage = new RemoteRuntime("codex", "https://s").ReadUsage(
             invocation, new ProcessResult(0, RemoteAsk.UsageLine(31, 41), "", false));
@@ -172,7 +173,7 @@ public sealed class RemoteCancellationTests : IDisposable
     {
         // The default on the interface, which is what keeps every CLI adapter unchanged.
         var invocation = new ReviewerInvocation(
-            "codex", ReviewRole.Architecture, new ProcessRequest("x", [], "."), Adapter: new CodexRuntime());
+            "codex", RoleCatalog.ArchitectureRole, new ProcessRequest("x", [], "."), Adapter: new CodexRuntime());
 
         var abandon = async () => await invocation.Adapter!.AbandonAsync(invocation);
 
@@ -196,7 +197,7 @@ public sealed class ExecutorAbandonsRemoteWorkTests
         public string DefaultExecutable => "spy";
 
         public ReviewerInvocation Build(
-            ReviewRole role, string prompt, string worktree, string schema, string outputDir, ReviewerSettings settings) =>
+            string role, string prompt, string worktree, string schema, string outputDir, ReviewerSettings settings) =>
             throw new NotSupportedException();
 
         public Task AbandonAsync(ReviewerInvocation invocation, CancellationToken ct = default)
@@ -214,7 +215,7 @@ public sealed class ExecutorAbandonsRemoteWorkTests
     }
 
     private static ReviewerInvocation InvocationFor(SpyRuntime spy) =>
-        new("spy", ReviewRole.Architecture, new ProcessRequest("spy", [], "."),
+        new("spy", RoleCatalog.ArchitectureRole, new ProcessRequest("spy", [], "."),
             Adapter: spy, JobFile: "a.job");
 
     [Fact]
@@ -266,7 +267,7 @@ public sealed class ExecutorAbandonsRemoteWorkTests
         var executor = new ReviewerExecutor(
             new Launcher((_, _) => new ProcessResult(-1, "", "", TimedOut: true)));
         var invocation = new ReviewerInvocation(
-            "throwing", ReviewRole.Architecture, new ProcessRequest("x", [], "."),
+            "throwing", RoleCatalog.ArchitectureRole, new ProcessRequest("x", [], "."),
             Adapter: new ThrowingAdapter(), JobFile: "a.job");
 
         var launch = await executor.LaunchAsync(invocation, CancellationToken.None);
@@ -281,7 +282,7 @@ public sealed class ExecutorAbandonsRemoteWorkTests
         public string DefaultExecutable => "x";
 
         public ReviewerInvocation Build(
-            ReviewRole role, string prompt, string worktree, string schema, string outputDir, ReviewerSettings settings) =>
+            string role, string prompt, string worktree, string schema, string outputDir, ReviewerSettings settings) =>
             throw new NotSupportedException();
 
         public Task AbandonAsync(ReviewerInvocation invocation, CancellationToken ct = default) =>

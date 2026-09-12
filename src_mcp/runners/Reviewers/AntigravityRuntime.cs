@@ -34,7 +34,7 @@ public sealed class AntigravityRuntime(string id = "antigravity") : IReviewerRun
     public const string DefaultModel = "gemini-3.7-flash-high";
 
     public ReviewerInvocation Build(
-        ReviewRole role,
+        string role,
         string prompt,
         string worktreePath,
         string schemaFilePath,

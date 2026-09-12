@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Rounds;
 using Xunit;
 using CoaiMcp.Runners.Reviewers;
 using FluentAssertions;
@@ -13,13 +14,13 @@ public sealed class ReviewerRuntimeTests
     private const string OutDir = "D:/storage/out";
 
     private static ReviewerInvocation Codex(ReviewerSettings? s = null) =>
-        new CodexRuntime().Build(ReviewRole.Architecture, "review this", Worktree, Schema, OutDir, s ?? new("codex"));
+        new CodexRuntime().Build(RoleCatalog.ArchitectureRole, "review this", Worktree, Schema, OutDir, s ?? new("codex"));
 
     private static ReviewerInvocation Gemini(ReviewerSettings? s = null) =>
-        new GeminiRuntime().Build(ReviewRole.SecurityReliability, "review this", Worktree, Schema, OutDir, s ?? new("gemini"));
+        new GeminiRuntime().Build(RoleCatalog.SecurityRole, "review this", Worktree, Schema, OutDir, s ?? new("gemini"));
 
     private static ReviewerInvocation Deepseek(ReviewerSettings? s = null) =>
-        new DeepseekRuntime().Build(ReviewRole.UxDxPerformance, "review this", Worktree, Schema, OutDir, s ?? new("deepseek") { ApiKey = "sk-ds" });
+        new DeepseekRuntime().Build(RoleCatalog.UxDxRole, "review this", Worktree, Schema, OutDir, s ?? new("deepseek") { ApiKey = "sk-ds" });
 
     /// <summary>
     /// The rule that would have caught the real run's silent failure: a multi-line argument is
@@ -33,9 +34,9 @@ public sealed class ReviewerRuntimeTests
 
         foreach (var invocation in (ReviewerInvocation[])
                  [
-                     new CodexRuntime().Build(ReviewRole.Architecture, multiline, Worktree, Schema, OutDir, new("codex")),
-                     new GeminiRuntime().Build(ReviewRole.Architecture, multiline, Worktree, Schema, OutDir, new("gemini")),
-                     new DeepseekRuntime().Build(ReviewRole.Architecture, multiline, Worktree, Schema, OutDir, new("deepseek") { ApiKey = "k" }),
+                     new CodexRuntime().Build(RoleCatalog.ArchitectureRole, multiline, Worktree, Schema, OutDir, new("codex")),
+                     new GeminiRuntime().Build(RoleCatalog.ArchitectureRole, multiline, Worktree, Schema, OutDir, new("gemini")),
+                     new DeepseekRuntime().Build(RoleCatalog.ArchitectureRole, multiline, Worktree, Schema, OutDir, new("deepseek") { ApiKey = "k" }),
                  ])
         {
             invocation.Request.Arguments.Should().OnlyContain(a => !a.Contains('\n'),

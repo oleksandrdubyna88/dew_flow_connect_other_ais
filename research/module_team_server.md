@@ -562,6 +562,16 @@ catalog that could not be re-fetched is shown as STALE rather than as absent.
 - **An out-of-range `timeoutSeconds` and an unknown role are REFUSED naming the legal values**, not
   clamped or silently substituted. Somebody who asked for five seconds and got thirty draws the wrong
   conclusion from the result; a review that ran under a role nobody asked for looks like a normal one.
+  **The legal values come from the shared role catalog since 2026-09-12** (`RoleCatalog.Builtin`,
+  read from `shared/builtin-roles.json` through the core this server already references) rather than
+  from a C# enum, and the endpoint canonicalises the spelling it accepts — a job sent as
+  `architecture` is recorded, billed and answered as `Architecture`, which the old
+  `Enum.TryParse(ignoreCase: true)` did and which is what stops one role becoming two rows in the
+  usage view. It is still the SHIPPED five and nothing else: letting a company name roles of its own
+  is `Coai:ExtraRoles`/`Coai:AllowAnyRole`, a later plan. What went with the enum is
+  `ReviewLauncher.RoleOf`, whose `Enum.TryParse(...) ? parsed : default` turned any name it did not
+  know into `PlanCritique` — harmless only because the endpoint refused first, and now impossible
+  rather than guarded.
 - **`lost` requires the whole id shape**, epoch and GUID. `123-typo` has an old-looking prefix, and
   `lost` is the answer that tells an automated client to resubmit — reporting it for an id nobody
   ever issued is how a typo turns into duplicate vendor spend.

@@ -220,6 +220,16 @@ a gate over them would break a configuration whose whole point is not to stop; a
 
 ## Prompts are a catalog, resolved per round
 
+> **Since 2026-09-12 the catalog a ROUND reads is `_settings.Rounds.Catalog`** — the seed
+> (`shared/builtin-roles.json`, embedded in the core) composed with whatever roles the operator has
+> defined, per `module_core.md`. `ChoiceFor` asks it, `UnspentPlanLenses` asks it, and the
+> all-roles-off refusal names the roles it holds rather than four constants, so a person who added a
+> role of their own is told to tick the box they can actually see. `RolePrompts` is keyed by PROMPT
+> id rather than by role, because a role somebody defined has prompts this build never shipped and
+> the file it wants is named by the prompt — which is what `ForChoice` always did underneath. The
+> paragraphs below describe `PromptCatalog`, which still exists and is what the extension's mirror
+> is still held to; it is retired when that mirror is generated from the seed.
+
 `PromptCatalog` (in the core) holds twenty-five prompts — a universal one and five narrow lenses for
 each of the four lensed roles, plus the single prompt of `Conventions`, which since 2026-09-08 is a
 ROLE rather than a pass the code roles took turns hosting. The last twelve lenses
@@ -458,12 +468,13 @@ produces it, rather than inheriting one from a mapping somewhere else.
 any summary exists, so it would otherwise be refused with a sentence about vendors — sending somebody
 to check a configuration that is perfectly correct. Raised twice on the code round.
 
-**The role travels as a string, and that is the ring, not laziness.** Three reviewers asked for
-`ReviewRole` instead, quoting the rule against primitive obsession. `ReviewRole` lives in
-`CoaiMcp.Runners`; `ReviewerSummary` lives in `CoaiMcp.Core`, which references NOTHING — that purity
-is itself held by a test. `Failures` carries `provider/Role: reason` as a string for the same reason,
-and moving the enum across the ring to type one field would be a larger change than this one, in the
-opposite direction to the architecture. `StageRun.MakeWork` returns `RoundWork(Reviewers, NotAsked)` rather
+**The role travels as a string, and since 2026-09-12 there is nothing else for it to be.** Three
+reviewers once asked for `ReviewRole` here instead, quoting the rule against primitive obsession;
+the answer then was the ring — the enum lived in `CoaiMcp.Runners` and `ReviewerSummary` lives in
+the core, which references nothing. The answer now is that the enum is gone. It was a closed list of
+five names that every consumer immediately called `.ToString()` on, and a closed list is exactly what
+a person defining their own role has to open. `Failures` carries `provider/Role: reason` as it
+always did. `StageRun.MakeWork` returns `RoundWork(Reviewers, NotAsked)` rather
 than a bare list, because the decision is made where the roles are chosen and the sentence is written
 where the round ends, and nothing carried the fact across that gap before.
 
