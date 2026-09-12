@@ -85,6 +85,7 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.codeWorkspace': 'what a reviewer gets',
   'coai.credsKey': 'credsfordevs config key',
   'coai.promptsPerRound': 'one picker per round per role',
+  'coai.roles': 'the roles you add are your own',
   'coai.uiScale': 'text size',
   'coai.textTone': 'text tone',
   'coai.helpLanguage': 'language switch',

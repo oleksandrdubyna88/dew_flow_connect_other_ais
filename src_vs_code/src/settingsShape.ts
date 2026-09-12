@@ -11,6 +11,7 @@
  */
 
 import { DEFAULT_VENDORS, Vendor, vendorsEnv } from './vendors';
+import { rolesFrom, type RoleRow } from './roles';
 
 export type OnExhausted = 'continue' | 'escalate' | 'human' | 'good_enough';
 
@@ -117,6 +118,17 @@ export interface CoaiSettings {
    * that no run with one reached. See `RESULTS_findings_that_are_worth_something.md`.</p>
    */
   readonly codeWorkspace: string;
+
+  /**
+   * The review roles this person configured, as the rows `COAI_ROLES` carries.
+   *
+   * <p>Stored as the WIRE FORMAT rather than a panel-shaped model, so `envBlock` is a
+   * `JSON.stringify` and nothing translates between the two halves — the arrangement
+   * `PLAN_review_roles_become_data.md` spent eight stories arriving at. Empty is the normal state
+   * and emits no key at all: an installation that adds no role of its own runs the shipped five, in
+   * the shipped order, with the shipped budgets.</p>
+   */
+  readonly roles: readonly RoleRow[];
 }
 
 /** The defaults, matching the master plan's configuration table — pinned by tests. */
@@ -204,6 +216,7 @@ export const DEFAULTS: CoaiSettings = {
   splitPlan: false,
   splitWithFable: false,
   codeWorkspace: 'none',
+  roles: [],
 };
 
 /** A raw configuration reader: `get(section)` returns whatever the host stored, if anything. */
@@ -223,6 +236,11 @@ export const OVERLAID_SETTINGS: readonly string[] = [
   'vendors', 'rounds', 'thresholds', 'roleEnabled', 'onExhausted', 'maxConcurrency', 'maxPerProvider',
   'reviewerTimeoutMinutes', 'roundTimeoutMinutes', 'credsKey', 'escalationMinutes', 'promptsPerRound',
   'dealPlanLenses', 'dealCodeLenses', 'autonomous', 'splitPlan', 'splitWithFable', 'codeWorkspace',
+  // A person's own review roles belong to the WORK, which is what a side is — beside `rounds`,
+  // `thresholds` and `roleEnabled`, which ask the same question about the roles this product ships.
+  // The prompt BODIES do NOT: they live in one data directory, because a body is the text of a
+  // question rather than a configuration, and two sides asking one question is right.
+  'roles',
 ];
 
 /**
@@ -282,6 +300,7 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     splitPlan: read('splitPlan') === true,
     splitWithFable: read('splitWithFable') === true,
     codeWorkspace: read('codeWorkspace') === 'worktree' ? 'worktree' : 'none',
+    roles: rolesFrom(read('roles')),
   };
 }
 
@@ -296,6 +315,12 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
   }
   if (Object.keys(settings.promptsPerRound).length > 0) {
     env['COAI_PROMPTS_PER_ROUND'] = JSON.stringify(settings.promptsPerRound);
+  }
+  // The rows go out exactly as they are stored: this setting IS the wire format, so there is no
+  // shape to translate and no second schema to keep level. Empty emits nothing, which is what makes
+  // a server older than 0.19.0 a non-event for everybody who has added no role of their own.
+  if (settings.roles.length > 0) {
+    env['COAI_ROLES'] = JSON.stringify(settings.roles);
   }
   // A key per role, and only where it differs: the panel writes what is not the default so that
   // returning a control to its default REMOVES the key rather than pinning the old value.

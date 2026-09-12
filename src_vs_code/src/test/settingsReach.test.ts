@@ -30,6 +30,8 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   autonomous: true,
   splitPlan: true,
   splitWithFable: true,
+  roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
+            prompts: [{ id: 'requirements-general', label: 'General' }] }],
 };
 
 test('every setting, changed on its own, reaches the server file', () => {
