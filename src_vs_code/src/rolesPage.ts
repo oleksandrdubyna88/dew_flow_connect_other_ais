@@ -167,6 +167,22 @@ export function canActivate(rows: readonly RoleRow[], role: RoleRow): boolean {
   return isActive(role) || activeCount(rows, stageOf(role)) < MAX_ACTIVE_PER_STAGE;
 }
 
+/**
+ * Whether this role's switch may be turned OFF.
+ *
+ * <p>The last one standing in a stage cannot be: a stage with no role in it produces a round with
+ * no reviewer, which the session counts as unresolved and never lets a person retry. The server
+ * refuses such a round with a sentence — `review_plan` and `review_code` both do — and refusing it
+ * HERE, where the pointer is, beats refusing it at round time, after somebody has waited for a
+ * review that was never going to happen.</p>
+ *
+ * <p>It is the rule the sidebar's code-role ticks have had since they shipped, applied to the plan
+ * stage as well, which is what the operator asked for when they asked for plan-stage switches.</p>
+ */
+export function canDeactivate(rows: readonly RoleRow[], role: RoleRow): boolean {
+  return !isActive(role) || activeCount(rows, stageOf(role)) > 1;
+}
+
 function promptBlock(role: RoleRow, prompt: { id: string; label?: string; purpose?: string }, texts: Readonly<Record<string, string>>): string {
   const shipped = isShippedPrompt(role.id, prompt.id);
   const text = texts[prompt.id] ?? '';
@@ -186,7 +202,8 @@ function promptBlock(role: RoleRow, prompt: { id: string; label?: string; purpos
 function roleBlock(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Record<string, string>>): string {
   const shipped = isBuiltIn(role.id);
   const on = isActive(role);
-  const may = canActivate(rows, role);
+  const may = isActive(role) ? canDeactivate(rows, role) : canActivate(rows, role);
+  const last = isActive(role) && !canDeactivate(rows, role);
   const stage = stageOf(role);
   const prompts = (role.prompts ?? []).map((p) => promptBlock(role, p, texts)).join('\n');
 
@@ -208,7 +225,9 @@ function roleBlock(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Reco
     </label>
     <label class="flag"><input type="checkbox" data-field="programmingTask"${role.programmingTask ?? true ? ' checked' : ''}> A programming task</label>
     <label class="flag"><input type="checkbox" data-field="active"${on ? ' checked' : ''}${may ? '' : ' disabled'}> Active</label>
-    ${may ? '' : `<p class="hint">Five roles are already active in this stage. Switch one off to make room.</p>`}
+    ${may ? '' : last
+      ? '<p class="hint">The only role still active in this stage — switch another one on before turning this one off, or the stage would have no reviewer in it at all.</p>'
+      : `<p class="hint">Five roles are already active in this stage. Switch one off to make room.</p>`}
     ${(role.programmingTask ?? true) ? '' : '<p class="hint">A role that is not a programming task is kept and takes part in no round yet — the stage that reviews a document rather than a diff is still being built.</p>'}
     ${shipped ? '<p class="hint">A role this product ships. Its name and its id are fixed, because they key your settings, your open sessions and every round already recorded — the prompt text below is yours to rewrite.</p>' : ''}
   </div>

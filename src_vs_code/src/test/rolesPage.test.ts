@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { BUILTIN_ROLES } from '../builtinRoles.generated';
 import { escapeHtml } from '../webviewHtml';
 import { PLAN_STAGE, RESULT_STAGE, type RoleRow } from '../roles';
-import { CUSTOM_ROLES_SINCE, canActivate, isShippedPrompt, roleEdit, rolesHtml, tooOldFor, type RolesPageState } from '../rolesPage';
+import { CUSTOM_ROLES_SINCE, canActivate, canDeactivate, isShippedPrompt, roleEdit, rolesHtml, tooOldFor, type RolesPageState } from '../rolesPage';
 
 /**
  * The roles page: what it draws, and what it refuses to offer.
@@ -102,6 +102,32 @@ test('a sixth active role in a stage cannot be ticked, and the page says why', (
   assert.match(block(html, 'Two'), /data-field="active" disabled/);
   assert.ok(block(html, 'Two').includes('Five roles are already active'));
   assert.doesNotMatch(block(html, 'One'), /data-field="active"[^>]* disabled/, 'one already on stays on');
+});
+
+test('the last active role in a stage cannot be switched off, and the page says why', () => {
+  // A stage with nothing in it produces a round with no reviewer, which the session counts as
+  // unresolved and never lets a person retry. The server refuses such a round with a sentence;
+  // refusing it here, where the pointer is, beats refusing it after somebody has waited.
+  const off = { active: false };
+  const rows: RoleRow[] = [
+    { id: 'Conventions', ...off },
+    { id: 'SecurityReliability', ...off },
+    { id: 'UxDxPerformance', ...off },
+  ];
+  const html = rolesHtml(state({ rows }), 'n0nce');
+
+  assert.match(block(html, 'Architecture'), /data-field="active"[^>]* disabled/, 'the only one left');
+  assert.ok(block(html, 'Architecture').includes('The only role still active in this stage'));
+  assert.strictEqual(canDeactivate(rows, { id: 'Architecture' }), false);
+});
+
+test('the plan stage has the same rule, which is what it never had before', () => {
+  // The sidebar draws no switch on a plan role at all, so this page is where a plan role is
+  // switched off — and where the last one is refused.
+  assert.strictEqual(canDeactivate([], { id: 'PlanCritique' }), false, 'the only shipped plan role');
+
+  const withMine: RoleRow[] = [{ id: 'Brief', stage: PLAN_STAGE, prompts: [{ id: 'brief-general' }] }];
+  assert.strictEqual(canDeactivate(withMine, { id: 'PlanCritique' }), true, 'once a second one exists');
 });
 
 test('a role already active is never refused its own switch', () => {

@@ -976,3 +976,59 @@ test('an older server that would run the role anyway is called out', () => {
   assert.ok(!nothingOff.includes('does not know a role can be switched off'),
     'and neither is one where nothing is switched off — there is nothing to get wrong');
 });
+
+/**
+ * The Prompts section draws the catalog a ROUND will run, not the five this product ships.
+ *
+ * <p>Added with the roles page: until a person could write `coai.roles`, those were the same list.
+ * Now a role they added has to appear here too, with its own rounds, threshold and pickers — a page
+ * that lets somebody create a role and a section that never draws it is two features that disagree.</p>
+ */
+function promptsSection(html: string): string {
+  const from = html.indexOf('data-section="prompts"');
+  const to = html.indexOf('data-section="gate"');
+  assert.ok(from > 0 && to > from, 'the Prompts section is bounded by the one after it');
+
+  return html.slice(from, to);
+}
+
+test('a role a person added is drawn in Prompts per round, under their own name', () => {
+  const settings = {
+    ...DEFAULTS,
+    roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
+              prompts: [{ id: 'requirements-general', label: 'General', purpose: 'Whether it is met.' }] }],
+  };
+  const prompts = promptsSection(panelHtml(state({ settings }), 'n0nce'));
+
+  assert.ok(prompts.includes('Requirements we wrote'), 'the name they gave it');
+  assert.ok(prompts.includes('data-role="Requirements"'), 'with its own rounds and threshold');
+  assert.ok(prompts.includes('data-prompt="Requirements"'), 'and its own prompt picker');
+});
+
+test('a role switched off in the catalog is drawn as off, whatever the section’s own tick says', () => {
+  // Two switches reach the same role: this section's `roleEnabled` tick and the catalog's `active`,
+  // which the roles page writes. The server reads BOTH, so a box that showed a role as on because
+  // only the other switch was off would be a box that disagrees with the round.
+  const settings = { ...DEFAULTS, roles: [{ id: 'Architecture', active: false }] };
+  const prompts = promptsSection(panelHtml(state({ settings }), 'n0nce'));
+  const at = prompts.indexOf('data-role="Architecture"');
+  const box = prompts.slice(Math.max(prompts.lastIndexOf('<div class="role', at), 0), at);
+
+  assert.match(box, /class="role role-[a-z]+ off/, 'dimmed');
+});
+
+test('a role that is not a programming task is not drawn among the roles that review a diff', () => {
+  // It is stored, and it takes part in no round until the stage that reviews a document exists.
+  // Drawing it here with rounds and a threshold would offer settings that do nothing.
+  const settings = {
+    ...DEFAULTS,
+    roles: [{ id: 'Brief', name: 'The brief', stage: 'result', programmingTask: false,
+              prompts: [{ id: 'brief-general' }] }],
+  };
+
+  assert.ok(!promptsSection(panelHtml(state({ settings }), 'n0nce')).includes('The brief'));
+});
+
+test('the Prompts section offers the way into the roles page', () => {
+  assert.ok(promptsSection(panelHtml(state(), 'n0nce')).includes('data-command="editRoles"'));
+});
