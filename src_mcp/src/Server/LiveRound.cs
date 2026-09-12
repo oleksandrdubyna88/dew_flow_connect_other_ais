@@ -31,10 +31,10 @@ public sealed class LiveRound
         _store = store;
         _session = session;
         _states = work.ToDictionary(
-            w => Key(w.Invocation.Provider, w.Invocation.Role.ToString()),
+            w => Key(w.Invocation.Provider, w.Invocation.Role),
             w => new ReviewerState(
                 w.Invocation.Provider,
-                w.Invocation.Role.ToString(),
+                w.Invocation.Role,
                 ReviewerState.Queued,
                 // The invocation has carried this since the adapters were written; the round simply
                 // never wrote it down, so the log could say WHO reviewed but not WITH WHAT.
@@ -60,9 +60,9 @@ public sealed class LiveRound
     {
         lock (_gate)
         {
-            var key = Key(progress.Provider, progress.Role.ToString());
+            var key = Key(progress.Provider, progress.Role);
             var previous = _states.GetValueOrDefault(key)
-                           ?? new ReviewerState(progress.Provider, progress.Role.ToString(), progress.Status);
+                           ?? new ReviewerState(progress.Provider, progress.Role, progress.Status);
             _states[key] = previous with
             {
                 Status = progress.Status,

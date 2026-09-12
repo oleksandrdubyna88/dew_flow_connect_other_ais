@@ -61,7 +61,7 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
             // able to paste the exact command into a terminal and watch it fail the same way.
             _log.Debug(
                 "reviewer {Provider}/{Role} argv: {Executable} {Arguments} (prompt {PromptBytes} bytes on stdin)",
-                w.Invocation.Provider, w.Invocation.Role.ToString(),
+                w.Invocation.Provider, w.Invocation.Role,
                 w.Invocation.Request.Executable,
                 string.Join(' ', w.Invocation.Request.Arguments),
                 w.Invocation.Request.StdIn.Length);
@@ -74,13 +74,13 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
         switch (progress.Status)
         {
             case ReviewerState.Running:
-                _log.Information("reviewer {Provider}/{Role} started", progress.Provider, progress.Role.ToString());
+                _log.Information("reviewer {Provider}/{Role} started", progress.Provider, progress.Role);
                 break;
 
             case ReviewerState.Done when progress.Outcome is ReviewerOutcome.Ok ok:
                 _log.Information(
                     "reviewer {Provider}/{Role} answered in {Seconds:0.0}s: {Findings} finding(s), {TokensIn} in / {TokensOut} out tokens{Cost}{Repaired}{Evidence}",
-                    progress.Provider, progress.Role.ToString(), progress.Elapsed.TotalSeconds,
+                    progress.Provider, progress.Role, progress.Elapsed.TotalSeconds,
                     ok.Review.Findings.Count(), ok.Usage.TokensIn, ok.Usage.TokensOut,
                     ok.Usage.CostUsd is { } usd ? $", ${usd:0.0000}" : string.Empty,
                     ok.Repaired ? " (after one repair)" : string.Empty,
@@ -96,7 +96,7 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
                 // is a warning even though the round survives it.
                 _log.Warning(
                     "reviewer {Provider}/{Role} FAILED after {Seconds:0.0}s: {Reason}",
-                    progress.Provider, progress.Role.ToString(), progress.Elapsed.TotalSeconds,
+                    progress.Provider, progress.Role, progress.Elapsed.TotalSeconds,
                     ReviewerSummaryFactory.Describe(outcome));
                 break;
         }

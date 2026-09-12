@@ -109,7 +109,7 @@ public sealed class UsageLedger(string dataDir)
             DateTime.UtcNow.ToString("O"),
             invocation.Provider,
             model,
-            invocation.Role.ToString(),
+            invocation.Role,
             stage,
             Math.Round(elapsed.TotalSeconds, 1),
             usage.TokensIn,

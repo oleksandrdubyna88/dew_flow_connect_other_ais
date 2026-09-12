@@ -189,6 +189,56 @@ public sealed class ReviewEndpointTests
             .Should().Contain("carries no review role");
     }
 
+    /// <summary>
+    /// A role spelled in another case is the same role, and it is RECORDED in the catalog's spelling.
+    /// </summary>
+    /// <remarks>
+    /// <c>Enum.TryParse(role, ignoreCase: true)</c> did both jobs — accepting the spelling and
+    /// canonicalising it — until the enum was retired. Losing either half is invisible until it is
+    /// expensive: a refusal would stop every client that lower-cases its roles, and a passed-through
+    /// spelling would make one role two rows in the usage view the day two clients disagree.
+    /// (codex, on the plan round of the story that removed the enum.)
+    /// </remarks>
+    [Theory]
+    [InlineData("architecture", "Architecture")]
+    [InlineData("cOnVeNtIoNs", "Conventions")]
+    [InlineData("SECURITYRELIABILITY", "SecurityReliability")]
+    public async Task AShippedRoleInAnyCase_IsAccepted_AndRecordedInTheCatalogsSpelling(
+        string sent, string recorded)
+    {
+        using var server = WithVendors();
+
+        var response = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .PostAsJsonAsync("/api/reviews", Request() with { Role = sent });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Accepted);
+
+        // The recorded spelling is asserted at the function rather than over the wire: the role a
+        // job carries reaches no response a client can read back, only the ledger a finished run
+        // writes — and running one here would mean running a vendor.
+        ReviewEndpoints.CanonicalRole(sent).Should().Be(recorded);
+    }
+
+    [Fact]
+    public void ARoleTheCatalogDoesNotKnow_KeepsTheSpellingItArrivedWith() =>
+        // So the refusal can quote it back. Canonicalising is not the same as validating, and the
+        // check that refuses an unknown role runs before this ever sees one.
+        ReviewEndpoints.CanonicalRole("Requirements").Should().Be("Requirements");
+
+    [Fact]
+    public async Task ARoleThisServerDoesNotKnow_IsRefusedNamingTheOnesItDoes()
+    {
+        using var server = WithVendors();
+
+        var response = await server.ClientFor($"dev@{TeamServer.Domain}")
+            .PostAsJsonAsync("/api/reviews", Request() with { Role = "Requirements" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadFromJsonAsync<ErrorDto>())!.Error
+            .Should().Contain("Requirements").And.Contain("Architecture",
+                "the refusal names the legal values, and they come from the shared catalog now");
+    }
+
     [Fact]
     public async Task AClientThatSendsNoKindIsStillAcceptedWithNoRole()
     {
