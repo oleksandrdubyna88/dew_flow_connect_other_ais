@@ -2,7 +2,7 @@
 
 > Status: **IMPLEMENTED, 2026-09-12.** The line reads
 > `All vendors: 4.4k tokens · — · 2.0 min summed across 2 vendors · 30 s average per run · codex
-> longest at 1.5 min`. One new function, `timeSpent`; `usage.ts` was not touched at all — the
+> longest at 1.5 min`. One new function, `summedTimeSpent`; `usage.ts` was not touched at all — the
 > accumulator already had everything except a `runs` sum.
 >
 > **Deviations, all from the plan round.** The longest clause is computed CONDITIONALLY rather than
