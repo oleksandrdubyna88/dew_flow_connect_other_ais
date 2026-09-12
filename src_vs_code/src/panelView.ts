@@ -736,20 +736,26 @@ ${local ? remoteNotice(vendor.baseUrl) : ''}
   // missing Linux binary, and until this field existed nothing could point at the native one.
 }
 
-function runtimeFields(
-  vendor: Vendor,
-  id: string,
-  local: boolean,
-  remote: boolean,
-  price: ModelPrice | undefined,
-  plan: string,
-  code: string,
-): string {
+function runtimeFields(vendor: Vendor, id: string, remote: boolean): string {
   return remote ? '' : `
   <div class="field">
     <input type="text" data-setting="executablePath" data-vendor="${id}" title="${escapeHtml(HELP.vendorExecutablePath)}"
            placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(vendor.executablePath)}">
-  </div>
+  </div>`;
+}
+
+/**
+ * The two price rows, each carrying the stage box it pays for.
+ *
+ * <p>Separate from `runtimeFields` for one reason, raised on this change's own code round: the card
+ * decides where the stage boxes go by asking whether there are PRICE rows to put them on, and while
+ * the two were one function that question could only be asked as "did anything come back". A runtime
+ * with a CLI path and no per-token price — a flat-rate local engine, a subscription CLI — would have
+ * answered yes and silently lost both stage controls. Now the question and the answer are the same
+ * thing.</p>
+ */
+function priceFields(vendor: Vendor, id: string, local: boolean, remote: boolean, price: ModelPrice | undefined, plan: string, code: string): string {
+  return remote ? '' : `
   <div class="field priced">
     ${labelled(`price-in-${id}`, '$ / 1M in', 'vendorPrice')}
     <input type="number" id="price-in-${id}" min="0" step="0.01" data-setting="pricePerMillionIn" data-vendor="${id}"
@@ -780,15 +786,14 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
   // master switch is a different kind of decision from the two stages.
   const plan = stageBox('plan', id, vendor.plan, vendor.enabled, 'reviews plans', help('vendorStages'));
   const code = stageBox('code', id, vendor.code, vendor.enabled, 'reviews code');
-  const executable = runtimeFields(vendor, id, local, remote, price, plan, code);
-  // Keyed off whether the price rows came back EMPTY rather than off `remote`, so the condition in
-  // the code is the condition that matters: a card with nothing to hang the boxes on keeps the row.
-  // A Team server's CLI runs on the server and its price is the company's subscription, so it has no
-  // price fields here — and moving the boxes unconditionally would have left every remote reviewer
-  // with no way to say which stages it serves.
-  const stages = executable.length > 0
-    ? ''
-    : `<div class="field stages${vendor.enabled ? '' : ' off'}">${plan}${code}</div>`;
+  const executable = runtimeFields(vendor, id, remote);
+  const prices = priceFields(vendor, id, local, remote, price, plan, code);
+  // Keyed off whether the PRICE rows came back empty — not off `remote`, and not off whether any
+  // runtime field was rendered. A card with nothing to hang the boxes on keeps the row: a Team
+  // server's CLI runs on the server and its price is the company's subscription, so it has no price
+  // fields here, and moving the boxes unconditionally would have left every remote reviewer with no
+  // way to say which stages it serves. The row is layout only — each box carries its own dimming.
+  const stages = prices.length > 0 ? '' : `<div class="field stages">${plan}${code}</div>`;
 
   return `<div class="vendor" style="border-left-color:${colour}">
   <div class="head">
@@ -814,7 +819,7 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
     </select>
     <div class="hint">${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(vendor.runtime, codexModels, localEngine, agyModels, allowedRemote))}</div>
   </div>
-  ${stages}${endpoint}${executable}
+  ${stages}${endpoint}${executable}${prices}
 </div>`;
 }
 

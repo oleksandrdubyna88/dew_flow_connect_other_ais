@@ -805,16 +805,39 @@ test('a vendor that is off has its stage boxes dimmed in both card shapes', () =
   // reason every stage box is wrapped in a `.stages` span whichever row it sits on.
   for (const runtime of ['codex', 'remote'] as const) {
     const html = card({ runtime, enabled: false });
-    const boxes = [...html.matchAll(/<span class="stages([^"]*)">(?:(?!<\/span>)[\s\S])*?data-setting="(plan|code)"/g)];
-    const standalone = [...html.matchAll(/<div class="field stages([^"]*)">((?:(?!<\/div>)[\s\S])*)<\/div>/g)];
-    const dimmed = [...boxes.map((m) => m[1]), ...standalone.filter((m) => /data-setting="(plan|code)"/.test(m[2])).map((m) => m[1])];
+    // Every stage control, wherever it sits, is wrapped by exactly one `.stages` span — and THAT is
+    // what must carry `off`. The standalone row is layout only and carries no dimming of its own,
+    // so a nested `.stages.off` inside a `.field stages off` cannot happen (raised on the code round).
+    const wrappers = [...html.matchAll(/<span class="stages([^"]*)">((?:(?!<\/span>)[\s\S])*)<\/span>/g)]
+      .filter((m) => /data-setting="(plan|code)"/.test(m[2]));
 
-    assert.ok(dimmed.length > 0, `${runtime}: the stage controls are inside something that can be dimmed`);
-    for (const classes of dimmed) {
+    assert.equal(wrappers.length, 2, `${runtime}: both stage controls are wrapped in something that can be dimmed`);
+    for (const [, classes] of wrappers) {
       assert.ok(/\boff\b/.test(classes), `${runtime}: a switched-off vendor's stage boxes are dimmed — got class="stages${classes}"`);
     }
+    assert.doesNotMatch(html, /<div class="field stages[^"]*\boff\b/, `${runtime}: the row does not dim a second time`);
     assert.match(html, /data-setting="plan" data-vendor="v1"[^>]*disabled/, `${runtime}: and inert`);
   }
+});
+
+test('the CLI path is a field of its own, and the stage boxes belong to the prices', () => {
+  // The fragility the code round found: the standalone row was keyed off whether ANY runtime field
+  // came back, while the CLI-path field and the price rows were one function. A flat-rate engine —
+  // a path, no per-token price — would have answered "yes, there are fields" and lost both controls.
+  // The card asks about PRICE rows alone now.
+  //
+  // This asserts the SHAPE that makes the question answerable, not the divergence itself: no runtime
+  // today has a path without prices, so the old condition and the new one agree on every vendor that
+  // exists, and reverting the fix does not go red. What is pinned is that the two kinds of field are
+  // separate and that a stage box lives only on a priced row — which is what the next runtime with a
+  // flat rate will depend on.
+  const html = card({});
+  const withoutPrices = html.replace(/<div class="field priced">(?:(?!<\/div>)[\s\S])*<\/div>/g, '');
+
+  assert.ok(html.includes('data-setting="executablePath"'), 'the CLI path is a field of its own');
+  assert.ok(withoutPrices.includes('data-setting="executablePath"'), 'and it is not inside a priced row');
+  assert.ok(!withoutPrices.includes('data-setting="plan"'), 'every stage box sits on a priced row');
+  assert.ok(!withoutPrices.includes('data-setting="code"'), 'both of them');
 });
 
 /**
