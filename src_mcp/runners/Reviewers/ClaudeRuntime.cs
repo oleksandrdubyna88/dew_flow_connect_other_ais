@@ -88,7 +88,7 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
                 : new Dictionary<string, string?>(),
             Timeout = settings.Timeout,
         };
-        return new ReviewerInvocation(Provider, role, request, OutputFile: string.Empty, this);
+        return new ReviewerInvocation(Provider, role, request, OutputFile: string.Empty, this, Model: settings.Model);
     }
 
     /// <summary>The review is the envelope's <c>result</c> string; the rest is metadata.</summary>

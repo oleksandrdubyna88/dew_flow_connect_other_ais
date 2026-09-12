@@ -151,6 +151,66 @@ test('a reviewer with no status says nothing, rather than a dangling dash', () =
 
   assert.equal(reviewerRows(blank)[0]!.said, '');
   assert.deepEqual(reviewerLines(blank), ['local/Architecture']);
+
+// ---------- the effort rides with the model (#129) ----------
+
+/**
+ * A reviewer line names the effort a launch actually APPLIED.
+ *
+ * <p>Only a local engine applies one: `LocalRuntime` puts `--reasoning-effort` on its argv and
+ * records what it passed. No hosted adapter passes a reasoning flag, so none records an effort —
+ * claiming one would say something that did not happen — and antigravity's effort lives inside its
+ * model id (`gemini-3.7-flash-high`) rather than beside it, which is why no line can read
+ * `gemini-3.7-flash-high (effort: high)`.</p>
+ */
+test('a reviewer line names the effort when the launch applied one', () => {
+  const withEffort = round({
+    reviewerStates: [
+      { provider: 'local', role: 'Architecture', status: 'done', findings: 0, note: '', model: 'qwen3.5:latest', effort: 'high' },
+    ],
+  });
+
+  assert.deepEqual(reviewerLines(withEffort), ['local/Architecture · qwen3.5:latest (effort: high) — done (0 findings)']);
+});
+
+test('a reviewer that applied no effort reads exactly as it did', () => {
+  const hosted = round({
+    reviewerStates: [
+      { provider: 'codex', role: 'Architecture', status: 'done', findings: 2, note: '', model: 'gpt-5.6-sol' },
+      { provider: 'codex', role: 'SecurityReliability', status: 'done', findings: 0, note: '', model: 'gpt-5.6-sol', effort: '' },
+    ],
+  });
+
+  assert.deepEqual(reviewerLines(hosted), [
+    'codex/Architecture · gpt-5.6-sol — done (2 findings)',
+    'codex/SecurityReliability · gpt-5.6-sol — done (0 findings)',
+  ]);
+});
+
+test('an effort that is not a usable string is absent, the way a model is', () => {
+  // Same distrust as the model, for the same reason: a session file is JSON somebody else wrote, and
+  // `.trim()` on a number throws while the log is being built — blanking a page to render one row.
+  const nonsense = round({
+    reviewerStates: [
+      { provider: 'local', role: 'A', status: 'done', findings: 0, note: '', model: 'qwen', effort: '   ' },
+      { provider: 'local', role: 'B', status: 'done', findings: 0, note: '', model: 'qwen', effort: 42 as unknown as string },
+    ],
+  });
+
+  assert.deepEqual(reviewerLines(nonsense), [
+    'local/A · qwen — done (0 findings)',
+    'local/B · qwen — done (0 findings)',
+  ]);
+});
+
+test('an effort with no model has nowhere to go, and says nothing', () => {
+  // The effort rides WITH the model. A launch that recorded one and no model is not a shape any
+  // adapter produces, and inventing `· (effort: high)` for it would be a separator with no subject.
+  const orphan = round({
+    reviewerStates: [{ provider: 'local', role: 'Architecture', status: 'done', findings: 0, note: '', model: '', effort: 'high' }],
+  });
+
+  assert.deepEqual(reviewerLines(orphan), ['local/Architecture — done (0 findings)']);
 });
 
 test('a reviewer launched without a model gets no separator, not an empty one', () => {

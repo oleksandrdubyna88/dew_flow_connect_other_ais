@@ -32,6 +32,14 @@ export interface ReviewerState {
    * reviewer.</p>
    */
   readonly model?: string;
+  /**
+   * The reasoning effort this launch APPLIED — absent for every reviewer that applied none.
+   *
+   * <p>Which today is every hosted one: no hosted adapter puts a reasoning flag on its CLI's
+   * command line, so recording an effort for one would claim something that did not happen.
+   * Antigravity's effort is inside its model id (`gemini-3.7-flash-high`) rather than beside it.</p>
+   */
+  readonly effort?: string;
 }
 
 export interface RoundRecord {
@@ -183,13 +191,22 @@ export function reviewerLines(round: RoundRecord): readonly string[] {
  * a dangling dash nor an indented empty line.</p>
  */
 function restOf(state: ReviewerState, model: string, detail: readonly string[]): { rest: string; said: string } {
-  const named = model ? ` · ${model}` : '';
+  // The effort belongs with the model: both are part of WHAT ran rather than of what it did. It is
+  // there only when the launch actually applied one, which today means a local engine; a hosted
+  // reviewer has none and reads exactly as it did (issue #129).
+  //
+  // It survives a MISSING model, though. A local vendor may be configured with no model at all —
+  // "whatever the engine answers with" is a first-class choice — and it still runs at an effort, so
+  // hanging the effort off the model would hide something that was applied. Raised on the code round.
+  const effort = usableString(state.effort);
+  const badge = effort ? ` (effort: ${effort})` : '';
+  const named = model ? ` · ${model}${badge}` : badge;
   const brackets = detail.length > 0 ? ` (${detail.join(', ')})` : '';
-  // Normalised exactly as `modelOf` normalises the model, and for the same reason: an interface is
-  // not runtime validation. A session file that omits `status`, or carries a number, reached
-  // `.length` here and threw while the panel was being built — one malformed reviewer blanking the
-  // whole Active rounds view. Whitespace is not a status either. Raised on the code round.
-  const status = typeof state.status === 'string' ? state.status.trim() : '';
+  // Normalised exactly as the model is, and for the same reason: an interface is not runtime
+  // validation. A session file that omits `status`, or carries a number, reached `.length` here and
+  // threw while the panel was being built — one malformed reviewer blanking the whole Active rounds
+  // view. Whitespace is not a status either. Raised on the code round of the two-line row.
+  const status = usableString(state.status);
 
   // The detail survives a missing status: findings and a duration are facts the file still records,
   // and suppressing them because the status is blank hides information rather than tidying it.
@@ -198,7 +215,20 @@ function restOf(state: ReviewerState, model: string, detail: readonly string[]):
 
 /** The model this state names, or empty — anything that is not a usable string is absent. */
 function modelOf(state: ReviewerState): string {
-  return typeof state.model === 'string' ? state.model.trim() : '';
+  return usableString(state.model);
+}
+
+/**
+ * A field of a session file as a usable string, or empty.
+ *
+ * <p>One function for the model and the effort, because they need the same distrust for the same
+ * reason: an interface is not runtime validation, a hand-edited or foreign session reaches the
+ * renderer as-is, and `.trim()` on a number throws while the log is being built — blanking a page
+ * to render one row. Whitespace is not a value either, or a separator appears with nothing after
+ * it.</p>
+ */
+function usableString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 export function reviewerRows(round: RoundRecord): readonly ReviewerRow[] {

@@ -63,7 +63,7 @@ public sealed class AntigravityRuntime(string id = "antigravity") : IReviewerRun
                 : new Dictionary<string, string?>(),
             Timeout = settings.Timeout,
         };
-        return new ReviewerInvocation(Provider, role, request, string.Empty, this);
+        return new ReviewerInvocation(Provider, role, request, string.Empty, this, Model: settings.Model);
     }
 
     /// <summary>One NDJSON line. Serialised, never interpolated — a prompt contains quotes.</summary>
