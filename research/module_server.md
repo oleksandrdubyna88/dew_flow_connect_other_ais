@@ -714,6 +714,23 @@ orders: with two vendors there are two possible orders and half of all client pa
 Nothing on the server changes — `JobStore.TryClaim` is FIFO by design, and a fair queue fed in a
 biased order is fixed at the feeding end.
 
+**Except that a local reviewer leads it (2026-09-12, issue #155).** `OneLocalFirstTheRestLast` runs
+over the shuffle's output: the first local vendor moves to the head, every other local vendor moves
+to the tail, and the hosted vendors keep the shuffle's relative order — so the Team-account fairness
+above is untouched and a replayed seed still replays. A local engine is the slowest reviewer in any
+round, minutes against tens of seconds, and asked last it makes the round's wall-clock "everything
+else finishes, then we wait".
+
+**Why only one leads, and the rest go last, is the mirror of the GPU lesson.** `BoundedScheduler`
+takes a machine-wide slot BEFORE the engine — deliberately, since taking the engine first once made a
+local reviewer hold an idle card while queued behind hosted vendors
+([PLAN_one_gpu_one_reviewer.md](PLAN_one_gpu_one_reviewer.md)). With `LocalConcurrency = 1` a second
+local row can only wait for the card, so near the front it would occupy one of three machine slots to
+do nothing and leave the hosted vendors sharing what was left. At the tail it waits where waiting is
+free. What the rule promises is the order reviewers are SUBMITTED in, which is all `BuildWork`
+decides: if another round holds the engine lease, the promoted row waits for the card like anything
+else.
+
 **The reviewers are shown the project's own rules.** `RuleFiles.Collect` (in `runners/Context`) reads
 `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.claude/rules/**` and
 `.cursor/rules/**` from the WORKTREE — the rules as of the commit under review, not as of this

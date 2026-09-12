@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+**A local model starts the round.** It is the slowest reviewer you have — minutes, where a hosted one takes tens of seconds — and the order vendors are asked in was shuffled for a different reason (so that everybody's client does not queue for the same Team accounts at nine in the morning). Asked last, it meant the round finished when it finally got going. It is asked first now. If you run TWO local reviewers, only the first leads and the second goes to the back on purpose: they share one graphics card, so a second one near the front would hold a slot it cannot use while the hosted reviewers waited for it.
+
 **A reviewer in the Active rounds list reads over two lines.** What it is — vendor, role and model — on the first; what it is doing, indented, on the second. Showing the model had made that line about twice as long as the sidebar is wide, and a model id is one long unbreakable word, so the line used to break in the middle of it. A reviewer whose status has not been recorded shows no second line rather than an empty one. The rounds log page is unchanged: there a reviewer is still one line.
 
 **Review roles of your own.** A review role is a reviewer with one question. This product ships five
