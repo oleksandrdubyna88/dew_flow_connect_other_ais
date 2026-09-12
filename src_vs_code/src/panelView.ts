@@ -851,6 +851,10 @@ function gateBody(s: CoaiSettings): string {
  * it did until issue #118. Every other description in this panel is a sibling hint for the same
  * reason, and `panelView.test.ts` holds every row to two children so the next one cannot repeat
  * it.</p>
+ *
+ * <p>The note is the one hint in this panel with an id, because it is the one a control is
+ * `aria-describedby` — visual proximity is what tied it to the input while it sat inside the row,
+ * and a screen reader never had that. Raised on the code round of the move.</p>
  */
 function limitsBody(s: CoaiSettings, enabledVendors: number): string {
   return `<div class="field inline">
@@ -867,9 +871,10 @@ function limitsBody(s: CoaiSettings, enabledVendors: number): string {
 </div>
 <div class="field inline">
   ${labelled('roundTimeoutMinutes', 'Round limit, minutes', 'roundTimeout')}
-  <input type="number" id="roundTimeoutMinutes" min="0" data-setting="roundTimeoutMinutes" value="${s.roundTimeoutMinutes}">
+  <input type="number" id="roundTimeoutMinutes" min="0" data-setting="roundTimeoutMinutes" value="${s.roundTimeoutMinutes}"
+         aria-describedby="roundTimeoutNote">
 </div>
-<div class="hint">${escapeHtml(roundLimitNote(s, enabledVendors))}</div>
+<div class="hint" id="roundTimeoutNote">${escapeHtml(roundLimitNote(s, enabledVendors))}</div>
 <div class="field inline">
   ${labelled('escalationMinutes', 'Wait for you, minutes', 'escalationMinutes')}
   <input type="number" id="escalationMinutes" min="1" data-setting="escalationMinutes" value="${s.escalationMinutes}">

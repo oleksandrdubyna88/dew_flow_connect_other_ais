@@ -15,6 +15,17 @@
 > draft put it in the emitted markup, where it shipped to the webview and separated the row from its
 > own hint — caught by the test that asserts the hint follows immediately.
 >
+> The code round added one thing worth having and nothing else: the input now names its note with
+> `aria-describedby`. Moving the note out of the row took away the visual proximity that tied the
+> two together, and a screen reader never had that proximity in the first place. Its other ten
+> findings were rejected — all from one reviewer, and all reading the diff's REMOVED lines as the
+> shipped state ("the note is a third flex child", "uses a span instead of a div" — one of them
+> works out mid-sentence that the diff is compliant and says so). The exceptions were a script
+> injection through a string built from three integers behind `escapeHtml` and a CSP, a try/catch
+> around a total function over numbers, a `data-testid` in a suite whose convention is to assert
+> what the browser gets, and memoising a string concatenation on a path that already serialises the
+> whole state.
+>
 > Of the plan round's nine findings four were accepted and five rejected with reasons: the in-page
 > script never queries `.hint` (it delegates by `[data-setting]`, `[data-prompt]`, `.section` and
 > `[data-command]`), `staticKey` is `JSON.stringify` over state and reads no DOM, and the two calls
