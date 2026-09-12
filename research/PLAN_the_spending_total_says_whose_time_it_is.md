@@ -1,8 +1,22 @@
 # PLAN — the summed time says it is a sum, and names an average and a longest
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/usage.ts` (one field on
-> `VendorTotals`), `src_vs_code/src/panelView.ts` (`usageRegion`'s totals line) and the tests for
-> both.
+> Status: **IMPLEMENTED, 2026-09-12.** The line reads
+> `All vendors: 4.4k tokens · — · 2.0 min summed across 2 vendors · 30 s average per run · codex
+> longest at 1.5 min`. One new function, `timeSpent`; `usage.ts` was not touched at all — the
+> accumulator already had everything except a `runs` sum.
+>
+> **Deviations, all from the plan round.** The longest clause is computed CONDITIONALLY rather than
+> computed and then hidden, which is both what the single-vendor case wants and what removes a
+> seedless `reduce` over a possibly-empty list. A tie keeps the first row and says so in a comment,
+> because `>` picking whichever the engine visited first is not a policy anybody would guess. The
+> word stayed **vendor** rather than becoming *agent*: every row here is a vendor and the line opens
+> `All vendors:`, so a second noun would invent a level this data does not have.
+>
+> And test 3 was rewritten. It had been planned with an expected symptom of *"green before and
+> after"*, which a reviewer correctly called out as a test that cannot catch the regression it
+> names; it was proved instead by making the clause unconditional and watching it go red.
+>
+> Related docs: [module_extension.md](module_extension.md).
 >
 > Issue [#116](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/116): *"at the
 > bottom we show the sum of worked time. 1. it needs to say this is all agents added up. 2. show the
@@ -87,8 +101,16 @@ log page, so `roundsLogPage.test.ts` and `bundledPage.test.ts` read it too.
 
 ## Definition of Done
 
-- [ ] Tests 1 and 2 written first and watched fail; then green; then red again with the fix reverted.
-- [ ] `npm test` green in the worktree; the count reported in the pull request.
-- [ ] The diff through the `coai` code round, every finding resolved.
-- [ ] `research/module_extension.md` and `CHANGELOG.md` updated as named above.
-- [ ] This plan promoted to `research/` with `IMPLEMENTED` and the date.
+- [x] All five tests written first and watched fail (12 tests in the file, 7 passing, 5 red); green
+      with `timeSpent`; red again with the whole fix reverted, and green when restored.
+- [x] The single-vendor guard proved separately: the clause made unconditional, *one vendor is never
+      "the longest"* went red, restored green.
+- [x] `npm test` green in the worktree: **1726 tests, 1725 pass, 0 fail** (1 skipped).
+- [ ] The diff through the `coai` code round — **pending**, run immediately after this commit.
+- [x] `research/module_extension.md` carries the decision and its three parts; `CHANGELOG.md` under
+      `## Unreleased`.
+- [x] This plan promoted to `research/` with `IMPLEMENTED` and the date; indexes updated both sides.
+
+**Deviation from this list:** the version is deliberately NOT bumped here. This is one of seven
+issues landing before a single extension release, and the release commit at the end of the batch
+renames the `## Unreleased` heading to the version it cuts.
