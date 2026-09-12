@@ -103,6 +103,20 @@ public sealed class BuiltinRoleCatalogTests
             [6, 1, 6, 6, 6],
             "six choices per section, and the conventions role has one — the shape the operator asked for");
 
+        // And each of the twenty-five by NAME. A prompt id is as permanent as a role id: it is the
+        // file under `<dataDir>/prompts/`, the value stored in COAI_PROMPTS_PER_ROUND, and the
+        // column in every rounds-database row already written. While `PromptCatalog` existed it was
+        // the oracle for these; with it gone, both loaders read one seed and would agree with each
+        // other about a typo. The embedded-text check catches a renamed id from the other side —
+        // there would be no `<id>.md` — but it cannot say which id was meant. (codex, C2's plan round.)
+        RoleCatalog.Builtin.Roles.SelectMany(r => r.Prompts).Select(p => p.Id).Should().Equal([
+            "plan-critique", "plan-assumptions", "plan-human-path", "plan-data-loss", "plan-operability", "plan-scope-creep",
+            "conventions",
+            "architecture", "arch-boundaries", "arch-evolution", "arch-coupling", "arch-naming", "arch-testability",
+            "security-reliability", "sec-memory-leaks", "sec-attack", "sec-blast-radius", "sec-concurrency", "sec-supply-chain",
+            "uxdx-performance", "perf-scale", "dx-ergonomics", "perf-first-run", "perf-wasted-work", "ux-undo",
+        ]);
+
         RoleCatalog.Builtin.ById(RoleCatalog.PlanRole)!.Stage.Should().Be(RoleStages.Plan);
         RoleCatalog.Builtin.Roles.Where(r => r.Id != RoleCatalog.PlanRole)
             .Should().OnlyContain(r => r.Stage == RoleStages.Result && r.ProgrammingTask,
