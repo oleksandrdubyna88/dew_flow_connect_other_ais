@@ -870,6 +870,9 @@ function ledger(
   void recordChatTurn(coaiDataDir(), chatTurnRecord({
     utc: turn.utc,
     provider: turn.vendor.id,
+    // The RUNTIME behind that row, written down beside its id: a preset is a row in a list somebody
+    // edits, and resolving an old line through the list as it is today would move history.
+    vendor: turn.vendor.runtime,
     model: turn.model,
     conversation: thread.saveId,
     title: thread.title,
@@ -2359,6 +2362,7 @@ export function noteChatDoor(door: Door, at = new Date()): void {
     ready.ok ? ready.providerId : '',
     ready.ok ? ready.modelId : '',
     at,
+    ready.ok ? ready.vendor.runtime : '',
   ));
 }
 

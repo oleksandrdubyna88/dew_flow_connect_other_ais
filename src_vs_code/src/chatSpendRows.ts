@@ -213,8 +213,12 @@ export function chatSpend(
 ): ChatSpend {
   const from = windowStart(window, now);
   const buckets = new Map<string, Bucket>();
-  const bucket = (recorded: string, model: string): Bucket => {
-    const provider = vendorOf(recorded);
+  // WHAT WAS WRITTEN DOWN wins over what the preset list says today. A preset is a row somebody
+  // edits, so resolving an old line through the list as it is now would move a year of history to
+  // another vendor in a ledger that is supposed to be append-only. The resolver is the answer only
+  // for lines written before the field existed. (CodeRabbit, PR #209.)
+  const bucket = (recorded: string, model: string, written?: string): Bucket => {
+    const provider = written !== undefined && written.length > 0 ? written : vendorOf(recorded);
     const key = keyOf(provider, model);
     const found = buckets.get(key) ?? emptyBucket(provider, model);
     buckets.set(key, found);
@@ -228,7 +232,7 @@ export function chatSpend(
   };
 
   for (const turn of turns) {
-    const one = bucket(turn.provider, turn.model);
+    const one = bucket(turn.provider, turn.model, turn.vendor);
     const billed = billedFor(turn);
     // ALL TIME first, and whatever the window says: that column is the one that ignores the buttons.
     if (billed === undefined) {
@@ -259,7 +263,7 @@ export function chatSpend(
     if (!inWindow(door.utc)) {
       continue;
     }
-    const one = bucket(door.provider, door.model);
+    const one = bucket(door.provider, door.model, door.vendor);
     one.opened += 1;
     one.asked += asking(door.door) ? 1 : 0;
   }
