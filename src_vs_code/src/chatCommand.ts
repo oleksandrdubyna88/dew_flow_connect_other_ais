@@ -65,7 +65,15 @@ import {
 import { LanguageCode } from './settingsShape';
 import { isOrdinaryEditorTab, sourceSession, TabSnapshot } from './sessionKey';
 import { askedAsText } from './claudeQuestion';
-import { oneAnswerFrom, promptsFrom, promptsInSession, sessionFileIn, waitingQuestion } from './claudeSessions';
+import {
+  Found,
+  oneAnswerFrom,
+  pinnable,
+  promptsFrom,
+  promptsInSession,
+  sessionFileIn,
+  waitingQuestion,
+} from './claudeSessions';
 import { EditorText, confirmWholeFile, passageFromEditor } from './editorPassage';
 import { triggerPlan } from './chatTrigger';
 import { Vendor } from './vendors';
@@ -265,13 +273,17 @@ function pinSession(id: object, title: string, fromSession: boolean): void {
     return;
   }
   void (async () => {
-    const found = await everyFolder((folder, caseBlind) => sessionFileIn(os.homedir(), folder, caseBlind, title));
-    const one = found.filter((answer) => answer.kind === 'one');
+    let found: readonly Found[];
+    try {
+      found = await everyFolder((folder, caseBlind) => sessionFileIn(os.homedir(), folder, caseBlind, title));
+    } catch {
+      // Nothing is pinned and nothing is said: the button still works by name, and a tab must not
+      // take down the extension host for a walk it started on its own.
+      return;
+    }
     const mine = threads.get(id);
-    // EXACTLY ONE, across every root. Two is the ambiguity the whole join exists to refuse, and
-    // pinning one of them would make that refusal permanent and invisible.
-    if (mine !== undefined && one.length === 1) {
-      mine.sessionFile = one[0]!.file;
+    if (mine !== undefined && pinnable(found)) {
+      mine.sessionFile = found.find((answer) => answer.kind === 'one')!.file;
     }
   })();
 }
