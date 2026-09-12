@@ -12,6 +12,7 @@ import {
   oneAnswerFrom,
   pinnable,
   promptsFrom,
+  sessionFileAnywhere,
   sessionFileIn,
 } from '../claudeSessions';
 import { chatCommandOf } from '../chatMessages';
@@ -405,4 +406,65 @@ test('what may be PINNED is exactly what the button would answer', () => {
   assert.strictEqual(pinnable([one('a.jsonl'), one('b.jsonl')]), false, 'two roots both matched and one was pinned');
   assert.strictEqual(pinnable([nothing]), false, 'nothing was pinned as something');
   assert.strictEqual(pinnable([]), false, 'a window with no folder open pinned a file');
+});
+
+test('a window with NO FOLDER open still finds its session, wherever Claude ran', async () => {
+  // Measured on the operator's machine, with the button open beside a live conversation it could not
+  // see: the tab read "Подключение к scoreMeter DB" and `workspaceFolders` was undefined, so the
+  // search was scoped to a workspace that did not exist and reported there was nowhere to look.
+  // Claude Code does not need a folder — it runs with the home directory as its working folder.
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    const dir = join(home, '.claude', 'projects', 'C--Users-strug');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'one.jsonl'), `${titled('Подключение к scoreMeter DB')}\n${said('мой вопрос')}\n`, 'utf8');
+    // And another project entirely, which must not confuse it.
+    const other = join(home, '.claude', 'projects', 'D--rsd-something');
+    mkdirSync(other, { recursive: true });
+    writeFileSync(join(other, 'two.jsonl'), `${titled('Something else')}\n${said('not yours')}\n`, 'utf8');
+
+    const found = await sessionFileAnywhere(home, 'Подключение к scoreMeter DB');
+
+    assert.strictEqual(found.kind, 'one', 'a window with no folder open could not find a session that exists');
+    const read = await promptsFrom(found.kind === 'one' ? found.file : '');
+    assert.deepStrictEqual(read.kind === 'said' ? read.said : [], ['мой вопрос']);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('searching everywhere still refuses two conversations that share a name', async () => {
+  // The title join does the work it was built for, wherever the sessions live: a wider search must
+  // not become a looser one.
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    for (const project of ['C--Users-strug', 'D--rsd-app']) {
+      const dir = join(home, '.claude', 'projects', project);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'one.jsonl'), `${titled('Same name')}\n${said('one of two')}\n`, 'utf8');
+    }
+
+    const found = await sessionFileAnywhere(home, 'Same name');
+
+    assert.strictEqual(found.kind, 'several', 'a wider search picked between namesakes');
+    assert.match(found.kind === 'several' ? found.refusal : '', /on this machine/, 'the refusal says the wrong place');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('searching everywhere and finding nothing says so, naming what it looked for', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
+  try {
+    mkdirSync(join(home, '.claude', 'projects'), { recursive: true });
+
+    const found = await sessionFileAnywhere(home, 'Никогда такого не было');
+
+    assert.strictEqual(found.kind, 'none');
+    assert.match(found.kind === 'none' ? found.refusal : '', /Никогда такого не было/);
+    // And a tab with no name never looks at all.
+    assert.strictEqual((await sessionFileAnywhere(home, '')).kind, 'none');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });

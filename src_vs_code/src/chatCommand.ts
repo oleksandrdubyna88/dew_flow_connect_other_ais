@@ -71,6 +71,7 @@ import {
   oneAnswerFrom,
   pinnable,
   promptsFrom,
+  sessionFileAnywhere,
   sessionFileIn,
   waitingQuestion,
 } from './claudeSessions';
@@ -254,10 +255,28 @@ const threads = new WeakMap<object, Thread>();
  * with the answers is `oneAnswerFrom`'s to decide.</p>
  */
 async function everyFolder<T>(ask: (folder: string, caseBlind: boolean) => Promise<T>): Promise<readonly T[]> {
-  const folders = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
   const caseBlind = process.platform === 'win32' || process.platform === 'darwin';
 
-  return await Promise.all(folders.map((folder) => ask(folder, caseBlind)));
+  return await Promise.all(openFolders().map((folder) => ask(folder, caseBlind)));
+}
+
+/** The workspace's folders, which a window opened on no folder at all simply does not have. */
+function openFolders(): readonly string[] {
+  return (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
+}
+
+/**
+ * Where this tab's session is, however the window was opened.
+ *
+ * <p>A window with NO FOLDER still runs Claude Code — with the home directory as its working folder —
+ * and scoping the search to a workspace that does not exist reported that there was nowhere to look
+ * while the session sat on disk. Measured on the operator's own machine, with the button open beside
+ * a live conversation it could not see.</p>
+ */
+async function findSession(title: string): Promise<readonly Found[]> {
+  return openFolders().length === 0
+    ? [await sessionFileAnywhere(os.homedir(), title)]
+    : await everyFolder((folder, caseBlind) => sessionFileIn(os.homedir(), folder, caseBlind, title));
 }
 
 /**
@@ -268,7 +287,7 @@ async function everyFolder<T>(ask: (folder: string, caseBlind: boolean) => Promi
  * `pinSession` uses: exactly one session, across every root, with nothing else in doubt.</p>
  */
 async function resolveAndPin(id: object, title: string): Promise<Asked> {
-  const found = await everyFolder((folder, caseBlind) => sessionFileIn(os.homedir(), folder, caseBlind, title));
+  const found = await findSession(title);
   if (!pinnable(found)) {
     // Nothing to keep, and the reason is the one the refusal would give anyway.
     return oneAnswerFrom(found.map(asAsked));
@@ -302,7 +321,7 @@ function pinSession(id: object, title: string, fromSession: boolean): void {
   void (async () => {
     let found: readonly Found[];
     try {
-      found = await everyFolder((folder, caseBlind) => sessionFileIn(os.homedir(), folder, caseBlind, title));
+      found = await findSession(title);
     } catch {
       // Nothing is pinned and nothing is said: the button still works by name, and a tab must not
       // take down the extension host for a walk it started on its own.

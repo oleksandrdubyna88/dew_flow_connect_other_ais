@@ -481,6 +481,7 @@ test('the shipped Asked button asks the host, and paints what comes back', () =>
     'the shipped page did not paint what the host read back');
   assert.strictEqual(nodes['askedText']?.['innerHTML'], '', 'a session file was written into the page as markup');
   assert.strictEqual(nodes['askedAt']?.['textContent'], '1 / 2', 'the shipped page did not say where it was');
+  assert.strictEqual(nodes['askingHead']?.['hidden'], false, 'two turns to step through and no arrows to do it');
 
   // The arrows step, and the count follows them — and they STOP, rather than walking off the end
   // into an empty box.
@@ -544,6 +545,9 @@ test('the shipped page says WHY there is nothing, rather than showing an empty b
   assert.strictEqual(nodes['askedText']?.['textContent'], '2 sessions in this folder are called “main”.');
   assert.strictEqual(nodes['askedAt']?.['textContent'], '', 'a count was drawn for nothing');
   assert.strictEqual(nodes['askedNext']?.['disabled'], true, 'arrows offered to step through nothing');
+  // GONE, not merely disabled. On the operator's own screenshot the pair sat above the reason as two
+  // empty boxes, which reads as something broken rather than as the answer it was.
+  assert.strictEqual(nodes['askingHead']?.['hidden'], true, 'a dead row of arrows was drawn anyway');
 });
 
 test('the chat page carries nothing from the host into the webview', () => {
