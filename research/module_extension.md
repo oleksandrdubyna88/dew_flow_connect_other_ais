@@ -2247,6 +2247,11 @@ did `.inline` — the layout was right, the markup was not. The regression test 
 row to exactly two children rather than naming the round limit, because the alignment is a property
 of the set of rows: the next one to grow a third item is the one nobody would think to test.
 
+The note is the only hint in this panel with an id (`roundTimeoutNote`), because it is the only one
+a control is `aria-describedby`. That came out of the move's own code round: proximity inside the
+row was what tied the note to the input, and a screen reader never had it — so taking the proximity
+away is the moment to say the association out loud.
+
 ### Installing a reviewer's CLI from the row (2026-09-01)
 
 A fresh WSL box has none of these CLIs, and the panel is where somebody is standing when they find

@@ -773,8 +773,11 @@ test('the round limit\'s note is a line under its row, in every state it can be 
     assert.ok(!row[0].includes('hint'), `${name}: the note is not inside the row — ${row[0]}`);
 
     const after = html.slice(row.index + row[0].length).trimStart();
-    assert.ok(after.startsWith('<div class="hint">'), `${name}: a hint follows the row, on its own line — got ${after.slice(0, 60)}`);
+    assert.ok(after.startsWith('<div class="hint" id="roundTimeoutNote">'), `${name}: a hint follows the row, on its own line — got ${after.slice(0, 60)}`);
     assert.ok(after.slice(0, 400).includes(wording), `${name}: and it carries the note`);
+    // Moving the note out of the row took away the visual proximity that tied it to the input; a
+    // screen reader never had that, so the association is explicit now. Raised on the code round.
+    assert.match(row[0], /id="roundTimeoutMinutes"[\s\S]*aria-describedby="roundTimeoutNote"/, `${name}: the input names its note`);
   }
 });
 
