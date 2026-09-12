@@ -537,3 +537,17 @@ test('the page can ask a handover to start somewhere, and cannot ask for a posit
     );
   }
 });
+
+test('the page can say WHICH half of the instruction left the box, and nothing else', () => {
+  assert.deepStrictEqual(chatCommandOf({ type: 'markGone', which: 'task' }), { kind: 'markGone', which: 'task' });
+  assert.deepStrictEqual(chatCommandOf({ type: 'markGone', which: 'role' }), { kind: 'markGone', which: 'role' });
+
+  // There are two buttons and two halves. Anything else names neither, so it is a press of nothing.
+  for (const bad of ['prompt', 'model', '', 1, null, undefined]) {
+    assert.deepStrictEqual(
+      chatCommandOf({ type: 'markGone', which: bad }),
+      { kind: 'ignore' },
+      `${String(bad)} was accepted as half of an instruction`,
+    );
+  }
+});

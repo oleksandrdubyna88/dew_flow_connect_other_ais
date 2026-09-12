@@ -4,7 +4,9 @@ import { test } from 'node:test';
 /** One vendor, as the wizard hands it to the factory. */
 const AGY = { runtime: 'antigravity' } as const;
 import {
+  ModelPreset,
   chatModelPresetsFrom,
+  presetInForce,
   chatPromptPresetsFrom,
   chatRunSpec,
   freshModelRow,
@@ -496,4 +498,23 @@ test('the models tick follows the same rule the prompts tick does', () => {
   // And the last one cannot be turned off - a list showing no tick while something is quietly the
   // one a capture opens on is the dishonest control this rule exists to refuse.
   assert.strictEqual(rowsAfterMain(moved, 'm2', false), moved, 'the only tick was allowed off');
+});
+
+test('a preset is in force only when BOTH halves match — the vendor and the model', () => {
+  // The two selects under the buttons move independently, so picking a vendor in the first and a
+  // different model in the second leaves a conversation that matches no preset at all. Recording the
+  // vendor's id anyway lit a button for a model that was not answering: the operator photographed
+  // GPT-5.6-Terra pressed while GPT-5.6-Sol was in the dropdown underneath it.
+  const presets: readonly ModelPreset[] = [
+    { id: 'terra', name: 'GPT-5.6-Terra', runtime: 'codex', model: 'gpt-5.6-terra', main: true, executablePath: '', baseUrl: '' },
+    { id: 'any', name: 'Whatever codex uses', runtime: 'codex', model: '', main: false, executablePath: '', baseUrl: '' },
+  ];
+
+  assert.strictEqual(presetInForce(presets, 'terra', 'gpt-5.6-terra'), 'terra');
+  assert.strictEqual(presetInForce(presets, 'terra', 'gpt-5.6-sol'), '',
+    'a preset stayed lit for a model that was not answering');
+  // A preset with no model of its own means "this vendor's default", so there is no second half to
+  // disagree about.
+  assert.strictEqual(presetInForce(presets, 'any', 'anything-at-all'), 'any');
+  assert.strictEqual(presetInForce(presets, 'nobody', 'gpt-5.6-terra'), '');
 });

@@ -469,3 +469,28 @@ export function chatRunSpec(preset: ModelPreset): Vendor {
     ...(preset.remoteVendor !== undefined ? { remoteVendor: preset.remoteVendor } : {}),
   };
 }
+
+/**
+ * Which model preset is actually IN FORCE — the button that should look pressed.
+ *
+ * <p><b>Both halves, or neither.</b> A preset names a vendor AND one of its models, and the two
+ * selects below the buttons can be moved independently: picking `codex` in the first and a different
+ * model in the second leaves a conversation that matches no preset at all. Recording the preset's id
+ * anyway lit a button for a model that was not answering — the operator photographed exactly that,
+ * *GPT-5.6-Terra* lit while *GPT-5.6-Sol* was the one in the dropdown.</p>
+ *
+ * <p>A preset whose `model` is EMPTY means "this vendor's own default", so it matches whatever that
+ * vendor chose for itself — there is no second half to disagree about.</p>
+ */
+export function presetInForce(
+  presets: readonly ModelPreset[],
+  providerId: string,
+  modelId: string,
+): string {
+  const found = presets.find((one) => one.id === providerId);
+  if (found === undefined) {
+    return '';
+  }
+
+  return found.model.length === 0 || found.model === modelId ? found.id : '';
+}

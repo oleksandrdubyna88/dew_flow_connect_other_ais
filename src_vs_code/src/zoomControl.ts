@@ -43,6 +43,7 @@ export function offsetLabel(offset: number): string {
 /** The header control: minus, the offset, plus. One shape for every page. */
 export function zoomControlHtml(offset: number): string {
   return `<span class="zoomCtl" title="Text size (applies to every ConnectOtherAIs page)">
+    <span class="ctlIcon" aria-hidden="true">🔍</span>
     <button type="button" class="icon" data-zoom="-1" aria-label="Smaller text">−</button>
     <span id="zoomOffset" class="zoomOffset">${escapeHtml(offsetLabel(offset))}</span>
     <button type="button" class="icon" data-zoom="1" aria-label="Larger text">+</button>
@@ -77,4 +78,7 @@ export function zoomScript(): string {
 export const ZOOM_CSS = `
   .zoomCtl { display: inline-flex; align-items: center; gap: 2px; margin-left: 8px; }
   .zoomCtl button { min-width: 24px; padding: 2px 6px; }
+  /* Which pair is which, without reading a tooltip: four identical buttons in a row is a row you
+     have to remember the order of. aria-hidden, because the control around it is already named. */
+  .ctlIcon { opacity: .7; font-size: .9em; margin-right: 2px; line-height: 1; }
   .zoomOffset { min-width: 2em; text-align: center; opacity: .75; font-size: .85em; }`;

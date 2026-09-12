@@ -37,6 +37,8 @@ export interface PageMessage {
   readonly data?: unknown;
   /** Where a handover should start, from the Carry-nothing-above button. */
   readonly at?: unknown;
+  /** Which half of the instruction left the box — `role` or `task`. */
+  readonly which?: unknown;
 }
 
 export type ChatCommand =
@@ -87,6 +89,8 @@ export type ChatCommand =
   | { readonly kind: 'showAsked' }
   /** Carry nothing above: the index of the first message a handover should start at. */
   | { readonly kind: 'carryFrom'; readonly at: number }
+  /** Half of the instruction has left the box: the prompt's words, or the model preset's role. */
+  | { readonly kind: 'markGone'; readonly which: 'role' | 'task' }
   /**
    * Ask the OTHER model the same thing: the conversation minus the last answer, and the question
    * that answer was given to. It carries nothing else — the host holds the transcript and decides
@@ -245,6 +249,14 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
   // negative as an offset from the END and would carry the last message instead of the suffix, which
   // is this feature as its own inverse. The host clamps it to the transcript as well — this only
   // refuses what was never a position. (codex, the plan round.)
+  // A preset button is lit because its words are the instruction in force. Edit them away and it
+  // goes on claiming something nothing is using, so the page says which half has gone. Only the
+  // two halves that exist: anything else names no button and is a press of nothing.
+  if (message.type === 'markGone') {
+    const which = message.which;
+
+    return which === 'role' || which === 'task' ? { kind: 'markGone', which } : IGNORE;
+  }
   if (message.type === 'carryFrom') {
     const at = message.at;
 

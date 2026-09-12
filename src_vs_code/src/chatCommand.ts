@@ -14,6 +14,7 @@ import {
   chatRunSpec,
   mainModel,
   mainPrompt,
+  presetInForce,
   reaskFrom,
 } from './chatPresets';
 import { ChatTabMemory, SavedTab, reloadedNote } from './chatTabs';
@@ -1474,8 +1475,12 @@ async function switchNow(entry: ChatEntry, providerId: string, modelId: string):
   thread.providerId = providerId;
   thread.modelId = modelId;
   // The ROW as well as the session: a model chosen in the dropdown below the buttons is still a
-  // model chosen, and the button naming it has to look it.
-  thread.chosenId = providerId;
+  // model chosen, and the button naming it has to look it — but ONLY when it is that button's model.
+  // The two selects move independently, so picking a vendor in the first and a different model in
+  // the second leaves a conversation matching no preset at all, and recording the vendor's id lit a
+  // button for a model that was not answering. Photographed by the operator: GPT-5.6-Terra pressed
+  // while GPT-5.6-Sol was in the dropdown underneath it.
+  thread.chosenId = presetInForce(savedModels(vscode.workspace.getConfiguration('coai')), providerId, modelId);
   // The memory rules move WITH the model. Left behind, they described the one just thrown away:
   // switching to a Team server kept `forgetful` false, so the server — which remembers nothing —
   // was asked turn two with no transcript behind it and the three-turn cap never applied; switching
@@ -1694,6 +1699,27 @@ function conversationHooks(panels: ChatPanels): Parameters<typeof createChatPane
           return;
         }
         chooseModel(found, mine, preset, draft, config);
+      },
+      onMarkGone: (id, which) => {
+        const mine = threads.get(id);
+        const found = panels.entryOf(id);
+        if (mine === undefined || found === undefined) {
+          return;
+        }
+        // The button stops looking pressed. It was lit because its words were the instruction in
+        // force; they are not, and a button claiming something nothing is using lies about what the
+        // next question will carry. Two halves, two buttons: a PROMPT preset owns the task, and a
+        // MODEL preset owns the role it put there — edit either away and that one goes dark.
+        const lit = which === 'task' ? mine.promptId : mine.chosenId;
+        if (lit.length === 0) {
+          return;
+        }
+        if (which === 'task') {
+          mine.promptId = '';
+        } else {
+          mine.chosenId = '';
+        }
+        show(found, mine.running, '');
       },
       onCarryFrom: (id, at) => {
         const mine = threads.get(id);
