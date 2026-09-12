@@ -276,6 +276,17 @@ the script block at all.
   and on the page, which offers Plan and Code only. Plan 4 adds a third stage and has to replace it
   with a stage catalog; a catalog built now would be an abstraction over one real member and one
   imagined one.
+- **The prompt path is agreed by two files rather than by a test.** The server builds
+  `<dataDir>/prompts/<FileName.Safe(id)>.md` (`RolePrompts.FileOf`) and the extension builds
+  `<dataDir>/prompts/<id>.md` (`rolesPrompts.promptFile`). For a slug id those are the same string,
+  and each half tests its own — but nothing holds them level, which is exactly the arrangement
+  `shared/team-server-url-vectors.json` exists to replace for the Team-server URL. A shared vector
+  fixture of `promptId → relative path`, read by a test on both sides, is the durable half of the
+  Definition-of-Done line below.
+- **Not verified end to end against an installed `coai-mcp`:** a prompt body written by this page and
+  then READ by a real round. Every part of it is covered by tests on one side or the other; the
+  join is not. It is the one Definition-of-Done line this plan cannot tick from a test, and it wants
+  one round on a real binary rather than more test code.
 - Carried from plan 1, still open: `BuildWork`'s eight parameters, and `[GeneratedRegex]` in two test
   methods.
 
