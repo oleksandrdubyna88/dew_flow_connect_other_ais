@@ -2,14 +2,11 @@
 
 ## Extension 0.36.6 — 2026-09-12
 
-**CoAI: add the question** joins the question to what your composer already holds, instead of replacing it. **CoAI: take the question** still replaces, as it did. Two verbs, two items: after composing a turn with **CoAI: choose**, taking the question threw that turn away, when what was wanted was the question underneath it as more material.
-
-## Extension 0.36.5 — 2026-09-12
-
 **Three right-click items, each named for what it does.** **CoAI: default** asks the model you
 ticked as main straight away. **CoAI: choose** puts the turn in the composer, so you can change the
 model or the prompt and press Enter yourself. **CoAI: take the question** hands the question Claude
-Code is asking YOU to a second model. None of the three consults **When to send** — each says in its
+Code is asking YOU to a second model, and **CoAI: add the question** joins it to what your
+composer already holds instead of replacing it. None of the three consults **When to send** — each says in its
 own name what it will do. The keyboard shortcut keeps that setting, where its name promises nothing
 either way.
 
