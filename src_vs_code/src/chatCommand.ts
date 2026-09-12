@@ -71,7 +71,6 @@ import {
   oneAnswerFrom,
   pinnable,
   promptsFrom,
-  sessionFileAnywhere,
   sessionFileIn,
   waitingQuestion,
 } from './claudeSessions';
@@ -268,15 +267,22 @@ function openFolders(): readonly string[] {
 /**
  * Where this tab's session is, however the window was opened.
  *
- * <p>A window with NO FOLDER still runs Claude Code — with the home directory as its working folder —
- * and scoping the search to a workspace that does not exist reported that there was nowhere to look
- * while the session sat on disk. Measured on the operator's own machine, with the button open beside
- * a live conversation it could not see.</p>
+ * <p>A window with NO FOLDER still runs Claude Code — and it runs it in the HOME directory, which is
+ * where a VS Code terminal starts when there is no folder to start in. So that is where this looks,
+ * as though home were the workspace: the operator's own session, which the button could not see, is
+ * filed under `C--Users-strug`.</p>
+ *
+ * <p><b>Not every project on the machine.</b> That was the first attempt and it was worse than the
+ * bug: 77 project directories and a gigabyte of transcript on this machine, read to compare titles,
+ * while the region sat on *Reading the session…*. The refusal names the directory it looked in, so a
+ * window whose Claude Code was started somewhere else says where it did look rather than hunting.</p>
  */
 async function findSession(title: string): Promise<readonly Found[]> {
+  const caseBlind = process.platform === 'win32' || process.platform === 'darwin';
+
   return openFolders().length === 0
-    ? [await sessionFileAnywhere(os.homedir(), title)]
-    : await everyFolder((folder, caseBlind) => sessionFileIn(os.homedir(), folder, caseBlind, title));
+    ? [await sessionFileIn(os.homedir(), os.homedir(), caseBlind, title)]
+    : await everyFolder((folder, blind) => sessionFileIn(os.homedir(), folder, blind, title));
 }
 
 /**

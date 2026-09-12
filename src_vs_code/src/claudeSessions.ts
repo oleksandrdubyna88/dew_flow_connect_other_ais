@@ -68,6 +68,33 @@ export function projectDirIn(
   return loose.length === 1 ? path.join(root, loose[0]!) : '';
 }
 
+/**
+ * Whether a tab's name and a session's name are the same name.
+ *
+ * <p><b>A tab wears a SHORTENED title.</b> Claude Code truncates what it puts on its own panel and
+ * writes the whole thing to the session file: the operator's tab reads *Подключение к scoreMeter...*
+ * where the file reads *Подключение к scoreMeter DB*. An exact comparison therefore matched short
+ * conversations and never long ones — and reported, correctly and uselessly, that no session on the
+ * machine was called what the tab was called. Found by them, on the shipped build, from the ellipsis
+ * in the refusal itself.</p>
+ *
+ * <p>So a name that ENDS in an ellipsis is a prefix, and anything else is exact. Nothing is loosened
+ * beyond that: a prefix that matches two sessions is the same refusal a whole name matching two is,
+ * which is what keeps a shortened title from becoming a licence to guess. Verified against every
+ * session on this machine — not one of them has an ellipsis of its own, so a prefix here is always
+ * the tab's doing and never a conversation that happens to be named with one.</p>
+ */
+export function namesTheSame(title: string, looking: string): boolean {
+  const cut = /(\.\.\.|…)$/.exec(looking);
+  if (cut === null) {
+    return title === looking;
+  }
+  const prefix = looking.slice(0, looking.length - cut[0].length).trimEnd();
+
+  // A name that is NOTHING but an ellipsis names everything, which is no name at all.
+  return prefix.length > 0 && title.startsWith(prefix);
+}
+
 /** One session file, and the question waiting in it. */
 export interface WaitingSession {
   readonly file: string;
@@ -103,7 +130,9 @@ export function waitingIn(sessions: readonly WaitingSession[], looking = ''): Wa
     // guess; anything else still refuses.
     const named = looking.length === 0
       ? []
-      : waiting.filter((one) => one.asked.title === looking);
+      // The same shortened-title rule the Asked button needs: a tab's name is what Claude Code put
+      // on its panel, and for a long conversation that is not what it wrote to the file.
+      : waiting.filter((one) => namesTheSame(one.asked.title, looking));
 
     return named.length === 1
       ? { kind: 'one', session: named[0]! }
@@ -298,44 +327,7 @@ export async function sessionFileIn(
   if (!Array.isArray(files)) {
     return { kind: 'none', refusal: (files as ReadFailure).refusal };
   }
-  return await theOneCalled(files, looking, 'in this folder');
-}
-
-/**
- * The session by this name in a window that has NO FOLDER OPEN.
- *
- * <p>Claude Code does not need one — it runs with the home directory as its working folder, and the
- * operator's own window is exactly that: a real session called *Подключение к scoreMeter DB* with
- * `workspaceFolders` undefined. Scoping the search to the workspace meant there was nothing to
- * scope by and the button reported that there was nowhere to look, while the session sat on disk.</p>
- *
- * <p>So every project Claude Code knows about is searched, and the title join does the work it was
- * built for: two conversations sharing a name are refused rather than picked between, wherever they
- * live. Only for a window with no folder — a window that HAS one is scoped to it, because two
- * projects may legitimately hold a conversation by the same name and the folder tells them apart.</p>
- */
-export async function sessionFileAnywhere(home: string, looking: string): Promise<Found> {
-  const root = projectsRoot(home);
-  if (looking.length === 0) {
-    return { kind: 'none', refusal: 'This conversation is not named after a Claude Code session.' };
-  }
-  let names: string[];
-  try {
-    names = await fs.readdir(root);
-  } catch (reason) {
-    return missing(reason)
-      ? { kind: 'none', refusal: `Claude Code keeps its sessions in ${root}, and there is nothing there to read.` }
-      : { kind: 'none', refusal: `Claude Code's sessions could not be listed in ${root}: ${where(reason)}` };
-  }
-  const everywhere: string[] = [];
-  for (const name of names) {
-    const found = await sessionFiles(path.join(root, name));
-    if (Array.isArray(found)) {
-      everywhere.push(...found);
-    }
-  }
-
-  return await theOneCalled(everywhere, looking, 'on this machine');
+  return await theOneCalled(files, looking, `in ${dir}`);
 }
 
 /**
@@ -349,7 +341,7 @@ export async function sessionFileAnywhere(home: string, looking: string): Promis
 async function theOneCalled(files: readonly string[], looking: string, whereabouts: string): Promise<Found> {
   const matched: string[] = [];
   for (const file of files) {
-    if (await titleOf(file) === looking) {
+    if (namesTheSame(await titleOf(file), looking)) {
       matched.push(file);
     }
   }

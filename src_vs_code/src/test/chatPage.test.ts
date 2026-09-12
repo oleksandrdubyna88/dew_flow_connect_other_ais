@@ -2225,6 +2225,10 @@ test('the region opens over half a second, because that is what was asked for', 
   const asking = ruleFor(css, '.asking');
 
   assert.match(asking, /transition:[^;]*max-height \.5s/, 'the region appears instead of opening');
+  // The line under it is ORANGE and nothing else on this page is: against the answers below it, a
+  // rule in the editor's own border colour read as one more division among many.
+  assert.match(ruleFor(css, '.asking.open'), /border-bottom-color: var\(--vscode-charts-orange/,
+    'the line that separates what you asked from the answers blends into them');
   assert.match(asking, /overflow: hidden/, 'a closed region would spill its text over the conversation');
   assert.match(ruleFor(css, '.askedText'), /overflow-y: auto/, 'a long question would push the conversation away');
 });
@@ -2249,4 +2253,19 @@ test('the button says what it controls and whether it is open', () => {
   assert.match(header, /aria-expanded="false"/, 'a screen reader is not told the region can open');
   assert.match(header, /aria-controls="asking"/, 'the button does not say what it opens');
   assert.match(html, /id="asking"[^>]*aria-hidden="true"/, 'a folded region is still announced');
+});
+
+test('hiding the arrows actually hides them, against the rule that lays them out', () => {
+  // `hidden` did nothing: the browser's own [hidden] is a bare attribute selector and `.askingHead`
+  // sets `display: flex`, which outranks it. The property was true and the row stayed on screen —
+  // the operator photographed two dead boxes above a sentence saying there was nothing to step
+  // through. A stub can only be asked about the property; only the CSS answers this.
+  const css = chatPageHtml(state({ fromSession: true }), 'n0nce').split('<style>')[1].split('</style>')[0];
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, '').split('}');
+  const layout = rules.findIndex((rule) => rule.includes('.askingHead ') || rule.includes('.askingHead{'));
+  const hide = rules.findIndex((rule) => rule.includes('.askingHead[hidden]'));
+
+  assert.ok(hide >= 0, 'nothing in the page makes a hidden row of arrows go away');
+  assert.match(rules[hide] ?? '', /display: none/, 'the hidden row is still laid out');
+  assert.ok(hide > layout, 'the rule that hides the row comes before the one that shows it, so it loses');
 });

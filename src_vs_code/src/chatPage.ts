@@ -563,10 +563,20 @@ function chatStyle(
      once the fold has finished, which is exactly the behaviour wanted. (CodeRabbit, PR #207.) */
   .asking { flex: 0 0 auto; max-height: 0; opacity: 0; overflow: hidden; padding: 0 20px; visibility: hidden;
             transition: max-height .5s ease, opacity .5s ease, padding .5s ease, visibility .5s ease;
-            border-bottom: 1px solid transparent; }
+            border-bottom: 2px solid transparent; }
+  /* ORANGE, and a colour no other line on this page wears. The panel border it used to use is the
+     colour every rule in the editor is, so the boundary between what you asked and what was answered
+     read as one more division among many — asked for as *"а то сливается ответами"*. A charts token
+     with a hex fallback, like every other colour here, so a theme that redefines the palette moves
+     this with it. */
   .asking.open { max-height: 40vh; opacity: 1; padding: 0 20px 10px; visibility: visible;
-                 border-bottom-color: var(--vscode-panel-border); }
+                 border-bottom-color: var(--vscode-charts-orange, #d18616); }
   .askingHead { display: flex; align-items: center; gap: 6px; opacity: .75; font-size: .85em; }
+  /* AFTER the rule above and no weaker than it. The browser's own [hidden] is a bare attribute
+     selector, so a class that sets display beats it and the element stays on screen with its hidden
+     property set to true — which is exactly what the operator photographed: two dead boxes above a
+     sentence explaining there was nothing to step through. */
+  .askingHead[hidden] { display: none; }
   .askingHead button { min-width: 24px; padding: 2px 6px; font: inherit; }
   .askedAt { min-width: 4em; text-align: center; }
   .askedText { max-height: calc(40vh - 2.5em); overflow-y: auto; white-space: pre-wrap; overflow-wrap: break-word; }
