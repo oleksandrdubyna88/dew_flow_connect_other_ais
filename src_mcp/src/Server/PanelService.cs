@@ -633,6 +633,48 @@ public sealed partial class PanelService
     }
 
     /// <summary>
+    /// One local reviewer leads the round; every other local one goes to the back.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why it leads (issue #155).</b> A local engine is the slowest reviewer in any round —
+    /// minutes where a hosted vendor takes tens of seconds — so a round that asks it last spends its
+    /// wall-clock watching the hosted reviewers finish and then waiting for this one to begin. The
+    /// shuffle above cannot know that: it exists to spread load across shared Team accounts, and it
+    /// puts the local row wherever the seed says.</para>
+    ///
+    /// <para><b>Why only ONE leads, and the others go LAST.</b> <see cref="BoundedScheduler"/> takes
+    /// a machine-wide slot before the engine — deliberately, since taking the engine first once made
+    /// a local reviewer hold an idle card while queued behind hosted vendors. With
+    /// <c>LocalConcurrency = 1</c> a second local row can only wait for the card, so leaving it near
+    /// the front would occupy one of three machine slots to do nothing, and the hosted vendors would
+    /// share what was left. At the tail it waits where waiting is free. Raised on the plan round,
+    /// against a first draft that promoted one row and left the rest where they were.</para>
+    ///
+    /// <para><b>What it promises</b> is the order reviewers are SUBMITTED in, which is all this
+    /// method decides. If another round already holds the engine lease, the promoted row waits for
+    /// the card like anything else; what changed is that it is asked first.</para>
+    ///
+    /// <para>Stable in both directions: the hosted vendors keep the shuffle's relative order, so the
+    /// fairness it buys is untouched and a replayed seed still replays.</para>
+    /// </remarks>
+    private static IReadOnlyList<ProviderSettings> OneLocalFirstTheRestLast(IReadOnlyList<ProviderSettings> shuffled)
+    {
+        var local = shuffled.Where(IsLocal).ToList();
+        if (local.Count == 0)
+        {
+            return shuffled;
+        }
+
+        // `RuntimeResolution.NameOf` is the one authority on what a vendor's runtime is; re-deriving
+        // it from the two settings fields is what its docstring forbids, and what three drifting
+        // copies of that logic once did.
+        return [local[0], .. shuffled.Where(p => !IsLocal(p)), .. local.Skip(1)];
+
+        static bool IsLocal(ProviderSettings p) =>
+            string.Equals(RuntimeResolution.NameOf(p.Identity()), "local", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// A seed that is the same on every replay of one round, and different for the next.
     /// </summary>
     /// <remarks>
@@ -1215,7 +1257,7 @@ public sealed partial class PanelService
         // synchronously to its first await. That prefix is what decides which vendor is asked first,
         // which is the whole point. Past it, who gets a RELEASED slot is SemaphoreSlim's business and
         // .NET documents no order for it — so the tail is best-effort rather than a promise.
-        var runnable = SeededShuffle.Of(eligible, seed);
+        var runnable = OneLocalFirstTheRestLast(SeededShuffle.Of(eligible, seed));
 
         var items = Items(roles, round, planPrompts);
         var work = new List<ReviewerWork>();
