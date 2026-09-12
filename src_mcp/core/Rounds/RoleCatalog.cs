@@ -1,5 +1,4 @@
 using System.Text.Json;
-using CoaiMcp.Core.Findings;
 
 namespace CoaiMcp.Core.Rounds;
 
@@ -203,8 +202,8 @@ public sealed class RoleCatalog
             MustBeWellFormed(role);
         }
 
-        MustBeUnique([.. roles.Select(r => r.Id)], "role id");
-        MustBeUnique([.. roles.SelectMany(r => r.Prompts).Select(p => p.Id)], "prompt id");
+        MustBeUnique([.. roles.Select(r => (r.Id, Owner: r.Name))], "role id");
+        MustBeUnique([.. roles.SelectMany(r => r.Prompts.Select(p => (p.Id, Owner: r.Id)))], "prompt id");
 
         return From([.. roles.Select(Definition)]);
     }
@@ -231,11 +230,14 @@ public sealed class RoleCatalog
     /// a coin toss; a prompt id is a file name under <c>&lt;dataDir&gt;/prompts/</c>, so two roles
     /// sharing one would read a single text. Both were raised on this story's own code round.
     /// </remarks>
-    private static void MustBeUnique(IReadOnlyList<string> ids, string what)
+    private static void MustBeUnique(IReadOnlyList<(string Id, string Owner)> ids, string what)
     {
-        if (ids.GroupBy(id => id, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1) is { } clash)
+        if (ids.GroupBy(x => x.Id, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1) is { } clash)
         {
-            throw Broken($"the {what} '{clash.Key}' is used more than once ({string.Join(", ", clash)})");
+            // Named with its OWNERS, because the id alone sends a person searching the file for a
+            // string that is legitimately there twice; what they need is which two rows to look at.
+            throw Broken(
+                $"the {what} '{clash.Key}' is used more than once — by {string.Join(" and ", clash.Select(x => $"'{x.Owner}'"))}");
         }
     }
 
