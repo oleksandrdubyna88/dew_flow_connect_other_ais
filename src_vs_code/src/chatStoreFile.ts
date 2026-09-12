@@ -130,6 +130,16 @@ export type SaveOutcome =
      * then nothing may be assumed about it. (gemini and local, A3's plan round.)</p>
      */
     readonly said?: readonly string[];
+    /**
+     * When the record on disk BEGAN, when it could be read.
+     *
+     * <p>A window that adopts a record is taking over one it wrote in an earlier session, and the
+     * conversation began when THAT did — not when the memento was last written, which is the best
+     * this side can otherwise do. Without it, adopting a conversation started in January and
+     * answered in March records it as having started in March, and the picker draws its "started"
+     * from exactly that field. (codex, A3's code round.)</p>
+     */
+    readonly began?: number;
   }
   | { readonly kind: 'incompatible'; readonly reason: string }
   | { readonly kind: 'failed'; readonly reason: string };
@@ -343,7 +353,9 @@ export class ChatStoreFile {
       return {
         kind: 'refused',
         diskRev: conflict,
-        ...(seen.kind === 'record' ? { said: seen.record.messages.map((message) => message.text) } : {}),
+        ...(seen.kind === 'record'
+          ? { said: seen.record.messages.map((message) => message.text), began: seen.record.createdAt }
+          : {}),
       };
     }
     try {

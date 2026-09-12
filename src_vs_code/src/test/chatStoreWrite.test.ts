@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CONTINUED_ELSEWHERE, INDEX_BEHIND, nextAfterSave } from '../chatStoreWrite';
+import { BUSY_ELSEWHERE, CONTINUED_ELSEWHERE, INDEX_BEHIND, STILL_SAFE, nextAfterSave } from '../chatStoreWrite';
 
 /**
  * What a conversation DOES about the answer its save came back with.
@@ -32,7 +32,7 @@ test('a refusal forks: the conversation is kept, under a new id, and the tab is 
   // Another window is in this conversation. Overwriting it would lose their turns and refusing to
   // save would lose ours, so neither happens: this tab becomes a copy, keeps every message it holds,
   // and writes somewhere nobody else is.
-  const next = nextAfterSave({ kind: 'refused', diskRev: 9 }, 4);
+  const next = nextAfterSave({ kind: 'refused', diskRev: 9, said: ['somebody else'] }, 4, ['ours']);
 
   assert.equal(next.kind, 'fork');
   assert.equal(next.kind === 'fork' ? next.note : '', CONTINUED_ELSEWHERE);
@@ -49,7 +49,7 @@ test('a record this build cannot read forks as well, rather than being written o
 test('a disk that would not answer changes nothing about the conversation, and says so once', () => {
   // Not a fork: forking would mint an id per failed write and scatter one conversation across the
   // store. The transcript is in memory and the next turn tries again.
-  const next = nextAfterSave({ kind: 'failed', reason: 'the conversation could not be saved to disk (EACCES)' }, 4);
+  const next = nextAfterSave({ kind: 'failed', reason: 'the conversation could not be saved to disk (EACCES)' }, 4, []);
 
   assert.equal(next.kind, 'said');
   assert.ok(
@@ -144,8 +144,36 @@ test('an identical transcript is adopted: it is our own record, unchanged', () =
   );
 });
 
-test('a refusal that says nothing about what is on disk is never adopted', () => {
-  // The store reports what it read; if it could not, there is nothing to compare against and the
-  // safe answer is the one that loses nobody's words.
-  assert.equal(nextAfterSave({ kind: 'refused', diskRev: 5 }, 0, ['why']).kind, 'fork');
+test('a refusal that says nothing about the disk changes nothing, and waits for the next turn', () => {
+  // The store reports what it read; when it could not, there is nothing to compare against. Forking
+  // was the first answer and A3's code round refused it: the reason a refusal carries no transcript
+  // is almost always that the store was mid-mutation of THIS conversation and never probed it, so
+  // forking would mint a copy because a lock was held for a few milliseconds. Nothing changes and
+  // the next turn tries again. (local.)
+  const next = nextAfterSave({ kind: 'refused', diskRev: 5 }, 0, ['why']);
+
+  assert.equal(next.kind, 'said', 'a conversation forked because its own store was busy for an instant');
+  assert.equal(next.kind === 'said' ? next.note : '', BUSY_ELSEWHERE);
+});
+
+test('what a failed save says names the fault AND that the conversation is still there', () => {
+  // A reason on its own reads as though the words had been lost, when they are on screen, in the
+  // store of record, and about to be tried again. (codex and gemini.)
+  const next = nextAfterSave({ kind: 'failed', reason: 'the disk said no (EACCES)' }, 4, []);
+
+  assert.equal(next.kind, 'said');
+  assert.ok(next.kind === 'said' && next.note.includes('EACCES'), 'the fault is not named');
+  assert.ok(next.kind === 'said' && next.note.includes(STILL_SAFE), 'a person is left thinking their words are gone');
+});
+
+test('an adopted record brings its own beginning with it', () => {
+  // Otherwise a conversation started in January and answered in March is rewritten as having
+  // started in March, because this side's best guess is when the memento was last written.
+  const next = nextAfterSave(
+    { kind: 'refused', diskRev: 5, said: ['why'], began: 1_700_000_000_000 },
+    0,
+    ['why', 'because'],
+  );
+
+  assert.deepEqual(next, { kind: 'adopt', rev: 5, began: 1_700_000_000_000 });
 });

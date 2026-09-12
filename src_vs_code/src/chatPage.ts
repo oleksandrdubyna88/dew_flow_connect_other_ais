@@ -1522,7 +1522,15 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     // as the copy it became rather than as the original it no longer owns.
     if (data.type === 'note') {
       if (typeof data.id === 'string' && data.id.length > 0) {
-        vscode.setState({ id: data.id });
+        // MERGED, not replaced. setState writes the whole state object, so naming one field here
+        // would throw away everything else a future page keeps in it - and this page is reloaded
+        // from exactly that object. Nothing else lives there today, which is what makes this the
+        // cheap moment to stop it being a trap. (gemini, twice, on A3's code round.)
+        // No backticks in this comment, deliberately: it lives inside a template literal, where one
+        // would end the literal and surface as a parse error dozens of lines away.
+        const held = vscode.getState() || {};
+        held.id = data.id;
+        vscode.setState(held);
       }
       const where = document.getElementById('failure');
       if (where && typeof data.noteHtml === 'string' && data.noteHtml.length > 0) {

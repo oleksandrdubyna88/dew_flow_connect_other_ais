@@ -2004,6 +2004,93 @@ conversation. It is NOT done here on purpose: this diff has been through its cod
 afterwards would ship unreviewed movement, and two other plans are editing the same file. It is worth
 one small change of its own.
 
+## A conversation is kept on disk as well (2026-09-12)
+
+The memento above is still the source of truth, and everything below is written BESIDE it. That is
+the whole shape of this step: the store is filled for a version before anything reads it, so the
+cut-over that empties the memento runs against a store that has already been correct for a while
+rather than one created in the same commit. It is the only step in this feature that can destroy a
+person's history, and it is the next one.
+
+### Where it lives, and what a conversation is on disk
+
+`<coaiDataDir>/chat-conversations/`, beside `chat-usage.jsonl` and `chat-doors.jsonl`. One
+conversation is TWO files:
+
+| File | Holds | Read by |
+|---|---|---|
+| `<id>.json` | the record — version, revision, id, title, passage, model, messages, which door it came through, the carry mark, its source, its workspace, when it began and when it was last written | a read, and the serializer once A4 lands |
+| `<id>.meta.json` | about 300 bytes: the title, the model, how many turns, the last line cut at 120 characters, the source, the workspace, the instants | the listing, and nothing else |
+
+The listing never opens a transcript. Reading ninety days of them to draw a list is seconds of a
+blocked extension host, which is the whole reason the second file exists.
+
+### Two atomic writes are not one atomic commit
+
+The record is written first and the metadata second, both stamped with one new `rev`, so a metadata
+file whose revision or version is not its record's is stale BY CONSTRUCTION rather than by a guess
+about clocks — and a read regenerates it from the record, which is the truth. Deletion goes the other
+way, metadata first, so a crash mid-delete leaves a file nobody can see rather than a row that opens
+onto nothing. Three vendors' reviewers found that hole in the plan, independently.
+
+### The swap, and the lock underneath it
+
+A save carries the revision the window last had accepted. Reading that revision and then renaming is
+a check-then-act, not a swap: two windows both holding revision 5 both write 6 and the second wins
+silently. So the transition is CLAIMED — one `<id>.lock` per conversation, created exclusively, which
+is the one operation a filesystem offers as an atomic test-and-set — and the disk is probed only
+under the claim. Every mutation takes it: a save, a delete, and the metadata regeneration a read
+performs. Release is fenced by a token, a claim older than thirty seconds is broken once so a killed
+writer cannot wedge a conversation for ever, and the residual window that leaves is stated in
+`chatStoreLock.ts`'s own header.
+
+A save answers in five: `ok`, `partial` (the record committed, its index did not — advance the
+baseline, the index self-heals), `refused` (somebody else is in this conversation), `incompatible`
+(the record is torn or from a newer build, and **nothing is written**, so a downgrade cannot destroy
+it) and `failed`.
+
+### What a tab DOES about a refusal
+
+`chatStoreWrite.ts`, pure and tested as values, because a rule buried in `chatCommand.ts` is one no
+reviewer can check. Nothing it decides can lose a conversation: the transcript is on the thread, and
+the disk is only where it is kept for tomorrow.
+
+- **A refusal forks.** The tab becomes a copy under a new id, keeps every message, and says so. The
+  new id is written to the memento FIRST and the store second — the same order as every other write
+  here, because a fork that exists only on disk leaves the reload restoring the original this tab no
+  longer owns, with the copy holding the person's words orphaned from both the reload and the
+  migration.
+- **Except where the record is this conversation's own earlier self**, which is the ordinary case
+  after a reopen and which forking would turn into a second copy every time. Such a record is
+  ADOPTED — but never on the strength of its revision, because two windows can both sit at baseline
+  0. What is compared is the WORDS: our own earlier session is a prefix of what we hold, and a disk
+  that has said anything we have not is somebody else. An adopted record brings its own beginning
+  with it, or a conversation started in January and answered in March is rewritten as having started
+  in March.
+- **A refusal that says nothing about the disk changes nothing.** The store was mid-mutation of this
+  very conversation and never probed it; forking there would mint a copy because a lock was held for
+  a few milliseconds.
+- **A failure changes nothing either**, and says so along with the fact that the conversation is
+  still there. Forking on a disk that would not answer would mint an id per failed write.
+
+### Two rules about WHEN it is written
+
+The writes of one conversation are CHAINED. A save carries the revision this window last had
+accepted, so two issued before the first answers both carry the old one — the second is refused, a
+refusal reads as another window, and the tab forks ITSELF and tells the person it has become a copy
+of a conversation nobody else was in.
+
+And both writes sit below `show`'s dedupe guard, which compares the transcript, the model and the
+carry mark by reference. A turn's hundred progress pushes change none of them and write nothing; what
+reaches the disk is about two writes per turn.
+
+### What the page is told
+
+Through a message of its OWN (`note`), never the state channel, for the reason the Asked region has
+one: the page reads a state push as the whole truth about every region it mentions. The new id
+travels with the sentence, and the page MERGES it into its stored state rather than replacing that
+state, because `setState` writes the object whole.
+
 ## The chat tab wears its own glyph (2026-09-09)
 
 Every chat tab wore the generic `≡`, because `createWebviewPanel` never set `iconPath` — there was
