@@ -244,6 +244,14 @@ function conflictOf(seen: Present, base: number): number | undefined {
  * directory. State is the directory and nothing more — every method is otherwise a pure function of
  * the disk.</p>
  */
+/** What the conversation store is called, beside `chat-usage.jsonl` and `chat-doors.jsonl`. */
+export const CONVERSATIONS_DIR = 'chat-conversations';
+
+/** Where this installation keeps its conversations, given the coai data directory. */
+export function conversationsDir(dataDir: string): string {
+  return join(dataDir, CONVERSATIONS_DIR);
+}
+
 export class ChatStoreFile {
   public constructor(private readonly dir: string) {}
 

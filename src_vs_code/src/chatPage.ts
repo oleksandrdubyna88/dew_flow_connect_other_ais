@@ -1516,6 +1516,21 @@ function chatScript(state: ChatPageState, regions: Regions): string {
 
       return;
     }
+    // Its OWN message too, and for the same reason as 'asked' above. It also carries the id this
+    // page is to hand back after a reload: a conversation continued in another window is written
+    // under a new one from that moment, and a tab that forked and was then reloaded must come back
+    // as the copy it became rather than as the original it no longer owns.
+    if (data.type === 'note') {
+      if (typeof data.id === 'string' && data.id.length > 0) {
+        vscode.setState({ id: data.id });
+      }
+      const where = document.getElementById('failure');
+      if (where && typeof data.noteHtml === 'string' && data.noteHtml.length > 0) {
+        where.innerHTML = '<div class="failure">' + data.noteHtml + '</div>';
+      }
+
+      return;
+    }
     if (data.type !== 'state') { return; }
     // BEFORE any write. Read after one, scrollHeight already includes what just arrived, so a reader
     // who was at the bottom measures as a screen short of it and is never followed - rule 2 turns

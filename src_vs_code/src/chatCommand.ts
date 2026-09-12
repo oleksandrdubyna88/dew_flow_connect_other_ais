@@ -18,6 +18,9 @@ import {
   reaskFrom,
 } from './chatPresets';
 import { ChatTabMemory, SavedTab, reloadedNote } from './chatTabs';
+import { CONVERSATION_VERSION, ConversationRecord } from './chatStore';
+import { ChatStoreFile } from './chatStoreFile';
+import { CONTINUED_ELSEWHERE, WriteNext, nextAfterSave } from './chatStoreWrite';
 import { ChatEntry, ChatPanels } from './chatPanels';
 import { ChatSession, TurnResult } from './chatSession';
 import { AnsweredBy, ChatMessage, ChatModelChoice, ChatPageState } from './chatPage';
@@ -49,7 +52,7 @@ import { recordChatDoor } from './chatDoorsFile';
 import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './chatDiscovery';
 import { chatSettingsFrom } from './chatSettings';
 import { CARRY_EVERYTHING, carriedFrom, carryMark } from './chatCarry';
-import { chatTextTone, chatUiScale, createChatPanel, pushChatDraft, pushChatState, setChatDraft } from './chatPanel';
+import { chatTextTone, chatUiScale, createChatPanel, pushChatDraft, pushChatNote, pushChatState, setChatDraft } from './chatPanel';
 import { captureSelection, COPY_SCRIPT, RunOutcome, argvFor, ran } from './selectionCapture';
 import { windowsReach } from './hostSide';
 import { ChatHome, adapterFor, chatHome, chatRuntimeRefusal, defaultExecutableFor } from './cliChatLaunch';
@@ -247,7 +250,16 @@ interface Thread extends ChatMemory {
    * <p>Not the entry's identity object — that one dies with the window. This is the string the page
    * hands back to the serializer after a reload.</p>
    */
-  readonly saveId: string;
+  saveId: string;
+  /**
+   * Which save of this conversation the disk last accepted from this window.
+   *
+   * <p>The baseline of the compare-and-swap in `chatStoreFile.ts`: a save carries it, and the store
+   * refuses rather than overwrites when the disk has moved on. 0 until the first save lands, which
+   * is what says "nothing of this conversation is on disk yet" — the only state allowed to create
+   * one.</p>
+   */
+  rev: number;
   /** The tab's heading, kept here because what is written down has to name the conversation. */
   readonly title: string;
   /** What was last written to the store, so a push that changed nothing writes nothing. */
@@ -387,6 +399,20 @@ let memory: ChatTabMemory | undefined;
 
 export function rememberChatsIn(store: ChatTabMemory): void {
   memory = store;
+}
+
+/**
+ * The conversation store on disk, which nothing reads yet.
+ *
+ * <p>Bound the same way and for the same reason as the memento above. It is written BESIDE that
+ * memento for one version — story A4 is what makes it the source of truth, and it can only do that
+ * against a store that has been filling while the old one was still in charge. Absent means no
+ * store, which is every test of this file's pure neighbours: every use is guarded.</p>
+ */
+let store: ChatStoreFile | undefined;
+
+export function keepChatsIn(onDisk: ChatStoreFile): void {
+  store = onDisk;
 }
 
 /**
@@ -548,6 +574,106 @@ function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): 
     fromSession: thread.fromSession,
     carryFrom: thread.carryFrom,
   });
+  // AND to the store on disk, which nothing reads yet. The memento above is still the source of
+  // truth; story A4 is what turns that round, and it can only do so against a store that has been
+  // filling for a version. Detached on purpose — nobody waits for a disk to see their own words —
+  // and therefore ending in a catch of its own, which `reliability.md` requires of every edge
+  // nothing is above.
+  void keepOnDisk(entry, thread).catch((reason: unknown) => {
+    console.error('ConnectOtherAIs: a conversation could not be written to the store', reason);
+  });
+}
+
+/**
+ * The conversation as the store keeps it — built here, because only this side knows a thread.
+ *
+ * <p>`rev` is what the store stamps, so the value put in is the one it will replace; `source` is
+ * `none` until story C1 teaches a conversation what it was opened from, and `none` matches no tab,
+ * which is the honest answer while nothing knows better.</p>
+ */
+function recordOf(thread: Thread, at = Date.now()): ConversationRecord {
+  return {
+    version: CONVERSATION_VERSION,
+    rev: thread.rev,
+    id: thread.saveId,
+    title: thread.title,
+    passage: thread.passage,
+    modelId: thread.modelId,
+    messages: thread.messages,
+    fromSession: thread.fromSession,
+    carryFrom: thread.carryFrom,
+    source: { kind: 'none' },
+    workspace: whereToLook()[0] ?? '',
+    createdAt: at,
+    updatedAt: at,
+  };
+}
+
+/**
+ * Write this conversation to the store, and do what its answer says.
+ *
+ * <p>The store's swap can refuse, and what a refusal MEANS is `chatStoreWrite.ts` — pure, and tested
+ * as values. What is left here is the disk and the page. The rule worth carrying in your head while
+ * reading it: nothing below can lose a conversation, because the transcript is on the thread and the
+ * disk is only where it is kept for tomorrow.</p>
+ */
+async function keepOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
+  if (store === undefined) {
+    return;
+  }
+  const next = nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev);
+  if (next.kind === 'adopt') {
+    // Our own record, from a session before this window ever wrote. Take the number the disk reports
+    // and save once more against it; a SECOND refusal has no innocent reading left and forks.
+    thread.rev = next.rev;
+    await settle(entry, thread, nextAfterSave(await store.save(recordOf(thread), thread.rev), thread.rev));
+
+    return;
+  }
+  await settle(entry, thread, next);
+}
+
+/** What one answer does to the thread and to the page. Never called with `adopt`, which is a retry. */
+async function settle(entry: ChatEntry, thread: Thread, next: WriteNext): Promise<void> {
+  if (next.kind === 'kept') {
+    thread.rev = next.rev;
+    if (next.note !== undefined) {
+      // A half-commit, said once and only where it matters: the transcript is safe on disk and the
+      // row that finds it again is behind, which the next read of it repairs.
+      pushChatNote(entry, thread.saveId, next.note);
+    }
+
+    return;
+  }
+  if (next.kind === 'said') {
+    pushChatNote(entry, thread.saveId, next.note);
+
+    return;
+  }
+  await forkOnDisk(entry, thread);
+}
+
+/**
+ * This conversation belongs to another window now; keep ours under a new id.
+ *
+ * <p>Every message stays — they are on the thread, and the record written below carries all of them
+ * — so what a person loses is nothing and what they gain is a tab that says which of the two windows
+ * they are looking at. The page is told through a message of its OWN rather than through the state
+ * channel, for the reason `showAsked` has one: a state push is read as the whole truth about every
+ * region it does not mention, so a sentence sent that way would clear a failure line beside it.</p>
+ */
+async function forkOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
+  thread.saveId = randomUUID();
+  thread.rev = 0;
+  if (store !== undefined) {
+    const next = nextAfterSave(await store.save(recordOf(thread), 0), 0);
+    if (next.kind === 'kept') {
+      thread.rev = next.rev;
+    }
+  }
+  // The new id goes with the sentence: the page hands it back to the serializer after a reload, so a
+  // tab that forked and was then reloaded must come back as the copy rather than as the original.
+  pushChatNote(entry, thread.saveId, CONTINUED_ELSEWHERE);
 }
 
 /**
@@ -1610,6 +1736,9 @@ function newConversation(
     messages: [],
     turns: Promise.resolve(),
     saveId,
+    // Nothing of this conversation is on disk yet, and 0 is what says so to the store's swap — the
+    // only baseline allowed to create a record rather than replace one.
+    rev: 0,
     title: state.title,
     reopen: false,
   });
@@ -2154,6 +2283,12 @@ export function restoreConversation(
     messages: [...saved.messages],
     turns: Promise.resolve(),
     saveId: saved.id,
+    // 0, because what this came back from is the MEMENTO, which knows nothing about the store's
+    // revisions. The conversation's own record is very likely already on disk under this id from a
+    // previous session, and the first save meets it — `nextAfterSave` then ADOPTS its number rather
+    // than forking, which is precisely the case that rule exists for. Story A4 retires the memento,
+    // and this becomes the record's own revision, read back with it.
+    rev: 0,
     title: saved.title,
     reopen: true,
   });

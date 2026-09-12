@@ -463,6 +463,22 @@ export function setChatDraft(entry: ChatEntry, draft: string): void {
   entry.panel.post({ type: 'state', setDraft: draft });
 }
 
+/**
+ * Tell the page something about ITSELF — and, when it has changed, which conversation it now is.
+ *
+ * <p>Its own message type rather than a field on the state push, for the reason `asked` has one: the
+ * page reads a state message as the whole truth about every region it mentions, and treats what it
+ * does NOT mention as gone. A sentence sent that way would clear the failure line beside it.</p>
+ *
+ * <p>The id travels with the sentence because the two change together. A conversation that has been
+ * continued in another window is written under a new id from that moment, and the page hands its id
+ * back to the serializer after a reload — so a tab that forked and was then reloaded must come back
+ * as the copy it became rather than as the original it no longer owns.</p>
+ */
+export function pushChatNote(entry: ChatEntry, id: string, note: string): void {
+  entry.panel.post({ type: 'note', id, noteHtml: escapeHtml(note) });
+}
+
 /** The scale the page opens at, so a new tab matches the ones already open. */
 export function chatUiScale(): number {
   return currentUiScale();
