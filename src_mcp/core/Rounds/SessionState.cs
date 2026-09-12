@@ -83,25 +83,43 @@ public sealed record PanelConfig(
     /// <summary>One attempt, at most five. Mirrored by the panel — see <see cref="PlanDefault"/>.</summary>
     public static readonly RoleGate CodeDefault = new(1, 5);
 
-    /// <summary>The role names this config knows, in the order a round runs them.</summary>
-    public static readonly string[] AllRoles =
-        [PromptCatalog.PlanRole, PromptCatalog.ConventionsRole, PromptCatalog.ArchitectureRole,
-         PromptCatalog.SecurityRole, PromptCatalog.UxDxRole];
+    /// <summary>
+    /// The SHIPPED role names, in the order a round runs them — read from the seed, not retyped.
+    /// </summary>
+    /// <remarks>
+    /// These two were the hard-coded list of roles this product had. They are now a projection of
+    /// <see cref="RoleCatalog.Builtin"/>, which is what every caller of them still means: a default
+    /// that predates custom roles, or a sentence naming the boxes a person sees out of the box. The
+    /// roles a ROUND runs come from <see cref="Catalog"/>, which may carry a person's own.
+    /// </remarks>
+    public static readonly string[] AllRoles = [.. RoleCatalog.Builtin.Roles.Select(r => r.Id)];
 
-    public static readonly string[] CodeRoleNames =
-        [PromptCatalog.ConventionsRole, PromptCatalog.ArchitectureRole,
-         PromptCatalog.SecurityRole, PromptCatalog.UxDxRole];
+    public static readonly string[] CodeRoleNames = [.. RoleCatalog.Builtin.RolesOf(RoleStages.Result)];
+
+    /// <summary>
+    /// Which roles exist for this session — the shipped five, plus whatever a person configured.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Roles"/> on purpose: that one is how much each role may SPEND, this
+    /// one is what a role IS. A config built before custom roles existed, or by a test that cares
+    /// about budgets only, gets the shipped catalog and behaves exactly as it always did.
+    /// </remarks>
+    public RoleCatalog Catalog { get; init; } = RoleCatalog.Builtin;
 
     public IReadOnlyDictionary<string, RoleGate> Roles { get; init; } = Roles ?? Defaults();
 
     private static Dictionary<string, RoleGate> Defaults() =>
-        AllRoles.ToDictionary(r => r, r => r == PromptCatalog.PlanRole ? PlanDefault : CodeDefault);
+        AllRoles.ToDictionary(r => r, r => r == RoleCatalog.PlanRole ? PlanDefault : CodeDefault);
 
     /// <summary>This role's numbers, falling back to its stage's default for an unknown name.</summary>
+    /// <remarks>
+    /// The fallback is what makes a role a person just created work with no settings at all: nobody
+    /// has written it a budget yet, so it takes its stage's shipped one.
+    /// </remarks>
     public RoleGate For(string role) =>
         Roles.TryGetValue(role, out var gate)
             ? gate
-            : role == PromptCatalog.PlanRole ? PlanDefault : CodeDefault;
+            : Catalog.ById(role)?.Stage == RoleStages.Plan ? PlanDefault : CodeDefault;
 
     /// <summary>
     /// The roles of this stage that are switched ON, in the order a round runs them.
@@ -147,8 +165,15 @@ public sealed record PanelConfig(
     public IReadOnlyList<string> RolesForRound(Stage stage, int round) =>
         [.. EnabledRolesOf(stage).Where(r => For(r).MaxRounds >= Math.Max(round, 1))];
 
-    private static string[] RolesOf(Stage stage) =>
-        stage == Stage.CodeReview ? CodeRoleNames : [PromptCatalog.PlanRole];
+    /// <summary>
+    /// The roles of a stage, from this session's catalog — switched on, and of this stage's kind.
+    /// </summary>
+    /// <remarks>
+    /// A hard-coded pair of arrays until the catalog became data, which is why a role a person
+    /// created could not take part in a round however carefully it was configured.
+    /// </remarks>
+    private IReadOnlyList<string> RolesOf(Stage stage) =>
+        Catalog.RolesOf(stage == Stage.CodeReview ? RoleStages.Result : RoleStages.Plan);
 
     /// <summary>
     /// The same gate for every role — what the legacy single-value settings mean, and what a test
@@ -156,6 +181,9 @@ public sealed record PanelConfig(
     /// </summary>
     public static PanelConfig Uniform(int maxRounds, int threshold, StagePolicy onExhausted = StagePolicy.Human) =>
         new(AllRoles.ToDictionary(r => r, _ => new RoleGate(maxRounds, threshold)), onExhausted);
+
+    /// <summary>The same config over a catalog that carries a person's own roles as well.</summary>
+    public PanelConfig With(RoleCatalog catalog) => this with { Catalog = catalog };
 }
 
 public enum Stage

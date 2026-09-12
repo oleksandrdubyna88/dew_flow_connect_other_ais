@@ -374,4 +374,39 @@ public sealed class RoleGateTests
         config.For(PromptCatalog.SecurityRole).Enabled.Should().BeTrue();
         config.RolesForRound(Stage.CodeReview, round: 1).Should().Contain(PromptCatalog.SecurityRole);
     }
+
+    /// <summary>
+    /// Which roles a stage HAS comes from the catalog this config was built with.
+    /// </summary>
+    /// <remarks>
+    /// It came from a hard-coded array until the catalog became data, which is why a person's own
+    /// role could not take part in a round however it was configured. The gate itself is unchanged:
+    /// a role with no gate of its own still falls back to its stage's shipped default, which is what
+    /// makes a new role work with no settings at all.
+    /// </remarks>
+    [Fact]
+    public void ACustomRoleInTheCatalog_TakesPartInItsStagesRound()
+    {
+        var catalog = RoleComposition.Compose([
+            new RoleEntry("Requirements", Stage: RoleStages.Result,
+                Prompts: [new PromptEntry("req-general", "General", "Whether the requirement is met.")]),
+        ]);
+        var config = new PanelConfig(Roles: null, StagePolicy.Human) { Catalog = catalog };
+
+        config.RolesForRound(Stage.CodeReview, round: 1).Should().Contain("Requirements");
+        config.For("Requirements").Should().Be(PanelConfig.CodeDefault,
+            "a role nobody gave a budget gets its stage's shipped one");
+    }
+
+    [Fact]
+    public void ACustomRoleSwitchedOffInTheCatalog_IsInNoRound()
+    {
+        var catalog = RoleComposition.Compose([
+            new RoleEntry(PromptCatalog.ArchitectureRole, Active: false),
+        ]);
+        var config = new PanelConfig(Roles: null, StagePolicy.Human) { Catalog = catalog };
+
+        config.RolesForRound(Stage.CodeReview, round: 1).Should().NotContain(PromptCatalog.ArchitectureRole);
+        config.EnabledRolesOf(Stage.CodeReview).Should().NotContain(PromptCatalog.ArchitectureRole);
+    }
 }
