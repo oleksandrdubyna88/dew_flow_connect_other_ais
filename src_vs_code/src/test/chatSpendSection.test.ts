@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ChatDoorRecord } from '../chatDoors';
 import { ChatTurnRecord } from '../chatUsage';
-import { usageTabHtml } from '../roundsLog';
+import { roundsLogHtml, usageTabHtml } from '../roundsLog';
 import { UsageEntry } from '../usage';
 
 /**
@@ -141,4 +141,26 @@ test('the tab still renders when nothing hands it any chat ledgers at all', () =
 
   assert.match(html, /<h3 class="ledger">Chat<\/h3>/);
   assert.match(html, /All vendors: 1\.2M tokens/);
+});
+
+test('the two ledgers stack in a narrow panel and sit side by side in a wide one', () => {
+  // Asked for after the first layout shipped: a panel dragged narrow must not put a 640px card
+  // beside another. The PAGE decides, so dragging it back and forth needs nobody to redraw it.
+  const html = page();
+
+  assert.match(html, /<div class="ledgers-grid">/, 'the two halves are not in a container that can lay them out');
+  assert.strictEqual(html.match(/<section class="ledger-half">/g)?.length, 2, 'the halves are not two columns-worth');
+  // The rule between them belongs to the stacked case, and it sits BETWEEN the two sections.
+  const grid = html.slice(html.indexOf('<div class="ledgers-grid">'), html.indexOf('</div>', html.indexOf('</section>')));
+
+  assert.match(grid, /<\/section>\s*<hr class="ledgers">\s*<section/, 'the stacked separator is not between the halves');
+
+  const styled = roundsLogHtml([], [], 'n0nce', html);
+
+  assert.match(styled, /\.ledgers-grid \{[^}]*grid-template-columns: minmax\(0, 1fr\)/,
+    'one column is not the default, so a narrow panel would try to fit both');
+  assert.match(styled, /@media \(min-width: 1360px\) \{[\s\S]*?\.ledgers-grid \{ grid-template-columns: repeat\(2/,
+    'there is no width at which the two halves sit side by side');
+  assert.match(styled, /@media \(min-width: 1360px\) \{[\s\S]*?\.ledgers-grid > hr\.ledgers \{ display: none/,
+    'the stacked separator would be drawn across nothing in the two-column layout');
 });

@@ -1455,11 +1455,18 @@ export function usageRegion(
     bothHalves(reviewers.totals.guess, chats.totals.guess),
   );
 
-  return `<h3 class="ledger">Reviewers</h3>
-${reviewers.html}
+  // TWO COLUMNS WHEN THERE IS ROOM, one when there is not - and the page decides, not the host: a
+  // panel is dragged narrow and wide again without anybody redrawing it. The columns keep the width
+  // the cards already had, so the wide layout is the same page side by side rather than a stretched
+  // one. The rule between the halves belongs to the STACKED case; side by side, the gap is the
+  // separator and the rule would be a line across nothing.
+  return `<div class="ledgers-grid">
+<section class="ledger-half"><h3 class="ledger">Reviewers</h3>
+${reviewers.html}</section>
 <hr class="ledgers">
-<h3 class="ledger">Chat</h3>
-${chats.html}
+<section class="ledger-half"><h3 class="ledger">Chat</h3>
+${chats.html}</section>
+</div>
 <hr class="ledgers">
 <div class="hint total everything">Reviewers and chat together: ${shortNumber(tokens)} tokens · ${money}</div>`;
 }
