@@ -140,13 +140,15 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
         // Each part is CONDITIONAL rather than interpolated empty: `[, promptId, 900 bytes]` is a
         // descriptor with a hole in it, which is what a later reader of these lines misparses.
         var parts = new List<string>(4);
-        if (w.Invocation.Model.Length > 0)
+        var model = ForALogLine(w.Invocation.Model);
+        var effort = ForALogLine(w.Invocation.Effort);
+        if (model.Length > 0)
         {
-            parts.Add(w.Invocation.Model);
+            parts.Add(model);
         }
-        if (w.Invocation.Effort.Length > 0)
+        if (effort.Length > 0)
         {
-            parts.Add($"effort {w.Invocation.Effort}");
+            parts.Add($"effort {effort}");
         }
         parts.Add(w.Prompt);
         if (w.PromptBytes is { } bytes)
@@ -156,6 +158,20 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
 
         return $"{w.Invocation.Provider}/{w.Invocation.Role}[{string.Join(", ", parts)}]";
     }
+
+    /// <summary>A configured value, fit to sit inside one line of an audit trail.</summary>
+    /// <remarks>
+    /// <para>Trimmed, so that whitespace is absent rather than an empty bracket section — the panel
+    /// and the reviewer line already treat it that way, and two records of one run disagreeing about
+    /// whether a field is present is worse than either answer.</para>
+    /// <para>And stripped of control characters, because this is the line a person reads to find out
+    /// what happened. A model id is configuration: a newline in one would end the entry and let
+    /// whatever follows read as the next one. It cannot be escaped away later — the log is text by
+    /// then — so it is cleaned here, where the value enters the sentence. Raised on the code round by
+    /// two reviewers.</para>
+    /// </remarks>
+    private static string ForALogLine(string value) =>
+        new(value.Trim().Where(c => !char.IsControl(c)).ToArray());
 
     private static string Humanised(TimeSpan span) =>
         span.TotalMinutes >= 1 ? $"{span.TotalMinutes:0} min" : $"{span.TotalSeconds:0}s";
