@@ -633,7 +633,7 @@ public sealed partial class PanelService
     }
 
     /// <summary>
-    /// One local reviewer leads the round; every other local one goes to the back.
+    /// One local ROW leads the round; every other local one goes to the back.
     /// </summary>
     /// <remarks>
     /// <para><b>Why it leads (issue #155).</b> A local engine is the slowest reviewer in any round —
@@ -641,6 +641,13 @@ public sealed partial class PanelService
     /// wall-clock watching the hosted reviewers finish and then waiting for this one to begin. The
     /// shuffle above cannot know that: it exists to spread load across shared Team accounts, and it
     /// puts the local row wherever the seed says.</para>
+    ///
+    /// <para><b>Rows, not providers — and that distinction is the whole correctness of this.</b> The
+    /// first version reordered the PROVIDER list, and <c>Everyone</c> then expands each provider into
+    /// one row per role, vendor-major. A local vendor serving four roles therefore put four local
+    /// rows at the head, filling every machine slot with reviewers that cannot run: exactly the trap
+    /// described below, reintroduced by the fix for it. Found on the code round — and the test could
+    /// not see it, because it read the row list through <c>Distinct()</c> on the provider.</para>
     ///
     /// <para><b>Why only ONE leads, and the others go LAST.</b> <see cref="BoundedScheduler"/> takes
     /// a machine-wide slot before the engine — deliberately, since taking the engine first once made
@@ -657,21 +664,21 @@ public sealed partial class PanelService
     /// <para>Stable in both directions: the hosted vendors keep the shuffle's relative order, so the
     /// fairness it buys is untouched and a replayed seed still replays.</para>
     /// </remarks>
-    private static IReadOnlyList<ProviderSettings> OneLocalFirstTheRestLast(IReadOnlyList<ProviderSettings> shuffled)
+    private static IReadOnlyList<ReviewerWork> OneLocalRowFirstTheRestLast(IReadOnlyList<ReviewerWork> rows)
     {
-        var local = shuffled.Where(IsLocal).ToList();
+        var local = rows.Where(IsLocalRow).ToList();
         if (local.Count == 0)
         {
-            return shuffled;
+            return rows;
         }
 
-        // `RuntimeResolution.NameOf` is the one authority on what a vendor's runtime is; re-deriving
-        // it from the two settings fields is what its docstring forbids, and what three drifting
-        // copies of that logic once did.
-        return [local[0], .. shuffled.Where(p => !IsLocal(p)), .. local.Skip(1)];
+        return [local[0], .. rows.Where(r => !IsLocalRow(r)), .. local.Skip(1)];
 
-        static bool IsLocal(ProviderSettings p) =>
-            string.Equals(RuntimeResolution.NameOf(p.Identity()), "local", StringComparison.OrdinalIgnoreCase);
+        // `SharedResource` is what the ADAPTER decided this launch contends on, and only
+        // `LocalRuntime` sets it — to the engine's endpoint. Asking the invocation rather than
+        // re-deriving "is this local" from the settings keeps one authority for the question:
+        // `RuntimeResolution` chose the adapter, and the adapter said what it contends on.
+        static bool IsLocalRow(ReviewerWork row) => row.Invocation.SharedResource.Length > 0;
     }
 
     /// <summary>
@@ -1257,7 +1264,7 @@ public sealed partial class PanelService
         // synchronously to its first await. That prefix is what decides which vendor is asked first,
         // which is the whole point. Past it, who gets a RELEASED slot is SemaphoreSlim's business and
         // .NET documents no order for it — so the tail is best-effort rather than a promise.
-        var runnable = OneLocalFirstTheRestLast(SeededShuffle.Of(eligible, seed));
+        var runnable = SeededShuffle.Of(eligible, seed);
 
         var items = Items(roles, round, planPrompts);
         var work = new List<ReviewerWork>();
@@ -1269,7 +1276,7 @@ public sealed partial class PanelService
         var refused = new HashSet<(string Provider, string Role)>();
         Assemble(runnable, items, deal, seed, Add, CanCarry);
 
-        return new RoundWork(work, notAsked, excluded);
+        return new RoundWork(OneLocalRowFirstTheRestLast(work), notAsked, excluded);
 
         // One sentence per ROLE however many vendors would have carried it: a person reading a round
         // needs to know the role did not run, not that four vendors each did not run it.
