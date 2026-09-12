@@ -48,14 +48,26 @@ public sealed class RolePrompts(string dataDir)
     /// </remarks>
     private string Text(string promptId)
     {
-        var file = $"{FileName.Safe(promptId)}.md";
-        var overridePath = Path.Combine(OverrideDir, file);
+        var file = FileOf(promptId);
 
-        return File.Exists(overridePath) ? File.ReadAllText(overridePath) : Embedded(file);
+        return File.Exists(Path.Combine(OverrideDir, file)) ? File.ReadAllText(Path.Combine(OverrideDir, file)) : Embedded(file);
     }
 
+    /// <summary>
+    /// The one place a prompt id becomes a file name — read, write and restore alike.
+    /// </summary>
+    /// <remarks>
+    /// It guarded the READ only, which was the seam codex found on story B1's second code round: an
+    /// editor calling <c>Override("../../settings", text)</c> would have written outside the prompts
+    /// directory while <c>For</c> sanitised the same id. Composition refuses an id that is not
+    /// <c>^[a-z0-9][a-z0-9-]*$</c>, so nothing shaped like a path should arrive — but the prompt
+    /// store is about to gain a caller in the extension, and a boundary only half of a type honours
+    /// is not a boundary.
+    /// </remarks>
+    private static string FileOf(string promptId) => $"{FileName.Safe(promptId ?? string.Empty)}.md";
+
     /// <summary>The text compiled into this binary. Static: it depends on nothing on disk.</summary>
-    public static string ShippedDefaultFor(string promptId) => Embedded($"{promptId}.md");
+    public static string ShippedDefaultFor(string promptId) => Embedded(FileOf(promptId));
 
     private static string Embedded(string file)
     {
@@ -70,12 +82,12 @@ public sealed class RolePrompts(string dataDir)
     public void Override(string promptId, string text)
     {
         Directory.CreateDirectory(OverrideDir);
-        File.WriteAllText(Path.Combine(OverrideDir, $"{promptId}.md"), text);
+        File.WriteAllText(Path.Combine(OverrideDir, FileOf(promptId)), text);
     }
 
     public void RestoreDefault(string promptId)
     {
-        var overridePath = Path.Combine(OverrideDir, $"{promptId}.md");
+        var overridePath = Path.Combine(OverrideDir, FileOf(promptId));
         if (File.Exists(overridePath))
         {
             File.Delete(overridePath);

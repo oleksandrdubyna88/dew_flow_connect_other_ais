@@ -218,7 +218,7 @@ internal sealed class SessionTurn : IDisposable
     public void Dispose() => _held?.Dispose();
 }
 
-public sealed class SessionStore(string dataDir)
+public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
 {
     private string SessionsDir => Path.Combine(dataDir, "sessions");
 
@@ -415,8 +415,41 @@ public sealed class SessionStore(string dataDir)
     /// old file would have taken down the startup sweep with a NullReferenceException instead of one
     /// round. One normaliser, every reader.</para>
     /// </remarks>
-    private static PersistedSession? Normalised(PersistedSession? session) =>
-        session is null or { Rounds: not null } ? session : session with { Rounds = [] };
+    /// <summary>
+    /// A session as it comes off disk, made whole: its rounds list, and the CATALOG it must run
+    /// against.
+    /// </summary>
+    /// <remarks>
+    /// The catalog is deliberately not persisted — see <c>PanelConfig.Catalog</c> — so a session
+    /// read back carries the shipped default until it is given the one this server is running. It
+    /// matters for one thing and it matters quietly: `PanelConfig.For(Stage)` asks the catalog which
+    /// roles a stage HAS, so a session resumed after a restart would take its stage budget from the
+    /// shipped roles alone and miss the rounds a person's own role was given. Reattaching here
+    /// rather than persisting is the right way round: the gates are the session's, and the catalog
+    /// is whatever the server is configured with NOW — a role edited today should reach a session
+    /// opened yesterday. Raised by codex on story B1's second code round.
+    /// </remarks>
+    private PersistedSession? Normalised(PersistedSession? session)
+    {
+        if (session is null)
+        {
+            return null;
+        }
+
+        var whole = session.Rounds is null ? session with { Rounds = [] } : session;
+        var live = catalog ?? RoleCatalog.Builtin;
+
+        // A file written before `config` existed deserialises with a NULL one — the same shape of
+        // absence `UsedPrompts` documents next door, and `ASessionFromAnOlderBuildStillRuns` is what
+        // found it here. It gets the shipped defaults, which is what a session that never recorded a
+        // budget was always running on; without this it got a NullReferenceException the moment the
+        // catalog was reattached.
+        var config = whole.State.Config is { } configured
+            ? configured with { Catalog = live }
+            : new PanelConfig { Catalog = live };
+
+        return whole with { State = whole.State with { Config = config } };
+    }
 
     private static bool IsOrphaned(RoundRecord round, Func<int, bool> processIsAlive) =>
         round.Status == RoundRecord.Running && (round.RunnerPid == 0 || !processIsAlive(round.RunnerPid));

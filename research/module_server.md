@@ -468,6 +468,16 @@ produces it, rather than inheriting one from a mapping somewhere else.
 any summary exists, so it would otherwise be refused with a sentence about vendors — sending somebody
 to check a configuration that is perfectly correct. Raised twice on the code round.
 
+**A session carries its GATES; the catalog belongs to the server that is running.** `PanelConfig` is
+persisted inside `SessionState`, and when it gained a `Catalog` the whole thing rode along into every
+session file — twenty-five prompts and their prose, and a resumed session read back with the catalog
+it was OPENED with, so a role edited today would not reach a session opened yesterday. The property
+is `[JsonIgnore]`, and `SessionStore` reattaches the live catalog on the way in. That matters
+quietly: `PanelConfig.For(Stage)` asks the catalog which roles a stage HAS, so without the
+reattachment a resumed session would take its stage budget from the shipped roles alone and miss the
+rounds a person's own role was given. A file written before `config` existed deserialises with a
+null one and gets the shipped defaults, which is what it was always running on.
+
 **A role's name reaches a PATH, so it is made safe where the path is built.** `FileSafe.Part`
 replaces every character the platform refuses, and the answer file, the local engine's prompt file,
 the remote job file and the kept evidence all go through it. Composition already refuses an id that

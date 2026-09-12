@@ -118,6 +118,30 @@ public sealed class RolePromptsTests
         prompts.For("architecture").Should().NotBe("look at the names", "one lens's override is not another's");
     }
 
+    /// <summary>
+    /// Writing a prompt cannot reach outside the prompts directory either.
+    /// </summary>
+    /// <remarks>
+    /// The read path was guarded and the WRITE path was not, which is the seam codex found: an
+    /// editor calling `Override("../../settings", text)` would have written wherever the id pointed
+    /// while `For` sanitised the same id. The prompt store is about to gain a caller in the
+    /// extension, and a boundary only half a type honours is not one.
+    /// </remarks>
+    [Fact]
+    public void OverridingAPromptWhoseIdIsAPath_WritesInsideThePromptsDirectory()
+    {
+        var prompts = new RolePrompts(_data);
+
+        prompts.Override("../../escaped", "somebody else's file");
+
+        var written = Directory.GetFiles(_data, "*", SearchOption.AllDirectories);
+
+        written.Should().ContainSingle().Which.Should()
+            .StartWith(Path.Combine(_data, "prompts"), "nothing this wrote may sit outside the directory it owns");
+        Path.GetFileName(written[0]).Should().Be(".._.._escaped.md",
+            "the separators are what made it a path, and they are what is replaced");
+    }
+
     [Fact]
     public void RestoringAnUnoverriddenPrompt_IsNotAnError()
     {
