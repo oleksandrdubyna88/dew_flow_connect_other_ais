@@ -20,13 +20,25 @@
 // nothing caught a file behind the GENERATOR — a changed mapping leaves the committed file matching
 // the seed, every test green, and the next regeneration silently changing the panel's catalog.
 // (codex, this story's plan round.)
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// `here` comes from this file's own URL, so every path below is absolute and the working directory
+// the script was started from changes nothing. `--seed=` and `--out=` exist for the tests, which
+// drive a doctored fixture through the same validation the real seed goes through.
 const here = dirname(fileURLToPath(import.meta.url));
-const seedPath = join(here, '..', '..', 'shared', 'builtin-roles.json');
-const out = join(here, '..', 'src', 'builtinRoles.generated.ts');
+const flag = (name, fallback) => {
+  const found = process.argv.find((a) => a.startsWith(`--${name}=`));
+
+  return found === undefined ? fallback : found.slice(name.length + 3);
+};
+
+const seedPath = flag('seed', join(here, '..', '..', 'shared', 'builtin-roles.json'));
+const out = flag('out', join(here, '..', 'src', 'builtinRoles.generated.ts'));
+
+/** The stages the seed may name. A third one is a deliberate change here, not a silent remapping. */
+const STAGES = ['plan', 'result'];
 
 const seed = JSON.parse(readFileSync(seedPath, 'utf8'));
 const roles = seed.roles ?? [];
@@ -41,6 +53,20 @@ for (const r of roles) {
     if (typeof r[field] !== 'string' || r[field].length === 0) {
       throw new Error(`${seedPath}: a role has no ${field} — ${JSON.stringify(r).slice(0, 120)}`);
     }
+  }
+  // A stage this build has no mapping for must STOP here. `prompts.ts` turns anything that is not
+  // `plan` into the panel's `code`, which is right for the two stages that exist and silently wrong
+  // for the document stage a later plan adds — the panel would draw it among the code roles and
+  // nothing would say so. (codex and gemini, this story's code round.)
+  if (!STAGES.includes(r.stage)) {
+    throw new Error(
+      `${seedPath}: role '${r.id}' is of stage '${r.stage}', which this panel has no mapping for `
+      + `(it knows ${STAGES.join(' and ')}) — add the mapping in prompts.ts before adding the stage here`,
+    );
+  }
+  // Absent would render as `false`, quietly excluding the role from every programming-task round.
+  if (typeof r.programmingTask !== 'boolean') {
+    throw new Error(`${seedPath}: role '${r.id}' does not say whether it is a programming task`);
   }
   if (!Array.isArray(r.prompts) || r.prompts.length === 0) {
     throw new Error(`${seedPath}: role '${r.id}' has no prompts, so it has no general prompt either`);
@@ -72,7 +98,7 @@ const role = (r) =>
     `    id: ${lit(r.id)},`,
     `    name: ${lit(r.name)},`,
     `    stage: ${lit(r.stage)},`,
-    `    programmingTask: ${r.programmingTask === true},`,
+    `    programmingTask: ${r.programmingTask},`,
     '    prompts: [',
     ...(r.prompts ?? []).map((p) => `  ${prompt(p)}`),
     '    ],',
@@ -96,6 +122,12 @@ ${roles.map(role).join('\n')}
 const counts = `${roles.length} roles, ${roles.reduce((n, r) => n + (r.prompts?.length ?? 0), 0)} prompts`;
 
 if (process.argv.includes('--check')) {
+  // A file that is not there is behind by definition, and saying so beats a readFileSync stack
+  // trace on a fresh checkout. (codex, this story's code round.)
+  if (!existsSync(out)) {
+    console.error(`${out} does not exist — run: node scripts/generate-builtin-roles.mjs`);
+    process.exit(1);
+  }
   // Line endings normalised on both sides: the committed file is LF, a Windows checkout may hold
   // CRLF, and that is not the drift this is looking for.
   const committed = readFileSync(out, 'utf8').replace(/\r\n/g, '\n');
@@ -105,6 +137,10 @@ if (process.argv.includes('--check')) {
   }
   console.log(`up to date: ${out} (${counts})`);
 } else {
-  writeFileSync(out, file, 'utf8');
+  // Written beside the target and renamed over it: a process killed mid-write would otherwise leave
+  // a truncated file that every build imports, with the last good copy already gone.
+  const staging = `${out}.tmp`;
+  writeFileSync(staging, file, 'utf8');
+  renameSync(staging, out);
   console.log(`wrote ${out}: ${counts}`);
 }
