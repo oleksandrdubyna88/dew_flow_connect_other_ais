@@ -1200,7 +1200,10 @@ test('every answer carries a way to copy the markdown it arrived as', () => {
   const html = chatMessagesHtml([{ role: 'you', text: 'ask' }, { role: 'model', text: '**answer**' }]);
 
   assert.match(html, /<button type="button" class="copy" data-copy="1"/, 'an answer cannot be copied');
-  assert.strictEqual((html.match(/class="copy"/g) ?? []).length, 1, 'the person\'s own message got a copy control');
+  // TWICE on the one answer — above it and below it — because an answer can be a page and a half,
+  // and the top of it is not where you are when you finish reading. Never on the person's message.
+  assert.strictEqual((html.match(/class="copy"/g) ?? []).length, 2, 'an answer lost one of its copy controls');
+  assert.strictEqual((html.match(/data-copy="0"/g) ?? []).length, 0, 'the person\'s own message got a copy control');
 });
 
 test('the prose is the editor\'s foreground and has room to breathe', () => {
@@ -2282,8 +2285,9 @@ test('Carry nothing above sits on the LAST answer, and on no other', () => {
     { role: 'model', text: 'the newest answer' },
   ]);
 
-  assert.strictEqual([...html.matchAll(/data-cut=/g)].length, 1, 'the button is on more than one answer');
-  assert.match(html, /data-cut="4"/, 'the button does not name the index a handover would start at');
+  // Twice on ONE answer — once above it, once below — and on no other answer at all.
+  assert.strictEqual([...html.matchAll(/data-cut=/g)].length, 2, 'a control was lost or duplicated');
+  assert.strictEqual([...html.matchAll(/data-cut="4"/g)].length, 2, 'the two controls name different positions');
   assert.match(html, /Carry nothing above/);
 });
 
@@ -2305,9 +2309,9 @@ test('a question never carries the button — a handover starts after an ANSWER'
     { role: 'you', text: 'and a question still waiting' },
   ]);
 
-  // The last message is the person's; the button stays on the last ANSWER above it.
-  assert.match(html, /data-cut="2"/, 'the button moved onto an unanswered question');
-  assert.strictEqual([...html.matchAll(/data-cut=/g)].length, 1);
+  // The last message is the person's; the button stays on the last ANSWER above it — both of it.
+  assert.strictEqual([...html.matchAll(/data-cut="2"/g)].length, 2, 'the button moved onto an unanswered question');
+  assert.strictEqual([...html.matchAll(/data-cut=/g)].length, 2);
 });
 
 test('the rule is drawn under the message ABOVE the mark, and only there', () => {
@@ -2377,4 +2381,38 @@ test('the button is not offered while a turn is in flight', () => {
     /data-cut=/,
     'the button was offered over an answer still being written',
   );
+});
+
+test('both controls are repeated UNDER the answer, where you are when you finish reading it', () => {
+  // An answer can be a page and a half, and the operator was scrolling back to the top of one to
+  // press a button about its bottom. The pair below is identical, index and all.
+  const html = chatMessagesHtml([{ role: 'you', text: 'ask' }, { role: 'model', text: 'a long answer' }]);
+
+  const top = html.indexOf('class="who"');
+  const body = html.indexOf('class="what"');
+  const after = html.indexOf('class="afterRow"');
+  const rule = html.indexOf('hr class="end"');
+
+  assert.ok(after > body, 'the second row is not under the answer');
+  assert.ok(after > top, 'the second row came before the first');
+  assert.ok(rule > after, 'the second row landed below the rule that closes the answer');
+
+  // And the row below carries BOTH, naming the same things as the row above.
+  const below = html.slice(after, rule);
+  assert.match(below, /data-copy="1"/, 'the row under the answer cannot copy it');
+  assert.match(below, /data-cut="2"/, 'the row under the answer cannot mark it');
+});
+
+test('a message with no controls grows no empty row under it', () => {
+  // The person's own messages have neither button, and an answer that is not the last one has only
+  // Copy. Neither should gain a stray flex row with nothing in it.
+  const html = chatMessagesHtml([
+    { role: 'you', text: 'ask' },
+    { role: 'model', text: 'an older answer' },
+    { role: 'you', text: 'ask again' },
+    { role: 'model', text: 'the last answer' },
+  ]);
+
+  // Two answers, two rows — and no row for either of the person's messages.
+  assert.strictEqual([...html.matchAll(/class="afterRow"/g)].length, 2, 'a row was drawn for a message with no controls');
 });
