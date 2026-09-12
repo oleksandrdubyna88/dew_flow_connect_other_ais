@@ -136,14 +136,35 @@ public sealed class FilesystemInvariant(IProcessLauncher launcher)
                 yield return ($"{label}{name}", Path.Combine(dir, name));
             }
 
-            var hooks = Path.Combine(dir, "hooks");
-            if (Directory.Exists(hooks))
+            foreach (var hook in HooksIn(Path.Combine(dir, "hooks")))
             {
-                foreach (var hook in Directory.EnumerateFiles(hooks).Order(StringComparer.Ordinal))
-                {
-                    yield return ($"{label}hooks/{Path.GetFileName(hook)}", hook);
-                }
+                yield return ($"{label}hooks/{Path.GetFileName(hook)}", hook);
             }
+        }
+    }
+
+    /// <summary>
+    /// The hook files in a directory, or none when it cannot be listed.
+    /// </summary>
+    /// <remarks>
+    /// The enumeration is guarded because the whole SNAPSHOT hangs off it: a hooks path that is a
+    /// symlink to somewhere gone, or a permission that changes between the two calls, would otherwise
+    /// throw out of the invariant and reach the client as an exception rather than a sentence — and
+    /// the failure would be ours, on a check that exists to report somebody else's. Listing nothing is
+    /// the honest answer: the two snapshots then agree, which is what an unreadable directory means.
+    /// (local, code round.)
+    /// </remarks>
+    private static IEnumerable<string> HooksIn(string hooks)
+    {
+        try
+        {
+            return Directory.Exists(hooks)
+                ? [.. Directory.EnumerateFiles(hooks).Order(StringComparer.Ordinal)]
+                : [];
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return [];
         }
     }
 

@@ -45,6 +45,15 @@ public static class ConsultantRoles
 /// arithmetic keep their one copy, while the argv — a different SHAPE per turn for codex, measured —
 /// lives here. The launch itself goes through <c>ReviewerExecutor.LaunchAsync</c> unchanged.</para>
 /// <para><c>Build</c> is pure: every flag is a unit test.</para>
+/// <para><b>The coupling this buys, and what would end it.</b> Returning a
+/// <see cref="ReviewerInvocation"/> means a consultant must have a reviewer adapter to delegate its
+/// answer and usage reading to. Every vendor this product can consult HAS one — codex, claude,
+/// antigravity and the local engine are all reviewers first — so the constraint costs nothing today,
+/// and what it prevents is four copies of a token arithmetic that is wrong by a factor of two when it
+/// drifts. It becomes wrong the day a CONSULT-ONLY vendor appears, with no findings schema and no
+/// reason to be a reviewer: that is the trigger to split a <c>ConsultantInvocation</c> out of this,
+/// and it is a change to one seam rather than to the adapters. Named by the gate's architecture
+/// reviewer on story 1's code round, and deliberately not built ahead of the vendor that needs it.</para>
 /// </remarks>
 public interface IConsultantRuntime
 {

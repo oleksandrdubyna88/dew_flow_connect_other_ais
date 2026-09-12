@@ -28,7 +28,14 @@ internal sealed class RepositoryLock : IDisposable
         dataDir, "consultations", "locks",
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Normalise(repoPath))))[..16] + ".lock");
 
-    /// <summary>The lock, or null when nobody let go within the wait.</summary>
+    /// <summary>
+    /// The lock, or null when nobody let go within the wait.
+    /// </summary>
+    /// <remarks>
+    /// A wait of zero is a legitimate question rather than a degenerate case — "is anybody working in
+    /// this repository right now" — and is what the startup sweep asks before deciding anything about
+    /// a record.
+    /// </remarks>
     public static async Task<RepositoryLock?> TryTakeAsync(string dataDir, string repoPath, TimeSpan wait, CancellationToken ct = default)
     {
         var path = PathFor(dataDir, repoPath);

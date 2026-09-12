@@ -22,6 +22,16 @@ public static class ConsultationStatuses
     public const string Failed = "failed";
 }
 
+/// <summary>How a consultation's vendor remembers it, as the record spells it.</summary>
+public static class ConsultationMemories
+{
+    /// <summary>The vendor holds the conversation; we send a handle.</summary>
+    public const string VendorRemembers = "vendorRemembers";
+
+    /// <summary>The vendor holds nothing; we carry the transcript into every turn.</summary>
+    public const string WeRemember = "weRemember";
+}
+
 /// <summary>One answered turn, as the record keeps it.</summary>
 public sealed record ConsultationTurn(
     string Utc,
@@ -77,8 +87,26 @@ public sealed record ConsultationRecord(
     /// <summary>The filesystem invariant's sentence, when it fired. The one field a person must read.</summary>
     public string Alert { get; init; } = string.Empty;
 
+    /// <summary>
+    /// The carry budget the adapter declared when this consultation opened. Zero for a vendor that
+    /// keeps the conversation itself, and for a record written before this field existed.
+    /// </summary>
+    public int CarryBudget { get; init; }
+
     [JsonIgnore]
     public TurnBudget Budget => new(MaxTurns, Turns.Count);
+
+    /// <summary>
+    /// Whether WE carry the conversation for this consultation — read from the record, never from
+    /// the runtime as it is configured now.
+    /// </summary>
+    /// <remarks>
+    /// The record says the memory mode is frozen, so a follow-up must honour it: a server upgrade that
+    /// changed an adapter's mode would otherwise make an open consultation silently stop carrying its
+    /// transcript, or start carrying one to a vendor that already has it. (codex, second code round.)
+    /// </remarks>
+    [JsonIgnore]
+    public bool WeCarryTheConversation => Memory == ConsultationMemories.WeRemember;
 
     [JsonIgnore]
     public bool IsOver => Status is ConsultationStatuses.Closed or ConsultationStatuses.Failed;

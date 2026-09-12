@@ -283,6 +283,16 @@ A RESUMED codex turn is a third shape again: `exec resume <id>` accepts neither 
 sandbox rides `-c sandbox_mode="read-only"` and the process must run in the directory the thread was
 started in — which is the repository, for every turn.
 
+**What the composition costs, and what would end it.** A consultant adapter returns a
+`ReviewerInvocation`, so it must HOLD a reviewer adapter to delegate its answer and usage reading to.
+Every vendor this product can consult has one — codex, claude, antigravity and the local engine are
+reviewers first — so the constraint costs nothing today, and what it prevents is four copies of a
+token arithmetic that is wrong by a factor of two the moment they drift. It becomes wrong the day a
+CONSULT-ONLY vendor appears, with no findings schema and no reason to be a reviewer: that is the
+trigger to split a `ConsultantInvocation` out of the seam, and it is a change to one interface rather
+than to the adapters. Named by the gate's architecture reviewer on story 1 and deliberately not built
+ahead of the vendor that needs it.
+
 **`ReviewerLaunch` now carries its `ProcessResult`.** A reviewer's answer is the whole story; a
 consultation's is not. The vendor's conversation id has to be read off the stream even when the launch
 ended in a TIMEOUT or a kill, because the vendor may have accepted the turn before the kill and that
