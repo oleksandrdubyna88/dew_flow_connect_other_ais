@@ -3079,7 +3079,12 @@ verdict, gating, findings, duration, tokens in/out, cost, reviewers — with a s
 a select per facet (repository, branch, stage, status, verdict, vendor), a search box over subject,
 branch, repository and reviewer lines, and a row that expands to its reviewers. It replaced
 `rounds.md`, a markdown file written under the data directory, opened as a text document and
-rewritten every five seconds while its tab was open.
+rewritten every five seconds while its tab was open. The toolbar's three actions — **Today**,
+**All dates**, **Clear** — take the page's bare `button` rule, the primary blue every other action
+wears (issue #126, 2026-09-12: painted secondary, they read as labels in a dark theme); the pager's
+◀ Newer / Older ▶ keep `secondary` because they are navigation, like the tab strip, not a change to
+what the table shows. `roundsLogPage.test.ts` pins both, and that no later rule singles the toolbar's
+buttons out.
 
 Two decisions define it. **The predicates are the page's**: `compareRows` and `rowMatches`
 reference nothing outside their parameters and their source is embedded into the webview script
