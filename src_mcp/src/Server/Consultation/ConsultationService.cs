@@ -293,7 +293,8 @@ public sealed class ConsultationService(
         // {"answer": …} because its route refuses to run without a schema. One reader, so "what did
         // the consultant say" has a single answer whichever route produced it.
         var advised = ConsultantAnswer.TextOf(launched.Answer).Trim();
-        var turn = new ConsultationTurn(ConsultationStore.Stamp(DateTime.UtcNow), problem, advised, Math.Round(elapsed.TotalSeconds, 1), launched.Usage.TokensIn, launched.Usage.TokensOut, launched.Usage.CostUsd);
+        var spent = ThisTurnsShare(consultant, record, launched.Usage);
+        var turn = new ConsultationTurn(ConsultationStore.Stamp(DateTime.UtcNow), problem, advised, Math.Round(elapsed.TotalSeconds, 1), spent.TokensIn, spent.TokensOut, spent.CostUsd);
         var answered = record with
         {
             Turns = [.. record.Turns, turn],
@@ -306,7 +307,7 @@ public sealed class ConsultationService(
             UpdatedUtc = turn.Utc,
         };
         _store.Write(answered);
-        Record(consultant, "ok", elapsed, launched.Usage);
+        Record(consultant, "ok", elapsed, spent);
         log.Information("consultation {Id}: answered turn {Turn} in {Seconds}s ({TokensIn}/{TokensOut} tokens)", record.Id, record.Budget.Turn, turn.Seconds, turn.TokensIn, turn.TokensOut);
 
         var advice = ConsultationFence.Advice(consultant.Row.Provider, consultant.Model, record.Budget, nonce, advised);
@@ -362,6 +363,29 @@ public sealed class ConsultationService(
         return files.Count == 0
             ? "(the working tree has no uncommitted change — everything is committed at HEAD)"
             : DiffShaper.Shape(files, ConsultantPrompt.DiffBudget).Text;
+    }
+
+    /// <summary>
+    /// What THIS turn consumed, for a vendor that reports the whole conversation's total every time.
+    /// </summary>
+    /// <remarks>
+    /// The running total lives on the RECORD, which is why the subtraction happens here and the
+    /// adapter only declares that it reports cumulatively. The arithmetic itself is
+    /// <see cref="ConsultationUsage"/>, in the core, so the test exercises the rule rather than a
+    /// copy of it.
+    /// </remarks>
+    private static Usage ThisTurnsShare(Consultant consultant, ConsultationRecord record, Usage reported)
+    {
+        if (!consultant.Runtime.UsageIsCumulative)
+        {
+            return reported;
+        }
+
+        var share = ConsultationUsage.ThisTurnsShare(
+            [.. record.Turns.Select(t => (t.TokensIn, t.TokensOut, t.CostUsd))],
+            (reported.TokensIn, reported.TokensOut, reported.CostUsd));
+
+        return new Usage(share.TokensIn, share.TokensOut, share.CostUsd);
     }
 
     private static string HandleOf(Consultant consultant, ReviewerLaunch launched, string known)

@@ -27,6 +27,18 @@ public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor 
 
     public ConsultantMemory Memory => new ConsultantMemory.VendorRemembers();
 
+    /// <summary>
+    /// Measured: turn 1 reported 14 138 input tokens and turn 2 reported 30 843 — turn 1 plus turn 2.
+    /// </summary>
+    /// <remarks>
+    /// The vendor reports the CONVERSATION's total on every turn, and a consultation is the first
+    /// thing in this product to run one conversation twice, so this is the first place it shows.
+    /// Declared here and subtracted by the caller, which is the only side holding the running total.
+    /// (gemini, this story's plan round, and it was right that recording it was not the same as
+    /// handling it.)
+    /// </remarks>
+    public bool UsageIsCumulative => true;
+
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
         ConsultantLaunches.MustBeLaunchable(launch);

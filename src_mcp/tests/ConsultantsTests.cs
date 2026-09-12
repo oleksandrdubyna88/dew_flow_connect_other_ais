@@ -47,7 +47,10 @@ public sealed class ConsultantsTests : IDisposable
         args.Should().Contain("Edit").And.Contain("Write").And.Contain("NotebookEdit");
         // The consultant was asked here to READ the tree; denying Read as a confined REVIEWER does
         // would leave it judging the prompt alone, which is the thing it exists not to do.
-        args.Should().NotContain("Read").And.NotContain("Grep").And.NotContain("Bash");
+        args.Should().NotContain("Read").And.NotContain("Glob").And.NotContain("Grep");
+        // `Bash` was allowed until this story's plan round: `--permission-mode plan` is the CLI's
+        // promise and a shell is a way around it. See ConsultStoryTwoGateTests for the full list.
+        args.Should().Contain("Bash");
         args.Should().ContainInOrder(["--add-dir", Repo]);
     }
 

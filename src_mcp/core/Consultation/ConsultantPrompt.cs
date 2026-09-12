@@ -113,6 +113,16 @@ public static class ConsultantPrompt
             var block = $"The caller asked:\n  {Indent(turns[i].Problem)}\nYou answered:\n  {Indent(turns[i].Advice)}";
             if (spent + block.Length > budget)
             {
+                // The NEWEST turn alone can be bigger than the whole budget — a pasted stack trace
+                // does it — and dropping it would carry nothing but a note, leaving the consultant
+                // with no idea what it last said. It is CUT instead, with the cut said inside the
+                // text, which is the rule the extension's own carry already follows.
+                // (codex and gemini, this story's plan round.)
+                if (kept.Count == 0)
+                {
+                    kept.Add(block[..Math.Min(block.Length, budget)] + "\n  … (this turn was cut here — it is longer than the whole carry budget)");
+                }
+
                 kept.Insert(0, $"(the earlier {i + 1} turn(s) of this conversation are not carried — the budget was reached)");
                 break;
             }
