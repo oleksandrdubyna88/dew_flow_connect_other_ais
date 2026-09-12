@@ -18,24 +18,35 @@ const here = dirname(fileURLToPath(import.meta.url));
 const promptsDir = join(here, '..', '..', 'src_mcp', 'src', 'prompts');
 const out = join(here, '..', 'src', 'helpPrompts.ts');
 
-/** The catalog mirror, read as text: this script must not need the TypeScript compiled first. */
-function catalogOrder() {
-  const source = readFileSync(join(here, '..', 'src', 'prompts.ts'), 'utf8');
-  const entries = [...source.matchAll(/\{\s*id:\s*'([^']+)',\s*role:\s*'([^']+)'[^}]*universal:\s*(true|false)/g)];
-  if (entries.length === 0) {
-    throw new Error('prompts.ts parsed to nothing — the PROMPTS entry shape must have changed');
+/**
+ * The seed, which is where both halves' catalogs come from.
+ *
+ * <p>It read <code>src/prompts.ts</code> with a regular expression, which worked while that file
+ * held the catalog as literals and stopped the day it became a derivation of the seed. Reading the
+ * seed is also what it always meant: the order and the labels are the seed's, and this script's own
+ * decision is only that the conventions pass stands alone.</p>
+ */
+function seedRoles() {
+  const seed = JSON.parse(readFileSync(join(here, '..', '..', 'shared', 'builtin-roles.json'), 'utf8'));
+  const roles = seed.roles ?? [];
+  if (roles.length === 0) {
+    throw new Error('shared/builtin-roles.json names no roles');
   }
-  return entries.map(([, id, role, universal]) => ({ id, role, universal: universal === 'true' }));
+  return roles;
 }
 
-const ROLE_LABELS = {
-  PlanCritique: 'Plan review',
-  Architecture: 'Architecture',
-  SecurityReliability: 'Security & reliability',
-  UxDxPerformance: 'Performance & UX-DX',
-};
+const SEED = seedRoles();
 
-const catalog = catalogOrder();
+// A role's FIRST prompt is its universal one — the seed says so by position.
+const catalog = SEED.flatMap((r) =>
+  r.prompts.map((p, index) => ({ id: p.id, role: r.id, universal: index === 0 })),
+);
+
+// Conventions is left out because it is not a group of lenses: its one prompt is printed on its own
+// below, under a heading that says it applies to all three code roles.
+const ROLE_LABELS = Object.fromEntries(
+  SEED.filter((r) => r.id !== 'Conventions').map((r) => [r.id, r.name]),
+);
 const shipped = readdirSync(promptsDir)
   .filter((f) => f.endsWith('.md'))
   .map((f) => f.replace(/\.md$/, ''));
