@@ -1,5 +1,9 @@
 # Changelog
 
+## Extension 0.36.5 — 2026-09-12
+
+**A question you interrupted is still a question.** Pressing Esc while Claude Code is asking writes the same kind of record an answer does, so **CoAI: take the question** treated it as settled — and told you nothing was waiting while the question sat on your screen with its Submit button. It reads the difference now. Of several questions in one session it still takes the newest one that is still open, never simply the newest.
+
 ## Extension 0.36.4 — 2026-09-12
 
 **The three right-click items are named for the menu they sit in.** **CoAI: default**, **CoAI: choose** and **CoAI: take the question** — the short name first and then the one word that differs, so you read the end of the line rather than the beginning of three.

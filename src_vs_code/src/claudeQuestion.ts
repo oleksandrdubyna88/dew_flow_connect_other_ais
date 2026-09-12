@@ -161,7 +161,13 @@ function everyAsked(lines: readonly string[]): { asked: AskedSet[]; unreadable: 
     for (const block of blocksOf(row)) {
       const one = record(block);
       if (one?.['type'] === 'tool_result') {
-        const names = text(one['tool_use_id']);
+        // AN ERROR RESULT IS NOT AN ANSWER. Interrupting Claude while it is asking writes a
+        // `tool_result` like any answer does — `is_error: true`, "The user doesn't want to proceed
+        // with this tool use" — and the question stays open in front of the person, widget and
+        // Submit button and all. Counting it as settled reported a question they were looking at as
+        // already answered, and offered them a waiting one from another conversation instead.
+        // Both shapes were read off their own session file before this was written.
+        const names = one['is_error'] === true ? '' : text(one['tool_use_id']);
         if (names.length > 0) {
           answered.add(names);
         }

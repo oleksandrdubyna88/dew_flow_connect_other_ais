@@ -29,6 +29,29 @@ const asks = (id: string, questions: unknown, extra: Record<string, unknown> = {
   ...extra,
 });
 
+/**
+ * A question the person INTERRUPTED rather than answered.
+ *
+ * <p>The shape is off the operator's own session file, beside a real answer in the same
+ * conversation: `is_error: true`, and a body saying the tool use was rejected. Claude Code writes it
+ * exactly as it writes an answer, and the question stays open in front of the person — widget,
+ * Submit button and all.</p>
+ */
+const interrupted = (id: string): string => JSON.stringify({
+  type: 'user',
+  message: {
+    content: [{
+      type: 'tool_result',
+      tool_use_id: id,
+      is_error: true,
+      content: "The user doesn't want to proceed with this tool use. The tool use was rejected"
+        + ' (eg. if it was a file edit, the new_string was NOT written to the file).'
+        + ' STOP what you are doing and wait for the user to tell you how to proceed.',
+    }],
+  },
+  toolUseResult: 'User rejected tool use',
+});
+
 const answers = (id: string): string => JSON.stringify({
   type: 'user',
   message: { content: [{ type: 'tool_result', tool_use_id: id, content: 'the answer' }] },
@@ -433,4 +456,50 @@ test('the title is read off the session, and the newest one wins', () => {
 
   assert.strictEqual(found?.title, 'What it is really about', 'an older title named the tab');
   assert.strictEqual(asked([asks('a', ONE)])?.title, '', 'a session with no title row invented one');
+});
+
+test('a question the person INTERRUPTED is still waiting, not answered', () => {
+  // Found by them, with the question on screen: the panel showed "Красный или синий?" with its
+  // Submit button, and the command answered that this session had nothing waiting and offered a
+  // question from a different conversation instead. Claude Code writes a rejection as a tool_result
+  // like any answer — the difference is `is_error: true`, read off their own file.
+  const found = lastAsked([asks('a', ONE), interrupted('a')]);
+
+  assert.strictEqual(found.kind, 'asked', 'an interrupted question was read as nothing at all');
+  assert.strictEqual(found.kind === 'asked' ? found.set.answered : true, false,
+    'a question the person interrupted was reported as already answered');
+});
+
+test('a real answer is still an answer, in the shape the file actually uses', () => {
+  // The other half of the same file: no `is_error`, and a body that says so in words.
+  const settled = lastAsked([asks('a', ONE), answers('a')]);
+
+  assert.strictEqual(settled.kind === 'asked' ? settled.set.answered : false, true,
+    'an answered question stopped being recognised');
+});
+
+test('among MANY questions, the one taken is the newest still open — an interruption included', () => {
+  // A session holds many questions, and the operator asked which one this takes. The newest still
+  // OPEN, never simply the newest: a question can be left open while the conversation goes on
+  // around it, and taking the last one reported "already answered" while the first sat on screen.
+  // An interrupted question is open, which is the whole of the fix above.
+  const TWO = [{ header: 'Colour', question: 'Красный или синий?', multiSelect: false, options: [] }];
+
+  const found = lastAsked([
+    asks('a', ONE), answers('a'),          // settled, and long ago
+    asks('b', TWO), interrupted('b'),      // interrupted — still in front of the person
+    asks('c', ONE), answers('c'),          // settled after it, which used to hide the one above
+  ]);
+
+  assert.strictEqual(found.kind, 'asked');
+  assert.strictEqual(found.kind === 'asked' ? found.set.id : '', 'b',
+    'a settled question asked later hid the one the person is still looking at');
+  assert.strictEqual(found.kind === 'asked' ? found.set.answered : true, false);
+});
+
+test('with every question settled, the NEWEST of them is the one reported answered', () => {
+  const found = lastAsked([asks('a', ONE), answers('a'), asks('b', ONE), answers('b')]);
+
+  assert.strictEqual(found.kind === 'asked' ? found.set.id : '', 'b', 'an older settled question was reported');
+  assert.strictEqual(found.kind === 'asked' ? found.set.answered : false, true);
 });
