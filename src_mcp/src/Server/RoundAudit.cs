@@ -131,10 +131,31 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
     /// claim that this reviewer was sent an empty prompt, and the whole reason the number is here is
     /// to be believed on exactly that question.
     /// </remarks>
-    private static string Describe(ReviewerWork w) =>
-        w.PromptBytes is { } bytes
-            ? $"{w.Invocation.Provider}/{w.Invocation.Role}[{w.Prompt}, {bytes} bytes]"
-            : $"{w.Invocation.Provider}/{w.Invocation.Role}[{w.Prompt}]";
+    private static string Describe(ReviewerWork w)
+    {
+        // The model and the effort lead the bracket when there are any, because this line is what a
+        // person reads when the panel is closed, and two local runs of one model at different
+        // efforts were writing the same sentence (issue #129, raised on its plan round).
+        //
+        // Each part is CONDITIONAL rather than interpolated empty: `[, promptId, 900 bytes]` is a
+        // descriptor with a hole in it, which is what a later reader of these lines misparses.
+        var parts = new List<string>(4);
+        if (w.Invocation.Model.Length > 0)
+        {
+            parts.Add(w.Invocation.Model);
+        }
+        if (w.Invocation.Effort.Length > 0)
+        {
+            parts.Add($"effort {w.Invocation.Effort}");
+        }
+        parts.Add(w.Prompt);
+        if (w.PromptBytes is { } bytes)
+        {
+            parts.Add($"{bytes} bytes");
+        }
+
+        return $"{w.Invocation.Provider}/{w.Invocation.Role}[{string.Join(", ", parts)}]";
+    }
 
     private static string Humanised(TimeSpan span) =>
         span.TotalMinutes >= 1 ? $"{span.TotalMinutes:0} min" : $"{span.TotalSeconds:0}s";

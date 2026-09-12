@@ -36,10 +36,16 @@ public sealed class LiveRound
                 w.Invocation.Provider,
                 w.Invocation.Role,
                 ReviewerState.Queued,
-                // The invocation has carried this since the adapters were written; the round simply
-                // never wrote it down, so the log could say WHO reviewed but not WITH WHAT.
-                //
-                Model: Normalise(w.Invocation.Model)));
+                // This side was right from the start; the invocation was not. Only LocalRuntime and
+                // RemoteRuntime ever PASSED a model, so codex, gemini, claude and antigravity wrote
+                // an empty one here for as long as the field existed — the log named WHO reviewed
+                // and not WITH WHAT for exactly the vendors people ask about (issue #129). The four
+                // adapters set it now, and `EveryAdapterRecordsWhatItLaunchedTests` goes through
+                // each one's own `Build` rather than a hand-made invocation, which is what let the
+                // first version of this ship believing itself covered.
+                Model: Normalise(w.Invocation.Model),
+                // The effort that was APPLIED, which today only a local launch has.
+                Effort: Normalise(w.Invocation.Effort)));
         Persist();
     }
 

@@ -1,6 +1,15 @@
 # PLAN — the rounds log names the model, and the one that actually ran
 
-> Status: **step 1 IMPLEMENTED 2026-09-08; steps 2 and 3 are open.** Scope: `ReviewerState` and the panel's rounds
+> Status: **step 1 IMPLEMENTED 2026-09-08 and REPAIRED 2026-09-12; steps 2 and 3 are open.**
+>
+> Step 1 shipped half-done and nothing noticed for four days: only `LocalRuntime` and
+> `RemoteRuntime` passed `Model:` to the invocation, so codex, gemini, claude and antigravity
+> recorded none — the log named no model for exactly the vendors people ask about. Repaired,
+> with the reasoning effort beside it, by
+> [PLAN_the_log_names_every_model_and_its_effort.md](../research/PLAN_the_log_names_every_model_and_its_effort.md)
+> (issue #129), which also replaced the test that could not see it.
+>
+> **What is still open here is unchanged**: which model a Team server ACTUALLY ran. Scope: `ReviewerState` and the panel's rounds
 > log, `ReviewStatusDto` on the Team server, and the client that reads it.
 >
 > Related docs: [module_server.md](../research/module_server.md),

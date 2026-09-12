@@ -700,6 +700,26 @@ needs a field on `ReviewStatusDto` and is written up as
 [PLAN_the_log_names_the_model.md](../todo/PLAN_the_log_names_the_model.md); until then the log shows
 the client's side and the docstring says so rather than letting the number imply more than it knows.
 
+**And for four vendors of six it wrote down nothing at all, until 2026-09-12 (issue #129).**
+`ReviewerInvocation.Model` is a trailing parameter defaulted to empty, and only `LocalRuntime` and
+`RemoteRuntime` ever passed it — codex, gemini, claude and antigravity each put the model on their
+CLI's command line and then built the invocation without it. So the log named no model for exactly
+the vendors whose model people ask about, for as long as the field existed. What hid it is worth more
+than the fix: the test that covered the model built the invocation BY HAND
+(`Work("codex", …).Invocation with { Model = … }`) and its docstring asserted *"the invocation has
+carried the model since the adapters were written"*. A test that constructs the value it then asserts
+can only confirm itself. `EveryAdapterRecordsWhatItLaunchedTests` drives each adapter's own `Build`.
+
+**The reasoning EFFORT rides beside it, and only where one was applied.** `ReviewerState.Effort` is
+filled from `ReviewerInvocation.Effort`, which `LocalRuntime` sets to the `--reasoning-effort` it put
+on the argv. No hosted adapter passes a reasoning flag, so none records an effort: the rule is *an
+adapter records the effort it APPLIED*, not *local has one and hosted does not* — stated that way it
+stays true the day a hosted adapter gains the flag, because whoever adds it to an argv adds it to the
+same `Build`. Antigravity's effort is inside its model id (`gemini-3.7-flash-high`), which is why no
+line reads `gemini-3.7-flash-high (effort: high)`. `RoundAudit`'s opening descriptor carries both,
+each conditionally — `provider/Role[model, effort high, promptId, 900 bytes]` — because that line is
+what a person reads when the panel is closed, and an interpolated empty leaves `[, promptId, …]`.
+
 **The vendors are offered in a shuffled order (2026-09-08).** `BuildWork` builds a round
 vendor-major and the scheduler starts one task per row against one machine-wide semaphore, which
 hands slots out in the order they were asked for — so the list's order is the order reviewers reach

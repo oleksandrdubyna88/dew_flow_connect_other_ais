@@ -1,8 +1,27 @@
 # PLAN — the log names EVERY model, and the effort it ran at
 
-> Status: **plan only, nothing implemented yet.** Scope: the four hosted adapters in
-> `src_mcp/runners/Reviewers/`, `ReviewerInvocation`, `ReviewerState`, and the extension's reviewer
-> line.
+> Status: **IMPLEMENTED, 2026-09-12.** All six adapters record the model they launched; a launch
+> that applied a reasoning effort records that too, which today means `LocalRuntime` alone. The
+> reviewer line reads `local/Architecture · qwen3.5:latest (effort: high) — done (0 findings)`, and
+> `RoundAudit`'s opening descriptor carries both conditionally.
+>
+> **The answer to the issue's question — lost, or never done? — was both.** The model half had
+> shipped for two adapters of six on 2026-09-08 and been blank for codex, gemini, claude and
+> antigravity ever since; the effort half had never been recorded anywhere. The companion plan's
+> status line said "step 1 IMPLEMENTED" the whole time and is corrected.
+>
+> **Deviations, all from the plan round.** Requirement 2 was restated: an adapter records the effort
+> it APPLIED, rather than "local records one and hosted does not". Same behaviour today — no hosted
+> adapter here passes a reasoning flag — but it stays true the day one gains it, because whoever adds
+> `--reasoning-effort` to an argv adds `Effort:` to the same `Build`. The audit descriptor takes the
+> effort as well as the model, since two local runs of one model at different efforts were otherwise
+> writing the same line. Both parts are conditional, so an absent one cannot leave `[, promptId, …]`.
+> And the hosted-effort assertion is table-driven across every hosted adapter rather than codex
+> alone, because a copy-paste into one of the others would show an invented effort with the suite
+> still green.
+>
+> Related docs: [module_server.md](module_server.md), [module_runners.md](module_runners.md),
+> [PLAN_the_log_names_the_model.md](../todo/PLAN_the_log_names_the_model.md).
 >
 > Issue [#129](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/129): *"record
 > the model name and the effort in the logs. We already did this, I think. Check whether it got lost
@@ -11,7 +30,7 @@
 > This is the check the issue asks for, and the answer is **both**: the model half was done for two
 > vendors out of six and has been silently blank for the other four ever since; the effort half was
 > never recorded anywhere. Companion to
-> [PLAN_the_log_names_the_model.md](PLAN_the_log_names_the_model.md), whose step 1 this repairs —
+> [PLAN_the_log_names_the_model.md](../todo/PLAN_the_log_names_the_model.md), whose step 1 this repairs —
 > its steps 2 and 3 (what a Team server ACTUALLY ran) stay open there and are **not** in scope here.
 
 ## What the check found
@@ -102,9 +121,20 @@ host here and aborts. Extension side: `cd src_vs_code && npm test`.
 
 ## Definition of Done
 
-- [ ] Tests 1 and 2 written first and watched fail, naming the four adapters; then green; then red
-      again with the adapter changes reverted.
-- [ ] Both suites green: the MTP executable and `npm test`, counts reported in the pull request.
-- [ ] The diff through the `coai` code round, every finding resolved.
-- [ ] `module_runners.md`, `module_server.md`, `module_extension.md` and `CHANGELOG.md` updated.
-- [ ] This plan promoted to `research/`; `PLAN_the_log_names_the_model.md` says its step 1 is whole.
+- [x] Tests 1, 2 and 2b written first. The C# half was red as a **compile error** —
+      `'ReviewerInvocation' does not contain a definition for 'Effort'` — which is the strongest RED
+      available: the assertion could not even be expressed against the old shape. The TS half was
+      proved by reverting the renderer, watching *a reviewer line names the effort when the launch
+      applied one* go red, and restoring it.
+- [x] Both suites green: **C# 1312 tests, 1311 pass, 1 skipped, 0 fail**; **extension 1725 tests,
+      1724 pass, 0 fail**.
+- [ ] The diff through the `coai` code round — **pending**, run immediately after this commit.
+- [x] `module_runners.md`, `module_server.md` and `CHANGELOG.md` updated. `module_extension.md` was
+      NOT — the reviewer line's own description there is about its two-line shape, which this change
+      does not alter; the effort is one more thing riding with the model it already documents.
+- [x] This plan promoted to `research/`; `PLAN_the_log_names_the_model.md` now says its step 1 was
+      repaired here, and by what.
+
+**Deviation from this list:** the version is deliberately NOT bumped here. This is one of seven
+issues landing before a single extension release, and the release commit at the end of the batch
+renames the `## Unreleased` heading to the version it cuts.
