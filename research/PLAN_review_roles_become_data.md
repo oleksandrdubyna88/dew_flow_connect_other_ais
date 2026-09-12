@@ -1,20 +1,20 @@
 # PLAN — review roles become data (1 of 5: the catalog, with nothing visible changing)
 
-> Status: **plan only, nothing implemented yet, 2026-09-12.** Scope: `src_mcp/core/Rounds`
+> Status: **IMPLEMENTED, 2026-09-12.** Scope: `src_mcp/core/Rounds`
 > (`PromptCatalog` → `RoleCatalog`, `PanelConfig`), `src_mcp/runners/Reviewers` (the `ReviewRole`
 > enum and the six `Build` implementations), `src_mcp/src/Server` (`PanelSettings`, `RolePrompts`,
 > `PanelService`, `Tools`), `src_server/src/Jobs` (the enum's three readers), a new
 > `shared/builtin-roles.json`, `src_vs_code/src/prompts.ts` with a generated sibling, two
 > generator scripts, and the tests on both sides.
 >
-> Related docs: [module_core.md](../research/module_core.md),
-> [module_server.md](../research/module_server.md),
-> [module_extension.md](../research/module_extension.md),
-> [module_team_server.md](../research/module_team_server.md),
-> [architecture.md](../research/architecture.md);
-> [PLAN_conventions_is_its_own_role.md](../research/PLAN_conventions_is_its_own_role.md) — the last
+> Related docs: [module_core.md](module_core.md),
+> [module_server.md](module_server.md),
+> [module_extension.md](module_extension.md),
+> [module_team_server.md](module_team_server.md),
+> [architecture.md](architecture.md);
+> [PLAN_conventions_is_its_own_role.md](PLAN_conventions_is_its_own_role.md) — the last
 > time a role was added, and the change surface it cost;
-> [PLAN_per_role_gate_and_dealt_prompts.md](../research/PLAN_per_role_gate_and_dealt_prompts.md) —
+> [PLAN_per_role_gate_and_dealt_prompts.md](PLAN_per_role_gate_and_dealt_prompts.md) —
 > why a role already carries its own rounds and threshold.
 
 ## What the operator asked for
@@ -131,7 +131,7 @@ either (that is plan 2); it re-keys them by prompt id so that plan 2 can.
   on the round as `NotAsked` ([SessionState.cs:179, 197](../src_mcp/core/Rounds/SessionState.cs#L179))
   and reaches `ReviewerSummaryFactory.From(results, excluded, roundWork.NotAsked)`
   ([PanelService.cs:695](../src_mcp/src/Server/PanelService.cs#L695)), shipped by
-  [PLAN_a_skipped_role_reaches_the_ai.md](../research/PLAN_a_skipped_role_reaches_the_ai.md) on
+  [PLAN_a_skipped_role_reaches_the_ai.md](PLAN_a_skipped_role_reaches_the_ai.md) on
   2026-09-10 for the Conventions role with no rules to read. A prompt with no text is the same shape —
   a role the round could not ask — and plugs into the same list with its own reason. The
   provider-level `ExcludedFrom` ([PanelService.cs:248-251](../src_mcp/src/Server/PanelService.cs#L248-L251))
@@ -566,13 +566,40 @@ only when the whole ritual has run.
 `SessionState.cs`, `RolePrompts.cs`, `PanelService.cs`, `ReviewerRuntime.cs` and the four runtime
 files, `Tools.cs`, the Team server's `Jobs/`, `prompts.ts`, and the C# test files that name the
 enum. One open plan names the same file and must not be built at the same time as this one:
-[PLAN_provider_liveness.md](PLAN_provider_liveness.md) (`PanelService.cs`).
-[PLAN_the_log_names_the_model.md](PLAN_the_log_names_the_model.md) touches `ReviewerState`, which
+[PLAN_provider_liveness.md](../todo/PLAN_provider_liveness.md) (`PanelService.cs`).
+[PLAN_the_log_names_the_model.md](../todo/PLAN_the_log_names_the_model.md) touches `ReviewerState`, which
 this plan reads but does not change — a textual conflict at worst.
 
 The four plans that follow — the CRUD tab, the Team server's role allowlist, `review_document`, the
 Team server's document upload — each branch from this one once it is on `main`; the first three are
 independent of each other and may run in parallel; the fourth needs two of them.
+
+## What shipped differently
+
+Recorded at promotion, because what a plan got WRONG is the most useful part of the record.
+
+- **A role id carries no hyphen.** The plan wrote `^[A-Za-z][A-Za-z0-9_-]*$`; the shipped rule is
+  `^[A-Za-z][A-Za-z0-9_]*$`. gemini's plan round pointed out that the id becomes
+  `COAI_ROUNDS_<ID>`, and `COAI_ROUNDS_MY-ROLE` is not a name a POSIX shell can export — so a role
+  whose budget could be set through the settings file and never through the environment would be a
+  role that works in one of the two places its settings come from.
+- **`PanelConfig.AllRoles` and `CodeRoleNames` were not deleted.** They are PROJECTIONS of
+  `RoleCatalog.Builtin` now, because every caller of them means what they still mean: a default that
+  predates custom roles, or a sentence naming the boxes somebody sees out of the box. The roles a
+  ROUND runs come from `Catalog`, which may carry a person's own.
+- **`PromptCatalog` survived epic A and died in story C2.** The plan had it deleted in A2; it stayed
+  as the characterization oracle `BuiltinRoleCatalogTests` held the seed against, which is what
+  caught a transcription slip being impossible rather than merely unlikely. It went when the
+  extension stopped mirroring it, and the twenty-five prompt ids are pinned as literals in its place.
+- **The composition rules are five, not four.** The plan named four; global prompt-id uniqueness
+  became the fifth, because a prompt id is the file name under `<dataDir>/prompts/` and two roles
+  claiming one id would be two roles sharing one override.
+- **The plan stage's roster came from the catalog too.** Not in the plan at all: `ReviewPlanAsync`
+  held a hardcoded `[PlanRole]`, so a plan-stage role a person added was composed, given a budget and
+  an enable switch, and then never asked anything. Found on story B2's code round, with the dealt-lens
+  ownership bug and the empty-roster refusal behind it.
+- **`review_document` is untouched, as planned**, and a role stored with `programmingTask: false` is
+  accepted today and takes part in no round — waiting for plan 4 rather than dropped.
 
 ## The open tail, carried into plan 2
 

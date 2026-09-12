@@ -50,10 +50,12 @@ So the built-in catalog is **one file, `shared/builtin-roles.json`**, owned by n
 this assembly embeds it (`CoaiMcp.Core.csproj`) and loads it once as `RoleCatalog.Builtin`, and
 `BuiltinRoleCatalogTests` asserts the LOADER against the file rather than against any other
 implementation — the same shape as `shared/team-server-url-vectors.json` and for the same reason:
-two self-consistent implementations cannot notice that they disagree. **The extension still carries
-its own hand-typed mirror** (`prompts.ts`) and still has the regex-over-C# test holding the two
-level; generating that copy from this seed is a later story of the same plan, and until it lands
-this paragraph describes one half, not both.
+two self-consistent implementations cannot notice that they disagree. **The extension's copy is
+GENERATED from the same file** (`scripts/generate-builtin-roles.mjs` → `builtinRoles.generated.ts`,
+with `prompts.ts` deriving `ROLES` and `PROMPTS` from it), and `builtinRoleCatalog.test.ts` asserts
+that loader against the seed field for field. Neither half reads the other's source any more — the
+two regular expressions that used to hold them level are gone, and
+`NothingReadsAnotherProgramsSourceTests` refuses their return.
 
 Four properties are worth knowing before touching it:
 

@@ -409,4 +409,29 @@ public sealed class RoleGateTests
         config.RolesForRound(Stage.CodeReview, round: 1).Should().NotContain(RoleCatalog.ArchitectureRole);
         config.EnabledRolesOf(Stage.CodeReview).Should().NotContain(RoleCatalog.ArchitectureRole);
     }
+
+    /// <summary>
+    /// And a role a person ADDED, switched off the same way.
+    /// </summary>
+    /// <remarks>
+    /// The test above drives composition's OVERRIDE path — a row naming a built-in. A row naming a
+    /// role nobody compiled in takes the ADD path, which builds the definition rather than copying
+    /// one, and nothing asserted that `Active: false` survives that construction. It does the same
+    /// thing for a different reason, which is exactly the kind of pair that quietly stops matching.
+    /// (CodeRabbit, this plan's pull request.)
+    /// </remarks>
+    [Fact]
+    public void ACustomRoleAddedSwitchedOff_IsInNoRoundEither()
+    {
+        var catalog = RoleComposition.Compose([
+            new RoleEntry("Requirements", Name: "Requirements we wrote", Stage: RoleStages.Result,
+                Active: false, Prompts: [new PromptEntry("req-general", "General", "Whether it is met.")]),
+        ]);
+        var config = new PanelConfig(Roles: null, StagePolicy.Human) { Catalog = catalog };
+
+        catalog.ById("Requirements").Should().NotBeNull("switched off is not dropped");
+        catalog.Dropped.Should().BeEmpty();
+        config.RolesForRound(Stage.CodeReview, round: 1).Should().NotContain("Requirements");
+        config.EnabledRolesOf(Stage.CodeReview).Should().NotContain("Requirements");
+    }
 }

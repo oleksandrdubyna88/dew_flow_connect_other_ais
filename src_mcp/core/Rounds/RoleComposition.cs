@@ -199,41 +199,56 @@ public static partial class RoleComposition
         IReadOnlyList<RoleEntry> entries, List<RoleDefinition> taken, HashSet<string> promptIds, List<string> dropped)
     {
         var ids = new HashSet<string>(taken.Select(r => r.Id), StringComparer.OrdinalIgnoreCase);
-        foreach (var entry in entries)
+        foreach (var entry in entries.Where(e => RoleCatalog.Builtin.ById(e.Id ?? string.Empty) is null))
         {
-            var id = entry.Id ?? string.Empty;
-            if (RoleCatalog.Builtin.ById(id) is not null)
+            if (Own(entry, ids, promptIds, dropped) is { } role)
             {
-                continue;
+                yield return role;
             }
-
-            if (Refusal(entry) is { } reason)
-            {
-                dropped.Add($"{Label(id)}: {reason}");
-                continue;
-            }
-
-            if (!ids.Add(id))
-            {
-                dropped.Add($"{id}: another role already has that id — ids are matched without case, because each one becomes COAI_ROUNDS_{id.ToUpperInvariant()}");
-                continue;
-            }
-
-            if (Extra(entry, id, promptIds, dropped) is not { Count: > 0 } prompts)
-            {
-                dropped.Add($"{id}: none of its prompts could be used, and a role's first prompt is its general one");
-                ids.Remove(id);
-                continue;
-            }
-
-            yield return new RoleDefinition(
-                id,
-                string.IsNullOrWhiteSpace(entry.Name) ? id : entry.Name,
-                entry.Stage!,
-                entry.ProgrammingTask ?? true,
-                prompts,
-                Active: entry.Active ?? true);
         }
+    }
+
+    /// <summary>
+    /// One row of a person's own, as a role — or nothing, with a sentence saying why.
+    /// </summary>
+    /// <remarks>
+    /// Split out of <see cref="Added"/> so each half stays inside the complexity the family's C#
+    /// doctrine allows: the loop belongs to the caller, the four ways a row can be refused belong
+    /// here. (CodeRabbit, this plan's pull request.)
+    /// </remarks>
+    private static RoleDefinition? Own(
+        RoleEntry entry, HashSet<string> ids, HashSet<string> promptIds, List<string> dropped)
+    {
+        var id = entry.Id ?? string.Empty;
+        if (Refusal(entry) is { } reason)
+        {
+            dropped.Add($"{Label(id)}: {reason}");
+
+            return null;
+        }
+
+        if (!ids.Add(id))
+        {
+            dropped.Add($"{id}: another role already has that id — ids are matched without case, because each one becomes COAI_ROUNDS_{id.ToUpperInvariant()}");
+
+            return null;
+        }
+
+        if (Extra(entry, id, promptIds, dropped) is not { Count: > 0 } prompts)
+        {
+            dropped.Add($"{id}: none of its prompts could be used, and a role's first prompt is its general one");
+            ids.Remove(id);
+
+            return null;
+        }
+
+        return new RoleDefinition(
+            id,
+            string.IsNullOrWhiteSpace(entry.Name) ? id : entry.Name,
+            entry.Stage!,
+            entry.ProgrammingTask ?? true,
+            prompts,
+            Active: entry.Active ?? true);
     }
 
     /// <summary>Why this row cannot be a role of its own, or null when it can.</summary>
@@ -278,31 +293,13 @@ public static partial class RoleComposition
         var prompts = new List<PromptChoice>();
         foreach (var prompt in row.Prompts ?? [])
         {
-            if (prompt is null)
+            if (WhyNot(prompt, roleId, promptIds) is { } reason)
             {
-                dropped.Add($"{roleId}: one of its prompts is an empty prompt — there is nothing in it to ask");
+                dropped.Add(reason);
                 continue;
             }
 
-            var id = prompt.Id ?? string.Empty;
-            if (!PromptId.IsMatch(id))
-            {
-                dropped.Add($"{roleId}: the prompt id '{id}' is not a usable one — it names a file, so it starts with a lower-case letter or a digit and then holds only those and '-'");
-                continue;
-            }
-
-            if (ReservedNames.Contains(id))
-            {
-                dropped.Add($"{roleId}: the prompt id '{id}' is a name Windows reserves for a device, so its text could be neither written nor read");
-                continue;
-            }
-
-            if (!promptIds.Add(id))
-            {
-                dropped.Add($"{roleId}: the prompt id '{id}' is already in use, and a prompt id names one text for the whole catalog");
-                continue;
-            }
-
+            var id = prompt!.Id!;
             prompts.Add(new PromptChoice(
                 id,
                 roleId,
@@ -312,6 +309,38 @@ public static partial class RoleComposition
         }
 
         return prompts;
+    }
+
+    /// <summary>
+    /// Why this prompt row cannot be used — or nothing, and it may be built.
+    /// </summary>
+    /// <remarks>
+    /// The four refusals, split out of <see cref="Extra"/> so the loop and the rules are separate
+    /// methods and each stays inside the complexity the family's C# doctrine allows. It TAKES the
+    /// id when it accepts, which is why the caller may dereference afterwards. (CodeRabbit, this
+    /// plan's pull request.)
+    /// </remarks>
+    private static string? WhyNot(PromptEntry? prompt, string roleId, HashSet<string> promptIds)
+    {
+        if (prompt is null)
+        {
+            return $"{roleId}: one of its prompts is an empty prompt — there is nothing in it to ask";
+        }
+
+        var id = prompt.Id ?? string.Empty;
+        if (!PromptId.IsMatch(id))
+        {
+            return $"{roleId}: the prompt id '{id}' is not a usable one — it names a file, so it starts with a lower-case letter or a digit and then holds only those and '-'";
+        }
+
+        if (ReservedNames.Contains(id))
+        {
+            return $"{roleId}: the prompt id '{id}' is a name Windows reserves for a device, so its text could be neither written nor read";
+        }
+
+        return promptIds.Add(id)
+            ? null
+            : $"{roleId}: the prompt id '{id}' is already in use, and a prompt id names one text for the whole catalog";
     }
 
     private static bool IsBuiltIn(string roleId) => RoleCatalog.Builtin.ById(roleId) is not null;

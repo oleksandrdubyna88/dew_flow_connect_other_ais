@@ -142,6 +142,31 @@ public sealed partial class PanelService
     /// their own is told to tick the box they can actually see. It was a sentence naming four
     /// constants, which would have listed the shipped four at somebody whose panel showed five.</para>
     /// </remarks>
+    /// <summary>
+    /// Why a round has nobody in it — the vendors, and then every role something dropped.
+    /// </summary>
+    /// <remarks>
+    /// <para>This path returns before any summary is built, so whatever the round decided on the way
+    /// here is said HERE or nowhere. It carried the roles it could not ASK — a prompt with no text —
+    /// from the start; it did not carry the roles a vendor could not TAKE, and those are the ones
+    /// that empty a round whose configuration is otherwise perfect: every vendor a Team server,
+    /// every scheduled role one a person defined. They were then told to check their vendors, which
+    /// are fine. (CodeRabbit, this plan's pull request.)</para>
+    /// <para>Both clauses name the ROLE first, because that is what somebody reading a round with
+    /// nothing in it is trying to find.</para>
+    /// </remarks>
+    internal string NoReviewerRefusal(Stage stage, RoundWork work) =>
+        $"no reviewer serves the {stage} stage — every configured vendor is either disabled, set not "
+        + "to review this stage, or missing its CLI or key. A round with no reviewer would pass the "
+        + "gate having reviewed nothing, so it is refused. Tick a vendor's stage box in the panel, or "
+        + "enable one that can run."
+        + Clause(" Before that, ", work.NotAsked.Select(r => $"{r.Role} was not asked: {r.Reason}"))
+        + Clause(" And ", work.Excluded.Select(e => $"{e.Role} could not go to {e.Provider}: {e.Reason}"));
+
+    /// <summary>A clause joining what a list holds, or nothing at all when it holds nothing.</summary>
+    private static string Clause(string lead, IEnumerable<string> parts) =>
+        parts.ToList() is { Count: > 0 } said ? $"{lead}{string.Join("; ", said)}." : string.Empty;
+
     internal string NoCodeRolesRefusal => NoRolesRefusal(Stage.CodeReview);
 
     /// <summary>The same sentence for either stage, naming that stage's own roles.</summary>
@@ -721,18 +746,7 @@ public sealed partial class PanelService
                 // filtered out would otherwise be refused with a sentence about vendors — sending
                 // somebody to check a configuration that is perfectly correct. (codex, the code
                 // round, twice.)
-                var whyThinner = roundWork.NotAsked.Count == 0
-                    ? string.Empty
-                    : " Before that, "
-                      + string.Join("; ", roundWork.NotAsked.Select(r => $"{r.Role} was not asked: {r.Reason}"))
-                      + ".";
-
-                return Error(
-                    $"no reviewer serves the {session.State.Stage} stage — every configured vendor is "
-                    + "either disabled, set not to review this stage, or missing its CLI or key. A round "
-                    + "with no reviewer would pass the gate having reviewed nothing, so it is refused. "
-                    + "Tick a vendor's stage box in the panel, or enable one that can run."
-                    + whyThinner);
+                return Error(NoReviewerRefusal(session.State.Stage, roundWork));
             }
 
             // The round exists on disk BEFORE the first CLI starts: the panel shows "running" for
@@ -1372,10 +1386,7 @@ public sealed partial class PanelService
     {
         if (!deal)
         {
-            foreach (var (provider, item) in runnable.SelectMany(p => items.Select(i => (p, i))))
-            {
-                add(provider, item.Role, item.PromptId);
-            }
+            Everyone(runnable, items, add);
 
             return;
         }
@@ -1387,25 +1398,49 @@ public sealed partial class PanelService
         // beside it was never offered the work. (gemini, story B2's second code round.)
         foreach (var group in items.GroupBy(i => Carriers(runnable, i.Role, canCarry), StringComparer.Ordinal))
         {
-            var vendors = group.Key.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (vendors.Length == 0)
-            {
-                // Nobody can run it. Every vendor is offered it anyway, so the leaf records why each
-                // of them could not — a round that says nothing about a role is the defect, and a
-                // deal is no excuse for one.
-                foreach (var (provider, item) in runnable.SelectMany(p => group.Select(i => (p, i))))
-                {
-                    add(provider, item.Role, item.PromptId);
-                }
+            Hand(runnable, [.. group], group.Key.Split('\0', StringSplitOptions.RemoveEmptyEntries), seed, add);
+        }
+    }
 
-                continue;
-            }
+    /// <summary>Every vendor offered every question — the shipped fan-out.</summary>
+    private static void Everyone(
+        IReadOnlyList<ProviderSettings> runnable,
+        IReadOnlyList<(string Role, string PromptId)> items,
+        Action<ProviderSettings, string, string> add)
+    {
+        foreach (var (provider, item) in runnable.SelectMany(p => items.Select(i => (p, i))))
+        {
+            add(provider, item.Role, item.PromptId);
+        }
+    }
 
-            foreach (var hand in PromptDeal.Deal([.. group.Select(i => $"{i.Role}|{i.PromptId}")], vendors, seed))
-            {
-                var parts = hand.Item.Split('|', 2);
-                add(runnable.First(p => p.Provider == hand.Vendor), parts[0], parts[1]);
-            }
+    /// <summary>
+    /// One group of items, dealt across the vendors that can carry them.
+    /// </summary>
+    /// <remarks>
+    /// With NO carrier every vendor is offered the work anyway, so the leaf records why each of them
+    /// could not take it: a round that says nothing about a role is the defect this whole story is
+    /// about, and a deal is no excuse for one. Split out of <see cref="Assemble"/> so both stay
+    /// inside the complexity the family's C# doctrine allows. (CodeRabbit, this plan's pull request.)
+    /// </remarks>
+    private static void Hand(
+        IReadOnlyList<ProviderSettings> runnable,
+        IReadOnlyList<(string Role, string PromptId)> items,
+        string[] vendors,
+        int seed,
+        Action<ProviderSettings, string, string> add)
+    {
+        if (vendors.Length == 0)
+        {
+            Everyone(runnable, items, add);
+
+            return;
+        }
+
+        foreach (var hand in PromptDeal.Deal([.. items.Select(i => $"{i.Role}|{i.PromptId}")], vendors, seed))
+        {
+            var parts = hand.Item.Split('|', 2);
+            add(runnable.First(p => p.Provider == hand.Vendor), parts[0], parts[1]);
         }
     }
 
@@ -1425,11 +1460,13 @@ public sealed partial class PanelService
     /// <summary>The vendors that can carry this role, as one key so items group by capability.</summary>
     /// <remarks>
     /// Joined on NUL because a provider name is a person's own word and may hold any punctuation a
-    /// separator could have been.
+    /// separator could have been — a space, a comma, a pipe, even a line break. Written as the
+    /// ESCAPE: an edit on this branch put the BYTE itself into the source, where it is invisible,
+    /// makes `grep` report the file as binary, and cannot be reviewed by reading it.
     /// </remarks>
     private static string Carriers(
         IReadOnlyList<ProviderSettings> runnable, string role, Func<ProviderSettings, string, bool> canCarry) =>
-        string.Join(' ', runnable.Where(p => canCarry(p, role)).Select(p => p.Provider));
+        string.Join('\0', runnable.Where(p => canCarry(p, role)).Select(p => p.Provider));
 
     /// <summary>
     /// The roles a code round runs, once the repository has been asked whether it wrote any rules.
