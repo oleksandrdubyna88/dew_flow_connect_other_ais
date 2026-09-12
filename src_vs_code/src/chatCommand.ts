@@ -2258,6 +2258,14 @@ async function questionWaitingHere(looking: string): Promise<{ text: string; ref
   if (waiting.length === 1) {
     return { text: askedAsText(waiting[0]!.asked), refusal: '' };
   }
+  const elsewhere = found.find((one) => one.kind === 'elsewhere');
+  if (elsewhere !== undefined) {
+    return {
+      text: '',
+      refusal: 'A Claude Code session here is waiting for an answer, but it is not the one this tab'
+        + ' is showing. Open that conversation and press it there.',
+    };
+  }
   if (found.some((one) => one.kind === 'answered')) {
     // A DIFFERENT SENTENCE from "nothing was asked". Handing a second model a question that is
     // already settled is the worst outcome this command has.

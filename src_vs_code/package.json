@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "Your AI writes the code; other vendors' models review it — the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.36.3",
+  "version": "0.36.4",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -196,17 +196,17 @@
       },
       {
         "command": "coai.takeTheQuestion",
-        "title": "Take the question to another AI",
+        "title": "CoAI: take the question",
         "category": "ConnectOtherAIs"
       },
       {
         "command": "coai.chatNow",
-        "title": "Chat with other AI: default",
+        "title": "CoAI: default",
         "category": "ConnectOtherAIs"
       },
       {
         "command": "coai.chatChoose",
-        "title": "Chat with other AI: choose",
+        "title": "CoAI: choose",
         "category": "ConnectOtherAIs"
       }
     ],

@@ -395,10 +395,28 @@ test('a tab that names NEITHER of them still refuses, rather than picking the ne
   const one = session('a', false, '2026-09-11T10:00:00.000Z', 'One conversation');
   const two = session('b', false, '2026-09-11T18:00:00.000Z', 'Another conversation');
 
-  assert.strictEqual(waitingIn([one, two], 'Something else entirely').kind, 'several');
+  // ELSEWHERE, not several: what this tab needs to hear is that the waiting question belongs to
+  // another conversation, which is a different instruction from "two of them are waiting here".
+  assert.strictEqual(waitingIn([one, two], 'Something else entirely').kind, 'elsewhere');
   // And with no tab to ask — the command invoked from a file rather than from the panel — the
   // refusal is the same one it was before any of this.
   assert.strictEqual(waitingIn([one, two]).kind, 'several');
+});
+
+test('ONE waiting session is not handed to a tab that names a different conversation', () => {
+  // Probed on the operator's machine with their question on screen: asked for `scoreMeter DB запись
+  // в c...` and handed `Подключение к scoreMeter DB`, because that was the only unanswered question
+  // anywhere. The title was consulted only to break a TIE — which is backwards, because a tie is
+  // where a wrong pick is at least suspected and a single candidate is where nobody would ever know.
+  const other = session('a', false, '2026-09-11T10:00:00.000Z', 'Подключение к scoreMeter DB');
+
+  assert.strictEqual(waitingIn([other], 'scoreMeter DB запись в c...').kind, 'elsewhere',
+    'the only waiting session was handed to a tab showing a different conversation');
+
+  // Its own tab still gets it, shortened title and all.
+  assert.strictEqual(waitingIn([other], 'Подключение к scoreMeter...').kind, 'one');
+  // And with no tab at all, a lone waiting session is still the answer — nothing contradicts it.
+  assert.strictEqual(waitingIn([other]).kind, 'one');
 });
 
 test('two sessions that share a title are still an ambiguity', () => {
