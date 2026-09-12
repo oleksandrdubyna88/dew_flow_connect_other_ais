@@ -59,6 +59,17 @@ export interface ChatTurnRecord {
    * typed is written here.</p>
    */
   readonly title: string;
+  /**
+   * WHOSE row this belongs in, decided when it was written.
+   *
+   * <p>`provider` is the id of the model PRESET in force, and a preset is a row in a list a person
+   * edits: change its runtime and every line ever recorded under it would move to another vendor,
+   * in a ledger that is supposed to be append-only. So the vendor is resolved once, here, and the
+   * reader prefers it. Optional because every line written before this field existed has none —
+   * those are still resolved through the preset list, which is the best answer available for them.
+   * (CodeRabbit, PR #209.)</p>
+   */
+  readonly vendor?: string;
 }
 
 /** What a vendor said about a turn's tokens, before anything is normalised. */
@@ -178,6 +189,8 @@ export interface FinishedTurn {
   readonly utc: string;
   /** The vendor ROW that answered — what the log page prices by. */
   readonly provider: string;
+  /** WHOSE row it belongs in, resolved by the caller: the runtime behind that row. */
+  readonly vendor?: string;
   readonly model: string;
   readonly conversation: string;
   readonly title: string;
@@ -221,6 +234,10 @@ export function chatTurnRecord(turn: FinishedTurn): ChatTurnRecord {
     outcome: turn.outcome,
     conversation: turn.conversation,
     title: turn.title,
+    // Resolved when it is WRITTEN, so editing a preset later cannot move a year of history to
+    // another vendor. Absent when the caller could not say, which the reader then resolves the old
+    // way. (CodeRabbit, PR #209.)
+    ...(turn.vendor !== undefined && turn.vendor.length > 0 ? { vendor: turn.vendor } : {}),
   };
 }
 
@@ -272,6 +289,7 @@ export function parseChatUsageLine(line: string): ChatTurnRecord | undefined {
     outcome: asText(row['outcome']),
     conversation: asText(row['conversation']),
     title: asText(row['title']),
+    ...(asText(row['vendor']).length > 0 ? { vendor: asText(row['vendor']) } : {}),
   };
 }
 

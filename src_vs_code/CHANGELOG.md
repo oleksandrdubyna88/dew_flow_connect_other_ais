@@ -1,5 +1,11 @@
 # Changelog
 
+## Extension 0.38.4 — 2026-09-12
+
+**Chat cards are priced now.** The price table was built from the models your REVIEWER rows select, and a chat is switched between model presets that select their own — so a card read "no rate set for this model" for a model the published table prices perfectly well. Both lists are asked now.
+
+**And the vendor a chat row belongs to is written down when the line is written.** It was resolved from the preset list when the page was drawn, which meant editing a preset moved a year of history to another vendor in a ledger that is supposed to be append-only. Lines already on disk carry no such field and are still resolved the old way, which is the best answer available for them.
+
 ## Extension 0.38.3 — 2026-09-12
 
 **The spending tab uses the width it has.** Reviewers and Chat sit side by side when the panel is wide enough to hold both at the width the cards already had, and stack when it is not. The page decides, so dragging the panel narrow and wide again needs nobody to redraw it — and the rule between the two halves belongs to the stacked layout, since side by side the gap is the separator.

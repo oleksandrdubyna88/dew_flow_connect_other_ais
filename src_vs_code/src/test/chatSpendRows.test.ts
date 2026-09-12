@@ -231,3 +231,38 @@ test('the whole ledger is read once, not once per row', () => {
   assert.strictEqual(rows.length, 40, 'the fixture does not have the pairs this is measuring');
   assert.strictEqual(reads, 40, 'the price was looked up per record rather than per row');
 });
+
+test('the vendor WRITTEN DOWN beats the preset list as it stands today', () => {
+  // A preset is a row somebody edits. Resolving an old line through the list as it is now would move
+  // a year of history to another vendor, in a ledger that is supposed to be append-only - so the
+  // vendor is resolved when the line is written and the reader prefers it. (CodeRabbit, PR #209.)
+  const moved: ChatPriceOf = () => undefined;
+  const rows = chatSpend(
+    [turn({ provider: 'preset-4', vendor: 'antigravity' })],
+    [door({ provider: 'preset-4', vendor: 'antigravity' })],
+    'day',
+    NOW,
+    moved,
+    // The preset has since been edited to run on something else entirely.
+    () => 'codex',
+  ).rows;
+
+  assert.deepStrictEqual(rows.map((row) => row.provider), ['antigravity'],
+    'editing a preset re-filed history under another vendor');
+});
+
+test('a line written before the field existed is still resolved through the presets', () => {
+  // Which is the best answer available for it, and the reason the field is optional rather than
+  // required: every line already on disk has none.
+  const rows = chatSpend(
+    [turn({ provider: 'preset-4' })],
+    [door({ provider: 'preset-4' })],
+    'day',
+    NOW,
+    () => undefined,
+    (provider) => (provider === 'preset-4' ? 'antigravity' : provider),
+  ).rows;
+
+  assert.deepStrictEqual(rows.map((row) => row.provider), ['antigravity'],
+    'an old line was left under the generated preset id');
+});

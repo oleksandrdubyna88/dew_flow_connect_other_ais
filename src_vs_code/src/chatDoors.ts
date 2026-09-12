@@ -60,6 +60,17 @@ export interface ChatDoorRecord {
    */
   readonly provider: string;
   readonly model: string;
+  /**
+   * WHOSE row this belongs in, decided when it was written.
+   *
+   * <p>`provider` is the id of the model PRESET in force, and a preset is a row in a list a person
+   * edits: change its runtime and every line ever recorded under it would move to another vendor,
+   * in a ledger that is supposed to be append-only. So the vendor is resolved once, here, and the
+   * reader prefers it. Optional because every line written before this field existed has none —
+   * those are still resolved through the preset list, which is the best answer available for them.
+   * (CodeRabbit, PR #209.)</p>
+   */
+  readonly vendor?: string;
 }
 
 /**
@@ -70,8 +81,14 @@ export interface ChatDoorRecord {
  * since the caller lives in a module that imports `vscode`. What reaches the ledger is
  * `toISOString()`, which is UTC by definition and by the rule. (codex and gemini, the code round.)</p>
  */
-export function chatDoorRecord(door: Door, provider: string, model: string, at: Date): ChatDoorRecord {
-  return { utc: at.toISOString(), door, provider, model };
+export function chatDoorRecord(
+  door: Door,
+  provider: string,
+  model: string,
+  at: Date,
+  vendor = '',
+): ChatDoorRecord {
+  return { utc: at.toISOString(), door, provider, model, ...(vendor.length > 0 ? { vendor } : {}) };
 }
 
 /** The record as one line of JSONL, with the newline. */
@@ -109,7 +126,15 @@ export function parseChatDoorLine(line: string): ChatDoorRecord | undefined {
     return undefined;
   }
 
-  return { utc, door, provider: asText(row['provider']), model: asText(row['model']) };
+  const vendor = asText(row['vendor']);
+
+  return {
+    utc,
+    door,
+    provider: asText(row['provider']),
+    model: asText(row['model']),
+    ...(vendor.length > 0 ? { vendor } : {}),
+  };
 }
 
 /** Every record in the file, with unreadable lines dropped. */

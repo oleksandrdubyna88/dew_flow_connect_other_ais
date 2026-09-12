@@ -827,13 +827,20 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     await this.refreshPriceTables();
 
     const prices: Record<string, ModelPrice> = {};
-    for (const vendor of vendors) {
-      if (vendor.model.length === 0) {
+    // THE MODELS OF BOTH HALVES OF THE PAGE. A reviewer row selects one; a chat is switched between
+    // model PRESETS, which select their own - and this map used to hold only the first kind, so a
+    // chat card read "no rate set for this model" for a model the published table prices perfectly
+    // well. The two lists are asked the same question and answered from the same table.
+    // (CodeRabbit, PR #209.)
+    const presets = chatModelPresetsFrom(vscode.workspace.getConfiguration('coai').get('chatModelPresets'));
+    const wanted = [...vendors.map((one) => one.model), ...presets.map((one) => one.model)];
+    for (const model of wanted) {
+      if (model.length === 0) {
         continue; // "the CLI's default" — we do not know which model that is, so we do not guess
       }
-      const price = priceFor(vendor.model, this.openRouterPrices, this.liteLlmPrices);
+      const price = priceFor(model, this.openRouterPrices, this.liteLlmPrices);
       if (price !== undefined) {
-        prices[vendor.model] = price;
+        prices[model] = price;
       }
     }
 
