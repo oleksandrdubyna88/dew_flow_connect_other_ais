@@ -5,7 +5,7 @@ import {
   usageScopeControl,
 } from './teamServerView';
 import { ChatDoorRecord } from './chatDoors';
-import { ChatPriceOf, ChatSpendRow, chatSpendRows, chatSpendTotals } from './chatSpendRows';
+import { ChatPriceOf, ChatSpendRow, chatSpend } from './chatSpendRows';
 import { ChatTurnRecord } from './chatUsage';
 import { escapeHtml } from './escapeHtml';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
@@ -1345,7 +1345,7 @@ function chatSpendRow(row: ChatSpendRow, colour: (provider: string) => string): 
   <td class="n">${rate(row.inPerMillion)}</td>
   <td class="n">${rate(row.outPerMillion)}</td>
   <td class="n">${total(row.costUsd, row.estimatedUsd)}</td>
-  <td class="n">${row.allTimeEstimated ? total(null, row.allTimeUsd) : total(row.allTimeUsd, null)}</td>
+  <td class="n">${total(row.allTimeUsd, row.allTimeEstimatedUsd)}</td>
   <td class="n">${row.asked}</td>
   <td class="n">${row.opened}</td>
 </tr>`;
@@ -1364,10 +1364,10 @@ function chatRegion(
   prices: Readonly<Record<string, ModelPrice>>,
   colour: (provider: string) => string,
 ): string {
-  const now = new Date();
+  // ONE pass over each ledger, for the rows and the total together - the second call used to redo
+  // the whole aggregation. (Four reviewers of the code round, independently.)
   const priceOf: ChatPriceOf = (model) => prices[model];
-  const rows = chatSpendRows(chat.turns, chat.doors, window, now, priceOf);
-  const sums = chatSpendTotals(chat.turns, chat.doors, window, now, priceOf);
+  const { rows, totals: sums } = chatSpend(chat.turns, chat.doors, window, new Date(), priceOf);
   if (rows.length === 0) {
     return '<div class="empty">No conversations in this window. Ask a second model about a passage and'
       + ' what it costs appears here.</div>';

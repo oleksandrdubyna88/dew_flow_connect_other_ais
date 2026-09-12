@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ChatDoorRecord, DOORS, asking, chatDoorLine, parseChatDoorLine, parseChatDoors } from '../chatDoors';
+import { ChatDoorRecord, DOORS, asking, chatDoorLine, chatDoorRecord, parseChatDoorLine, parseChatDoors } from '../chatDoors';
 import { parseChatUsageLine } from '../chatUsage';
 
 /**
@@ -89,4 +89,21 @@ test('a door that resolved no model keeps the empty strings rather than inventin
   const nowhere = parseChatDoorLine('{"utc":"2026-09-12T10:00:00.000Z","door":"choose"}');
 
   assert.deepStrictEqual(nowhere, { utc: '2026-09-12T10:00:00.000Z', door: 'choose', provider: '', model: '' });
+});
+
+test('the instant a record carries is the one it was given, in UTC', () => {
+  // The clock is a parameter, not a call inside: a test can pin it, which is what the UTC rule asks
+  // for, and what reaches the ledger is toISOString() - UTC by definition rather than by hoping the
+  // machine is set to it.
+  const noon = new Date('2026-09-12T12:34:56.000Z');
+  const built = chatDoorRecord('add', 'antigravity', 'gemini-3.8-flash', noon);
+
+  assert.deepStrictEqual(built, {
+    utc: '2026-09-12T12:34:56.000Z',
+    door: 'add',
+    provider: 'antigravity',
+    model: 'gemini-3.8-flash',
+  });
+  // A machine in any zone writes the same characters for the same instant.
+  assert.strictEqual(built.utc.endsWith('Z'), true, 'an instant reached the ledger without saying it was UTC');
 });

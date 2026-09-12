@@ -62,6 +62,18 @@ export interface ChatDoorRecord {
   readonly model: string;
 }
 
+/**
+ * One invocation, built from an instant somebody else chose.
+ *
+ * <p>The clock is a PARAMETER rather than a call inside, which is the shape the UTC rule asks for -
+ * "injected, so a test can control it" - and the only shape a test in this suite can reach at all,
+ * since the caller lives in a module that imports `vscode`. What reaches the ledger is
+ * `toISOString()`, which is UTC by definition and by the rule. (codex and gemini, the code round.)</p>
+ */
+export function chatDoorRecord(door: Door, provider: string, model: string, at: Date): ChatDoorRecord {
+  return { utc: at.toISOString(), door, provider, model };
+}
+
 /** The record as one line of JSONL, with the newline. */
 export function chatDoorLine(record: ChatDoorRecord): string {
   return `${JSON.stringify(record)}\n`;
