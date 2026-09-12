@@ -95,9 +95,19 @@ and the duplicate-selector test all read this page.
 
 ## Definition of Done
 
-- [ ] Test 1 written first and watched fail with the symptom above; then green; then red again with
-      the fix reverted, and green with it restored.
-- [ ] `npm test` green in the worktree; the count reported in the pull request.
-- [ ] The diff through the `coai` code round, every finding resolved.
-- [ ] `research/module_extension.md` and `CHANGELOG.md` updated as named above.
-- [ ] This plan promoted to `research/` with `IMPLEMENTED` and the date.
+- [x] Both tests written first and watched fail with `derived: the note is not inside the row —
+      <div class="field inline">` and the row-shape guard; green with the note moved out; red again
+      (2 failures) with the fix reverted, and green with it restored.
+- [x] `npm test` green in the worktree: **1719 tests, 1718 pass, 0 fail** (1 skipped), reported in
+      the pull request. The count is 1719 rather than the 1701 of the first run because the branch
+      was rebased onto a `main` that had gained 18 tests.
+- [x] The diff through the `coai` code round — `proceed`, 7 gating against a threshold of 5, all 12
+      reviewers answered; 1 finding accepted, 10 rejected with reasons, all recorded via `resolve`.
+- [x] `research/module_extension.md` gained the decision beside *One class, one section*;
+      `CHANGELOG.md` has its paragraph under `## Unreleased`.
+- [x] This plan promoted to `research/` with `IMPLEMENTED` and the date; its row moved in
+      `todo/README.md` and added to `research/README.md`; `plan-lifecycle` clean.
+
+**Deviation from this list:** the version is deliberately NOT bumped here. This is one of seven
+issues landing before a single extension release, and the release commit at the end of the batch
+renames the `## Unreleased` heading to the version it cuts.
