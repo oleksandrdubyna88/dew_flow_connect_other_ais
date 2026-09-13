@@ -117,7 +117,7 @@ public sealed class AcceptedRolesTests
     [InlineData("123Role")]
     [InlineData("role with spaces")]
     [InlineData("role:123")]
-    [InlineData("Requirements\n")]
+    [InlineData("Requi\nrements")]
     public void AllowAnyRoleStillRefusesSomethingThatIsNotAnId(string bad)
     {
         // The regex bounds the ALPHABET; an id also becomes COAI_ROUNDS_<ID>, reaches JobRecord, the
@@ -297,5 +297,53 @@ public sealed class AcceptedRolesTests
         // refusal's job. (gemini, story 2's code round.)
         Default.Canonical("   ").Should().BeEmpty();
         Default.Canonical("\t\n").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ARoleWithSpaceAroundItIsTheSameRole()
+    {
+        // The KIND is trimmed, and so is the idempotency key. The role was not — so a client with a
+        // stray space was refused by the SHAPE rule and told a role id is latin and carries no
+        // hyphen, which is not what was wrong with it, while the same name without the space was
+        // accepted. Three inputs at one boundary, two of them trimmed.
+        // (gemini, story 2's second code round.)
+        var padded = "  " + Shipped + "  ";
+
+        Default.Knows(padded).Should().BeTrue();
+        Default.Refusal(padded).Should().BeNull();
+        Default.Canonical(padded).Should().Be(Shipped, "and it is recorded once, not twice");
+    }
+
+    [Fact]
+    public void SpaceInsideARoleIsStillNotARole()
+    {
+        // Trimming the ends is forgiveness for a client's stray keystroke. A space in the MIDDLE is
+        // an id that could never be an environment variable, and it stays refused.
+        Default.Knows("Not A Role").Should().BeFalse();
+        Default.Refusal("Not A Role").Should().Contain("COAI_ROUNDS_");
+    }
+
+    [Fact]
+    public void ATrailingNewlineIsTrimmedAwayRatherThanRefused()
+    {
+        // Story 1 refused this, and the refusal was the point: `^[A-Za-z][A-Za-z0-9_]*$` ACCEPTS
+        // "Requirements\n" in .NET, because `$` matches before a trailing newline — so the id would
+        // have been STORED with a line break in it. The anchors became \A…\z and a test pinned the
+        // refusal.
+        //
+        // Trimming the ends changes which of the two mechanisms catches it, not whether it is caught:
+        // a trailing newline is whitespace, it is removed before anything looks at the shape, and
+        // what reaches the record is `Requirements`. Refusing a stray newline while forgiving a stray
+        // space would be two answers to one question.
+        Default.Knows(Shipped + "\n").Should().BeTrue();
+        Default.Canonical(Shipped + "\r\n").Should().Be(Shipped, "no line break reaches the record");
+    }
+
+    [Fact]
+    public void ANewlineINSIDEARoleIsStillRefused()
+    {
+        // Which is what the anchors are for, and why they stay: trimming only reaches the ends.
+        Default.Knows("Requi\nrements").Should().BeFalse();
+        AcceptedRoles.From([], allowAny: true).Knows("Requi\nrements").Should().BeFalse();
     }
 }
