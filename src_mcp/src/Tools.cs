@@ -34,7 +34,18 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            async (string repoPath, string branch) => await host.Current.OpenAsync(repoPath, branch),
+            // `McpServer` is injected and does NOT appear in the tool's schema — the SDK binds it to
+            // the server instance of THIS request's RequestContext, which is what makes ClientInfo
+            // readable on the 2026-07-28 revision too (there it travels per request in `_meta`
+            // rather than being fixed at initialize). `callerModel` is nullable and defaulted, so
+            // every client that predates it keeps calling `open` with two arguments.
+            async (McpServer server, string repoPath, string branch, string? callerModel = null) =>
+                await host.Current.OpenAsync(
+                    repoPath,
+                    branch,
+                    callerModel ?? string.Empty,
+                    server.ClientInfo?.Name ?? string.Empty,
+                    server.ClientInfo?.Version ?? string.Empty),
             new McpServerToolCreateOptions
             {
                 Name = "open",
@@ -44,6 +55,14 @@ internal static class Tools
                     the same pair resumes the same session with its rounds intact. Also prunes any
                     worktree a killed session left behind. `repoPath` is the git checkout on THIS
                     machine; `branch` is the branch under review.
+
+                    `callerModel` is YOUR OWN model id — `claude-opus-5`, `codex-astra`,
+                    `gemini-3-pro`. Send it: the MCP handshake tells this server which CLIENT is
+                    calling and there is no field anywhere in the protocol that carries the model,
+                    so the log can only name what you declare. Send it on EVERY open, because
+                    switching model mid-session is exactly the case this exists for. If you
+                    genuinely do not know it, leave it out — the round is then recorded as not
+                    stating one, which is true, rather than defaulting to something that is not.
                     """,
                 ReadOnly = false, Idempotent = true, Destructive = false, OpenWorld = false,
             });

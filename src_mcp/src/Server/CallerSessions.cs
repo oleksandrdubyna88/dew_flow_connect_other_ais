@@ -17,32 +17,53 @@ namespace CoaiMcp.Server;
 /// model's own bookkeeping. <c>COAI_CALLER_SESSION</c> is first so a client without an id of its own
 /// can still be given one.</para>
 /// </remarks>
-public static class CallerIdentity
+/// <param name="Vendor">
+/// Whose client it is, from the variable that matched — <see cref="Unknown"/> when none did.
+/// </param>
+/// <param name="Id">That client's own session id, or empty.</param>
+public readonly record struct CallerIdentity(string Vendor = CallerIdentity.Unknown, string Id = "")
 {
-    private static readonly string[] Variables =
+    /// <summary>Nothing identified this caller. A state with a name, never a blank.</summary>
+    /// <remarks>
+    /// The first build of this returned an empty string for it, and the plan round was right about
+    /// what that does: a blank renders as a gap, and a gap beside a model reads as though the vendor
+    /// were known and merely not worth printing.
+    /// </remarks>
+    public const string Unknown = "unknown";
+
+    /// <summary>
+    /// The id was handed to us by the operator, so it says nothing about which vendor this is.
+    /// </summary>
+    /// <remarks>
+    /// <c>COAI_CALLER_SESSION</c> exists so a client with no id of its own can be given one. Naming
+    /// a vendor from it would be an invention, and this whole change is about not doing that.
+    /// </remarks>
+    public const string Stated = "stated";
+
+    /// <summary>Which vendor each variable belongs to. The order is the precedence.</summary>
+    private static readonly (string Variable, string Vendor)[] Variables =
     [
-        "COAI_CALLER_SESSION",
-        "CLAUDE_CODE_SESSION_ID",
-        "CODEX_SESSION_ID",
-        "GEMINI_CLI_SESSION_ID",
+        ("COAI_CALLER_SESSION", Stated),
+        ("CLAUDE_CODE_SESSION_ID", "claude"),
+        ("CODEX_SESSION_ID", "codex"),
+        ("GEMINI_CLI_SESSION_ID", "gemini"),
     ];
 
-    /// <summary>The first of them that is set, or empty when this client identifies itself at all.</summary>
-    public static string From(Func<string, string?> read)
+    /// <summary>The first of them that is set, with the vendor that variable names.</summary>
+    public static CallerIdentity From(Func<string, string?> read)
     {
-        foreach (var name in Variables)
+        foreach (var (variable, vendor) in Variables)
         {
-            var value = read(name);
-            if (!string.IsNullOrWhiteSpace(value))
+            if (read(variable) is { } value && !string.IsNullOrWhiteSpace(value))
             {
-                return value.Trim();
+                return new CallerIdentity(vendor, value.Trim());
             }
         }
 
-        return string.Empty;
+        return new CallerIdentity(Unknown, string.Empty);
     }
 
-    public static string Current() => From(Environment.GetEnvironmentVariable);
+    public static CallerIdentity Current() => From(Environment.GetEnvironmentVariable);
 }
 
 /// <summary>
