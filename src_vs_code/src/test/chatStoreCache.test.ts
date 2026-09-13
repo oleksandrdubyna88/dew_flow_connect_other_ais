@@ -87,6 +87,16 @@ const ids = (metas: readonly ConversationMeta[]): readonly string[] => metas.map
 
 const EVERYWHERE = { kind: 'everywhere' } as const;
 
+/**
+ * Every heartbeat's writer still exists.
+ *
+ * <p>Pinned rather than left to the real check, which asks the OPERATING SYSTEM whether a pid is
+ * running. A test that wrote a heartbeat for pid 7 and then asked the machine about pid 7 would be
+ * asserting something about this computer — and pid 7 exists on most of them, so it would have
+ * passed for a reason that has nothing to do with the code.</p>
+ */
+const ALIVE = (): boolean => true;
+
 test('the index is building until its first refresh, then ready', async () => {
   const w = world();
   try {
@@ -365,7 +375,7 @@ test('the index knows what OTHER windows hold, out of the survey it was already 
     const now = Date.now();
     await keeper.beat(4242, ['mine'], now);
     await keeper.beat(7, ['theirs'], now);
-    const index = new ConversationIndex(keeper, w.store, 4242);
+    const index = new ConversationIndex(keeper, w.store, 4242, ALIVE);
 
     assert.deepEqual([...index.elsewhere(now)], [], 'the index answered before it had ever looked');
 
@@ -377,6 +387,13 @@ test('the index knows what OTHER windows hold, out of the survey it was already 
     // is not — judged at the moment of asking, so a picker left open stops holding them hostage.
     assert.deepEqual([...index.elsewhere(now + HEARTBEAT_STALE_MS)], [],
       'a window that went quiet while the list was up still held its conversations');
+
+    // AND THE WRITER MUST STILL EXIST. A reload leaves the old host's heartbeat on disk on purpose,
+    // so a young file whose process has gone is this window's own predecessor rather than a rival.
+    const reloaded = new ConversationIndex(keeper, w.store, 4242, () => false);
+    await reloaded.refresh(now);
+    assert.deepEqual([...reloaded.elsewhere(now)], [],
+      'the index does not ask whether a heartbeat’s window still exists, so a reload makes conversations unreachable');
   } finally {
     rmSync(w.dir, { recursive: true, force: true });
   }
@@ -390,7 +407,7 @@ test('a survey that fails keeps the last good announcements, exactly as it keeps
     const keeper = new ChatStoreKeeper(w.dir);
     const now = Date.now();
     await keeper.beat(7, ['theirs'], now);
-    const index = new ConversationIndex(keeper, w.store, 4242);
+    const index = new ConversationIndex(keeper, w.store, 4242, ALIVE);
     await index.refresh(now);
 
     rmSync(w.dir, { recursive: true, force: true });
