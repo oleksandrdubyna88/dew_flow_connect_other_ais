@@ -1,17 +1,28 @@
 # PLAN — the gate reviews a document (4 of 5)
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_mcp` (a third stage, the session kind,
-> the artifact, `review_document`, the finding wire), `src_vs_code` (the roles page, the panel, the
-> snippet, the help), `shared/builtin-roles.json` (two shipped document roles), and the tests for all
-> of it. No `src_server` change — that is plan 5.
+> Status: **IMPLEMENTED, 2026-09-13.** Shipped as PR #230, as ONE unit on the operator's standing
+> command that a plan already part of a split is not to be split again. `review_document` runs the
+> roles a person wrote over a document; a document review is its own session keyed by the document's
+> identity; `notes` carries the summary; and the shared rule and the pasted snippet teach the new
+> call.
 >
-> Related docs: [module_core.md](../research/module_core.md),
-> [module_server.md](../research/module_server.md),
-> [module_extension.md](../research/module_extension.md),
-> [architecture.md](../research/architecture.md);
-> plan 1: [PLAN_review_roles_become_data.md](../research/PLAN_review_roles_become_data.md),
-> plan 2: [PLAN_review_roles_crud_tab.md](../research/PLAN_review_roles_crud_tab.md),
-> plan 3: [PLAN_team_server_accepts_custom_roles.md](../research/PLAN_team_server_accepts_custom_roles.md),
+> Three gate rounds — the plan round and two code rounds — **77 findings, 49 accepted**. Two of them
+> were security holes that a fully green suite could not see, and both were proved by breaking the
+> fix and watching the test name the real symptom.
+>
+> Scope: `src_mcp` (a third stage, the session kind, the artifact, `review_document`, the finding
+> wire), `src_vs_code` (the roles page, the panel, the snippet, the help),
+> `shared/builtin-roles.json` (two shipped document roles), `.agents/conventions`
+> (`common/coai-document-gate.md`, merged as conventions #26), and the tests for all of it. No
+> `src_server` change — that is plan 5.
+>
+> Related docs: [module_core.md](module_core.md),
+> [module_server.md](module_server.md),
+> [module_extension.md](module_extension.md),
+> [architecture.md](architecture.md);
+> plan 1: [PLAN_review_roles_become_data.md](PLAN_review_roles_become_data.md),
+> plan 2: [PLAN_review_roles_crud_tab.md](PLAN_review_roles_crud_tab.md),
+> plan 3: [PLAN_team_server_accepts_custom_roles.md](PLAN_team_server_accepts_custom_roles.md),
 > all three shipped.
 
 > **Revised after the plan round.** Eighteen findings, sixteen accepted, and six of them converged on
