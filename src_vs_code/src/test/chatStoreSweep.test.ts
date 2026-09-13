@@ -422,3 +422,17 @@ test('an empty plan is empty, and a report reads as one line a person can act on
   assert.match(describeSweep({ kind: 'skipped', why: 'unclaimed', reason: '' }), /could not claim the store/u);
   assert.match(describeSweep({ kind: 'skipped', why: 'unannounced', reason: '' }), /could not announce what it holds open/u);
 });
+
+test('a heartbeat is THIS window\u2019s if EITHER its name or its body says so', () => {
+  // A file names its window twice, and they agree in every file this code writes. The question asked
+  // is whether either says ours, which is the safe direction: a file that might be ours is left out
+  // of what somebody else holds, and being wrong that way costs a conversation this window can
+  // reopen rather than a second tab on a record another window is writing. Two reviewers read the
+  // inline form as its own opposite, which is why it is a named function now.
+  const bodyOnly: HeartbeatFile = { name: heartbeatName(7), stamp: stamp(NOW, 120), beat: { pid: OWN_PID, at: NOW, ids: ['a1'] } };
+  const nameOnly: HeartbeatFile = { name: heartbeatName(OWN_PID), stamp: stamp(NOW, 120), beat: { pid: 7, at: NOW, ids: ['b2'] } };
+
+  assert.deepEqual([...heldElsewhere([bodyOnly], NOW, OWN_PID)], [], 'a heartbeat whose BODY says it is ours was read as another window');
+  assert.deepEqual([...heldElsewhere([nameOnly], NOW, OWN_PID)], [], 'a heartbeat whose NAME says it is ours was read as another window');
+  assert.deepEqual([...heldElsewhere([beat(7, ['c3'], NOW)], NOW, OWN_PID)], ['c3'], 'a heartbeat that is nobody ours was dropped');
+});

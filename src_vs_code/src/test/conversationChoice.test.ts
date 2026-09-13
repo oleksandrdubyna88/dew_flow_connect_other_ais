@@ -6,6 +6,7 @@ import {
   byLastUsed,
   forgetting,
   mayForget,
+  mustRedraw,
   openElsewhere,
   opening,
   pickerTitle,
@@ -215,4 +216,32 @@ test('choosing a conversation another window holds is declined by a sentence tha
   assert.match(said, /split it in two/iu, 'it does not say why reopening is refused');
   // Never a pid: a process id is not something a person can act on.
   assert.doesNotMatch(said, /[0-9]{3,}/u);
+});
+
+test('the list is rebuilt only when what is on screen could be missing a match', () => {
+  // A set drawn for "pay" already holds every match for "paym", because matching is a substring test
+  // and extending a query can only narrow it — so typing forward is the widget's own filter doing its
+  // job and nothing is read again. Deleting a character widens the question. And a draw that hit the
+  // hundred-row cap is incomplete for anything.
+  assert.equal(mustRedraw('pay', 'paym', false), false, 'typing forward through a complete list rebuilds it on every keystroke');
+  assert.equal(mustRedraw('pay', 'pa', false), true, 'a shortened query was answered from a narrower list');
+  assert.equal(mustRedraw('pay', 'log', false), true, 'a different query was answered from the wrong list');
+  assert.equal(mustRedraw('pay', 'paym', true), true, 'a list that was cut was not read again, so a match past the cut stays unreachable');
+  assert.equal(mustRedraw('', 'p', false), false, 'the first keystroke over a complete list rebuilds it');
+  assert.equal(mustRedraw('', '', false), false);
+});
+
+test('a forget answer this build has no arm for fails by name, rather than being reported as a failure', () => {
+  // It was a ternary: everything that was not `ok` became `failed`, so a third outcome added to the
+  // store would have been shown to the person as a failure, with a sentence about a reason that did
+  // not exist. Every other answer in this file is exhaustive by name; this one was the exception.
+  // (codex, the code round — the constraint was my own.)
+  const odd = { kind: 'postponed', reason: 'a third answer' } as unknown as Parameters<typeof forgetting>[1];
+
+  assert.throws(() => forgetting('Why the lock is fenced', odd), (thrown: Error) => {
+    assert.match(thrown.message, /postponed/u, 'the failure does not say what arrived');
+    assert.match(thrown.message, /ok and failed/u, 'the failure does not name the answers that are legal');
+
+    return true;
+  });
 });

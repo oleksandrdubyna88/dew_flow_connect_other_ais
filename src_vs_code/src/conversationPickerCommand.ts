@@ -8,6 +8,7 @@ import {
   byLastUsed,
   forgetting,
   mayForget,
+  mustRedraw,
   openElsewhere,
   opening,
   pickerTitle,
@@ -126,6 +127,16 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
   // which is the one accident this command is written to prevent, and a latch is cheaper than the
   // argument that it cannot happen. (The plan round.)
   let chosen = false;
+  // One forget at a time. Two quick presses on one row would have the second meet the lock the first
+  // is holding and be told the conversation "is being changed by another window" — which it is not;
+  // it is being changed by this one, and blaming a window that does not exist is the worst sentence
+  // this command could produce. (gemini, the code round.)
+  let removing = false;
+  /** What the person has typed, and what the list on screen was built for. */
+  let query = '';
+  let drawn = '';
+  /** Whether the list on screen hit the hundred-row cap, and so may be missing a match. */
+  let cut = false;
   const pick = vscode.window.createQuickPick<Item>();
   // Typing a model name or a word from the last answer filters — which is most of why a person opens
   // this rather than hunting through their tabs.
@@ -158,8 +169,11 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
       elsewhere: deps.index.elsewhere(now()),
       workspace: deps.workspace(),
       everywhere,
+      query,
       now: now(),
     });
+    drawn = query;
+    cut = rows.some((row) => row.kind === 'notice' && row.notice === 'more');
     pick.title = pickerTitle(everywhere);
     pick.buttons = [scopeButton(everywhere)];
     pick.items = rows.map(itemFor);
@@ -171,15 +185,20 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
     }
   };
 
-  /** Reveal it if this window has it, otherwise read it back off disk and reopen it. */
-  const choose = async (row: Extract<PickerRow, { kind: 'conversation' }>): Promise<void> => {
+  /**
+   * Reveal it if this window has it, otherwise read it back off disk and reopen it.
+   *
+   * @returns whether a tab is now on screen for it — `false` when the person was told why not, and
+   *   the list must therefore stay up to be told it on
+   */
+  const choose = async (row: Extract<PickerRow, { kind: 'conversation' }>): Promise<boolean> => {
     // REVEALED FIRST, whatever the row said. A live row is one this window holds and revealing it is
     // the whole answer. A closed one should not be open at all — the rows exclude what is held — but
     // the registry can move between the list being drawn and the row being pressed, and a second tab
     // for one record would give it two writers: the fork the store's swap exists to catch, caused by
     // us. Asking costs one walk of the registry.
     if (revealConversation(panels, row.id)) {
-      return;
+      return true;
     }
     if (row.where === 'elsewhere') {
       // ASKED THIS WINDOW FIRST, and only then declined: between the list being drawn and the row
@@ -187,7 +206,7 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
       // strength of a heartbeat read seconds ago would refuse a tab that is right here.
       void vscode.window.showWarningMessage(openElsewhere(row.label));
 
-      return;
+      return false;
     }
     // NOT the metadata the row was drawn from. The index is built in the background and a row can be
     // pressed an hour later; what goes on screen is what is on disk at the moment of the press.
@@ -198,20 +217,20 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
         // conversation comes back closed, with nothing running, exactly as it does after a reload.
         restoreConversation(panels, undefined, answer.record, deps.extensionUri).panel.reveal();
 
-        return;
+        return true;
       case 'gone':
         // Off the list as well as said out loud, or the row is still there on the next keystroke and
         // the person presses it again.
         deps.index.drop(row.id);
         void vscode.window.showWarningMessage(answer.message);
 
-        return;
+        return false;
       case 'refused':
         // It is there and could not be read. The row STAYS: nothing has been lost, and a permissions
         // error or a record a newer build wrote must not hide a conversation from the list.
         void vscode.window.showWarningMessage(answer.message);
 
-        return;
+        return false;
       default: {
         // Exhaustive by name, as every decision in this feature is: a fourth answer added to
         // `Opening` must be a compile error here rather than a press that does nothing.
@@ -229,6 +248,23 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
     draw();
   });
 
+  /** The picker after a choice that did not open anything: still there, and ready to be chosen from. */
+  const settle = (opened: boolean): void => {
+    if (!onScreen) {
+      return;
+    }
+    if (opened) {
+      pick.hide();
+
+      return;
+    }
+    chosen = false;
+    pick.busy = false;
+    // REDRAWN, because something has usually changed: a conversation that had gone was dropped from
+    // the index, and the row must go with it or the next keystroke offers it again.
+    draw();
+  };
+
   pick.onDidAccept(() => {
     const row = pick.selectedItems[0]?.row;
     if (chosen || row === undefined || row.kind !== 'conversation') {
@@ -239,15 +275,33 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
       return;
     }
     chosen = true;
-    // Hidden BEFORE the work: what happens next is a tab appearing, and a list still covering it
-    // would be a list the person has to dismiss to see what they asked for.
-    pick.hide();
-    void choose(row).catch((reason: unknown) => {
-      // The outer edge of a detached call, and therefore a catch that says something: the store
-      // answers in outcomes and never rejects, so anything arriving here is a defect.
-      console.error('ConnectOtherAIs: a conversation could not be opened from the picker', reason);
-      void vscode.window.showWarningMessage('That conversation could not be opened.');
-    });
+    // NOT HIDDEN YET. Choosing can fail to open anything — the conversation has gone, it cannot be
+    // read, it is held by another window — and each of those answers is a sentence about THIS LIST:
+    // "it has been taken off this list", "the row stays". A picker that had already closed made
+    // every one of them false, and threw the person back to their editor to read a toast about a
+    // list that was no longer there. So it waits, busy, and closes only when a tab is actually on
+    // screen. (gemini, the code round.)
+    pick.busy = true;
+    void choose(row)
+      .then(settle)
+      .catch((reason: unknown) => {
+        // The outer edge of a detached call, and therefore a catch that says something: the store
+        // answers in outcomes and never rejects, so anything arriving here is a defect.
+        console.error('ConnectOtherAIs: a conversation could not be opened from the picker', reason);
+        void vscode.window.showWarningMessage('That conversation could not be opened.');
+        settle(false);
+      });
+  });
+
+  pick.onDidChangeValue((value) => {
+    query = value;
+    if (mustRedraw(drawn, value, cut)) {
+      // Only when the list on screen could be missing a match — a draw that hit the cap, or a query
+      // that has been shortened rather than extended. Typing forward through a complete list is the
+      // widget's own filter doing its job, and rebuilding on every keystroke would be a directory's
+      // worth of rows reassigned under somebody's fingers.
+      draw();
+    }
   });
 
   const forget = async (row: PickerRow | undefined): Promise<void> => {
@@ -257,7 +311,16 @@ export function switchConversations(panels: ChatPanels, deps: PickerDeps): void 
 
       return;
     }
-    const done = forgetting(decided.title, await deps.store.forget(decided.id));
+    if (removing) {
+      // Ignored rather than queued or refused: the row is still there, and if the first press fails
+      // it can be pressed again. See `removing` above for what the second press would otherwise be
+      // told.
+      return;
+    }
+    removing = true;
+    const done = forgetting(decided.title, await deps.store.forget(decided.id).finally(() => {
+      removing = false;
+    }));
     if (done.kind === 'failed') {
       void vscode.window.showWarningMessage(done.message);
       // Redrawn anyway, because the row is still there and the list must go on saying so.

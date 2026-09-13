@@ -29,6 +29,17 @@ A conversation that has gone since the list was drawn — another window forgot 
 disappears, rather than opening a tab onto nothing. One that is there and cannot be read says that
 instead, and keeps its row: nothing has been lost.
 
+**Typing now searches all of your conversations, not the hundred newest.** The list draws at most a
+hundred rows, and the filter ran over what had been drawn — so if you had more than that, the older
+ones could not be found by typing their own titles, which is the one thing the list is for. What you
+type is matched first now, and the hundred is the newest hundred OF THE MATCHES.
+
+**And the list stays open when it cannot open something.** Choosing a conversation that has gone,
+or one that cannot be read, or one another window is holding says so — and every one of those
+sentences is about the list itself ("it has been taken off this list"). The list used to close
+first, which left you in your editor reading a message about something that was no longer on
+screen. It waits now, and closes only once the conversation is actually open.
+
 **Forgetting a conversation no longer destroys it.** The row goes the moment you press the trash,
 and nothing lists that conversation again — but the transcript is set aside on disk and only really
 deleted after the same ninety days as everything else. There is no confirmation dialog in the way of

@@ -435,8 +435,23 @@ test('forgetting a conversation whose transcript has already gone is not a failu
     await store.save(record(), 0);
     rmSync(join(dir, recordName('a1')));
 
-    assert.deepEqual(await store.forget('a1', AT), { kind: 'ok' });
+    const said: string[] = [];
+    const before = console.info;
+    console.info = (line: unknown) => said.push(String(line));
+    try {
+      assert.deepEqual(await store.forget('a1', AT), { kind: 'ok' });
+    } finally {
+      console.info = before;
+    }
+
     assert.deepEqual(readdirSync(dir).filter((name) => name !== QUARANTINE_DIR), [], 'the index entry was left behind');
+    // SAID, though not as a failure. "The transcript was set aside" and "there was no transcript to
+    // set aside" are different facts, and reporting them with one line would make the archive
+    // unfalsifiable — nobody could tell afterwards whether anything had been kept. The person is not
+    // interrupted, because the row went, which is what they asked for. (Three reviewers.)
+    assert.equal(said.length, 1, `the outcome was not said exactly once: ${said.join(' | ')}`);
+    assert.match(said[0] ?? '', /no transcript to set aside/u, 'a forget with nothing to archive is logged as an archive');
+    assert.doesNotMatch(said[0] ?? '', /was set aside, unchanged/u, 'it claims to have archived a transcript that was not there');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
